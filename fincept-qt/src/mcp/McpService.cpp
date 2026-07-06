@@ -44,8 +44,7 @@ void McpService::initialize() {
         // (error paths), and the retriever rebuild takes ToolRetriever →
         // McpService → McpManager locks — invalidating inline here would
         // invert that order.
-        QMetaObject::invokeMethod(qApp, []() { ToolRetriever::instance().invalidate(); },
-                                  Qt::QueuedConnection);
+        QMetaObject::invokeMethod(qApp, []() { ToolRetriever::instance().invalidate(); }, Qt::QueuedConnection);
         LOG_INFO(TAG, "Tool cache invalidated — external servers changed");
     });
 
@@ -135,9 +134,11 @@ static constexpr int kHardMaxTools = 50;
 // are too wide. Truncation isn't an error — but it is a signal.
 static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools, const ToolFilter& filter) {
     QList<QRegularExpression> include_rx;
-    for (const auto& p : filter.name_patterns) include_rx.append(QRegularExpression(p));
+    for (const auto& p : filter.name_patterns)
+        include_rx.append(QRegularExpression(p));
     QList<QRegularExpression> exclude_rx;
-    for (const auto& p : filter.exclude_name_patterns) exclude_rx.append(QRegularExpression(p));
+    for (const auto& p : filter.exclude_name_patterns)
+        exclude_rx.append(QRegularExpression(p));
 
     const int effective_cap = filter.max_tools > 0 ? filter.max_tools : kHardMaxTools;
 
@@ -157,15 +158,23 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
         if (!include_rx.isEmpty()) {
             bool any_match = false;
             for (const auto& rx : include_rx) {
-                if (rx.match(tool.name).hasMatch()) { any_match = true; break; }
+                if (rx.match(tool.name).hasMatch()) {
+                    any_match = true;
+                    break;
+                }
             }
-            if (!any_match) continue;
+            if (!any_match)
+                continue;
         }
         bool excluded = false;
         for (const auto& rx : exclude_rx) {
-            if (rx.match(tool.name).hasMatch()) { excluded = true; break; }
+            if (rx.match(tool.name).hasMatch()) {
+                excluded = true;
+                break;
+            }
         }
-        if (excluded) continue;
+        if (excluded)
+            continue;
 
         kept.push_back(std::move(tool));
     }
@@ -182,13 +191,13 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
         cat_rank.insert(filter.categories[i], i);
     const int sentinel = filter.categories.size();
 
-    std::stable_sort(kept.begin(), kept.end(),
-                     [&cat_rank, sentinel](const UnifiedTool& a, const UnifiedTool& b) {
-                         const int ra = cat_rank.value(a.category, sentinel);
-                         const int rb = cat_rank.value(b.category, sentinel);
-                         if (ra != rb) return ra < rb;
-                         return a.name < b.name;
-                     });
+    std::stable_sort(kept.begin(), kept.end(), [&cat_rank, sentinel](const UnifiedTool& a, const UnifiedTool& b) {
+        const int ra = cat_rank.value(a.category, sentinel);
+        const int rb = cat_rank.value(b.category, sentinel);
+        if (ra != rb)
+            return ra < rb;
+        return a.name < b.name;
+    });
 
     // Stage 3 — apply cap.
     const int kept_before_cap = static_cast<int>(kept.size());
@@ -198,8 +207,10 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
     if (kept_before_cap > effective_cap) {
         LOG_WARN(TAG, QString("apply_tool_filter: truncated %1 → %2 (cap=%3, configured_cap=%4) — "
                               "consider tightening categories for this screen/agent")
-                          .arg(kept_before_cap).arg(kept.size())
-                          .arg(effective_cap).arg(filter.max_tools));
+                          .arg(kept_before_cap)
+                          .arg(kept.size())
+                          .arg(effective_cap)
+                          .arg(filter.max_tools));
     }
     return kept;
 }
@@ -266,17 +277,14 @@ static const QSet<QString>& tier_0_tool_names() {
 // The kill switch is one settings flip away if a specific
 // provider/model combo regresses.
 static bool tool_rag_enabled() {
-    return fincept::AppConfig::instance()
-        .get("mcp/use_tool_rag", QVariant(true))
-        .toBool();
+    return fincept::AppConfig::instance().get("mcp/use_tool_rag", QVariant(true)).toBool();
 }
 
 QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
     return format_tools_for_openai(filter, QSet<QString>{});
 }
 
-QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter,
-                                               const QSet<QString>& extra_tool_names) {
+QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
     QMutexLocker lock(&mutex_);
     cached_tools_locked();
 
@@ -285,10 +293,8 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter,
     // default-constructed ToolFilter (i.e. didn't ask for a specific scope).
     // Per-agent / per-screen explicit filters bypass Tier-0 — those callers
     // know what they want and shouldn't be silently overridden.
-    const bool default_filter = filter.categories.isEmpty() &&
-                                filter.exclude_categories.isEmpty() &&
-                                filter.name_patterns.isEmpty() &&
-                                filter.exclude_name_patterns.isEmpty() &&
+    const bool default_filter = filter.categories.isEmpty() && filter.exclude_categories.isEmpty() &&
+                                filter.name_patterns.isEmpty() && filter.exclude_name_patterns.isEmpty() &&
                                 filter.max_tools == 0;
     const bool use_rag = default_filter && tool_rag_enabled();
 
@@ -358,10 +364,13 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter,
     if (use_rag) {
         LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM "
                               "(tier-0 + %3 activated / Tool RAG mode, fresh)")
-                          .arg(result.size()).arg(total_seen).arg(extra_tool_names.size()));
+                          .arg(result.size())
+                          .arg(total_seen)
+                          .arg(extra_tool_names.size()));
     } else if (total_seen != result.size()) {
         LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM (filtered, fresh)")
-                          .arg(result.size()).arg(total_seen));
+                          .arg(result.size())
+                          .arg(total_seen));
     } else {
         LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (fresh)").arg(result.size()));
     }
@@ -387,8 +396,8 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
     // metadata, so external tools are gated destructive-by-default: the
     // installed checker must approve them exactly like a destructive internal
     // tool (agent-originated calls are denied unless the agent opts in).
-    if (auto denied = McpProvider::instance().check_authorization(
-            server_id + "__" + tool_name, AuthLevel::None, /*is_destructive=*/true))
+    if (auto denied = McpProvider::instance().check_authorization(server_id + "__" + tool_name, AuthLevel::None,
+                                                                  /*is_destructive=*/true))
         return *denied;
 
     auto result = McpManager::instance().call_external_tool(server_id, tool_name, args);
@@ -506,8 +515,8 @@ void McpService::refresh_cache() {
         // signal on the wire, so treat external tools as destructive-by-
         // default. Keeps tool_list / Tool RAG surfacing honest and matches
         // execute_tool(), which gates them like destructive internal tools.
-        cached_tools_.push_back({ext.server_id, ext.server_name, ext.name, ext.description,
-                                  ext.input_schema, false, QString{}, true});
+        cached_tools_.push_back(
+            {ext.server_id, ext.server_name, ext.name, ext.description, ext.input_schema, false, QString{}, true});
     }
 
     // Invalidate filter-derived caches — they were computed against the

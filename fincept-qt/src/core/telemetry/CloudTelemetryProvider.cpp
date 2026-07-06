@@ -21,8 +21,7 @@ constexpr const char* kCloudTag = "CloudTelemetry";
 } // namespace
 
 CloudTelemetryProvider::CloudTelemetryProvider(TelemetryProvider* inner_sink, QObject* parent)
-    : QObject(parent), inner_sink_(inner_sink) {
-}
+    : QObject(parent), inner_sink_(inner_sink) {}
 
 CloudTelemetryProvider::~CloudTelemetryProvider() {
     stop();
@@ -160,8 +159,7 @@ bool CloudTelemetryProvider::read_config(QString& endpoint_out, QString& api_key
     return true;
 }
 
-void CloudTelemetryProvider::post_batch(const QString& endpoint, const QString& api_key,
-                                        const QJsonArray& body,
+void CloudTelemetryProvider::post_batch(const QString& endpoint, const QString& api_key, const QJsonArray& body,
                                         QVector<Event> raw_for_requeue) {
     QNetworkRequest req((QUrl(endpoint)));
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -198,8 +196,7 @@ void CloudTelemetryProvider::post_batch(const QString& endpoint, const QString& 
                     // since /health is "is the upstream reachable" not
                     // "did we send the right thing".
                     LOG_WARN(kCloudTag,
-                             QString("Drop batch (status %1, %2 events)")
-                                 .arg(status).arg(raw_for_requeue.size()));
+                             QString("Drop batch (status %1, %2 events)").arg(status).arg(raw_for_requeue.size()));
                     return;
                 }
 
@@ -210,11 +207,11 @@ void CloudTelemetryProvider::post_batch(const QString& endpoint, const QString& 
                     backoff_seconds_ = 5; // first hit
                 else
                     backoff_seconds_ = qMin(kMaxBackoffSeconds, backoff_seconds_ * 2);
-                next_attempt_ms_ = QDateTime::currentMSecsSinceEpoch()
-                                   + qint64(backoff_seconds_) * 1000;
-                LOG_WARN(kCloudTag,
-                         QString("Upload failed (status=%1, err=%2); backing off %3s")
-                             .arg(status).arg(err).arg(backoff_seconds_));
+                next_attempt_ms_ = QDateTime::currentMSecsSinceEpoch() + qint64(backoff_seconds_) * 1000;
+                LOG_WARN(kCloudTag, QString("Upload failed (status=%1, err=%2); backing off %3s")
+                                        .arg(status)
+                                        .arg(err)
+                                        .arg(backoff_seconds_));
             });
 }
 

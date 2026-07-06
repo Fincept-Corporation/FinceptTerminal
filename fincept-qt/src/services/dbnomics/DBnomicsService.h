@@ -1,13 +1,12 @@
 // src/services/dbnomics/DBnomicsService.h
 #pragma once
+#include "datahub/Producer.h"
 #include "services/dbnomics/DBnomicsModels.h"
 
 #include <QHash>
 #include <QJsonDocument>
 #include <QObject>
 #include <QTimer>
-
-#    include "datahub/Producer.h"
 
 namespace fincept::services {
 
@@ -17,9 +16,7 @@ namespace fincept::services {
 /// (the hot path for chart panels) fan out to the hub. Dual-fire — the
 /// existing `observations_loaded` signal still emits alongside hub
 /// publishes, so panels can migrate incrementally.
-class DBnomicsService : public QObject
-    , public fincept::datahub::Producer
-{
+class DBnomicsService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static DBnomicsService& instance();
@@ -30,7 +27,7 @@ class DBnomicsService : public QObject
     // ── fincept::datahub::Producer ────────────────────────────────────────
     QStringList topic_patterns() const override;
     void refresh(const QStringList& topics) override;
-    int max_requests_per_sec() const override;  // 3 — DBnomics REST
+    int max_requests_per_sec() const override; // 3 — DBnomics REST
 
     // ── API methods (all async, result via signals) ───────────────────────────
     void fetch_providers();

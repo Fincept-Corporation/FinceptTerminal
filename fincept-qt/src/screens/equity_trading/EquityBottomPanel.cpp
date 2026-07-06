@@ -166,14 +166,22 @@ void EquityBottomPanel::changeEvent(QEvent* event) {
 void EquityBottomPanel::retranslateUi() {
     // Tab labels
     if (tabs_) {
-        if (positions_tab_idx_ >= 0)  tabs_->setTabText(positions_tab_idx_, tr("POSITIONS"));
-        if (holdings_tab_idx_ >= 0)   tabs_->setTabText(holdings_tab_idx_, tr("HOLDINGS"));
-        if (orders_tab_idx_ >= 0)     tabs_->setTabText(orders_tab_idx_, tr("ORDERS"));
-        if (funds_tab_idx_ >= 0)      tabs_->setTabText(funds_tab_idx_, tr("FUNDS"));
-        if (stats_tab_idx_ >= 0)      tabs_->setTabText(stats_tab_idx_, tr("STATS"));
-        if (time_sales_tab_idx_ >= 0) tabs_->setTabText(time_sales_tab_idx_, tr("TIME & SALES"));
-        if (auctions_tab_idx_ >= 0)   tabs_->setTabText(auctions_tab_idx_, tr("AUCTIONS"));
-        if (calendar_tab_idx_ >= 0)   tabs_->setTabText(calendar_tab_idx_, tr("CALENDAR"));
+        if (positions_tab_idx_ >= 0)
+            tabs_->setTabText(positions_tab_idx_, tr("POSITIONS"));
+        if (holdings_tab_idx_ >= 0)
+            tabs_->setTabText(holdings_tab_idx_, tr("HOLDINGS"));
+        if (orders_tab_idx_ >= 0)
+            tabs_->setTabText(orders_tab_idx_, tr("ORDERS"));
+        if (funds_tab_idx_ >= 0)
+            tabs_->setTabText(funds_tab_idx_, tr("FUNDS"));
+        if (stats_tab_idx_ >= 0)
+            tabs_->setTabText(stats_tab_idx_, tr("STATS"));
+        if (time_sales_tab_idx_ >= 0)
+            tabs_->setTabText(time_sales_tab_idx_, tr("TIME & SALES"));
+        if (auctions_tab_idx_ >= 0)
+            tabs_->setTabText(auctions_tab_idx_, tr("AUCTIONS"));
+        if (calendar_tab_idx_ >= 0)
+            tabs_->setTabText(calendar_tab_idx_, tr("CALENDAR"));
     }
 
     // Table headers
@@ -181,9 +189,9 @@ void EquityBottomPanel::retranslateUi() {
         positions_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Product"), tr("Opened"), tr("Side"), tr("Qty"),
                                                      tr("Avg Price"), tr("LTP"), tr("P&L"), tr("P&L %"), tr("Action")});
     if (holdings_table_)
-        holdings_table_->setHorizontalHeaderLabels(
-            {tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("Invested"), tr("Current"), tr("P&L"),
-             tr("P&L %"), tr("Day P&L"), tr("Action")});
+        holdings_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("Invested"),
+                                                    tr("Current"), tr("P&L"), tr("P&L %"), tr("Day P&L"),
+                                                    tr("Action")});
     if (orders_table_)
         orders_table_->setHorizontalHeaderLabels({tr("Order ID"), tr("Symbol"), tr("Product"), tr("Side"), tr("Type"),
                                                   tr("Qty"), tr("Price"), tr("Status"), tr("Time"), tr("Action")});
@@ -198,33 +206,44 @@ void EquityBottomPanel::retranslateUi() {
             {tr("Date"), tr("Open (ET)"), tr("Close (ET)"), tr("Pre-Market"), tr("After-Hours")});
 
     // Action buttons
-    if (close_all_btn_)      close_all_btn_->setText(tr("SQUARE OFF ALL"));
-    if (cancel_all_btn_)     cancel_all_btn_->setText(tr("CANCEL ALL ORDERS"));
-    if (holdings_import_btn_) holdings_import_btn_->setText(tr("IMPORT TO PORTFOLIO"));
-    if (holdings_square_off_btn_) holdings_square_off_btn_->setText(tr("SQUARE OFF ALL"));
+    if (close_all_btn_)
+        close_all_btn_->setText(tr("SQUARE OFF ALL"));
+    if (cancel_all_btn_)
+        cancel_all_btn_->setText(tr("CANCEL ALL ORDERS"));
+    if (holdings_import_btn_)
+        holdings_import_btn_->setText(tr("IMPORT TO PORTFOLIO"));
+    if (holdings_square_off_btn_)
+        holdings_square_off_btn_->setText(tr("SQUARE OFF ALL"));
 
     // Holdings summary-strip captions
-    if (holdings_count_caption_)    holdings_count_caption_->setText(tr("HOLDINGS"));
-    if (holdings_invested_caption_) holdings_invested_caption_->setText(tr("INVESTED"));
-    if (holdings_current_caption_)  holdings_current_caption_->setText(tr("CURRENT"));
-    if (holdings_pnl_caption_)      holdings_pnl_caption_->setText(tr("TOTAL P&L"));
-    if (holdings_day_pnl_caption_)  holdings_day_pnl_caption_->setText(tr("TODAY'S P&L"));
-    if (holdings_pnl_pct_caption_)  holdings_pnl_pct_caption_->setText(tr("RETURN %"));
+    if (holdings_count_caption_)
+        holdings_count_caption_->setText(tr("HOLDINGS"));
+    if (holdings_invested_caption_)
+        holdings_invested_caption_->setText(tr("INVESTED"));
+    if (holdings_current_caption_)
+        holdings_current_caption_->setText(tr("CURRENT"));
+    if (holdings_pnl_caption_)
+        holdings_pnl_caption_->setText(tr("TOTAL P&L"));
+    if (holdings_day_pnl_caption_)
+        holdings_day_pnl_caption_->setText(tr("TODAY'S P&L"));
+    if (holdings_pnl_pct_caption_)
+        holdings_pnl_pct_caption_->setText(tr("RETURN %"));
 
     // Funds card captions
-    const QString fund_caps[kFundCards] = {tr("AVAILABLE BALANCE"), tr("USED MARGIN"),   tr("TOTAL EQUITY"),
+    const QString fund_caps[kFundCards] = {tr("AVAILABLE BALANCE"), tr("USED MARGIN"),    tr("TOTAL EQUITY"),
                                            tr("REALIZED P&L"),      tr("UNREALIZED P&L"), tr("HOLDINGS VALUE"),
                                            tr("OPENING BALANCE"),   tr("MARGIN USED %"),  tr("COLLATERAL")};
     for (int i = 0; i < kFundCards; ++i)
-        if (fund_card_cap_[i]) fund_card_cap_[i]->setText(fund_caps[i]);
+        if (fund_card_cap_[i])
+            fund_card_cap_[i]->setText(fund_caps[i]);
 
     // Stats card captions
-    const QString stat_caps[kStatCards] = {tr("NET P&L"),     tr("TODAY'S P&L"),   tr("RETURN %"),
-                                           tr("WIN RATE"),    tr("PROFIT FACTOR"), tr("TOTAL TRADES"),
-                                           tr("AVG WIN"),     tr("AVG LOSS"),      tr("TURNOVER"),
-                                           tr("LARGEST WIN"), tr("LARGEST LOSS"),  tr("TOTAL CHARGES")};
+    const QString stat_caps[kStatCards] = {
+        tr("NET P&L"), tr("TODAY'S P&L"), tr("RETURN %"), tr("WIN RATE"),    tr("PROFIT FACTOR"), tr("TOTAL TRADES"),
+        tr("AVG WIN"), tr("AVG LOSS"),    tr("TURNOVER"), tr("LARGEST WIN"), tr("LARGEST LOSS"),  tr("TOTAL CHARGES")};
     for (int i = 0; i < kStatCards; ++i)
-        if (stat_card_cap_[i]) stat_card_cap_[i]->setText(stat_caps[i]);
+        if (stat_card_cap_[i])
+            stat_card_cap_[i]->setText(stat_caps[i]);
 
     // The calendar clock banner ("● MARKET OPEN/CLOSED/--") is live data driven
     // by set_clock(); it re-renders in the new language on the next clock tick,
@@ -361,15 +380,23 @@ void EquityBottomPanel::setup_positions_tab() {
         auto* prod_item = positions_table_->item(row, 1);
         const QString product = prod_item && !prod_item->text().isEmpty() ? prod_item->text() : QStringLiteral("MIS");
         QMenu menu(this);
-        QAction* buy = menu.addAction(tr("Buy / Add  %1").arg(symbol));
-        QAction* sell = menu.addAction(tr("Sell / Reduce  %1").arg(symbol));
+        // Direction-aware exit: paper shorts render side "SHORT" with positive qty,
+        // live broker shorts a signed qty and/or side "SHORT"/"SELL" (col 3).
+        auto* side_item = positions_table_->item(row, 3); // Side column
+        const QString side_txt = side_item ? side_item->text() : QString();
         auto* qty_item = positions_table_->item(row, 4); // Qty column
-        const double held = qty_item ? qAbs(qty_item->text().toDouble()) : 0.0;
+        const double raw_qty = qty_item ? qty_item->text().toDouble() : 0.0;
+        const bool is_short = raw_qty < 0 || side_txt.contains(QStringLiteral("SHORT"), Qt::CaseInsensitive) ||
+                              side_txt.compare(QStringLiteral("SELL"), Qt::CaseInsensitive) == 0;
+        const double held = qAbs(raw_qty);
+        QAction* buy = menu.addAction(tr("Buy / Add  %1").arg(symbol));
+        QAction* sell =
+            menu.addAction(is_short ? tr("Buy / Cover  %1").arg(symbol) : tr("Sell / Reduce  %1").arg(symbol));
         QAction* chosen = menu.exec(positions_table_->viewport()->mapToGlobal(p));
         if (chosen == buy)
             emit trade_symbol_requested(symbol, product, true, 0.0); // add → ticket defaults to 1
         else if (chosen == sell)
-            emit trade_symbol_requested(symbol, product, false, held); // reduce → pre-fill held qty
+            emit trade_symbol_requested(symbol, product, is_short, held); // exit → pre-fill held qty
     });
 
     // Left-click a position row → load that symbol's chart (parity with the
@@ -378,7 +405,9 @@ void EquityBottomPanel::setup_positions_tab() {
     connect(positions_table_, &QTableWidget::cellClicked, this, [this](int row, int col) {
         auto* sym_item = positions_table_->item(row, 0);
         LOG_INFO("posdbg", QString("positions cellClicked row=%1 col=%2 sym='%3'")
-                               .arg(row).arg(col).arg(sym_item ? sym_item->text() : QStringLiteral("<null>")));
+                               .arg(row)
+                               .arg(col)
+                               .arg(sym_item ? sym_item->text() : QStringLiteral("<null>")));
         if (sym_item && !sym_item->text().isEmpty())
             emit chart_symbol_requested(sym_item->text());
     });
@@ -411,23 +440,23 @@ void EquityBottomPanel::setup_holdings_tab() {
         cv->setContentsMargins(0, 0, 0, 0);
         cv->setSpacing(1);
         auto* cap = new QLabel(caption);
-        cap->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:0.5px;")
-                               .arg(fincept::ui::colors::TEXT_SECONDARY()));
+        cap->setStyleSheet(
+            QString("color:%1;font-size:10px;letter-spacing:0.5px;").arg(fincept::ui::colors::TEXT_SECONDARY()));
         caption_out = cap;
         auto* val = new QLabel("--");
-        val->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;")
-                               .arg(fincept::ui::colors::TEXT_PRIMARY()));
+        val->setStyleSheet(
+            QString("color:%1;font-size:13px;font-weight:700;").arg(fincept::ui::colors::TEXT_PRIMARY()));
         cv->addWidget(cap);
         cv->addWidget(val);
         strip_layout->addWidget(cell);
         return val;
     };
-    holdings_count_label_     = make_stat(tr("HOLDINGS"),  holdings_count_caption_);
-    holdings_invested_label_  = make_stat(tr("INVESTED"),  holdings_invested_caption_);
-    holdings_current_label_   = make_stat(tr("CURRENT"),   holdings_current_caption_);
-    holdings_pnl_label_       = make_stat(tr("TOTAL P&L"), holdings_pnl_caption_);
-    holdings_day_pnl_label_   = make_stat(tr("TODAY'S P&L"), holdings_day_pnl_caption_);
-    holdings_pnl_pct_label_   = make_stat(tr("RETURN %"),  holdings_pnl_pct_caption_);
+    holdings_count_label_ = make_stat(tr("HOLDINGS"), holdings_count_caption_);
+    holdings_invested_label_ = make_stat(tr("INVESTED"), holdings_invested_caption_);
+    holdings_current_label_ = make_stat(tr("CURRENT"), holdings_current_caption_);
+    holdings_pnl_label_ = make_stat(tr("TOTAL P&L"), holdings_pnl_caption_);
+    holdings_day_pnl_label_ = make_stat(tr("TODAY'S P&L"), holdings_day_pnl_caption_);
+    holdings_pnl_pct_label_ = make_stat(tr("RETURN %"), holdings_pnl_pct_caption_);
     strip_layout->addStretch(1);
 
     holdings_import_btn_ = new QPushButton(tr("IMPORT TO PORTFOLIO"));
@@ -438,9 +467,8 @@ void EquityBottomPanel::setup_holdings_tab() {
                 "font-size:11px;font-weight:700;letter-spacing:0.5px;}"
                 "QPushButton:hover{background:%4;color:#000;}"
                 "QPushButton:disabled{color:%5;border-color:%3;}")
-            .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::ORANGE(),
-                 fincept::ui::colors::BORDER(), fincept::ui::colors::ORANGE(),
-                 fincept::ui::colors::TEXT_SECONDARY()));
+            .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::ORANGE(), fincept::ui::colors::BORDER(),
+                 fincept::ui::colors::ORANGE(), fincept::ui::colors::TEXT_SECONDARY()));
     connect(holdings_import_btn_, &QPushButton::clicked, this, [this]() {
         if (!last_holdings_.isEmpty())
             emit import_holdings_requested(last_holdings_);
@@ -450,8 +478,7 @@ void EquityBottomPanel::setup_holdings_tab() {
     holdings_replicate_btn_ = new QPushButton(tr("REPLICATE → PAPER"));
     holdings_replicate_btn_->setCursor(Qt::PointingHandCursor);
     holdings_replicate_btn_->setStyleSheet(holdings_import_btn_->styleSheet());
-    connect(holdings_replicate_btn_, &QPushButton::clicked, this,
-            [this]() { emit replicate_portfolio_requested(); });
+    connect(holdings_replicate_btn_, &QPushButton::clicked, this, [this]() { emit replicate_portfolio_requested(); });
     strip_layout->addWidget(holdings_replicate_btn_);
 
     // SQUARE OFF ALL — sells every holding (delivery/CNC) at market. Mirrors the
@@ -472,12 +499,11 @@ void EquityBottomPanel::setup_holdings_tab() {
                               .arg(last_holdings_.size()));
         if (account_id_.isEmpty() || last_holdings_.isEmpty())
             return;
-        auto answer = QMessageBox::warning(
-            this, tr("Square Off All Holdings"),
-            tr("This will place MARKET SELL orders to exit ALL %1 holding(s).\n\n"
-               "Positions are NOT affected. Are you sure?")
-                .arg(last_holdings_.size()),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        auto answer = QMessageBox::warning(this, tr("Square Off All Holdings"),
+                                           tr("This will place MARKET SELL orders to exit ALL %1 holding(s).\n\n"
+                                              "Positions are NOT affected. Are you sure?")
+                                               .arg(last_holdings_.size()),
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
         emit square_off_all_holdings_requested(last_holdings_);
@@ -489,9 +515,8 @@ void EquityBottomPanel::setup_holdings_tab() {
     holdings_table_ = new QTableWidget;
     holdings_table_->setObjectName("eqTable");
     holdings_table_->setColumnCount(10);
-    holdings_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"),
-                                                tr("Invested"), tr("Current"), tr("P&L"), tr("P&L %"),
-                                                tr("Day P&L"), tr("Action")});
+    holdings_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("Invested"),
+                                                tr("Current"), tr("P&L"), tr("P&L %"), tr("Day P&L"), tr("Action")});
     holdings_table_->verticalHeader()->setVisible(false);
     holdings_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     holdings_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -553,15 +578,16 @@ void EquityBottomPanel::setup_orders_tab() {
     // Per-day order book: pick a date to view that IST day's orders (default today,
     // so each session starts empty instead of accumulating every past order).
     auto* date_lbl = new QLabel(tr("DATE"));
-    date_lbl->setStyleSheet(
-        QString("color:%1;font-size:10px;font-weight:600;letter-spacing:0.5px;").arg(fincept::ui::colors::TEXT_SECONDARY()));
+    date_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:600;letter-spacing:0.5px;")
+                                .arg(fincept::ui::colors::TEXT_SECONDARY()));
     orders_date_edit_ = new QDateEdit(QDate::currentDate());
     orders_date_edit_->setObjectName("eqOrdersDate");
     orders_date_edit_->setCalendarPopup(true);
     orders_date_edit_->setDisplayFormat(QStringLiteral("yyyy-MM-dd"));
     orders_date_edit_->setMaximumDate(QDate::currentDate());
     orders_date_edit_->setStyleSheet(
-        QString("QDateEdit{background:%1;color:%2;border:1px solid %3;padding:2px 6px;font-size:11px;border-radius:2px;}")
+        QString(
+            "QDateEdit{background:%1;color:%2;border:1px solid %3;padding:2px 6px;font-size:11px;border-radius:2px;}")
             .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER()));
     connect(orders_date_edit_, &QDateEdit::dateChanged, this, [this](const QDate& d) {
         if (!suppress_orders_date_signal_)
@@ -620,8 +646,8 @@ static QFrame* make_metric_card(const QString& caption, QLabel*& cap_out, QLabel
     cv->setContentsMargins(12, 8, 12, 8);
     cv->setSpacing(3);
     auto* cap = new QLabel(caption);
-    cap->setStyleSheet(
-        QString("color:%1;font-size:10px;letter-spacing:0.5px;font-weight:600;").arg(fincept::ui::colors::TEXT_SECONDARY()));
+    cap->setStyleSheet(QString("color:%1;font-size:10px;letter-spacing:0.5px;font-weight:600;")
+                           .arg(fincept::ui::colors::TEXT_SECONDARY()));
     auto* val = new QLabel(QStringLiteral("--"));
     val->setStyleSheet(QString("color:%1;font-size:15px;font-weight:700;").arg(fincept::ui::colors::TEXT_PRIMARY()));
     cv->addWidget(cap);
@@ -646,7 +672,7 @@ void EquityBottomPanel::setup_funds_tab() {
     grid->setHorizontalSpacing(10);
     grid->setVerticalSpacing(10);
 
-    const QString caps[kFundCards] = {tr("AVAILABLE BALANCE"), tr("USED MARGIN"),   tr("TOTAL EQUITY"),
+    const QString caps[kFundCards] = {tr("AVAILABLE BALANCE"), tr("USED MARGIN"),    tr("TOTAL EQUITY"),
                                       tr("REALIZED P&L"),      tr("UNREALIZED P&L"), tr("HOLDINGS VALUE"),
                                       tr("OPENING BALANCE"),   tr("MARGIN USED %"),  tr("COLLATERAL")};
     for (int i = 0; i < kFundCards; ++i)
@@ -677,10 +703,9 @@ void EquityBottomPanel::setup_stats_tab() {
     grid->setHorizontalSpacing(10);
     grid->setVerticalSpacing(10);
 
-    const QString caps[kStatCards] = {tr("NET P&L"),      tr("TODAY'S P&L"),  tr("RETURN %"),
-                                      tr("WIN RATE"),     tr("PROFIT FACTOR"), tr("TOTAL TRADES"),
-                                      tr("AVG WIN"),      tr("AVG LOSS"),     tr("TURNOVER"),
-                                      tr("LARGEST WIN"),  tr("LARGEST LOSS"), tr("TOTAL CHARGES")};
+    const QString caps[kStatCards] = {tr("NET P&L"),       tr("TODAY'S P&L"),  tr("RETURN %"),     tr("WIN RATE"),
+                                      tr("PROFIT FACTOR"), tr("TOTAL TRADES"), tr("AVG WIN"),      tr("AVG LOSS"),
+                                      tr("TURNOVER"),      tr("LARGEST WIN"),  tr("LARGEST LOSS"), tr("TOTAL CHARGES")};
     for (int i = 0; i < kStatCards; ++i)
         grid->addWidget(make_metric_card(caps[i], stat_card_cap_[i], stat_card_val_[i]), i / 3, i % 3);
     for (int c = 0; c < 3; ++c)
@@ -695,9 +720,12 @@ void EquityBottomPanel::setup_stats_tab() {
 // ── Data Setters ───────────────────────────────────────────────────────────
 
 void EquityBottomPanel::clear_blotter_tables() {
-    if (positions_table_) positions_table_->setRowCount(0);
-    if (holdings_table_)  holdings_table_->setRowCount(0);
-    if (orders_table_)    orders_table_->setRowCount(0);
+    if (positions_table_)
+        positions_table_->setRowCount(0);
+    if (holdings_table_)
+        holdings_table_->setRowCount(0);
+    if (orders_table_)
+        orders_table_->setRowCount(0);
     last_positions_.clear();
     last_paper_positions_.clear();
     last_holdings_.clear();
@@ -788,8 +816,7 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
         // Col 2 — "Opened": parse ISO timestamp, convert to local time, fall back to raw string
         {
             const QDateTime dt = QDateTime::fromString(p.opened_at, Qt::ISODate).toLocalTime();
-            ensure_item(positions_table_, i, 2)
-                ->setText(dt.isValid() ? dt.toString("yyyy-MM-dd HH:mm") : p.opened_at);
+            ensure_item(positions_table_, i, 2)->setText(dt.isValid() ? dt.toString("yyyy-MM-dd HH:mm") : p.opened_at);
         }
 
         ensure_item(positions_table_, i, 3)->setText(p.side.toUpper());
@@ -812,10 +839,9 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
 
         // Col 9 — Action: SELL (exit, pre-filled qty) + for intraday (MIS), a
         // "→ CNC" convert-to-delivery button. NRML/CNC rows get SELL only.
-        positions_table_->setCellWidget(
-            i, 9,
-            make_positions_action_cell(p.symbol, p.product, p.quantity,
-                                       trading::product_is_intraday(p.product), p.id));
+        positions_table_->setCellWidget(i, 9,
+                                        make_positions_action_cell(p.symbol, p.product, p.quantity, p.side,
+                                                                   trading::product_is_intraday(p.product), p.id));
     }
     update_positions_summary();
 }
@@ -919,32 +945,39 @@ void EquityBottomPanel::set_orders_date(const QDate& day) {
     suppress_orders_date_signal_ = false;
 }
 
-QWidget* EquityBottomPanel::make_positions_action_cell(const QString& symbol, const QString& product,
-                                                       double qty, bool show_convert,
+QWidget* EquityBottomPanel::make_positions_action_cell(const QString& symbol, const QString& product, double qty,
+                                                       const QString& side, bool show_convert,
                                                        const QString& paper_pid) {
     auto* cell = new QWidget;
     auto* lay = new QHBoxLayout(cell);
     lay->setContentsMargins(2, 0, 2, 0);
     lay->setSpacing(4);
 
-    // SELL → opens the order ticket pre-filled with the held quantity (parity with
-    // the FNO tab's per-strike order button, instead of right-click-only).
-    auto* sell = new QPushButton(tr("SELL"));
+    // Exit → opens the order ticket pre-filled with the held quantity (parity with
+    // the FNO tab's per-strike order button, instead of right-click-only). For a
+    // SHORT position the exit side is BUY (cover): paper rows carry a positive qty
+    // with side "short"; live broker rows carry a signed qty and/or side
+    // "SHORT"/"SELL" — detect either.
+    const bool exit_is_buy = qty < 0 || side.contains(QStringLiteral("short"), Qt::CaseInsensitive) ||
+                             side.compare(QStringLiteral("sell"), Qt::CaseInsensitive) == 0;
+    auto* sell = new QPushButton(exit_is_buy ? tr("BUY") : tr("SELL"));
     sell->setObjectName("eqTableBtn");
     sell->setFixedHeight(18);
     sell->setCursor(Qt::PointingHandCursor);
-    sell->setToolTip(tr("Sell / exit %1 — opens an order ticket pre-filled with the held quantity").arg(symbol));
+    sell->setToolTip(exit_is_buy
+                         ? tr("Buy / cover %1 — opens an order ticket pre-filled with the held quantity").arg(symbol)
+                         : tr("Sell / exit %1 — opens an order ticket pre-filled with the held quantity").arg(symbol));
     sell->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(239,68,68,0.15);color:%1;"
                                 "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
                                 "QPushButton#eqTableBtn:hover{background:rgba(239,68,68,0.30);}")
                             .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::BORDER_MED()));
     const double held = qAbs(qty);
     const QString prod = product.isEmpty() ? QStringLiteral("MIS") : product;
-    connect(sell, &QPushButton::clicked, this, [this, symbol, prod, held]() {
-        LOG_INFO("sqoff", QString("[panel] per-row SELL clicked: sym='%1' prod='%2' qty=%3")
-                              .arg(symbol, prod)
+    connect(sell, &QPushButton::clicked, this, [this, symbol, prod, held, exit_is_buy]() {
+        LOG_INFO("sqoff", QString("[panel] per-row %1 clicked: sym='%2' prod='%3' qty=%4")
+                              .arg(exit_is_buy ? QStringLiteral("BUY(cover)") : QStringLiteral("SELL"), symbol, prod)
                               .arg(held));
-        emit trade_symbol_requested(symbol, prod, false, held);
+        emit trade_symbol_requested(symbol, prod, exit_is_buy, held);
     });
     lay->addWidget(sell);
 
@@ -993,7 +1026,7 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
 
         // SELL (exit) action; no MIS→CNC convert in live mode (paper-only).
         positions_table_->setCellWidget(
-            i, 9, make_positions_action_cell(p.symbol, p.product_type, p.quantity, false, QString()));
+            i, 9, make_positions_action_cell(p.symbol, p.product_type, p.quantity, p.side, false, QString()));
     }
     update_positions_summary();
 }
@@ -1032,8 +1065,8 @@ void EquityBottomPanel::update_holding_quote(const QString& symbol, double ltp, 
             item->setData(Qt::DisplayRole, QString::number(v, 'f', 2));
             item->setData(Qt::EditRole, v);
         };
-        set_num(3, ltp);               // LTP
-        set_num(5, h->current_value);  // Current
+        set_num(3, ltp);              // LTP
+        set_num(5, h->current_value); // Current
         auto* pnl_item = ensure_item(holdings_table_, r, 6);
         pnl_item->setData(Qt::DisplayRole, QString::number(h->pnl, 'f', 2));
         pnl_item->setData(Qt::EditRole, h->pnl);
@@ -1137,9 +1170,8 @@ void EquityBottomPanel::update_quote(const QString& symbol, const trading::Broke
             if (p.symbol != symbol)
                 continue;
             p.current_price = ltp;
-            p.unrealized_pnl = (p.side == QLatin1String("long"))
-                                   ? (ltp - p.entry_price) * p.quantity
-                                   : (p.entry_price - ltp) * p.quantity;
+            p.unrealized_pnl = (p.side == QLatin1String("long")) ? (ltp - p.entry_price) * p.quantity
+                                                                 : (p.entry_price - ltp) * p.quantity;
             const double notional = p.entry_price * p.quantity;
             const double pct = notional != 0.0 ? (p.unrealized_pnl / notional) * 100.0 : 0.0;
             paint(i, p.unrealized_pnl, pct);
@@ -1260,8 +1292,8 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
         holdings_table_->setCellWidget(i, 9, action_cell);
 
         total_invested += h.invested_value;
-        total_current  += h.current_value;
-        total_pnl      += h.pnl;
+        total_current += h.current_value;
+        total_pnl += h.pnl;
     }
 
     const double total_pct = total_invested > 0 ? (total_pnl / total_invested) * 100.0 : 0.0;
@@ -1273,25 +1305,22 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
     if (holdings_current_label_)
         holdings_current_label_->setText(QString::number(total_current, 'f', 2));
     if (holdings_pnl_label_) {
-        holdings_pnl_label_->setText(QString("%1%2")
-                                         .arg(total_pnl >= 0 ? "+" : "")
-                                         .arg(QString::number(total_pnl, 'f', 2)));
+        holdings_pnl_label_->setText(
+            QString("%1%2").arg(total_pnl >= 0 ? "+" : "").arg(QString::number(total_pnl, 'f', 2)));
         holdings_pnl_label_->setStyleSheet(
             QString("color:%1;font-size:13px;font-weight:700;")
                 .arg(total_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
     }
     if (holdings_day_pnl_label_) {
-        holdings_day_pnl_label_->setText(QString("%1%2")
-                                             .arg(total_day_pnl >= 0 ? "+" : "")
-                                             .arg(QString::number(total_day_pnl, 'f', 2)));
+        holdings_day_pnl_label_->setText(
+            QString("%1%2").arg(total_day_pnl >= 0 ? "+" : "").arg(QString::number(total_day_pnl, 'f', 2)));
         holdings_day_pnl_label_->setStyleSheet(
             QString("color:%1;font-size:13px;font-weight:700;")
                 .arg(total_day_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
     }
     if (holdings_pnl_pct_label_) {
-        holdings_pnl_pct_label_->setText(QString("%1%2%")
-                                             .arg(total_pct >= 0 ? "+" : "")
-                                             .arg(QString::number(total_pct, 'f', 2)));
+        holdings_pnl_pct_label_->setText(
+            QString("%1%2%").arg(total_pct >= 0 ? "+" : "").arg(QString::number(total_pct, 'f', 2)));
         holdings_pnl_pct_label_->setStyleSheet(
             QString("color:%1;font-size:13px;font-weight:700;")
                 .arg(total_pct >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));

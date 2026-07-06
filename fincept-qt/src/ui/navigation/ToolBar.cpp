@@ -162,9 +162,12 @@ void ToolBar::changeEvent(QEvent* e) {
 }
 
 void ToolBar::retranslateUi() {
-    if (subtitle_label_) subtitle_label_->setText(tr("  |  PROFESSIONAL RESEARCH DESK"));
-    if (live_label_)     live_label_->setText(tr(" LIVE"));
-    if (plan_btn_)       plan_btn_->setToolTip(tr("View Plans & Pricing"));
+    if (subtitle_label_)
+        subtitle_label_->setText(tr("  |  PROFESSIONAL RESEARCH DESK"));
+    if (live_label_)
+        live_label_->setText(tr(" LIVE"));
+    if (plan_btn_)
+        plan_btn_->setToolTip(tr("View Plans & Pricing"));
     if (chat_mode_btn_) {
         // Keep the ⬡ glyph (U+2B21) as a visual icon; only the label after it
         // translates. Must use fromUtf8 to decode the UTF-8 bytes — wrapping
@@ -173,7 +176,8 @@ void ToolBar::retranslateUi() {
         chat_mode_btn_->setText(QString::fromUtf8("\xe2\xac\xa1 ") + tr("CHAT"));
         chat_mode_btn_->setToolTip(tr("Switch to Chat Mode (F9)"));
     }
-    if (logout_btn_) logout_btn_->setText(tr("LOGOUT"));
+    if (logout_btn_)
+        logout_btn_->setText(tr("LOGOUT"));
     // Rebuild menus so the new translator applies to every QAction label.
     rebuild_menus();
     // Refresh user display so "FREE" / "---" placeholders pick up new locale.
@@ -181,7 +185,8 @@ void ToolBar::retranslateUi() {
 }
 
 void ToolBar::rebuild_menus() {
-    if (!menu_bar_) return;
+    if (!menu_bar_)
+        return;
     menu_bar_->clear();
     menu_bar_->addMenu(build_file_menu());
     menu_bar_->addMenu(build_navigate_menu());
@@ -196,7 +201,8 @@ void ToolBar::rebuild_menus() {
 }
 
 void ToolBar::refresh_theme() {
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
+    setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
     if (menu_bar_) {
         menu_bar_->setStyleSheet(menu_ss());
         for (auto* action : menu_bar_->actions())
@@ -321,22 +327,20 @@ QMenu* ToolBar::build_file_menu() {
             const QString name = s->name();
             const QSize size = s->size();
             // Resolution format (W×H) is locale-neutral.
-            const QString label =
-                QString("%1. %2  (%3×%4)").arg(idx++).arg(name).arg(size.width()).arg(size.height());
-            monitors->addAction(label, this, [this, name]() {
-                emit action_triggered(QString("move_to_monitor:%1").arg(name));
-            });
+            const QString label = QString("%1. %2  (%3×%4)").arg(idx++).arg(name).arg(size.width()).arg(size.height());
+            monitors->addAction(label, this,
+                                [this, name]() { emit action_triggered(QString("move_to_monitor:%1").arg(name)); });
         }
     });
 
-    m->addAction(tr("Close Window"),      this, [this]() { emit action_triggered("close_window"); });
+    m->addAction(tr("Close Window"), this, [this]() { emit action_triggered("close_window"); });
     m->addAction(tr("Close All Windows"), this, [this]() { emit action_triggered("close_all_windows"); });
 
     m->addSeparator();
-    m->addAction(tr("New Layout"),       this, [this]() { emit action_triggered("layout_new"); });
-    m->addAction(tr("Open Layout…"),     this, [this]() { emit action_triggered("layout_open"); });
-    m->addAction(tr("Save Layout"),      this, [this]() { emit action_triggered("layout_save"); });
-    m->addAction(tr("Save Layout As…"),  this, [this]() { emit action_triggered("layout_save_as"); });
+    m->addAction(tr("New Layout"), this, [this]() { emit action_triggered("layout_new"); });
+    m->addAction(tr("Open Layout…"), this, [this]() { emit action_triggered("layout_open"); });
+    m->addAction(tr("Save Layout"), this, [this]() { emit action_triggered("layout_save"); });
+    m->addAction(tr("Save Layout As…"), this, [this]() { emit action_triggered("layout_save_as"); });
     m->addSeparator();
     m->addAction(tr("Import Layout"), this, [this]() { emit action_triggered("import_data"); });
     m->addAction(tr("Export Layout"), this, [this]() { emit action_triggered("export_data"); });
@@ -423,15 +427,13 @@ QMenu* ToolBar::build_navigate_menu() {
 QMenu* ToolBar::build_view_menu() {
     auto* m = new QMenu(tr("View"), this);
     m->setStyleSheet(popup_ss());
-    m->addAction(tr("Component Browser\tCtrl+K"), this,
-                 [this]() { emit action_triggered("browse_components"); });
+    m->addAction(tr("Component Browser\tCtrl+K"), this, [this]() { emit action_triggered("browse_components"); });
     m->addSeparator();
     m->addAction(tr("Fullscreen\tF11"), this, [this]() { emit action_triggered("fullscreen"); });
     m->addSeparator();
     m->addAction(tr("Focus Mode\tF10"), this, [this]() { emit action_triggered("focus_mode"); });
     // Not checkable — state lives on WindowFrame::always_on_top_; a checkable QAction would drift on focus changes.
-    m->addAction(tr("Always on Top\tCtrl+Shift+T"), this,
-                 [this]() { emit action_triggered("always_on_top"); });
+    m->addAction(tr("Always on Top\tCtrl+Shift+T"), this, [this]() { emit action_triggered("always_on_top"); });
     m->addSeparator();
 
     auto* panels = m->addMenu(tr("Float Panel"));

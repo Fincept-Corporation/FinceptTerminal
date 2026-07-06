@@ -23,8 +23,8 @@ class PortfolioReplicationDialog : public QDialog {
     explicit PortfolioReplicationDialog(QWidget* parent = nullptr);
 
   private slots:
-    void reload_plan();          // (re)fetch source + rebuild table for current pickers
-    void recompute_footer();     // update required/available + top-up enablement
+    void reload_plan();      // (re)fetch source + rebuild table for current pickers
+    void recompute_footer(); // update required/available + top-up enablement
     void do_top_up();
     void do_replicate();
 
@@ -34,16 +34,16 @@ class PortfolioReplicationDialog : public QDialog {
     void fill_table();
     trading::replication::ReplicationOptions current_options() const;
 
-    QComboBox*    source_combo_ = nullptr;
-    QComboBox*    target_combo_ = nullptr;
-    QCheckBox*    inc_holdings_ = nullptr;
-    QCheckBox*    inc_positions_ = nullptr;
+    QComboBox* source_combo_ = nullptr;
+    QComboBox* target_combo_ = nullptr;
+    QCheckBox* inc_holdings_ = nullptr;
+    QCheckBox* inc_positions_ = nullptr;
     QTableWidget* table_ = nullptr;
-    QLabel*       footer_ = nullptr;
-    QPushButton*  topup_btn_ = nullptr;
-    QPushButton*  replicate_btn_ = nullptr;
+    QLabel* footer_ = nullptr;
+    QPushButton* topup_btn_ = nullptr;
+    QPushButton* replicate_btn_ = nullptr;
     QProgressBar* progress_ = nullptr;
-    QLabel*       status_ = nullptr;
+    QLabel* status_ = nullptr;
 
     QVector<trading::replication::SourceItem> source_items_;
     trading::replication::ReplicationPlan plan_;

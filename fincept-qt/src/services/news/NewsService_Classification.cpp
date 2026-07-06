@@ -6,14 +6,12 @@
 //
 // Part of the partial-class split of NewsService.cpp.
 
-#include "services/news/NewsService.h"
-
 #include "core/logging/Logger.h"
-#include "network/http/HttpClient.h"
-#include "storage/cache/CacheManager.h"
-
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "network/http/HttpClient.h"
+#include "services/news/NewsService.h"
+#include "storage/cache/CacheManager.h"
 
 #include <QAtomicInt>
 #include <QDateTime>

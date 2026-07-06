@@ -14,8 +14,7 @@ namespace fincept::screens {
 namespace {
 
 QString trade_font_stack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 } // namespace
@@ -29,7 +28,8 @@ TradeTab::TradeTab(QWidget* parent) : QWidget(parent) {
 TradeTab::~TradeTab() = default;
 
 void TradeTab::set_from_mint(const QString& mint) {
-    if (swap_panel_) swap_panel_->set_from_mint(mint);
+    if (swap_panel_)
+        swap_panel_->set_from_mint(mint);
 }
 
 void TradeTab::build_ui() {
@@ -72,25 +72,23 @@ void TradeTab::apply_theme() {
     using namespace ui::colors;
     const QString font = trade_font_stack();
 
-    const QString ss = QStringLiteral(
-        "QWidget#tradeTab { background:%1; }"
-        "QFrame#tradeTabPanelHost { background:%2; border:1px solid %3; }"
-        "QWidget#tradeTabPanelHead { background:%4; border-bottom:1px solid %3; }"
-        "QLabel#tradeTabPanelTitle { color:%5; font-family:%6; font-size:11px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#tradeTabPanelStatus { color:%7; font-family:%6; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#tradeTabPlaceholderBody { color:%8; font-family:%6; font-size:11px;"
-        "  background:transparent; }"
-    )
-        .arg(BG_BASE(),         // %1
-             BG_SURFACE(),      // %2
-             BORDER_DIM(),      // %3
-             BG_RAISED(),       // %4
-             AMBER(),           // %5
-             font,              // %6
-             TEXT_TERTIARY(),   // %7
-             TEXT_SECONDARY()); // %8
+    const QString ss = QStringLiteral("QWidget#tradeTab { background:%1; }"
+                                      "QFrame#tradeTabPanelHost { background:%2; border:1px solid %3; }"
+                                      "QWidget#tradeTabPanelHead { background:%4; border-bottom:1px solid %3; }"
+                                      "QLabel#tradeTabPanelTitle { color:%5; font-family:%6; font-size:11px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                                      "QLabel#tradeTabPanelStatus { color:%7; font-family:%6; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                                      "QLabel#tradeTabPlaceholderBody { color:%8; font-family:%6; font-size:11px;"
+                                      "  background:transparent; }")
+                           .arg(BG_BASE(),         // %1
+                                BG_SURFACE(),      // %2
+                                BORDER_DIM(),      // %3
+                                BG_RAISED(),       // %4
+                                AMBER(),           // %5
+                                font,              // %6
+                                TEXT_TERTIARY(),   // %7
+                                TEXT_SECONDARY()); // %8
 
     setStyleSheet(ss);
 }

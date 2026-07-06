@@ -47,8 +47,7 @@ void GoogleDesktopLogin::start() {
 
     timeout_ = new QTimer(this);
     timeout_->setSingleShot(true);
-    connect(timeout_, &QTimer::timeout, this,
-            [this]() { finish_error(tr("Login timed out. Please try again.")); });
+    connect(timeout_, &QTimer::timeout, this, [this]() { finish_error(tr("Login timed out. Please try again.")); });
     timeout_->start(kTimeoutMs);
 
     LOG_INFO("GoogleLogin", QString("Loopback listening on %1; opening browser").arg(callback));

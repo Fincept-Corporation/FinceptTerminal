@@ -8,7 +8,7 @@ class QLabel;
 namespace fincept::screens::panels {
 class SwapPanel;
 class FeeDiscountPanel;
-}
+} // namespace fincept::screens::panels
 
 namespace fincept::screens {
 

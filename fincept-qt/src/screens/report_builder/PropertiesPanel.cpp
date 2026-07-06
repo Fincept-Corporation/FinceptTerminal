@@ -53,7 +53,8 @@ void PropertiesPanel::build_empty_page() {
 
     empty_label_ = new QLabel(tr("Select a component\nto edit properties"));
     empty_label_->setAlignment(Qt::AlignCenter);
-    empty_label_->setStyleSheet(QString("color: %1; font-size: 13px; background: transparent;").arg(ui::colors::MUTED()));
+    empty_label_->setStyleSheet(
+        QString("color: %1; font-size: 13px; background: transparent;").arg(ui::colors::MUTED()));
     vl->addWidget(empty_label_);
 
     stack_->addWidget(empty_widget_);
@@ -425,14 +426,15 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         editor_layout_->addWidget(make_label(tr("Image File:")));
         auto* path_lbl = new QLabel(component->config.value("path", tr("(none)")));
         path_lbl->setWordWrap(true);
-        path_lbl->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
+        path_lbl->setStyleSheet(
+            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::MUTED()));
         editor_layout_->addWidget(path_lbl);
 
         // Browse button
         auto* browse = new QPushButton(tr("Browse File..."));
         connect(browse, &QPushButton::clicked, this, [this, path_lbl]() {
-            QString path =
-                QFileDialog::getOpenFileName(this, tr("Select Image"), "", tr("Images (*.png *.jpg *.jpeg *.bmp *.svg)"));
+            QString path = QFileDialog::getOpenFileName(this, tr("Select Image"), "",
+                                                        tr("Images (*.png *.jpg *.jpeg *.bmp *.svg)"));
             if (!path.isEmpty()) {
                 path_lbl->setText(QFileInfo(path).fileName());
                 emit config_changed(current_index_, "path", path);

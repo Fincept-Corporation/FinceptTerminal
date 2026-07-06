@@ -68,14 +68,8 @@ class PumpFunSwapService : public QObject {
     /// `slippage_pct`     — integer percent, 1..5. Clamped server-side.
     /// `priority_fee_sol` — SOL prio-fee, e.g. 0.00005. Clamped to a
     ///                      sensible range internally.
-    void build_swap(Action action,
-                    const QString& mint,
-                    double amount,
-                    bool denominated_in_sol,
-                    const QString& user_pubkey,
-                    int slippage_pct,
-                    double priority_fee_sol,
-                    SwapBuildCallback cb);
+    void build_swap(Action action, const QString& mint, double amount, bool denominated_in_sol,
+                    const QString& user_pubkey, int slippage_pct, double priority_fee_sol, SwapBuildCallback cb);
 
   private:
     QNetworkAccessManager* nam_ = nullptr;

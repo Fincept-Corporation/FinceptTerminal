@@ -47,8 +47,8 @@ class HistoricalDataStore {
 
     /// Query stored candles in [from_ms, to_ms] inclusive, ordered ascending by
     /// timestamp. Pass from_ms<=0 / to_ms<=0 to leave that bound open.
-    QVector<trading::BrokerCandle> get_candles(const QString& symbol, const QString& exchange,
-                                               const QString& interval, qint64 from_ms, qint64 to_ms) const;
+    QVector<trading::BrokerCandle> get_candles(const QString& symbol, const QString& exchange, const QString& interval,
+                                               qint64 from_ms, qint64 to_ms) const;
 
     /// Compute a higher-timeframe series by resampling a stored base series:
     ///   4h / 8h  ← aggregated from stored "1h"
@@ -57,8 +57,7 @@ class HistoricalDataStore {
     /// oi=last in each target bucket. Returns empty if target_interval is not a
     /// supported resample target or the base series is missing.
     QVector<trading::BrokerCandle> get_resampled(const QString& symbol, const QString& exchange,
-                                                 const QString& target_interval, qint64 from_ms,
-                                                 qint64 to_ms) const;
+                                                 const QString& target_interval, qint64 from_ms, qint64 to_ms) const;
 
     // ── Watchlist (symbols flagged for auto-download) ────────────────────────
 
@@ -96,8 +95,8 @@ class HistoricalDataStore {
     /// volume,oi` then one row per candle (timestamp in epoch ms). [from_ms,
     /// to_ms] inclusive; pass 0 for either bound to leave it open. Returns false
     /// on query / file-write error.
-    bool export_csv(const QString& symbol, const QString& exchange, const QString& interval,
-                    const QString& file_path, qint64 from_ms = 0, qint64 to_ms = 0) const;
+    bool export_csv(const QString& symbol, const QString& exchange, const QString& interval, const QString& file_path,
+                    qint64 from_ms = 0, qint64 to_ms = 0) const;
 
     /// TODO(parquet): true columnar Parquet export requires a parquet/arrow lib
     /// (none is vendored). For now this writes CSV to `file_path` and logs a

@@ -1,15 +1,14 @@
 // src/screens/portfolio/PortfolioBlotter.cpp
 #include "screens/portfolio/PortfolioBlotter.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/portfolio/PortfolioSparkline.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerTopic.h"
 #include "ui/theme/Theme.h"
-
-#include "datahub/DataHub.h"
-#include "datahub/DataHubMetaTypes.h"
 
 #include <QAction>
 #include <QEvent>
@@ -112,8 +111,8 @@ void PortfolioBlotter::build_ui() {
                                "  border-bottom:1px solid %3; border-right:1px solid %4;"
                                "  padding:5px 8px; font-size:11px; font-weight:700;"
                                "  letter-spacing:0.5px; }")
-                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
-                                ui::colors::BORDER_MED(), ui::colors::BORDER_DIM()));
+                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                                ui::colors::BORDER_DIM()));
 
     connect(hdr, &QHeaderView::sectionClicked, this, &PortfolioBlotter::on_header_clicked);
     connect(table_, &QTableWidget::cellClicked, this, &PortfolioBlotter::on_row_clicked);
@@ -132,9 +131,8 @@ void PortfolioBlotter::build_pagination_footer() {
     footer_ = new QWidget(this);
     footer_->setObjectName("pfBlotterFooter");
     footer_->setFixedHeight(28);
-    footer_->setStyleSheet(
-        QString("#pfBlotterFooter { background:%1; border-top:1px solid %2; }")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    footer_->setStyleSheet(QString("#pfBlotterFooter { background:%1; border-top:1px solid %2; }")
+                               .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* h = new QHBoxLayout(footer_);
     h->setContentsMargins(12, 0, 10, 0);
@@ -143,8 +141,7 @@ void PortfolioBlotter::build_pagination_footer() {
     // ── Left: "Showing X-Y of Z" ─────────────────────────────────────────────
     footer_status_ = new QLabel(tr("Showing 0 of 0"));
     footer_status_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:600; background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:10px; font-weight:600; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
     h->addWidget(footer_status_);
 
     h->addStretch(1);
@@ -157,18 +154,17 @@ void PortfolioBlotter::build_pagination_footer() {
         b->setFixedSize(22, 22);
         b->setCursor(Qt::PointingHandCursor);
         b->setToolTip(tip);
-        b->setStyleSheet(
-            QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                    "  font-size:11px; font-weight:700; }"
-                    "QPushButton:hover:enabled { color:%3; border-color:%3; }"
-                    "QPushButton:disabled { color:%4; border-color:%5; }")
-                .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
-                     ui::colors::AMBER(), ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
+        b->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                 "  font-size:11px; font-weight:700; }"
+                                 "QPushButton:hover:enabled { color:%3; border-color:%3; }"
+                                 "QPushButton:disabled { color:%4; border-color:%5; }")
+                             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
+                                  ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
         return b;
     };
 
     btn_first_ = make_nav_btn(QStringLiteral("«"), tr("First page"));
-    btn_prev_  = make_nav_btn(QStringLiteral("‹"), tr("Previous page"));
+    btn_prev_ = make_nav_btn(QStringLiteral("‹"), tr("Previous page"));
     h->addWidget(btn_first_);
     h->addWidget(btn_prev_);
 
@@ -176,8 +172,7 @@ void PortfolioBlotter::build_pagination_footer() {
     footer_page_label_->setMinimumWidth(80);
     footer_page_label_->setAlignment(Qt::AlignCenter);
     footer_page_label_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-weight:700; background:transparent;")
-            .arg(ui::colors::TEXT_PRIMARY()));
+        QString("color:%1; font-size:11px; font-weight:700; background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
     h->addWidget(footer_page_label_);
 
     btn_next_ = make_nav_btn(QStringLiteral("›"), tr("Next page"));
@@ -190,8 +185,7 @@ void PortfolioBlotter::build_pagination_footer() {
     // ── Right: "Rows: [10 ▾]" ───────────────────────────────────────────────
     footer_rows_label_ = new QLabel(tr("Rows:"));
     footer_rows_label_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:600; background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1; font-size:10px; font-weight:600; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
     h->addWidget(footer_rows_label_);
 
     page_size_combo_ = new QComboBox(footer_);
@@ -201,14 +195,13 @@ void PortfolioBlotter::build_pagination_footer() {
     page_size_combo_->addItem("20", 20);
     page_size_combo_->addItem("50", 50);
     page_size_combo_->addItem("100", 100);
-    page_size_combo_->setStyleSheet(
-        QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                "  padding:0 6px; font-size:11px; font-weight:700; min-width:48px; }"
-                "QComboBox::drop-down { border:none; width:14px; }"
-                "QComboBox QAbstractItemView { background:%1; color:%2;"
-                "  selection-background-color:%4; selection-color:%5; }")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER()));
+    page_size_combo_->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
+                                            "  padding:0 6px; font-size:11px; font-weight:700; min-width:48px; }"
+                                            "QComboBox::drop-down { border:none; width:14px; }"
+                                            "QComboBox QAbstractItemView { background:%1; color:%2;"
+                                            "  selection-background-color:%4; selection-color:%5; }")
+                                        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
+                                             ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER()));
     // Set initial selection to the persisted (or default) value.
     for (int i = 0; i < page_size_combo_->count(); ++i) {
         if (page_size_combo_->itemData(i).toInt() == page_size_) {
@@ -221,33 +214,43 @@ void PortfolioBlotter::build_pagination_footer() {
 
     // ── Wiring ───────────────────────────────────────────────────────────────
     connect(btn_first_, &QPushButton::clicked, this, [this]() {
-        if (current_page_ != 1) { current_page_ = 1; populate_table(); }
+        if (current_page_ != 1) {
+            current_page_ = 1;
+            populate_table();
+        }
     });
     connect(btn_prev_, &QPushButton::clicked, this, [this]() {
-        if (current_page_ > 1) { --current_page_; populate_table(); }
+        if (current_page_ > 1) {
+            --current_page_;
+            populate_table();
+        }
     });
     connect(btn_next_, &QPushButton::clicked, this, [this]() {
-        if (current_page_ < total_pages()) { ++current_page_; populate_table(); }
+        if (current_page_ < total_pages()) {
+            ++current_page_;
+            populate_table();
+        }
     });
     connect(btn_last_, &QPushButton::clicked, this, [this]() {
         const int last = total_pages();
-        if (current_page_ != last) { current_page_ = last; populate_table(); }
+        if (current_page_ != last) {
+            current_page_ = last;
+            populate_table();
+        }
     });
-    connect(page_size_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this](int idx) {
-                const int new_size = page_size_combo_->itemData(idx).toInt();
-                if (new_size <= 0 || new_size == page_size_)
-                    return;
-                // Preserve the topmost visible row across page-size changes:
-                // figure out which row is at the top right now, then jump to
-                // the page that contains it under the new page size.
-                const int top_row_idx = (current_page_ - 1) * page_size_;
-                page_size_ = new_size;
-                current_page_ = (top_row_idx / page_size_) + 1;
-                SettingsRepository::instance().set("portfolio.blotter.page_size",
-                                                   QString::number(page_size_), "portfolio");
-                populate_table();
-            });
+    connect(page_size_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        const int new_size = page_size_combo_->itemData(idx).toInt();
+        if (new_size <= 0 || new_size == page_size_)
+            return;
+        // Preserve the topmost visible row across page-size changes:
+        // figure out which row is at the top right now, then jump to
+        // the page that contains it under the new page size.
+        const int top_row_idx = (current_page_ - 1) * page_size_;
+        page_size_ = new_size;
+        current_page_ = (top_row_idx / page_size_) + 1;
+        SettingsRepository::instance().set("portfolio.blotter.page_size", QString::number(page_size_), "portfolio");
+        populate_table();
+    });
 }
 
 void PortfolioBlotter::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
@@ -266,7 +269,6 @@ void PortfolioBlotter::fetch_sparklines() {
 
     hub_resubscribe_sparklines();
 }
-
 
 void PortfolioBlotter::repaint_sparkline_cells() {
     for (int r = 0; r < table_->rowCount(); ++r) {
@@ -364,7 +366,8 @@ void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, doubl
         auto* item = table_->item(r, 0);
         if (!item || item->data(Qt::UserRole).toString() != symbol)
             continue;
-        // Column layout: SYMBOL(0), QTY(1), AVG(2), LAST(3), MKT VAL(4), COST(5), P&L(6), P&L%(7), CHG%(8), SPARKLINE(9), WT%(10)
+        // Column layout: SYMBOL(0), QTY(1), AVG(2), LAST(3), MKT VAL(4), COST(5), P&L(6), P&L%(7), CHG%(8),
+        // SPARKLINE(9), WT%(10)
         if (auto* last_item = table_->item(r, 3))
             last_item->setText(format_value(ltp));
         // Recalculate market value & P&L from holdings data
@@ -389,7 +392,6 @@ void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, doubl
         break;
     }
 }
-
 
 void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
     selected_symbol_ = symbol;
@@ -503,8 +505,10 @@ int PortfolioBlotter::total_pages() const {
 
 void PortfolioBlotter::clamp_current_page() {
     const int last = total_pages();
-    if (current_page_ < 1) current_page_ = 1;
-    if (current_page_ > last) current_page_ = last;
+    if (current_page_ < 1)
+        current_page_ = 1;
+    if (current_page_ > last)
+        current_page_ = last;
 }
 
 void PortfolioBlotter::update_pagination_controls() {
@@ -752,13 +756,12 @@ void PortfolioBlotter::refresh_theme() {
                                    ui::colors::BG_HOVER()));
     // See note in build constructor — header rule must live on the header
     // widget itself or the global qApp stylesheet wins.
-    table_->horizontalHeader()->setStyleSheet(
-        QString("QHeaderView::section { background:%1; color:%2; border:none;"
-                "  border-bottom:1px solid %3; border-right:1px solid %4;"
-                "  padding:5px 8px; font-size:" + hsz +
-                "px; font-weight:700; letter-spacing:0.5px; }")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::BORDER_MED(), ui::colors::BORDER_DIM()));
+    table_->horizontalHeader()->setStyleSheet(QString("QHeaderView::section { background:%1; color:%2; border:none;"
+                                                      "  border-bottom:1px solid %3; border-right:1px solid %4;"
+                                                      "  padding:5px 8px; font-size:" +
+                                                      hsz + "px; font-weight:700; letter-spacing:0.5px; }")
+                                                  .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
+                                                       ui::colors::BORDER_MED(), ui::colors::BORDER_DIM()));
     populate_table();
 }
 
@@ -778,11 +781,16 @@ void PortfolioBlotter::retranslateUi() {
         table_->setHorizontalHeaderLabels(headers);
     }
 
-    if (btn_first_) btn_first_->setToolTip(tr("First page"));
-    if (btn_prev_)  btn_prev_->setToolTip(tr("Previous page"));
-    if (btn_next_)  btn_next_->setToolTip(tr("Next page"));
-    if (btn_last_)  btn_last_->setToolTip(tr("Last page"));
-    if (footer_rows_label_) footer_rows_label_->setText(tr("Rows:"));
+    if (btn_first_)
+        btn_first_->setToolTip(tr("First page"));
+    if (btn_prev_)
+        btn_prev_->setToolTip(tr("Previous page"));
+    if (btn_next_)
+        btn_next_->setToolTip(tr("Next page"));
+    if (btn_last_)
+        btn_last_->setToolTip(tr("Last page"));
+    if (footer_rows_label_)
+        footer_rows_label_->setText(tr("Rows:"));
 
     // Footer status + page label hold dynamic strings — re-run the computation
     // so "Showing %1-%2 of %3" and "Page %1 of %2" pick up the new locale.

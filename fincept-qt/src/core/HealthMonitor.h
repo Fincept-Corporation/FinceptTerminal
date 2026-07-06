@@ -21,9 +21,9 @@ namespace fincept {
 /// Snapshot of all health checks at one point in time.
 struct HealthStatus {
     struct Check {
-        QString name;     ///< short identifier, e.g. "broker_connections"
-        bool ok = false;  ///< true if the subsystem is healthy
-        QString detail;   ///< human-readable summary / failure reason
+        QString name;    ///< short identifier, e.g. "broker_connections"
+        bool ok = false; ///< true if the subsystem is healthy
+        QString detail;  ///< human-readable summary / failure reason
     };
 
     QVector<Check> checks;

@@ -60,7 +60,7 @@ class ActiveLocksPanel : public QWidget {
     void update_demo_chip(bool is_mock);
 
     // Head
-    QLabel* title_ = nullptr;          // "ACTIVE LOCKS"
+    QLabel* title_ = nullptr; // "ACTIVE LOCKS"
     QLabel* summary_label_ = nullptr;
     QLabel* status_pill_ = nullptr;
 

@@ -104,9 +104,8 @@ class TradeFlowChordWidget : public QWidget {
             p.setFont(nf);
             p.setPen(QColor(ui::colors::AMBER()));
             p.drawText(QRect(10, 6, w - 20, 16), Qt::AlignLeft | Qt::AlignTop,
-                       QCoreApplication::translate(
-                           "TradeFlowChordWidget",
-                           "Illustrative — US bilateral trade, 2024 estimates (static)"));
+                       QCoreApplication::translate("TradeFlowChordWidget",
+                                                   "Illustrative — US bilateral trade, 2024 estimates (static)"));
         }
 
         const int radius = std::min(cx, cy) - 65;
@@ -591,10 +590,14 @@ void TradeVizScreen::retranslateUi() {
         tab_labels_[2]->setText(tr("Export"));
         tab_labels_[3]->setText(tr("Notes"));
     }
-    if (flow_title_)     flow_title_->setText(tr("Trade Flow"));
-    if (browse_label_)   browse_label_->setText(tr("20) Browse"));
-    if (order_caption_)  order_caption_->setText(tr("Order by"));
-    if (period_caption_) period_caption_->setText(tr("Periodicity"));
+    if (flow_title_)
+        flow_title_->setText(tr("Trade Flow"));
+    if (browse_label_)
+        browse_label_->setText(tr("20) Browse"));
+    if (order_caption_)
+        order_caption_->setText(tr("Order by"));
+    if (period_caption_)
+        period_caption_->setText(tr("Periodicity"));
 
     // Combo option labels — re-set by index (selection index drives logic, not text).
     if (order_combo_ && order_combo_->count() >= 5) {

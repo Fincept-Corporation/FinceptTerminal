@@ -7,7 +7,6 @@
 // Part of the partial-class split of WindowFrame.cpp.
 
 #include "app/WindowFrame.h"
-
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
@@ -23,11 +22,11 @@
 #include "ui/navigation/DockToolBar.h"
 #include "ui/theme/Theme.h"
 
-#include <DockManager.h>
-
 #include <QApplication>
 #include <QMessageBox>
 #include <QStackedWidget>
+
+#include <DockManager.h>
 
 namespace fincept {
 
@@ -86,10 +85,10 @@ void WindowFrame::on_auth_state_changed() {
                 }
             }
             LOG_DEBUG("WindowFrame", QString("on_auth_state_changed: skipping redirect, "
-                                            "stack index=%1, chat_mode=%2, gate_cleared=%3")
-                                        .arg(stack_->currentIndex())
-                                        .arg(chat_mode_)
-                                        .arg(pin_gate_cleared_));
+                                             "stack index=%1, chat_mode=%2, gate_cleared=%3")
+                                         .arg(stack_->currentIndex())
+                                         .arg(chat_mode_)
+                                         .arg(pin_gate_cleared_));
             return;
         }
         if (stack_->currentIndex() == 0 && auth_stack_->currentIndex() == 3)
@@ -127,10 +126,10 @@ void WindowFrame::on_auth_state_changed() {
             // still locked or ungated, log a warning so the regression is
             // visible rather than leaking the dashboard for one frame.
             if (locked_ || !pin_gate_cleared_) {
-                LOG_WARN("WindowFrame",
-                         QString("on_auth_state_changed: shell would become visible while "
-                                 "locked=%1 gate_cleared=%2 — forcing lock screen")
-                             .arg(locked_).arg(pin_gate_cleared_));
+                LOG_WARN("WindowFrame", QString("on_auth_state_changed: shell would become visible while "
+                                                "locked=%1 gate_cleared=%2 — forcing lock screen")
+                                            .arg(locked_)
+                                            .arg(pin_gate_cleared_));
                 if (auth::PinManager::instance().has_pin())
                     lock_screen_->show_unlock();
                 else
@@ -266,8 +265,10 @@ void WindowFrame::apply_lock_state(bool locked) {
         // focus traversal, and dock-manager hit-testing cannot mutate state.
         if (dock_manager_ && dock_manager_->parentWidget())
             dock_manager_->parentWidget()->setEnabled(false);
-        if (dock_toolbar_)    dock_toolbar_->setEnabled(false);
-        if (dock_status_bar_) dock_status_bar_->setEnabled(false);
+        if (dock_toolbar_)
+            dock_toolbar_->setEnabled(false);
+        if (dock_status_bar_)
+            dock_status_bar_->setEnabled(false);
         return;
     }
 
@@ -283,8 +284,10 @@ void WindowFrame::apply_lock_state(bool locked) {
     pin_gate_cleared_ = true;
     if (dock_manager_ && dock_manager_->parentWidget())
         dock_manager_->parentWidget()->setEnabled(true);
-    if (dock_toolbar_)    dock_toolbar_->setEnabled(true);
-    if (dock_status_bar_) dock_status_bar_->setEnabled(true);
+    if (dock_toolbar_)
+        dock_toolbar_->setEnabled(true);
+    if (dock_status_bar_)
+        dock_status_bar_->setEnabled(true);
     set_shell_visible(true);
     stack_->setCurrentIndex(1);
 }
@@ -301,8 +304,10 @@ void WindowFrame::on_terminal_unlocked() {
     // restore their own UI before this originator is fully ready.
     if (dock_manager_ && dock_manager_->parentWidget())
         dock_manager_->parentWidget()->setEnabled(true);
-    if (dock_toolbar_)    dock_toolbar_->setEnabled(true);
-    if (dock_status_bar_) dock_status_bar_->setEnabled(true);
+    if (dock_toolbar_)
+        dock_toolbar_->setEnabled(true);
+    if (dock_status_bar_)
+        dock_status_bar_->setEnabled(true);
 
     // Enable/restart inactivity guard. It is disabled in show_lock_screen()
     // and on logout, so it may currently be off even though the filter is

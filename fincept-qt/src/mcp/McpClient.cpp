@@ -203,7 +203,12 @@ void McpClient::send_notification(const QString& method, const QJsonObject& para
         note["params"] = params;
     const QByteArray line = QJsonDocument(note).toJson(QJsonDocument::Compact) + "\n";
     QMetaObject::invokeMethod(
-        process_, [this, line]() { if (process_) process_->write(line); }, Qt::QueuedConnection);
+        process_,
+        [this, line]() {
+            if (process_)
+                process_->write(line);
+        },
+        Qt::QueuedConnection);
     LOG_INFO(TAG, "RPC → " + method + " (notification)");
 }
 

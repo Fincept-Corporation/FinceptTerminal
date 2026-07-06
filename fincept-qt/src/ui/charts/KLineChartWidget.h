@@ -15,7 +15,7 @@ namespace fincept::ui {
 
 class KLineChartWidget : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit KLineChartWidget(QWidget* parent = nullptr);
 
     void set_candles(const QJsonArray& candles);
@@ -37,13 +37,13 @@ public:
     // `local_y` (view coords) via JS, then pops the trade menu at `global_pos`.
     void show_chart_context_menu(int local_y, const QPoint& global_pos);
 
-signals:
+  signals:
     void chart_ready();
     void buy_requested(double price);
     void sell_requested(double price);
     void add_to_watchlist_requested();
 
-protected:
+  protected:
     void showEvent(QShowEvent* e) override;
     // QWebEngineView routes input to an internal render widget (its focusProxy),
     // so QWebEngineView::contextMenuEvent never fires for our subclass — the
@@ -51,7 +51,7 @@ protected:
     // right mouse-press to drive the trading menu reliably (incl. on macOS).
     bool eventFilter(QObject* obj, QEvent* ev) override;
 
-private:
+  private:
     void ensure_web_view();
     void install_chart_event_filter(); // (re)attach the proxy filter once it exists
     void emit_trade(bool is_buy, double price);
@@ -65,8 +65,8 @@ private:
     bool page_ready_ = false;
     bool initialized_ = false;
     bool trading_menu_ = false;
-    bool menu_open_ = false;             // re-entrancy guard (avoid double menus)
-    QPointer<QWidget> filtered_proxy_;   // the render widget we've filtered
+    bool menu_open_ = false;           // re-entrancy guard (avoid double menus)
+    QPointer<QWidget> filtered_proxy_; // the render widget we've filtered
     QQueue<QString> pending_js_;
 };
 

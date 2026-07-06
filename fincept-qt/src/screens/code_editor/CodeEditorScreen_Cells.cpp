@@ -5,12 +5,11 @@
 // partial-class split — the file in their own folder grouping by widget
 // responsibility.
 
-#include "screens/code_editor/CodeEditorScreen.h"
-
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
+#include "screens/code_editor/CodeEditorScreen.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
@@ -251,7 +250,8 @@ void CellWidget::build_ui() {
                 " font-family:%4; font-size:10px; font-weight:700; letter-spacing:0.5px;"
                 " padding:0 10px; text-align:left; }"
                 "QPushButton:hover { background:%5; }")
-            .arg(colors::BG_RAISED(), colors::POSITIVE(), colors::BORDER_DIM(), fonts::DATA_FAMILY, colors::BG_HOVER()));
+            .arg(colors::BG_RAISED(), colors::POSITIVE(), colors::BORDER_DIM(), fonts::DATA_FAMILY,
+                 colors::BG_HOVER()));
     output_toggle_->setVisible(false);
     connect(output_toggle_, &QPushButton::clicked, this, [this]() {
         output_collapsed_ = !output_collapsed_;
@@ -293,8 +293,8 @@ void CellWidget::build_ui() {
     insert_btn->setStyleSheet(QString("QPushButton { color:%1; font-family:%2; font-size:12px; font-weight:700;"
                                       " background:%3; border:1px solid %4; }"
                                       "QPushButton:hover { background:%5; color:%6; border-color:%5; }")
-                                  .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY, colors::BG_SURFACE(), colors::BORDER_DIM(),
-                                       colors::AMBER_DIM(), colors::AMBER()));
+                                  .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY, colors::BG_SURFACE(),
+                                       colors::BORDER_DIM(), colors::AMBER_DIM(), colors::AMBER()));
     connect(insert_btn, &QPushButton::clicked, this, [this]() { emit insert_below_requested(cell_id_); });
     insert_layout->addWidget(insert_btn);
 
@@ -315,11 +315,16 @@ void CellWidget::changeEvent(QEvent* event) {
 
 void CellWidget::retranslateUi() {
     // Hover toolbar buttons — fixed labels.
-    if (run_btn_) run_btn_->setText(tr("RUN"));
-    if (type_btn_) type_btn_->setText(tr("TYPE"));
-    if (up_btn_) up_btn_->setText(tr("UP"));
-    if (dn_btn_) dn_btn_->setText(tr("DN"));
-    if (del_btn_) del_btn_->setText(tr("DEL"));
+    if (run_btn_)
+        run_btn_->setText(tr("RUN"));
+    if (type_btn_)
+        type_btn_->setText(tr("TYPE"));
+    if (up_btn_)
+        up_btn_->setText(tr("UP"));
+    if (dn_btn_)
+        dn_btn_->setText(tr("DN"));
+    if (del_btn_)
+        del_btn_->setText(tr("DEL"));
     // output_toggle_ reflects live collapse/execution state ("OUT [n]" /
     // "OUTPUT [collapsed]") — it is re-applied on the next state change, so we
     // deliberately don't clobber it with stale text here.
@@ -561,9 +566,10 @@ void CellWidget::update_gutter() {
                                           .arg(fonts::TINY));
     } else {
         gutter_number_->setText(QString("[%1]").arg(index_ + 1));
-        gutter_number_->setStyleSheet(QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
-                                          .arg(selected_ ? colors::AMBER() : colors::TEXT_TERTIARY(), fonts::DATA_FAMILY)
-                                          .arg(fonts::TINY));
+        gutter_number_->setStyleSheet(
+            QString("color:%1; font-family:%2; font-size:%3px; font-weight:700;")
+                .arg(selected_ ? colors::AMBER() : colors::TEXT_TERTIARY(), fonts::DATA_FAMILY)
+                .arg(fonts::TINY));
     }
 
     if (cell_type_ == "markdown") {
@@ -582,8 +588,9 @@ void CellWidget::update_gutter() {
 void CellWidget::render_markdown() {
     QString src = editor_->toPlainText();
     if (src.trimmed().isEmpty()) {
-        md_preview_->setHtml(QString("<p style='color:%1; font-style:italic;'>%2</p>")
-                                 .arg(colors::TEXT_TERTIARY(), tr("Empty markdown cell — click to edit").toHtmlEscaped()));
+        md_preview_->setHtml(
+            QString("<p style='color:%1; font-style:italic;'>%2</p>")
+                .arg(colors::TEXT_TERTIARY(), tr("Empty markdown cell — click to edit").toHtmlEscaped()));
         md_preview_->setMinimumHeight(48);
         md_preview_->setMaximumHeight(48);
         return;
@@ -592,27 +599,28 @@ void CellWidget::render_markdown() {
     // Convert basic markdown to HTML for rendering
     // Handles: headers, bold, italic, code blocks, inline code, lists, links, horizontal rules
     QString html;
-    html += QString("<style>"
-                    "body { color:%1; font-family:%2; font-size:%3px; }"
-                    "h1 { color:%4; font-size:20px; font-weight:700; margin:8px 0 4px; border-bottom:1px solid %5; "
-                    "padding-bottom:4px; }"
-                    "h2 { color:%4; font-size:17px; font-weight:700; margin:8px 0 4px; }"
-                    "h3 { color:%4; font-size:15px; font-weight:700; margin:6px 0 3px; }"
-                    "h4 { color:%6; font-size:14px; font-weight:600; margin:4px 0 2px; }"
-                    "code { background:%7; color:%4; padding:2px 4px; font-family:%2; }"
-                    "pre { background:%7; color:%1; padding:8px; font-family:%2; font-size:13px;"
-                    "      border-left:2px solid %5; margin:6px 0; }"
-                    "a { color:%8; }"
-                    "strong { color:%1; font-weight:700; }"
-                    "em { color:%6; font-style:italic; }"
-                    "ul, ol { margin:4px 0; padding-left:20px; }"
-                    "li { margin:2px 0; }"
-                    "hr { border:none; border-top:1px solid %5; margin:8px 0; }"
-                    "blockquote { border-left:3px solid %4; padding-left:10px; color:%6; margin:6px 0; }"
-                    "</style>")
-                .arg(colors::TEXT_PRIMARY(), fonts::DATA_FAMILY)
-                .arg(fonts::DATA)
-                .arg(colors::AMBER(), colors::BORDER_MED(), colors::TEXT_SECONDARY(), colors::BG_RAISED(), colors::CYAN());
+    html +=
+        QString("<style>"
+                "body { color:%1; font-family:%2; font-size:%3px; }"
+                "h1 { color:%4; font-size:20px; font-weight:700; margin:8px 0 4px; border-bottom:1px solid %5; "
+                "padding-bottom:4px; }"
+                "h2 { color:%4; font-size:17px; font-weight:700; margin:8px 0 4px; }"
+                "h3 { color:%4; font-size:15px; font-weight:700; margin:6px 0 3px; }"
+                "h4 { color:%6; font-size:14px; font-weight:600; margin:4px 0 2px; }"
+                "code { background:%7; color:%4; padding:2px 4px; font-family:%2; }"
+                "pre { background:%7; color:%1; padding:8px; font-family:%2; font-size:13px;"
+                "      border-left:2px solid %5; margin:6px 0; }"
+                "a { color:%8; }"
+                "strong { color:%1; font-weight:700; }"
+                "em { color:%6; font-style:italic; }"
+                "ul, ol { margin:4px 0; padding-left:20px; }"
+                "li { margin:2px 0; }"
+                "hr { border:none; border-top:1px solid %5; margin:8px 0; }"
+                "blockquote { border-left:3px solid %4; padding-left:10px; color:%6; margin:6px 0; }"
+                "</style>")
+            .arg(colors::TEXT_PRIMARY(), fonts::DATA_FAMILY)
+            .arg(fonts::DATA)
+            .arg(colors::AMBER(), colors::BORDER_MED(), colors::TEXT_SECONDARY(), colors::BG_RAISED(), colors::CYAN());
 
     bool in_code_block = false;
     QString code_block;

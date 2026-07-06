@@ -56,14 +56,12 @@ void DesktopNotifier::init() {
 
     // The missing wire: ToastService::posted had no listener, so every alert
     // toast was silent. Mirror each one to a native OS notification.
-    connect(&ToastService::instance(), &ToastService::posted, this,
-            [this](const ToastService::Notification& n) {
-                const QString title = n.source.startsWith(QStringLiteral("scan:"))
-                                          ? QStringLiteral("Fincept Alert")
-                                          : QStringLiteral("Fincept Terminal");
-                notify(title, n.message, static_cast<int>(n.severity));
-                show_inapp(title, n.message, static_cast<int>(n.severity));
-            });
+    connect(&ToastService::instance(), &ToastService::posted, this, [this](const ToastService::Notification& n) {
+        const QString title = n.source.startsWith(QStringLiteral("scan:")) ? QStringLiteral("Fincept Alert")
+                                                                           : QStringLiteral("Fincept Terminal");
+        notify(title, n.message, static_cast<int>(n.severity));
+        show_inapp(title, n.message, static_cast<int>(n.severity));
+    });
 
     LOG_INFO("DesktopNotifier", "Native desktop notifications enabled");
 }
@@ -91,10 +89,17 @@ void DesktopNotifier::notify(const QString& title, const QString& body, int seve
 void DesktopNotifier::show_inapp(const QString& title, const QString& body, int severity) {
     QString accent = QStringLiteral("#00BFA5");
     switch (static_cast<ToastService::Severity>(severity)) {
-        case ToastService::Severity::Warning: accent = QStringLiteral("#FFC400"); break;
-        case ToastService::Severity::Error:   accent = QStringLiteral("#FF5252"); break;
-        case ToastService::Severity::Success: accent = QStringLiteral("#26C281"); break;
-        default: break;
+        case ToastService::Severity::Warning:
+            accent = QStringLiteral("#FFC400");
+            break;
+        case ToastService::Severity::Error:
+            accent = QStringLiteral("#FF5252");
+            break;
+        case ToastService::Severity::Success:
+            accent = QStringLiteral("#26C281");
+            break;
+        default:
+            break;
     }
     if (!toast_) {
         toast_ = new QWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
@@ -108,7 +113,10 @@ void DesktopNotifier::show_inapp(const QString& title, const QString& body, int 
         lay->addWidget(toast_lbl_);
         toast_timer_ = new QTimer(this);
         toast_timer_->setSingleShot(true);
-        connect(toast_timer_, &QTimer::timeout, toast_, [this]() { if (toast_) toast_->hide(); });
+        connect(toast_timer_, &QTimer::timeout, toast_, [this]() {
+            if (toast_)
+                toast_->hide();
+        });
     }
     toast_->setStyleSheet(QString("background:#15181d; border:1px solid %1; border-radius:8px;").arg(accent));
     toast_lbl_->setStyleSheet(QStringLiteral("color:#e6e6e6; font-size:12px; background:transparent; border:none;"));

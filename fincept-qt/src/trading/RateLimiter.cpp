@@ -2,14 +2,12 @@
 
 namespace fincept::trading {
 
-OrderRateLimiter& OrderRateLimiter::instance()
-{
+OrderRateLimiter& OrderRateLimiter::instance() {
     static OrderRateLimiter limiter;
     return limiter;
 }
 
-OrderRateLimiter::OrderRateLimiter()
-{
+OrderRateLimiter::OrderRateLimiter() {
     set_limit(BrokerId::Zerodha, 10);
     set_limit(BrokerId::AngelOne, 10);
     set_limit(BrokerId::Upstox, 10);
@@ -29,8 +27,7 @@ OrderRateLimiter::OrderRateLimiter()
     set_limit(BrokerId::MetaTrader4, 10);
 }
 
-OrderRateLimiter::BrokerLimit& OrderRateLimiter::get_or_create(BrokerId broker)
-{
+OrderRateLimiter::BrokerLimit& OrderRateLimiter::get_or_create(BrokerId broker) {
     QMutexLocker locker(&registry_mutex_);
     int key = static_cast<int>(broker);
     auto it = limits_.find(key);
@@ -39,8 +36,7 @@ OrderRateLimiter::BrokerLimit& OrderRateLimiter::get_or_create(BrokerId broker)
     return *it->second;
 }
 
-void OrderRateLimiter::acquire(BrokerId broker)
-{
+void OrderRateLimiter::acquire(BrokerId broker) {
     auto& limit = get_or_create(broker);
     QMutexLocker locker(&limit.mutex);
 
@@ -58,19 +54,18 @@ void OrderRateLimiter::acquire(BrokerId broker)
     limit.last_order_ms = QDateTime::currentMSecsSinceEpoch();
 }
 
-void OrderRateLimiter::set_limit(BrokerId broker, int orders_per_second)
-{
+void OrderRateLimiter::set_limit(BrokerId broker, int orders_per_second) {
     auto& limit = get_or_create(broker);
     QMutexLocker locker(&limit.mutex);
     limit.orders_per_second = (orders_per_second > 0) ? orders_per_second : DEFAULT_LIMIT;
 }
 
-int OrderRateLimiter::get_limit(BrokerId broker) const
-{
+int OrderRateLimiter::get_limit(BrokerId broker) const {
     QMutexLocker locker(&registry_mutex_);
     int key = static_cast<int>(broker);
     auto it = limits_.find(key);
-    if (it == limits_.end()) return DEFAULT_LIMIT;
+    if (it == limits_.end())
+        return DEFAULT_LIMIT;
     return it->second->orders_per_second;
 }
 

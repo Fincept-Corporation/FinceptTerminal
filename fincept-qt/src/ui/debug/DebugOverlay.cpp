@@ -12,12 +12,11 @@ namespace fincept::ui {
 DebugOverlay::DebugOverlay(QWidget* parent) : QFrame(parent) {
     setObjectName("debugOverlay");
     setFrameShape(QFrame::NoFrame);
-    setStyleSheet(
-        "QFrame#debugOverlay {"
-        "  background: rgba(15, 23, 42, 0.85);"
-        "  border: 1px solid #374151;"
-        "  border-radius: 4px;"
-        "}");
+    setStyleSheet("QFrame#debugOverlay {"
+                  "  background: rgba(15, 23, 42, 0.85);"
+                  "  border: 1px solid #374151;"
+                  "  border-radius: 4px;"
+                  "}");
     setAttribute(Qt::WA_TransparentForMouseEvents);
     // Hidden by default — user toggles via debug.overlay action.
     hide();
@@ -27,8 +26,7 @@ DebugOverlay::DebugOverlay(QWidget* parent) : QFrame(parent) {
     hl->setSpacing(0);
 
     label_ = new QLabel(this);
-    label_->setStyleSheet(
-        "color: #9ca3af; font-family: 'Consolas', monospace; font-size: 10px;");
+    label_->setStyleSheet("color: #9ca3af; font-family: 'Consolas', monospace; font-size: 10px;");
     label_->setTextFormat(Qt::PlainText);
     hl->addWidget(label_);
 
@@ -64,13 +62,10 @@ void DebugOverlay::refresh() {
     if (auto* frame = qobject_cast<fincept::WindowFrame*>(window())) {
         const auto frame_uuid = frame->frame_uuid();
         const QString uuid_short = frame_uuid.to_string().left(8);
-        const int frame_panels =
-            fincept::PanelRegistry::instance().find_by_frame(frame_uuid).size();
+        const int frame_panels = fincept::PanelRegistry::instance().find_by_frame(frame_uuid).size();
         const bool active = frame->is_active_for_work();
-        frame_info = QString("frame %1  panels:%2  active:%3")
-                         .arg(uuid_short)
-                         .arg(frame_panels)
-                         .arg(active ? "yes" : "no");
+        frame_info =
+            QString("frame %1  panels:%2  active:%3").arg(uuid_short).arg(frame_panels).arg(active ? "yes" : "no");
     } else {
         frame_info = "frame ?";
     }
@@ -95,14 +90,9 @@ void DebugOverlay::refresh() {
     last_msgs_count_ = total_publishes;
     last_msgs_sample_ms_ = now_ms;
 
-    const QString hub_info = QString("hub topics:%1  rate:%2/s")
-                                 .arg(topic_count)
-                                 .arg(QString::number(rate, 'f', 1));
+    const QString hub_info = QString("hub topics:%1  rate:%2/s").arg(topic_count).arg(QString::number(rate, 'f', 1));
 
-    label_->setText(QString("%1\nall panels:%2  %3")
-                        .arg(frame_info)
-                        .arg(total_panels)
-                        .arg(hub_info));
+    label_->setText(QString("%1\nall panels:%2  %3").arg(frame_info).arg(total_panels).arg(hub_info));
     adjustSize();
     reposition();
 }

@@ -45,16 +45,15 @@ class FyersBroker : public IBroker {
             .default_paper_balance = 1000000.0,
             // Nifty 50 constituents (NSE large-caps). Plain symbols; the stream's
             // to_fyers() helper maps each to "NSE:<sym>-EQ" when subscribing.
-            .default_watchlist = {"ADANIENT",   "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
-                                  "BAJAJ-AUTO", "BAJAJFINSV", "BAJFINANCE", "BEL",        "BHARTIARTL",
-                                  "CIPLA",      "COALINDIA",  "DIVISLAB",   "DRREDDY",    "EICHERMOT",
-                                  "GRASIM",     "HCLTECH",    "HDFCBANK",   "HDFCLIFE",   "HEROMOTOCO",
-                                  "HINDALCO",   "HINDUNILVR", "ICICIBANK",  "INDUSINDBK", "INFY",
-                                  "ITC",        "JIOFIN",     "JSWSTEEL",   "KOTAKBANK",  "LT",
-                                  "M&M",        "MARUTI",     "NESTLEIND",  "NTPC",       "ONGC",
-                                  "POWERGRID",  "RELIANCE",   "SBILIFE",    "SBIN",       "SHRIRAMFIN",
-                                  "SUNPHARMA",  "TATACONSUM", "TATASTEEL",  "TCS",
-                                  "TECHM",      "TITAN",      "TRENT",      "ULTRACEMCO", "WIPRO"},
+            .default_watchlist = {"ADANIENT",   "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",  "BAJAJ-AUTO",
+                                  "BAJAJFINSV", "BAJFINANCE", "BEL",        "BHARTIARTL", "CIPLA",     "COALINDIA",
+                                  "DIVISLAB",   "DRREDDY",    "EICHERMOT",  "GRASIM",     "HCLTECH",   "HDFCBANK",
+                                  "HDFCLIFE",   "HEROMOTOCO", "HINDALCO",   "HINDUNILVR", "ICICIBANK", "INDUSINDBK",
+                                  "INFY",       "ITC",        "JIOFIN",     "JSWSTEEL",   "KOTAKBANK", "LT",
+                                  "M&M",        "MARUTI",     "NESTLEIND",  "NTPC",       "ONGC",      "POWERGRID",
+                                  "RELIANCE",   "SBILIFE",    "SBIN",       "SHRIRAMFIN", "SUNPHARMA", "TATACONSUM",
+                                  "TATASTEEL",  "TCS",        "TECHM",      "TITAN",      "TRENT",     "ULTRACEMCO",
+                                  "WIPRO"},
             .default_symbol = "RELIANCE",
             .default_exchange = "NSE",
             .brokerage_info = "\u20B920/order or 0.03% (whichever lower)",
@@ -85,18 +84,16 @@ class FyersBroker : public IBroker {
                                                    const QString& to_date) override;
 
     // --- Multi-quote & Market Depth ---
-    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
-        const BrokerCredentials& creds,
-        const QVector<QPair<QString, QString>>& symbols) override;
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const BrokerCredentials& creds,
+                                                       const QVector<QPair<QString, QString>>& symbols) override;
 
-    ApiResponse<MarketDepth> get_market_depth(
-        const BrokerCredentials& creds,
-        const QString& symbol, const QString& exchange) override;
+    ApiResponse<MarketDepth> get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                              const QString& exchange) override;
 
     // Market depth — GET /data/depth (5-level bid/ask)
     ApiResponse<QVector<BrokerQuote>> get_historical_quotes_single(const BrokerCredentials& creds,
-                                                                    const QString& symbol, const QString& start,
-                                                                    const QString& end, int limit = 1000) override;
+                                                                   const QString& symbol, const QString& start,
+                                                                   const QString& end, int limit = 1000) override;
 
     // Market clock — GET /api/v3/marketStatus.
     ApiResponse<MarketClock> get_clock(const BrokerCredentials& creds) override;
@@ -113,8 +110,7 @@ class FyersBroker : public IBroker {
     ApiResponse<QJsonObject> gtt_cancel(const BrokerCredentials& creds, const QString& gtt_id) override;
 
     // Multi-order batch (up to 10 legs) — non-virtual; callers reach via dynamic_cast.
-    ApiResponse<QJsonObject> place_multi_order(const BrokerCredentials& creds,
-                                               const QVector<UnifiedOrder>& orders);
+    ApiResponse<QJsonObject> place_multi_order(const BrokerCredentials& creds, const QVector<UnifiedOrder>& orders);
 
   protected:
     QMap<QString, QString> auth_headers(const BrokerCredentials& creds) const override;

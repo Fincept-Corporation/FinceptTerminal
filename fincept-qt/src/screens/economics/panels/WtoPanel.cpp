@@ -150,8 +150,7 @@ void WtoPanel::on_fetch() {
 
         // wto_data.py uses --flag=value style args
         // CLI: timeseries_data --i TP_A_0010 --r US --ps 2015-2023
-        show_loading(
-            tr("Fetching WTO Trade Statistics: %1 for %2…").arg(indicator_combo_->currentText(), reporter));
+        show_loading(tr("Fetching WTO Trade Statistics: %1 for %2…").arg(indicator_combo_->currentText(), reporter));
         services::EconomicsService::instance().execute(
             kWtoSourceId, kWtoScript, "timeseries_data",
             {"--i=" + indicator, "--r=" + reporter, "--ps=" + (years.isEmpty() ? "default" : years)},

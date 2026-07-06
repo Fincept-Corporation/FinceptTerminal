@@ -7,13 +7,12 @@
 //     emitted by models that don't support structured tool_calls (minimax,
 //     some OpenRouter models). Executes them and asks the LLM to summarise.
 
-#include "services/llm/LlmService.h"
-
-#include "services/llm/LlmContentExtractors.h"
-#include "services/llm/LlmRequestPolicy.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
+#include "services/llm/LlmContentExtractors.h"
+#include "services/llm/LlmRequestPolicy.h"
+#include "services/llm/LlmService.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -25,11 +24,12 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* kLlmToolLoopTag = "LlmService"; }
+namespace {
+constexpr const char* kLlmToolLoopTag = "LlmService";
+}
 
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
-                                     const QMap<QString, QString>& headers,
-                                     QSet<QString> activated_tools) {
+                                     const QMap<QString, QString>& headers, QSet<QString> activated_tools) {
     LlmResponse resp;
     // MiniMax-style models spend 3 rounds per action (tool_list → tool_describe
     // → actual call), so the default 40 gives ~13 real actions — enough for a
@@ -39,8 +39,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
 
     for (int round = 0; round < MAX_ROUNDS; ++round) {
         QJsonObject fu;
-        fu["model"]      = model_;
-        fu["messages"]   = loop_messages;
+        fu["model"] = model_;
+        fu["messages"] = loop_messages;
         // Temperature intentionally omitted — provider default.
         fu["max_tokens"] = resolved_max_tokens();
 
@@ -81,8 +81,11 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 QJsonObject fa =
                     QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8()).object();
 
-                LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: executing %2 args=%3").arg(round).arg(fname,
-                              QString::fromUtf8(QJsonDocument(fa).toJson(QJsonDocument::Compact)).left(200)));
+                LOG_INFO(
+                    kLlmToolLoopTag,
+                    QString("TOOL LOOP r%1: executing %2 args=%3")
+                        .arg(round)
+                        .arg(fname, QString::fromUtf8(QJsonDocument(fa).toJson(QJsonDocument::Compact)).left(200)));
                 // Strip "<server>__" prefix for user-visible label; decode any wire encoding.
                 QString display = fname;
                 int sep = display.indexOf(QStringLiteral("__"));
@@ -91,9 +94,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
                 detail::emit_progress(QStringLiteral("• ") + display + QStringLiteral("\n"));
                 auto tr = mcp::McpService::instance().execute_openai_function(fname, fa);
-                LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
-                                  .arg(round).arg(fname,
-                                       tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
+                LOG_INFO(kLlmToolLoopTag,
+                         QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
+                             .arg(round)
+                             .arg(fname, tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                 // If this was a discovery call (tool_list / tool_describe), declare
                 // what it surfaced so the model can actually call it next round.
                 detail::note_tool_activations(display, fa, tr, activated_tools);
@@ -110,7 +114,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         parse_usage(resp, rj, provider_);
         resp.success = !resp.content.isEmpty();
         LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
-                          .arg(round + 1).arg(resp.content.length()));
+                                      .arg(round + 1)
+                                      .arg(resp.content.length()));
 
         // The "final" text may actually contain text-based tool markup
         // (<minimax:tool_call>, <invoke name=…>, etc.) that the model emitted
@@ -121,7 +126,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
             QStringLiteral("<\\s*/?\\s*(?:\\w+\\s*:\\s*)?tool_call\\b|<\\s*invoke\\s+name="),
             QRegularExpression::CaseInsensitiveOption);
         if (resp.success && rx_has_text_markup.match(resp.content).hasMatch()) {
-            LOG_INFO(kLlmToolLoopTag, "TOOL LOOP: final content has text-tool markup — re-routing through text-extraction");
+            LOG_INFO(kLlmToolLoopTag,
+                     "TOOL LOOP: final content has text-tool markup — re-routing through text-extraction");
             QString user_msg;
             for (const auto& v : loop_messages) {
                 QJsonObject o = v.toObject();
@@ -140,15 +146,15 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
     // Max rounds exhausted. Force one final turn so the chat doesn't go silent.
     LOG_WARN(kLlmToolLoopTag, "TOOL LOOP: exceeded max rounds — forcing summary turn");
     {
-        loop_messages.append(QJsonObject{
-            {"role", "system"},
-            {"content", "You have used your tool-call budget. Reply now with a final summary of what "
-                        "you accomplished and what (if anything) is incomplete. If there are critical "
-                        "remaining tool calls, you may make them, but prefer summarising."}});
+        loop_messages.append(
+            QJsonObject{{"role", "system"},
+                        {"content", "You have used your tool-call budget. Reply now with a final summary of what "
+                                    "you accomplished and what (if anything) is incomplete. If there are critical "
+                                    "remaining tool calls, you may make them, but prefer summarising."}});
 
         QJsonObject fu;
-        fu["model"]      = model_;
-        fu["messages"]   = loop_messages;
+        fu["model"] = model_;
+        fu["messages"] = loop_messages;
         fu["max_tokens"] = resolved_max_tokens();
         // Keep tools available so structured tool_calls still work. Stripping
         // them used to force text-markup mode (raw <minimax:tool_call> blobs)
@@ -170,8 +176,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                     resp.content = strip_think_blocks(extract_openai_message_text(msg));
                     parse_usage(resp, rj, provider_);
                     resp.success = !resp.content.isEmpty();
-                    LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: summary fallback produced %1 chars")
-                                      .arg(resp.content.length()));
+                    LOG_INFO(kLlmToolLoopTag,
+                             QString("TOOL LOOP: summary fallback produced %1 chars").arg(resp.content.length()));
 
                     // If the model emitted text-tool markup instead of structured
                     // tool_calls, run it through extraction so the markup is
@@ -189,7 +195,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                                 break;
                             }
                         }
-                        auto text_result = try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
+                        auto text_result =
+                            try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
                         if (text_result.has_value() && text_result->success)
                             return text_result.value();
                     }
@@ -226,7 +233,8 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     };
     std::vector<TextToolCall> calls;
 
-    LOG_INFO(kLlmToolLoopTag, "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
+    LOG_INFO(kLlmToolLoopTag,
+             "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
 
     // --- Pattern 1: XML <tool_call> blocks (without namespace prefix) ---
     {
@@ -339,11 +347,12 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
                 if (tool.is_internal)
                     continue;
                 QJsonObject schema = tool.input_schema;
-                QJsonObject props  = schema["properties"].toObject();
+                QJsonObject props = schema["properties"].toObject();
                 for (auto pit = props.constBegin(); pit != props.constEnd(); ++pit) {
                     QString key = pit.key().toLower();
                     if (key == "query" || key == "sql" || key == "statement") {
-                        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
+                        QString fn_name =
+                            tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
                         QJsonObject args;
                         args[pit.key()] = body;
                         calls.push_back({fn_name, args});
@@ -421,8 +430,8 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     if (provider_ == "anthropic") {
         QJsonArray msgs;
         msgs.append(QJsonObject{{"role", "user"}, {"content", follow_prompt}});
-        follow_body["model"]      = model_;
-        follow_body["messages"]   = msgs;
+        follow_body["model"] = model_;
+        follow_body["messages"] = msgs;
         follow_body["max_tokens"] = resolved_max_tokens();
         // Temperature intentionally omitted — Anthropic default.
         if (!system_prompt_.isEmpty())
@@ -442,8 +451,8 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         if (!system_prompt_.isEmpty())
             msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
         msgs.append(QJsonObject{{"role", "user"}, {"content", follow_prompt}});
-        follow_body["model"]      = model_;
-        follow_body["messages"]   = msgs;
+        follow_body["model"] = model_;
+        follow_body["messages"] = msgs;
         // Temperature intentionally omitted — provider default.
         follow_body["max_tokens"] = resolved_max_tokens();
     }

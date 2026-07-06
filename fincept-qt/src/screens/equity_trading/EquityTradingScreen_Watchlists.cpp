@@ -7,9 +7,8 @@
 //
 // Part of the partial-class split of EquityTradingScreen.cpp.
 
-#include "screens/equity_trading/EquityTradingScreen.h"
-
 #include "core/logging/Logger.h"
+#include "screens/equity_trading/EquityTradingScreen.h"
 #include "screens/equity_trading/EquityTypes.h"
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "storage/repositories/WatchlistRepository.h"
@@ -177,8 +176,8 @@ void EquityTradingScreen::apply_active_watchlist(bool resubscribe) {
                 break;
             }
         if (has_option)
-            opt_quote_conn_ = connect(stream, &trading::AccountDataStream::quote_updated,
-                                      this, &EquityTradingScreen::route_option_quote);
+            opt_quote_conn_ = connect(stream, &trading::AccountDataStream::quote_updated, this,
+                                      &EquityTradingScreen::route_option_quote);
         LOG_INFO("posdbg", QString("opt route bind: has_option=%1 stream=%2 conn=%3 pos=[%4]")
                                .arg(has_option ? "Y" : "N")
                                .arg(stream ? "Y" : "N")
@@ -202,7 +201,7 @@ void EquityTradingScreen::on_watchlist_create(const QString& name) {
     if (!cr.is_ok())
         return;
     active_watchlist_id_ = cr.value().id;
-    load_watchlists();              // refresh combo, selects the new (empty) list
+    load_watchlists(); // refresh combo, selects the new (empty) list
     apply_active_watchlist(true);
 }
 

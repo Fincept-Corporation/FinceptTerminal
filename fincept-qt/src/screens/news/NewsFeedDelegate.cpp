@@ -56,12 +56,12 @@ void NewsFeedDelegate::paint_wire_row(QPainter* painter, const QRect& rect, cons
     // QVariant[1]. Suppress locally; struct layout is fixed and QVariant
     // conversion is validated by QMetaType.
 #if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
     auto article = index.data(ArticleRole).value<services::NewsArticle>();
 #if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
+#    pragma GCC diagnostic pop
 #endif
     auto monitor_color = index.data(MonitorColorRole).toString();
     bool is_new = index.data(IsNewRole).toBool();

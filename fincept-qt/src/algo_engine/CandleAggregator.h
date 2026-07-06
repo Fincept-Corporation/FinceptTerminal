@@ -10,9 +10,8 @@ namespace fincept::algo {
 
 class CandleAggregator : public QObject {
     Q_OBJECT
-public:
-    explicit CandleAggregator(const QString& symbol, Timeframe tf,
-                              int buffer_size = 200, QObject* parent = nullptr);
+  public:
+    explicit CandleAggregator(const QString& symbol, Timeframe tf, int buffer_size = 200, QObject* parent = nullptr);
 
     void on_tick(double price, double volume, int64_t timestamp_ms);
 
@@ -22,10 +21,10 @@ public:
 
     void warm_from(const QVector<OhlcvCandle>& historical);
 
-signals:
+  signals:
     void candle_closed(const fincept::algo::OhlcvCandle& candle);
 
-private:
+  private:
     void close_current_and_open_new(int64_t tick_time, double price, double volume);
     int64_t align_to_period(int64_t timestamp_ms) const;
 

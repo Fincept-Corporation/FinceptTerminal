@@ -6,18 +6,18 @@
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
-#include <QComboBox>
 #include <QCheckBox>
-#include <QTableWidget>
+#include <QComboBox>
+#include <QFormLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
-#include <QPushButton>
-#include <QProgressBar>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QFormLayout>
 #include <QMessageBox>
 #include <QPointer>
+#include <QProgressBar>
+#include <QPushButton>
+#include <QTableWidget>
+#include <QVBoxLayout>
 #include <QtConcurrent>
 
 #include <cmath>
@@ -28,7 +28,9 @@ using namespace fincept::trading::replication;
 namespace fincept::screens {
 
 namespace {
-QString fmt_money(double v) { return QStringLiteral("₹%L1").arg(v, 0, 'f', 2); }
+QString fmt_money(double v) {
+    return QStringLiteral("₹%L1").arg(v, 0, 'f', 2);
+}
 } // namespace
 
 PortfolioReplicationDialog::PortfolioReplicationDialog(QWidget* parent) : QDialog(parent) {
@@ -60,8 +62,8 @@ PortfolioReplicationDialog::PortfolioReplicationDialog(QWidget* parent) : QDialo
     // ── Preview table ──
     table_ = new QTableWidget;
     table_->setColumnCount(8);
-    table_->setHorizontalHeaderLabels({tr(""), tr("Type"), tr("Source"), tr("Target"),
-                                       tr("Side"), tr("Qty"), tr("Est Price"), tr("Est Value / Note")});
+    table_->setHorizontalHeaderLabels({tr(""), tr("Type"), tr("Source"), tr("Target"), tr("Side"), tr("Qty"),
+                                       tr("Est Price"), tr("Est Value / Note")});
     table_->horizontalHeader()->setStretchLastSection(true);
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -91,8 +93,8 @@ PortfolioReplicationDialog::PortfolioReplicationDialog(QWidget* parent) : QDialo
         QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:6px 18px;"
                 "font-weight:700;letter-spacing:0.5px;}QPushButton:hover{background:%2;color:#000;}"
                 "QPushButton:disabled{color:%4;}")
-            .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::ORANGE(),
-                 fincept::ui::colors::BORDER(), fincept::ui::colors::TEXT_SECONDARY()));
+            .arg(fincept::ui::colors::PANEL(), fincept::ui::colors::ORANGE(), fincept::ui::colors::BORDER(),
+                 fincept::ui::colors::TEXT_SECONDARY()));
     btns->addWidget(cancel);
     btns->addWidget(replicate_btn_);
     root->addLayout(btns);
@@ -100,8 +102,10 @@ PortfolioReplicationDialog::PortfolioReplicationDialog(QWidget* parent) : QDialo
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
     connect(replicate_btn_, &QPushButton::clicked, this, &PortfolioReplicationDialog::do_replicate);
     connect(topup_btn_, &QPushButton::clicked, this, &PortfolioReplicationDialog::do_top_up);
-    connect(source_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &PortfolioReplicationDialog::reload_plan);
-    connect(target_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, &PortfolioReplicationDialog::reload_plan);
+    connect(source_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            &PortfolioReplicationDialog::reload_plan);
+    connect(target_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            &PortfolioReplicationDialog::reload_plan);
     connect(inc_holdings_, &QCheckBox::toggled, this, &PortfolioReplicationDialog::reload_plan);
     connect(inc_positions_, &QCheckBox::toggled, this, &PortfolioReplicationDialog::reload_plan);
 
@@ -186,12 +190,15 @@ void PortfolioReplicationDialog::reload_plan() {
             err = QStringLiteral("Broker unavailable");
         }
         auto items = to_source_items(holdings, positions);
-        QMetaObject::invokeMethod(self, [self, items, err]() {
-            if (!self)
-                return;
-            self->loading_ = false;
-            self->apply_items(items, err);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, items, err]() {
+                if (!self)
+                    return;
+                self->loading_ = false;
+                self->apply_items(items, err);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -220,8 +227,8 @@ void PortfolioReplicationDialog::fill_table() {
         }
     }
 
-    plan_ = build_plan(source_items_, current_options(), available, src_id, tgt_id,
-                       tgt.paper_portfolio_id, make_instrument_resolver(src.broker_id, tgt.broker_id));
+    plan_ = build_plan(source_items_, current_options(), available, src_id, tgt_id, tgt.paper_portfolio_id,
+                       make_instrument_resolver(src.broker_id, tgt.broker_id));
 
     table_->setRowCount(plan_.orders.size());
     for (int row = 0; row < plan_.orders.size(); ++row) {
@@ -309,19 +316,16 @@ void PortfolioReplicationDialog::do_replicate() {
     ReplicationResult res = execute_plan(plan_);
     progress_->setValue(n);
 
-    status_->setText(tr("Placed %1  •  Failed %2  •  Skipped %3")
-                         .arg(res.placed)
-                         .arg(res.failed)
-                         .arg(res.skipped));
+    status_->setText(tr("Placed %1  •  Failed %2  •  Skipped %3").arg(res.placed).arg(res.failed).arg(res.skipped));
 
     QString detail;
     for (const auto& r : res.rows)
         if (!r.ok && !r.error.isEmpty())
             detail += QStringLiteral("• %1: %2\n").arg(r.symbol, r.error);
     if (!detail.isEmpty())
-        QMessageBox::information(this, tr("Replication results"),
-                                 tr("Placed %1, failed %2, skipped %3.\n\n%4")
-                                     .arg(res.placed).arg(res.failed).arg(res.skipped).arg(detail));
+        QMessageBox::information(
+            this, tr("Replication results"),
+            tr("Placed %1, failed %2, skipped %3.\n\n%4").arg(res.placed).arg(res.failed).arg(res.skipped).arg(detail));
 
     replicate_btn_->setEnabled(true);
     reload_plan(); // refresh against new paper balance/positions

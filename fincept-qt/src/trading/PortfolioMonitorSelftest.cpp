@@ -143,7 +143,7 @@ int run_portfolio_monitor_selftest() {
     h2.exchange = "NSE";
     h2.quantity = 50;
     h2.avg_price = 380;
-    h2.ltp = 0; // broker that doesn't hydrate LTP (e.g. Dhan) → derived fields guarded
+    h2.ltp = 0;            // broker that doesn't hydrate LTP (e.g. Dhan) → derived fields guarded
     h2.invested_value = 0; // must derive qty*avg = 19000
     h2.current_value = 0;
     h2.pnl = 0;
@@ -178,8 +178,7 @@ int run_portfolio_monitor_selftest() {
     // (test accounts have no paper portfolio, so the paper view is empty even
     // though the live caches above are populated — proving the views never mix.)
     svc.set_mode(UnifiedPortfolioService::Mode::Paper);
-    check("paper view empty (no blending of live rows)",
-          svc.positions().isEmpty() && svc.holdings().isEmpty());
+    check("paper view empty (no blending of live rows)", svc.positions().isEmpty() && svc.holdings().isEmpty());
     // Live ingestion while in paper mode must be cached but not displayed.
     BrokerPosition px_live;
     px_live.symbol = "SBIN";

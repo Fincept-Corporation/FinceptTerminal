@@ -5,15 +5,14 @@
 //
 // Part of the partial-class split of AiChatScreen.cpp.
 
-#include "screens/ai_chat/AiChatScreen.h"
-
-#include "screens/ai_chat/ChatBubbleFactory.h"
-#include "services/llm/LlmService.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "mcp/McpService.h"
+#include "screens/ai_chat/AiChatScreen.h"
+#include "screens/ai_chat/ChatBubbleFactory.h"
+#include "services/llm/LlmService.h"
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -60,8 +59,8 @@ static constexpr int kUserColMaxWidth = 560;
 static constexpr int kAiColMaxWidth = 680;
 
 void AiChatScreen::on_typing_indicator_tick() {
-    const QStringList states = {tr("AI is thinking"), tr("AI is thinking·"),
-                                tr("AI is thinking··"), tr("AI is thinking···")};
+    const QStringList states = {tr("AI is thinking"), tr("AI is thinking·"), tr("AI is thinking··"),
+                                tr("AI is thinking···")};
     typing_step_ = (typing_step_ + 1) % states.size();
     typing_dots_lbl_->setText(states[typing_step_]);
 }
@@ -79,7 +78,6 @@ void AiChatScreen::show_typing(bool show) {
 }
 
 // ── Session management ────────────────────────────────────────────────────────
-
 
 void AiChatScreen::on_send() {
     if (streaming_)
@@ -126,13 +124,11 @@ void AiChatScreen::on_send() {
     if (linked_symbol_.is_valid()) {
         text = QString("[Context: %1 (%2)]\n\n%3")
                    .arg(linked_symbol_.symbol,
-                        linked_symbol_.asset_class.isEmpty()
-                            ? QStringLiteral("equity")
-                            : linked_symbol_.asset_class,
+                        linked_symbol_.asset_class.isEmpty() ? QStringLiteral("equity") : linked_symbol_.asset_class,
                         text);
     }
 
-// Capture request‑time context for correct persistence
+    // Capture request‑time context for correct persistence
     const QString req_session = active_session_id_;
     const QString req_provider = ai_chat::LlmService::instance().active_provider();
     const QString req_model = ai_chat::LlmService::instance().active_model();
@@ -167,7 +163,8 @@ void AiChatScreen::on_send() {
         QPointer<AiChatScreen> self = this;
         auto first_chunk = std::make_shared<bool>(true);
         ai_chat::LlmService::instance().chat_streaming(
-            text, hist_copy, [self, first_chunk](const QString& chunk, bool done) {
+            text, hist_copy,
+            [self, first_chunk](const QString& chunk, bool done) {
                 QMetaObject::invokeMethod(
                     qApp,
                     [self, chunk, done, first_chunk]() {
@@ -185,8 +182,7 @@ void AiChatScreen::on_send() {
                     },
                     Qt::QueuedConnection);
             },
-            ai_chat::LlmService::ToolPolicy::All,
-            active_session_id_);
+            ai_chat::LlmService::ToolPolicy::All, active_session_id_);
     } else {
         QPointer<AiChatScreen> self = this;
         (void)QtConcurrent::run([self, text, hist_copy]() {
@@ -248,10 +244,8 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     // with no per-chunk emission, or fails before any chunk lands, would
     // be silently dropped — the typing indicator hides and the input is
     // re-enabled but nothing is shown.
-    const bool need_bubble = !streaming_bubble_ &&
-                             ((response.success && !response.content.isEmpty()) ||
-                              !response.success ||
-                              response.content.isEmpty());
+    const bool need_bubble = !streaming_bubble_ && ((response.success && !response.content.isEmpty()) ||
+                                                    !response.success || response.content.isEmpty());
     if (need_bubble)
         streaming_bubble_ = add_streaming_bubble();
 
@@ -259,8 +253,8 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
 
     if (!response.success) {
         if (streaming_bubble_) {
-            const QString err = response.error.isEmpty() ? tr("Error: request failed")
-                                                         : tr("Error: %1").arg(response.error);
+            const QString err =
+                response.error.isEmpty() ? tr("Error: request failed") : tr("Error: %1").arg(response.error);
             fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, err);
         }
         LOG_WARN("AiChat", QString("LLM request failed: %1").arg(response.error));
@@ -295,8 +289,8 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
         total_tokens_ += response.total_tokens;
         update_stats();
         // Use request‑time captured context to persist the assistant message
-        ChatRepository::instance().add_message(pending_req_session_, "assistant", content,
-                                               pending_req_provider_, pending_req_model_, response.total_tokens);
+        ChatRepository::instance().add_message(pending_req_session_, "assistant", content, pending_req_provider_,
+                                               pending_req_model_, response.total_tokens);
         // Clear pending request context to avoid accidental reuse
         pending_req_session_.clear();
         pending_req_provider_.clear();
@@ -314,22 +308,22 @@ void AiChatScreen::on_provider_changed() {
 
 void AiChatScreen::add_message_bubble(const QString& role, const QString& content, const QString& timestamp) {
     fincept::ai_chat::ChatBubbleFactory::Options opts;
-    opts.role               = role;
-    opts.content            = content;
-    opts.timestamp_iso      = timestamp;
-    opts.show_footer        = true;
+    opts.role = role;
+    opts.content = content;
+    opts.timestamp_iso = timestamp;
+    opts.show_footer = true;
     opts.user_col_max_width = kUserColMaxWidth;
-    opts.ai_col_max_width   = kAiColMaxWidth;
+    opts.ai_col_max_width = kAiColMaxWidth;
     auto b = fincept::ai_chat::ChatBubbleFactory::build(opts);
     messages_layout_->insertWidget(messages_layout_->count() - 1, b.row);
 }
 
 QLabel* AiChatScreen::add_streaming_bubble() {
     fincept::ai_chat::ChatBubbleFactory::Options opts;
-    opts.role               = "assistant";
-    opts.show_footer        = true;
+    opts.role = "assistant";
+    opts.show_footer = true;
     opts.user_col_max_width = kUserColMaxWidth;
-    opts.ai_col_max_width   = kAiColMaxWidth;
+    opts.ai_col_max_width = kAiColMaxWidth;
     auto b = fincept::ai_chat::ChatBubbleFactory::build_streaming(opts);
     messages_layout_->insertWidget(messages_layout_->count() - 1, b.row);
     return b.body;
@@ -353,7 +347,9 @@ void AiChatScreen::create_thinking_card() {
 
     // Collapsed by default — header toggles the body. The leading chevron (▸/▾)
     // reflects expanded state; the body holds the dimmed, selectable reasoning.
-    auto* header = new QPushButton(QChar(0x25B8) + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) + tr("Thinking…"));
+    auto* header = new QPushButton(
+        QChar(0x25B8) + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) +
+        tr("Thinking…"));
     header->setCursor(Qt::PointingHandCursor);
     header->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
                                   "font-size:%2px;font-weight:600;text-align:left;padding:0;}"
@@ -406,7 +402,9 @@ void AiChatScreen::finalize_thinking_card() {
     if (thinking_header_) {
         const bool expanded = thinking_body_ && thinking_body_->isVisible();
         const QChar chev = expanded ? QChar(0x25BE) : QChar(0x25B8);
-        thinking_header_->setText(chev + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) + tr("Thoughts"));
+        thinking_header_->setText(chev +
+                                  (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) +
+                                  tr("Thoughts"));
     }
     reset_thinking_state();
 }
@@ -510,8 +508,8 @@ void AiChatScreen::update_stats() {
             hdr_model_lbl_->setToolTip(tr("Fincept managed AI service\n\nChange in Settings > LLM Configuration"));
         } else {
             hdr_model_lbl_->setText(provider_raw.left(1).toUpper() + provider_raw.mid(1) + " / " + model_short);
-            hdr_model_lbl_->setToolTip(tr("Provider: %1\nModel: %2\n\nChange in Settings > LLM Configuration")
-                                           .arg(prov_display, model_raw));
+            hdr_model_lbl_->setToolTip(
+                tr("Provider: %1\nModel: %2\n\nChange in Settings > LLM Configuration").arg(prov_display, model_raw));
         }
     } else {
         provider_lbl_->setText(tr("No provider"));

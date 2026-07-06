@@ -4,13 +4,12 @@
 // refresh_installed, refresh_tools, update_status_bar.
 // Part of the partial-class split of McpServersScreen.cpp.
 
-#include "screens/mcp_servers/McpServersScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpMarketplace.h"
 #include "mcp/McpProvider.h"
+#include "screens/mcp_servers/McpServersScreen.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -172,7 +171,6 @@ namespace fincept::screens {
 
 using namespace fincept::mcp;
 using namespace fincept::ui;
-
 
 void McpServersScreen::on_view_changed(int view) {
     active_view_ = view;
@@ -342,8 +340,7 @@ void McpServersScreen::on_remove_server() {
             break;
         }
 
-    QMessageBox mb(QMessageBox::Question, tr("Remove Server"),
-                   tr("Remove \"%1\"?\nThis cannot be undone.").arg(name),
+    QMessageBox mb(QMessageBox::Question, tr("Remove Server"), tr("Remove \"%1\"?\nThis cannot be undone.").arg(name),
                    QMessageBox::Yes | QMessageBox::Cancel, this);
     if (mb.exec() != QMessageBox::Yes)
         return;
@@ -586,10 +583,8 @@ void McpServersScreen::refresh_tools() {
     tools_table_->resizeColumnToContents(2);
     tools_table_->resizeColumnToContents(3);
     tools_table_->setSortingEnabled(true);
-    tools_count_->setText(tr("%1 tools  (%2 internal · %3 external)")
-                              .arg(total)
-                              .arg(internal_tools.size())
-                              .arg(external_tools.size()));
+    tools_count_->setText(
+        tr("%1 tools  (%2 internal · %3 external)").arg(total).arg(internal_tools.size()).arg(external_tools.size()));
 
     connect(tools_table_, &QTableWidget::cellChanged, this, &McpServersScreen::on_tool_enabled_changed);
 }

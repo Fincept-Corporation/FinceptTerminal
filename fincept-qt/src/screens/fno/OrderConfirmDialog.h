@@ -28,9 +28,8 @@ class OrderConfirmDialog : public QDialog {
     Q_OBJECT
   public:
     OrderConfirmDialog(const fincept::services::options::Strategy& strategy,
-                       const fincept::services::options::OptionChain& chain,
-                       double premium, double max_profit, double max_loss,
-                       QWidget* parent = nullptr);
+                       const fincept::services::options::OptionChain& chain, double premium, double max_profit,
+                       double max_loss, QWidget* parent = nullptr);
 
     /// Margin returned by the broker. Empty until the async fetch completes;
     /// the dialog can be accepted without it (the loader times out at 5s).

@@ -26,7 +26,7 @@ namespace fincept::services {
 // SpeechService's identically-named constants.
 namespace {
 constexpr auto TTS_TAG = "TtsService";
-constexpr int  kTtsShutdownTimeoutMs = 1500;
+constexpr int kTtsShutdownTimeoutMs = 1500;
 } // namespace
 
 // ── PythonTtsProvider (base) ─────────────────────────────────────────────────
@@ -42,8 +42,9 @@ class PythonTtsProvider : public TtsProvider {
     using TtsProvider::TtsProvider;
 
     void speak(const QString& text) override {
-        LOG_INFO(TTS_TAG, QString("Provider[%1]::speak() — len=%2 active=%3")
-                              .arg(name()).arg(text.length()).arg(active_.load()));
+        LOG_INFO(
+            TTS_TAG,
+            QString("Provider[%1]::speak() — len=%2 active=%3").arg(name()).arg(text.length()).arg(active_.load()));
 
         if (text.trimmed().isEmpty()) {
             LOG_INFO(TTS_TAG, "speak: empty text — emitting finished immediately");
@@ -59,7 +60,8 @@ class PythonTtsProvider : public TtsProvider {
 
         QString python_exe = python::PythonSetupManager::instance().python_path("venv-numpy2");
         LOG_INFO(TTS_TAG, QString("Resolving python_exe — venv-numpy2: '%1' (exists=%2)")
-                              .arg(python_exe).arg(QFileInfo::exists(python_exe)));
+                              .arg(python_exe)
+                              .arg(QFileInfo::exists(python_exe)));
         if (python_exe.isEmpty() || !QFileInfo::exists(python_exe))
             python_exe = python::PythonRunner::instance().python_path();
 
@@ -70,8 +72,7 @@ class PythonTtsProvider : public TtsProvider {
         }
 
         const QString script = script_path();
-        LOG_INFO(TTS_TAG, QString("Resolving script — '%1' (exists=%2)")
-                              .arg(script).arg(QFileInfo::exists(script)));
+        LOG_INFO(TTS_TAG, QString("Resolving script — '%1' (exists=%2)").arg(script).arg(QFileInfo::exists(script)));
         if (!QFileInfo::exists(script)) {
             LOG_ERROR(TTS_TAG, QString("TTS script not found at '%1'").arg(script));
             emit error_occurred(QStringLiteral("TTS script not found: ") + script);
@@ -93,9 +94,7 @@ class PythonTtsProvider : public TtsProvider {
 #else
         const QChar kPathSep = ':';
 #endif
-        env.insert("PYTHONPATH", existing_pypath.isEmpty()
-                                     ? scripts_dir
-                                     : (scripts_dir + kPathSep + existing_pypath));
+        env.insert("PYTHONPATH", existing_pypath.isEmpty() ? scripts_dir : (scripts_dir + kPathSep + existing_pypath));
 
         // Provider-specific env (api keys, voice models, rates).
         extend_environment(env);
@@ -111,15 +110,16 @@ class PythonTtsProvider : public TtsProvider {
 #endif
 
         connect(process_, &QProcess::readyReadStandardOutput, this, &PythonTtsProvider::on_stdout_ready);
-        connect(process_, &QProcess::readyReadStandardError,  this, &PythonTtsProvider::on_stderr_ready);
+        connect(process_, &QProcess::readyReadStandardError, this, &PythonTtsProvider::on_stderr_ready);
         connect(process_, &QProcess::started, this, [this]() {
             LOG_INFO(TTS_TAG, QString("Provider[%1]: QProcess::started — pid=%2")
-                                  .arg(name()).arg(process_ ? process_->processId() : 0));
+                                  .arg(name())
+                                  .arg(process_ ? process_->processId() : 0));
         });
         connect(process_, &QProcess::finished, this, &PythonTtsProvider::on_process_finished);
         connect(process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
-            LOG_ERROR(TTS_TAG, QString("Provider[%1]: QProcess::errorOccurred err=%2")
-                                   .arg(name()).arg(static_cast<int>(err)));
+            LOG_ERROR(TTS_TAG,
+                      QString("Provider[%1]: QProcess::errorOccurred err=%2").arg(name()).arg(static_cast<int>(err)));
             if (err == QProcess::FailedToStart) {
                 emit error_occurred(QStringLiteral("Failed to launch TTS process"));
                 stop();
@@ -127,8 +127,8 @@ class PythonTtsProvider : public TtsProvider {
         });
 
         stdout_buffer_.clear();
-        LOG_INFO(TTS_TAG, QString("Provider[%1]: launching '%2' '%3' (cwd='%4')")
-                              .arg(name(), python_exe, script, scripts_dir));
+        LOG_INFO(TTS_TAG,
+                 QString("Provider[%1]: launching '%2' '%3' (cwd='%4')").arg(name(), python_exe, script, scripts_dir));
         process_->start(python_exe, {script});
 
         if (!process_->waitForStarted(2000)) {
@@ -142,8 +142,8 @@ class PythonTtsProvider : public TtsProvider {
         const QByteArray payload = text.toUtf8();
         const qint64 written = process_->write(payload);
         process_->closeWriteChannel();
-        LOG_INFO(TTS_TAG, QString("Provider[%1]: wrote %2/%3 bytes to stdin")
-                              .arg(name()).arg(written).arg(payload.size()));
+        LOG_INFO(TTS_TAG,
+                 QString("Provider[%1]: wrote %2/%3 bytes to stdin").arg(name()).arg(written).arg(payload.size()));
     }
 
     void stop() override {
@@ -161,15 +161,12 @@ class PythonTtsProvider : public TtsProvider {
 
         const bool was_active = active_.exchange(false, std::memory_order_acq_rel);
         if (was_active) {
-            LOG_INFO(TTS_TAG, QString("Provider[%1]: stop — was_active=true → speaking_finished")
-                                  .arg(name()));
+            LOG_INFO(TTS_TAG, QString("Provider[%1]: stop — was_active=true → speaking_finished").arg(name()));
             emit speaking_finished();
         }
     }
 
-    [[nodiscard]] bool is_active() const noexcept override {
-        return active_.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] bool is_active() const noexcept override { return active_.load(std::memory_order_relaxed); }
 
   protected:
     /// Absolute path to the Python script that implements the JSON-lines protocol.
@@ -191,8 +188,7 @@ class PythonTtsProvider : public TtsProvider {
             const QByteArray line = stdout_buffer_.left(newline_pos).trimmed();
             stdout_buffer_.remove(0, newline_pos + 1);
             if (!line.isEmpty()) {
-                LOG_DEBUG(TTS_TAG, QString("Provider[%1] stdout: %2")
-                                       .arg(name(), QString::fromUtf8(line.left(400))));
+                LOG_DEBUG(TTS_TAG, QString("Provider[%1] stdout: %2").arg(name(), QString::fromUtf8(line.left(400))));
                 parse_line(line);
             }
         }
@@ -214,8 +210,7 @@ class PythonTtsProvider : public TtsProvider {
         QJsonParseError parse_err;
         const QJsonDocument doc = QJsonDocument::fromJson(line, &parse_err);
         if (parse_err.error != QJsonParseError::NoError) {
-            LOG_WARN(TTS_TAG, QString("Provider[%1] non-JSON stdout: %2")
-                                  .arg(name(), QString::fromUtf8(line)));
+            LOG_WARN(TTS_TAG, QString("Provider[%1] non-JSON stdout: %2").arg(name(), QString::fromUtf8(line)));
             return;
         }
         const QJsonObject obj = doc.object();
@@ -246,12 +241,14 @@ class PythonTtsProvider : public TtsProvider {
         if (process_) {
             const QByteArray remaining_err = process_->readAllStandardError();
             if (!remaining_err.isEmpty())
-                LOG_WARN(TTS_TAG, QString("Provider[%1] final stderr: %2")
-                                       .arg(name(), QString::fromUtf8(remaining_err).trimmed()));
+                LOG_WARN(
+                    TTS_TAG,
+                    QString("Provider[%1] final stderr: %2").arg(name(), QString::fromUtf8(remaining_err).trimmed()));
             const QByteArray remaining_out = process_->readAllStandardOutput();
             if (!remaining_out.isEmpty())
-                LOG_INFO(TTS_TAG, QString("Provider[%1] final stdout: %2")
-                                       .arg(name(), QString::fromUtf8(remaining_out).trimmed()));
+                LOG_INFO(
+                    TTS_TAG,
+                    QString("Provider[%1] final stdout: %2").arg(name(), QString::fromUtf8(remaining_out).trimmed()));
         }
 
         LOG_INFO(TTS_TAG, QString("Provider[%1] process exited (code=%2, status=%3, was_active=%4)")
@@ -270,15 +267,14 @@ class PythonTtsProvider : public TtsProvider {
         if (was_active) {
             emit speaking_finished();
             if (status == QProcess::CrashExit || exit_code != 0) {
-                LOG_ERROR(TTS_TAG, QString("Provider[%1] exited abnormally (code=%2)")
-                                       .arg(name()).arg(exit_code));
+                LOG_ERROR(TTS_TAG, QString("Provider[%1] exited abnormally (code=%2)").arg(name()).arg(exit_code));
                 emit error_occurred(QStringLiteral("Voice response stopped unexpectedly"));
             }
         }
     }
 
-    QProcess*         process_ = nullptr;
-    QByteArray        stdout_buffer_;
+    QProcess* process_ = nullptr;
+    QByteArray stdout_buffer_;
     std::atomic<bool> active_{false};
 };
 
@@ -293,8 +289,7 @@ class Pyttsx3TtsProvider final : public PythonTtsProvider {
 
   protected:
     QString script_path() const override {
-        return python::PythonRunner::instance().scripts_dir() +
-               QStringLiteral("/voice/tts.py");
+        return python::PythonRunner::instance().scripts_dir() + QStringLiteral("/voice/tts.py");
     }
 };
 
@@ -311,8 +306,7 @@ class DeepgramTtsProvider final : public PythonTtsProvider {
 
   protected:
     QString script_path() const override {
-        return python::PythonRunner::instance().scripts_dir() +
-               QStringLiteral("/voice/deepgram_tts.py");
+        return python::PythonRunner::instance().scripts_dir() + QStringLiteral("/voice/deepgram_tts.py");
     }
 
     void extend_environment(QProcessEnvironment& env) const override {
@@ -323,12 +317,9 @@ class DeepgramTtsProvider final : public PythonTtsProvider {
                                    .arg(QString::fromStdString(key_res.error())));
         }
 
-        const QString model = AppConfig::instance()
-                                  .get("voice/deepgram/tts_model", "aura-2-thalia-en")
-                                  .toString();
+        const QString model = AppConfig::instance().get("voice/deepgram/tts_model", "aura-2-thalia-en").toString();
 
-        LOG_INFO(TTS_TAG, QString("Deepgram TTS env: api_key_len=%1 model='%2'")
-                              .arg(api_key.length()).arg(model));
+        LOG_INFO(TTS_TAG, QString("Deepgram TTS env: api_key_len=%1 model='%2'").arg(api_key.length()).arg(model));
 
         env.insert("DEEPGRAM_API_KEY", api_key);
         env.insert("FINCEPT_TTS_DG_MODEL", model);
@@ -357,15 +348,14 @@ bool TtsService::is_speaking() const noexcept {
 }
 
 QString TtsService::configured_provider() {
-    const QString v = AppConfig::instance()
-                          .get("voice/tts/provider", "pyttsx3")
-                          .toString().toLower();
+    const QString v = AppConfig::instance().get("voice/tts/provider", "pyttsx3").toString().toLower();
     return (v == "deepgram") ? QStringLiteral("deepgram") : QStringLiteral("pyttsx3");
 }
 
 void TtsService::speak(const QString& text) {
     LOG_INFO(TTS_TAG, QString("speak() — text_len=%1 currently_speaking=%2 provider=%3")
-                          .arg(text.length()).arg(is_speaking())
+                          .arg(text.length())
+                          .arg(is_speaking())
                           .arg(provider_ ? provider_->name() : QStringLiteral("<none>")));
 
     install_provider();

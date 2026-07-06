@@ -28,19 +28,21 @@ namespace {
 
 const QSet<QString>& bt_indian_brokers() {
     static const QSet<QString> s = {
-        QStringLiteral("fyers"),    QStringLiteral("zerodha"),  QStringLiteral("angelone"),
-        QStringLiteral("upstox"),   QStringLiteral("dhan"),     QStringLiteral("kotak"),
-        QStringLiteral("groww"),    QStringLiteral("aliceblue"),QStringLiteral("fivepaisa"),
-        QStringLiteral("iifl"),     QStringLiteral("motilal"),  QStringLiteral("shoonya"),
-        QStringLiteral("samco"),    QStringLiteral("flattrade"),QStringLiteral("paytm"),
-        QStringLiteral("tradejini"),QStringLiteral("icicidirect"),
+        QStringLiteral("fyers"),     QStringLiteral("zerodha"),     QStringLiteral("angelone"),
+        QStringLiteral("upstox"),    QStringLiteral("dhan"),        QStringLiteral("kotak"),
+        QStringLiteral("groww"),     QStringLiteral("aliceblue"),   QStringLiteral("fivepaisa"),
+        QStringLiteral("iifl"),      QStringLiteral("motilal"),     QStringLiteral("shoonya"),
+        QStringLiteral("samco"),     QStringLiteral("flattrade"),   QStringLiteral("paytm"),
+        QStringLiteral("tradejini"), QStringLiteral("icicidirect"),
     };
     return s;
 }
 
 const QSet<QString>& bt_brokers_needing_token() {
     static const QSet<QString> s = {
-        QStringLiteral("motilal"),   QStringLiteral("aliceblue"), QStringLiteral("fivepaisa"),
+        QStringLiteral("motilal"),
+        QStringLiteral("aliceblue"),
+        QStringLiteral("fivepaisa"),
         QStringLiteral("iifl"),
     };
     return s;
@@ -50,14 +52,22 @@ const QSet<QString>& bt_brokers_needing_token() {
 // intervals we deliberately don't source from brokers in v1 (weekly/monthly) so
 // the caller skips broker fetch and Python uses yfinance.
 QString bt_timeframe_to_resolution(const QString& tf) {
-    if (tf == "1m")  return QStringLiteral("1");
-    if (tf == "3m")  return QStringLiteral("3");
-    if (tf == "5m")  return QStringLiteral("5");
-    if (tf == "15m") return QStringLiteral("15");
-    if (tf == "30m") return QStringLiteral("30");
-    if (tf == "1h")  return QStringLiteral("60");
-    if (tf == "4h")  return QStringLiteral("240");
-    if (tf == "1d")  return QStringLiteral("D");
+    if (tf == "1m")
+        return QStringLiteral("1");
+    if (tf == "3m")
+        return QStringLiteral("3");
+    if (tf == "5m")
+        return QStringLiteral("5");
+    if (tf == "15m")
+        return QStringLiteral("15");
+    if (tf == "30m")
+        return QStringLiteral("30");
+    if (tf == "1h")
+        return QStringLiteral("60");
+    if (tf == "4h")
+        return QStringLiteral("240");
+    if (tf == "1d")
+        return QStringLiteral("D");
     return {}; // 1wk, 1mo, unknown → yfinance
 }
 
@@ -88,8 +98,10 @@ QString bt_resolve_broker_symbol(const QString& broker_id, const QString& bare_s
         return exch + ":" + sym + ":" + QString::number(tok.value());
     }
     static const QSet<QString> kInternalResolvers = {
-        QStringLiteral("zerodha"), QStringLiteral("angelone"),
-        QStringLiteral("dhan"),    QStringLiteral("upstox"),
+        QStringLiteral("zerodha"),
+        QStringLiteral("angelone"),
+        QStringLiteral("dhan"),
+        QStringLiteral("upstox"),
     };
     if (kInternalResolvers.contains(broker_id))
         bt_ensure_instruments_loaded(broker_id);
@@ -118,8 +130,7 @@ std::optional<fincept::trading::BrokerAccount> bt_first_active_indian_account() 
     for (const auto& a : accts) {
         if (!bt_indian_brokers().contains(a.broker_id))
             continue;
-        if (fincept::trading::AccountManager::instance().connection_state(a.account_id)
-            == ConnectionState::Connected)
+        if (fincept::trading::AccountManager::instance().connection_state(a.account_id) == ConnectionState::Connected)
             return a;
         if (!fallback)
             fallback = a;
@@ -133,9 +144,8 @@ bool BacktestBrokerData::has_active_indian_broker() {
     return bt_first_active_indian_account().has_value();
 }
 
-void BacktestBrokerData::fetch(QObject* context, const QStringList& symbols,
-                               const QString& start_date, const QString& end_date,
-                               const QString& interval, Callback cb) {
+void BacktestBrokerData::fetch(QObject* context, const QStringList& symbols, const QString& start_date,
+                               const QString& end_date, const QString& interval, Callback cb) {
     QPointer<QObject> ctx = context;
     (void)QtConcurrent::run([ctx, symbols, start_date, end_date, interval, cb]() {
         QJsonObject out;
@@ -147,8 +157,7 @@ void BacktestBrokerData::fetch(QObject* context, const QStringList& symbols,
         if (acct.has_value() && !resolution.isEmpty()) {
             broker_id = acct->broker_id;
             auto* broker = fincept::trading::BrokerRegistry::instance().get(broker_id);
-            const auto creds =
-                fincept::trading::AccountManager::instance().load_credentials(acct->account_id);
+            const auto creds = fincept::trading::AccountManager::instance().load_credentials(acct->account_id);
 
             auto has_data = [](const fincept::trading::ApiResponse<QVector<fincept::trading::BrokerCandle>>& r) {
                 return r.success && r.data.value_or(QVector<fincept::trading::BrokerCandle>{}).size() > 0;
@@ -184,8 +193,7 @@ void BacktestBrokerData::fetch(QObject* context, const QStringList& symbols,
 
         if (!ctx)
             return;
-        QMetaObject::invokeMethod(ctx, [cb, out, broker_id]() { cb(out, broker_id); },
-                                  Qt::QueuedConnection);
+        QMetaObject::invokeMethod(ctx, [cb, out, broker_id]() { cb(out, broker_id); }, Qt::QueuedConnection);
     });
 }
 

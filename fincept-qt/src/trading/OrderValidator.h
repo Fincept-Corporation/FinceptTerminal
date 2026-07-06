@@ -5,8 +5,8 @@
 
 #include "trading/TradingTypes.h"
 
-#include <QStringList>
 #include <QSet>
+#include <QStringList>
 
 namespace fincept::trading {
 

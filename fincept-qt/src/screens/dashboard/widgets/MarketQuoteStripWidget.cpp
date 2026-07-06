@@ -148,8 +148,7 @@ void MarketQuoteStripWidget::on_quote(const fincept::services::QuoteData& q) {
     const QString sign = q.change_pct >= 0 ? "+" : "";
     r.change->setText(QString("%1%2%").arg(sign).arg(q.change_pct, 0, 'f', 2));
     const QColor col = q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
-    r.change->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(col.name()));
+    r.change->setStyleSheet(QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(col.name()));
     received_.insert(q.symbol);
     set_loading_progress(received_.size(), symbols_.size());
 }
@@ -191,14 +190,11 @@ void MarketQuoteStripWidget::on_theme_changed() {
 
 void MarketQuoteStripWidget::apply_styles() {
     const QString sym_css =
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-            .arg(ui::colors::TEXT_PRIMARY());
+        QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
     const QString price_css =
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;")
-            .arg(ui::colors::TEXT_PRIMARY());
+        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
     const QString chg_css =
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY());
+        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
     for (auto it = rows_.begin(); it != rows_.end(); ++it) {
         if (it->symbol)
             it->symbol->setStyleSheet(sym_css);

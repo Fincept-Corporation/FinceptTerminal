@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QReadWriteLock>
 #include <QString>
+
 #include <optional>
 
 class QNetworkAccessManager;

@@ -12,8 +12,6 @@
 #include "core/window/WindowRegistry.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 
-#include <DockManager.h>
-
 #include <QApplication>
 #include <QDateTime>
 #include <QDir>
@@ -23,6 +21,8 @@
 #include <QScreen>
 #include <QSet>
 #include <QWindow>
+
+#include <DockManager.h>
 
 namespace fincept::layout {
 
@@ -56,22 +56,27 @@ QRect ensure_on_screen(const QRect& saved) {
     QSize sz = saved.size();
     // Clamp to the primary screen if the saved size is larger than the
     // current display (downsizing monitor case).
-    if (sz.width()  > avail.width())  sz.setWidth(avail.width());
-    if (sz.height() > avail.height()) sz.setHeight(avail.height());
-    return QRect(avail.center() - QPoint(sz.width()/2, sz.height()/2), sz);
+    if (sz.width() > avail.width())
+        sz.setWidth(avail.width());
+    if (sz.height() > avail.height())
+        sz.setHeight(avail.height());
+    return QRect(avail.center() - QPoint(sz.width() / 2, sz.height() / 2), sz);
 }
 } // namespace
 
-QString WorkspaceShell::current_name() { return g_current_name; }
-LayoutId WorkspaceShell::current_id()  { return g_current_id; }
+QString WorkspaceShell::current_name() {
+    return g_current_name;
+}
+LayoutId WorkspaceShell::current_id() {
+    return g_current_id;
+}
 
 void WorkspaceShell::clear_current() {
     g_current_name.clear();
     g_current_id = LayoutId{};
 }
 
-Workspace WorkspaceShell::capture(const QString& name, const QString& kind,
-                                  const Workspace* previous) {
+Workspace WorkspaceShell::capture(const QString& name, const QString& kind, const Workspace* previous) {
     Workspace w;
     if (previous) {
         // Preserve identity + variant history. Caller's intent: "save the
@@ -94,7 +99,8 @@ Workspace WorkspaceShell::capture(const QString& name, const QString& kind,
     // Capture each frame's layout.
     const auto frames = fincept::WindowRegistry::instance().frames();
     for (auto* frame : frames) {
-        if (!frame) continue;
+        if (!frame)
+            continue;
         FrameLayout fl = frame->capture_layout();
         w.frames.append(fl);
     }
@@ -104,7 +110,8 @@ Workspace WorkspaceShell::capture(const QString& name, const QString& kind,
     WorkspaceVariant variant;
     variant.topology = current;
     for (auto* frame : frames) {
-        if (!frame) continue;
+        if (!frame)
+            continue;
         const WindowId id = frame->frame_uuid();
         variant.frame_geometries.insert(id, frame->geometry());
         if (auto* scr = frame->screen())
@@ -140,8 +147,7 @@ Workspace WorkspaceShell::capture(const QString& name, const QString& kind,
     // autosave hot path.
     if (kind != QStringLiteral("auto") && !frames.isEmpty() && frames.first()) {
         if (auto* dm = frames.first()->dock_manager()) {
-            const QPixmap shot = dm->grab().scaled(
-                320, 180, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            const QPixmap shot = dm->grab().scaled(320, 180, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             if (!shot.isNull()) {
                 const QString thumb_dir = ProfilePaths::layouts_dir() + "/thumbs";
                 QDir().mkpath(thumb_dir);
@@ -153,9 +159,11 @@ Workspace WorkspaceShell::capture(const QString& name, const QString& kind,
         }
     }
 
-    LOG_INFO(kShellTag,
-             QString("capture: '%1' (uuid=%2) → %3 frames, %4 variants, topology=%5")
-                 .arg(name, w.id.to_string()).arg(w.frames.size()).arg(w.variants.size()).arg(current.value));
+    LOG_INFO(kShellTag, QString("capture: '%1' (uuid=%2) → %3 frames, %4 variants, topology=%5")
+                            .arg(name, w.id.to_string())
+                            .arg(w.frames.size())
+                            .arg(w.variants.size())
+                            .arg(current.value));
     return w;
 }
 
@@ -172,10 +180,10 @@ int WorkspaceShell::apply(const Workspace& workspace) {
     const MonitorTopologyKey current = fincept::MonitorTopology::current_key();
     const WorkspaceVariant* variant = WorkspaceMatcher::match(workspace, current);
 
-    LOG_INFO(kShellTag,
-             QString("apply: '%1' (uuid=%2) → %3 frames; matched variant: %4")
-                 .arg(workspace.name, workspace.id.to_string()).arg(workspace.frames.size())
-                 .arg(variant ? variant->topology.value : QStringLiteral("(none)")));
+    LOG_INFO(kShellTag, QString("apply: '%1' (uuid=%2) → %3 frames; matched variant: %4")
+                            .arg(workspace.name, workspace.id.to_string())
+                            .arg(workspace.frames.size())
+                            .arg(variant ? variant->topology.value : QStringLiteral("(none)")));
 
     int applied = 0;
     auto frames_now = fincept::WindowRegistry::instance().frames();
@@ -206,10 +214,9 @@ int WorkspaceShell::apply(const Workspace& workspace) {
         }
         if (!target) {
             // No existing frame to reuse — genuinely need a new window.
-            target = new fincept::WindowFrame(
-                fincept::WindowFrame::next_window_id(),
-                /*parent=*/nullptr,
-                /*adopted_uuid=*/fl.window_id);
+            target = new fincept::WindowFrame(fincept::WindowFrame::next_window_id(),
+                                              /*parent=*/nullptr,
+                                              /*adopted_uuid=*/fl.window_id);
             target->setAttribute(Qt::WA_DeleteOnClose);
             target->show();
             frames_now.append(target);
@@ -232,8 +239,7 @@ int WorkspaceShell::apply(const Workspace& workspace) {
         if (variant && spawned) {
             const auto scr_it = variant->frame_screens.constFind(fl.window_id);
             if (scr_it != variant->frame_screens.constEnd()) {
-                if (QScreen* saved_screen =
-                        fincept::MonitorTopology::find_screen_by_stable_id(scr_it.value())) {
+                if (QScreen* saved_screen = fincept::MonitorTopology::find_screen_by_stable_id(scr_it.value())) {
                     if (auto* win = target->windowHandle()) {
                         if (win->screen() != saved_screen)
                             win->setScreen(saved_screen);
@@ -265,8 +271,7 @@ int WorkspaceShell::apply(const Workspace& workspace) {
         if (err.error == QJsonParseError::NoError && ctx_doc.isObject())
             SymbolContext::instance().from_json(ctx_doc.object());
         else
-            LOG_WARN(kShellTag,
-                     QString("apply: symbol_context parse failed: %1").arg(err.errorString()));
+            LOG_WARN(kShellTag, QString("apply: symbol_context parse failed: %1").arg(err.errorString()));
     }
 
     // Update process-wide state so the title bar + toolbar see the current
@@ -279,8 +284,7 @@ int WorkspaceShell::apply(const Workspace& workspace) {
             auto pin_r = LayoutCatalog::instance().set_last_loaded_id(workspace.id);
             if (pin_r.is_err())
                 LOG_WARN(kShellTag,
-                         QString("Failed to pin last_loaded_id: %1")
-                             .arg(QString::fromStdString(pin_r.error())));
+                         QString("Failed to pin last_loaded_id: %1").arg(QString::fromStdString(pin_r.error())));
         }
     }
     return applied;
@@ -295,14 +299,11 @@ int WorkspaceShell::load_last_or_default() {
         auto wr = LayoutCatalog::instance().load_workspace(last.value());
         if (wr.is_ok()) {
             const int n = apply(wr.value());
-            LOG_INFO(kShellTag,
-                     QString("load_last_or_default: restored '%1' (%2 frames)")
-                         .arg(wr.value().name).arg(n));
+            LOG_INFO(kShellTag, QString("load_last_or_default: restored '%1' (%2 frames)").arg(wr.value().name).arg(n));
             return n;
         }
-        LOG_WARN(kShellTag,
-                 QString("load_last_or_default: last_loaded_uuid=%1 unreadable: %2")
-                     .arg(last.value().to_string(), QString::fromStdString(wr.error())));
+        LOG_WARN(kShellTag, QString("load_last_or_default: last_loaded_uuid=%1 unreadable: %2")
+                                .arg(last.value().to_string(), QString::fromStdString(wr.error())));
     }
 
     // Step 2: most recent kind='auto' snapshot from the ring buffer. The
@@ -325,13 +326,10 @@ int WorkspaceShell::load_last_or_default() {
                 // last_loaded_id (the next user save should be the pin).
                 w.kind = QStringLiteral("auto");
                 const int n = apply(w);
-                LOG_INFO(kShellTag,
-                         QString("load_last_or_default: restored auto snapshot (%1 frames)")
-                             .arg(n));
+                LOG_INFO(kShellTag, QString("load_last_or_default: restored auto snapshot (%1 frames)").arg(n));
                 return n;
             }
-            LOG_WARN(kShellTag,
-                     QString("load_last_or_default: snapshot parse failed: %1").arg(err.errorString()));
+            LOG_WARN(kShellTag, QString("load_last_or_default: snapshot parse failed: %1").arg(err.errorString()));
         }
     }
 

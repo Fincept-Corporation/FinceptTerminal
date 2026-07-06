@@ -21,7 +21,7 @@ class FiiDiiRepository : public BaseRepository<fincept::services::options::FiiDi
 
     /// ISO date window (inclusive). Returns ASC by date_iso.
     Result<QVector<fincept::services::options::FiiDiiDay>> get_window(const QString& since_iso,
-                                                                       const QString& until_iso = {});
+                                                                      const QString& until_iso = {});
 
   private:
     FiiDiiRepository() = default;

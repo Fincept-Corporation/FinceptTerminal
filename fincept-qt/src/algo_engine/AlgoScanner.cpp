@@ -1,5 +1,6 @@
 // src/algo_engine/AlgoScanner.cpp
 #include "algo_engine/AlgoScanner.h"
+
 #include "algo_engine/ConditionEvaluator.h"
 #include "core/logging/Logger.h"
 
@@ -12,9 +13,9 @@ AlgoScanner& AlgoScanner::instance() {
     return s;
 }
 
-void AlgoScanner::scan(const QJsonArray& conditions, const QStringList& symbols,
-                       const QString& timeframe, int lookback_days, const QString& logic,
-                       DataSource source, const QString& broker_id, const QString& account_id) {
+void AlgoScanner::scan(const QJsonArray& conditions, const QStringList& symbols, const QString& timeframe,
+                       int lookback_days, const QString& logic, DataSource source, const QString& broker_id,
+                       const QString& account_id) {
     if (conditions.isEmpty()) {
         emit scan_error(QStringLiteral("No conditions provided"));
         return;
@@ -24,13 +25,12 @@ void AlgoScanner::scan(const QJsonArray& conditions, const QStringList& symbols,
         return;
     }
 
-    LOG_INFO("AlgoScanner", QString("Scanning %1 symbols via %2")
-             .arg(symbols.size()).arg(data_source_to_string(source)));
+    LOG_INFO("AlgoScanner",
+             QString("Scanning %1 symbols via %2").arg(symbols.size()).arg(data_source_to_string(source)));
 
     CandleDataFetcher::instance().fetch_multi(
         symbols, timeframe, lookback_days, source, broker_id, account_id,
-        [this, conditions, logic](const QHash<QString, QVector<OhlcvCandle>>& data,
-                                  const QStringList& fetch_errors) {
+        [this, conditions, logic](const QHash<QString, QVector<OhlcvCandle>>& data, const QStringList& fetch_errors) {
             QVector<ScanMatch> matches;
             QStringList all_errors = fetch_errors;
             int scanned = 0;
@@ -39,8 +39,7 @@ void AlgoScanner::scan(const QJsonArray& conditions, const QStringList& symbols,
                 scanned++;
                 const auto& candles = it.value();
                 if (candles.size() < 20) {
-                    all_errors.append(QString("%1: insufficient data (%2 candles)")
-                                          .arg(it.key()).arg(candles.size()));
+                    all_errors.append(QString("%1: insufficient data (%2 candles)").arg(it.key()).arg(candles.size()));
                     continue;
                 }
 
@@ -87,8 +86,7 @@ void AlgoScanner::scan(const QJsonArray& conditions, const QStringList& symbols,
             out["errors"] = err_arr;
 
             emit scan_complete(out);
-            LOG_INFO("AlgoScanner", QString("Scan done: %1 matches / %2 scanned")
-                     .arg(matches.size()).arg(scanned));
+            LOG_INFO("AlgoScanner", QString("Scan done: %1 matches / %2 scanned").arg(matches.size()).arg(scanned));
         });
 }
 

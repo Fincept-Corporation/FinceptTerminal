@@ -172,7 +172,7 @@ void CodeEditorScreen::build_ui() {
 
     view_stack_ = new QStackedWidget(this);
     library_page_ = build_library_page();
-    view_stack_->addWidget(library_page_);     // 0 — Library
+    view_stack_->addWidget(library_page_);       // 0 — Library
     view_stack_->addWidget(build_editor_page()); // 1 — Editor
     root->addWidget(view_stack_, 1);
 }
@@ -541,7 +541,8 @@ void CodeEditorScreen::on_rename_cell(const QString& cell_id) {
 
     bool ok = false;
     const QString name =
-        QInputDialog::getText(this, tr("Rename Cell"), tr("Cell name:"), QLineEdit::Normal, current_name, &ok).trimmed();
+        QInputDialog::getText(this, tr("Rename Cell"), tr("Cell name:"), QLineEdit::Normal, current_name, &ok)
+            .trimmed();
     if (!ok)
         return;
 
@@ -763,7 +764,8 @@ void CodeEditorScreen::on_save_notebook() {
 
     QString path = notebook_path_;
     if (path.isEmpty()) {
-        path = QFileDialog::getSaveFileName(this, tr("Save Notebook"), "notebook.ipynb", tr("Fincept Notebooks (*.ipynb)"));
+        path = QFileDialog::getSaveFileName(this, tr("Save Notebook"), "notebook.ipynb",
+                                            tr("Fincept Notebooks (*.ipynb)"));
         if (path.isEmpty())
             return;
     }
@@ -906,22 +908,33 @@ void CodeEditorScreen::changeEvent(QEvent* event) {
 
 void CodeEditorScreen::retranslateUi() {
     // Header
-    if (header_title_) header_title_->setText(tr("FINCEPT NOTEBOOK"));
+    if (header_title_)
+        header_title_->setText(tr("FINCEPT NOTEBOOK"));
     const QStringList tab_labels = {tr("LIBRARY"), tr("EDITOR")};
     for (int i = 0; i < view_btns_.size() && i < tab_labels.size(); ++i)
         view_btns_[i]->setText(tab_labels[i]);
-    if (lib_search_input_) lib_search_input_->setPlaceholderText(tr("Search notebooks..."));
-    if (header_new_btn_) header_new_btn_->setText(tr("＋  NEW NOTEBOOK"));
+    if (lib_search_input_)
+        lib_search_input_->setPlaceholderText(tr("Search notebooks..."));
+    if (header_new_btn_)
+        header_new_btn_->setText(tr("＋  NEW NOTEBOOK"));
 
     // Toolbar
-    if (btn_new_) btn_new_->setText(tr("NEW"));
-    if (btn_open_) btn_open_->setText(tr("OPEN"));
-    if (btn_save_) btn_save_->setText(tr("SAVE"));
-    if (btn_add_cell_) btn_add_cell_->setText(tr("+ CELL"));
-    if (btn_clear_out_) btn_clear_out_->setText(tr("CLEAR OUT"));
-    if (btn_run_all_) btn_run_all_->setText(tr("▶  RUN ALL"));
-    if (btn_sidebar_) btn_sidebar_->setText(tr("SIDEBAR"));
-    if (py_label_) py_label_->setText(tr("Python 3.11"));
+    if (btn_new_)
+        btn_new_->setText(tr("NEW"));
+    if (btn_open_)
+        btn_open_->setText(tr("OPEN"));
+    if (btn_save_)
+        btn_save_->setText(tr("SAVE"));
+    if (btn_add_cell_)
+        btn_add_cell_->setText(tr("+ CELL"));
+    if (btn_clear_out_)
+        btn_clear_out_->setText(tr("CLEAR OUT"));
+    if (btn_run_all_)
+        btn_run_all_->setText(tr("▶  RUN ALL"));
+    if (btn_sidebar_)
+        btn_sidebar_->setText(tr("SIDEBAR"));
+    if (py_label_)
+        py_label_->setText(tr("Python 3.11"));
     refresh_kernel_label();
     if (lib_toolbar_lbl_)
         lib_toolbar_lbl_->setText(tr("FINCEPT NOTEBOOK LIBRARY — curated finance, economics, trading, "

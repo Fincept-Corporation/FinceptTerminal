@@ -86,9 +86,9 @@ class CryptoCenterScreen : public QWidget {
     TradeTab* trade_tab_ = nullptr;
     ActivityTab* activity_tab_ = nullptr;
     SettingsTab* settings_tab_ = nullptr;
-    StakeTab* stake_tab_ = nullptr;       // Phase 3 — veFNCPT lock + tier
-    MarketsTab* markets_tab_ = nullptr;   // Phase 4 — internal prediction markets
-    RoadmapTab* roadmap_tab_ = nullptr;   // Phase 5 — buyback & burn dashboard
+    StakeTab* stake_tab_ = nullptr;     // Phase 3 — veFNCPT lock + tier
+    MarketsTab* markets_tab_ = nullptr; // Phase 4 — internal prediction markets
+    RoadmapTab* roadmap_tab_ = nullptr; // Phase 5 — buyback & burn dashboard
 };
 
 } // namespace fincept::screens

@@ -6,7 +6,7 @@
 namespace fincept {
 class WindowFrame;
 class AiChatBubble;
-}
+} // namespace fincept
 
 namespace fincept::ai_chat {
 

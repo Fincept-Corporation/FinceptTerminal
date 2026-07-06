@@ -27,8 +27,7 @@ using fincept::services::options::OptionChainService;
 FnoDataBridge::FnoDataBridge(QObject* parent) : QObject(parent) {
     // This object lives on the main thread. chain_published fires on the main thread
     // (OptionChainService publishes from there), so this direct connection is safe.
-    connect(&OptionChainService::instance(), &OptionChainService::chain_published,
-            this, &FnoDataBridge::ingest_chain);
+    connect(&OptionChainService::instance(), &OptionChainService::chain_published, this, &FnoDataBridge::ingest_chain);
 }
 
 void FnoDataBridge::ingest_chain(const OptionChain& chain) {
@@ -37,30 +36,26 @@ void FnoDataBridge::ingest_chain(const OptionChain& chain) {
     chains_[topic] = chain;
 }
 
-OptionChain FnoDataBridge::snapshot(const QString& broker, const QString& underlying,
-                                    const QString& expiry) const {
+OptionChain FnoDataBridge::snapshot(const QString& broker, const QString& underlying, const QString& expiry) const {
     const QString topic = make_chain_topic(broker, underlying, expiry);
     QMutexLocker l(&mutex_);
     return chains_.value(topic);
 }
 
-void FnoDataBridge::ensure_chain(const QString& broker, const QString& underlying,
-                                  const QString& expiry) {
+void FnoDataBridge::ensure_chain(const QString& broker, const QString& underlying, const QString& expiry) {
     const QString topic = make_chain_topic(broker, underlying, expiry);
     if (QThread::currentThread() != thread()) {
-        QMetaObject::invokeMethod(this, [this, topic]() { do_ensure_chain(topic); },
-                                  Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, [this, topic]() { do_ensure_chain(topic); }, Qt::QueuedConnection);
     } else {
         do_ensure_chain(topic);
     }
 }
 
-void FnoDataBridge::pin_legs(const QString& broker, const QString& underlying,
-                              const QString& expiry, const QStringList& symbols) {
+void FnoDataBridge::pin_legs(const QString& broker, const QString& underlying, const QString& expiry,
+                             const QStringList& symbols) {
     const QString topic = make_chain_topic(broker, underlying, expiry);
     if (QThread::currentThread() != thread()) {
-        QMetaObject::invokeMethod(this, [this, topic, symbols]() { do_pin(topic, symbols); },
-                                  Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, [this, topic, symbols]() { do_pin(topic, symbols); }, Qt::QueuedConnection);
     } else {
         do_pin(topic, symbols);
     }

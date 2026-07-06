@@ -19,12 +19,9 @@ namespace fincept::services {
 /// Manifest schema (see updates.json):
 /// {
 ///   "updates": {
-///     "windows-x64":  { "latest-version": "4.1.0", "download-url": "...", "sha256": "...", "open-url": "...", "changelog": "..." },
-///     "windows-arm64":{ ... },
-///     "linux-x64":    { ... },
-///     "macos-arm64":  { ... },
-///     "macos-x64":    { ... },
-///     "macos-universal": { ... }
+///     "windows-x64":  { "latest-version": "4.1.0", "download-url": "...", "sha256": "...", "open-url": "...",
+///     "changelog": "..." }, "windows-arm64":{ ... }, "linux-x64":    { ... }, "macos-arm64":  { ... }, "macos-x64": {
+///     ... }, "macos-universal": { ... }
 ///   }
 /// }
 ///

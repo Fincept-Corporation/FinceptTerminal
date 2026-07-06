@@ -229,7 +229,8 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
     r1l->addWidget(search_input_, 1);
 
     sort_label_ = new QLabel(tr("Sort:"));
-    sort_label_->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
+    sort_label_->setStyleSheet(
+        QString("color:%1;font-size:11px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
     r1l->addWidget(sort_label_);
 
     // Sort combo — logic uses currentIndex(), so display text is set/refreshed
@@ -418,9 +419,9 @@ void FileManagerScreen::delete_file(const QString& file_id) {
     auto f = FileManagerService::instance().find_by_id(file_id);
     if (f.id.isEmpty())
         return;
-    auto reply = QMessageBox::question(this, tr("Delete File"),
-                                       tr("Delete \"%1\"? This cannot be undone.").arg(f.original_name),
-                                       QMessageBox::Yes | QMessageBox::No);
+    auto reply =
+        QMessageBox::question(this, tr("Delete File"), tr("Delete \"%1\"? This cannot be undone.").arg(f.original_name),
+                              QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes)
         FileManagerService::instance().remove_file(file_id);
 }
@@ -433,10 +434,9 @@ void FileManagerScreen::delete_selected() {
     }
     if (to_delete.isEmpty())
         return;
-    auto reply = QMessageBox::question(
-        this, tr("Delete Files"),
-        tr("Delete %n selected file(s)? This cannot be undone.", "", to_delete.size()),
-        QMessageBox::Yes | QMessageBox::No);
+    auto reply = QMessageBox::question(this, tr("Delete Files"),
+                                       tr("Delete %n selected file(s)? This cannot be undone.", "", to_delete.size()),
+                                       QMessageBox::Yes | QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
     for (const QString& id : to_delete)
@@ -965,27 +965,36 @@ void FileManagerScreen::changeEvent(QEvent* event) {
 
 void FileManagerScreen::retranslateUi() {
     // Header
-    if (title_label_) title_label_->setText(tr("FILE MANAGER"));
-    if (subtitle_label_) subtitle_label_->setText(tr("Manage files across the terminal"));
-    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
-    if (upload_btn_) upload_btn_->setText(tr("UPLOAD FILES"));
+    if (title_label_)
+        title_label_->setText(tr("FILE MANAGER"));
+    if (subtitle_label_)
+        subtitle_label_->setText(tr("Manage files across the terminal"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
+    if (upload_btn_)
+        upload_btn_->setText(tr("UPLOAD FILES"));
 
     // Filter / sort bar
-    if (sort_label_) sort_label_->setText(tr("Sort:"));
+    if (sort_label_)
+        sort_label_->setText(tr("Sort:"));
     if (sort_combo_) {
-        const QStringList opts = {tr("Date (newest)"),  tr("Date (oldest)"),  tr("Name (A-Z)"), tr("Name (Z-A)"),
+        const QStringList opts = {tr("Date (newest)"),  tr("Date (oldest)"),   tr("Name (A-Z)"), tr("Name (Z-A)"),
                                   tr("Size (largest)"), tr("Size (smallest)"), tr("Type")};
         for (int i = 0; i < opts.size() && i < sort_combo_->count(); ++i)
             sort_combo_->setItemText(i, opts[i]);
     }
-    if (search_input_) search_input_->setPlaceholderText(tr("Search files by name, type, or source..."));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search files by name, type, or source..."));
 
     // Bulk action bar
-    if (bulk_sel_label_) bulk_sel_label_->setText(tr("Selected files:"));
-    if (bulk_clear_btn_) bulk_clear_btn_->setText(tr("CLEAR SELECTION"));
+    if (bulk_sel_label_)
+        bulk_sel_label_->setText(tr("Selected files:"));
+    if (bulk_clear_btn_)
+        bulk_clear_btn_->setText(tr("CLEAR SELECTION"));
 
     // Preview panel header + empty placeholder (when no file is being previewed)
-    if (preview_header_label_) preview_header_label_->setText(tr("PREVIEW"));
+    if (preview_header_label_)
+        preview_header_label_->setText(tr("PREVIEW"));
     if (preview_empty_ && preview_empty_->isVisible() && preview_title_ && preview_title_->text().isEmpty())
         preview_empty_->setText(tr("Select a file to preview"));
 

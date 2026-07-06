@@ -14,11 +14,11 @@ namespace {
 Result<void> apply_v038(QSqlDatabase& db) {
     QSqlQuery q(db);
     if (!q.exec("CREATE TABLE IF NOT EXISTS notebooks ("
-                "id TEXT PRIMARY KEY, "                                  // client UUID; maps to nbk_
+                "id TEXT PRIMARY KEY, " // client UUID; maps to nbk_
                 "name TEXT NOT NULL DEFAULT 'Untitled', "
                 "description TEXT, "
-                "cells TEXT NOT NULL DEFAULT '[]', "                     // JSON array (Jupyter cells)
-                "metadata TEXT NOT NULL DEFAULT '{}', "                  // JSON object
+                "cells TEXT NOT NULL DEFAULT '[]', "    // JSON array (Jupyter cells)
+                "metadata TEXT NOT NULL DEFAULT '{}', " // JSON object
                 "execution_counter INTEGER NOT NULL DEFAULT 0, "
                 "created_at TEXT NOT NULL DEFAULT (datetime('now')), "
                 "updated_at TEXT NOT NULL DEFAULT (datetime('now')))"))

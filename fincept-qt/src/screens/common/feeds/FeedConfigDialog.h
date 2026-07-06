@@ -47,11 +47,11 @@ class FeedConfigDialog : public QDialog {
 
     // Manual-mapping section
     QWidget* manual_box_ = nullptr;
-    QComboBox* item_combo_ = nullptr;     // repeating record selector (editable)
+    QComboBox* item_combo_ = nullptr; // repeating record selector (editable)
     QLabel* discover_status_ = nullptr;
     QVBoxLayout* fields_layout_ = nullptr; // holds the row widgets + a trailing stretch
     QVector<QWidget*> field_rows_;
-    QStringList discovered_paths_;        // populates each row's source dropdown
+    QStringList discovered_paths_; // populates each row's source dropdown
 
     QLabel* test_result_ = nullptr;
     bool delete_requested_ = false;

@@ -64,9 +64,9 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     void on_order_submitted(const QString& side, const QString& order_type, double qty, double price, double stop_price,
                             double sl, double tp);
     void on_cancel_order(const QString& order_id);
-    void on_cancel_all_orders();                     // CANCEL ALL (live + paper)
-    void on_close_all_positions();                   // SQUARE OFF ALL (live + paper)
-    void on_close_position(const QString& symbol);   // close a single position
+    void on_cancel_all_orders();                   // CANCEL ALL (live + paper)
+    void on_close_all_positions();                 // SQUARE OFF ALL (live + paper)
+    void on_close_position(const QString& symbol); // close a single position
     void on_ob_price_clicked(double price);
     void on_search_requested(const QString& filter);
 
@@ -116,7 +116,7 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     QPushButton* mode_btn_ = nullptr;
     QPushButton* api_btn_ = nullptr;
     QLabel* ws_status_ = nullptr;
-    QLabel* ws_transport_ = nullptr;  // tiny hint: "NATIVE" for Kraken, "DAEMON" for ccxt
+    QLabel* ws_transport_ = nullptr; // tiny hint: "NATIVE" for Kraken, "DAEMON" for ccxt
     QLabel* clock_label_ = nullptr;
 
     /// Context object that owns all direct connections to the native Kraken
@@ -150,10 +150,9 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     QString portfolio_id_;
     trading::PtPortfolio portfolio_;
 
-
     // Async fetch guards
     std::atomic<bool> candles_fetching_{false};
-    std::atomic<int> live_inflight_{0};  // counts async_fetch_live_* tasks still running
+    std::atomic<int> live_inflight_{0}; // counts async_fetch_live_* tasks still running
     std::atomic<bool> paper_bookkeeping_in_flight_{false};
 
     // Startup gate — ensures daemon-dependent fetches fire exactly once,
@@ -163,7 +162,7 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     // WS/REST mode edge detection — when WS transitions online we stop REST
     // polling; when it drops we restart it. tri-state: -1 = unknown.
     int last_ws_state_ = -1;
-    int last_ws_status_label_state_ = -1;  // separate from last_ws_state_ since update_clock is 1Hz
+    int last_ws_status_label_state_ = -1; // separate from last_ws_state_ since update_clock is 1Hz
     void apply_feed_mode(bool ws_connected);
 
     QStringList watchlist_symbols_ = {

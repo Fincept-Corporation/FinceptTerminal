@@ -49,19 +49,18 @@ QString muted_button() {
 }
 
 QString fno_dense_table() {
-    return QString(
-        "QTableView { background:%1; color:%2; border:none; gridline-color:transparent; "
-        "  alternate-background-color:%3; font-size:11px; "
-        "  selection-background-color:%4; selection-color:%2; }"
-        "QTableView::item { padding:0 6px; border:none; }"
-        "QTableView::item:hover { background:%4; }"
-        "QHeaderView::section { background:%5; color:%6; border:none; "
-        "  border-bottom:1px solid %7; padding:2px 6px; "
-        "  font-size:9px; font-weight:700; letter-spacing:0.4px; }"
-        "QScrollBar:vertical { background:%1; width:6px; margin:0; }"
-        "QScrollBar::handle:vertical { background:%7; min-height:20px; border-radius:3px; }"
-        "QScrollBar::handle:vertical:hover { background:%6; }"
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+    return QString("QTableView { background:%1; color:%2; border:none; gridline-color:transparent; "
+                   "  alternate-background-color:%3; font-size:11px; "
+                   "  selection-background-color:%4; selection-color:%2; }"
+                   "QTableView::item { padding:0 6px; border:none; }"
+                   "QTableView::item:hover { background:%4; }"
+                   "QHeaderView::section { background:%5; color:%6; border:none; "
+                   "  border-bottom:1px solid %7; padding:2px 6px; "
+                   "  font-size:9px; font-weight:700; letter-spacing:0.4px; }"
+                   "QScrollBar:vertical { background:%1; width:6px; margin:0; }"
+                   "QScrollBar::handle:vertical { background:%7; min-height:20px; border-radius:3px; }"
+                   "QScrollBar::handle:vertical:hover { background:%6; }"
+                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
         .arg(colors::BG_BASE(),        // %1
              colors::TEXT_PRIMARY(),   // %2
              colors::ROW_ALT(),        // %3
@@ -209,9 +208,11 @@ QString news_screen_styles() {
                "  letter-spacing: 0.5px; background: transparent; padding: 2px 0; "
                "  border-bottom: 1px solid %3; }"
                "#newsDetailSubTitle { color: %6; font-size: 10px; font-weight: 700; background: transparent; }"
-               "#newsDetailOpenBtn, #newsDetailCopyBtn, #newsDetailCopyTitleBtn, #newsDetailSaveBtn { background: %8; color: %7; "
+               "#newsDetailOpenBtn, #newsDetailCopyBtn, #newsDetailCopyTitleBtn, #newsDetailSaveBtn { background: %8; "
+               "color: %7; "
                "  border: 1px solid %3; font-size: 11px; font-weight: 700; padding: 0 8px; }"
-               "#newsDetailOpenBtn:hover, #newsDetailCopyBtn:hover, #newsDetailCopyTitleBtn:hover, #newsDetailSaveBtn:hover { color: %4; background: %13; }"
+               "#newsDetailOpenBtn:hover, #newsDetailCopyBtn:hover, #newsDetailCopyTitleBtn:hover, "
+               "#newsDetailSaveBtn:hover { color: %4; background: %13; }"
                "#newsDetailAnalyzeBtn { background: rgba(217,119,6,0.1); color: %12; "
                "  border: 1px solid %10; font-size: 11px; font-weight: 700; padding: 0 10px; }"
                "#newsDetailAnalyzeBtn:hover { background: %12; color: %1; }"

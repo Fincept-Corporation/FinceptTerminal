@@ -17,19 +17,18 @@ struct ScanMatch {
 
 class AlgoScanner : public QObject {
     Q_OBJECT
-public:
+  public:
     static AlgoScanner& instance();
 
-    void scan(const QJsonArray& conditions, const QStringList& symbols,
-              const QString& timeframe, int lookback_days, const QString& logic,
-              DataSource source = DataSource::Auto,
-              const QString& broker_id = {}, const QString& account_id = {});
+    void scan(const QJsonArray& conditions, const QStringList& symbols, const QString& timeframe, int lookback_days,
+              const QString& logic, DataSource source = DataSource::Auto, const QString& broker_id = {},
+              const QString& account_id = {});
 
-signals:
+  signals:
     void scan_complete(const QJsonObject& result);
     void scan_error(const QString& error);
 
-private:
+  private:
     AlgoScanner() = default;
     Q_DISABLE_COPY(AlgoScanner)
 };

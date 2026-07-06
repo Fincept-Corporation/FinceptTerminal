@@ -151,9 +151,8 @@ TokenExchangeResponse SamcoBroker::exchange_token(const QString& api_key, const 
     // — persist the secret so the daily session can be silently re-minted. Token
     // lapses at the daily reset.
     QJsonObject extra_obj{{"secret_api_key", auth_code}};
-    const QString extra =
-        with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
-                          next_ist_flush_epoch(6, 0));
+    const QString extra = with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
+                                            next_ist_flush_epoch(6, 0));
     return {true, session, "", api_key, extra, ""};
 }
 

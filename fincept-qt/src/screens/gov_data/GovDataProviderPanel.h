@@ -19,17 +19,16 @@
 namespace fincept::screens {
 
 struct GovProviderOptions {
-    QString watermark_text;                // if non-empty, show a bottom status bar with this text
-    QStringList portal_combo_items;        // if non-empty, show a portal selector bar at top
-    QString portal_combo_tooltip;          // tooltip for the portal combobox
+    QString watermark_text;         // if non-empty, show a bottom status bar with this text
+    QStringList portal_combo_items; // if non-empty, show a portal selector bar at top
+    QString portal_combo_tooltip;   // tooltip for the portal combobox
 };
 
 class GovDataProviderPanel : public QWidget {
     Q_OBJECT
   public:
     explicit GovDataProviderPanel(const QString& script, const QString& provider_color,
-                                  const QString& org_label = "Publishers",
-                                  const GovProviderOptions& options = {},
+                                  const QString& org_label = "Publishers", const GovProviderOptions& options = {},
                                   QWidget* parent = nullptr);
 
   public slots:
@@ -63,10 +62,10 @@ class GovDataProviderPanel : public QWidget {
     /// org_label_ is a CKAN-style key passed in by the parent ("Publishers" or
     /// "Organizations"). These helpers return the user-visible, translated form
     /// in the casing the call site needs.
-    QString org_label_translated() const;        // "Publishers"
-    QString org_label_translated_upper() const;  // "PUBLISHERS"
-    QString org_label_translated_lower() const;  // "publishers"
-    QString all_orgs_breadcrumb() const;         // "All Publishers"
+    QString org_label_translated() const;       // "Publishers"
+    QString org_label_translated_upper() const; // "PUBLISHERS"
+    QString org_label_translated_lower() const; // "publishers"
+    QString all_orgs_breadcrumb() const;        // "All Publishers"
 
     QString script_;
     QString color_;
@@ -89,7 +88,7 @@ class GovDataProviderPanel : public QWidget {
 
     // Breadcrumb
     QWidget* breadcrumb_ = nullptr;
-    QHBoxLayout* breadcrumb_layout_ = nullptr;  // rebuilt on every navigation
+    QHBoxLayout* breadcrumb_layout_ = nullptr; // rebuilt on every navigation
     QLabel* row_count_label_ = nullptr;
 
     // Content
@@ -105,8 +104,8 @@ class GovDataProviderPanel : public QWidget {
     int loading_dots_ = 0;
 
     // Navigation state
-    QString selected_org_;       // API id used for requests
-    QString selected_org_name_;  // display name used in breadcrumb
+    QString selected_org_;      // API id used for requests
+    QString selected_org_name_; // display name used in breadcrumb
     QString selected_dataset_;
     QJsonArray current_orgs_;
     QJsonArray current_datasets_;

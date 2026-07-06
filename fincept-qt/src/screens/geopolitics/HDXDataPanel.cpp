@@ -60,9 +60,9 @@ void HDXDataPanel::build_ui() {
 
     title_lbl_ = new QLabel(tr("HDX HUMANITARIAN DATA"), header);
     title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-                             .arg(ui::colors::CYAN())
-                             .arg(ui::fonts::TINY)
-                             .arg(ui::fonts::DATA_FAMILY()));
+                                  .arg(ui::colors::CYAN())
+                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
 
     auto* div = new QWidget(header);
@@ -142,20 +142,21 @@ void HDXDataPanel::build_ui() {
 
     datasets_table_->verticalHeader()->setDefaultSectionSize(26);
 
-    datasets_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
-                                           "font-family:%4; font-size:%5px; border:none; }"
-                                           "QTableWidget::item { padding:3px 8px; }"
-                                           "QTableWidget::item:selected { background:rgba(%6,0.15); }"
-                                           "QHeaderView::section { background:%7; color:%8; font-weight:700;"
-                                           "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-                                           "QTableWidget::item:alternate { background:%9; }")
-                                       .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
-                                       .arg(ui::fonts::DATA_FAMILY)
-                                       .arg(ui::fonts::SMALL)
-                                       .arg(rgb)
-                                       .arg(ui::colors::BG_RAISED())
-                                       .arg(ui::colors::TEXT_SECONDARY())
-                                       .arg(ui::colors::ROW_ALT()));
+    datasets_table_->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                "font-family:%4; font-size:%5px; border:none; }"
+                "QTableWidget::item { padding:3px 8px; }"
+                "QTableWidget::item:selected { background:rgba(%6,0.15); }"
+                "QHeaderView::section { background:%7; color:%8; font-weight:700;"
+                "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                "QTableWidget::item:alternate { background:%9; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL)
+            .arg(rgb)
+            .arg(ui::colors::BG_RAISED())
+            .arg(ui::colors::TEXT_SECONDARY())
+            .arg(ui::colors::ROW_ALT()));
 
     // Loading overlay
     loading_label_ = new QLabel(tr("Loading HDX data..."), this);
@@ -215,13 +216,13 @@ void HDXDataPanel::build_ui() {
     {
         QColor cy(ui::colors::CYAN());
         explore_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3;"
-                                           "font-size:%4px; font-weight:700; border:none; padding:6px 16px; }"
-                                           "QPushButton:hover { background:%5; }")
-                                       .arg(ui::colors::CYAN())
-                                       .arg(ui::colors::BG_BASE())
-                                       .arg(ui::fonts::DATA_FAMILY())
-                                       .arg(ui::fonts::SMALL)
-                                       .arg(cy.darker(120).name()));
+                                            "font-size:%4px; font-weight:700; border:none; padding:6px 16px; }"
+                                            "QPushButton:hover { background:%5; }")
+                                        .arg(ui::colors::CYAN())
+                                        .arg(ui::colors::BG_BASE())
+                                        .arg(ui::fonts::DATA_FAMILY())
+                                        .arg(ui::fonts::SMALL)
+                                        .arg(cy.darker(120).name()));
     }
     connect(explore_btn_, &QPushButton::clicked, this, [this]() {
         auto country = country_combo_->currentText().trimmed();
@@ -357,21 +358,29 @@ void HDXDataPanel::changeEvent(QEvent* event) {
 }
 
 void HDXDataPanel::retranslateUi() {
-    if (title_lbl_)   title_lbl_->setText(tr("HDX HUMANITARIAN DATA"));
-    if (search_edit_) search_edit_->setPlaceholderText(tr("Search HDX datasets..."));
-    if (loading_label_) loading_label_->setText(tr("Loading HDX data..."));
+    if (title_lbl_)
+        title_lbl_->setText(tr("HDX HUMANITARIAN DATA"));
+    if (search_edit_)
+        search_edit_->setPlaceholderText(tr("Search HDX datasets..."));
+    if (loading_label_)
+        loading_label_->setText(tr("Loading HDX data..."));
 
     // View-tab buttons — re-apply the fixed labels (upper-cased) in order.
     const QStringList views = {tr("Conflicts"), tr("Humanitarian"), tr("Explorer"), tr("Datasets")};
     view_labels_ = views;
     for (int i = 0; i < view_buttons_.size() && i < views.size(); ++i)
-        if (view_buttons_[i]) view_buttons_[i]->setText(views[i].toUpper());
+        if (view_buttons_[i])
+            view_buttons_[i]->setText(views[i].toUpper());
 
     // Explorer filter bar
-    if (country_lbl_)   country_lbl_->setText(tr("COUNTRY:"));
-    if (topic_lbl_)     topic_lbl_->setText(tr("TOPIC:"));
-    if (country_combo_) country_combo_->setPlaceholderText(tr("Select country"));
-    if (explore_btn_)   explore_btn_->setText(tr("SEARCH"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY:"));
+    if (topic_lbl_)
+        topic_lbl_->setText(tr("TOPIC:"));
+    if (country_combo_)
+        country_combo_->setPlaceholderText(tr("Select country"));
+    if (explore_btn_)
+        explore_btn_->setText(tr("SEARCH"));
 
     // Table headers
     if (datasets_table_)

@@ -1,9 +1,8 @@
 #include "screens/dashboard/widgets/TopMoversWidget.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 namespace fincept::screens::widgets {
 
@@ -67,9 +66,8 @@ void TopMoversWidget::refresh_data() {
     topics.reserve(symbols_.size());
     for (const auto& sym : symbols_)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
+    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
 }
-
 
 void TopMoversWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
@@ -104,7 +102,6 @@ void TopMoversWidget::rebuild_from_cache() {
               [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
     show_tab(showing_gainers_);
 }
-
 
 void TopMoversWidget::show_tab(bool gainers) {
     showing_gainers_ = gainers;
@@ -146,8 +143,10 @@ void TopMoversWidget::show_tab(bool gainers) {
 void TopMoversWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("TOP MOVERS"));
-    if (gainers_btn_) gainers_btn_->setText(tr("GAINERS"));
-    if (losers_btn_)  losers_btn_->setText(tr("LOSERS"));
+    if (gainers_btn_)
+        gainers_btn_->setText(tr("GAINERS"));
+    if (losers_btn_)
+        losers_btn_->setText(tr("LOSERS"));
     rebuild_from_cache(); // re-renders table headers in the new language
 }
 

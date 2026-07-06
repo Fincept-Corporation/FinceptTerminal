@@ -13,10 +13,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolDragSource.h"
-
-#include <QAbstractItemView>
-#include <QApplication>
-#include <QMouseEvent>
+#include "screens/common/feeds/FeedPanel.h"
 #include "screens/equity_trading/AccountManagementDialog.h"
 #include "screens/equity_trading/BroadcastOrderDialog.h"
 #include "screens/equity_trading/EquityBottomPanel.h"
@@ -25,10 +22,9 @@
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
 #include "screens/equity_trading/EquityWatchlist.h"
-#include "screens/common/feeds/FeedPanel.h"
+#include "screens/equity_trading/PortfolioReplicationDialog.h"
 #include "screens/portfolio_monitor/PortfolioMonitorScreen.h"
 #include "services/feeds/FeedMonitor.h"
-#include "screens/equity_trading/PortfolioReplicationDialog.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
@@ -41,6 +37,8 @@
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
+#include <QAbstractItemView>
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
@@ -57,6 +55,7 @@
 #include <QJsonObject>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPointer>
 #include <QPushButton>
 #include <QRadioButton>
@@ -65,11 +64,9 @@
 #include <QStringListModel>
 #include <QTableWidget>
 #include <QVBoxLayout>
-
-#include <memory>
-
 #include <QtConcurrent/QtConcurrent>
 
+#include <memory>
 
 namespace fincept::screens {
 
@@ -90,13 +87,13 @@ EquityTradingScreen::EquityTradingScreen(QWidget* parent) : QWidget(parent) {
     // securityId map that only exists once instruments are loaded.
     {
         QPointer<EquityTradingScreen> self = this;
-        connect(&trading::InstrumentService::instance(), &trading::InstrumentService::refresh_done,
-                this, [self](const QString& broker_id, int /*count*/) {
+        connect(&trading::InstrumentService::instance(), &trading::InstrumentService::refresh_done, this,
+                [self](const QString& broker_id, int /*count*/) {
                     if (self)
                         self->on_instruments_ready(broker_id);
                 });
-        connect(&trading::InstrumentService::instance(), &trading::InstrumentService::refresh_failed,
-                this, [](const QString& broker_id, const QString& error) {
+        connect(&trading::InstrumentService::instance(), &trading::InstrumentService::refresh_failed, this,
+                [](const QString& broker_id, const QString& error) {
                     LOG_WARN(TAG, QString("Instrument load failed for %1: %2").arg(broker_id, error));
                 });
     }
@@ -209,15 +206,16 @@ void EquityTradingScreen::hideEvent(QHideEvent* event) {
 
     fincept::feeds::FeedMonitor::instance().pause_all();
 
-    ScreenStateManager::instance().save_direct("equity_trading", {
-        {"focused_account_id", focused_account_id_},
-        {"selected_symbol", selected_symbol_},
-        {"selected_exchange", selected_exchange_},
-        {"feeds_visible", feed_panel_ != nullptr && feed_panel_->isVisible()},
-        {"feeds_width", main_splitter_ != nullptr ? main_splitter_->sizes().value(3) : 0},
-        {"unified_visible", monitor_panel_ != nullptr && monitor_panel_->isVisible()},
-        {"unified_width", main_splitter_ != nullptr ? main_splitter_->sizes().value(4) : 0},
-    });
+    ScreenStateManager::instance().save_direct(
+        "equity_trading", {
+                              {"focused_account_id", focused_account_id_},
+                              {"selected_symbol", selected_symbol_},
+                              {"selected_exchange", selected_exchange_},
+                              {"feeds_visible", feed_panel_ != nullptr && feed_panel_->isVisible()},
+                              {"feeds_width", main_splitter_ != nullptr ? main_splitter_->sizes().value(3) : 0},
+                              {"unified_visible", monitor_panel_ != nullptr && monitor_panel_->isVisible()},
+                              {"unified_width", main_splitter_ != nullptr ? main_splitter_->sizes().value(4) : 0},
+                          });
     LOG_INFO(TAG, "Screen hidden — data streams paused, hub unsubscribed");
 }
 
@@ -304,8 +302,7 @@ void EquityTradingScreen::setup_ui() {
         connect(popup, &QAbstractItemView::clicked, this,
                 [this](const QModelIndex& idx) { apply_symbol_input(idx.data(Qt::DisplayRole).toString()); });
     }
-    connect(symbol_input_, &QLineEdit::returnPressed, this,
-            [this]() { apply_symbol_input(symbol_input_->text()); });
+    connect(symbol_input_, &QLineEdit::returnPressed, this, [this]() { apply_symbol_input(symbol_input_->text()); });
     cmd_layout->addWidget(symbol_input_);
 
     // Separator
@@ -325,7 +322,8 @@ void EquityTradingScreen::setup_ui() {
     // Connection status indicator (aggregate)
     conn_label_ = new QLabel(tr("○ NO ACCOUNTS"));
     conn_label_->setObjectName("eqConnLabel");
-    conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
+    conn_label_->setStyleSheet(
+        QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     cmd_layout->addWidget(conn_label_);
 
     // Accounts management button (replaces api_btn_)
@@ -471,10 +469,11 @@ void EquityTradingScreen::setup_ui() {
             }
         }
     });
-    connect(monitor_panel_, &PortfolioMonitorScreen::float_requested, this,
-            &EquityTradingScreen::float_monitor);
-    connect(monitor_panel_, &PortfolioMonitorScreen::dock_requested, this,
-            [this]() { if (monitor_float_) monitor_float_->close(); }); // close → redock
+    connect(monitor_panel_, &PortfolioMonitorScreen::float_requested, this, &EquityTradingScreen::float_monitor);
+    connect(monitor_panel_, &PortfolioMonitorScreen::dock_requested, this, [this]() {
+        if (monitor_float_)
+            monitor_float_->close();
+    }); // close → redock
     connect(accounts_btn_, &QPushButton::clicked, this, &EquityTradingScreen::on_accounts_clicked);
     connect(watchlist_, &EquityWatchlist::symbol_selected, this, &EquityTradingScreen::on_symbol_selected);
     connect(watchlist_, &EquityWatchlist::symbol_added, this, &EquityTradingScreen::on_watchlist_symbol_added);
@@ -484,9 +483,9 @@ void EquityTradingScreen::setup_ui() {
     connect(watchlist_, &EquityWatchlist::watchlist_rename_requested, this, &EquityTradingScreen::on_watchlist_rename);
     connect(watchlist_, &EquityWatchlist::watchlist_delete_requested, this, &EquityTradingScreen::on_watchlist_delete);
     connect(order_entry_, &EquityOrderEntry::order_submitted, this, &EquityTradingScreen::on_order_submitted);
-    connect(order_entry_, &EquityOrderEntry::multi_broker_submit, this,
-            &EquityTradingScreen::on_multi_broker_submit);
-    connect(order_entry_, &EquityOrderEntry::strategy_order_submitted, this, &EquityTradingScreen::on_strategy_submitted);
+    connect(order_entry_, &EquityOrderEntry::multi_broker_submit, this, &EquityTradingScreen::on_multi_broker_submit);
+    connect(order_entry_, &EquityOrderEntry::strategy_order_submitted, this,
+            &EquityTradingScreen::on_strategy_submitted);
     connect(order_entry_, &EquityOrderEntry::broadcast_requested, this, [this](const trading::UnifiedOrder& order) {
         auto* dlg = new BroadcastOrderDialog(order, this);
         dlg->exec();
@@ -503,7 +502,8 @@ void EquityTradingScreen::setup_ui() {
             &EquityTradingScreen::on_square_off_all_holdings);
     connect(bottom_panel_, &EquityBottomPanel::square_off_holding_requested, this,
             &EquityTradingScreen::on_square_off_holding);
-    connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this, &EquityTradingScreen::on_import_holdings_requested);
+    connect(bottom_panel_, &EquityBottomPanel::import_holdings_requested, this,
+            &EquityTradingScreen::on_import_holdings_requested);
     connect(bottom_panel_, &EquityBottomPanel::replicate_portfolio_requested, this,
             &EquityTradingScreen::on_replicate_portfolio_requested);
     connect(bottom_panel_, &EquityBottomPanel::convert_position_requested, this,
@@ -515,8 +515,7 @@ void EquityTradingScreen::setup_ui() {
             &EquityTradingScreen::on_trade_symbol_requested);
     // Click a position/holding row → load that symbol on the chart (same slot the
     // watchlist uses, so it sets the selected symbol, fetches candles + orderbook).
-    connect(bottom_panel_, &EquityBottomPanel::chart_symbol_requested, this,
-            &EquityTradingScreen::on_symbol_selected);
+    connect(bottom_panel_, &EquityBottomPanel::chart_symbol_requested, this, &EquityTradingScreen::on_symbol_selected);
     connect(chart_, &EquityChartPanel::timeframe_changed, this, [this](const QString& tf) {
         auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
         if (stream)
@@ -526,8 +525,7 @@ void EquityTradingScreen::setup_ui() {
     connect(chart_, &EquityChartPanel::sell_requested, this, &EquityTradingScreen::on_chart_sell_requested);
     connect(chart_, &EquityChartPanel::add_to_watchlist_requested, this,
             &EquityTradingScreen::on_chart_add_to_watchlist);
-    connect(chart_, &EquityChartPanel::exit_position_requested, this,
-            &EquityTradingScreen::on_chart_exit_position);
+    connect(chart_, &EquityChartPanel::exit_position_requested, this, &EquityTradingScreen::on_chart_exit_position);
 }
 
 // ============================================================================
@@ -573,7 +571,8 @@ void EquityTradingScreen::changeEvent(QEvent* event) {
 }
 
 void EquityTradingScreen::retranslateUi() {
-    if (accounts_btn_) accounts_btn_->setText(tr("ACCOUNTS"));
+    if (accounts_btn_)
+        accounts_btn_->setText(tr("ACCOUNTS"));
 
     // Mode button reflects the focused account's live/paper state.
     if (mode_btn_)
@@ -627,8 +626,7 @@ void EquityTradingScreen::on_instruments_ready(const QString& broker_id) {
     // Only act if the currently-focused account uses this broker.
     if (focused_account_id_.isEmpty())
         return;
-    const QString focused_broker =
-        AccountManager::instance().load_credentials(focused_account_id_).broker_id;
+    const QString focused_broker = AccountManager::instance().load_credentials(focused_account_id_).broker_id;
     if (focused_broker != broker_id)
         return;
 
@@ -658,24 +656,15 @@ void EquityTradingScreen::connect_data_stream_signals() {
     // Streaming data (quotes, positions, holdings, orders, funds) now comes
     // via DataHub subscriptions — see hub_subscribe_streaming().
     // Only on-demand / one-shot signals remain wired here.
-    connect(&dsm, &DataStreamManager::candles_fetched,
-            this, &EquityTradingScreen::on_stream_candles_fetched);
-    connect(&dsm, &DataStreamManager::orderbook_fetched,
-            this, &EquityTradingScreen::on_stream_orderbook_fetched);
-    connect(&dsm, &DataStreamManager::time_sales_fetched,
-            this, &EquityTradingScreen::on_stream_time_sales_fetched);
-    connect(&dsm, &DataStreamManager::latest_trade_fetched,
-            this, &EquityTradingScreen::on_stream_latest_trade_fetched);
-    connect(&dsm, &DataStreamManager::calendar_fetched,
-            this, &EquityTradingScreen::on_stream_calendar_fetched);
-    connect(&dsm, &DataStreamManager::clock_fetched,
-            this, &EquityTradingScreen::on_stream_clock_fetched);
-    connect(&dsm, &DataStreamManager::connection_state_changed,
-            this, [this](const QString& /*account_id*/, ConnectionState /*state*/) {
-        update_connection_status();
-    });
-    connect(&dsm, &DataStreamManager::token_expired,
-            this, &EquityTradingScreen::handle_token_expired);
+    connect(&dsm, &DataStreamManager::candles_fetched, this, &EquityTradingScreen::on_stream_candles_fetched);
+    connect(&dsm, &DataStreamManager::orderbook_fetched, this, &EquityTradingScreen::on_stream_orderbook_fetched);
+    connect(&dsm, &DataStreamManager::time_sales_fetched, this, &EquityTradingScreen::on_stream_time_sales_fetched);
+    connect(&dsm, &DataStreamManager::latest_trade_fetched, this, &EquityTradingScreen::on_stream_latest_trade_fetched);
+    connect(&dsm, &DataStreamManager::calendar_fetched, this, &EquityTradingScreen::on_stream_calendar_fetched);
+    connect(&dsm, &DataStreamManager::clock_fetched, this, &EquityTradingScreen::on_stream_clock_fetched);
+    connect(&dsm, &DataStreamManager::connection_state_changed, this,
+            [this](const QString& /*account_id*/, ConnectionState /*state*/) { update_connection_status(); });
+    connect(&dsm, &DataStreamManager::token_expired, this, &EquityTradingScreen::handle_token_expired);
 }
 
 // ============================================================================
@@ -707,9 +696,12 @@ void EquityTradingScreen::ensure_account_loaded() {
     //   added, no credentials               → 0
     auto score = [&am](const BrokerAccount& a) -> int {
         switch (a.state) {
-            case ConnectionState::Connected: return 4;
-            case ConnectionState::Connecting: return 3;
-            default: break; // TokenExpired / Error / Disconnected
+            case ConnectionState::Connected:
+                return 4;
+            case ConnectionState::Connecting:
+                return 3;
+            default:
+                break; // TokenExpired / Error / Disconnected
         }
         return am.load_credentials(a.account_id).api_key.isEmpty() ? 0 : 1;
     };
@@ -820,9 +812,7 @@ void EquityTradingScreen::update_account_menu() {
         auto* broker = BrokerRegistry::instance().get(acct.broker_id);
         const QString broker_name = broker ? broker->profile().display_name : acct.broker_id;
         const QString text = QString("%1 [%2]").arg(acct.display_name, broker_name);
-        auto* action = account_menu_->addAction(text, this, [this, id = acct.account_id]() {
-            on_account_changed(id);
-        });
+        auto* action = account_menu_->addAction(text, this, [this, id = acct.account_id]() { on_account_changed(id); });
         if (acct.account_id == focused_account_id_)
             action->setCheckable(true), action->setChecked(true);
     }
@@ -855,33 +845,37 @@ void EquityTradingScreen::update_connection_status() {
     conn_label_->setToolTip(QString());
     if (accounts.isEmpty()) {
         conn_label_->setText(tr("○ NO ACCOUNTS"));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
+        conn_label_->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     } else if (expired > 0 && connected == 0) {
         conn_label_->setText(tr("\xe2\x9a\xa0 TOKEN EXPIRED \xe2\x80\x94 click ACCOUNTS"));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
+        conn_label_->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
     } else if (errored > 0 && connected == 0) {
         // Authenticated but the broker refused live market data (e.g. Kite 403 — no
         // active Kite Connect subscription). Account data may still load; only the
         // live feed is gated. Full reason on hover.
         conn_label_->setText(tr("\xe2\x9a\xa0 NO MARKET DATA \xe2\x80\x94 hover for details"));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
+        conn_label_->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::NEGATIVE()));
         conn_label_->setToolTip(first_error);
     } else if (connected == accounts.size()) {
         conn_label_->setText(tr("● %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE()));
+        conn_label_->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::POSITIVE()));
     } else if (connected > 0) {
         conn_label_->setText(tr("◐ %1/%2 CONNECTED").arg(connected).arg(accounts.size()));
         conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::WARNING()));
     } else {
         conn_label_->setText(tr("○ 0/%1 CONNECTED").arg(accounts.size()));
-        conn_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
+        conn_label_->setStyleSheet(
+            QString("color: %1; font-size: 10px; font-weight: 700;").arg(ui::colors::TEXT_TERTIARY()));
     }
 }
 
 // ============================================================================
 // DataStream signal handlers
 // ============================================================================
-
 
 void EquityTradingScreen::on_group_symbol_changed(const SymbolRef& ref) {
     if (!ref.is_valid() || ref.symbol == selected_symbol_)

@@ -38,7 +38,7 @@ void DeployDialog::build_ui(const QString& current_name) {
     // ── Title ──────────────────────────────────────────────────────
     title_label_ = new QLabel(tr("SAVE & RUN WORKFLOW"));
     title_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 14px;"
-                                         "font-weight: bold; letter-spacing: 0.5px;")
+                                        "font-weight: bold; letter-spacing: 0.5px;")
                                     .arg(ui::colors::AMBER()));
     root->addWidget(title_label_);
 
@@ -134,13 +134,20 @@ void DeployDialog::changeEvent(QEvent* event) {
 
 void DeployDialog::retranslateUi() {
     setWindowTitle(tr("Save & Run Workflow"));
-    if (title_label_) title_label_->setText(tr("SAVE & RUN WORKFLOW"));
-    if (name_label_) name_label_->setText(tr("WORKFLOW NAME"));
-    if (desc_label_) desc_label_->setText(tr("DESCRIPTION"));
-    if (desc_edit_) desc_edit_->setPlaceholderText(tr("Describe what this workflow does..."));
-    if (cancel_btn_) cancel_btn_->setText(tr("CANCEL"));
-    if (draft_btn_) draft_btn_->setText(tr("SAVE DRAFT"));
-    if (deploy_btn_) deploy_btn_->setText(tr("SAVE & RUN"));
+    if (title_label_)
+        title_label_->setText(tr("SAVE & RUN WORKFLOW"));
+    if (name_label_)
+        name_label_->setText(tr("WORKFLOW NAME"));
+    if (desc_label_)
+        desc_label_->setText(tr("DESCRIPTION"));
+    if (desc_edit_)
+        desc_edit_->setPlaceholderText(tr("Describe what this workflow does..."));
+    if (cancel_btn_)
+        cancel_btn_->setText(tr("CANCEL"));
+    if (draft_btn_)
+        draft_btn_->setText(tr("SAVE DRAFT"));
+    if (deploy_btn_)
+        deploy_btn_->setText(tr("SAVE & RUN"));
 }
 
 } // namespace fincept::workflow

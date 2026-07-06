@@ -7,7 +7,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
@@ -69,7 +68,8 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
 
     rl_train_button_ = make_run_button(tr("TRAIN RL AGENT"), w);
     connect(rl_train_button_, &QPushButton::clicked, this, [this]() {
-        if (!rl_train_button_ || !rl_log_console_) return;
+        if (!rl_train_button_ || !rl_log_console_)
+            return;
         rl_log_console_->clear();
         rl_progress_bar_->setValue(0);
         rl_progress_bar_->setVisible(true);
@@ -108,11 +108,10 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
     rl_progress_stats_ = new QLabel(w);
     rl_progress_stats_->setText("");
     rl_progress_stats_->setVisible(false);
-    rl_progress_stats_->setStyleSheet(
-        QString("color:%1; background:transparent; font-family:%2; font-size:%3px;")
-            .arg(ui::colors::TEXT_SECONDARY())
-            .arg(ui::fonts::DATA_FAMILY)
-            .arg(ui::fonts::SMALL));
+    rl_progress_stats_->setStyleSheet(QString("color:%1; background:transparent; font-family:%2; font-size:%3px;")
+                                          .arg(ui::colors::TEXT_SECONDARY())
+                                          .arg(ui::fonts::DATA_FAMILY)
+                                          .arg(ui::fonts::SMALL));
     vl->addWidget(rl_progress_stats_);
 
     // Log console — hidden until training starts

@@ -33,8 +33,7 @@ void PushpinService::pin(const SymbolRef& ref) {
 
 void PushpinService::unpin(const SymbolRef& ref) {
     const int before = static_cast<int>(pins_.size());
-    pins_.erase(std::remove_if(pins_.begin(), pins_.end(),
-                               [&ref](const SymbolRef& p) { return p == ref; }),
+    pins_.erase(std::remove_if(pins_.begin(), pins_.end(), [&ref](const SymbolRef& p) { return p == ref; }),
                 pins_.end());
     if (static_cast<int>(pins_.size()) != before) {
         save();

@@ -87,8 +87,10 @@ void NodeEditorToolbar::changeEvent(QEvent* event) {
 }
 
 void NodeEditorToolbar::retranslateUi() {
-    if (name_edit_) name_edit_->setPlaceholderText(tr("Untitled Workflow"));
-    if (status_badge_) status_badge_->setText(tr("DRAFT"));
+    if (name_edit_)
+        name_edit_->setPlaceholderText(tr("Untitled Workflow"));
+    if (status_badge_)
+        status_badge_->setText(tr("DRAFT"));
     if (undo_btn_) {
         undo_btn_->setText(tr("UNDO"));
         undo_btn_->setToolTip(tr("Undo last action (Ctrl+Z)"));
@@ -105,13 +107,19 @@ void NodeEditorToolbar::retranslateUi() {
         load_btn_->setText(tr("LOAD"));
         load_btn_->setToolTip(tr("Load a saved workflow"));
     }
-    if (clear_btn_) clear_btn_->setText(tr("CLEAR"));
-    if (import_btn_) import_btn_->setText(tr("IMPORT"));
-    if (export_btn_) export_btn_->setText(tr("EXPORT"));
-    if (templates_btn_) templates_btn_->setText(tr("TEMPLATES"));
-    if (deploy_btn_) deploy_btn_->setText(tr("SAVE & RUN"));
+    if (clear_btn_)
+        clear_btn_->setText(tr("CLEAR"));
+    if (import_btn_)
+        import_btn_->setText(tr("IMPORT"));
+    if (export_btn_)
+        export_btn_->setText(tr("EXPORT"));
+    if (templates_btn_)
+        templates_btn_->setText(tr("TEMPLATES"));
+    if (deploy_btn_)
+        deploy_btn_->setText(tr("SAVE & RUN"));
     // Execute button text depends on running state; default to EXECUTE.
-    if (execute_btn_) execute_btn_->setText(tr("EXECUTE"));
+    if (execute_btn_)
+        execute_btn_->setText(tr("EXECUTE"));
 }
 
 void NodeEditorToolbar::build_ui() {

@@ -1,8 +1,7 @@
 #pragma once
 
+#include "datahub/Producer.h"
 #include "services/polymarket/PolymarketTypes.h"
-
-#    include "datahub/Producer.h"
 
 #include <QObject>
 #include <QSet>
@@ -21,9 +20,7 @@ namespace fincept::services::polymarket {
 /// `polymarket:orderbook:*`. The existing `price_updated` /
 /// `orderbook_updated` signals are kept alive alongside hub publishes
 /// so consumers can migrate incrementally.
-class PolymarketWebSocket : public QObject
-    , public fincept::datahub::Producer
-{
+class PolymarketWebSocket : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static PolymarketWebSocket& instance();
@@ -39,8 +36,8 @@ class PolymarketWebSocket : public QObject
 
     // ── fincept::datahub::Producer ────────────────────────────────────────
     QStringList topic_patterns() const override;
-    void refresh(const QStringList& topics) override;   // no-op: push_only
-    int max_requests_per_sec() const override;          // 10 (CLOB REST cap)
+    void refresh(const QStringList& topics) override; // no-op: push_only
+    int max_requests_per_sec() const override;        // 10 (CLOB REST cap)
 
   signals:
     void price_updated(const QString& asset_id, double price);

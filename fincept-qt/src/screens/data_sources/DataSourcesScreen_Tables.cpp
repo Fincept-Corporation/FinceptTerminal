@@ -8,15 +8,13 @@
 //
 // Part of the partial-class split of DataSourcesScreen.cpp.
 
-#include "screens/data_sources/DataSourcesScreen.h"
-
 #include "core/logging/Logger.h"
-
 #include "core/session/ScreenStateManager.h"
 #include "screens/data_sources/ConnectionConfigDialog.h"
 #include "screens/data_sources/ConnectionTester.h"
 #include "screens/data_sources/ConnectorRegistry.h"
 #include "screens/data_sources/DataSourcesHelpers.h"
+#include "screens/data_sources/DataSourcesScreen.h"
 #include "screens/data_sources/DataSourcesStyles.h"
 #include "screens/data_sources/ImportExportConnections.h"
 #include "ui/theme/Theme.h"
@@ -69,9 +67,10 @@ void DataSourcesScreen::build_category_ladder() {
 
     // Category display labels — rebuilt each call so they follow the active
     // language. Row index (Qt::UserRole) drives logic, not the label text.
-    const QStringList category_labels = {
-        tr("All Connectors"), tr("Databases"),   tr("APIs"),   tr("Files"),      tr("Streaming"),        tr("Cloud"),
-        tr("Time Series"),    tr("Market Data"), tr("Search"), tr("Warehouses"), tr("Alternative Data"), tr("Open Banking")};
+    const QStringList category_labels = {tr("All Connectors"), tr("Databases"),        tr("APIs"),
+                                         tr("Files"),          tr("Streaming"),        tr("Cloud"),
+                                         tr("Time Series"),    tr("Market Data"),      tr("Search"),
+                                         tr("Warehouses"),     tr("Alternative Data"), tr("Open Banking")};
 
     QSignalBlocker blocker(category_list_);
     category_list_->clear();

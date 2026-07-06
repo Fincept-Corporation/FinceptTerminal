@@ -59,16 +59,16 @@ void capture_row_labels(QWidget* row, QLabel** label_out, QLabel** desc_out = nu
 
 QString cloud_status_text(CloudSyncEngine::Status s, int pending, const QString& error) {
     switch (s) {
-    case CloudSyncEngine::Status::Disabled:
-        return QStringLiteral("off");
-    case CloudSyncEngine::Status::Idle:
-        return pending > 0 ? QStringLiteral("%1 pending").arg(pending) : QStringLiteral("synced");
-    case CloudSyncEngine::Status::Syncing:
-        return QStringLiteral("syncing…");
-    case CloudSyncEngine::Status::Paused:
-        return QStringLiteral("paused — out of credits");
-    case CloudSyncEngine::Status::Error:
-        return QStringLiteral("error: %1").arg(error);
+        case CloudSyncEngine::Status::Disabled:
+            return QStringLiteral("off");
+        case CloudSyncEngine::Status::Idle:
+            return pending > 0 ? QStringLiteral("%1 pending").arg(pending) : QStringLiteral("synced");
+        case CloudSyncEngine::Status::Syncing:
+            return QStringLiteral("syncing…");
+        case CloudSyncEngine::Status::Paused:
+            return QStringLiteral("paused — out of credits");
+        case CloudSyncEngine::Status::Error:
+            return QStringLiteral("error: %1").arg(error);
     }
     return {};
 }
@@ -133,8 +133,10 @@ void CloudSyncSection::build_ui() {
         QLabel* row_label = nullptr;
         QLabel* row_desc = nullptr;
         capture_row_labels(domain_row, &row_label, &row_desc);
-        if (row_label) domain_row_label_.insert(entity, row_label);
-        if (row_desc) domain_row_desc_.insert(entity, row_desc);
+        if (row_label)
+            domain_row_label_.insert(entity, row_label);
+        if (row_desc)
+            domain_row_desc_.insert(entity, row_desc);
         vl->addWidget(domain_row);
         domain_toggles_.insert(entity, cb);
 
@@ -217,17 +219,23 @@ void CloudSyncSection::changeEvent(QEvent* event) {
 }
 
 void CloudSyncSection::retranslateUi() {
-    if (title_) title_->setText(tr("Fincept Cloud Sync"));
+    if (title_)
+        title_->setText(tr("Fincept Cloud Sync"));
     if (blurb_)
         blurb_->setText(tr("Mirror your data to your Fincept account. Your local copy stays the working "
                            "copy — sync runs in the background, on this device and across your devices."));
-    if (credits_banner_) credits_banner_->setText(tr("Out of credits — top up to resume cloud sync."));
-    if (master_toggle_)  master_toggle_->setText(tr("Enable cloud sync"));
-    if (cloud_sync_label_) cloud_sync_label_->setText(tr("Cloud Sync"));
+    if (credits_banner_)
+        credits_banner_->setText(tr("Out of credits — top up to resume cloud sync."));
+    if (master_toggle_)
+        master_toggle_->setText(tr("Enable cloud sync"));
+    if (cloud_sync_label_)
+        cloud_sync_label_->setText(tr("Cloud Sync"));
     if (cloud_sync_desc_)
         cloud_sync_desc_->setText(tr("When on, changes mirror to your account and pull on this device."));
-    if (sign_in_hint_)   sign_in_hint_->setText(tr("Sign in to enable cloud sync."));
-    if (adv_title_)      adv_title_->setText(tr("ADVANCED — DOMAINS"));
+    if (sign_in_hint_)
+        sign_in_hint_->setText(tr("Sign in to enable cloud sync."));
+    if (adv_title_)
+        adv_title_->setText(tr("ADVANCED — DOMAINS"));
 
     // Per-domain rows: re-apply checkbox text, row label, and description.
     for (const DomainRow& d : cloud_domains()) {
@@ -240,7 +248,8 @@ void CloudSyncSection::retranslateUi() {
             desc->setText(tr(d.desc));
     }
 
-    if (refresh_btn_) refresh_btn_->setText(tr("Refresh now"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("Refresh now"));
 }
 
 } // namespace fincept::screens

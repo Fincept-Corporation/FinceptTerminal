@@ -21,8 +21,12 @@ namespace fincept::trading {
 namespace {
 constexpr const char* kLog = "ActionCenter";
 
-QString iso(const QDateTime& dt) { return dt.isValid() ? dt.toString(Qt::ISODate) : QString(); }
-QDateTime from_iso(const QString& s) { return s.isEmpty() ? QDateTime() : QDateTime::fromString(s, Qt::ISODate); }
+QString iso(const QDateTime& dt) {
+    return dt.isValid() ? dt.toString(Qt::ISODate) : QString();
+}
+QDateTime from_iso(const QString& s) {
+    return s.isEmpty() ? QDateTime() : QDateTime::fromString(s, Qt::ISODate);
+}
 } // namespace
 
 ActionCenter& ActionCenter::instance() {
@@ -34,10 +38,9 @@ const QSet<QString>& ActionCenter::immediate_ops() {
     // Risk-management + read-only ops always execute immediately, never queued.
     // Mirrors OpenAlgo order_router_service.py IMMEDIATE_EXECUTION_OPERATIONS.
     static const QSet<QString> ops = {
-        "closeallpositions", "closeposition", "cancelorder", "cancelallorder",
-        "modifyorder", "orderstatus", "orderbook", "tradebook", "positions",
-        "holdings", "funds", "openposition", "modifygttorder", "cancelgttorder",
-        "gttorderbook",
+        "closeallpositions", "closeposition",  "cancelorder",  "cancelallorder", "modifyorder", "orderstatus",
+        "orderbook",         "tradebook",      "positions",    "holdings",       "funds",       "openposition",
+        "modifygttorder",    "cancelgttorder", "gttorderbook",
     };
     return ops;
 }
@@ -79,10 +82,18 @@ QJsonObject ActionCenter::serialize_unified_order(const UnifiedOrder& order) {
     // price_type in OpenAlgo terms (MARKET/LIMIT/SL/SL-M).
     QString pt;
     switch (order.order_type) {
-        case OrderType::Market: pt = "MARKET"; break;
-        case OrderType::Limit: pt = "LIMIT"; break;
-        case OrderType::StopLoss: pt = "SL-M"; break;
-        case OrderType::StopLossLimit: pt = "SL"; break;
+        case OrderType::Market:
+            pt = "MARKET";
+            break;
+        case OrderType::Limit:
+            pt = "LIMIT";
+            break;
+        case OrderType::StopLoss:
+            pt = "SL-M";
+            break;
+        case OrderType::StopLossLimit:
+            pt = "SL";
+            break;
     }
     j["pricetype"] = pt;
     j["product"] = QString::fromLatin1(product_type_str(order.product_type));
@@ -111,8 +122,8 @@ UnifiedOrder ActionCenter::deserialize_unified_order(const QJsonObject& json) {
     o.side = json.value("action").toString().toUpper() == "SELL" ? OrderSide::Sell : OrderSide::Buy;
     o.quantity = json.value("quantity").toDouble();
     o.price = json.value("price").toDouble();
-    o.stop_price = json.contains("stop_price") ? json.value("stop_price").toDouble()
-                                               : json.value("trigger_price").toDouble();
+    o.stop_price =
+        json.contains("stop_price") ? json.value("stop_price").toDouble() : json.value("trigger_price").toDouble();
 
     const QString pt = json.value("pricetype").toString().toUpper();
     if (pt == "LIMIT")
@@ -164,16 +175,18 @@ void ActionCenter::populate_display_fields(PendingOrder& po) {
     if (po.order_type == "basketorder") {
         const QJsonArray orders = d.value("orders").toArray();
         po.symbol = QString("Basket (%1 orders)").arg(orders.size());
-        po.exchange = orders.size() > 1 ? "Multiple"
-                      : (orders.isEmpty() ? "" : orders.first().toObject().value("exchange").toString());
+        po.exchange = orders.size() > 1
+                          ? "Multiple"
+                          : (orders.isEmpty() ? "" : orders.first().toObject().value("exchange").toString());
         po.action = orders.size() > 1 ? "Multiple"
-                    : (orders.isEmpty() ? "" : orders.first().toObject().value("action").toString());
+                                      : (orders.isEmpty() ? "" : orders.first().toObject().value("action").toString());
         qint64 total = 0;
         for (const auto& v : orders)
             total += (qint64)v.toObject().value("quantity").toDouble();
         po.quantity = QString::number(total);
-        po.price_type = orders.size() > 1 ? "Multiple"
-                        : (orders.isEmpty() ? "" : orders.first().toObject().value("pricetype").toString("MARKET"));
+        po.price_type = orders.size() > 1
+                            ? "Multiple"
+                            : (orders.isEmpty() ? "" : orders.first().toObject().value("pricetype").toString("MARKET"));
         return;
     }
 
@@ -181,8 +194,7 @@ void ActionCenter::populate_display_fields(PendingOrder& po) {
         po.symbol = d.value("symbol").toString();
         po.exchange = d.value("exchange").toString();
         po.action = d.value("action").toString();
-        po.quantity = QString("%1 (split: %2)").arg(qty_str(d.value("quantity")),
-                                                     qty_str(d.value("splitsize")));
+        po.quantity = QString("%1 (split: %2)").arg(qty_str(d.value("quantity")), qty_str(d.value("splitsize")));
         po.price_type = d.value("pricetype").toString("MARKET");
         return;
     }
@@ -197,8 +209,7 @@ void ActionCenter::populate_display_fields(PendingOrder& po) {
 
 // ── Persistence ────────────────────────────────────────────────────────────
 
-QString ActionCenter::queue_order(const QString& account_id, const QString& order_type,
-                                  const QJsonObject& order_data) {
+QString ActionCenter::queue_order(const QString& account_id, const QString& order_type, const QJsonObject& order_data) {
     PendingOrder po;
     po.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     po.account_id = account_id;
@@ -398,8 +409,7 @@ QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString&
         // place_basket_orders is async (background thread + callback). For the
         // approval gate we fire it and report acceptance immediately; per-leg
         // results surface via the trading event bus / order book.
-        UnifiedTrading::instance().place_basket_orders(po.account_id, basket,
-            [](const BasketOrderResult&) {});
+        UnifiedTrading::instance().place_basket_orders(po.account_id, basket, [](const BasketOrderResult&) {});
         ok = true;
         err.clear();
         return {}; // no single broker order id for a basket
@@ -408,11 +418,9 @@ QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString&
     if (po.order_type == "splitorder") {
         SplitOrderRequest req;
         req.base_order = deserialize_unified_order(po.order_data);
-        req.split_size = po.order_data.value("splitsize").toInt(
-            (int)po.order_data.value("split_size").toDouble());
+        req.split_size = po.order_data.value("splitsize").toInt((int)po.order_data.value("split_size").toDouble());
         req.delay_between_ms = po.order_data.value("delay_between_ms").toInt(100);
-        UnifiedTrading::instance().place_split_orders(po.account_id, req,
-            [](const SplitOrderResult&) {});
+        UnifiedTrading::instance().place_split_orders(po.account_id, req, [](const SplitOrderResult&) {});
         ok = true;
         err.clear();
         return {};
@@ -439,11 +447,10 @@ void ActionCenter::approve_order(const QString& pending_id) {
     const QString broker_order_id = execute_pending(po, ok, err);
 
     const QDateTime now = QDateTime::currentDateTime();
-    auto r = Database::instance().execute(
-        "UPDATE pending_orders SET status = ?, approved_at = ?, broker_order_id = ?, "
-        "rejection_reason = ? WHERE id = ?",
-        {ok ? "approved" : "rejected", iso(now), broker_order_id,
-         ok ? QString() : ("Execution failed: " + err), pending_id});
+    auto r = Database::instance().execute("UPDATE pending_orders SET status = ?, approved_at = ?, broker_order_id = ?, "
+                                          "rejection_reason = ? WHERE id = ?",
+                                          {ok ? "approved" : "rejected", iso(now), broker_order_id,
+                                           ok ? QString() : ("Execution failed: " + err), pending_id});
     if (r.is_err())
         LOG_ERROR(kLog, QString("approve_order update failed: %1").arg(QString::fromStdString(r.error())));
 

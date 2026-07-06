@@ -34,9 +34,9 @@ void ChatSessionPanel::build_ui() {
     header_row->setSpacing(4);
     title_lbl_ = new QLabel(tr("CONVERSATIONS"));
     title_lbl_->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
-                                     "font-family:'Consolas','Courier New',monospace;"
-                                     "background:transparent;letter-spacing:1px;")
-                                 .arg(ui::colors::AMBER()));
+                                      "font-family:'Consolas','Courier New',monospace;"
+                                      "background:transparent;letter-spacing:1px;")
+                                  .arg(ui::colors::AMBER()));
     header_row->addWidget(title_lbl_);
     header_row->addStretch();
 
@@ -58,12 +58,12 @@ void ChatSessionPanel::build_ui() {
     search_edit_ = new QLineEdit;
     search_edit_->setPlaceholderText(tr("Search..."));
     search_edit_->setFixedHeight(28);
-    search_edit_->setStyleSheet(
-        QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
-                "border-radius:0px;padding:4px 8px;font-size:12px;"
-                "font-family:'Consolas','Courier New',monospace;}"
-                "QLineEdit:focus{border:1px solid %4;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
+    search_edit_->setStyleSheet(QString("QLineEdit{background:%1;color:%2;border:1px solid %3;"
+                                        "border-radius:0px;padding:4px 8px;font-size:12px;"
+                                        "font-family:'Consolas','Courier New',monospace;}"
+                                        "QLineEdit:focus{border:1px solid %4;}")
+                                    .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                         ui::colors::BORDER_BRIGHT()));
     connect(search_edit_, &QLineEdit::textChanged, this, &ChatSessionPanel::on_search_changed);
     vl->addWidget(search_edit_);
 
@@ -337,18 +337,33 @@ void ChatSessionPanel::changeEvent(QEvent* event) {
 }
 
 void ChatSessionPanel::retranslateUi() {
-    if (title_lbl_)   title_lbl_->setText(tr("CONVERSATIONS"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("CONVERSATIONS"));
     if (exit_btn_) {
         exit_btn_->setText(tr("TERMINAL"));
         exit_btn_->setToolTip(tr("Switch to Terminal Mode (F9)"));
     }
-    if (search_edit_) search_edit_->setPlaceholderText(tr("Search..."));
-    if (new_btn_)    { new_btn_->setText(tr("+ New"));   new_btn_->setToolTip(tr("New conversation")); }
-    if (rename_btn_) { rename_btn_->setText(tr("Rename")); rename_btn_->setToolTip(tr("Rename selected")); }
-    if (delete_btn_) { delete_btn_->setText(tr("Delete")); delete_btn_->setToolTip(tr("Delete selected")); }
-    if (export_btn_) { export_btn_->setText(tr("Export")); export_btn_->setToolTip(tr("Export conversations")); }
+    if (search_edit_)
+        search_edit_->setPlaceholderText(tr("Search..."));
+    if (new_btn_) {
+        new_btn_->setText(tr("+ New"));
+        new_btn_->setToolTip(tr("New conversation"));
+    }
+    if (rename_btn_) {
+        rename_btn_->setText(tr("Rename"));
+        rename_btn_->setToolTip(tr("Rename selected"));
+    }
+    if (delete_btn_) {
+        delete_btn_->setText(tr("Delete"));
+        delete_btn_->setToolTip(tr("Delete selected"));
+    }
+    if (export_btn_) {
+        export_btn_->setText(tr("Export"));
+        export_btn_->setToolTip(tr("Export conversations"));
+    }
     if (stats_lbl_)
-        stats_lbl_->setText(tr("%1 sessions | %2 messages").arg(last_stats_.total_sessions).arg(last_stats_.total_messages));
+        stats_lbl_->setText(
+            tr("%1 sessions | %2 messages").arg(last_stats_.total_sessions).arg(last_stats_.total_messages));
     // Re-render the session list so "(Untitled)" / "%1 msg" pick up the language.
     populate_list(sessions_);
 }

@@ -25,8 +25,8 @@ namespace {
 const QString kTopic = QStringLiteral("fno:fii_dii:daily");
 const QString kUrl = QStringLiteral("https://blissquants.com/Bliss_Fii_Dii_Data");
 constexpr int kPublishWindowDays = 30;
-constexpr int kTtlMs = 60 * 60 * 1000;          // 1 h
-constexpr int kMinIntervalMs = 30 * 60 * 1000;  // 30 min
+constexpr int kTtlMs = 60 * 60 * 1000;         // 1 h
+constexpr int kMinIntervalMs = 30 * 60 * 1000; // 30 min
 constexpr int kTimeoutMs = 15000;
 
 // Parse "22 May 2026" → "2026-05-22"
@@ -56,12 +56,10 @@ QVector<FiiDiiDay> parse_html(const QString& html) {
     QVector<FiiDiiDay> rows;
 
     // Find all <tr> blocks
-    static const QRegularExpression rx_tr("<tr[^>]*>(.*?)</tr>",
-                                           QRegularExpression::DotMatchesEverythingOption
-                                           | QRegularExpression::CaseInsensitiveOption);
-    static const QRegularExpression rx_td("<td[^>]*>(.*?)</td>",
-                                           QRegularExpression::DotMatchesEverythingOption
-                                           | QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rx_tr("<tr[^>]*>(.*?)</tr>", QRegularExpression::DotMatchesEverythingOption |
+                                                                     QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rx_td("<td[^>]*>(.*?)</td>", QRegularExpression::DotMatchesEverythingOption |
+                                                                     QRegularExpression::CaseInsensitiveOption);
 
     auto tr_it = rx_tr.globalMatch(html);
     while (tr_it.hasNext()) {
@@ -90,7 +88,7 @@ QVector<FiiDiiDay> parse_html(const QString& html) {
     return rows;
 }
 
-}  // namespace
+} // namespace
 
 FiiDiiService& FiiDiiService::instance() {
     static FiiDiiService s;
@@ -164,14 +162,12 @@ void FiiDiiService::kick_off_refresh() {
         if (!fresh.isEmpty()) {
             auto upr = fincept::FiiDiiRepository::instance().upsert_batch(fresh);
             if (upr.is_err())
-                LOG_WARN("FiiDii", QString("upsert failed: %1")
-                                        .arg(QString::fromStdString(upr.error())));
+                LOG_WARN("FiiDii", QString("upsert failed: %1").arg(QString::fromStdString(upr.error())));
         }
 
         auto qr = fincept::FiiDiiRepository::instance().get_recent(kPublishWindowDays);
         if (qr.is_err()) {
-            LOG_WARN("FiiDii", QString("get_recent failed: %1")
-                                    .arg(QString::fromStdString(qr.error())));
+            LOG_WARN("FiiDii", QString("get_recent failed: %1").arg(QString::fromStdString(qr.error())));
             return;
         }
         QVector<FiiDiiDay> rows = qr.value();
@@ -180,8 +176,8 @@ void FiiDiiService::kick_off_refresh() {
         fincept::datahub::DataHub::instance().publish(kTopic, QVariant::fromValue(rows));
         emit self->published(rows);
         LOG_INFO("FiiDii", QString("Published %1 days (latest: %2)")
-                                .arg(rows.size())
-                                .arg(rows.isEmpty() ? QString("—") : rows.last().date_iso));
+                               .arg(rows.size())
+                               .arg(rows.isEmpty() ? QString("—") : rows.last().date_iso));
     });
 }
 

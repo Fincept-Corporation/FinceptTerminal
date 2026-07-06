@@ -48,26 +48,29 @@ QWidget* make_kv(QWidget* parent, QLabel*& value_out, QLabel*& key_out, const QS
     return wrap;
 }
 
-}  // namespace
+} // namespace
 
 FnoHeaderBar::FnoHeaderBar(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoHeader");
-    setStyleSheet(QStringLiteral(
-        "#fnoHeader { background:%1; border-bottom:2px solid %2; }"
-        "#fnoHdrKey { color:%3; font-size:8px; font-weight:700; letter-spacing:0.6px; background:transparent; }"
-        "#fnoHdrValue { color:%4; font-size:13px; font-weight:700; background:transparent; }"
-        "#fnoHdrValuePos { color:%5; font-size:13px; font-weight:700; background:transparent; }"
-        "#fnoHdrValueNeg { color:%6; font-size:13px; font-weight:700; background:transparent; }"
-        "#fnoHdrStatus { color:%3; font-size:9px; background:transparent; }"
-        "QComboBox { background:%7; color:%4; border:1px solid %8; padding:3px 8px; font-size:11px; min-width:90px; }"
-        "QComboBox:hover { border-color:%2; }"
-        "QComboBox::drop-down { border:none; width:18px; }"
-        "QComboBox QAbstractItemView { background:%1; color:%4; border:1px solid %8; selection-background-color:%2; }"
-        "#fnoRefreshBtn { background:%2; color:%7; border:none; padding:5px 12px; font-size:9px; "
-        "                 font-weight:700; letter-spacing:0.5px; }"
-        "#fnoRefreshBtn:hover { background:%4; color:%7; }")
-                      .arg(colors::BG_RAISED(), colors::AMBER(), colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(),
-                           colors::POSITIVE(), colors::NEGATIVE(), colors::BG_BASE(), colors::BORDER_DIM()));
+    setStyleSheet(
+        QStringLiteral(
+            "#fnoHeader { background:%1; border-bottom:2px solid %2; }"
+            "#fnoHdrKey { color:%3; font-size:8px; font-weight:700; letter-spacing:0.6px; background:transparent; }"
+            "#fnoHdrValue { color:%4; font-size:13px; font-weight:700; background:transparent; }"
+            "#fnoHdrValuePos { color:%5; font-size:13px; font-weight:700; background:transparent; }"
+            "#fnoHdrValueNeg { color:%6; font-size:13px; font-weight:700; background:transparent; }"
+            "#fnoHdrStatus { color:%3; font-size:9px; background:transparent; }"
+            "QComboBox { background:%7; color:%4; border:1px solid %8; padding:3px 8px; font-size:11px; "
+            "min-width:90px; }"
+            "QComboBox:hover { border-color:%2; }"
+            "QComboBox::drop-down { border:none; width:18px; }"
+            "QComboBox QAbstractItemView { background:%1; color:%4; border:1px solid %8; "
+            "selection-background-color:%2; }"
+            "#fnoRefreshBtn { background:%2; color:%7; border:none; padding:5px 12px; font-size:9px; "
+            "                 font-weight:700; letter-spacing:0.5px; }"
+            "#fnoRefreshBtn:hover { background:%4; color:%7; }")
+            .arg(colors::BG_RAISED(), colors::AMBER(), colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(),
+                 colors::POSITIVE(), colors::NEGATIVE(), colors::BG_BASE(), colors::BORDER_DIM()));
 
     setup_ui();
 }
@@ -267,8 +270,8 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
 }
 
 void FnoHeaderBar::clear_ribbon() {
-    for (QLabel* l : {lbl_spot_, lbl_change_, lbl_atm_, lbl_pcr_, lbl_max_pain_, lbl_ce_oi_, lbl_pe_oi_,
-                      lbl_iv_pctile_})
+    for (QLabel* l :
+         {lbl_spot_, lbl_change_, lbl_atm_, lbl_pcr_, lbl_max_pain_, lbl_ce_oi_, lbl_pe_oi_, lbl_iv_pctile_})
         if (l)
             l->setText("--");
     if (lbl_status_)
@@ -282,20 +285,32 @@ void FnoHeaderBar::changeEvent(QEvent* event) {
 }
 
 void FnoHeaderBar::retranslateUi() {
-    if (refresh_btn_)       refresh_btn_->setText(tr("REFRESH"));
-    if (lbl_broker_field_)  lbl_broker_field_->setText(tr("Broker:"));
-    if (lbl_under_field_)   lbl_under_field_->setText(tr("Underlying:"));
-    if (lbl_expiry_field_)  lbl_expiry_field_->setText(tr("Expiry:"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
+    if (lbl_broker_field_)
+        lbl_broker_field_->setText(tr("Broker:"));
+    if (lbl_under_field_)
+        lbl_under_field_->setText(tr("Underlying:"));
+    if (lbl_expiry_field_)
+        lbl_expiry_field_->setText(tr("Expiry:"));
 
     // Ribbon keys mirror make_kv's .toUpper() rendering.
-    if (key_spot_)       key_spot_->setText(tr("Spot").toUpper());
-    if (key_change_)     key_change_->setText(tr("Day Change").toUpper());
-    if (key_atm_)        key_atm_->setText(tr("ATM").toUpper());
-    if (key_pcr_)        key_pcr_->setText(tr("PCR").toUpper());
-    if (key_max_pain_)   key_max_pain_->setText(tr("Max Pain").toUpper());
-    if (key_ce_oi_)      key_ce_oi_->setText(tr("CE OI").toUpper());
-    if (key_pe_oi_)      key_pe_oi_->setText(tr("PE OI").toUpper());
-    if (key_iv_pctile_)  key_iv_pctile_->setText(tr("IV Pctile").toUpper());
+    if (key_spot_)
+        key_spot_->setText(tr("Spot").toUpper());
+    if (key_change_)
+        key_change_->setText(tr("Day Change").toUpper());
+    if (key_atm_)
+        key_atm_->setText(tr("ATM").toUpper());
+    if (key_pcr_)
+        key_pcr_->setText(tr("PCR").toUpper());
+    if (key_max_pain_)
+        key_max_pain_->setText(tr("Max Pain").toUpper());
+    if (key_ce_oi_)
+        key_ce_oi_->setText(tr("CE OI").toUpper());
+    if (key_pe_oi_)
+        key_pe_oi_->setText(tr("PE OI").toUpper());
+    if (key_iv_pctile_)
+        key_iv_pctile_->setText(tr("IV Pctile").toUpper());
 }
 
 } // namespace fincept::screens::fno

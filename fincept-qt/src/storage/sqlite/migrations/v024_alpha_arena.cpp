@@ -51,7 +51,8 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 cycle_count INTEGER NOT NULL DEFAULT 0
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Agents (one row per agent slot in a competition) ────────────────────
@@ -73,12 +74,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 UNIQUE(competition_id, slot)
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_agents_comp "
                               "ON aa_agents(competition_id)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Prompts (content-addressed) ─────────────────────────────────────────
@@ -91,7 +94,8 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 first_seen_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Ticks ───────────────────────────────────────────────────────────────
@@ -109,12 +113,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 UNIQUE(competition_id, seq)
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_ticks_comp_seq "
                               "ON aa_ticks(competition_id, seq DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Decisions (one row per agent per tick) ──────────────────────────────
@@ -137,12 +143,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 UNIQUE(tick_id, agent_id)
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_decisions_agent "
                               "ON aa_decisions(agent_id, created_at DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Orders ──────────────────────────────────────────────────────────────
@@ -167,12 +175,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 resolved_at TEXT DEFAULT NULL
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_orders_agent "
                               "ON aa_orders(agent_id, created_at DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Fills ───────────────────────────────────────────────────────────────
@@ -187,12 +197,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 ts TEXT DEFAULT CURRENT_TIMESTAMP
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_fills_order "
                               "ON aa_fills(order_id)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Positions (one open row per (agent_id, coin); closed positions kept) ─
@@ -216,17 +228,20 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 close_reason TEXT DEFAULT ''                    -- model_close|stop|target|liquidation|halt
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_aa_positions_open "
                               "ON aa_positions(agent_id, coin) WHERE closed_at IS NULL");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_positions_agent "
                               "ON aa_positions(agent_id, opened_at DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── PnL snapshots (one row per agent per tick) ──────────────────────────
@@ -249,12 +264,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 UNIQUE(tick_id, agent_id)
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_pnl_agent "
                               "ON aa_pnl_snapshots(agent_id, created_at DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── Events (append-only audit) ──────────────────────────────────────────
@@ -270,12 +287,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 ts TEXT DEFAULT CURRENT_TIMESTAMP
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_events_comp "
                               "ON aa_events(competition_id, seq)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     // ── HITL approvals ──────────────────────────────────────────────────────
@@ -293,12 +312,14 @@ Result<void> apply_v024(QSqlDatabase& db) {
                 resolved_by TEXT DEFAULT ''
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v024_sql(db, "CREATE INDEX IF NOT EXISTS idx_aa_hitl_status "
                               "ON aa_hitl_approvals(status, requested_at)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
 
     return Result<void>::ok();
@@ -308,7 +329,8 @@ Result<void> apply_v024(QSqlDatabase& db) {
 
 void register_migration_v024() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({24, "alpha_arena", apply_v024});
 }

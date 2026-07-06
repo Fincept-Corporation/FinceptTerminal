@@ -234,18 +234,26 @@ void DashboardToolBar::changeEvent(QEvent* event) {
 }
 
 void DashboardToolBar::retranslateUi() {
-    if (status_text_)   status_text_->setText(connected_ ? tr("LIVE") : tr("OFFLINE"));
-    if (clock_btn_)     clock_btn_->setToolTip(tr("Click to toggle UTC / local time"));
-    if (widget_count_)  widget_count_->setText(tr("%1 WIDGETS").arg(widget_count_value_));
-    if (compact_btn_)   compact_btn_->setText(tr("COMPACT"));
-    if (pulse_btn_)     pulse_btn_->setText(tr("PULSE"));
+    if (status_text_)
+        status_text_->setText(connected_ ? tr("LIVE") : tr("OFFLINE"));
+    if (clock_btn_)
+        clock_btn_->setToolTip(tr("Click to toggle UTC / local time"));
+    if (widget_count_)
+        widget_count_->setText(tr("%1 WIDGETS").arg(widget_count_value_));
+    if (compact_btn_)
+        compact_btn_->setText(tr("COMPACT"));
+    if (pulse_btn_)
+        pulse_btn_->setText(tr("PULSE"));
     if (refresh_btn_) {
         refresh_btn_->setText(tr("REFRESH"));
         refresh_btn_->setToolTip(tr("Force-refresh all live data on the dashboard"));
     }
-    if (add_btn_)       add_btn_->setText(tr("+ ADD"));
-    if (save_btn_)      save_btn_->setText(tr("SAVE"));
-    if (reset_btn_)     reset_btn_->setText(tr("RESET"));
+    if (add_btn_)
+        add_btn_->setText(tr("+ ADD"));
+    if (save_btn_)
+        save_btn_->setText(tr("SAVE"));
+    if (reset_btn_)
+        reset_btn_->setText(tr("RESET"));
     update_clock();
 }
 

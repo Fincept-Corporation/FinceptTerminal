@@ -13,8 +13,8 @@ namespace fincept::ai_chat {
 namespace {
 
 struct CatalogEntry {
-    const char* provider;     // exact match, lowercase
-    const char* model_glob;   // case-insensitive glob (* and ? wildcards)
+    const char* provider;   // exact match, lowercase
+    const char* model_glob; // case-insensitive glob (* and ? wildcards)
     int output_cap_tokens;
 };
 
@@ -29,68 +29,68 @@ constexpr int kNoPublishedCap = 16384;
 const CatalogEntry kCatalog[] = {
     // ── OpenAI ──────────────────────────────────────────────────────────
     // https://developers.openai.com/api/docs/models/<model>
-    {"openai", "gpt-5*",        128000},  // gpt-5 base / 5.2 / 5.4 / 5.5
-    {"openai", "gpt-4.1*",       32768},  // gpt-4.1, gpt-4.1-mini
-    {"openai", "gpt-4o*",        16384},  // gpt-4o, gpt-4o-mini
-    {"openai", "gpt-4-turbo*",    4096},
-    {"openai", "o1-mini*",       65536},
-    {"openai", "o1-pro*",       100000},
-    {"openai", "o1*",           100000},  // o1 base, o1-preview
-    {"openai", "o3-mini*",      100000},
-    {"openai", "o3*",           100000},
-    {"openai", "*",               4096},  // catch-all (chat/legacy)
+    {"openai", "gpt-5*", 128000},  // gpt-5 base / 5.2 / 5.4 / 5.5
+    {"openai", "gpt-4.1*", 32768}, // gpt-4.1, gpt-4.1-mini
+    {"openai", "gpt-4o*", 16384},  // gpt-4o, gpt-4o-mini
+    {"openai", "gpt-4-turbo*", 4096},
+    {"openai", "o1-mini*", 65536},
+    {"openai", "o1-pro*", 100000},
+    {"openai", "o1*", 100000}, // o1 base, o1-preview
+    {"openai", "o3-mini*", 100000},
+    {"openai", "o3*", 100000},
+    {"openai", "*", 4096}, // catch-all (chat/legacy)
 
     // ── Anthropic ───────────────────────────────────────────────────────
     // https://platform.claude.com/docs/en/docs/about-claude/models/overview
     // Sync Messages API caps. Batch API beta supports up to 300k via
     // header `output-300k-2026-03-24` — not used by interactive chat.
-    {"anthropic", "claude-opus-4-7*",   128000},
-    {"anthropic", "claude-opus-4-6*",   128000},
-    {"anthropic", "claude-opus-4*",      64000},  // 4-5 and earlier 4.x
-    {"anthropic", "claude-sonnet-4*",    64000},
-    {"anthropic", "claude-haiku-4*",     64000},
-    {"anthropic", "claude-3-5-sonnet*",   8192},  // legacy
-    {"anthropic", "claude-3-5-haiku*",    8192},
-    {"anthropic", "claude-3-opus*",       4096},
-    {"anthropic", "claude-3*",            4096},
-    {"anthropic", "*",                    8192},
+    {"anthropic", "claude-opus-4-7*", 128000},
+    {"anthropic", "claude-opus-4-6*", 128000},
+    {"anthropic", "claude-opus-4*", 64000}, // 4-5 and earlier 4.x
+    {"anthropic", "claude-sonnet-4*", 64000},
+    {"anthropic", "claude-haiku-4*", 64000},
+    {"anthropic", "claude-3-5-sonnet*", 8192}, // legacy
+    {"anthropic", "claude-3-5-haiku*", 8192},
+    {"anthropic", "claude-3-opus*", 4096},
+    {"anthropic", "claude-3*", 4096},
+    {"anthropic", "*", 8192},
 
     // ── Google Gemini ───────────────────────────────────────────────────
     // https://ai.google.dev/gemini-api/docs/models/<model>
     // Note: 2.5 series budget is shared between thinking and visible output.
-    {"gemini", "gemini-2.5-pro*",     65536},
-    {"gemini", "gemini-2.5-flash*",   65536},
-    {"gemini", "gemini-2.5*",         65536},
-    {"gemini", "gemini-2.0-flash*",    8192},
-    {"gemini", "gemini-2.0*",          8192},
-    {"gemini", "gemini-1.5*",          8192},  // retired but still works on some keys
-    {"gemini", "*",                    8192},
+    {"gemini", "gemini-2.5-pro*", 65536},
+    {"gemini", "gemini-2.5-flash*", 65536},
+    {"gemini", "gemini-2.5*", 65536},
+    {"gemini", "gemini-2.0-flash*", 8192},
+    {"gemini", "gemini-2.0*", 8192},
+    {"gemini", "gemini-1.5*", 8192}, // retired but still works on some keys
+    {"gemini", "*", 8192},
     // Alias used by some user configs
-    {"google",  "gemini-2.5*",        65536},
-    {"google",  "gemini-2.0*",         8192},
-    {"google",  "*",                   8192},
+    {"google", "gemini-2.5*", 65536},
+    {"google", "gemini-2.0*", 8192},
+    {"google", "*", 8192},
 
     // ── xAI (Grok) ──────────────────────────────────────────────────────
     // https://docs.x.ai/developers/models
     // No published per-model output cap — bounded by context. Use a
     // generous default; user can override.
-    {"xai", "grok-4*",  kNoPublishedCap},  // 256k context
-    {"xai", "grok-3*",  kNoPublishedCap},  // 131k context
-    {"xai", "grok-2*",  kNoPublishedCap},
-    {"xai", "*",        kNoPublishedCap},
+    {"xai", "grok-4*", kNoPublishedCap}, // 256k context
+    {"xai", "grok-3*", kNoPublishedCap}, // 131k context
+    {"xai", "grok-2*", kNoPublishedCap},
+    {"xai", "*", kNoPublishedCap},
 
     // ── Groq ────────────────────────────────────────────────────────────
     // https://console.groq.com/docs/model/<id>
-    {"groq", "llama-3.3-70b*",                      32768},
-    {"groq", "llama-3.1-8b-instant*",              131072},  // ctx==output
-    {"groq", "meta-llama/llama-4-scout*",            8192},
-    {"groq", "meta-llama/llama-4-maverick*",         8192},
-    {"groq", "llama-4*",                             8192},
-    {"groq", "gemma2-9b-it*",                        8192},
-    {"groq", "deepseek-r1-distill*",                32768},  // shared with reasoning
-    {"groq", "qwen*",                                32768},
-    {"groq", "mixtral*",                             8192},  // legacy
-    {"groq", "*",                                    8192},
+    {"groq", "llama-3.3-70b*", 32768},
+    {"groq", "llama-3.1-8b-instant*", 131072}, // ctx==output
+    {"groq", "meta-llama/llama-4-scout*", 8192},
+    {"groq", "meta-llama/llama-4-maverick*", 8192},
+    {"groq", "llama-4*", 8192},
+    {"groq", "gemma2-9b-it*", 8192},
+    {"groq", "deepseek-r1-distill*", 32768}, // shared with reasoning
+    {"groq", "qwen*", 32768},
+    {"groq", "mixtral*", 8192}, // legacy
+    {"groq", "*", 8192},
 
     // ── DeepSeek ────────────────────────────────────────────────────────
     // https://api-docs.deepseek.com/quick_start/pricing
@@ -98,38 +98,38 @@ const CatalogEntry kCatalog[] = {
     // alias to v4. We cap at 65536 for interactive use — the model can
     // emit far more but we don't want a chat tab to consume 384k of budget
     // by accident. User override applies.
-    {"deepseek", "deepseek-v4*",        65536},
-    {"deepseek", "deepseek-reasoner*",  65536},
-    {"deepseek", "deepseek-chat*",      65536},
-    {"deepseek", "*",                   16384},
+    {"deepseek", "deepseek-v4*", 65536},
+    {"deepseek", "deepseek-reasoner*", 65536},
+    {"deepseek", "deepseek-chat*", 65536},
+    {"deepseek", "*", 16384},
 
     // ── Moonshot / Kimi ─────────────────────────────────────────────────
     // https://platform.kimi.ai/docs/pricing/chat-k26.md
     // No published hard output cap — output bounded by 256k context window
     // minus prompt. Pick a generous interactive default; thinking variants
     // get more headroom.
-    {"kimi", "kimi-k2-thinking*",   131072},
-    {"kimi", "kimi-k2.6*",           65536},
-    {"kimi", "kimi-k2.5*",           65536},
-    {"kimi", "kimi-k2-0905*",        65536},
-    {"kimi", "kimi-k2*",             65536},
-    {"kimi", "moonshot-v1-128k*",   100000},
-    {"kimi", "moonshot-v1-32k*",     30000},
-    {"kimi", "moonshot-v1-8k*",       8000},
-    {"kimi", "*",                    32768},
+    {"kimi", "kimi-k2-thinking*", 131072},
+    {"kimi", "kimi-k2.6*", 65536},
+    {"kimi", "kimi-k2.5*", 65536},
+    {"kimi", "kimi-k2-0905*", 65536},
+    {"kimi", "kimi-k2*", 65536},
+    {"kimi", "moonshot-v1-128k*", 100000},
+    {"kimi", "moonshot-v1-32k*", 30000},
+    {"kimi", "moonshot-v1-8k*", 8000},
+    {"kimi", "*", 32768},
 
     // ── MiniMax ─────────────────────────────────────────────────────────
     // https://platform.minimax.io/docs/api-reference/text-chat-openai
     // OpenAI-compat endpoint hard-caps at 2048 for M2.7/M2.5/M2.1; native
     // v2 endpoint allows higher. We use the conservative number for the
     // OpenAI-compat path (which is what LlmService talks to).
-    {"minimax", "minimax-m2.7*",  2048},
-    {"minimax", "minimax-m2.5*",  2048},
-    {"minimax", "minimax-m2.1*",  2048},
-    {"minimax", "minimax-m2*",    8192},  // M2 native is higher; OpenAI-compat may clamp
-    {"minimax", "minimax-m1*",    8192},
-    {"minimax", "minimax-text*",  2048},
-    {"minimax", "*",              2048},
+    {"minimax", "minimax-m2.7*", 2048},
+    {"minimax", "minimax-m2.5*", 2048},
+    {"minimax", "minimax-m2.1*", 2048},
+    {"minimax", "minimax-m2*", 8192}, // M2 native is higher; OpenAI-compat may clamp
+    {"minimax", "minimax-m1*", 8192},
+    {"minimax", "minimax-text*", 2048},
+    {"minimax", "*", 2048},
 
     // ── OpenRouter (pass-through) ───────────────────────────────────────
     // https://openrouter.ai/docs/api/reference/parameters
@@ -150,7 +150,7 @@ const CatalogEntry kCatalog[] = {
     // https://astraflow.ucloud-global.com  /  https://astraflow.ucloud.cn
     // Supports 200+ models; output cap varies by underlying model. Use a
     // generous default; user can override via max_tokens.
-    {"astraflow",    "*", kNoPublishedCap},
+    {"astraflow", "*", kNoPublishedCap},
     {"astraflow_cn", "*", kNoPublishedCap},
 
     // ── AIHubMix (OpenAI-compatible aggregator) ─────────────────────────────

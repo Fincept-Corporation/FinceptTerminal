@@ -42,7 +42,7 @@ QString NotebookLibraryService::assets_dir() {
 
     const QString exe = QCoreApplication::applicationDirPath();
     const QStringList candidates = {
-        exe + "/resources/notebooks",            // dev + Windows/Linux next-to-exe
+        exe + "/resources/notebooks",              // dev + Windows/Linux next-to-exe
         exe + "/../Resources/resources/notebooks", // macOS .app/Contents/Resources
         exe + "/../resources/notebooks",
         exe + "/../../resources/notebooks",

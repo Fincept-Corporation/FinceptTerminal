@@ -35,15 +35,13 @@ struct MarketKey {
     QString event_id;
     QStringList asset_ids;
 
-    bool is_empty() const noexcept {
-        return exchange_id.isEmpty() && market_id.isEmpty() && event_id.isEmpty();
-    }
+    bool is_empty() const noexcept { return exchange_id.isEmpty() && market_id.isEmpty() && event_id.isEmpty(); }
 };
 
 struct Outcome {
-    QString name;      // "Yes" / "No" / free-form for multi-outcome markets.
-    QString asset_id;  // Exchange-opaque ID for subscribing / ordering.
-    double price = 0.0;  // 0.0–1.0 probability.
+    QString name;       // "Yes" / "No" / free-form for multi-outcome markets.
+    QString asset_id;   // Exchange-opaque ID for subscribing / ordering.
+    double price = 0.0; // 0.0–1.0 probability.
 };
 
 struct PredictionMarket {
@@ -58,13 +56,13 @@ struct PredictionMarket {
     double open_interest = 0.0;
     bool active = false;
     bool closed = false;
-    QVector<Outcome> outcomes;  // size ≥ 2; binary markets have 2.
+    QVector<Outcome> outcomes; // size ≥ 2; binary markets have 2.
     QStringList tags;
-    QVariantMap extras;  // exchange-specific: "neg_risk", "tick_size", "series_ticker", etc.
+    QVariantMap extras; // exchange-specific: "neg_risk", "tick_size", "series_ticker", etc.
 };
 
 struct PredictionEvent {
-    MarketKey key;  // key.market_id is empty for pure events.
+    MarketKey key; // key.market_id is empty for pure events.
     QString title;
     QString description;
     QString category;
@@ -86,8 +84,8 @@ struct OrderLevel {
 
 struct PredictionOrderBook {
     QString asset_id;
-    QVector<OrderLevel> bids;  // highest first
-    QVector<OrderLevel> asks;  // lowest first
+    QVector<OrderLevel> bids; // highest first
+    QVector<OrderLevel> asks; // lowest first
     double tick_size = 0.01;
     double min_order_size = 0.0;
     qint64 last_update_ms = 0;
@@ -105,11 +103,11 @@ struct PriceHistory {
 
 struct PredictionTrade {
     QString asset_id;
-    QString side;  // "BUY" | "SELL"
+    QString side; // "BUY" | "SELL"
     double price = 0.0;
     double size = 0.0;
     qint64 ts_ms = 0;
-    QString maker;  // Polymarket address or empty (Kalshi).
+    QString maker; // Polymarket address or empty (Kalshi).
 };
 
 // ── Account / trading ───────────────────────────────────────────────────────
@@ -117,7 +115,7 @@ struct PredictionTrade {
 struct PredictionPosition {
     QString asset_id;
     QString market_id;
-    QString outcome;  // resolved outcome name, e.g. "YES" / "NO" / custom.
+    QString outcome; // resolved outcome name, e.g. "YES" / "NO" / custom.
     double size = 0.0;
     double avg_price = 0.0;
     double realized_pnl = 0.0;
@@ -130,12 +128,12 @@ struct OpenOrder {
     QString asset_id;
     QString market_id;
     QString outcome;
-    QString side;        // "BUY" | "SELL"
-    QString order_type;  // "GTC" | "GTD" | "FOK" | "FAK" | "LIMIT" | "MARKET"
+    QString side;       // "BUY" | "SELL"
+    QString order_type; // "GTC" | "GTD" | "FOK" | "FAK" | "LIMIT" | "MARKET"
     double price = 0.0;
     double size = 0.0;
     double filled = 0.0;
-    QString status;      // normalized: "LIVE" | "PARTIAL" | "FILLED" | "CANCELED"
+    QString status; // normalized: "LIVE" | "PARTIAL" | "FILLED" | "CANCELED"
     qint64 created_ms = 0;
     qint64 expires_ms = 0;
 };
@@ -143,8 +141,8 @@ struct OpenOrder {
 struct OrderRequest {
     MarketKey key;
     QString asset_id;
-    QString side;        // "BUY" | "SELL"
-    QString order_type;  // see OpenOrder::order_type
+    QString side;       // "BUY" | "SELL"
+    QString order_type; // see OpenOrder::order_type
     double price = 0.0;
     double size = 0.0;
     qint64 expires_ms = 0;   // 0 = GTC
@@ -162,9 +160,9 @@ struct OrderResult {
 };
 
 struct AccountBalance {
-    double available = 0.0;    // USDC (Polymarket) or USD (Kalshi)
-    double total_value = 0.0;  // includes open positions + collateral
-    QString currency;          // "USDC" / "USD"
+    double available = 0.0;   // USDC (Polymarket) or USD (Kalshi)
+    double total_value = 0.0; // includes open positions + collateral
+    QString currency;         // "USDC" / "USD"
 };
 
 // ── Capability flags ────────────────────────────────────────────────────────
@@ -174,8 +172,8 @@ struct ExchangeCapabilities {
     bool has_multi_outcome = false;
     bool has_orderbook_ws = true;
     bool has_trade_ws = false;
-    bool has_rewards = false;        // Polymarket liquidity rewards
-    bool has_maker_rebates = false;  // Polymarket
+    bool has_rewards = false;       // Polymarket liquidity rewards
+    bool has_maker_rebates = false; // Polymarket
     bool has_leaderboard = false;
 
     bool supports_limit_orders = true;
@@ -183,7 +181,7 @@ struct ExchangeCapabilities {
     bool supports_gtd = false;
     bool supports_fok = true;
     bool supports_fak = true;
-    bool supports_decrease_order = false;  // Kalshi only
+    bool supports_decrease_order = false; // Kalshi only
     bool supports_batch_orders = false;
 
     QString quote_currency = "USD";

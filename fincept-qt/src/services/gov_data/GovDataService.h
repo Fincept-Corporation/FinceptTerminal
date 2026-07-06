@@ -1,6 +1,8 @@
 // src/services/gov_data/GovDataService.h
 #pragma once
 
+#include "datahub/Producer.h"
+
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -8,8 +10,6 @@
 #include <QObject>
 #include <QString>
 #include <QVector>
-
-#    include "datahub/Producer.h"
 
 namespace fincept::services {
 
@@ -39,9 +39,7 @@ struct GovDataResult {
 /// Phase 6 — DataHub producer for `govdata:<provider>:<request_id>`.
 /// Same dispatch-replay shape as EconomicsService: execute() remembers
 /// dispatch params so refresh(topic) can replay.
-class GovDataService : public QObject
-    , public fincept::datahub::Producer
-{
+class GovDataService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static GovDataService& instance();
@@ -63,7 +61,7 @@ class GovDataService : public QObject
     void ensure_registered_with_hub();
     QStringList topic_patterns() const override;
     void refresh(const QStringList& topics) override;
-    int max_requests_per_sec() const override;  // 2 — Python spawn pacing
+    int max_requests_per_sec() const override; // 2 — Python spawn pacing
 
   signals:
     void result_ready(const QString& request_id, const GovDataResult& result);
@@ -86,7 +84,7 @@ class GovDataService : public QObject
         QStringList args;
         QString request_id;
     };
-    QHash<QString, DispatchRecord> dispatch_records_;  // topic -> last dispatch
+    QHash<QString, DispatchRecord> dispatch_records_; // topic -> last dispatch
     bool hub_registered_ = false;
 };
 

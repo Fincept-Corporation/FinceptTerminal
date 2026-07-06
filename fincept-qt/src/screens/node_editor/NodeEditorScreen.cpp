@@ -406,9 +406,9 @@ void NodeEditorScreen::on_delete_node(const QString& node_id) {
 }
 
 void NodeEditorScreen::on_clear_workflow() {
-    auto result = QMessageBox::question(this, tr("Clear Workflow"),
-                                        tr("Are you sure you want to clear all nodes and edges?"),
-                                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    auto result =
+        QMessageBox::question(this, tr("Clear Workflow"), tr("Are you sure you want to clear all nodes and edges?"),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (result == QMessageBox::Yes) {
         scene_->clear_all();

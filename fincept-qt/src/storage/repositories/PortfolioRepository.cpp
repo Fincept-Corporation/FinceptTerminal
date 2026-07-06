@@ -91,16 +91,15 @@ Result<QString> PortfolioRepository::create_portfolio(const QString& name, const
                                                       const QString& currency, const QString& description,
                                                       const QString& broker_account_id) {
     QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    auto r = exec_write(
-        "INSERT INTO portfolios (id, name, owner, currency, description, broker_account_id) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        {id, name, owner, currency, description, broker_account_id});
+    auto r = exec_write("INSERT INTO portfolios (id, name, owner, currency, description, broker_account_id) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        {id, name, owner, currency, description, broker_account_id});
     if (r.is_err())
         return Result<QString>::err(r.error());
-    LOG_INFO("PortfolioRepo", QString("Created portfolio '%1' (%2)%3")
-                                  .arg(name, id,
-                                       broker_account_id.isEmpty() ? QString()
-                                                                   : QString(" [broker:%1]").arg(broker_account_id)));
+    LOG_INFO(
+        "PortfolioRepo",
+        QString("Created portfolio '%1' (%2)%3")
+            .arg(name, id, broker_account_id.isEmpty() ? QString() : QString(" [broker:%1]").arg(broker_account_id)));
     SyncOutbox::record_unique("portfolio", id, "sync");
     return Result<QString>::ok(id);
 }
@@ -154,9 +153,8 @@ Result<qint64> PortfolioRepository::add_asset(const QString& portfolio_id, const
         // Guard the weighted-average against a zero/near-zero total quantity — a
         // 0/0 here would write NaN into avg_buy_price and poison every portfolio
         // total downstream.
-        double new_avg = (new_qty > 1e-9)
-                             ? ((asset.avg_buy_price * asset.quantity) + (price * qty)) / new_qty
-                             : asset.avg_buy_price;
+        double new_avg =
+            (new_qty > 1e-9) ? ((asset.avg_buy_price * asset.quantity) + (price * qty)) / new_qty : asset.avg_buy_price;
         QString merged_sector = sector.isEmpty() ? asset.sector : sector;
         QString merged_broker_symbol = broker_symbol.isEmpty() ? asset.broker_symbol : broker_symbol;
         QString merged_exchange = exchange.isEmpty() ? asset.exchange : exchange;
@@ -169,10 +167,10 @@ Result<qint64> PortfolioRepository::add_asset(const QString& portfolio_id, const
         return Result<qint64>::ok(static_cast<qint64>(asset.id));
     }
 
-    auto ins = exec_insert(
-        "INSERT INTO portfolio_assets (portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, "
-        "sector, broker_symbol, exchange) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        {portfolio_id, symbol.toUpper(), qty, price, purchase_date, sector, broker_symbol, exchange});
+    auto ins =
+        exec_insert("INSERT INTO portfolio_assets (portfolio_id, symbol, quantity, avg_buy_price, first_purchase_date, "
+                    "sector, broker_symbol, exchange) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    {portfolio_id, symbol.toUpper(), qty, price, purchase_date, sector, broker_symbol, exchange});
     if (ins.is_ok())
         SyncOutbox::record_unique("portfolio", portfolio_id, "sync");
     return ins;

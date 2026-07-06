@@ -9,18 +9,15 @@ namespace fincept::surface::defaults {
 
 // Starter equity options underlyings — used to seed the asset search field
 // when the user first opens an OPRA-backed surface.
-inline constexpr std::array<const char*, 7> EQUITY_UNDERLYINGS = {
-    "SPY", "QQQ", "IWM", "AAPL", "TSLA", "NVDA", "AMZN"};
+inline constexpr std::array<const char*, 7> EQUITY_UNDERLYINGS = {"SPY", "QQQ", "IWM", "AAPL", "TSLA", "NVDA", "AMZN"};
 
 // Default correlation / PCA / risk basket — user can edit and persist their own
 // via SurfaceControlPanel state.
-inline constexpr std::array<const char*, 8> RISK_BASKET = {
-    "SPY", "QQQ", "IWM", "DIA", "GLD", "TLT", "IEF", "HYG"};
+inline constexpr std::array<const char*, 8> RISK_BASKET = {"SPY", "QQQ", "IWM", "DIA", "GLD", "TLT", "IEF", "HYG"};
 
 // Default commodity roots used for futures-curve surfaces. The control panel
 // shows these in the asset combo when the active surface is commodity-backed.
-inline constexpr std::array<const char*, 5> COMMODITY_ROOTS = {
-    "CL", "NG", "GC", "ZC", "ZS"};
+inline constexpr std::array<const char*, 5> COMMODITY_ROOTS = {"CL", "NG", "GC", "ZC", "ZS"};
 
 // Default historical lookback (days) for equities OHLCV-driven surfaces.
 inline constexpr int LOOKBACK_DAYS = 60;

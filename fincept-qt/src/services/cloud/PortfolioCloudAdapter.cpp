@@ -198,8 +198,8 @@ void PortfolioCloudAdapter::reconcile_up(const QString& local_pid, const QString
             CloudClient::instance().get(
                 pf_path(pfl) + QStringLiteral("/transactions?page_size=500"),
                 [this, local_pid, pfl, cloud_assets, done](CloudResponse tr) {
-                    const QJsonArray cloud_txns =
-                        (tr.ok && tr.data.isObject()) ? tr.data.toObject().value("transactions").toArray()
+                    const QJsonArray cloud_txns = (tr.ok && tr.data.isObject())
+                                                      ? tr.data.toObject().value("transactions").toArray()
                                                       : QJsonArray();
                     CloudClient::instance().get(
                         pf_path(pfl) + QStringLiteral("/snapshots?days=3650"),
@@ -212,23 +212,32 @@ void PortfolioCloudAdapter::reconcile_up(const QString& local_pid, const QString
 
                             auto post_op = [this](const QString& ep, const QJsonObject& b) -> Op {
                                 return [this, ep, b](std::function<void(bool, bool)> rep) {
-                                    CloudClient::instance().post(ep, b, [rep](CloudResponse r) {
-                                        rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
-                                    }, this);
+                                    CloudClient::instance().post(
+                                        ep, b,
+                                        [rep](CloudResponse r) {
+                                            rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
+                                        },
+                                        this);
                                 };
                             };
                             auto put_op = [this](const QString& ep, const QJsonObject& b) -> Op {
                                 return [this, ep, b](std::function<void(bool, bool)> rep) {
-                                    CloudClient::instance().put(ep, b, [rep](CloudResponse r) {
-                                        rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
-                                    }, this);
+                                    CloudClient::instance().put(
+                                        ep, b,
+                                        [rep](CloudResponse r) {
+                                            rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
+                                        },
+                                        this);
                                 };
                             };
                             auto del_op = [this](const QString& ep) -> Op {
                                 return [this, ep](std::function<void(bool, bool)> rep) {
-                                    CloudClient::instance().del(ep, [rep](CloudResponse r) {
-                                        rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
-                                    }, this);
+                                    CloudClient::instance().del(
+                                        ep,
+                                        [rep](CloudResponse r) {
+                                            rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
+                                        },
+                                        this);
                                 };
                             };
 
@@ -279,12 +288,15 @@ void PortfolioCloudAdapter::reconcile_up(const QString& local_pid, const QString
                                         const QString ep = pf_path(pfl) + "/transactions";
                                         const QJsonObject b = txn_body(t);
                                         ops.append([this, ep, b, uuid](std::function<void(bool, bool)> rep) {
-                                            CloudClient::instance().post(ep, b, [rep, uuid](CloudResponse r) {
-                                                if (r.ok && r.data.isObject())
-                                                    SyncMap::put(pf_txn_entity(), uuid,
-                                                                 r.data.toObject().value("id").toString(), {});
-                                                rep(r.is_insufficient_credits(), !r.ok);
-                                            }, this);
+                                            CloudClient::instance().post(
+                                                ep, b,
+                                                [rep, uuid](CloudResponse r) {
+                                                    if (r.ok && r.data.isObject())
+                                                        SyncMap::put(pf_txn_entity(), uuid,
+                                                                     r.data.toObject().value("id").toString(), {});
+                                                    rep(r.is_insufficient_credits(), !r.ok);
+                                                },
+                                                this);
                                         });
                                     }
                                 }
@@ -296,11 +308,14 @@ void PortfolioCloudAdapter::reconcile_up(const QString& local_pid, const QString
                                     const QString uuid = *loc;
                                     const QString ep = pf_path(pfl) + "/transactions/" + ptx;
                                     ops.append([this, ep, uuid](std::function<void(bool, bool)> rep) {
-                                        CloudClient::instance().del(ep, [rep, uuid](CloudResponse r) {
-                                            if (r.ok || r.status == 404)
-                                                SyncMap::remove_by_local(pf_txn_entity(), uuid);
-                                            rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
-                                        }, this);
+                                        CloudClient::instance().del(
+                                            ep,
+                                            [rep, uuid](CloudResponse r) {
+                                                if (r.ok || r.status == 404)
+                                                    SyncMap::remove_by_local(pf_txn_entity(), uuid);
+                                                rep(r.is_insufficient_credits(), !r.ok && r.status != 404);
+                                            },
+                                            this);
                                     });
                                 }
                             }
@@ -396,9 +411,9 @@ void PortfolioCloudAdapter::pull(PullDone done) {
                         CloudClient::instance().get(
                             pf_path(pfl) + QStringLiteral("/transactions?page_size=500"),
                             [this, pfl, detail, had_error, finish_one](CloudResponse tr) {
-                                const QJsonArray txns =
-                                    (tr.ok && tr.data.isObject()) ? tr.data.toObject().value("transactions").toArray()
-                                                                  : QJsonArray();
+                                const QJsonArray txns = (tr.ok && tr.data.isObject())
+                                                            ? tr.data.toObject().value("transactions").toArray()
+                                                            : QJsonArray();
                                 CloudClient::instance().get(
                                     pf_path(pfl) + QStringLiteral("/snapshots?days=3650"),
                                     [this, detail, txns, finish_one](CloudResponse sr) {
@@ -481,10 +496,10 @@ void PortfolioCloudAdapter::apply_remote_portfolio(const QJsonObject& detail, co
         const QString ptx = t.value("id").toString();
         cloud_ptx.insert(ptx);
         if (!SyncMap::local_id(pf_txn_entity(), ptx)) {
-            auto cr = repo.add_transaction(local_pid, t.value("symbol").toString(),
-                                           t.value("transaction_type").toString(), t.value("quantity").toDouble(),
-                                           t.value("price").toDouble(), t.value("transaction_date").toString(),
-                                           t.value("notes").toString());
+            auto cr =
+                repo.add_transaction(local_pid, t.value("symbol").toString(), t.value("transaction_type").toString(),
+                                     t.value("quantity").toDouble(), t.value("price").toDouble(),
+                                     t.value("transaction_date").toString(), t.value("notes").toString());
             if (cr.is_ok())
                 SyncMap::put(pf_txn_entity(), cr.value(), ptx, {});
         }

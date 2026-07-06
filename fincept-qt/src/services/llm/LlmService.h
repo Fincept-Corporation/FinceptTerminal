@@ -165,8 +165,8 @@ class LlmService : public QObject {
     // follow-up turns stay identical to the first turn (Anthropic/Gemini
     // previously dropped tools on the follow-up, so they could never chain a
     // second tool call). Honour the active ToolPolicy via apply_request_policy.
-    QJsonArray build_anthropic_tools();  // [{name, description, input_schema}]
-    QJsonArray build_gemini_tools();     // [{functionDeclarations:[{name, description, parameters}]}]
+    QJsonArray build_anthropic_tools(); // [{name, description, input_schema}]
+    QJsonArray build_gemini_tools();    // [{functionDeclarations:[{name, description, parameters}]}]
 
     QString get_endpoint_url() const;
     QMap<QString, QString> get_headers() const;

@@ -17,9 +17,9 @@ struct DiscoveredField {
 /// manual-mapping UI so the user just picks tags instead of typing paths.
 struct DiscoveredSchema {
     bool ok = false;
-    QString format;            // "rss" | "atom" | "xml" | "json" | "csv"
-    QString item_selector;     // best-guess repeating record (XML element / JSON array path)
-    QStringList item_options;  // candidate repeating records the user can switch to
+    QString format;           // "rss" | "atom" | "xml" | "json" | "csv"
+    QString item_selector;    // best-guess repeating record (XML element / JSON array path)
+    QStringList item_options; // candidate repeating records the user can switch to
     QVector<DiscoveredField> fields;
 };
 

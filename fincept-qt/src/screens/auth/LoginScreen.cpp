@@ -47,8 +47,8 @@ static QString btn_primary() {
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::BORDER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(),
+             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
 }
 
 // White "Continue with Google" button — high contrast against the dark theme,
@@ -113,8 +113,8 @@ static QString btn_standard() {
                    "  font-family: 'Consolas','Courier New',monospace;"
                    "}"
                    "QPushButton:hover { color: %4; background: %5; }")
-        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
-             ui::colors::BG_HOVER());
+        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+             ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER());
 }
 
 static QString btn_danger() {
@@ -200,15 +200,19 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
     connect(&auth, &auth::AuthManager::mfa_verified, this, &LoginScreen::on_mfa_verified);
     connect(&auth, &auth::AuthManager::mfa_failed, this, &LoginScreen::on_mfa_failed);
     connect(&auth, &auth::AuthManager::logged_out, this, [this]() {
-        if (email_input_) email_input_->clear();
+        if (email_input_)
+            email_input_->clear();
         if (password_input_) {
             password_input_->clear();
             password_input_->setEchoMode(QLineEdit::Password);
         }
-        if (mfa_input_) mfa_input_->clear();
+        if (mfa_input_)
+            mfa_input_->clear();
         clear_error();
-        if (mfa_error_) mfa_error_->hide();
-        if (pages_) pages_->setCurrentIndex(0);
+        if (mfa_error_)
+            mfa_error_->hide();
+        if (pages_)
+            pages_->setCurrentIndex(0);
     });
 }
 
@@ -545,35 +549,57 @@ void LoginScreen::build_conflict_page() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void LoginScreen::retranslateUi() {
-    if (login_title_)    login_title_->setText(tr("SIGN IN"));
-    if (login_subtitle_) login_subtitle_->setText(tr("Access your terminal account"));
-    if (email_lbl_)      email_lbl_->setText(tr("EMAIL"));
-    if (pw_lbl_)         pw_lbl_->setText(tr("PASSWORD"));
-    if (email_input_)    email_input_->setPlaceholderText(tr("user@domain.com"));
-    if (password_input_) password_input_->setPlaceholderText(tr("enter password"));
+    if (login_title_)
+        login_title_->setText(tr("SIGN IN"));
+    if (login_subtitle_)
+        login_subtitle_->setText(tr("Access your terminal account"));
+    if (email_lbl_)
+        email_lbl_->setText(tr("EMAIL"));
+    if (pw_lbl_)
+        pw_lbl_->setText(tr("PASSWORD"));
+    if (email_input_)
+        email_input_->setPlaceholderText(tr("user@domain.com"));
+    if (password_input_)
+        password_input_->setPlaceholderText(tr("enter password"));
     if (show_pw_btn_) {
         // Preserve current visibility state when re-translating.
         const bool showing = password_input_ && password_input_->echoMode() != QLineEdit::Password;
         show_pw_btn_->setText(showing ? tr("HIDE") : tr("SHOW"));
     }
-    if (forgot_btn_)      forgot_btn_->setText(tr("FORGOT PASSWORD?"));
-    if (login_btn_)       login_btn_->setText(tr("  SIGN IN  "));
-    if (or_lbl_)          or_lbl_->setText(tr("or"));
-    if (google_btn_)      google_btn_->setText(tr("CONTINUE WITH GOOGLE"));
-    if (no_account_lbl_)  no_account_lbl_->setText(tr("No account?"));
-    if (signup_btn_)      signup_btn_->setText(tr("SIGN UP"));
+    if (forgot_btn_)
+        forgot_btn_->setText(tr("FORGOT PASSWORD?"));
+    if (login_btn_)
+        login_btn_->setText(tr("  SIGN IN  "));
+    if (or_lbl_)
+        or_lbl_->setText(tr("or"));
+    if (google_btn_)
+        google_btn_->setText(tr("CONTINUE WITH GOOGLE"));
+    if (no_account_lbl_)
+        no_account_lbl_->setText(tr("No account?"));
+    if (signup_btn_)
+        signup_btn_->setText(tr("SIGN UP"));
 
-    if (mfa_title_)     mfa_title_->setText(tr("TWO-FACTOR AUTH"));
-    if (mfa_indicator_) mfa_indicator_->setText(tr("SECURE"));
-    if (mfa_sub_)       mfa_sub_->setText(tr("Enter the 6-digit code from your authenticator"));
-    if (mfa_code_lbl_)  mfa_code_lbl_->setText(tr("VERIFICATION CODE"));
-    if (mfa_verify_btn_) mfa_verify_btn_->setText(tr("  VERIFY  "));
-    if (mfa_back_btn_)   mfa_back_btn_->setText(tr("BACK TO LOGIN"));
+    if (mfa_title_)
+        mfa_title_->setText(tr("TWO-FACTOR AUTH"));
+    if (mfa_indicator_)
+        mfa_indicator_->setText(tr("SECURE"));
+    if (mfa_sub_)
+        mfa_sub_->setText(tr("Enter the 6-digit code from your authenticator"));
+    if (mfa_code_lbl_)
+        mfa_code_lbl_->setText(tr("VERIFICATION CODE"));
+    if (mfa_verify_btn_)
+        mfa_verify_btn_->setText(tr("  VERIFY  "));
+    if (mfa_back_btn_)
+        mfa_back_btn_->setText(tr("BACK TO LOGIN"));
 
-    if (conflict_title_)       conflict_title_->setText(tr("SESSION CONFLICT"));
-    if (conflict_warning_lbl_) conflict_warning_lbl_->setText(tr("WARNING"));
-    if (force_login_btn_)      force_login_btn_->setText(tr("  LOG OUT OTHER SESSION & CONTINUE  "));
-    if (cancel_btn_)           cancel_btn_->setText(tr("  CANCEL  "));
+    if (conflict_title_)
+        conflict_title_->setText(tr("SESSION CONFLICT"));
+    if (conflict_warning_lbl_)
+        conflict_warning_lbl_->setText(tr("WARNING"));
+    if (force_login_btn_)
+        force_login_btn_->setText(tr("  LOG OUT OTHER SESSION & CONTINUE  "));
+    if (cancel_btn_)
+        cancel_btn_->setText(tr("  CANCEL  "));
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -619,14 +645,17 @@ void LoginScreen::on_force_login() {
 
 void LoginScreen::on_login_succeeded() {
     set_loading(false);
-    if (email_input_) email_input_->clear();
+    if (email_input_)
+        email_input_->clear();
     if (password_input_) {
         password_input_->clear();
         password_input_->setEchoMode(QLineEdit::Password);
     }
-    if (mfa_input_) mfa_input_->clear();
+    if (mfa_input_)
+        mfa_input_->clear();
     clear_error();
-    if (mfa_error_) mfa_error_->hide();
+    if (mfa_error_)
+        mfa_error_->hide();
     pages_->setCurrentIndex(0);
     for (auto* b : conflict_page_->findChildren<QPushButton*>())
         b->setEnabled(true);

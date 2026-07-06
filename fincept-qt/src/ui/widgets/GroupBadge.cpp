@@ -21,8 +21,7 @@ GroupBadge::GroupBadge(QWidget* parent) : QWidget(parent) {
 
     // Repaint + refresh tooltip when any registry mutation lands. Cheap —
     // the slot count is at most 10 and we only repaint our own widget.
-    connect(&SymbolGroupRegistry::instance(),
-            &SymbolGroupRegistry::group_metadata_changed, this,
+    connect(&SymbolGroupRegistry::instance(), &SymbolGroupRegistry::group_metadata_changed, this,
             [this](SymbolGroup) { set_group_silent(group_); });
 
     set_group_silent(SymbolGroup::None); // seeds the tooltip
@@ -36,9 +35,8 @@ QColor GroupBadge::color_for_group(SymbolGroup g) {
 
 void GroupBadge::set_group_silent(SymbolGroup g) {
     group_ = g;
-    const QString state = (g == SymbolGroup::None)
-                              ? QStringLiteral("Unlinked")
-                              : SymbolGroupRegistry::instance().name(g);
+    const QString state =
+        (g == SymbolGroup::None) ? QStringLiteral("Unlinked") : SymbolGroupRegistry::instance().name(g);
     setToolTip(QStringLiteral("Symbol link group: %1\nClick to cycle • Right-click for menu").arg(state));
     update();
 }
@@ -58,8 +56,7 @@ void GroupBadge::contextMenuEvent(QContextMenuEvent* e) {
 
     auto* unlink = menu.addAction("Unlink");
     unlink->setEnabled(group_ != SymbolGroup::None);
-    connect(unlink, &QAction::triggered, this,
-            [this]() { emit group_change_requested(SymbolGroup::None); });
+    connect(unlink, &QAction::triggered, this, [this]() { emit group_change_requested(SymbolGroup::None); });
 
     menu.addSeparator();
 
@@ -86,12 +83,12 @@ void GroupBadge::contextMenuEvent(QContextMenuEvent* e) {
     auto* rename = menu.addAction(QStringLiteral("Rename %1…").arg(registry.name(target)));
     QPointer<GroupBadge> self = this;
     connect(rename, &QAction::triggered, this, [self, target]() {
-        if (!self) return;
+        if (!self)
+            return;
         bool ok = false;
         const QString current = SymbolGroupRegistry::instance().name(target);
         const QString name = QInputDialog::getText(self, QStringLiteral("Rename Group"),
-                                                   QStringLiteral("New name for %1:")
-                                                       .arg(symbol_group_letter(target)),
+                                                   QStringLiteral("New name for %1:").arg(symbol_group_letter(target)),
                                                    QLineEdit::Normal, current, &ok);
         if (ok)
             SymbolGroupRegistry::instance().set_name(target, name);
@@ -99,27 +96,25 @@ void GroupBadge::contextMenuEvent(QContextMenuEvent* e) {
 
     auto* recolor = menu.addAction(QStringLiteral("Change Colour for %1…").arg(registry.name(target)));
     connect(recolor, &QAction::triggered, this, [self, target]() {
-        if (!self) return;
+        if (!self)
+            return;
         const QColor current = SymbolGroupRegistry::instance().color(target);
-        const QColor picked = QColorDialog::getColor(current, self,
-                                                     QStringLiteral("Group %1 Colour")
-                                                         .arg(symbol_group_letter(target)));
+        const QColor picked =
+            QColorDialog::getColor(current, self, QStringLiteral("Group %1 Colour").arg(symbol_group_letter(target)));
         if (picked.isValid())
             SymbolGroupRegistry::instance().set_color(target, picked);
     });
 
-    auto* toggle = menu.addAction(registry.enabled(target) ? QStringLiteral("Disable Slot %1")
-                                                                  .arg(symbol_group_letter(target))
-                                                            : QStringLiteral("Enable Slot %1")
-                                                                  .arg(symbol_group_letter(target)));
+    auto* toggle =
+        menu.addAction(registry.enabled(target) ? QStringLiteral("Disable Slot %1").arg(symbol_group_letter(target))
+                                                : QStringLiteral("Enable Slot %1").arg(symbol_group_letter(target)));
     connect(toggle, &QAction::triggered, this, [target]() {
         auto& r = SymbolGroupRegistry::instance();
         r.set_enabled(target, !r.enabled(target));
     });
 
     auto* reset = menu.addAction(QStringLiteral("Reset %1 to Defaults").arg(symbol_group_letter(target)));
-    connect(reset, &QAction::triggered, this,
-            [target]() { SymbolGroupRegistry::instance().reset_to_default(target); });
+    connect(reset, &QAction::triggered, this, [target]() { SymbolGroupRegistry::instance().reset_to_default(target); });
 
     menu.exec(e->globalPos());
 }
@@ -147,9 +142,8 @@ void GroupBadge::paintEvent(QPaintEvent*) {
         f.setPointSizeF(f.pointSizeF() - 1.0);
     f.setBold(true);
     p.setFont(f);
-    const QString label = group_ == SymbolGroup::None
-                              ? QStringLiteral("·") // middle dot for unlinked
-                              : QString(symbol_group_letter(group_));
+    const QString label = group_ == SymbolGroup::None ? QStringLiteral("·") // middle dot for unlinked
+                                                      : QString(symbol_group_letter(group_));
     p.drawText(r, Qt::AlignCenter, label);
 }
 

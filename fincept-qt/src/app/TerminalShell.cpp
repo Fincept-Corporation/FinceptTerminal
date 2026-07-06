@@ -1,6 +1,5 @@
 ﻿#include "app/TerminalShell.h"
 
-#include "screens/ai_chat/ChatBubbleController.h"
 #include "app/WindowFrame.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
@@ -9,20 +8,21 @@
 #include "core/actions/ActionRegistry.h"
 #include "core/actions/builtin_actions.h"
 #include "core/config/ProfileManager.h"
+#include "core/layout/LayoutCatalog.h"
+#include "core/layout/WorkspaceShell.h"
 #include "core/logging/Logger.h"
 #include "core/panel/PanelRegistry.h"
 #include "core/profile/ProfilePaths.h"
-#include "core/layout/LayoutCatalog.h"
-#include "core/layout/WorkspaceShell.h"
-#include "storage/workspace/WorkspaceFwspImporter.h"
 #include "core/screen/MonitorWatcher.h"
 #include "core/telemetry/CloudTelemetryProvider.h"
 #include "core/telemetry/LocalTelemetrySink.h"
 #include "core/telemetry/TelemetryProvider.h"
 #include "core/window/WindowRegistry.h"
+#include "screens/ai_chat/ChatBubbleController.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/workspace/CrashRecovery.h"
 #include "storage/workspace/WorkspaceDb.h"
+#include "storage/workspace/WorkspaceFwspImporter.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 
 #include <QDateTime>
@@ -54,8 +54,8 @@ void TerminalShell::initialise() {
     // mints + persists a UUID on first read if the manifest is legacy.
     active_profile_id_ = ProfileManager::instance().active_profile_id();
     LOG_INFO(kShellTag, QString("Active profile: %1 (id=%2)")
-                          .arg(ProfileManager::instance().active())
-                          .arg(active_profile_id_.to_string()));
+                            .arg(ProfileManager::instance().active())
+                            .arg(active_profile_id_.to_string()));
     // Create the new per-profile directory tree (workspace.db, layouts/,
     // crashes/). Distinct from AppPaths::ensure_all() which creates the
     // legacy tree (data/, logs/, cache/, etc.) — both run, both are
@@ -65,59 +65,59 @@ void TerminalShell::initialise() {
     // any WindowFrame tries to register against them. Avoids a startup
     // race where the first window's constructor runs faster than the
     // registry's singleton init under aggressive optimisation.
-    (void) WindowRegistry::instance();
-    (void) ActionRegistry::instance();
-    (void) PanelRegistry::instance();
-    (void) ProfileManager::instance();
+    (void)WindowRegistry::instance();
+    (void)ActionRegistry::instance();
+    (void)PanelRegistry::instance();
+    (void)ProfileManager::instance();
     // Phase 6 trim: MonitorWatcher boots here so its QGuiApplication signal
     // connections are in place before any frame restores. Phase 6's full
     // workspace-variant matcher will subscribe to topology_changed.
-    (void) MonitorWatcher::instance();
+    (void)MonitorWatcher::instance();
     // Rescue off-screen windows when monitors come or go at runtime. The
     // raw `screenAdded` / `screenRemoved` signals fire mid-burst (some
     // OSes emit removed-then-added on dock unplug/replug); MonitorWatcher
     // debounces to a single topology_changed once the dust has settled.
-    QObject::connect(&MonitorWatcher::instance(), &MonitorWatcher::topology_changed,
-                     &MonitorWatcher::instance(), [](const layout::MonitorTopologyKey&) {
-        const auto screens = QGuiApplication::screens();
-        if (screens.isEmpty())
-            return;
-        for (WindowFrame* w : WindowRegistry::instance().frames()) {
-            if (!w)
-                continue;
-            const QRect frame = w->frameGeometry();
-            // A window is "rescued" only if no currently-connected screen's
-            // available geometry intersects it at all — i.e. it would be
-            // completely invisible. Partial overlap is fine; the user can
-            // still grab the title bar.
-            bool on_some_screen = false;
-            for (QScreen* s : screens) {
-                if (s && s->availableGeometry().intersects(frame)) {
-                    on_some_screen = true;
-                    break;
-                }
-            }
-            if (on_some_screen)
-                continue;
-            QScreen* target = QGuiApplication::primaryScreen();
-            if (!target)
-                target = screens.first();
-            if (!target)
-                continue;
-            const QRect ag = target->availableGeometry();
-            // Keep the window's size if it fits, otherwise clamp to 9/10
-            // of the target screen (same heuristic the constructor and the
-            // new-window path use).
-            QSize sz = w->size();
-            sz.setWidth(qMin(sz.width(), ag.width() * 9 / 10));
-            sz.setHeight(qMin(sz.height(), ag.height() * 9 / 10));
-            w->resize(sz);
-            w->move(ag.center() - QPoint(sz.width() / 2, sz.height() / 2));
-            LOG_INFO(kShellTag,
-                     QString("Rescued window %1 onto '%2' after topology change")
-                         .arg(w->window_id()).arg(target->name()));
-        }
-    });
+    QObject::connect(&MonitorWatcher::instance(), &MonitorWatcher::topology_changed, &MonitorWatcher::instance(),
+                     [](const layout::MonitorTopologyKey&) {
+                         const auto screens = QGuiApplication::screens();
+                         if (screens.isEmpty())
+                             return;
+                         for (WindowFrame* w : WindowRegistry::instance().frames()) {
+                             if (!w)
+                                 continue;
+                             const QRect frame = w->frameGeometry();
+                             // A window is "rescued" only if no currently-connected screen's
+                             // available geometry intersects it at all — i.e. it would be
+                             // completely invisible. Partial overlap is fine; the user can
+                             // still grab the title bar.
+                             bool on_some_screen = false;
+                             for (QScreen* s : screens) {
+                                 if (s && s->availableGeometry().intersects(frame)) {
+                                     on_some_screen = true;
+                                     break;
+                                 }
+                             }
+                             if (on_some_screen)
+                                 continue;
+                             QScreen* target = QGuiApplication::primaryScreen();
+                             if (!target)
+                                 target = screens.first();
+                             if (!target)
+                                 continue;
+                             const QRect ag = target->availableGeometry();
+                             // Keep the window's size if it fits, otherwise clamp to 9/10
+                             // of the target screen (same heuristic the constructor and the
+                             // new-window path use).
+                             QSize sz = w->size();
+                             sz.setWidth(qMin(sz.width(), ag.width() * 9 / 10));
+                             sz.setHeight(qMin(sz.height(), ag.height() * 9 / 10));
+                             w->resize(sz);
+                             w->move(ag.center() - QPoint(sz.width() / 2, sz.height() / 2));
+                             LOG_INFO(kShellTag, QString("Rescued window %1 onto '%2' after topology change")
+                                                     .arg(w->window_id())
+                                                     .arg(target->name()));
+                         }
+                     });
     // Phase 1b skeleton: LockOverlayController construction. Currently a
     // no-op — the full lift is deferred (see auth/lock/LockOverlayController.h
     // for rationale). Constructing it here keeps the dependency direction
@@ -133,8 +133,7 @@ void TerminalShell::initialise() {
     {
         auto r = LayoutCatalog::instance().open();
         if (r.is_err()) {
-            LOG_WARN(kShellTag, QString("LayoutCatalog open failed: %1")
-                                    .arg(QString::fromStdString(r.error())));
+            LOG_WARN(kShellTag, QString("LayoutCatalog open failed: %1").arg(QString::fromStdString(r.error())));
         } else {
             // One-shot: import legacy v3 *.fwsp filenames as empty named
             // layouts so users see them in the Launchpad list. No-op after
@@ -185,8 +184,7 @@ void TerminalShell::initialise() {
     workspace_db_ = &WorkspaceDb::instance();
     auto db_open = workspace_db_->open(ProfilePaths::workspace_db());
     if (db_open.is_err()) {
-        LOG_ERROR(kShellTag, QString("Failed to open workspace.db: %1")
-                               .arg(QString::fromStdString(db_open.error())));
+        LOG_ERROR(kShellTag, QString("Failed to open workspace.db: %1").arg(QString::fromStdString(db_open.error())));
         // Keep going — the shell can still run without persistence; later
         // saves just become no-ops. We don't want a corrupted db to brick
         // the terminal entirely.
@@ -213,12 +211,11 @@ void TerminalShell::initialise() {
         // ended_at + exit_kind stay NULL until shutdown() updates them.
         session_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
         const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
-        auto sess = workspace_db_->execute(
-            "INSERT INTO session_history(session_id, profile_id, started_at) VALUES(?, ?, ?)",
-            {session_id_, active_profile_id_.to_string(), now_ms});
+        auto sess =
+            workspace_db_->execute("INSERT INTO session_history(session_id, profile_id, started_at) VALUES(?, ?, ?)",
+                                   {session_id_, active_profile_id_.to_string(), now_ms});
         if (sess.is_err()) {
-            LOG_WARN(kShellTag, QString("session_history insert failed: %1")
-                                  .arg(QString::fromStdString(sess.error())));
+            LOG_WARN(kShellTag, QString("session_history insert failed: %1").arg(QString::fromStdString(sess.error())));
         } else {
             LOG_INFO(kShellTag, QString("Session %1 started").arg(session_id_));
         }
@@ -246,13 +243,13 @@ void TerminalShell::shutdown() {
             // depending on which Qt finalizer ran first. Read it anyway —
             // a stale snapshot is fine for analytics.
             const int frame_count = WindowRegistry::instance().frame_count();
-            auto upd = workspace_db_->execute(
-                "UPDATE session_history SET ended_at = ?, exit_kind = 'clean', frame_count = ? "
-                "WHERE session_id = ?",
-                {now_ms, frame_count, session_id_});
+            auto upd =
+                workspace_db_->execute("UPDATE session_history SET ended_at = ?, exit_kind = 'clean', frame_count = ? "
+                                       "WHERE session_id = ?",
+                                       {now_ms, frame_count, session_id_});
             if (upd.is_err()) {
-                LOG_WARN(kShellTag, QString("session_history update failed: %1")
-                                      .arg(QString::fromStdString(upd.error())));
+                LOG_WARN(kShellTag,
+                         QString("session_history update failed: %1").arg(QString::fromStdString(upd.error())));
             }
         }
         if (crash_recovery_)

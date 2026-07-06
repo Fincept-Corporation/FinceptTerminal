@@ -1,8 +1,7 @@
 #include "trading/instruments/GrowwInstrumentParser.h"
 
-#include "trading/instruments/InstrumentNormalize.h"
-
 #include "core/logging/Logger.h"
+#include "trading/instruments/InstrumentNormalize.h"
 
 #include <QDate>
 #include <QHash>

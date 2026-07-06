@@ -231,16 +231,24 @@ void NodePropertiesPanel::changeEvent(QEvent* event) {
 }
 
 void NodePropertiesPanel::retranslateUi() {
-    if (empty_label_) empty_label_->setText(tr("Select a node\nto edit properties"));
+    if (empty_label_)
+        empty_label_->setText(tr("Select a node\nto edit properties"));
     // Dynamic editor labels (recreated on each node selection) — update the
     // live instances if a node is currently shown.
-    if (props_title_) props_title_->setText(tr("PROPERTIES"));
-    if (del_btn_) del_btn_->setText(tr("DEL"));
-    if (name_label_) name_label_->setText(tr("NAME"));
-    if (param_header_) param_header_->setText(tr("PARAMETERS"));
-    if (settings_header_) settings_header_->setText(tr("SETTINGS"));
-    if (disabled_check_) disabled_check_->setText(tr("Disabled"));
-    if (cof_check_) cof_check_->setText(tr("Continue on Fail"));
+    if (props_title_)
+        props_title_->setText(tr("PROPERTIES"));
+    if (del_btn_)
+        del_btn_->setText(tr("DEL"));
+    if (name_label_)
+        name_label_->setText(tr("NAME"));
+    if (param_header_)
+        param_header_->setText(tr("PARAMETERS"));
+    if (settings_header_)
+        settings_header_->setText(tr("SETTINGS"));
+    if (disabled_check_)
+        disabled_check_->setText(tr("Disabled"));
+    if (cof_check_)
+        cof_check_->setText(tr("Continue on Fail"));
 }
 
 } // namespace fincept::workflow

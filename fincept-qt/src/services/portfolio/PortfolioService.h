@@ -7,9 +7,9 @@
 #include <QDateTime>
 #include <QHash>
 #include <QMutex>
-#include <QSet>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QTimer>
 
 namespace fincept::services {
@@ -27,8 +27,7 @@ class PortfolioService : public QObject {
     /// PortfolioService routes live quotes via that broker instead of yfinance.
     /// Empty for manual / JSON imports — yfinance fallback applies.
     void create_portfolio(const QString& name, const QString& owner, const QString& currency,
-                          const QString& description = {},
-                          const QString& broker_account_id = {});
+                          const QString& description = {}, const QString& broker_account_id = {});
     void delete_portfolio(const QString& id);
 
     // ── Summary (assets + live quotes) ───────────────────────────────────────
@@ -40,8 +39,7 @@ class PortfolioService : public QObject {
     /// yfinance-format `symbol` so broker quote calls can use the native
     /// pair. Both empty for manual / JSON imports.
     void add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
-                   const QString& date = {},
-                   const QString& broker_symbol = {}, const QString& exchange = {});
+                   const QString& date = {}, const QString& broker_symbol = {}, const QString& exchange = {});
     void sell_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
                     const QString& date = {});
 
@@ -148,10 +146,8 @@ class PortfolioService : public QObject {
     /// Common "I have quotes, build the summary and emit" path used by both
     /// the broker and yfinance routes. quote_map is keyed by the asset's
     /// canonical (yfinance) `symbol` field.
-    void finalize_summary(const QString& portfolio_id,
-                          const QVector<portfolio::PortfolioAsset>& assets,
-                          const portfolio::Portfolio& portfolio,
-                          const QHash<QString, QuoteData>& quote_map);
+    void finalize_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
+                          const portfolio::Portfolio& portfolio, const QHash<QString, QuoteData>& quote_map);
 
     /// Try to fetch live quotes via the broker linked to `portfolio.broker_account_id`.
     /// On success, calls finalize_summary with broker-sourced QuoteData.
@@ -159,8 +155,7 @@ class PortfolioService : public QObject {
     /// silently falls back to the yfinance path. Returns true if the broker
     /// path was attempted (even if it ultimately failed); false if we should
     /// go straight to yfinance.
-    bool try_broker_quotes(const QString& portfolio_id,
-                           const QVector<portfolio::PortfolioAsset>& assets,
+    bool try_broker_quotes(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                            const portfolio::Portfolio& portfolio);
 
     // ── Summary cache (P11) ──────────────────────────────────────────────────
@@ -185,7 +180,7 @@ class PortfolioService : public QObject {
     // ── Risk-free rate cache (annual decimal, e.g. 0.043) ────────────────────
     // Canonical fallback used wherever the live FRED rate is unavailable.
     static constexpr double kDefaultRiskFreeRate = 0.04; // 4%
-    double rf_rate_ = kDefaultRiskFreeRate; // default until FRED responds
+    double rf_rate_ = kDefaultRiskFreeRate;              // default until FRED responds
 
     // ── Backfill state ───────────────────────────────────────────────────────
     // Per-portfolio guard so compute_metrics doesn't kick off backfill on

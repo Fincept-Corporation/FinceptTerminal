@@ -357,16 +357,15 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const 
         LOG_WARN(TAG, "hsServerId/dataCenter missing from MPIN response — sId routing disabled");
 
     // Pack: trading_token:::trading_sid:::base_url:::access_token_portal:::server_id
-    const QString packed = trading_token + ":::" + trading_sid + ":::" + base_url + ":::" + access_token_portal +
-                           ":::" + server_id;
+    const QString packed =
+        trading_token + ":::" + trading_sid + ":::" + base_url + ":::" + access_token_portal + ":::" + server_id;
 
     // Persist the TOTP secret (auth_code) so the daily trading session can be
     // silently re-minted: Step1+Step2 re-run from the stored portal token, MPIN
     // and TOTP secret. Token lapses at the daily reset.
     QJsonObject extra_obj{{"totp_secret", auth_code.trimmed()}};
-    const QString extra =
-        with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
-                          next_ist_flush_epoch(6, 0));
+    const QString extra = with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
+                                            next_ist_flush_epoch(6, 0));
     LOG_INFO(TAG, "Kotak auth complete, ucc=" + ucc + " base_url=" + base_url + " sId=" + server_id);
     return {true, packed, /*refresh*/ "", ucc, /*additional*/ extra, ""};
 }

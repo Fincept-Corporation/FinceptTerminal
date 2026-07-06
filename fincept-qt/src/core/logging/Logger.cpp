@@ -28,10 +28,7 @@ QString format_timestamp() {
     const int offs_h = abs_sec / 3600;
     const int offs_m = (abs_sec % 3600) / 60;
     return now.toString("yyyy-MM-dd HH:mm:ss.zzz") +
-           QString("%1%2:%3")
-               .arg(sign)
-               .arg(offs_h, 2, 10, QChar('0'))
-               .arg(offs_m, 2, 10, QChar('0'));
+           QString("%1%2:%3").arg(sign).arg(offs_h, 2, 10, QChar('0')).arg(offs_m, 2, 10, QChar('0'));
 }
 
 constexpr std::array<const char*, 6> kLevelNames = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
@@ -126,8 +123,8 @@ void Logger::set_file(const QString& path) {
             bytes_written_ = log_file_.size();
             return true;
         }
-        fprintf(stderr, "[Logger] failed to open log file: %s error: %s\n",
-                qUtf8Printable(target), qUtf8Printable(log_file_.errorString()));
+        fprintf(stderr, "[Logger] failed to open log file: %s error: %s\n", qUtf8Printable(target),
+                qUtf8Printable(log_file_.errorString()));
         return false;
     };
 
@@ -169,8 +166,7 @@ void Logger::rotate_if_needed_locked() {
     if (log_file_.open(QIODevice::WriteOnly | QIODevice::Append)) {
         bytes_written_ = 0;
     } else {
-        qWarning() << "[Logger] rotate: reopen failed for" << base
-                   << "error:" << log_file_.errorString();
+        qWarning() << "[Logger] rotate: reopen failed for" << base << "error:" << log_file_.errorString();
     }
 }
 
@@ -182,12 +178,24 @@ void Logger::flush_and_close() {
     }
 }
 
-void Logger::trace(const QString& tag, const QString& msg) { write(LogLevel::Trace, tag, msg); }
-void Logger::debug(const QString& tag, const QString& msg) { write(LogLevel::Debug, tag, msg); }
-void Logger::info(const QString& tag, const QString& msg)  { write(LogLevel::Info,  tag, msg); }
-void Logger::warn(const QString& tag, const QString& msg)  { write(LogLevel::Warn,  tag, msg); }
-void Logger::error(const QString& tag, const QString& msg) { write(LogLevel::Error, tag, msg); }
-void Logger::fatal(const QString& tag, const QString& msg) { write(LogLevel::Fatal, tag, msg); }
+void Logger::trace(const QString& tag, const QString& msg) {
+    write(LogLevel::Trace, tag, msg);
+}
+void Logger::debug(const QString& tag, const QString& msg) {
+    write(LogLevel::Debug, tag, msg);
+}
+void Logger::info(const QString& tag, const QString& msg) {
+    write(LogLevel::Info, tag, msg);
+}
+void Logger::warn(const QString& tag, const QString& msg) {
+    write(LogLevel::Warn, tag, msg);
+}
+void Logger::error(const QString& tag, const QString& msg) {
+    write(LogLevel::Error, tag, msg);
+}
+void Logger::fatal(const QString& tag, const QString& msg) {
+    write(LogLevel::Fatal, tag, msg);
+}
 
 void Logger::write(LogLevel level, const QString& tag, const QString& msg) {
     // Level check is also done by LOG_* macros, but re-check here for direct callers.
@@ -231,8 +239,8 @@ void Logger::write(LogLevel level, const QString& tag, const QString& msg) {
         // P1.9 — warn at most once per session (via stderr directly, not
         // qWarning, to avoid re-entering the logger through the Qt handler).
         degraded_.store(true, std::memory_order_relaxed);
-        fprintf(stderr, "[Logger] write failed (%lld bytes): %s\n",
-                static_cast<long long>(n), qUtf8Printable(log_file_.errorString()));
+        fprintf(stderr, "[Logger] write failed (%lld bytes): %s\n", static_cast<long long>(n),
+                qUtf8Printable(log_file_.errorString()));
     }
 }
 

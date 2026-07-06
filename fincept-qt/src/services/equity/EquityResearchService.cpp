@@ -215,9 +215,8 @@ void EquityResearchService::load_quote_only(const QString& symbol) {
             return;
         }
         fincept::CacheManager::instance().put(
-            "equity:quote:" + symbol,
-            QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), kQuoteTtlSec,
-            "equity");
+            "equity:quote:" + symbol, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+            kQuoteTtlSec, "equity");
         emit quote_loaded(parse_quote(obj));
     });
 }
@@ -241,9 +240,8 @@ void EquityResearchService::load_info_only(const QString& symbol) {
             return;
         }
         fincept::CacheManager::instance().put(
-            "equity:info:" + symbol,
-            QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), kInfoTtlSec,
-            "equity");
+            "equity:info:" + symbol, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+            kInfoTtlSec, "equity");
         emit info_loaded(parse_info(obj));
     });
 }
@@ -269,8 +267,7 @@ void EquityResearchService::load_historical_only(const QString& symbol, const QS
                    auto arr = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).array();
                    if (!arr.isEmpty()) {
                        fincept::CacheManager::instance().put(
-                           cache_key,
-                           QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                           cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                            kHistoricalTtlSec, "equity");
                    }
                    emit historical_loaded(symbol, parse_candles(arr));
@@ -354,9 +351,9 @@ void EquityResearchService::fetch_peers(const QString& symbol, const QStringList
 // trailing corporate suffix(es) and punctuation — "Reliance Industries Limited" →
 // "Reliance Industries", "Tesla, Inc." → "Tesla". Materially improves GNews recall.
 static QString gnews_query_from_company_name(const QString& company_name) {
-    static const QStringList kSuffixes = {"Limited", "Ltd",  "Incorporated", "Inc",     "Corporation", "Corp",
-                                          "Company", "Co",    "PLC",          "Holdings", "Holding",     "Group",
-                                          "SA",      "NV",    "AG",           "SE",       "SpA",         "AB"};
+    static const QStringList kSuffixes = {"Limited", "Ltd", "Incorporated", "Inc",      "Corporation", "Corp",
+                                          "Company", "Co",  "PLC",          "Holdings", "Holding",     "Group",
+                                          "SA",      "NV",  "AG",           "SE",       "SpA",         "AB"};
     QString q = company_name.trimmed();
     bool changed = true;
     while (changed) {
@@ -453,30 +450,29 @@ void EquityResearchService::fetch_news(const QString& symbol, int count, NewsPro
     const QString country = indian ? QStringLiteral("IN") : QStringLiteral("US");
     const QString query = news_query_for_symbol(symbol);
 
-    run_python(
-        "fetch_company_news.py",
-        {"search", query, QString::number(count), QStringLiteral("1M"), QStringLiteral("en"), country},
-        [this, symbol, count](bool ok, const QString& out) {
-            if (ok) {
-                const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-                // GNews returns {"success":true,"data":[...]}. Only accept a
-                // non-empty result; anything else falls through to yfinance.
-                if (obj.value("success").toBool()) {
-                    const auto arr = obj.value("data").toArray();
-                    if (!arr.isEmpty()) {
-                        fincept::CacheManager::instance().put(
-                            "equity:news:" + symbol,
-                            QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))), kNewsTtlSec,
-                            "equity");
-                        emit news_loaded(symbol, parse_news(arr));
-                        return;
-                    }
-                }
-            }
-            // Google News unavailable (e.g. gnews missing / network) or empty →
-            // fall back to the Yahoo/yfinance feed.
-            fetch_news_yfinance(symbol, count);
-        });
+    run_python("fetch_company_news.py",
+               {"search", query, QString::number(count), QStringLiteral("1M"), QStringLiteral("en"), country},
+               [this, symbol, count](bool ok, const QString& out) {
+                   if (ok) {
+                       const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                       // GNews returns {"success":true,"data":[...]}. Only accept a
+                       // non-empty result; anything else falls through to yfinance.
+                       if (obj.value("success").toBool()) {
+                           const auto arr = obj.value("data").toArray();
+                           if (!arr.isEmpty()) {
+                               fincept::CacheManager::instance().put(
+                                   "equity:news:" + symbol,
+                                   QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
+                                   kNewsTtlSec, "equity");
+                               emit news_loaded(symbol, parse_news(arr));
+                               return;
+                           }
+                       }
+                   }
+                   // Google News unavailable (e.g. gnews missing / network) or empty →
+                   // fall back to the Yahoo/yfinance feed.
+                   fetch_news_yfinance(symbol, count);
+               });
 }
 
 void EquityResearchService::fetch_news_yfinance(const QString& symbol, int count) {
@@ -544,8 +540,7 @@ void EquityResearchService::fetch_news_newsapi(const QString& symbol, int count,
         const auto fall_back = [this, symbol, count]() { fetch_news(symbol, count, NewsProvider::Auto); };
 
         if (reply->error() != QNetworkReply::NoError) {
-            LOG_WARN("EquityResearch",
-                     QString("NewsAPI request failed (%1) — falling back").arg(reply->errorString()));
+            LOG_WARN("EquityResearch", QString("NewsAPI request failed (%1) — falling back").arg(reply->errorString()));
             fall_back();
             return;
         }
@@ -623,7 +618,8 @@ void EquityResearchService::ensure_candles(const QString& symbol, const QString&
                                  done(false, {}); // yfinance rate-limited / unknown symbol
                                  return;
                              }
-                             fincept::CacheManager::instance().put(cache_key, QVariant(raw), kHistoricalTtlSec, "equity");
+                             fincept::CacheManager::instance().put(cache_key, QVariant(raw), kHistoricalTtlSec,
+                                                                   "equity");
                              done(true, raw);
                          });
     };
@@ -632,8 +628,7 @@ void EquityResearchService::ensure_candles(const QString& symbol, const QString&
     if (resolve_connected_data_broker(symbol, broker_id, account_id)) {
         const QString bare = candle_bare_symbol(symbol);
         const int lookback = candle_lookback_days(period);
-        LOG_INFO("EquityResearch",
-                 QString("Candles for %1 via broker %2").arg(symbol, broker_id));
+        LOG_INFO("EquityResearch", QString("Candles for %1 via broker %2").arg(symbol, broker_id));
         fincept::trading::HistoricalDataService::instance().fetch(
             bare, QStringLiteral("1d"), lookback, broker_id, account_id,
             [cache_key, done, run_yfinance](bool ok, const QVector<fincept::trading::BrokerCandle>& candles,
@@ -1038,4 +1033,3 @@ QVector<NewsArticle> EquityResearchService::parse_news(const QJsonArray& arr) co
 }
 
 } // namespace fincept::services::equity
-

@@ -52,8 +52,7 @@ class RealYieldService : public QObject, public fincept::datahub::Producer {
     static QString pubkey_from_yield_topic(const QString& topic);
 
     /// Real-path handlers.
-    void refresh_yield_real(const QString& endpoint, const QString& topic,
-                            const QString& pubkey);
+    void refresh_yield_real(const QString& endpoint, const QString& topic, const QString& pubkey);
     void refresh_revenue_real(const QString& endpoint);
 
     /// Mock-path handlers.

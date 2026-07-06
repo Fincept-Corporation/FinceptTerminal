@@ -101,7 +101,7 @@ void EquityNewsTab::build_ui() {
 
     title_lbl_ = new QLabel(tr("LATEST NEWS"));
     title_lbl_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; letter-spacing:2px; "
-                                       "background:transparent; border:0;")
+                                      "background:transparent; border:0;")
                                   .arg(ui::colors::AMBER()));
     hl->addWidget(title_lbl_);
 
@@ -314,8 +314,10 @@ void EquityNewsTab::changeEvent(QEvent* event) {
 }
 
 void EquityNewsTab::retranslateUi() {
-    if (title_lbl_)   title_lbl_->setText(tr("LATEST NEWS"));
-    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("LATEST NEWS"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
     if (provider_combo_) {
         provider_combo_->setItemText(0, tr("Auto (GNews → Yahoo)"));
         provider_combo_->setToolTip(tr("News source"));

@@ -66,8 +66,8 @@ class PredictionAccountDialog : public QDialog {
     QLineEdit* pm_private_key_ = nullptr;
     QLineEdit* pm_funder_ = nullptr;
     QComboBox* pm_signature_type_ = nullptr;
-    QLabel*    pm_derived_status_ = nullptr;
-    QLabel*    pm_status_ = nullptr;
+    QLabel* pm_derived_status_ = nullptr;
+    QLabel* pm_status_ = nullptr;
     QPushButton* pm_save_btn_ = nullptr;
     QPushButton* pm_test_btn_ = nullptr;
     QPushButton* pm_clear_btn_ = nullptr;
@@ -79,7 +79,7 @@ class PredictionAccountDialog : public QDialog {
     QTextEdit* ks_private_key_pem_ = nullptr;
     QPushButton* ks_load_pem_btn_ = nullptr;
     QCheckBox* ks_use_demo_ = nullptr;
-    QLabel*    ks_status_ = nullptr;
+    QLabel* ks_status_ = nullptr;
     QPushButton* ks_save_btn_ = nullptr;
     QPushButton* ks_test_btn_ = nullptr;
     QPushButton* ks_clear_btn_ = nullptr;

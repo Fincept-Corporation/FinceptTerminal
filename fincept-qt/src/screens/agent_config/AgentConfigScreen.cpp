@@ -1,10 +1,9 @@
 // src/screens/agent_config/AgentConfigScreen.cpp
 #include "screens/agent_config/AgentConfigScreen.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "core/events/EventBus.h"
-#include "services/cloud/CloudSyncEngine.h"
 #include "screens/agent_config/AgentChatPanel.h"
 #include "screens/agent_config/AgenticTasksPanel.h"
 #include "screens/agent_config/AgentsViewPanel.h"
@@ -15,6 +14,7 @@
 #include "screens/agent_config/ToolsViewPanel.h"
 #include "screens/agent_config/WorkflowsViewPanel.h"
 #include "services/agents/AgentService.h"
+#include "services/cloud/CloudSyncEngine.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -37,15 +37,15 @@ struct ViewMeta {
 // initialization time — actual lookup happens in make_nav_btn() / status-view
 // update via tr(), so the active translator is consulted on every render.
 static constexpr ViewMeta kViews[] = {
-    {services::AgentViewMode::Agents,    QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "AGENTS")},
-    {services::AgentViewMode::Create,    QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "CREATE")},
-    {services::AgentViewMode::Teams,     QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "TEAMS")},
+    {services::AgentViewMode::Agents, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "AGENTS")},
+    {services::AgentViewMode::Create, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "CREATE")},
+    {services::AgentViewMode::Teams, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "TEAMS")},
     {services::AgentViewMode::Workflows, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "WORKFLOWS")},
-    {services::AgentViewMode::Planner,   QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "PLANNER")},
-    {services::AgentViewMode::Tools,     QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "TOOLS")},
-    {services::AgentViewMode::Chat,      QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "CHAT")},
-    {services::AgentViewMode::System,    QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "SYSTEM")},
-    {services::AgentViewMode::Agentic,   QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "AGENTIC")},
+    {services::AgentViewMode::Planner, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "PLANNER")},
+    {services::AgentViewMode::Tools, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "TOOLS")},
+    {services::AgentViewMode::Chat, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "CHAT")},
+    {services::AgentViewMode::System, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "SYSTEM")},
+    {services::AgentViewMode::Agentic, QT_TRANSLATE_NOOP("fincept::screens::AgentConfigScreen", "AGENTIC")},
 };
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -61,8 +61,8 @@ AgentConfigScreen::AgentConfigScreen(QWidget* parent) : QWidget(parent) {
     // (DeveloperSection) publishes settings.agentic_mode_changed via EventBus
     // on user change; we react in-place without restart.
     {
-        auto r = fincept::SettingsRepository::instance().get(
-            QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
+        auto r = fincept::SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"),
+                                                             QStringLiteral("false"));
         agentic_mode_enabled_ = r.is_ok() && r.value() == QStringLiteral("true");
     }
     connect(&fincept::EventBus::instance(), &fincept::EventBus::eventPublished, this,
@@ -106,8 +106,9 @@ void AgentConfigScreen::build_nav_bar(QVBoxLayout* root) {
     hl->setSpacing(0);
 
     title_label_ = new QLabel(tr("AGENT STUDIO"));
-    title_label_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
-                                    .arg(ui::colors::AMBER()));
+    title_label_->setStyleSheet(
+        QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;padding-right:16px;")
+            .arg(ui::colors::AMBER()));
     hl->addWidget(title_label_);
 
     auto* sep = new QFrame;
@@ -173,7 +174,8 @@ void AgentConfigScreen::changeEvent(QEvent* event) {
 }
 
 void AgentConfigScreen::retranslateUi() {
-    if (title_label_) title_label_->setText(tr("AGENT STUDIO"));
+    if (title_label_)
+        title_label_->setText(tr("AGENT STUDIO"));
     // Nav buttons — apply the QT_TR_NOOP-marked label through tr() in order
     // so the table-driven mode mapping survives the language switch.
     for (int i = 0; i < nav_buttons_.size() && i < static_cast<int>(std::size(kViews)); ++i)

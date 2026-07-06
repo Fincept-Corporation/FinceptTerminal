@@ -10,26 +10,19 @@ namespace fincept::trading::hyperliquid {
 
 namespace {
 
-constexpr int kRateBytes = 136;   // (1600 - 256) / 8
+constexpr int kRateBytes = 136; // (1600 - 256) / 8
 constexpr int kStateLanes = 25;
 
 constexpr uint64_t kRoundConstants[24] = {
-    0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL,
-    0x8000000080008000ULL, 0x000000000000808BULL, 0x0000000080000001ULL,
-    0x8000000080008081ULL, 0x8000000000008009ULL, 0x000000000000008AULL,
-    0x0000000000000088ULL, 0x0000000080008009ULL, 0x000000008000000AULL,
-    0x000000008000808BULL, 0x800000000000008BULL, 0x8000000000008089ULL,
-    0x8000000000008003ULL, 0x8000000000008002ULL, 0x8000000000000080ULL,
-    0x000000000000800AULL, 0x800000008000000AULL, 0x8000000080008081ULL,
-    0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL,
+    0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL, 0x8000000080008000ULL, 0x000000000000808BULL,
+    0x0000000080000001ULL, 0x8000000080008081ULL, 0x8000000000008009ULL, 0x000000000000008AULL, 0x0000000000000088ULL,
+    0x0000000080008009ULL, 0x000000008000000AULL, 0x000000008000808BULL, 0x800000000000008BULL, 0x8000000000008089ULL,
+    0x8000000000008003ULL, 0x8000000000008002ULL, 0x8000000000000080ULL, 0x000000000000800AULL, 0x800000008000000AULL,
+    0x8000000080008081ULL, 0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL,
 };
 
 constexpr int kRotationOffsets[25] = {
-     0,  1, 62, 28, 27,
-    36, 44,  6, 55, 20,
-     3, 10, 43, 25, 39,
-    41, 45, 15, 21,  8,
-    18,  2, 61, 56, 14,
+    0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
 };
 
 inline uint64_t rotl64(uint64_t x, int n) {
@@ -45,7 +38,8 @@ void keccak_f1600(uint64_t s[kStateLanes]) {
         }
         for (int x = 0; x < 5; ++x) {
             uint64_t D = C[(x + 4) % 5] ^ rotl64(C[(x + 1) % 5], 1);
-            for (int y = 0; y < 5; ++y) s[x + 5 * y] ^= D;
+            for (int y = 0; y < 5; ++y)
+                s[x + 5 * y] ^= D;
         }
         // ρ + π
         uint64_t B[25];
@@ -60,8 +54,7 @@ void keccak_f1600(uint64_t s[kStateLanes]) {
         // χ
         for (int x = 0; x < 5; ++x) {
             for (int y = 0; y < 5; ++y) {
-                s[x + 5 * y] = B[x + 5 * y] ^
-                               ((~B[((x + 1) % 5) + 5 * y]) & B[((x + 2) % 5) + 5 * y]);
+                s[x + 5 * y] = B[x + 5 * y] ^ ((~B[((x + 1) % 5) + 5 * y]) & B[((x + 2) % 5) + 5 * y]);
             }
         }
         // ι
@@ -93,7 +86,8 @@ QByteArray keccak256(const QByteArray& input) {
     // Final block with keccak (pre-NIST) padding: 0x01 ... 0x80.
     uint8_t block[kRateBytes];
     std::memset(block, 0, kRateBytes);
-    if (len > 0) std::memcpy(block, data, len);
+    if (len > 0)
+        std::memcpy(block, data, len);
     block[len] = 0x01;
     block[kRateBytes - 1] |= 0x80;
     for (int i = 0; i < kRateBytes / 8; ++i) {

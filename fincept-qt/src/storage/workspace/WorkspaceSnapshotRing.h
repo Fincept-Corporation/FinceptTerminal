@@ -42,8 +42,7 @@ class WorkspaceSnapshotRing {
     /// `add_with_kind('auto', ..., force=true)`.
     static constexpr qint64 kDefaultMinIntervalMs = 60'000;
 
-    explicit WorkspaceSnapshotRing(WorkspaceDb* db,
-                                   int max_auto = kDefaultMaxAuto,
+    explicit WorkspaceSnapshotRing(WorkspaceDb* db, int max_auto = kDefaultMaxAuto,
                                    qint64 min_interval_ms = kDefaultMinIntervalMs);
 
     /// Insert a snapshot of the given kind. Returns the new snapshot_id on
@@ -54,9 +53,7 @@ class WorkspaceSnapshotRing {
     Result<qint64> add(const QByteArray& payload, const QString& kind, bool force = false);
 
     /// Convenience: kind='auto', force=false. The hot path for autosave.
-    Result<qint64> add_auto(const QByteArray& payload) {
-        return add(payload, "auto", /*force=*/false);
-    }
+    Result<qint64> add_auto(const QByteArray& payload) { return add(payload, "auto", /*force=*/false); }
 
     /// Convenience: kind='named_save', force=true, with a name attached.
     /// Returns the new snapshot_id. Name is stored in `workspace_snapshot.name`.

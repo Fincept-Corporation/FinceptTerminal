@@ -20,9 +20,8 @@ namespace fincept::wallet {
 namespace {
 
 constexpr const char* kStorageKey = "token_metadata.cache_v1";
-constexpr const char* kJupiterTokensUrl =
-    "https://api.jup.ag/tokens/v2/tagged/verified";
-constexpr qint64 kStaleAfterMs = 24LL * 60 * 60 * 1000;  // 24h
+constexpr const char* kJupiterTokensUrl = "https://api.jup.ag/tokens/v2/tagged/verified";
+constexpr qint64 kStaleAfterMs = 24LL * 60 * 60 * 1000; // 24h
 
 } // namespace
 
@@ -39,14 +38,16 @@ TokenMetadataService::~TokenMetadataService() = default;
 
 bool TokenMetadataService::cache_is_stale() const {
     QReadLocker rl(&lock_);
-    if (last_refreshed_ms_ == 0) return true;
+    if (last_refreshed_ms_ == 0)
+        return true;
     return (QDateTime::currentMSecsSinceEpoch() - last_refreshed_ms_) > kStaleAfterMs;
 }
 
 std::optional<TokenMetadata> TokenMetadataService::lookup(const QString& mint) const {
     QReadLocker rl(&lock_);
     auto it = cache_.constFind(mint);
-    if (it == cache_.constEnd()) return std::nullopt;
+    if (it == cache_.constEnd())
+        return std::nullopt;
     return it.value();
 }
 
@@ -86,18 +87,17 @@ void TokenMetadataService::load_from_storage() {
         m.decimals = obj.value(QStringLiteral("decimals")).toInt();
         m.icon_url = obj.value(QStringLiteral("icon_url")).toString();
         m.verified = obj.value(QStringLiteral("verified")).toBool();
-        if (!m.mint.isEmpty()) next.insert(m.mint, std::move(m));
+        if (!m.mint.isEmpty())
+            next.insert(m.mint, std::move(m));
     }
     {
         QWriteLocker wl(&lock_);
         cache_ = std::move(next);
-        last_refreshed_ms_ = static_cast<qint64>(
-            root.value(QStringLiteral("ts_ms")).toDouble());
+        last_refreshed_ms_ = static_cast<qint64>(root.value(QStringLiteral("ts_ms")).toDouble());
     }
-    LOG_INFO("TokenMetadata",
-             QStringLiteral("loaded %1 tokens from cache (age %2 h)")
-                 .arg(size())
-                 .arg((QDateTime::currentMSecsSinceEpoch() - last_refreshed_ms_) / 3600000));
+    LOG_INFO("TokenMetadata", QStringLiteral("loaded %1 tokens from cache (age %2 h)")
+                                  .arg(size())
+                                  .arg((QDateTime::currentMSecsSinceEpoch() - last_refreshed_ms_) / 3600000));
 }
 
 void TokenMetadataService::persist_to_storage() {
@@ -119,22 +119,19 @@ void TokenMetadataService::persist_to_storage() {
     QJsonObject root;
     root[QStringLiteral("ts_ms")] = static_cast<double>(last_refreshed_ms_);
     root[QStringLiteral("entries")] = entries;
-    const auto blob = QString::fromUtf8(
-        QJsonDocument(root).toJson(QJsonDocument::Compact));
+    const auto blob = QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
     auto r = SecureStorage::instance().store(QString::fromLatin1(kStorageKey), blob);
     if (r.is_err()) {
-        LOG_WARN("TokenMetadata",
-                 "failed to persist token cache: " + QString::fromStdString(r.error()));
+        LOG_WARN("TokenMetadata", "failed to persist token cache: " + QString::fromStdString(r.error()));
     } else {
         LOG_INFO("TokenMetadata",
-                 QStringLiteral("persisted %1 tokens (%2 KB)")
-                     .arg(entries.size())
-                     .arg(blob.size() / 1024));
+                 QStringLiteral("persisted %1 tokens (%2 KB)").arg(entries.size()).arg(blob.size() / 1024));
     }
 }
 
 void TokenMetadataService::refresh_from_jupiter_async() {
-    if (refresh_in_flight_) return;
+    if (refresh_in_flight_)
+        return;
     if (!cache_is_stale()) {
         LOG_DEBUG("TokenMetadata", "cache fresh; skipping Jupiter refresh");
         return;
@@ -143,18 +140,17 @@ void TokenMetadataService::refresh_from_jupiter_async() {
 
     QNetworkRequest req{QUrl(QString::fromLatin1(kJupiterTokensUrl))};
     req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     auto* reply = nam_->get(req);
 
     QPointer<TokenMetadataService> self = this;
     connect(reply, &QNetworkReply::finished, this, [self, reply]() {
         reply->deleteLater();
-        if (!self) return;
+        if (!self)
+            return;
         self->refresh_in_flight_ = false;
         if (reply->error() != QNetworkReply::NoError) {
-            LOG_WARN("TokenMetadata",
-                     "Jupiter fetch failed: " + reply->errorString());
+            LOG_WARN("TokenMetadata", "Jupiter fetch failed: " + reply->errorString());
             return;
         }
         const auto payload = reply->readAll();
@@ -165,9 +161,7 @@ void TokenMetadataService::refresh_from_jupiter_async() {
             return;
         }
         // Endpoint returns a top-level array of token objects.
-        const auto arr = doc.isArray() ? doc.array()
-                                       : doc.object()
-                                             .value(QStringLiteral("data")).toArray();
+        const auto arr = doc.isArray() ? doc.array() : doc.object().value(QStringLiteral("data")).toArray();
         if (arr.isEmpty()) {
             LOG_WARN("TokenMetadata", "Jupiter returned 0 tokens; keeping old cache");
             return;
@@ -183,7 +177,8 @@ void TokenMetadataService::refresh_from_jupiter_async() {
             if (m.mint.isEmpty()) {
                 m.mint = obj.value(QStringLiteral("address")).toString();
             }
-            if (m.mint.isEmpty()) continue;
+            if (m.mint.isEmpty())
+                continue;
             m.symbol = obj.value(QStringLiteral("symbol")).toString();
             m.name = obj.value(QStringLiteral("name")).toString();
             m.decimals = obj.value(QStringLiteral("decimals")).toInt();
@@ -201,8 +196,7 @@ void TokenMetadataService::refresh_from_jupiter_async() {
             self->last_refreshed_ms_ = QDateTime::currentMSecsSinceEpoch();
         }
         self->persist_to_storage();
-        LOG_INFO("TokenMetadata",
-                 QStringLiteral("refreshed: %1 verified tokens").arg(self->size()));
+        LOG_INFO("TokenMetadata", QStringLiteral("refreshed: %1 verified tokens").arg(self->size()));
         emit self->metadata_changed();
     });
 }

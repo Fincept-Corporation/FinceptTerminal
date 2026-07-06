@@ -5,10 +5,10 @@
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
-#include <QTabBar>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QTabBar>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -55,7 +55,8 @@ void ReportsView::build_ui() {
 
     txn_table_ = new QTableWidget;
     txn_table_->setColumnCount(7);
-    txn_table_->setHorizontalHeaderLabels({tr("DATE"), tr("SYMBOL"), tr("TYPE"), tr("QTY"), tr("PRICE"), tr("TOTAL"), tr("NOTES")});
+    txn_table_->setHorizontalHeaderLabels(
+        {tr("DATE"), tr("SYMBOL"), tr("TYPE"), tr("QTY"), tr("PRICE"), tr("TOTAL"), tr("NOTES")});
     txn_table_->setSelectionMode(QAbstractItemView::NoSelection);
     txn_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     txn_table_->setShowGrid(false);
@@ -89,7 +90,8 @@ void ReportsView::build_ui() {
 
     attr_table_ = new QTableWidget;
     attr_table_->setColumnCount(6);
-    attr_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"), tr("P&L"), tr("STATUS")});
+    attr_table_->setHorizontalHeaderLabels(
+        {tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"), tr("P&L"), tr("STATUS")});
     attr_table_->setSelectionMode(QAbstractItemView::NoSelection);
     attr_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     attr_table_->setShowGrid(false);
@@ -125,12 +127,17 @@ void ReportsView::changeEvent(QEvent* event) {
 
 void ReportsView::retranslateUi() {
     if (tabs_) {
-        if (summary_tab_index_ >= 0) tabs_->setTabText(summary_tab_index_, tr("SUMMARY"));
-        if (txn_tab_index_ >= 0)     tabs_->setTabText(txn_tab_index_, tr("TRANSACTIONS"));
-        if (attr_tab_index_ >= 0)    tabs_->setTabText(attr_tab_index_, tr("ATTRIBUTION"));
+        if (summary_tab_index_ >= 0)
+            tabs_->setTabText(summary_tab_index_, tr("SUMMARY"));
+        if (txn_tab_index_ >= 0)
+            tabs_->setTabText(txn_tab_index_, tr("TRANSACTIONS"));
+        if (attr_tab_index_ >= 0)
+            tabs_->setTabText(attr_tab_index_, tr("ATTRIBUTION"));
     }
-    if (txn_title_)  txn_title_->setText(tr("TRANSACTION HISTORY"));
-    if (attr_title_) attr_title_->setText(tr("PERFORMANCE ATTRIBUTION"));
+    if (txn_title_)
+        txn_title_->setText(tr("TRANSACTION HISTORY"));
+    if (attr_title_)
+        attr_title_->setText(tr("PERFORMANCE ATTRIBUTION"));
 
     if (txn_table_)
         txn_table_->setHorizontalHeaderLabels(
@@ -172,8 +179,8 @@ void ReportsView::update_summary() {
         cl->setSpacing(2);
 
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(
-            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
+        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
+                               .arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(lbl);
 
         auto* val = new QLabel(value);
@@ -212,7 +219,8 @@ void ReportsView::update_summary() {
 
     auto* breakdown = new QTableWidget;
     breakdown->setColumnCount(6);
-    breakdown->setHorizontalHeaderLabels({tr("SYMBOL"), tr("QTY"), tr("AVG COST"), tr("CURRENT"), tr("P&L"), tr("WEIGHT")});
+    breakdown->setHorizontalHeaderLabels(
+        {tr("SYMBOL"), tr("QTY"), tr("AVG COST"), tr("CURRENT"), tr("P&L"), tr("WEIGHT")});
     breakdown->setSelectionMode(QAbstractItemView::NoSelection);
     breakdown->setEditTriggers(QAbstractItemView::NoEditTriggers);
     breakdown->setShowGrid(false);

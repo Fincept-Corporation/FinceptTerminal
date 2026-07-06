@@ -13,8 +13,7 @@ constexpr const char* kCrashRecoveryTag = "CrashRecovery";
 constexpr const char* kKeyCleanShutdown = "last_clean_shutdown_at";
 } // namespace
 
-CrashRecovery::CrashRecovery(WorkspaceDb* db, WorkspaceSnapshotRing* ring)
-    : db_(db), ring_(ring) {}
+CrashRecovery::CrashRecovery(WorkspaceDb* db, WorkspaceSnapshotRing* ring) : db_(db), ring_(ring) {}
 
 bool CrashRecovery::needs_recovery() const {
     if (!db_ || !db_->is_open())
@@ -31,7 +30,7 @@ bool CrashRecovery::needs_recovery() const {
     if (clean_ms == 0) {
         // Marker missing entirely — definitive unclean shutdown.
         LOG_INFO(kCrashRecoveryTag, QString("Recovery needed: no clean-shutdown marker, latest auto=%1")
-                              .arg(QDateTime::fromMSecsSinceEpoch(latest_auto_ms).toString(Qt::ISODate)));
+                                        .arg(QDateTime::fromMSecsSinceEpoch(latest_auto_ms).toString(Qt::ISODate)));
         return true;
     }
 
@@ -40,8 +39,8 @@ bool CrashRecovery::needs_recovery() const {
     // crashed. Recovery is warranted.
     if (clean_ms < latest_auto_ms) {
         LOG_INFO(kCrashRecoveryTag, QString("Recovery needed: clean=%1 < latest auto=%2")
-                              .arg(QDateTime::fromMSecsSinceEpoch(clean_ms).toString(Qt::ISODate))
-                              .arg(QDateTime::fromMSecsSinceEpoch(latest_auto_ms).toString(Qt::ISODate)));
+                                        .arg(QDateTime::fromMSecsSinceEpoch(clean_ms).toString(Qt::ISODate))
+                                        .arg(QDateTime::fromMSecsSinceEpoch(latest_auto_ms).toString(Qt::ISODate)));
         return true;
     }
 
@@ -49,8 +48,7 @@ bool CrashRecovery::needs_recovery() const {
     return false;
 }
 
-Result<QList<WorkspaceSnapshotRing::Entry>>
-CrashRecovery::latest_snapshots(int limit) const {
+Result<QList<WorkspaceSnapshotRing::Entry>> CrashRecovery::latest_snapshots(int limit) const {
     if (!ring_)
         return Result<QList<WorkspaceSnapshotRing::Entry>>::err("Ring not configured");
     // Combine auto + crash_recovery, leave named_save out (the recovery
@@ -76,8 +74,8 @@ Result<void> CrashRecovery::mark_clean_shutdown() {
     const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
     auto r = db_->set_meta(kKeyCleanShutdown, QString::number(now_ms));
     if (r.is_err()) {
-        LOG_WARN(kCrashRecoveryTag, QString("Failed to write clean-shutdown marker: %1")
-                              .arg(QString::fromStdString(r.error())));
+        LOG_WARN(kCrashRecoveryTag,
+                 QString("Failed to write clean-shutdown marker: %1").arg(QString::fromStdString(r.error())));
     } else {
         LOG_INFO(kCrashRecoveryTag, "Clean-shutdown marker written");
     }
@@ -87,8 +85,7 @@ Result<void> CrashRecovery::mark_clean_shutdown() {
 qint64 CrashRecovery::latest_auto_snapshot_ms() const {
     if (!db_ || !db_->is_open())
         return 0;
-    auto r = db_->execute(
-        "SELECT MAX(created_at) FROM workspace_snapshot WHERE kind = 'auto'");
+    auto r = db_->execute("SELECT MAX(created_at) FROM workspace_snapshot WHERE kind = 'auto'");
     if (r.is_err())
         return 0;
     QSqlQuery q = std::move(r.value());

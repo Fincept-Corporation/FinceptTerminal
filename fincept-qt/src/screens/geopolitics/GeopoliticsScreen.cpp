@@ -74,25 +74,37 @@ void GeopoliticsScreen::retranslateUi() {
     // Tab buttons — re-apply the fixed labels in declared order.
     const QStringList labels = {tr("MONITOR"), tr("HDX DATA"), tr("RELATIONS"), tr("TRADE")};
     for (int i = 0; i < tab_buttons_.size() && i < labels.size(); ++i)
-        if (tab_buttons_[i]) tab_buttons_[i]->setText(labels[i]);
+        if (tab_buttons_[i])
+            tab_buttons_[i]->setText(labels[i]);
 
     // Filter panel
-    if (filters_title_)  filters_title_->setText(tr("FILTERS"));
-    if (country_lbl_)    country_lbl_->setText(tr("COUNTRY"));
-    if (city_lbl_)       city_lbl_->setText(tr("CITY"));
-    if (category_lbl_)   category_lbl_->setText(tr("CATEGORY"));
-    if (country_edit_)   country_edit_->setPlaceholderText(tr("e.g. Ukraine"));
-    if (city_edit_)      city_edit_->setPlaceholderText(tr("e.g. Kyiv"));
-    if (apply_btn_)      apply_btn_->setText(tr("APPLY FILTERS"));
-    if (clear_btn_)      clear_btn_->setText(tr("CLEAR"));
-    if (legend_title_)   legend_title_->setText(tr("LEGEND"));
+    if (filters_title_)
+        filters_title_->setText(tr("FILTERS"));
+    if (country_lbl_)
+        country_lbl_->setText(tr("COUNTRY"));
+    if (city_lbl_)
+        city_lbl_->setText(tr("CITY"));
+    if (category_lbl_)
+        category_lbl_->setText(tr("CATEGORY"));
+    if (country_edit_)
+        country_edit_->setPlaceholderText(tr("e.g. Ukraine"));
+    if (city_edit_)
+        city_edit_->setPlaceholderText(tr("e.g. Kyiv"));
+    if (apply_btn_)
+        apply_btn_->setText(tr("APPLY FILTERS"));
+    if (clear_btn_)
+        clear_btn_->setText(tr("CLEAR"));
+    if (legend_title_)
+        legend_title_->setText(tr("LEGEND"));
     // Combo's first row is the fixed "All Categories" entry (others are data).
     if (category_combo_ && category_combo_->count() > 0)
         category_combo_->setItemText(0, tr("All Categories"));
 
     // Status bar — static label keys (values are tech/brand identifiers).
-    if (status_source_lbl_) status_source_lbl_->setText(tr("SOURCE:"));
-    if (status_engine_lbl_) status_engine_lbl_->setText(tr("ENGINE:"));
+    if (status_source_lbl_)
+        status_source_lbl_->setText(tr("SOURCE:"));
+    if (status_engine_lbl_)
+        status_engine_lbl_->setText(tr("ENGINE:"));
 
     // Dynamic state labels (status, credits, event count) reflect the most
     // recent data fetch and are re-applied on the next refresh.
@@ -100,8 +112,8 @@ void GeopoliticsScreen::retranslateUi() {
 
 void GeopoliticsScreen::connect_service() {
     auto& svc = GeopoliticsService::instance();
-    connect(&svc, &GeopoliticsService::events_loaded,    this, &GeopoliticsScreen::on_events_loaded);
-    connect(&svc, &GeopoliticsService::error_occurred,   this, &GeopoliticsScreen::on_error);
+    connect(&svc, &GeopoliticsService::events_loaded, this, &GeopoliticsScreen::on_events_loaded);
+    connect(&svc, &GeopoliticsService::error_occurred, this, &GeopoliticsScreen::on_error);
     connect(&svc, &GeopoliticsService::categories_loaded, this, &GeopoliticsScreen::on_categories_loaded);
 }
 
@@ -187,9 +199,9 @@ QWidget* GeopoliticsScreen::build_top_bar() {
 
     clock_label_ = new QLabel(tr("UTC --:--"), bar);
     clock_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; min-width:68px;")
-                                   .arg(ui::colors::TEXT_TERTIARY())
-                                   .arg(ui::fonts::TINY)
-                                   .arg(ui::fonts::DATA_FAMILY));
+                                    .arg(ui::colors::TEXT_TERTIARY())
+                                    .arg(ui::fonts::TINY)
+                                    .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(clock_label_);
 
     connect(clock_timer_, &QTimer::timeout, this, [this]() {
@@ -234,11 +246,11 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
 
     filters_title_ = new QLabel(tr("FILTERS"), panel);
     filters_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                 "letter-spacing:1px; padding-bottom:4px; border-bottom:1px solid %4;")
-                             .arg(ui::colors::NEGATIVE())
-                             .arg(ui::fonts::TINY)
-                             .arg(ui::fonts::DATA_FAMILY())
-                             .arg(ui::colors::BORDER_DIM()));
+                                          "letter-spacing:1px; padding-bottom:4px; border-bottom:1px solid %4;")
+                                      .arg(ui::colors::NEGATIVE())
+                                      .arg(ui::fonts::TINY)
+                                      .arg(ui::fonts::DATA_FAMILY())
+                                      .arg(ui::colors::BORDER_DIM()));
     vl->addWidget(filters_title_);
 
     auto input_style = QString("QLineEdit, QComboBox { background:%1; color:%2; border:1px solid %3;"
@@ -289,13 +301,13 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     {
         QColor neg(ui::colors::NEGATIVE());
         apply_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-family:%3; font-size:%4px;"
-                                         "font-weight:700; border:none; padding:6px 12px; }"
-                                         "QPushButton:hover { background:%5; }")
-                                     .arg(ui::colors::NEGATIVE())
-                                     .arg(ui::colors::BG_BASE())
-                                     .arg(ui::fonts::DATA_FAMILY())
-                                     .arg(ui::fonts::SMALL)
-                                     .arg(neg.darker(120).name()));
+                                          "font-weight:700; border:none; padding:6px 12px; }"
+                                          "QPushButton:hover { background:%5; }")
+                                      .arg(ui::colors::NEGATIVE())
+                                      .arg(ui::colors::BG_BASE())
+                                      .arg(ui::fonts::DATA_FAMILY())
+                                      .arg(ui::fonts::SMALL)
+                                      .arg(neg.darker(120).name()));
     }
     connect(apply_btn_, &QPushButton::clicked, this, &GeopoliticsScreen::on_apply_filters);
     vl->addWidget(apply_btn_);
@@ -303,13 +315,13 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     clear_btn_ = new QPushButton(tr("CLEAR"), panel);
     clear_btn_->setCursor(Qt::PointingHandCursor);
     clear_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; font-family:%2; font-size:%3px;"
-                                     "border:1px solid %4; padding:5px 12px; }"
-                                     "QPushButton:hover { background:%5; }")
-                                 .arg(ui::colors::TEXT_SECONDARY())
-                                 .arg(ui::fonts::DATA_FAMILY)
-                                 .arg(ui::fonts::SMALL)
-                                 .arg(ui::colors::BORDER_DIM())
-                                 .arg(ui::colors::BG_HOVER()));
+                                      "border:1px solid %4; padding:5px 12px; }"
+                                      "QPushButton:hover { background:%5; }")
+                                  .arg(ui::colors::TEXT_SECONDARY())
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::fonts::SMALL)
+                                  .arg(ui::colors::BORDER_DIM())
+                                  .arg(ui::colors::BG_HOVER()));
     connect(clear_btn_, &QPushButton::clicked, this, &GeopoliticsScreen::on_clear_filters);
     vl->addWidget(clear_btn_);
 
@@ -350,7 +362,7 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     legend_layout_->setContentsMargins(0, 0, 4, 0);
     legend_layout_->setSpacing(2);
     legend_scroll->setWidget(legend_container_);
-    vl->addWidget(legend_scroll, 1);  // stretch — legend takes remaining space
+    vl->addWidget(legend_scroll, 1); // stretch — legend takes remaining space
 
     return panel;
 }
@@ -388,9 +400,9 @@ QWidget* GeopoliticsScreen::build_status_bar() {
     // Tech/brand identifier — shown verbatim, not translated.
     status_engine_val_ = new QLabel("PYTHON + C++", bar);
     status_engine_val_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                            .arg(ui::colors::POSITIVE())
-                            .arg(ui::fonts::TINY)
-                            .arg(ui::fonts::DATA_FAMILY));
+                                          .arg(ui::colors::POSITIVE())
+                                          .arg(ui::fonts::TINY)
+                                          .arg(ui::fonts::DATA_FAMILY));
     hl->addWidget(status_engine_lbl_);
     hl->addWidget(status_engine_val_);
 
@@ -476,19 +488,21 @@ void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
     const int total = page.total_events;
     int mapped = 0;
     for (const auto& ev : page.events)
-        if (ev.has_coords) ++mapped;
+        if (ev.has_coords)
+            ++mapped;
 
     auto fmt_count = [](int n) -> QString {
-        if (n >= 1'000'000) return QString::number(n / 1'000'000.0, 'f', 1) + "M";
-        if (n >= 1'000)     return QString::number(n / 1'000.0,     'f', 1) + "K";
+        if (n >= 1'000'000)
+            return QString::number(n / 1'000'000.0, 'f', 1) + "M";
+        if (n >= 1'000)
+            return QString::number(n / 1'000.0, 'f', 1) + "K";
         return QString::number(n);
     };
     // "30 MAPPED / 100 LOADED · 1.2K TOTAL" — surfaces the API gap (most events
     // arrive without lat/lng, so the map only ever shows the geocoded subset).
-    event_count_label_->setText(tr("%1 MAPPED / %2 LOADED")
-                                    .arg(fmt_count(mapped), fmt_count(shown)));
-    event_count_label_->setToolTip(tr("Events on map: %1\nEvents loaded: %2\nTotal in API: %3")
-                                       .arg(mapped).arg(shown).arg(total));
+    event_count_label_->setText(tr("%1 MAPPED / %2 LOADED").arg(fmt_count(mapped), fmt_count(shown)));
+    event_count_label_->setToolTip(
+        tr("Events on map: %1\nEvents loaded: %2\nTotal in API: %3").arg(mapped).arg(shown).arg(total));
     const QString color = mapped > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     QColor clr(color);
     auto clr_rgb = QString("%1,%2,%3").arg(clr.red()).arg(clr.green()).arg(clr.blue());
@@ -503,9 +517,9 @@ void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
     // Credits — colour-coded so depletion is glanceable.
     if (page.remaining_credits >= 0 && credits_label_) {
         const int rc = page.remaining_credits;
-        const QString credit_color = rc < 20  ? ui::colors::NEGATIVE()
-                                  : rc < 100 ? ui::colors::WARNING()
-                                             : ui::colors::POSITIVE();
+        const QString credit_color = rc < 20    ? ui::colors::NEGATIVE()
+                                     : rc < 100 ? ui::colors::WARNING()
+                                                : ui::colors::POSITIVE();
         credits_label_->setText(tr("CREDITS: %1").arg(rc));
         credits_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                           .arg(credit_color)
@@ -535,11 +549,11 @@ void GeopoliticsScreen::on_categories_loaded(QVector<services::geo::UniqueCatego
         category_combo_->addItem(tr("All Categories"), "");
         for (const auto& c : cats)
             category_combo_->addItem(
-                QString("%1 (%2)").arg(services::geo::pretty_category(c.category)).arg(c.event_count),
-                c.category);
+                QString("%1 (%2)").arg(services::geo::pretty_category(c.category)).arg(c.event_count), c.category);
         if (!prev.isEmpty()) {
             const int idx = category_combo_->findData(prev);
-            if (idx >= 0) category_combo_->setCurrentIndex(idx);
+            if (idx >= 0)
+                category_combo_->setCurrentIndex(idx);
         }
     }
     rebuild_legend(cats);
@@ -550,14 +564,14 @@ void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCatego
         return;
     while (legend_layout_->count() > 0) {
         auto* item = legend_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
     for (const auto& c : cats) {
         const QColor cat_col = services::geo::category_color(c.category);
         const QString col_hex = cat_col.name();
-        const QString col_rgb =
-            QString("%1,%2,%3").arg(cat_col.red()).arg(cat_col.green()).arg(cat_col.blue());
+        const QString col_rgb = QString("%1,%2,%3").arg(cat_col.red()).arg(cat_col.green()).arg(cat_col.blue());
 
         auto* row = new QWidget(legend_container_);
         row->setObjectName("legend_row");
@@ -572,8 +586,7 @@ void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCatego
         // chip reads cleanly against the surface background.
         auto* swatch = new QWidget(row);
         swatch->setFixedSize(11, 11);
-        swatch->setStyleSheet(QString("background:%1; border:1px solid rgba(0,0,0,0.35);")
-                                  .arg(col_hex));
+        swatch->setStyleSheet(QString("background:%1; border:1px solid rgba(0,0,0,0.35);").arg(col_hex));
         rl->addWidget(swatch, 0, Qt::AlignVCenter);
 
         auto* lbl = new QLabel(services::geo::pretty_category(c.category), row);
@@ -614,8 +627,10 @@ void GeopoliticsScreen::on_error(const QString& context, const QString& message)
 
 QVariantMap GeopoliticsScreen::save_state() const {
     QVariantMap state{{"tab_index", active_tab_}};
-    if (country_edit_) state["country"] = country_edit_->text();
-    if (city_edit_) state["city"] = city_edit_->text();
+    if (country_edit_)
+        state["country"] = country_edit_->text();
+    if (city_edit_)
+        state["city"] = city_edit_->text();
     return state;
 }
 

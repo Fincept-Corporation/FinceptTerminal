@@ -34,9 +34,8 @@ static constexpr const char* TAG = "FyersWS";
 
 static QString segment_name(const QString& code) {
     static const QHash<QString, QString> m = {
-        {"1010", "nse_cm"}, {"1011", "nse_fo"}, {"1012", "cde_fo"},
-        {"1020", "nse_com"}, {"1120", "mcx_fo"}, {"1210", "bse_cm"},
-        {"1211", "bse_fo"}, {"1212", "bcs_fo"},
+        {"1010", "nse_cm"}, {"1011", "nse_fo"}, {"1012", "cde_fo"}, {"1020", "nse_com"},
+        {"1120", "mcx_fo"}, {"1210", "bse_cm"}, {"1211", "bse_fo"}, {"1212", "bcs_fo"},
     };
     return m.value(code, "nse_cm");
 }
@@ -45,7 +44,7 @@ static QString segment_name(const QString& code) {
 
 quint64 FyersWebSocket::read_u64_be(const uchar* p) {
     return (quint64(p[0]) << 56) | (quint64(p[1]) << 48) | (quint64(p[2]) << 40) | (quint64(p[3]) << 32) |
-           (quint64(p[4]) << 24) | (quint64(p[5]) << 16) | (quint64(p[6]) << 8)  | quint64(p[7]);
+           (quint64(p[4]) << 24) | (quint64(p[5]) << 16) | (quint64(p[6]) << 8) | quint64(p[7]);
 }
 quint32 FyersWebSocket::read_u32_be(const uchar* p) {
     return (quint32(p[0]) << 24) | (quint32(p[1]) << 16) | (quint32(p[2]) << 8) | quint32(p[3]);
@@ -60,17 +59,24 @@ quint16 FyersWebSocket::read_u16_le(const uchar* p) {
     return quint16(p[0]) | (quint16(p[1]) << 8);
 }
 void FyersWebSocket::write_u16_be(uchar* p, quint16 v) {
-    p[0] = (v >> 8) & 0xFF; p[1] = v & 0xFF;
+    p[0] = (v >> 8) & 0xFF;
+    p[1] = v & 0xFF;
 }
 void FyersWebSocket::write_u32_be(uchar* p, quint32 v) {
-    p[0] = (v >> 24) & 0xFF; p[1] = (v >> 16) & 0xFF; p[2] = (v >> 8) & 0xFF; p[3] = v & 0xFF;
+    p[0] = (v >> 24) & 0xFF;
+    p[1] = (v >> 16) & 0xFF;
+    p[2] = (v >> 8) & 0xFF;
+    p[3] = v & 0xFF;
 }
 void FyersWebSocket::write_u64_be(uchar* p, quint64 v) {
-    for (int i = 7; i >= 0; --i) { p[7 - i] = (v >> (i * 8)) & 0xFF; }
+    for (int i = 7; i >= 0; --i) {
+        p[7 - i] = (v >> (i * 8)) & 0xFF;
+    }
 }
 
 double FyersWebSocket::field_to_price(qint32 raw, const TopicState& ts) const {
-    if (raw == kSentinel) return 0.0;
+    if (raw == kSentinel)
+        return 0.0;
     return raw / (std::pow(10.0, ts.precision) * ts.multiplier);
 }
 
@@ -78,9 +84,11 @@ double FyersWebSocket::field_to_price(qint32 raw, const TopicState& ts) const {
 
 QString FyersWebSocket::extract_hsm_key(const QString& jwt) {
     auto parts = jwt.split('.');
-    if (parts.size() < 2) return {};
+    if (parts.size() < 2)
+        return {};
     QByteArray b64 = parts[1].toUtf8();
-    while (b64.size() % 4 != 0) b64.append('=');
+    while (b64.size() % 4 != 0)
+        b64.append('=');
     QByteArray payload = QByteArray::fromBase64(b64, QByteArray::Base64UrlEncoding);
     auto doc = QJsonDocument::fromJson(payload);
     return doc.object().value("hsm_key").toString();
@@ -93,11 +101,11 @@ QByteArray FyersWebSocket::build_auth_message() const {
     const QByteArray key = hsm_key_.toUtf8();
     const QByteArray mode = "P";
     const QByteArray source = "FinceptTerminal";
-    const int body_len = 1 + 1    // req_type + field_count
-        + 1 + 2 + key.size()      // field 1
-        + 1 + 2 + mode.size()     // field 2
-        + 1 + 2 + 1               // field 3
-        + 1 + 2 + source.size();  // field 4
+    const int body_len = 1 + 1                    // req_type + field_count
+                         + 1 + 2 + key.size()     // field 1
+                         + 1 + 2 + mode.size()    // field 2
+                         + 1 + 2 + 1              // field 3
+                         + 1 + 2 + source.size(); // field 4
     QByteArray msg(2 + body_len, 0);
     auto* d = reinterpret_cast<uchar*>(msg.data());
     write_u16_be(d, static_cast<quint16>(body_len));
@@ -106,19 +114,25 @@ QByteArray FyersWebSocket::build_auth_message() const {
     int pos = 4;
     // Field 1: hsm_key
     d[pos++] = 1;
-    write_u16_be(d + pos, static_cast<quint16>(key.size())); pos += 2;
-    memcpy(d + pos, key.constData(), key.size()); pos += key.size();
+    write_u16_be(d + pos, static_cast<quint16>(key.size()));
+    pos += 2;
+    memcpy(d + pos, key.constData(), key.size());
+    pos += key.size();
     // Field 2: mode "P"
     d[pos++] = 2;
-    write_u16_be(d + pos, static_cast<quint16>(mode.size())); pos += 2;
-    memcpy(d + pos, mode.constData(), mode.size()); pos += mode.size();
+    write_u16_be(d + pos, static_cast<quint16>(mode.size()));
+    pos += 2;
+    memcpy(d + pos, mode.constData(), mode.size());
+    pos += mode.size();
     // Field 3: value 1
     d[pos++] = 3;
-    write_u16_be(d + pos, 1); pos += 2;
+    write_u16_be(d + pos, 1);
+    pos += 2;
     d[pos++] = 1;
     // Field 4: source
     d[pos++] = 4;
-    write_u16_be(d + pos, static_cast<quint16>(source.size())); pos += 2;
+    write_u16_be(d + pos, static_cast<quint16>(source.size()));
+    pos += 2;
     memcpy(d + pos, source.constData(), source.size());
     return msg;
 }
@@ -127,11 +141,11 @@ QByteArray FyersWebSocket::build_mode_message(bool lite) const {
     // req_type=12, field1=channel_bits(u64), field2=mode_byte(70=full,76=lite)
     QByteArray msg(2 + 1 + 1 + 1 + 2 + 8 + 1 + 2 + 1, 0);
     auto* d = reinterpret_cast<uchar*>(msg.data());
-    write_u16_be(d, 0); // placeholder
-    d[2] = 12; // req_type
-    d[3] = 2;  // field_count
-    d[4] = 1;  // field 1 id
-    write_u16_be(d + 5, 8); // field 1 size
+    write_u16_be(d, 0);              // placeholder
+    d[2] = 12;                       // req_type
+    d[3] = 2;                        // field_count
+    d[4] = 1;                        // field 1 id
+    write_u16_be(d + 5, 8);          // field 1 size
     quint64 channels = (1ULL << 11); // channel 11 active
     write_u64_be(d + 7, channels);
     d[15] = 2; // field 2 id
@@ -154,9 +168,9 @@ QByteArray FyersWebSocket::build_subscribe_message(const QStringList& topics, bo
         scrips.append(static_cast<char>(tb.size() & 0xFF));
         scrips.append(tb);
     }
-    const int body_len = 1 + 1               // req_type + field_count
-        + 1 + 2 + scrips.size()              // field 1
-        + 1 + 2 + 1;                         // field 2
+    const int body_len = 1 + 1                   // req_type + field_count
+                         + 1 + 2 + scrips.size() // field 1
+                         + 1 + 2 + 1;            // field 2
     QByteArray msg(2 + body_len, 0);
     auto* d = reinterpret_cast<uchar*>(msg.data());
     write_u16_be(d, static_cast<quint16>(body_len));
@@ -164,10 +178,13 @@ QByteArray FyersWebSocket::build_subscribe_message(const QStringList& topics, bo
     d[3] = 2;
     int pos = 4;
     d[pos++] = 1;
-    write_u16_be(d + pos, static_cast<quint16>(scrips.size())); pos += 2;
-    memcpy(d + pos, scrips.constData(), scrips.size()); pos += scrips.size();
+    write_u16_be(d + pos, static_cast<quint16>(scrips.size()));
+    pos += 2;
+    memcpy(d + pos, scrips.constData(), scrips.size());
+    pos += scrips.size();
     d[pos++] = 2;
-    write_u16_be(d + pos, 1); pos += 2;
+    write_u16_be(d + pos, 1);
+    pos += 2;
     d[pos] = 11; // channel 11
     return msg;
 }
@@ -175,10 +192,10 @@ QByteArray FyersWebSocket::build_subscribe_message(const QStringList& topics, bo
 QByteArray FyersWebSocket::build_ack_message(quint32 msg_number) const {
     QByteArray msg(2 + 1 + 1 + 1 + 2 + 4, 0);
     auto* d = reinterpret_cast<uchar*>(msg.data());
-    write_u16_be(d, 9); // body size
-    d[2] = 3; // req_type = ack
-    d[3] = 1; // field_count
-    d[4] = 1; // field id
+    write_u16_be(d, 9);     // body size
+    d[2] = 3;               // req_type = ack
+    d[3] = 1;               // field_count
+    d[4] = 1;               // field id
     write_u16_be(d + 5, 4); // field size
     write_u32_be(d + 7, msg_number);
     return msg;
@@ -287,7 +304,8 @@ void FyersWebSocket::on_text_message(const QString& msg) {
 }
 
 void FyersWebSocket::on_binary_message(const QByteArray& data) {
-    if (data.size() < 3) return;
+    if (data.size() < 3)
+        return;
     const auto* buf = reinterpret_cast<const uchar*>(data.constData());
     const int sz = data.size();
 
@@ -296,56 +314,63 @@ void FyersWebSocket::on_binary_message(const QByteArray& data) {
     Q_UNUSED(msg_len);
 
     switch (resp_type) {
-    case 1: { // Auth response
-        // Parse: field_count at [3], then fields. First field value = "K" means success.
-        if (sz < 8) break;
-        const quint8 fc = buf[3];
-        if (fc < 1) break;
-        // field 1: id, len, data
-        int pos = 4;
-        if (pos >= sz) break;
-        pos++; // field_id
-        if (pos + 2 > sz) break;
-        const quint16 flen = read_u16_be(buf + pos); pos += 2;
-        if (pos + flen > sz) break;
-        QString val = QString::fromUtf8(reinterpret_cast<const char*>(buf + pos), flen);
-        pos += flen;
-        if (val == "K") {
-            // Try to read ack_interval from field 2
-            if (fc >= 2 && pos + 3 + 4 <= sz) {
-                pos++; // field_id
-                const quint16 f2len = read_u16_be(buf + pos); pos += 2;
-                if (f2len == 4 && pos + 4 <= sz)
-                    ack_interval_ = read_u32_be(buf + pos);
+        case 1: { // Auth response
+            // Parse: field_count at [3], then fields. First field value = "K" means success.
+            if (sz < 8)
+                break;
+            const quint8 fc = buf[3];
+            if (fc < 1)
+                break;
+            // field 1: id, len, data
+            int pos = 4;
+            if (pos >= sz)
+                break;
+            pos++; // field_id
+            if (pos + 2 > sz)
+                break;
+            const quint16 flen = read_u16_be(buf + pos);
+            pos += 2;
+            if (pos + flen > sz)
+                break;
+            QString val = QString::fromUtf8(reinterpret_cast<const char*>(buf + pos), flen);
+            pos += flen;
+            if (val == "K") {
+                // Try to read ack_interval from field 2
+                if (fc >= 2 && pos + 3 + 4 <= sz) {
+                    pos++; // field_id
+                    const quint16 f2len = read_u16_be(buf + pos);
+                    pos += 2;
+                    if (f2len == 4 && pos + 4 <= sz)
+                        ack_interval_ = read_u32_be(buf + pos);
+                }
+                authenticated_ = true;
+                LOG_INFO(TAG, QString("Auth OK (ack_interval=%1) — sending full mode").arg(ack_interval_));
+                ws_->send_binary(build_mode_message(false));
+                ping_timer_->start();
+                if (!subscribed_symbols_.isEmpty())
+                    resolve_and_subscribe(subscribed_symbols_);
+                emit connected();
+            } else {
+                LOG_ERROR(TAG, QString("Auth failed: %1").arg(val));
+                emit error_occurred("HSM auth failed: " + val);
             }
-            authenticated_ = true;
-            LOG_INFO(TAG, QString("Auth OK (ack_interval=%1) — sending full mode").arg(ack_interval_));
-            ws_->send_binary(build_mode_message(false));
-            ping_timer_->start();
-            if (!subscribed_symbols_.isEmpty())
-                resolve_and_subscribe(subscribed_symbols_);
-            emit connected();
-        } else {
-            LOG_ERROR(TAG, QString("Auth failed: %1").arg(val));
-            emit error_occurred("HSM auth failed: " + val);
+            break;
         }
-        break;
-    }
-    case 4: // Subscribe ACK
-        LOG_INFO(TAG, "Subscribe acknowledged");
-        break;
-    case 5: // Unsubscribe ACK
-        LOG_DEBUG(TAG, "Unsubscribe acknowledged");
-        break;
-    case 6: // Data feed
-        parse_data_feed(data, 3);
-        break;
-    case 12: // Mode ACK
-        LOG_INFO(TAG, "Mode set acknowledged");
-        break;
-    default:
-        LOG_DEBUG(TAG, QString("Unknown resp_type=%1 (size=%2)").arg(resp_type).arg(sz));
-        break;
+        case 4: // Subscribe ACK
+            LOG_INFO(TAG, "Subscribe acknowledged");
+            break;
+        case 5: // Unsubscribe ACK
+            LOG_DEBUG(TAG, "Unsubscribe acknowledged");
+            break;
+        case 6: // Data feed
+            parse_data_feed(data, 3);
+            break;
+        case 12: // Mode ACK
+            LOG_INFO(TAG, "Mode set acknowledged");
+            break;
+        default:
+            LOG_DEBUG(TAG, QString("Unknown resp_type=%1 (size=%2)").arg(resp_type).arg(sz));
+            break;
     }
 }
 
@@ -354,10 +379,13 @@ void FyersWebSocket::on_binary_message(const QByteArray& data) {
 void FyersWebSocket::parse_data_feed(const QByteArray& data, int offset) {
     const auto* buf = reinterpret_cast<const uchar*>(data.constData());
     const int sz = data.size();
-    if (offset + 6 > sz) return;
+    if (offset + 6 > sz)
+        return;
 
-    const quint32 msg_number = read_u32_be(buf + offset); offset += 4;
-    const quint16 scrip_count = read_u16_be(buf + offset); offset += 2;
+    const quint32 msg_number = read_u32_be(buf + offset);
+    offset += 4;
+    const quint16 scrip_count = read_u16_be(buf + offset);
+    offset += 2;
 
     // Send ACK if needed
     ++msg_count_;
@@ -367,29 +395,41 @@ void FyersWebSocket::parse_data_feed(const QByteArray& data, int offset) {
     for (quint16 i = 0; i < scrip_count && offset < sz; ++i) {
         const quint8 data_type = buf[offset];
         switch (data_type) {
-        case 83: parse_snapshot(buf, sz, offset); break;
-        case 85: parse_update(buf, sz, offset); break;
-        case 76: parse_lite_update(buf, sz, offset); break;
-        default:
-            LOG_WARN(TAG, QString("Unknown data_type=%1 at offset %2").arg(data_type).arg(offset));
-            return; // Can't safely skip unknown types
+            case 83:
+                parse_snapshot(buf, sz, offset);
+                break;
+            case 85:
+                parse_update(buf, sz, offset);
+                break;
+            case 76:
+                parse_lite_update(buf, sz, offset);
+                break;
+            default:
+                LOG_WARN(TAG, QString("Unknown data_type=%1 at offset %2").arg(data_type).arg(offset));
+                return; // Can't safely skip unknown types
         }
     }
 }
 
 void FyersWebSocket::parse_snapshot(const uchar* buf, int sz, int& pos) {
-    if (pos + 4 > sz) return;
+    if (pos + 4 > sz)
+        return;
     pos++; // skip data_type (83)
-    const quint16 topic_id = read_u16_le(buf + pos); pos += 2;
-    if (pos >= sz) return;
+    const quint16 topic_id = read_u16_le(buf + pos);
+    pos += 2;
+    if (pos >= sz)
+        return;
     const quint8 topic_len = buf[pos++];
-    if (pos + topic_len > sz) return;
+    if (pos + topic_len > sz)
+        return;
     const QString topic_name = QString::fromUtf8(reinterpret_cast<const char*>(buf + pos), topic_len);
     pos += topic_len;
 
-    if (pos >= sz) return;
+    if (pos >= sz)
+        return;
     const quint8 field_count = buf[pos++];
-    if (pos + field_count * 4 > sz) return;
+    if (pos + field_count * 4 > sz)
+        return;
 
     QVector<qint32> fields(field_count);
     for (int f = 0; f < field_count; ++f) {
@@ -398,7 +438,8 @@ void FyersWebSocket::parse_snapshot(const uchar* buf, int sz, int& pos) {
     }
 
     // Skip 2 bytes, then read multiplier + precision + strings
-    if (pos + 2 > sz) return;
+    if (pos + 2 > sz)
+        return;
     pos += 2;
 
     quint16 multiplier = 1;
@@ -406,7 +447,8 @@ void FyersWebSocket::parse_snapshot(const uchar* buf, int sz, int& pos) {
     QString exchange_name, exchange_token, symbol_name;
 
     if (pos + 3 <= sz) {
-        multiplier = read_u16_be(buf + pos); pos += 2;
+        multiplier = read_u16_be(buf + pos);
+        pos += 2;
         precision = buf[pos++];
     }
     // exchange name
@@ -434,7 +476,8 @@ void FyersWebSocket::parse_snapshot(const uchar* buf, int sz, int& pos) {
         }
     }
 
-    if (multiplier == 0) multiplier = 1;
+    if (multiplier == 0)
+        multiplier = 1;
 
     TopicState& ts = topics_[topic_id];
     ts.topic_name = topic_name;
@@ -445,18 +488,27 @@ void FyersWebSocket::parse_snapshot(const uchar* buf, int sz, int& pos) {
     ts.fields = fields;
 
     LOG_INFO(TAG, QString("Snapshot: topic=%1 id=%2 sym=%3 exch=%4 prec=%5 mul=%6 fields=%7")
-                      .arg(topic_name).arg(topic_id).arg(symbol_name)
-                      .arg(exchange_name).arg(precision).arg(multiplier).arg(field_count));
+                      .arg(topic_name)
+                      .arg(topic_id)
+                      .arg(symbol_name)
+                      .arg(exchange_name)
+                      .arg(precision)
+                      .arg(multiplier)
+                      .arg(field_count));
     emit_tick(topic_id);
 }
 
 void FyersWebSocket::parse_update(const uchar* buf, int sz, int& pos) {
-    if (pos + 4 > sz) return;
+    if (pos + 4 > sz)
+        return;
     pos++; // skip data_type (85)
-    const quint16 topic_id = read_u16_le(buf + pos); pos += 2;
-    if (pos >= sz) return;
+    const quint16 topic_id = read_u16_le(buf + pos);
+    pos += 2;
+    if (pos >= sz)
+        return;
     const quint8 field_count = buf[pos++];
-    if (pos + field_count * 4 > sz) return;
+    if (pos + field_count * 4 > sz)
+        return;
 
     auto it = topics_.find(topic_id);
     if (it == topics_.end()) {
@@ -482,13 +534,17 @@ void FyersWebSocket::parse_update(const uchar* buf, int sz, int& pos) {
 }
 
 void FyersWebSocket::parse_lite_update(const uchar* buf, int sz, int& pos) {
-    if (pos + 7 > sz) return;
+    if (pos + 7 > sz)
+        return;
     pos++; // skip data_type (76)
-    const quint16 topic_id = read_u16_le(buf + pos); pos += 2;
-    const qint32 ltp_raw = read_i32_be(buf + pos); pos += 4;
+    const quint16 topic_id = read_u16_le(buf + pos);
+    pos += 2;
+    const qint32 ltp_raw = read_i32_be(buf + pos);
+    pos += 4;
 
     auto it = topics_.find(topic_id);
-    if (it == topics_.end()) return;
+    if (it == topics_.end())
+        return;
     if (!it->fields.isEmpty())
         it->fields[0] = ltp_raw;
     emit_tick(topic_id);
@@ -498,7 +554,8 @@ void FyersWebSocket::parse_lite_update(const uchar* buf, int sz, int& pos) {
 
 void FyersWebSocket::emit_tick(quint16 topic_id) {
     auto it = topics_.constFind(topic_id);
-    if (it == topics_.constEnd() || it->fields.isEmpty()) return;
+    if (it == topics_.constEnd() || it->fields.isEmpty())
+        return;
     const auto& ts = *it;
     const auto& f = ts.fields;
 
@@ -514,9 +571,8 @@ void FyersWebSocket::emit_tick(quint16 topic_id) {
     if (tick.symbol.endsWith(QLatin1String("-EQ")))
         tick.symbol.chop(3);
     static const QHash<QString, QString> exch_norm = {
-        {"nse_cm", "NSE"}, {"nse_fo", "NSE"}, {"cde_fo", "NSE"},
-        {"nse_com", "NSE"}, {"mcx_fo", "MCX"}, {"bse_cm", "BSE"},
-        {"bse_fo", "BSE"}, {"bcs_fo", "BSE"},
+        {"nse_cm", "NSE"}, {"nse_fo", "NSE"}, {"cde_fo", "NSE"}, {"nse_com", "NSE"},
+        {"mcx_fo", "MCX"}, {"bse_cm", "BSE"}, {"bse_fo", "BSE"}, {"bcs_fo", "BSE"},
     };
     tick.exchange = exch_norm.value(ts.exchange, ts.exchange.section('_', 0, 0).toUpper());
 
@@ -554,7 +610,8 @@ void FyersWebSocket::emit_tick(quint16 topic_id) {
 
 void FyersWebSocket::emit_depth(quint16 topic_id) {
     auto it = topics_.constFind(topic_id);
-    if (it == topics_.constEnd() || it->fields.size() < 20) return;
+    if (it == topics_.constEnd() || it->fields.size() < 20)
+        return;
     const auto& ts = *it;
     const auto& f = ts.fields;
 
@@ -566,10 +623,12 @@ void FyersWebSocket::emit_depth(quint16 topic_id) {
     for (int i = 0; i < 5; ++i) {
         double bp = field_to_price(f[i], ts);
         double bs = f[10 + i] != kSentinel ? static_cast<double>(f[10 + i]) : 0;
-        if (bp > 0) bids.append({bp, bs});
+        if (bp > 0)
+            bids.append({bp, bs});
         double ap = field_to_price(f[5 + i], ts);
         double as_ = f[15 + i] != kSentinel ? static_cast<double>(f[15 + i]) : 0;
-        if (ap > 0) asks.append({ap, as_});
+        if (ap > 0)
+            asks.append({ap, as_});
     }
 
     if (!bids.isEmpty() || !asks.isEmpty())
@@ -603,7 +662,8 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
         }
 
         QJsonArray arr;
-        for (const auto& s : fyers_syms) arr.append(s);
+        for (const auto& s : fyers_syms)
+            arr.append(s);
         QJsonObject body;
         body["symbols"] = arr;
         {
@@ -612,23 +672,25 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
             // requested — and below, whether Fyers resolved or rejected it.
             QStringList fno;
             for (const auto& s : fyers_syms)
-                if (!s.endsWith(QLatin1String("-EQ")) && (s.contains(QLatin1String("CE")) ||
-                    s.contains(QLatin1String("PE")) || s.contains(QLatin1String("FUT"))))
+                if (!s.endsWith(QLatin1String("-EQ")) &&
+                    (s.contains(QLatin1String("CE")) || s.contains(QLatin1String("PE")) ||
+                     s.contains(QLatin1String("FUT"))))
                     fno << s;
-            LOG_INFO("subdbg", QString("resolve_and_subscribe: sending %1 syms, F&O=[%2]")
-                                   .arg(fyers_syms.size()).arg(fno.join(',')));
+            LOG_INFO(
+                "subdbg",
+                QString("resolve_and_subscribe: sending %1 syms, F&O=[%2]").arg(fyers_syms.size()).arg(fno.join(',')));
         }
 
-        auto resp = BrokerHttp::instance().post_json(
-            QStringLiteral("https://api-t1.fyers.in/data/symbol-token"), body,
-            {{"Authorization", auth}, {"Content-Type", "application/json"}});
+        auto resp = BrokerHttp::instance().post_json(QStringLiteral("https://api-t1.fyers.in/data/symbol-token"), body,
+                                                     {{"Authorization", auth}, {"Content-Type", "application/json"}});
 
         QStringList topics;
         if (resp.success && resp.json.value("s").toString() == "ok") {
             const auto valid = resp.json.value("validSymbol").toObject();
             for (auto it = valid.begin(); it != valid.end(); ++it) {
                 const QString fytoken = it.value().toString();
-                if (fytoken.size() < 10) continue;
+                if (fytoken.size() < 10)
+                    continue;
                 const QString seg_code = fytoken.left(4);
                 const QString exch_token = fytoken.mid(10);
                 const QString seg = segment_name(seg_code);
@@ -644,21 +706,26 @@ void FyersWebSocket::resolve_and_subscribe(const QStringList& symbols) {
                     unresolved << s;
             if (!unresolved.isEmpty())
                 LOG_WARN("subdbg", QString("resolve_and_subscribe: %1 UNRESOLVED (no feed): [%2]")
-                                       .arg(unresolved.size()).arg(unresolved.join(',')));
+                                       .arg(unresolved.size())
+                                       .arg(unresolved.join(',')));
             for (const auto& t : topics)
                 LOG_DEBUG("FyersWS", QString("  topic: %1").arg(t));
         } else {
             LOG_ERROR("FyersWS", QString("Token resolve failed: %1 (HTTP %2)").arg(resp.error).arg(resp.status_code));
         }
 
-        QMetaObject::invokeMethod(self, [self, topics]() {
-            if (!self || topics.isEmpty()) return;
-            for (const auto& t : topics)
-                if (!self->subscribed_topics_.contains(t))
-                    self->subscribed_topics_.append(t);
-            self->ws_->send_binary(self->build_subscribe_message(topics));
-            LOG_INFO("FyersWS", QString("Sent subscribe for %1 topics").arg(topics.size()));
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, topics]() {
+                if (!self || topics.isEmpty())
+                    return;
+                for (const auto& t : topics)
+                    if (!self->subscribed_topics_.contains(t))
+                        self->subscribed_topics_.append(t);
+                self->ws_->send_binary(self->build_subscribe_message(topics));
+                LOG_INFO("FyersWS", QString("Sent subscribe for %1 topics").arg(topics.size()));
+            },
+            Qt::QueuedConnection);
     });
 }
 

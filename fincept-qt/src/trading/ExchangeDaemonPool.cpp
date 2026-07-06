@@ -45,7 +45,7 @@ void ExchangeDaemonPool::start() {
     const QString python_path = python::PythonRunner::instance().python_path();
     const QString script_path = pool_resolve_script_path("exchange/exchange_daemon.py");
     if (python_path.isEmpty() || script_path.isEmpty()) {
-        LOG_WARN(kPoolTag,"Cannot start daemon: python or exchange_daemon.py not found");
+        LOG_WARN(kPoolTag, "Cannot start daemon: python or exchange_daemon.py not found");
         return;
     }
 
@@ -62,7 +62,7 @@ void ExchangeDaemonPool::start() {
     });
     connect(process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             [this](int code, QProcess::ExitStatus status) {
-                LOG_WARN(kPoolTag,QString("Daemon exited (code=%1, status=%2)").arg(code).arg(status));
+                LOG_WARN(kPoolTag, QString("Daemon exited (code=%1, status=%2)").arg(code).arg(status));
                 ready_ = false;
                 if (process_) {
                     process_->deleteLater();
@@ -77,7 +77,7 @@ void ExchangeDaemonPool::start() {
     QStringList args;
     args << "-u" << "-B" << script_path;
     process_->start(python_path, args);
-    LOG_INFO(kPoolTag,"Exchange daemon starting...");
+    LOG_INFO(kPoolTag, "Exchange daemon starting...");
 }
 
 void ExchangeDaemonPool::stop() {
@@ -185,8 +185,8 @@ void ExchangeDaemonPool::drain_buffer() {
 
         if (id == "__init__") {
             ready_ = true;
-            LOG_INFO(kPoolTag,"Exchange daemon ready (pid=" +
-                              obj.value("data").toObject().value("pid").toVariant().toString() + ")");
+            LOG_INFO(kPoolTag, "Exchange daemon ready (pid=" +
+                                   obj.value("data").toObject().value("pid").toVariant().toString() + ")");
             response_ready_.wakeAll();
             emit ready();
             continue;
@@ -204,14 +204,11 @@ void ExchangeDaemonPool::drain_buffer() {
     }
 }
 
-QJsonObject ExchangeDaemonPool::call(const QString& exchange,
-                                     const QString& method,
-                                     const QJsonObject& args,
-                                     const ExchangeCredentials& credentials,
-                                     int timeout_ms) {
+QJsonObject ExchangeDaemonPool::call(const QString& exchange, const QString& method, const QJsonObject& args,
+                                     const ExchangeCredentials& credentials, int timeout_ms) {
     if (!ready_.load()) {
         if (!wait_for_ready(std::min(timeout_ms, 8000))) {
-            LOG_WARN(kPoolTag,QString("Daemon not ready for %1/%2").arg(exchange, method));
+            LOG_WARN(kPoolTag, QString("Daemon not ready for %1/%2").arg(exchange, method));
             return {{"error", "Daemon not ready"}};
         }
     }
@@ -256,7 +253,7 @@ QJsonObject ExchangeDaemonPool::call(const QString& exchange,
         response_ready_.wait(&mutex_, 50);
     }
     lock.unlock();
-    LOG_WARN(kPoolTag,QString("Daemon call timed out: %1/%2").arg(exchange, method));
+    LOG_WARN(kPoolTag, QString("Daemon call timed out: %1/%2").arg(exchange, method));
     return {{"error", QString("Daemon call timed out: %1/%2").arg(exchange, method)}};
 }
 

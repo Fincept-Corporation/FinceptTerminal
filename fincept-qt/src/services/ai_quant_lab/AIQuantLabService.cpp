@@ -134,17 +134,12 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
                 auto obj = doc.object();
                 const auto event = obj.value("event").toString();
                 if (event == "progress") {
-                    emit self->training_progress(
-                        "rl_trading",
-                        obj.value("step").toInt(),
-                        obj.value("total").toInt(),
-                        obj.value("reward_mean").toDouble(),
-                        obj.value("loss").toDouble());
+                    emit self->training_progress("rl_trading", obj.value("step").toInt(), obj.value("total").toInt(),
+                                                 obj.value("reward_mean").toDouble(), obj.value("loss").toDouble());
                     return;
                 }
                 if (event == "log") {
-                    emit self->training_log(
-                        "rl_trading", obj.value("msg").toString(), is_stderr);
+                    emit self->training_log("rl_trading", obj.value("msg").toString(), is_stderr);
                     return;
                 }
                 // "result" events are handled authoritatively in the finished callback.
@@ -186,8 +181,8 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
         } else {
             QString msg;
             if (found_result && !result.success) {
-                msg = QString("Training process exited abnormally (exit=%1) after emitting result")
-                          .arg(result.exit_code);
+                msg =
+                    QString("Training process exited abnormally (exit=%1) after emitting result").arg(result.exit_code);
                 if (!result.error.isEmpty())
                     msg += QStringLiteral(": ") + result.error;
             } else if (!result.error.isEmpty()) {
@@ -200,8 +195,7 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
         }
     };
 
-    python::PythonRunner::instance().run("ai_quant_lab/qlib_rl.py", {"train", json},
-                                         on_finished, on_line);
+    python::PythonRunner::instance().run("ai_quant_lab/qlib_rl.py", {"train", json}, on_finished, on_line);
 }
 
 void AIQuantLabService::evaluate_rl_agent(const QJsonObject& params) {
@@ -344,8 +338,7 @@ void AIQuantLabService::fort_covariance_matrix(const QJsonObject& params) {
 
 void AIQuantLabService::fort_mean_variance_optimize(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
-    run_python(kFortitudoScript, {"mean_variance_optimize", json}, "fortitudo",
-               "mean_variance_optimize");
+    run_python(kFortitudoScript, {"mean_variance_optimize", json}, "fortitudo", "mean_variance_optimize");
 }
 
 void AIQuantLabService::fort_mean_cvar_optimize(const QJsonObject& params) {
@@ -360,8 +353,7 @@ void AIQuantLabService::fort_efficient_frontier(const QJsonObject& params) {
 
 void AIQuantLabService::fort_exp_decay_probabilities(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
-    run_python(kFortitudoScript, {"exp_decay_probabilities", json}, "fortitudo",
-               "exp_decay_probabilities");
+    run_python(kFortitudoScript, {"exp_decay_probabilities", json}, "fortitudo", "exp_decay_probabilities");
 }
 
 // ── GluonTS ──────────────────────────────────────────────────────────────────
@@ -484,19 +476,19 @@ void AIQuantLabService::signals_get_feature_importance(const QJsonObject& params
 
 // ── HFT ──────────────────────────────────────────────────────────────────────
 void AIQuantLabService::hft_create_orderbook(const QJsonObject& params) {
-    run_module("hft", "fetch_orderbook", params);   // live CCXT fetch
+    run_module("hft", "fetch_orderbook", params); // live CCXT fetch
 }
 void AIQuantLabService::hft_snapshot(const QJsonObject& params) {
-    run_module("hft", "analyze", params);           // full analysis: book + trades + all metrics
+    run_module("hft", "analyze", params); // full analysis: book + trades + all metrics
 }
 void AIQuantLabService::hft_market_making_quotes(const QJsonObject& params) {
-    run_module("hft", "market_making", params);     // live book → A-S quotes
+    run_module("hft", "market_making", params); // live book → A-S quotes
 }
 void AIQuantLabService::hft_detect_toxic(const QJsonObject& params) {
-    run_module("hft", "toxic_flow", params);        // live trades → PIN score
+    run_module("hft", "toxic_flow", params); // live trades → PIN score
 }
 void AIQuantLabService::hft_execute_order(const QJsonObject& params) {
-    run_module("hft", "slippage", params);          // order book walk → slippage estimate
+    run_module("hft", "slippage", params); // order book walk → slippage estimate
 }
 
 // ── Meta Learning ────────────────────────────────────────────────────────────
@@ -545,24 +537,26 @@ void AIQuantLabService::rolling_execute_retrain(const QJsonObject& params) {
     // We parse each line individually and emit result_ready per event.
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     QPointer<AIQuantLabService> self = this;
-    python::PythonRunner::instance().run(
-        "ai_quant_lab/qlib_rolling_retraining.py", {"retrain", json},
-        [self](python::PythonResult result) {
-            if (!self) return;
-            if (!result.success && result.output.isEmpty()) {
-                emit self->error_occurred("rolling_retraining", result.error);
-                return;
-            }
-            // Parse each JSON line and emit separately
-            const auto lines = result.output.split('\n', Qt::SkipEmptyParts);
-            for (const auto& line : lines) {
-                const auto trimmed = line.trimmed();
-                if (!trimmed.startsWith('{')) continue;
-                auto doc = QJsonDocument::fromJson(trimmed.toUtf8());
-                if (doc.isNull()) continue;
-                emit self->result_ready("rolling_retraining", "retrain", doc.object());
-            }
-        });
+    python::PythonRunner::instance().run("ai_quant_lab/qlib_rolling_retraining.py", {"retrain", json},
+                                         [self](python::PythonResult result) {
+                                             if (!self)
+                                                 return;
+                                             if (!result.success && result.output.isEmpty()) {
+                                                 emit self->error_occurred("rolling_retraining", result.error);
+                                                 return;
+                                             }
+                                             // Parse each JSON line and emit separately
+                                             const auto lines = result.output.split('\n', Qt::SkipEmptyParts);
+                                             for (const auto& line : lines) {
+                                                 const auto trimmed = line.trimmed();
+                                                 if (!trimmed.startsWith('{'))
+                                                     continue;
+                                                 auto doc = QJsonDocument::fromJson(trimmed.toUtf8());
+                                                 if (doc.isNull())
+                                                     continue;
+                                                 emit self->result_ready("rolling_retraining", "retrain", doc.object());
+                                             }
+                                         });
 }
 void AIQuantLabService::rolling_list_schedules() {
     run_python_cached("ai_quant_lab/qlib_rolling_retraining.py", {"list"}, "rolling_retraining", "list", kListTtlSec);

@@ -27,7 +27,7 @@ QColor with_alpha(const QString& hex, int alpha) {
     return c;
 }
 
-}  // namespace
+} // namespace
 
 MultiStrikeOIChart::MultiStrikeOIChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
@@ -132,9 +132,12 @@ void MultiStrikeOIChart::changeEvent(QEvent* event) {
 }
 
 void MultiStrikeOIChart::retranslateUi() {
-    if (chart_) chart_->setTitle(tr("Open Interest by Strike"));
-    if (ce_set_) ce_set_->setLabel(tr("CE OI"));
-    if (pe_set_) pe_set_->setLabel(tr("PE OI"));
+    if (chart_)
+        chart_->setTitle(tr("Open Interest by Strike"));
+    if (ce_set_)
+        ce_set_->setLabel(tr("CE OI"));
+    if (pe_set_)
+        pe_set_->setLabel(tr("PE OI"));
 }
 
 } // namespace fincept::screens::fno

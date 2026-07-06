@@ -44,7 +44,8 @@ Result<void> apply_v029(QSqlDatabase& db) {
 
 void register_migration_v029() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({29, "secure_credentials", apply_v029});
 }

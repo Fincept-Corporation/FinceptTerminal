@@ -78,7 +78,7 @@ class WalletBalanceProducer : public QObject, public fincept::datahub::Producer 
     struct StreamSession {
         WebSocketClient* ws = nullptr;
         QString pubkey;
-        QString fncpt_token_account;  ///< owner's associated FNCPT token account
+        QString fncpt_token_account; ///< owner's associated FNCPT token account
         WalletBalance latest;
         int sol_sub_id = 0;
         int fncpt_sub_id = 0;
@@ -86,7 +86,7 @@ class WalletBalanceProducer : public QObject, public fincept::datahub::Producer 
         bool seeded = false;
         QTimer* fncpt_heartbeat = nullptr; ///< re-polls FNCPT every ~30s
     };
-    QHash<QString, StreamSession*> streams_;  ///< keyed by pubkey
+    QHash<QString, StreamSession*> streams_; ///< keyed by pubkey
 };
 
 } // namespace fincept::wallet

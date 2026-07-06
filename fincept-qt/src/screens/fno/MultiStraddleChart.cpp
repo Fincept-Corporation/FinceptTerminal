@@ -32,7 +32,7 @@ QColor series_color_at(int i) {
     return QColor(kPalette.at(i % kPalette.size()));
 }
 
-}  // namespace
+} // namespace
 
 MultiStraddleChart::MultiStraddleChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
@@ -116,13 +116,11 @@ void MultiStraddleChart::set_straddles(const QVector<Selection>& selections) {
 
     if (selections.isEmpty() || ts_min >= ts_max) {
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(now - 3'600'000),
-                          QDateTime::fromMSecsSinceEpoch(now));
+        axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(now - 3'600'000), QDateTime::fromMSecsSinceEpoch(now));
         axis_y_->setRange(0, 1);
         return;
     }
-    axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(ts_min),
-                      QDateTime::fromMSecsSinceEpoch(ts_max));
+    axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(ts_min), QDateTime::fromMSecsSinceEpoch(ts_max));
     axis_y_->setRange(0, y_max > 0 ? y_max * 1.1 : 1);
 }
 
@@ -177,9 +175,7 @@ void MultiStraddleChart::update_crosshair(const QPoint& widget_pos) {
                 near = i;
             }
         }
-        lines.append(QString("%1: ₹ %2")
-                          .arg(sel.label)
-                          .arg(sel.points.at(near).premium, 0, 'f', 2));
+        lines.append(QString("%1: ₹ %2").arg(sel.label).arg(sel.points.at(near).premium, 0, 'f', 2));
     }
     tooltip_->setText(lines.join("\n"));
     tooltip_->adjustSize();
@@ -208,7 +204,8 @@ void MultiStraddleChart::changeEvent(QEvent* event) {
 }
 
 void MultiStraddleChart::retranslateUi() {
-    if (chart_) chart_->setTitle(tr("Synthetic Premium (intraday)"));
+    if (chart_)
+        chart_->setTitle(tr("Synthetic Premium (intraday)"));
 }
 
 } // namespace fincept::screens::fno

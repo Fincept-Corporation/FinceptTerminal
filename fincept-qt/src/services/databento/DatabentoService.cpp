@@ -825,11 +825,16 @@ void DatabentoService::get_dataset_range(const QString& dataset, std::function<v
 // ── Metadata: cost estimate ────────────────────────────────────────────────
 void DatabentoService::get_cost(const DbCostQuery& q, std::function<void(DbCostResult)> cb) {
     QStringList args = {"get_cost_estimate",
-                        "dataset", q.dataset,
-                        "symbols", q.symbols.join(","),
-                        "schema", q.schema,
-                        "start_date", q.start.toString("yyyy-MM-dd"),
-                        "end_date", q.end.toString("yyyy-MM-dd")};
+                        "dataset",
+                        q.dataset,
+                        "symbols",
+                        q.symbols.join(","),
+                        "schema",
+                        q.schema,
+                        "start_date",
+                        q.start.toString("yyyy-MM-dd"),
+                        "end_date",
+                        q.end.toString("yyyy-MM-dd")};
     run_script(args, [cb](bool ok, const QJsonObject& j) {
         DbCostResult res;
         if (!ok || j["error"].toBool(false)) {
@@ -876,8 +881,8 @@ void DatabentoService::fetch_with_params(const DatabentoFetchParams& params) {
     // consult DataHub for a live quote.
     float spot = params.spot_override > 0.0f ? params.spot_override : 100.0f;
 
-    if (chart == "Volatility" || chart == "DeltaSurface" || chart == "GammaSurface" ||
-        chart == "VegaSurface" || chart == "ThetaSurface" || chart == "SkewSurface") {
+    if (chart == "Volatility" || chart == "DeltaSurface" || chart == "GammaSurface" || chart == "VegaSurface" ||
+        chart == "ThetaSurface" || chart == "SkewSurface") {
         fetch_options_surface(params.symbol, spot);
     } else if (chart == "LocalVolSurface") {
         fetch_local_vol(params.symbol, spot);
@@ -894,10 +899,9 @@ void DatabentoService::fetch_with_params(const DatabentoFetchParams& params) {
         fetch_commodity_vol(params.symbol);
     } else if (chart == "CrackSpread") {
         fetch_crack_spread();
-    } else if (chart == "Correlation" || chart == "PCA" || chart == "Drawdown" ||
-               chart == "BetaSurface" || chart == "VaR" || chart == "FactorExposure") {
-        QDate start = params.start_date.isValid() ? params.start_date
-                                                  : QDate::currentDate().addDays(-60);
+    } else if (chart == "Correlation" || chart == "PCA" || chart == "Drawdown" || chart == "BetaSurface" ||
+               chart == "VaR" || chart == "FactorExposure") {
+        QDate start = params.start_date.isValid() ? params.start_date : QDate::currentDate().addDays(-60);
         QDate end = params.end_date.isValid() ? params.end_date : QDate::currentDate();
         int days = std::max(1, (int)start.daysTo(end));
         QStringList syms = params.basket.isEmpty() ? QStringList{params.symbol} : params.basket;

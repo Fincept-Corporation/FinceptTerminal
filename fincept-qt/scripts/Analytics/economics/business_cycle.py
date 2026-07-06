@@ -119,12 +119,8 @@ def get_indicators():
 
 
 def main():
-    # Read stdin (may be empty)
-    try:
-        sys.stdin.read()
-    except Exception:
-        pass
-
+    # Qt bridge invokes as (command, json); this analytic takes no params, so argv
+    # is ignored. (Previously read stdin, which can block under a held-open pipe.)
     result = get_indicators()
     print(json.dumps(convert_numpy(result)))
 

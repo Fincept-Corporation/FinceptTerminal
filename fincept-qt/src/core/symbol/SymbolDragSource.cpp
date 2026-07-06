@@ -54,13 +54,13 @@ void startSymbolDrag(QWidget* source, const SymbolRef& ref, SymbolGroup source_g
     drag->setMimeData(symbol_mime::pack(ref, source_group));
     const QPixmap pm = make_drag_pixmap(ref);
     drag->setPixmap(pm);
-    drag->setHotSpot(QPoint(pm.width() / (2 * static_cast<int>(pm.devicePixelRatio() > 0 ? pm.devicePixelRatio() : 1)),
-                            pm.height() / (2 * static_cast<int>(pm.devicePixelRatio() > 0 ? pm.devicePixelRatio() : 1))));
+    drag->setHotSpot(
+        QPoint(pm.width() / (2 * static_cast<int>(pm.devicePixelRatio() > 0 ? pm.devicePixelRatio() : 1)),
+               pm.height() / (2 * static_cast<int>(pm.devicePixelRatio() > 0 ? pm.devicePixelRatio() : 1))));
     drag->exec(Qt::CopyAction, Qt::CopyAction);
 }
 
-SymbolDropFilter::SymbolDropFilter(QWidget* target, Handler handler)
-    : QObject(target), handler_(std::move(handler)) {}
+SymbolDropFilter::SymbolDropFilter(QWidget* target, Handler handler) : QObject(target), handler_(std::move(handler)) {}
 
 bool SymbolDropFilter::eventFilter(QObject* watched, QEvent* event) {
     switch (event->type()) {
@@ -147,8 +147,7 @@ bool SymbolDragFilter::eventFilter(QObject* /*watched*/, QEvent* event) {
     }
 }
 
-SymbolDragFilter* installDragSource(QWidget* source, SymbolDragFilter::RefProvider provider,
-                                     SymbolGroup source_group) {
+SymbolDragFilter* installDragSource(QWidget* source, SymbolDragFilter::RefProvider provider, SymbolGroup source_group) {
     if (!source)
         return nullptr;
     auto* f = new SymbolDragFilter(source, std::move(provider), source_group);

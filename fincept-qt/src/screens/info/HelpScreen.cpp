@@ -27,31 +27,31 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* q_btn = new QPushButton(icon.isEmpty() ? QString("  %1").arg(question)
-                                                  : QString("  %1  %2").arg(icon, question));
+    auto* q_btn =
+        new QPushButton(icon.isEmpty() ? QString("  %1").arg(question) : QString("  %1  %2").arg(icon, question));
     q_btn->setCursor(Qt::PointingHandCursor);
     q_btn->setStyleSheet(QString("QPushButton { color: %1; background: %2; border: 1px solid %3;"
                                  " padding: 11px 14px; text-align: left;"
                                  " font-size: 12px; font-weight: 600; %4 }"
                                  "QPushButton:hover { background: %5; border-color: %6; color: %7; }")
-                             .arg(colors::TEXT_PRIMARY(), colors::BG_SURFACE(), colors::BORDER_DIM(), MF, colors::BG_RAISED(),
-                                  colors::AMBER(), colors::AMBER()));
+                             .arg(colors::TEXT_PRIMARY(), colors::BG_SURFACE(), colors::BORDER_DIM(), MF,
+                                  colors::BG_RAISED(), colors::AMBER(), colors::AMBER()));
 
     auto* a_lbl = new QLabel(answer);
     a_lbl->setWordWrap(true);
-    a_lbl->setStyleSheet(QString("color: %1; font-size: 12px; background: %2;"
-                                 " border: 1px solid %3; border-top: none;"
-                                 " border-left: 3px solid %4;"
-                                 " padding: 12px 16px 12px 18px; %5")
-                             .arg(colors::TEXT_SECONDARY(), colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER(), MF));
+    a_lbl->setStyleSheet(
+        QString("color: %1; font-size: 12px; background: %2;"
+                " border: 1px solid %3; border-top: none;"
+                " border-left: 3px solid %4;"
+                " padding: 12px 16px 12px 18px; %5")
+            .arg(colors::TEXT_SECONDARY(), colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER(), MF));
     a_lbl->setVisible(false);
 
     QObject::connect(q_btn, &QPushButton::clicked, a_lbl, [a_lbl, q_btn, question, icon]() {
         bool show = !a_lbl->isVisible();
         a_lbl->setVisible(show);
         QString arrow = show ? "▾" : "▸";
-        q_btn->setText(icon.isEmpty() ? QString("  %1").arg(question)
-                                      : QString("  %1  %2").arg(icon, question));
+        q_btn->setText(icon.isEmpty() ? QString("  %1").arg(question) : QString("  %1  %2").arg(icon, question));
         // tint open state
         q_btn->setStyleSheet(
             QString("QPushButton { color: %1; background: %2; border: 1px solid %3;"
@@ -187,8 +187,7 @@ QWidget* HelpScreen::build_page() {
         // Email + Discord chip text is shown verbatim (URL/handle) — not translated.
         // Business-hours label IS translated.
         chips_vl->addWidget(make_chip("✉", "support@fincept.in", colors::CYAN, "mailto:support@fincept.in"));
-        chips_vl->addWidget(
-            make_chip("", "discord.gg/ae87a8ygbN", colors::POSITIVE, "https://discord.gg/ae87a8ygbN"));
+        chips_vl->addWidget(make_chip("", "discord.gg/ae87a8ygbN", colors::POSITIVE, "https://discord.gg/ae87a8ygbN"));
         chips_vl->addWidget(make_chip("", tr("Mon-Fri  9AM–6PM EST"), colors::TEXT_TERTIARY));
         hl->addLayout(chips_vl);
 
@@ -214,12 +213,12 @@ QWidget* HelpScreen::build_page() {
             QString desc;
         };
         const Action actions[] = {
-            {"", "create_account",  tr("Create Account"),    tr("Register for full access")},
-            {"", "reset_password",  tr("Reset Password"),    tr("Recover your account")},
-            {"", "documentation",   tr("Documentation"),     tr("Guides, tutorials & API ref")},
-            {"", "report_bug",      tr("Report a Bug"),      tr("Open a bug report ticket")},
-            {"", "join_discord",    tr("Join Discord"),      tr("Community & live support")},
-            {"", "support_tickets", tr("Support Tickets"),   tr("View or open a support ticket")},
+            {"", "create_account", tr("Create Account"), tr("Register for full access")},
+            {"", "reset_password", tr("Reset Password"), tr("Recover your account")},
+            {"", "documentation", tr("Documentation"), tr("Guides, tutorials & API ref")},
+            {"", "report_bug", tr("Report a Bug"), tr("Open a bug report ticket")},
+            {"", "join_discord", tr("Join Discord"), tr("Community & live support")},
+            {"", "support_tickets", tr("Support Tickets"), tr("View or open a support ticket")},
         };
 
         int col = 0, row = 0;
@@ -230,8 +229,8 @@ QWidget* HelpScreen::build_page() {
             btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3;"
                                        " text-align: left; padding: 0; }"
                                        "QPushButton:hover { background: %4; border-color: %5; }")
-                                   .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_RAISED(),
-                                        colors::AMBER()));
+                                   .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(),
+                                        colors::BG_RAISED(), colors::AMBER()));
 
             auto* bl = new QVBoxLayout(btn);
             bl->setContentsMargins(12, 8, 12, 8);
@@ -278,8 +277,7 @@ QWidget* HelpScreen::build_page() {
 
     // ── FAQ ───────────────────────────────────────────────────────────────────
     {
-        vl->addWidget(section_header(tr("FREQUENTLY ASKED QUESTIONS"),
-                                     tr("Click a question to expand the answer")));
+        vl->addWidget(section_header(tr("FREQUENTLY ASKED QUESTIONS"), tr("Click a question to expand the answer")));
         vl->addSpacing(8);
 
         struct FAQ {
@@ -345,10 +343,10 @@ QWidget* HelpScreen::build_page() {
             QString detail;
         };
         const Step steps[] = {
-            {"1", tr("Create an account"),       tr("Register at fincept.in or use the in-app sign-up.")},
-            {"2", tr("Complete setup"),          tr("The setup wizard installs Python and configures your paths.")},
-            {"3", tr("Connect a data source"),   tr("Add a broker or enable free data feeds in Data Sources.")},
-            {"4", tr("Explore the terminal"),    tr("Browse Markets, Research, AI Chat, and QuantLib tabs.")},
+            {"1", tr("Create an account"), tr("Register at fincept.in or use the in-app sign-up.")},
+            {"2", tr("Complete setup"), tr("The setup wizard installs Python and configures your paths.")},
+            {"3", tr("Connect a data source"), tr("Add a broker or enable free data feeds in Data Sources.")},
+            {"4", tr("Explore the terminal"), tr("Browse Markets, Research, AI Chat, and QuantLib tabs.")},
         };
 
         auto* steps_widget = new QWidget(page);
@@ -412,10 +410,10 @@ QWidget* HelpScreen::build_page() {
             const char* url;
         };
         const Contact contacts[] = {
-            {"✉",  tr("Email Support"),   "support@fincept.in",                       "mailto:support@fincept.in"},
-            {"", tr("Discord Server"),  "discord.gg/ae87a8ygbN",                    "https://discord.gg/ae87a8ygbN"},
-            {"", tr("Website"),         "fincept.in",                               "https://fincept.in"},
-            {"", tr("GitHub"),          "github.com/Fincept-Corporation/FinceptTerminal",
+            {"✉", tr("Email Support"), "support@fincept.in", "mailto:support@fincept.in"},
+            {"", tr("Discord Server"), "discord.gg/ae87a8ygbN", "https://discord.gg/ae87a8ygbN"},
+            {"", tr("Website"), "fincept.in", "https://fincept.in"},
+            {"", tr("GitHub"), "github.com/Fincept-Corporation/FinceptTerminal",
              "https://github.com/Fincept-Corporation/FinceptTerminal"},
         };
 

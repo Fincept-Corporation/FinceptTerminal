@@ -70,14 +70,12 @@ class GrowwBroker : public IBroker {
                                                    const QString& to_date) override;
 
     // Batch multi-quotes — uses /v1/live-data/ltp + /v1/live-data/ohlc (max 50 per call)
-    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
-        const BrokerCredentials& creds,
-        const QVector<QPair<QString, QString>>& symbols) override;
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const BrokerCredentials& creds,
+                                                       const QVector<QPair<QString, QString>>& symbols) override;
 
     // Market depth — GET /v1/live-data/quote includes bid/ask depth for single symbol
-    ApiResponse<MarketDepth> get_market_depth(
-        const BrokerCredentials& creds,
-        const QString& symbol, const QString& exchange) override;
+    ApiResponse<MarketDepth> get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                              const QString& exchange) override;
 
     // Pre-trade margin calculator — POST /v1/margins/detail/orders?segment=...
     ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;
@@ -126,10 +124,10 @@ class GrowwBroker : public IBroker {
     static SymbolRef split_symbol(const QString& sym);
     // Fills ltp/open/high/low/close on the matching BrokerQuote entries.
     // Returns true on successful RPC (partial symbol matches still return true).
-    bool fetch_ltp_batch(const BrokerCredentials& creds, const QString& segment,
-                         const QVector<SymbolRef>& refs, QVector<BrokerQuote>& out);
-    bool fetch_ohlc_batch(const BrokerCredentials& creds, const QString& segment,
-                          const QVector<SymbolRef>& refs, QVector<BrokerQuote>& out);
+    bool fetch_ltp_batch(const BrokerCredentials& creds, const QString& segment, const QVector<SymbolRef>& refs,
+                         QVector<BrokerQuote>& out);
+    bool fetch_ohlc_batch(const BrokerCredentials& creds, const QString& segment, const QVector<SymbolRef>& refs,
+                          QVector<BrokerQuote>& out);
 
     // /v1/historical/candles candle_interval mapping. Groww's current API takes a
     // string token (e.g. "1min", "1day"); we keep the minutes helper around for

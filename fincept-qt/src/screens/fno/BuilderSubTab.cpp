@@ -45,24 +45,19 @@ using namespace fincept::ui;
 
 BuilderSubTab::BuilderSubTab(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoBuilderTab");
-    setStyleSheet(QString(
-        "#fnoBuilderTab { background:%1; }"
-        "#fnoBldrFooter { background:%2; border-top:1px solid %3; }"
-        "#fnoSaveBtn, #fnoLoadBtn { background:%2; color:%4; border:1px solid %3; "
-        "  padding:5px 14px; font-size:10px; font-weight:700; letter-spacing:0.4px; }"
-        "#fnoSaveBtn:hover, #fnoLoadBtn:hover { background:%5; }"
-        "#fnoTradeBtn { background:%3; color:%6; border:none; padding:5px 14px; "
-        "  font-size:10px; font-weight:700; letter-spacing:0.4px; }"
-        "#fnoBldrOiLabel { color:%6; font-size:10px; font-weight:700; "
-        "  letter-spacing:0.4px; background:transparent; }"
-        "#fnoBldrOiValue { color:%4; font-size:10px; font-weight:700; background:transparent; }"
-        "QToolButton::menu-indicator { width:14px; }")
-                      .arg(colors::BG_BASE(),
-                           colors::BG_RAISED(),
-                           colors::BORDER_DIM(),
-                           colors::TEXT_PRIMARY(),
-                           colors::BG_HOVER(),
-                           colors::TEXT_SECONDARY()));
+    setStyleSheet(QString("#fnoBuilderTab { background:%1; }"
+                          "#fnoBldrFooter { background:%2; border-top:1px solid %3; }"
+                          "#fnoSaveBtn, #fnoLoadBtn { background:%2; color:%4; border:1px solid %3; "
+                          "  padding:5px 14px; font-size:10px; font-weight:700; letter-spacing:0.4px; }"
+                          "#fnoSaveBtn:hover, #fnoLoadBtn:hover { background:%5; }"
+                          "#fnoTradeBtn { background:%3; color:%6; border:none; padding:5px 14px; "
+                          "  font-size:10px; font-weight:700; letter-spacing:0.4px; }"
+                          "#fnoBldrOiLabel { color:%6; font-size:10px; font-weight:700; "
+                          "  letter-spacing:0.4px; background:transparent; }"
+                          "#fnoBldrOiValue { color:%4; font-size:10px; font-weight:700; background:transparent; }"
+                          "QToolButton::menu-indicator { width:14px; }")
+                      .arg(colors::BG_BASE(), colors::BG_RAISED(), colors::BORDER_DIM(), colors::TEXT_PRIMARY(),
+                           colors::BG_HOVER(), colors::TEXT_SECONDARY()));
 
     setup_ui();
     connect(toolbar_, &TemplateToolbar::template_chosen, this, &BuilderSubTab::on_template_chosen);
@@ -78,8 +73,8 @@ BuilderSubTab::BuilderSubTab(QWidget* parent) : QWidget(parent) {
     connect(load_btn_, &QToolButton::clicked, this, &BuilderSubTab::on_load_clicked);
     connect(trade_btn_, &QPushButton::clicked, this, &BuilderSubTab::on_trade_clicked);
 
-    connect(&OptionChainService::instance(), &OptionChainService::chain_published,
-            this, [this](const OptionChain& chain) {
+    connect(&OptionChainService::instance(), &OptionChainService::chain_published, this,
+            [this](const OptionChain& chain) {
                 last_chain_ = chain;
                 legs_view_->leg_model()->set_chain(chain);
                 if (pcr_label_)
@@ -151,13 +146,11 @@ void BuilderSubTab::setup_ui() {
     days_to_target_spin_->setRange(0, 365);
     days_to_target_spin_->setValue(0);
     days_to_target_spin_->setSuffix(" d");
-    days_to_target_spin_->setToolTip(
-        tr("Days from today for the dashed target-day P/L curve. 0 = T+0."));
-    days_to_target_spin_->setStyleSheet(QString(
-        "QSpinBox { background:%1; color:%2; border:1px solid %3; padding:2px 4px; "
-        "  font-size:11px; min-width:54px; }")
-                                              .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(),
-                                                   colors::BORDER_DIM()));
+    days_to_target_spin_->setToolTip(tr("Days from today for the dashed target-day P/L curve. 0 = T+0."));
+    days_to_target_spin_->setStyleSheet(
+        QString("QSpinBox { background:%1; color:%2; border:1px solid %3; padding:2px 4px; "
+                "  font-size:11px; min-width:54px; }")
+            .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(), colors::BORDER_DIM()));
     connect(days_to_target_spin_, QOverload<int>::of(&QSpinBox::valueChanged), this,
             [this](int) { refresh_analytics(); });
     foot_lay->addWidget(target_label_);
@@ -214,11 +207,11 @@ void BuilderSubTab::showEvent(QShowEvent* e) {
         return;
     auto& hub = fincept::datahub::DataHub::instance();
     QPointer<BuilderSubTab> self = this;
-    hub.subscribe_pattern(this, QStringLiteral("option:chain:*"),
-                          [self](const QString& topic, const QVariant& v) {
-                              if (!self) return;
-                              self->on_chain_published(topic, v);
-                          });
+    hub.subscribe_pattern(this, QStringLiteral("option:chain:*"), [self](const QString& topic, const QVariant& v) {
+        if (!self)
+            return;
+        self->on_chain_published(topic, v);
+    });
     chain_subscribed_ = true;
 }
 
@@ -233,17 +226,23 @@ void BuilderSubTab::changeEvent(QEvent* event) {
 }
 
 void BuilderSubTab::retranslateUi() {
-    if (save_btn_)  save_btn_->setText(tr("SAVE"));
-    if (load_btn_)  load_btn_->setText(tr("LOAD") + " \xe2\x96\xbe");
-    if (target_label_) target_label_->setText(tr("TARGET +"));
+    if (save_btn_)
+        save_btn_->setText(tr("SAVE"));
+    if (load_btn_)
+        load_btn_->setText(tr("LOAD") + " \xe2\x96\xbe");
+    if (target_label_)
+        target_label_->setText(tr("TARGET +"));
     if (days_to_target_spin_)
-        days_to_target_spin_->setToolTip(
-            tr("Days from today for the dashed target-day P/L curve. 0 = T+0."));
-    if (pcr_key_) pcr_key_->setText(tr("PCR"));
-    if (ce_key_)  ce_key_->setText(tr("CE OI"));
-    if (pe_key_)  pe_key_->setText(tr("PE OI"));
+        days_to_target_spin_->setToolTip(tr("Days from today for the dashed target-day P/L curve. 0 = T+0."));
+    if (pcr_key_)
+        pcr_key_->setText(tr("PCR"));
+    if (ce_key_)
+        ce_key_->setText(tr("CE OI"));
+    if (pe_key_)
+        pe_key_->setText(tr("PE OI"));
     // Re-applies the TRADE button text + its enabled/tooltip state.
-    if (trade_btn_) trade_btn_->setText(tr("TRADE ALL (PAPER)"));
+    if (trade_btn_)
+        trade_btn_->setText(tr("TRADE ALL (PAPER)"));
     update_trade_button_state();
 }
 
@@ -379,10 +378,9 @@ void BuilderSubTab::on_trade_clicked() {
     const QString broker = last_chain_.broker_id;
     const QString account_id = find_account_for_broker(broker);
     if (account_id.isEmpty()) {
-        QMessageBox::warning(
-            this, tr("Trade Strategy"),
-            tr("No connected %1 account. Connect one in Equity Trading to paper-trade this strategy.")
-                .arg(broker.isEmpty() ? tr("trading") : broker));
+        QMessageBox::warning(this, tr("Trade Strategy"),
+                             tr("No connected %1 account. Connect one in Equity Trading to paper-trade this strategy.")
+                                 .arg(broker.isEmpty() ? tr("trading") : broker));
         return;
     }
 
@@ -396,10 +394,10 @@ void BuilderSubTab::on_trade_clicked() {
         order.symbol = leg.symbol;
         order.exchange = QStringLiteral("NFO");
         order.side = leg.lots > 0 ? OrderSide::Buy : OrderSide::Sell;
-        order.order_type = OrderType::Market;       // paper: execute the strategy at current premiums
+        order.order_type = OrderType::Market; // paper: execute the strategy at current premiums
         order.quantity = std::abs(double(leg.lots) * double(leg.lot_size));
-        order.price = leg.entry_price;              // current leg premium → paper fill price
-        order.product_type = ProductType::Margin;   // NRML (positional) for F&O
+        order.price = leg.entry_price;            // current leg premium → paper fill price
+        order.product_type = ProductType::Margin; // NRML (positional) for F&O
         order.validity = QStringLiteral("DAY");
         auto resp = UnifiedTrading::instance().place_order(account_id, order);
         if (resp.success) {
@@ -412,12 +410,13 @@ void BuilderSubTab::on_trade_clicked() {
 
     QString msg;
     if (failed == 0) {
-        msg = tr("Placed %1 paper orders for %2 (%3).")
-                  .arg(placed)
-                  .arg(s.underlying, s.expiry);
+        msg = tr("Placed %1 paper orders for %2 (%3).").arg(placed).arg(s.underlying, s.expiry);
     } else {
         msg = tr("Placed %1 of %2 paper orders. %3 failed:\n%4")
-                  .arg(placed).arg(placed + failed).arg(failed).arg(failures.join("\n"));
+                  .arg(placed)
+                  .arg(placed + failed)
+                  .arg(failed)
+                  .arg(failures.join("\n"));
     }
     LOG_INFO("FnoBuilder", msg.split('\n').first());
     QMessageBox::information(this, tr("Paper orders dispatched"), msg);
@@ -439,14 +438,13 @@ void BuilderSubTab::on_save_clicked() {
             QMessageBox::warning(this, tr("Save failed"), QString::fromStdString(r.error()));
             return;
         }
-        LOG_INFO("FnoBuilder", QString("Updated strategy '%1' (id=%2)")
-                                    .arg(s.name).arg(loaded_strategy_id_));
+        LOG_INFO("FnoBuilder", QString("Updated strategy '%1' (id=%2)").arg(s.name).arg(loaded_strategy_id_));
         return;
     }
 
     bool ok = false;
-    const QString name = QInputDialog::getText(this, tr("Save strategy"), tr("Name"),
-                                                QLineEdit::Normal, tr("My strategy"), &ok);
+    const QString name =
+        QInputDialog::getText(this, tr("Save strategy"), tr("Name"), QLineEdit::Normal, tr("My strategy"), &ok);
     if (!ok || name.trimmed().isEmpty())
         return;
     Strategy s = current_strategy();
@@ -498,10 +496,9 @@ void BuilderSubTab::on_load_clicked() {
             const qint64 id = row.id;
             const QString name = row.strategy.name;
             connect(del, &QAction::triggered, this, [this, id, name]() {
-                const auto choice = QMessageBox::question(
-                    this, tr("Delete saved strategy"),
-                    tr("Delete '%1'? This can't be undone.").arg(name),
-                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                const auto choice = QMessageBox::question(this, tr("Delete saved strategy"),
+                                                          tr("Delete '%1'? This can't be undone.").arg(name),
+                                                          QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
                 if (choice != QMessageBox::Yes)
                     return;
                 fincept::StrategiesRepository::instance().remove(id);

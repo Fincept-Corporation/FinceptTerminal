@@ -30,8 +30,7 @@ QByteArray random_token_hex(int n_bytes) {
 QByteArray load_connect_html() {
     // Resources are copied beside the executable at build time:
     //   $<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/connect.html
-    const QString path =
-        QCoreApplication::applicationDirPath() + QStringLiteral("/resources/wallet/connect.html");
+    const QString path = QCoreApplication::applicationDirPath() + QStringLiteral("/resources/wallet/connect.html");
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
         LOG_WARN("WalletBridge", "connect.html not found at " + path);
@@ -77,19 +76,14 @@ QString LocalWalletBridge::start(const QByteArray& nonce_hex, int timeout_second
         return {};
     }
     const quint16 port = server_->serverPort();
-    LOG_INFO("WalletBridge",
-             QStringLiteral("listening on 127.0.0.1:%1 (timeout %2s)")
-                 .arg(port)
-                 .arg(timeout_seconds));
+    LOG_INFO("WalletBridge", QStringLiteral("listening on 127.0.0.1:%1 (timeout %2s)").arg(port).arg(timeout_seconds));
 
     if (timer_id_ != 0) {
         killTimer(timer_id_);
     }
     timer_id_ = startTimer(timeout_seconds * 1000);
 
-    return QStringLiteral("http://127.0.0.1:%1/connect?token=%2")
-        .arg(port)
-        .arg(QString::fromLatin1(connect_token_));
+    return QStringLiteral("http://127.0.0.1:%1/connect?token=%2").arg(port).arg(QString::fromLatin1(connect_token_));
 }
 
 void LocalWalletBridge::stop() {
@@ -168,16 +162,12 @@ void LocalWalletBridge::on_new_connection() {
     }
 }
 
-void LocalWalletBridge::handle_request(QTcpSocket* socket,
-                                       const QByteArray& /*request_line*/,
-                                       const QByteArray& body,
-                                       const QByteArray& path,
-                                       const QByteArray& method) {
-    LOG_INFO("WalletBridge",
-             QStringLiteral("request %1 %2 (body=%3 bytes)")
-                 .arg(QString::fromLatin1(method))
-                 .arg(QString::fromLatin1(path))
-                 .arg(body.size()));
+void LocalWalletBridge::handle_request(QTcpSocket* socket, const QByteArray& /*request_line*/, const QByteArray& body,
+                                       const QByteArray& path, const QByteArray& method) {
+    LOG_INFO("WalletBridge", QStringLiteral("request %1 %2 (body=%3 bytes)")
+                                 .arg(QString::fromLatin1(method))
+                                 .arg(QString::fromLatin1(path))
+                                 .arg(body.size()));
 
     // CORS preflight: respond 204 without checking token (token is in the
     // query string of the actual POST, which the browser hasn't yet sent).
@@ -197,10 +187,9 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket,
 
     const auto token_in_query = query_param(path, "token");
     if (token_in_query != connect_token_) {
-        LOG_WARN("WalletBridge",
-                 QStringLiteral("token mismatch on %1 (got %2 chars)")
-                     .arg(QString::fromLatin1(path))
-                     .arg(token_in_query.size()));
+        LOG_WARN("WalletBridge", QStringLiteral("token mismatch on %1 (got %2 chars)")
+                                     .arg(QString::fromLatin1(path))
+                                     .arg(token_in_query.size()));
         write_response(socket, 403, "text/plain", "forbidden");
         socket->disconnectFromHost();
         return;
@@ -208,8 +197,7 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket,
 
     if (method == "GET" && path_starts_with(path, "/connect")) {
         const auto html = render_connect_page();
-        LOG_INFO("WalletBridge",
-                 QStringLiteral("served connect.html (%1 bytes)").arg(html.size()));
+        LOG_INFO("WalletBridge", QStringLiteral("served connect.html (%1 bytes)").arg(html.size()));
         write_response(socket, 200, "text/html; charset=utf-8", html);
         socket->disconnectFromHost();
         return;
@@ -253,11 +241,10 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket,
             socket->disconnectFromHost();
             return;
         }
-        LOG_INFO("WalletBridge",
-                 QStringLiteral("callback received: pubkey=%1 sig_len=%2 label=%3")
-                     .arg(pubkey.left(8) + QStringLiteral("…"))
-                     .arg(sig.size())
-                     .arg(label));
+        LOG_INFO("WalletBridge", QStringLiteral("callback received: pubkey=%1 sig_len=%2 label=%3")
+                                     .arg(pubkey.left(8) + QStringLiteral("…"))
+                                     .arg(sig.size())
+                                     .arg(label));
         write_response(socket, 200, "application/json", QByteArrayLiteral("{\"ok\":true}"));
         socket->disconnectFromHost();
 
@@ -274,26 +261,36 @@ QByteArray LocalWalletBridge::render_connect_page() const {
     QByteArray html = load_connect_html();
     if (html.isEmpty()) {
         // Fall back to a minimal inline page if the resource isn't bundled.
-        html =
-            "<!doctype html><html><body><h2>connect.html missing in resources</h2>"
-            "</body></html>";
+        html = "<!doctype html><html><body><h2>connect.html missing in resources</h2>"
+               "</body></html>";
     }
     html.replace("__NONCE_HEX__", nonce_hex_);
     html.replace("__CALLBACK_TOKEN__", connect_token_);
     return html;
 }
 
-void LocalWalletBridge::write_response(QTcpSocket* socket, int status,
-                                       const QByteArray& content_type,
+void LocalWalletBridge::write_response(QTcpSocket* socket, int status, const QByteArray& content_type,
                                        const QByteArray& body) {
     QByteArray status_text;
     switch (status) {
-    case 200: status_text = "OK"; break;
-    case 400: status_text = "Bad Request"; break;
-    case 403: status_text = "Forbidden"; break;
-    case 404: status_text = "Not Found"; break;
-    case 413: status_text = "Payload Too Large"; break;
-    default: status_text = "Error"; break;
+        case 200:
+            status_text = "OK";
+            break;
+        case 400:
+            status_text = "Bad Request";
+            break;
+        case 403:
+            status_text = "Forbidden";
+            break;
+        case 404:
+            status_text = "Not Found";
+            break;
+        case 413:
+            status_text = "Payload Too Large";
+            break;
+        default:
+            status_text = "Error";
+            break;
     }
     QByteArray response;
     response.append("HTTP/1.1 " + QByteArray::number(status) + " " + status_text + "\r\n");

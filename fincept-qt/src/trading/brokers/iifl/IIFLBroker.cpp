@@ -96,7 +96,7 @@ const BrokerEnumMap<QString>& IIFLBroker::iifl_enum_map() {
         BrokerEnumMap<QString> x;
         x.set(OrderType::Market, "MARKET");
         x.set(OrderType::Limit, "LIMIT");
-        x.set(OrderType::StopLoss, "STOPMARKET");      // SL-M: trigger only, market fill
+        x.set(OrderType::StopLoss, "STOPMARKET");     // SL-M: trigger only, market fill
         x.set(OrderType::StopLossLimit, "STOPLIMIT"); // SL:   trigger + limit price
         x.set(ProductType::Intraday, "MIS");
         x.set(ProductType::Delivery, "CNC");

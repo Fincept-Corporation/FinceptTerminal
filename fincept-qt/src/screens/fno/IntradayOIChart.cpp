@@ -25,9 +25,9 @@ using namespace fincept::ui;
 
 namespace {
 
-constexpr int kPollIntervalMs = 60'000;  // OISnapshotter flush cadence.
+constexpr int kPollIntervalMs = 60'000; // OISnapshotter flush cadence.
 
-}  // namespace
+} // namespace
 
 IntradayOIChart::IntradayOIChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
@@ -169,8 +169,7 @@ void IntradayOIChart::replot() {
     }
 
     if (ts_min < ts_max) {
-        axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(ts_min),
-                          QDateTime::fromMSecsSinceEpoch(ts_max));
+        axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(ts_min), QDateTime::fromMSecsSinceEpoch(ts_max));
     } else {
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(now - 3'600'000), QDateTime::fromMSecsSinceEpoch(now));
@@ -203,9 +202,12 @@ void IntradayOIChart::changeEvent(QEvent* event) {
 }
 
 void IntradayOIChart::retranslateUi() {
-    if (chart_) chart_->setTitle(tr("Intraday OI"));
-    if (ce_series_) ce_series_->setName(tr("CE OI"));
-    if (pe_series_) pe_series_->setName(tr("PE OI"));
+    if (chart_)
+        chart_->setTitle(tr("Intraday OI"));
+    if (ce_series_)
+        ce_series_->setName(tr("CE OI"));
+    if (pe_series_)
+        pe_series_->setName(tr("PE OI"));
 }
 
 } // namespace fincept::screens::fno

@@ -161,18 +161,27 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .string("symbol", "Trading symbol (e.g. SBIN, RELIANCE)").required().length(1, 64)
-            .string("exchange", "Exchange (e.g. NSE, BSE, NFO, MCX)").required()
-            .string("action", "Order side").required().enums({"BUY", "SELL"})
-            .number("quantity", "Order quantity (must be > 0)").required().min(0.0)
-            .string("order_type", "Price type").default_str("MARKET")
-                .enums({"MARKET", "LIMIT", "SL", "SL-M"})
-            .number("price", "Limit price (required for LIMIT / SL)")
-            .number("trigger_price", "Trigger price (required for SL / SL-M)")
-            .string("product", "Product type").default_str("MIS")
-                .enums({"MIS", "CNC", "NRML"})
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .string("symbol", "Trading symbol (e.g. SBIN, RELIANCE)")
+                             .required()
+                             .length(1, 64)
+                             .string("exchange", "Exchange (e.g. NSE, BSE, NFO, MCX)")
+                             .required()
+                             .string("action", "Order side")
+                             .required()
+                             .enums({"BUY", "SELL"})
+                             .number("quantity", "Order quantity (must be > 0)")
+                             .required()
+                             .min(0.0)
+                             .string("order_type", "Price type")
+                             .default_str("MARKET")
+                             .enums({"MARKET", "LIMIT", "SL", "SL-M"})
+                             .number("price", "Limit price (required for LIMIT / SL)")
+                             .number("trigger_price", "Trigger price (required for SL / SL-M)")
+                             .string("product", "Product type")
+                             .default_str("MIS")
+                             .enums({"MIS", "CNC", "NRML"})
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -198,14 +207,13 @@ std::vector<ToolDef> get_live_trading_tools() {
             // Semi-Auto mode queue it for human approval (surfaces in the
             // status-bar Pending Orders popover) instead of sending it.
             if (ActionCenter::instance().should_queue(account_id, "placeorder")) {
-                const QString pid = ActionCenter::instance().queue_order(
-                    account_id, "placeorder", ActionCenter::serialize_unified_order(order));
+                const QString pid = ActionCenter::instance().queue_order(account_id, "placeorder",
+                                                                         ActionCenter::serialize_unified_order(order));
                 if (pid.isEmpty())
                     return ToolResult::fail("Failed to queue order for approval");
-                return ToolResult::ok("Order queued for approval",
-                                      QJsonObject{{"pending_id", pid},
-                                                  {"account_id", account_id},
-                                                  {"status", "queued_for_approval"}});
+                return ToolResult::ok(
+                    "Order queued for approval",
+                    QJsonObject{{"pending_id", pid}, {"account_id", account_id}, {"status", "queued_for_approval"}});
             }
 
             auto resp = UnifiedTrading::instance().place_order(account_id, order);
@@ -214,7 +222,8 @@ std::vector<ToolDef> get_live_trading_tools() {
 
             LOG_INFO(TAG, QString("Live order placed: %1 %2 %3 -> %4")
                               .arg(args["action"].toString(), symbol)
-                              .arg(quantity).arg(resp.order_id));
+                              .arg(quantity)
+                              .arg(resp.order_id));
             return ToolResult::ok("Order placed", QJsonObject{{"order_id", resp.order_id},
                                                               {"account_id", account_id},
                                                               {"symbol", symbol},
@@ -236,16 +245,22 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .string("symbol", "Trading symbol").required().length(1, 64)
-            .string("exchange", "Exchange (e.g. NSE, NFO)").required()
-            .number("position_size", "Target net position (positive=long, negative=short, 0=flatten)").required()
-            .string("order_type", "Price type").default_str("MARKET")
-                .enums({"MARKET", "LIMIT", "SL", "SL-M"})
-            .number("price", "Limit price (required for LIMIT / SL)")
-            .string("product", "Product type").default_str("MIS")
-                .enums({"MIS", "CNC", "NRML"})
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .string("symbol", "Trading symbol")
+                             .required()
+                             .length(1, 64)
+                             .string("exchange", "Exchange (e.g. NSE, NFO)")
+                             .required()
+                             .number("position_size", "Target net position (positive=long, negative=short, 0=flatten)")
+                             .required()
+                             .string("order_type", "Price type")
+                             .default_str("MARKET")
+                             .enums({"MARKET", "LIMIT", "SL", "SL-M"})
+                             .number("price", "Limit price (required for LIMIT / SL)")
+                             .string("product", "Product type")
+                             .default_str("MIS")
+                             .enums({"MIS", "CNC", "NRML"})
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -271,8 +286,9 @@ std::vector<ToolDef> get_live_trading_tools() {
                 return ToolResult::fail(resp.error.isEmpty() ? "Smart order failed" : resp.error);
 
             const auto& r = resp.data.value();
-            LOG_INFO(TAG, QString("Live smart order: %1 -> action_taken=%2 %3")
-                              .arg(symbol).arg(r.action_taken).arg(r.order_id));
+            LOG_INFO(
+                TAG,
+                QString("Live smart order: %1 -> action_taken=%2 %3").arg(symbol).arg(r.action_taken).arg(r.order_id));
             return ToolResult::ok(r.message.isEmpty() ? "Smart order processed" : r.message,
                                   QJsonObject{{"account_id", account_id},
                                               {"symbol", symbol},
@@ -294,9 +310,10 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .string("order_id", "Broker order ID to cancel").required()
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .string("order_id", "Broker order ID to cancel")
+                             .required()
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -311,9 +328,9 @@ std::vector<ToolDef> get_live_trading_tools() {
                 return ToolResult::fail(resp.message.isEmpty() ? "Cancel failed" : resp.message);
 
             LOG_INFO(TAG, QString("Live order cancelled: %1 (%2)").arg(order_id, account_id));
-            return ToolResult::ok("Order cancelled", QJsonObject{{"order_id", order_id},
-                                                                 {"account_id", account_id},
-                                                                 {"message", resp.message}});
+            return ToolResult::ok(
+                "Order cancelled",
+                QJsonObject{{"order_id", order_id}, {"account_id", account_id}, {"message", resp.message}});
         };
         tools.push_back(std::move(t));
     }
@@ -327,8 +344,8 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -347,7 +364,9 @@ std::vector<ToolDef> get_live_trading_tools() {
                 failed.append(QJsonObject{{"order_id", f.first}, {"error", f.second}});
 
             LOG_INFO(TAG, QString("Live cancel-all: %1/%2 cancelled (%3)")
-                              .arg(canceled.size()).arg(r.total_attempted).arg(account_id));
+                              .arg(canceled.size())
+                              .arg(r.total_attempted)
+                              .arg(account_id));
             return ToolResult::ok("Cancel-all complete", QJsonObject{{"account_id", account_id},
                                                                      {"total_attempted", r.total_attempted},
                                                                      {"canceled_count", canceled.size()},
@@ -368,11 +387,14 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .string("symbol", "Symbol of the position to close").required().length(1, 64)
-            .string("exchange", "Exchange of the position").required()
-            .string("product", "Product type filter (optional: MIS/CNC/NRML)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .string("symbol", "Symbol of the position to close")
+                             .required()
+                             .length(1, 64)
+                             .string("exchange", "Exchange of the position")
+                             .required()
+                             .string("product", "Product type filter (optional: MIS/CNC/NRML)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -391,9 +413,9 @@ std::vector<ToolDef> get_live_trading_tools() {
             const auto& r = resp.data.value();
             LOG_INFO(TAG, QString("Live position closed: %1 %2 -> %3").arg(symbol, exchange, r.order_id));
             return ToolResult::ok("Position closed", QJsonObject{{"account_id", account_id},
-                                                                {"symbol", symbol},
-                                                                {"exchange", exchange},
-                                                                {"order_id", r.order_id}});
+                                                                 {"symbol", symbol},
+                                                                 {"exchange", exchange},
+                                                                 {"order_id", r.order_id}});
         };
         tools.push_back(std::move(t));
     }
@@ -408,8 +430,8 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -427,8 +449,9 @@ std::vector<ToolDef> get_live_trading_tools() {
             for (const auto& f : r.failed)
                 failed.append(QJsonObject{{"symbol", f.first}, {"error", f.second}});
 
-            LOG_INFO(TAG, QString("Live close-all: %1/%2 closed (%3)")
-                              .arg(closed.size()).arg(r.total_positions).arg(account_id));
+            LOG_INFO(
+                TAG,
+                QString("Live close-all: %1/%2 closed (%3)").arg(closed.size()).arg(r.total_positions).arg(account_id));
             return ToolResult::ok("Close-all complete", QJsonObject{{"account_id", account_id},
                                                                     {"total_positions", r.total_positions},
                                                                     {"closed_count", closed.size()},
@@ -450,8 +473,8 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get current open positions for a live broker account.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -491,8 +514,8 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get long-term holdings (demat) for a live broker account.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -531,8 +554,8 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get the order book (all orders for the day) for a live broker account.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -562,8 +585,8 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get the trade book (executed fills) for a live broker account.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -591,8 +614,8 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get available balance, used margin, and total balance for a live broker account.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -627,10 +650,13 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get a single live quote (LTP, bid/ask, OHLC, volume, OI) for a symbol.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .string("symbol", "Trading symbol").required().length(1, 64)
-            .string("exchange", "Exchange (e.g. NSE, NFO)").required()
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .string("symbol", "Trading symbol")
+                             .required()
+                             .length(1, 64)
+                             .string("exchange", "Exchange (e.g. NSE, NFO)")
+                             .required()
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -660,13 +686,14 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get live quotes for multiple symbols in one call. Each entry "
                         "is \"EXCHANGE:SYMBOL\" (e.g. NSE:SBIN) or just SYMBOL.";
         t.category = "live-trading";
-        t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .array("symbols", "Symbols as \"EXCHANGE:SYMBOL\" or \"SYMBOL\"",
-                   QJsonObject{{"type", "string"}}).required()
-            .string("exchange", "Default exchange for entries without an EXCHANGE: prefix")
+        t.input_schema =
+            ToolSchemaBuilder()
+                .string("account_id", "Broker account ID (optional if exactly one active account)")
+                .array("symbols", "Symbols as \"EXCHANGE:SYMBOL\" or \"SYMBOL\"", QJsonObject{{"type", "string"}})
+                .required()
+                .string("exchange", "Default exchange for entries without an EXCHANGE: prefix")
                 .default_str("NSE")
-            .build();
+                .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -706,10 +733,13 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get Level-2 market depth (bid/ask ladder) for a symbol.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .string("symbol", "Trading symbol").required().length(1, 64)
-            .string("exchange", "Exchange (e.g. NSE, NFO)").required()
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .string("symbol", "Trading symbol")
+                             .required()
+                             .length(1, 64)
+                             .string("exchange", "Exchange (e.g. NSE, NFO)")
+                             .required()
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -749,13 +779,18 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Get the option chain (CE/PE quotes per strike) for an underlying and expiry.";
         t.category = "live-trading";
         t.input_schema = ToolSchemaBuilder()
-            .string("account_id", "Broker account ID (optional if exactly one active account)")
-            .string("underlying", "Underlying symbol (e.g. NIFTY, BANKNIFTY)").required().length(1, 64)
-            .string("exchange", "Exchange (e.g. NFO, BFO)").required()
-            .string("expiry", "Expiry date (broker format, e.g. 2026-05-29)").required()
-            .integer("strike_count", "Number of strikes around ATM (0 = broker default)")
-                .default_int(0).min(0.0)
-            .build();
+                             .string("account_id", "Broker account ID (optional if exactly one active account)")
+                             .string("underlying", "Underlying symbol (e.g. NIFTY, BANKNIFTY)")
+                             .required()
+                             .length(1, 64)
+                             .string("exchange", "Exchange (e.g. NFO, BFO)")
+                             .required()
+                             .string("expiry", "Expiry date (broker format, e.g. 2026-05-29)")
+                             .required()
+                             .integer("strike_count", "Number of strikes around ATM (0 = broker default)")
+                             .default_int(0)
+                             .min(0.0)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
             if (!resolve_account(args["account_id"].toString(), account_id, err))
@@ -786,10 +821,8 @@ std::vector<ToolDef> get_live_trading_tools() {
                                           {"pe_symbol", e.pe_symbol},
                                           {"pe_quote", quote_to_json(e.pe_quote)}});
             }
-            return ToolResult::ok_data(QJsonObject{{"underlying", underlying},
-                                                   {"exchange", exchange},
-                                                   {"expiry", expiry},
-                                                   {"chain", result}});
+            return ToolResult::ok_data(
+                QJsonObject{{"underlying", underlying}, {"exchange", exchange}, {"expiry", expiry}, {"chain", result}});
         };
         tools.push_back(std::move(t));
     }

@@ -33,8 +33,8 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStringList>
-#include <QVariant>
 #include <QVBoxLayout>
+#include <QVariant>
 
 #include <cstdlib>
 #include <ctime>
@@ -73,15 +73,12 @@ float SurfaceAnalyticsScreen::spot_for(const QString& sym) const {
     return 100.0f;
 }
 
-
 void SurfaceAnalyticsScreen::refresh_provider_status() {
     if (!control_panel_)
         return;
     auto& svc = DatabentoService::instance();
-    control_panel_->set_provider_status(
-        "databento",
-        svc.has_api_key() ? "configured" : "not configured",
-        svc.has_api_key() ? "key set" : "Settings → Credentials");
+    control_panel_->set_provider_status("databento", svc.has_api_key() ? "configured" : "not configured",
+                                        svc.has_api_key() ? "key set" : "Settings → Credentials");
 }
 
 void SurfaceAnalyticsScreen::load_dataset_range_for_active_capability() {
@@ -106,22 +103,22 @@ void SurfaceAnalyticsScreen::load_dataset_range_for_active_capability() {
 void SurfaceAnalyticsScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     auto& svc = DatabentoService::instance();
-    connect(&svc, &DatabentoService::vol_surface_ready, this,
-            &SurfaceAnalyticsScreen::on_vol_surface_received, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::ohlcv_ready, this,
-            &SurfaceAnalyticsScreen::on_ohlcv_received, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::futures_ready, this,
-            &SurfaceAnalyticsScreen::on_futures_received, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::surface_ready, this,
-            &SurfaceAnalyticsScreen::on_surface_received, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::fetch_started, this,
-            &SurfaceAnalyticsScreen::on_db_fetch_started, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::fetch_failed, this,
-            &SurfaceAnalyticsScreen::on_db_fetch_failed, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::connection_tested, this,
-            &SurfaceAnalyticsScreen::on_db_connection_tested, Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::raw_response, this,
-            &SurfaceAnalyticsScreen::on_db_raw_response, Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::vol_surface_ready, this, &SurfaceAnalyticsScreen::on_vol_surface_received,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::ohlcv_ready, this, &SurfaceAnalyticsScreen::on_ohlcv_received,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::futures_ready, this, &SurfaceAnalyticsScreen::on_futures_received,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::surface_ready, this, &SurfaceAnalyticsScreen::on_surface_received,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::fetch_started, this, &SurfaceAnalyticsScreen::on_db_fetch_started,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::fetch_failed, this, &SurfaceAnalyticsScreen::on_db_fetch_failed,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::connection_tested, this, &SurfaceAnalyticsScreen::on_db_connection_tested,
+            Qt::UniqueConnection);
+    connect(&svc, &DatabentoService::raw_response, this, &SurfaceAnalyticsScreen::on_db_raw_response,
+            Qt::UniqueConnection);
     refresh_provider_status();
     load_dataset_range_for_active_capability();
 }
@@ -142,11 +139,16 @@ void SurfaceAnalyticsScreen::changeEvent(QEvent* e) {
 void SurfaceAnalyticsScreen::retranslateUi() {
     // Fixed-label toolbar buttons. Category/surface chips carry data-domain
     // names (chart_type_name / category name) and are not translated.
-    if (import_btn_)  import_btn_->setText(tr("IMPORT CSV"));
-    if (refresh_btn_) refresh_btn_->setText(tr("REFRESH"));
-    if (btn_3d_)      btn_3d_->setText(tr("3D"));
-    if (btn_table_)   btn_table_->setText(tr("TABLE"));
-    if (btn_line_)    btn_line_->setText(tr("LINE"));
+    if (import_btn_)
+        import_btn_->setText(tr("IMPORT CSV"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
+    if (btn_3d_)
+        btn_3d_->setText(tr("3D"));
+    if (btn_table_)
+        btn_table_->setText(tr("TABLE"));
+    if (btn_line_)
+        btn_line_->setText(tr("LINE"));
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
@@ -186,8 +188,10 @@ void SurfaceAnalyticsScreen::restore_state(const QVariantMap& state) {
         cs.dataset = state.value("dataset", cs.dataset).toString();
         QString sd = state.value("start_date").toString();
         QString ed = state.value("end_date").toString();
-        if (!sd.isEmpty()) cs.start_date = QDate::fromString(sd, Qt::ISODate);
-        if (!ed.isEmpty()) cs.end_date = QDate::fromString(ed, Qt::ISODate);
+        if (!sd.isEmpty())
+            cs.start_date = QDate::fromString(sd, Qt::ISODate);
+        if (!ed.isEmpty())
+            cs.end_date = QDate::fromString(ed, Qt::ISODate);
         cs.strike_window_pct = state.value("strike_window_pct", cs.strike_window_pct).toInt();
         cs.dte_min = state.value("dte_min", cs.dte_min).toInt();
         cs.dte_max = state.value("dte_max", cs.dte_max).toInt();

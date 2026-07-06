@@ -37,9 +37,8 @@ class HyperliquidSigner {
     /// Build the signed envelope for an HL `exchange` action.
     /// `agent_priv_key_hex` MUST be a 0x-prefixed 32-byte hex string read from
     /// SecureStorage; it never leaves the in-process address space.
-    static Result<SignedAction> sign_action(const QJsonObject& action,
-                                             const QString& agent_priv_key_hex,
-                                             bool is_testnet);
+    static Result<SignedAction> sign_action(const QJsonObject& action, const QString& agent_priv_key_hex,
+                                            bool is_testnet);
 
     /// keccak256 of the canonical JSON of `action` (sorted keys, no whitespace).
     /// Public for testability — known-vector tests assert this output.

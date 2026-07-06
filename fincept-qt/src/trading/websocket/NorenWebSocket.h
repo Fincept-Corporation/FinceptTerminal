@@ -44,8 +44,8 @@ class NorenWebSocket : public BrokerWebSocketBase {
     /// @param user_id       uid sent in the connect frame
     /// @param account_id    actid sent in the connect frame
     /// @param susertoken    session token (raw); derive_susertoken() may transform it
-    NorenWebSocket(const QString& ws_url, const QString& user_id, const QString& account_id,
-                   const QString& susertoken, QObject* parent = nullptr);
+    NorenWebSocket(const QString& ws_url, const QString& user_id, const QString& account_id, const QString& susertoken,
+                   QObject* parent = nullptr);
 
     void open() override;
     void close() override;
@@ -108,11 +108,11 @@ class NorenWebSocket : public BrokerWebSocketBase {
     QTimer heartbeat_timer_;
     bool auth_ok_ = false;
 
-    QSet<QString> subscribed_scrips_;          // all "EXCHANGE|TOKEN" we want active
-    QHash<qint64, QString> token_exchange_;    // token → exchange override
+    QSet<QString> subscribed_scrips_;       // all "EXCHANGE|TOKEN" we want active
+    QHash<qint64, QString> token_exchange_; // token → exchange override
 
-    static constexpr int kHeartbeatMs = 30000;     // send {"t":"h"} every 30s
-    static constexpr int kSubscribeBatch = 100;    // # scrips per touchline/depth frame
+    static constexpr int kHeartbeatMs = 30000;  // send {"t":"h"} every 30s
+    static constexpr int kSubscribeBatch = 100; // # scrips per touchline/depth frame
 };
 
 } // namespace fincept::trading

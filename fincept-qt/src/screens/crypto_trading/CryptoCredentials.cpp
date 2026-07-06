@@ -19,42 +19,45 @@ namespace {
 static QString kDialogStyle() {
     const QString mono = "'Consolas', 'Courier New', monospace";
     return QString(
-        // Dialog background
-        "QDialog { background: %1; color: %2; font-family: %13; }"
-        // Inputs (API key/secret/password/TOTP)
-        "QLineEdit { background: %3; border: 1px solid %4; color: %2; padding: 6px; "
-        "           font-size: 13px; font-family: %13; }"
-        "QLineEdit:focus { border-color: %5; }"
-        // Labels by role
-        "QLabel#credTitle { color: %6; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; font-family: %13; }"
-        "QLabel#credInfo { color: %7; font-size: 12px; font-family: %13; }"
-        "QLabel#credFieldLabel { color: %7; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; font-family: %13; }"
-        "QLabel#credTotpCode { color: %6; font-size: 18px; font-weight: 700; letter-spacing: 2px; font-family: %13; }"
-        "QLabel#credTotpCountdown { color: %8; font-size: 11px; font-family: %13; }"
-        "QLabel#credStatusErr { color: %9; font-size: 12px; font-family: %13; }"
-        "QLabel#credStatusOk { color: %10; font-size: 12px; font-family: %13; }"
-        "QLabel#credStatusWarn { color: %11; font-size: 12px; font-family: %13; }"
-        // Buttons
-        "QPushButton#credClearBtn { background: rgba(220,38,38,0.1); color: %9; border: 1px solid %12; "
-        "                          padding: 6px 16px; font-weight: 700; font-size: 12px; font-family: %13; }"
-        "QPushButton#credClearBtn:hover { background: %9; color: %2; }"
-        "QPushButton#credSaveBtn { background: rgba(217,119,6,0.1); color: %6; border: 1px solid %14; "
-        "                         padding: 6px 16px; font-weight: 700; font-size: 12px; font-family: %13; }"
-        "QPushButton#credSaveBtn:hover { background: %6; color: %1; }")
-        .arg(colors::BG_BASE(),           // %1
-             colors::TEXT_PRIMARY(),      // %2
-             colors::BG_SURFACE(),        // %3
-             colors::BORDER_DIM(),        // %4
-             colors::BORDER_BRIGHT(),     // %5
-             colors::AMBER(),             // %6
-             colors::TEXT_SECONDARY(),    // %7
-             colors::TEXT_TERTIARY(),     // %8
-             colors::NEGATIVE(),          // %9
-             colors::POSITIVE(),          // %10
-             colors::WARNING(),           // %11
-             colors::NEGATIVE_DIM(),      // %12
-             mono)                        // %13
-        .arg(colors::AMBER_DIM());        // %14
+               // Dialog background
+               "QDialog { background: %1; color: %2; font-family: %13; }"
+               // Inputs (API key/secret/password/TOTP)
+               "QLineEdit { background: %3; border: 1px solid %4; color: %2; padding: 6px; "
+               "           font-size: 13px; font-family: %13; }"
+               "QLineEdit:focus { border-color: %5; }"
+               // Labels by role
+               "QLabel#credTitle { color: %6; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; font-family: "
+               "%13; }"
+               "QLabel#credInfo { color: %7; font-size: 12px; font-family: %13; }"
+               "QLabel#credFieldLabel { color: %7; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; "
+               "font-family: %13; }"
+               "QLabel#credTotpCode { color: %6; font-size: 18px; font-weight: 700; letter-spacing: 2px; font-family: "
+               "%13; }"
+               "QLabel#credTotpCountdown { color: %8; font-size: 11px; font-family: %13; }"
+               "QLabel#credStatusErr { color: %9; font-size: 12px; font-family: %13; }"
+               "QLabel#credStatusOk { color: %10; font-size: 12px; font-family: %13; }"
+               "QLabel#credStatusWarn { color: %11; font-size: 12px; font-family: %13; }"
+               // Buttons
+               "QPushButton#credClearBtn { background: rgba(220,38,38,0.1); color: %9; border: 1px solid %12; "
+               "                          padding: 6px 16px; font-weight: 700; font-size: 12px; font-family: %13; }"
+               "QPushButton#credClearBtn:hover { background: %9; color: %2; }"
+               "QPushButton#credSaveBtn { background: rgba(217,119,6,0.1); color: %6; border: 1px solid %14; "
+               "                         padding: 6px 16px; font-weight: 700; font-size: 12px; font-family: %13; }"
+               "QPushButton#credSaveBtn:hover { background: %6; color: %1; }")
+        .arg(colors::BG_BASE(),        // %1
+             colors::TEXT_PRIMARY(),   // %2
+             colors::BG_SURFACE(),     // %3
+             colors::BORDER_DIM(),     // %4
+             colors::BORDER_BRIGHT(),  // %5
+             colors::AMBER(),          // %6
+             colors::TEXT_SECONDARY(), // %7
+             colors::TEXT_TERTIARY(),  // %8
+             colors::NEGATIVE(),       // %9
+             colors::POSITIVE(),       // %10
+             colors::WARNING(),        // %11
+             colors::NEGATIVE_DIM(),   // %12
+             mono)                     // %13
+        .arg(colors::AMBER_DIM());     // %14
 }
 } // namespace
 
@@ -220,23 +223,39 @@ void CryptoCredentials::changeEvent(QEvent* event) {
 
 void CryptoCredentials::retranslateUi() {
     setWindowTitle(tr("API Credentials — %1").arg(exchange_id_.toUpper()));
-    if (title_label_)          title_label_->setText(tr("API CREDENTIALS  %1").arg(exchange_id_.toUpper()));
-    if (info_label_)           info_label_->setText(tr("Enter your exchange API credentials for live trading.\n"
-                                                       "Keys are stored locally in encrypted secure storage."));
-    if (key_field_label_)      key_field_label_->setText(tr("API KEY"));
-    if (key_edit_)             key_edit_->setPlaceholderText(tr("Enter API key"));
-    if (secret_field_label_)   secret_field_label_->setText(tr("API SECRET"));
-    if (secret_edit_)          secret_edit_->setPlaceholderText(tr("Enter API secret"));
-    if (password_field_label_) password_field_label_->setText(tr("PASSPHRASE (OKX/KUCOIN/BITGET/COINBASE)"));
-    if (password_edit_)        password_edit_->setPlaceholderText(tr("Optional"));
-    if (wallet_field_label_)   wallet_field_label_->setText(tr("WALLET ADDRESS"));
-    if (wallet_edit_)          wallet_edit_->setPlaceholderText(tr("Enter wallet address (0x…)"));
-    if (private_key_field_label_) private_key_field_label_->setText(tr("PRIVATE KEY"));
-    if (private_key_edit_)     private_key_edit_->setPlaceholderText(tr("Enter private key"));
-    if (totp_field_label_)     totp_field_label_->setText(tr("TOTP SECRET (2FA)"));
-    if (totp_secret_edit_)     totp_secret_edit_->setPlaceholderText(tr("Base32 secret (optional)"));
-    if (clear_btn_)            clear_btn_->setText(tr("CLEAR"));
-    if (save_btn_)             save_btn_->setText(tr("SAVE & CONNECT"));
+    if (title_label_)
+        title_label_->setText(tr("API CREDENTIALS  %1").arg(exchange_id_.toUpper()));
+    if (info_label_)
+        info_label_->setText(tr("Enter your exchange API credentials for live trading.\n"
+                                "Keys are stored locally in encrypted secure storage."));
+    if (key_field_label_)
+        key_field_label_->setText(tr("API KEY"));
+    if (key_edit_)
+        key_edit_->setPlaceholderText(tr("Enter API key"));
+    if (secret_field_label_)
+        secret_field_label_->setText(tr("API SECRET"));
+    if (secret_edit_)
+        secret_edit_->setPlaceholderText(tr("Enter API secret"));
+    if (password_field_label_)
+        password_field_label_->setText(tr("PASSPHRASE (OKX/KUCOIN/BITGET/COINBASE)"));
+    if (password_edit_)
+        password_edit_->setPlaceholderText(tr("Optional"));
+    if (wallet_field_label_)
+        wallet_field_label_->setText(tr("WALLET ADDRESS"));
+    if (wallet_edit_)
+        wallet_edit_->setPlaceholderText(tr("Enter wallet address (0x…)"));
+    if (private_key_field_label_)
+        private_key_field_label_->setText(tr("PRIVATE KEY"));
+    if (private_key_edit_)
+        private_key_edit_->setPlaceholderText(tr("Enter private key"));
+    if (totp_field_label_)
+        totp_field_label_->setText(tr("TOTP SECRET (2FA)"));
+    if (totp_secret_edit_)
+        totp_secret_edit_->setPlaceholderText(tr("Base32 secret (optional)"));
+    if (clear_btn_)
+        clear_btn_->setText(tr("CLEAR"));
+    if (save_btn_)
+        save_btn_->setText(tr("SAVE & CONNECT"));
     // TOTP code label only resets to the idle placeholder when no secret is set;
     // a live code is data and is left untouched.
     if (totp_code_label_ && totp_secret_edit_ && totp_secret_edit_->text().trimmed().isEmpty())
@@ -259,8 +278,8 @@ QString CryptoCredentials::private_key() const {
     return private_key_edit_->text().trimmed();
 }
 
-void CryptoCredentials::set_values(const QString& key, const QString& secret, const QString& pw,
-                                   const QString& wallet, const QString& pk) {
+void CryptoCredentials::set_values(const QString& key, const QString& secret, const QString& pw, const QString& wallet,
+                                   const QString& pk) {
     key_edit_->setText(key);
     secret_edit_->setText(secret);
     password_edit_->setText(pw);
@@ -313,18 +332,17 @@ void CryptoCredentials::refresh_totp() {
         return;
 
     QPointer<CryptoCredentials> self = this;
-    services::crypto::TotpService::instance().generate(
-        secret, [self](const services::crypto::TotpResult& r) {
-            if (!self)
-                return;
-            if (!r.success) {
-                self->totp_code_label_->setText(tr("CODE: ERR"));
-                self->totp_countdown_label_->setText("");
-                return;
-            }
-            self->totp_code_label_->setText(tr("CODE: %1").arg(r.code));
-            self->totp_countdown_label_->setText(QString("(%1s)").arg(r.valid_for));
-        });
+    services::crypto::TotpService::instance().generate(secret, [self](const services::crypto::TotpResult& r) {
+        if (!self)
+            return;
+        if (!r.success) {
+            self->totp_code_label_->setText(tr("CODE: ERR"));
+            self->totp_countdown_label_->setText("");
+            return;
+        }
+        self->totp_code_label_->setText(tr("CODE: %1").arg(r.code));
+        self->totp_countdown_label_->setText(QString("(%1s)").arg(r.valid_for));
+    });
 }
 
 } // namespace fincept::screens::crypto

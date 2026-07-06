@@ -6,11 +6,12 @@
 //
 // Part of the partial-class split of DataSourcesScreen.cpp.
 
+#include "core/logging/Logger.h"
 #include "screens/data_sources/DataSourcesScreen.h"
 
-#include "core/logging/Logger.h"
-
-namespace { const QString TAG = "DataSources"; }
+namespace {
+const QString TAG = "DataSources";
+}
 
 #include "core/session/ScreenStateManager.h"
 #include "screens/data_sources/ConnectionConfigDialog.h"
@@ -55,12 +56,11 @@ namespace fnt = fincept::ui::fonts;
 
 static const QString TAG = "DataSources";
 
-
 void DataSourcesScreen::show_config_dialog(const ConnectorConfig& config, const QString& edit_id, bool duplicate) {
     const QString saved_id = show_connection_config_dialog(this, config, edit_id, duplicate);
     if (saved_id.isEmpty())
         return;
-    selected_connector_id_  = config.id;
+    selected_connector_id_ = config.id;
     selected_connection_id_ = saved_id;
     refresh_connections();
 }
@@ -97,7 +97,6 @@ QVector<ConnectorConfig> DataSourcesScreen::filtered_connectors() const {
     }
     return filtered;
 }
-
 
 void DataSourcesScreen::on_category_filter(int idx) {
     show_all_categories_ = (idx == 0);
@@ -176,7 +175,8 @@ void DataSourcesScreen::on_connection_enabled_changed(const QString& conn_id, bo
 void DataSourcesScreen::on_connection_test(const QString& conn_id) {
     QPointer<DataSourcesScreen> self = this;
     test_connection(this, conn_id, [self](const QString& id, bool ok, const QString& msg) {
-        if (!self) return;
+        if (!self)
+            return;
         self->live_status_cache_[id] = {ok, msg};
         self->update_connection_status_cell(id, ok, msg);
         self->update_detail_panel();
@@ -423,8 +423,9 @@ void DataSourcesScreen::on_poll_timer() {
             QTcpSocket socket;
             socket.connectToHost(cap_host, static_cast<quint16>(cap_port));
             const bool ok = socket.waitForConnected(3000);
-            const QString msg = ok ? DataSourcesScreen::tr("Reachable: %1").arg(cap_probe.isEmpty() ? cap_host : cap_probe)
-                                   : DataSourcesScreen::tr("Unreachable: %1").arg(socket.errorString());
+            const QString msg =
+                ok ? DataSourcesScreen::tr("Reachable: %1").arg(cap_probe.isEmpty() ? cap_host : cap_probe)
+                   : DataSourcesScreen::tr("Unreachable: %1").arg(socket.errorString());
             if (ok)
                 socket.disconnectFromHost();
 

@@ -29,9 +29,8 @@ NewsWidget::NewsWidget(QWidget* parent) : BaseWidget(tr("MARKET NEWS"), parent, 
 
     // Refresh button on the title bar — force-refresh through the hub.
     // Per-producer rate limit still applies, so this can't hammer upstream.
-    connect(this, &BaseWidget::refresh_requested, this, []() {
-        datahub::DataHub::instance().request(QString::fromLatin1(kTopic), /*force=*/true);
-    });
+    connect(this, &BaseWidget::refresh_requested, this,
+            []() { datahub::DataHub::instance().request(QString::fromLatin1(kTopic), /*force=*/true); });
 
     apply_styles();
     set_loading(true);

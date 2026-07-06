@@ -5,9 +5,8 @@
 //
 // Part of the topic-based split of UtilityNodes.cpp.
 
-#include "services/workflow/nodes/UtilityNodes.h"
-
 #include "services/workflow/NodeRegistry.h"
+#include "services/workflow/nodes/UtilityNodes.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -191,8 +190,7 @@ void register_utility_tier1_extra(NodeRegistry& registry) {
                 } else if (op == "hmac_sha256") {
                     const QString key = params.value("key").toString();
                     const QString hash = QString::fromLatin1(
-                        QMessageAuthenticationCode::hash(text.toUtf8(), key.toUtf8(),
-                                                         QCryptographicHash::Sha256)
+                        QMessageAuthenticationCode::hash(text.toUtf8(), key.toUtf8(), QCryptographicHash::Sha256)
                             .toHex());
                     cb(true, QJsonObject{{"result", hash}, {"operation", op}}, {});
                 } else {
@@ -296,6 +294,5 @@ void register_utility_tier1_extra(NodeRegistry& registry) {
                 cb(true, data, {});
             },
     });
-
 }
 } // namespace fincept::workflow

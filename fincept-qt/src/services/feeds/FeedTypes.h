@@ -25,9 +25,9 @@ enum class FeedStatus { Idle, Fetching, Ok, Error };
 ///     JSON: dot-path (e.g. "meta.url")
 ///     CSV : header name, or "#<index>" (0-based)
 struct MappedField {
-    QString label;       // display column name
-    QString path;        // source tag/path
-    QString role;        // "" | "title" | "summary" | "link" | "time"
+    QString label; // display column name
+    QString path;  // source tag/path
+    QString role;  // "" | "title" | "summary" | "link" | "time"
 };
 
 /// Manual field mapping — an unlimited, user-editable list of MappedFields plus the
@@ -111,36 +111,57 @@ struct FeedItem {
     QString summary;
     QString link;
     QString source;
-    qint64 sort_ts = 0; // epoch secs; 0 = unknown
-    QString time;       // display string
+    qint64 sort_ts = 0;             // epoch secs; 0 = unknown
+    QString time;                   // display string
     QHash<QString, QString> fields; // mapped extra columns (manual mode)
 };
 
 // String <-> enum helpers (stable storage tokens).
-inline QString to_token(ParseMode m) { return m == ParseMode::Manual ? "manual" : "auto"; }
-inline ParseMode parse_mode_from(const QString& s) { return s == "manual" ? ParseMode::Manual : ParseMode::Auto; }
+inline QString to_token(ParseMode m) {
+    return m == ParseMode::Manual ? "manual" : "auto";
+}
+inline ParseMode parse_mode_from(const QString& s) {
+    return s == "manual" ? ParseMode::Manual : ParseMode::Auto;
+}
 
-inline QString to_token(DisplayMode m) { return m == DisplayMode::Table ? "table" : "cards"; }
-inline DisplayMode display_mode_from(const QString& s) { return s == "table" ? DisplayMode::Table : DisplayMode::Cards; }
+inline QString to_token(DisplayMode m) {
+    return m == DisplayMode::Table ? "table" : "cards";
+}
+inline DisplayMode display_mode_from(const QString& s) {
+    return s == "table" ? DisplayMode::Table : DisplayMode::Cards;
+}
 
 inline QString to_token(FeedFormat f) {
     switch (f) {
-        case FeedFormat::Rss: return "rss";
-        case FeedFormat::Atom: return "atom";
-        case FeedFormat::Xml: return "xml";
-        case FeedFormat::Json: return "json";
-        case FeedFormat::Csv: return "csv";
-        case FeedFormat::Html: return "html";
-        default: return "auto";
+        case FeedFormat::Rss:
+            return "rss";
+        case FeedFormat::Atom:
+            return "atom";
+        case FeedFormat::Xml:
+            return "xml";
+        case FeedFormat::Json:
+            return "json";
+        case FeedFormat::Csv:
+            return "csv";
+        case FeedFormat::Html:
+            return "html";
+        default:
+            return "auto";
     }
 }
 inline FeedFormat feed_format_from(const QString& s) {
-    if (s == "rss") return FeedFormat::Rss;
-    if (s == "atom") return FeedFormat::Atom;
-    if (s == "xml") return FeedFormat::Xml;
-    if (s == "json") return FeedFormat::Json;
-    if (s == "csv") return FeedFormat::Csv;
-    if (s == "html") return FeedFormat::Html;
+    if (s == "rss")
+        return FeedFormat::Rss;
+    if (s == "atom")
+        return FeedFormat::Atom;
+    if (s == "xml")
+        return FeedFormat::Xml;
+    if (s == "json")
+        return FeedFormat::Json;
+    if (s == "csv")
+        return FeedFormat::Csv;
+    if (s == "html")
+        return FeedFormat::Html;
     return FeedFormat::Auto;
 }
 

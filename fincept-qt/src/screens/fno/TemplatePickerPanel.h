@@ -24,8 +24,8 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
-#include <QString>
 #include <QSpinBox>
+#include <QString>
 #include <QVector>
 #include <QWidget>
 

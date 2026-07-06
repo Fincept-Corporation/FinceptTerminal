@@ -11,8 +11,7 @@ ToastService& ToastService::instance() {
     return s;
 }
 
-void ToastService::post(Severity sev, const QString& message, const QString& source,
-                        QWidget* target_frame) {
+void ToastService::post(Severity sev, const QString& message, const QString& source, QWidget* target_frame) {
     Notification n;
     n.severity = sev;
     n.message = message;
@@ -26,13 +25,19 @@ void ToastService::post(Severity sev, const QString& message, const QString& sou
 
     const char* level = "INFO";
     switch (sev) {
-        case Severity::Success:  level = "OK"; break;
-        case Severity::Warning:  level = "WARN"; break;
-        case Severity::Error:    level = "ERR"; break;
-        case Severity::Info:     break;
+        case Severity::Success:
+            level = "OK";
+            break;
+        case Severity::Warning:
+            level = "WARN";
+            break;
+        case Severity::Error:
+            level = "ERR";
+            break;
+        case Severity::Info:
+            break;
     }
-    LOG_INFO("Toast",
-             QString("[%1] %2 (%3)").arg(level, message, source.isEmpty() ? QStringLiteral("-") : source));
+    LOG_INFO("Toast", QString("[%1] %2 (%3)").arg(level, message, source.isEmpty() ? QStringLiteral("-") : source));
 
     emit posted(n);
 }

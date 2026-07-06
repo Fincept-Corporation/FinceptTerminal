@@ -1,8 +1,8 @@
 // src/screens/gov_data/GovDataCongressPanel.cpp
 #include "screens/gov_data/GovDataCongressPanel.h"
-#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
@@ -206,13 +206,20 @@ QWidget* GovDataCongressPanel::build_toolbar() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void GovDataCongressPanel::retranslateUi() {
-    if (back_btn_)    back_btn_->setText(tr("← BACK"));
-    if (bills_btn_)   bills_btn_->setText(tr("BILLS"));
-    if (summary_btn_) summary_btn_->setText(tr("SUMMARY"));
-    if (fetch_btn_)   fetch_btn_->setText(tr("FETCH"));
-    if (export_btn_)  export_btn_->setText(tr("CSV"));
-    if (congress_lbl_) congress_lbl_->setText(tr("CONGRESS"));
-    if (type_lbl_)     type_lbl_->setText(tr("TYPE"));
+    if (back_btn_)
+        back_btn_->setText(tr("← BACK"));
+    if (bills_btn_)
+        bills_btn_->setText(tr("BILLS"));
+    if (summary_btn_)
+        summary_btn_->setText(tr("SUMMARY"));
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)
+        export_btn_->setText(tr("CSV"));
+    if (congress_lbl_)
+        congress_lbl_->setText(tr("CONGRESS"));
+    if (type_lbl_)
+        type_lbl_->setText(tr("TYPE"));
 
     if (bill_type_combo_) {
         const QString cur = bill_type_combo_->currentData().toString();
@@ -226,13 +233,13 @@ void GovDataCongressPanel::retranslateUi() {
         bill_type_combo_->setItemText(7, tr("H. Simple Res."));
         bill_type_combo_->setItemText(8, tr("S. Simple Res."));
         const int idx = bill_type_combo_->findData(cur);
-        if (idx >= 0) bill_type_combo_->setCurrentIndex(idx);
+        if (idx >= 0)
+            bill_type_combo_->setCurrentIndex(idx);
     }
 
     if (bills_table_)
         bills_table_->setHorizontalHeaderLabels(
-            {tr("CONGRESS"), tr("TYPE"), tr("NUMBER"), tr("TITLE"),
-             tr("LATEST ACTION"), tr("DATE")});
+            {tr("CONGRESS"), tr("TYPE"), tr("NUMBER"), tr("TITLE"), tr("LATEST ACTION"), tr("DATE")});
     if (summary_table_)
         summary_table_->setHorizontalHeaderLabels({tr("BILL TYPE"), tr("COUNT")});
 }

@@ -152,10 +152,12 @@ void CryptoOrderBook::changeEvent(QEvent* event) {
 }
 
 void CryptoOrderBook::retranslateUi() {
-    if (title_label_) title_label_->setText(tr("ORDER BOOK"));
+    if (title_label_)
+        title_label_->setText(tr("ORDER BOOK"));
     const QString mode_labels[] = {tr("Book"), tr("Vol"), tr("Imb"), tr("Sig")};
     for (int i = 0; i < 4; ++i)
-        if (mode_btns_[i]) mode_btns_[i]->setText(mode_labels[i]);
+        if (mode_btns_[i])
+            mode_btns_[i]->setText(mode_labels[i]);
     // Spread label: only reset to the idle placeholder when no live spread
     // has been received yet; a real spread value is data and stays as-is.
     if (spread_label_ && !has_spread_data_)

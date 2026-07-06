@@ -37,13 +37,18 @@ static constexpr int kDefaultTimeoutMs = 15000;
 
 screens::ExcelScreen* find_excel_screen() {
     for (auto* w : WindowRegistry::instance().frames()) {
-        if (!w || !w->dock_router()) continue;
+        if (!w || !w->dock_router())
+            continue;
         auto* dw = w->dock_router()->find_dock_widget("excel");
-        if (!dw) continue;
+        if (!dw)
+            continue;
         auto* widget = dw->widget();
-        if (!widget) continue;
-        if (auto* es = qobject_cast<screens::ExcelScreen*>(widget)) return es;
-        if (auto* es = widget->findChild<screens::ExcelScreen*>()) return es;
+        if (!widget)
+            continue;
+        if (auto* es = qobject_cast<screens::ExcelScreen*>(widget))
+            return es;
+        if (auto* es = widget->findChild<screens::ExcelScreen*>())
+            return es;
     }
     return nullptr;
 }
@@ -55,7 +60,8 @@ QTabWidget* find_excel_tabs() {
 
 screens::SpreadsheetWidget* sheet_by_index(int idx) {
     auto* tabs = find_excel_tabs();
-    if (!tabs || idx < 0 || idx >= tabs->count()) return nullptr;
+    if (!tabs || idx < 0 || idx >= tabs->count())
+        return nullptr;
     return qobject_cast<screens::SpreadsheetWidget*>(tabs->widget(idx));
 }
 
@@ -67,7 +73,8 @@ screens::SpreadsheetWidget* active_sheet() {
 screens::SpreadsheetWidget* resolve_sheet(const QJsonObject& args) {
     if (args.contains("sheet_index") && !args["sheet_index"].isNull()) {
         const int i = args["sheet_index"].toInt(-1);
-        if (i >= 0) return sheet_by_index(i);
+        if (i >= 0)
+            return sheet_by_index(i);
     }
     return active_sheet();
 }
@@ -88,18 +95,23 @@ std::vector<ToolDef> get_excel_tools() {
         t.description = "List all sheets (index, name, rows, cols, is_active).";
         t.category = "excel";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* tabs = find_excel_tabs();
-                if (!tabs) { resolve(ToolResult::fail("Excel screen not open")); return; }
+                if (!tabs) {
+                    resolve(ToolResult::fail("Excel screen not open"));
+                    return;
+                }
                 QJsonArray arr;
                 for (int i = 0; i < tabs->count(); ++i) {
                     auto* s = qobject_cast<screens::SpreadsheetWidget*>(tabs->widget(i));
-                    if (!s) continue;
+                    if (!s)
+                        continue;
                     arr.append(QJsonObject{
-                        {"index", i}, {"name", s->sheet_name()},
-                        {"rows", s->row_count()}, {"cols", s->col_count()},
+                        {"index", i},
+                        {"name", s->sheet_name()},
+                        {"rows", s->row_count()},
+                        {"cols", s->col_count()},
                         {"is_active", i == tabs->currentIndex()},
                     });
                 }
@@ -116,16 +128,23 @@ std::vector<ToolDef> get_excel_tools() {
         t.description = "Get the currently-active sheet (index + name + dimensions).";
         t.category = "excel";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* tabs = find_excel_tabs();
-                if (!tabs) { resolve(ToolResult::fail("Excel screen not open")); return; }
+                if (!tabs) {
+                    resolve(ToolResult::fail("Excel screen not open"));
+                    return;
+                }
                 auto* s = active_sheet();
-                if (!s) { resolve(ToolResult::fail("No active sheet")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("No active sheet"));
+                    return;
+                }
                 resolve(ToolResult::ok_data(QJsonObject{
-                    {"index", tabs->currentIndex()}, {"name", s->sheet_name()},
-                    {"rows", s->row_count()}, {"cols", s->col_count()},
+                    {"index", tabs->currentIndex()},
+                    {"name", s->sheet_name()},
+                    {"rows", s->row_count()},
+                    {"cols", s->col_count()},
                 }));
             });
         };
@@ -140,16 +159,19 @@ std::vector<ToolDef> get_excel_tools() {
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().integer("sheet_index", "Sheet index").required().min(0).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
-                if (!tabs) { resolve(ToolResult::fail("Excel screen not open")); return; }
+                if (!tabs) {
+                    resolve(ToolResult::fail("Excel screen not open"));
+                    return;
+                }
                 const int i = args["sheet_index"].toInt();
-                if (i < 0 || i >= tabs->count()) { resolve(ToolResult::fail("Index out of range")); return; }
+                if (i < 0 || i >= tabs->count()) {
+                    resolve(ToolResult::fail("Index out of range"));
+                    return;
+                }
                 tabs->setCurrentIndex(i);
                 resolve(ToolResult::ok("Sheet activated", QJsonObject{{"index", i}}));
             });
@@ -161,24 +183,33 @@ std::vector<ToolDef> get_excel_tools() {
     {
         ToolDef t;
         t.name = "add_excel_sheet";
-        t.description = "Add a new blank sheet with an optional name (default: Sheet<N>). Returns the new sheet's index.";
+        t.description =
+            "Add a new blank sheet with an optional name (default: Sheet<N>). Returns the new sheet's index.";
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("name", "Sheet name (empty = auto-generated)").default_str("").length(0, 64)
-            .integer("rows", "Initial row count").default_int(100).between(1, 10000)
-            .integer("cols", "Initial col count").default_int(26).between(1, 256)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("name", "Sheet name (empty = auto-generated)")
+                             .default_str("")
+                             .length(0, 64)
+                             .integer("rows", "Initial row count")
+                             .default_int(100)
+                             .between(1, 10000)
+                             .integer("cols", "Initial col count")
+                             .default_int(26)
+                             .between(1, 256)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
-                if (!tabs) { resolve(ToolResult::fail("Excel screen not open")); return; }
+                if (!tabs) {
+                    resolve(ToolResult::fail("Excel screen not open"));
+                    return;
+                }
                 QString name = args["name"].toString();
-                if (name.isEmpty()) name = QString("Sheet%1").arg(tabs->count() + 1);
-                auto* s = new screens::SpreadsheetWidget(name,
-                                                         args["rows"].toInt(100), args["cols"].toInt(26));
+                if (name.isEmpty())
+                    name = QString("Sheet%1").arg(tabs->count() + 1);
+                auto* s = new screens::SpreadsheetWidget(name, args["rows"].toInt(100), args["cols"].toInt(26));
                 const int idx = tabs->addTab(s, name);
                 tabs->setCurrentIndex(idx);
                 resolve(ToolResult::ok("Sheet added", QJsonObject{{"index", idx}, {"name", name}}));
@@ -196,20 +227,27 @@ std::vector<ToolDef> get_excel_tools() {
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index to delete").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().integer("sheet_index", "Sheet index to delete").required().min(0).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
-                if (!tabs) { resolve(ToolResult::fail("Excel screen not open")); return; }
+                if (!tabs) {
+                    resolve(ToolResult::fail("Excel screen not open"));
+                    return;
+                }
                 const int i = args["sheet_index"].toInt();
-                if (i < 0 || i >= tabs->count()) { resolve(ToolResult::fail("Index out of range")); return; }
-                if (tabs->count() <= 1) { resolve(ToolResult::fail("Cannot delete the last sheet")); return; }
+                if (i < 0 || i >= tabs->count()) {
+                    resolve(ToolResult::fail("Index out of range"));
+                    return;
+                }
+                if (tabs->count() <= 1) {
+                    resolve(ToolResult::fail("Cannot delete the last sheet"));
+                    return;
+                }
                 auto* w = tabs->widget(i);
                 tabs->removeTab(i);
-                if (w) w->deleteLater();
+                if (w)
+                    w->deleteLater();
                 resolve(ToolResult::ok("Sheet deleted", QJsonObject{{"index", i}}));
             });
         };
@@ -225,17 +263,26 @@ std::vector<ToolDef> get_excel_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index").required().min(0)
-            .string("name", "New name").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index")
+                             .required()
+                             .min(0)
+                             .string("name", "New name")
+                             .required()
+                             .length(1, 64)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
-                if (!tabs) { resolve(ToolResult::fail("Excel screen not open")); return; }
+                if (!tabs) {
+                    resolve(ToolResult::fail("Excel screen not open"));
+                    return;
+                }
                 const int i = args["sheet_index"].toInt();
                 auto* s = sheet_by_index(i);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 const QString name = args["name"].toString();
                 s->set_sheet_name(name);
                 tabs->setTabText(i, name);
@@ -253,21 +300,32 @@ std::vector<ToolDef> get_excel_tools() {
         t.category = "excel";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .integer("row", "Zero-indexed row").required().min(0)
-            .integer("col", "Zero-indexed column").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .integer("row", "Zero-indexed row")
+                             .required()
+                             .min(0)
+                             .integer("col", "Zero-indexed column")
+                             .required()
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 const int r = args["row"].toInt(), c = args["col"].toInt();
                 if (r >= s->row_count() || c >= s->col_count()) {
-                    resolve(ToolResult::fail("Cell out of range")); return;
+                    resolve(ToolResult::fail("Cell out of range"));
+                    return;
                 }
                 resolve(ToolResult::ok_data(QJsonObject{
-                    {"row", r}, {"col", c}, {"text", s->cell_text(r, c)},
+                    {"row", r},
+                    {"col", c},
+                    {"text", s->cell_text(r, c)},
                 }));
             });
         };
@@ -278,21 +336,32 @@ std::vector<ToolDef> get_excel_tools() {
     {
         ToolDef t;
         t.name = "set_excel_cell";
-        t.description = "Write a cell's text. Strings starting with '=' are evaluated as formulas (e.g. '=A1+B1', '=SUM(A1:A10)').";
+        t.description =
+            "Write a cell's text. Strings starting with '=' are evaluated as formulas (e.g. '=A1+B1', '=SUM(A1:A10)').";
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .integer("row", "Zero-indexed row").required().min(0)
-            .integer("col", "Zero-indexed column").required().min(0)
-            .string("text", "Cell text (or formula)").required().length(0, 4096)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .integer("row", "Zero-indexed row")
+                             .required()
+                             .min(0)
+                             .integer("col", "Zero-indexed column")
+                             .required()
+                             .min(0)
+                             .string("text", "Cell text (or formula)")
+                             .required()
+                             .length(0, 4096)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 s->set_cell(args["row"].toInt(), args["col"].toInt(), args["text"].toString());
                 resolve(ToolResult::ok("Cell updated"));
             });
@@ -309,15 +378,23 @@ std::vector<ToolDef> get_excel_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .integer("row", "Zero-indexed row").required().min(0)
-            .integer("col", "Zero-indexed column").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .integer("row", "Zero-indexed row")
+                             .required()
+                             .min(0)
+                             .integer("col", "Zero-indexed column")
+                             .required()
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 s->set_cell(args["row"].toInt(), args["col"].toInt(), QString());
                 resolve(ToolResult::ok("Cell cleared"));
             });
@@ -332,23 +409,27 @@ std::vector<ToolDef> get_excel_tools() {
         t.description = "Get the entire sheet as a 2D array of cell text (rows of strings).";
         t.category = "excel";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 const auto data = s->get_data();
                 QJsonArray rows;
                 for (const auto& row : data) {
                     QJsonArray r;
-                    for (const auto& cell : row) r.append(cell);
+                    for (const auto& cell : row)
+                        r.append(cell);
                     rows.append(r);
                 }
                 resolve(ToolResult::ok_data(QJsonObject{
-                    {"rows", rows}, {"row_count", s->row_count()}, {"col_count", s->col_count()},
+                    {"rows", rows},
+                    {"row_count", s->row_count()},
+                    {"col_count", s->col_count()},
                 }));
             });
         };
@@ -365,24 +446,27 @@ std::vector<ToolDef> get_excel_tools() {
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .array("rows", "2D array of strings (array of row arrays)",
-                   QJsonObject{{"type", "array"}})
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .array("rows", "2D array of strings (array of row arrays)", QJsonObject{{"type", "array"}})
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 QVector<QVector<QString>> data;
                 for (const auto& row_v : args["rows"].toArray()) {
                     QVector<QString> row;
-                    for (const auto& cell : row_v.toArray()) row.append(cell.toString());
+                    for (const auto& cell : row_v.toArray())
+                        row.append(cell.toString());
                     data.append(row);
                 }
                 s->set_data(data);
-                resolve(ToolResult::ok("Sheet data replaced",
-                                        QJsonObject{{"rows", static_cast<int>(data.size())}}));
+                resolve(ToolResult::ok("Sheet data replaced", QJsonObject{{"rows", static_cast<int>(data.size())}}));
             });
         };
         tools.push_back(std::move(t));
@@ -395,17 +479,19 @@ std::vector<ToolDef> get_excel_tools() {
         t.description = "Get row/col counts for a sheet.";
         t.category = "excel";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 resolve(ToolResult::ok_data(QJsonObject{
                     {"name", s->sheet_name()},
-                    {"rows", s->row_count()}, {"cols", s->col_count()},
+                    {"rows", s->row_count()},
+                    {"cols", s->col_count()},
                 }));
             });
         };
@@ -420,14 +506,15 @@ std::vector<ToolDef> get_excel_tools() {
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 s->recalculate();
                 resolve(ToolResult::ok("Recalculated"));
             });
@@ -444,16 +531,24 @@ std::vector<ToolDef> get_excel_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .string("position", "above | below").default_str("below").enums({"above", "below"})
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .string("position", "above | below")
+                             .default_str("below")
+                             .enums({"above", "below"})
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
-                if (args["position"].toString("below") == "above") s->insert_row_above();
-                else s->insert_row_below();
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
+                if (args["position"].toString("below") == "above")
+                    s->insert_row_above();
+                else
+                    s->insert_row_below();
                 resolve(ToolResult::ok("Row inserted"));
             });
         };
@@ -469,16 +564,24 @@ std::vector<ToolDef> get_excel_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .string("position", "left | right").default_str("right").enums({"left", "right"})
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .string("position", "left | right")
+                             .default_str("right")
+                             .enums({"left", "right"})
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
-                if (args["position"].toString("right") == "left") s->insert_col_left();
-                else s->insert_col_right();
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
+                if (args["position"].toString("right") == "left")
+                    s->insert_col_left();
+                else
+                    s->insert_col_right();
                 resolve(ToolResult::ok("Column inserted"));
             });
         };
@@ -493,14 +596,15 @@ std::vector<ToolDef> get_excel_tools() {
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 s->delete_selected_rows();
                 resolve(ToolResult::ok("Rows deleted"));
             });
@@ -516,14 +620,15 @@ std::vector<ToolDef> get_excel_tools() {
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 s->delete_selected_cols();
                 resolve(ToolResult::ok("Columns deleted"));
             });
@@ -541,17 +646,24 @@ std::vector<ToolDef> get_excel_tools() {
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1)
-            .string("path", "Output CSV file path").required().length(1, 1024)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .string("path", "Output CSV file path")
+                             .required()
+                             .length(1, 1024)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
-                if (!s) { resolve(ToolResult::fail("Sheet not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Sheet not found"));
+                    return;
+                }
                 QFile f(args["path"].toString());
                 if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                    resolve(ToolResult::fail("Cannot open path for writing")); return;
+                    resolve(ToolResult::fail("Cannot open path for writing"));
+                    return;
                 }
                 QTextStream out(&f);
                 const auto data = s->get_data();
@@ -569,9 +681,9 @@ std::vector<ToolDef> get_excel_tools() {
                 }
                 f.close();
                 resolve(ToolResult::ok("CSV exported", QJsonObject{
-                    {"path", args["path"].toString()},
-                    {"rows", static_cast<int>(data.size())},
-                }));
+                                                           {"path", args["path"].toString()},
+                                                           {"rows", static_cast<int>(data.size())},
+                                                       }));
             });
         };
         tools.push_back(std::move(t));

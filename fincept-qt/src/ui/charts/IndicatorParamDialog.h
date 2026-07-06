@@ -12,17 +12,17 @@ namespace fincept::ui {
 
 class IndicatorParamDialog : public QDialog {
     Q_OBJECT
-public:
+  public:
     explicit IndicatorParamDialog(const QString& indicator_id, QWidget* parent = nullptr);
 
     int period() const;
     double std_dev() const;
     QString pivot_type() const;
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     void setup_ema_ui();
     void setup_bollinger_ui();
     void setup_pivot_ui();

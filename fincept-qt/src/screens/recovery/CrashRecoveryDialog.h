@@ -43,8 +43,7 @@ class CrashRecoveryDialog : public QDialog {
     /// Construct with the live CrashRecovery + ring pointers from
     /// TerminalShell. Both must outlive the dialog (they're owned by the
     /// shell and only released in shutdown()).
-    explicit CrashRecoveryDialog(fincept::CrashRecovery* recovery,
-                                 fincept::WorkspaceSnapshotRing* ring,
+    explicit CrashRecoveryDialog(fincept::CrashRecovery* recovery, fincept::WorkspaceSnapshotRing* ring,
                                  QWidget* parent = nullptr);
 
     /// True iff the user picked "Restore" and the snapshot was successfully

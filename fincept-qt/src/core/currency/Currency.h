@@ -19,11 +19,14 @@
 #include <QLocale>
 #include <QSpinBox>
 #include <QString>
+
 #include <cmath>
 
 namespace cur {
 
-inline QString symbol() { return fincept::currency::CurrencyManager::instance().symbol(); }
+inline QString symbol() {
+    return fincept::currency::CurrencyManager::instance().symbol();
+}
 
 /// Symbol for a specific currency code, independent of the global preference.
 /// Use for intrinsic-currency surfaces (e.g. a portfolio's own currency).
@@ -34,9 +37,7 @@ inline QString symbol_for(const QString& code) {
 /// Format an amount. `compact` abbreviates to K/M/B. `intrinsic` (if non-empty)
 /// pins the symbol to that currency code instead of the global preference.
 inline QString money(double v, bool compact = false, const QString& intrinsic = QString()) {
-    const QString sym = intrinsic.isEmpty()
-                            ? symbol()
-                            : fincept::currency::CurrencyManager::symbol_for(intrinsic);
+    const QString sym = intrinsic.isEmpty() ? symbol() : fincept::currency::CurrencyManager::symbol_for(intrinsic);
     const QString sign = v < 0 ? QStringLiteral("-") : QString();
     const double a = std::abs(v);
     if (compact) {

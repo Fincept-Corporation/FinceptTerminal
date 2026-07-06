@@ -26,11 +26,10 @@ FiiDiiDay FiiDiiRepository::map_row(QSqlQuery& q) {
 }
 
 Result<void> FiiDiiRepository::upsert(const FiiDiiDay& d) {
-    return exec_write(
-        "INSERT OR REPLACE INTO fii_dii_daily "
-        "(date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net, fetched_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-        {d.date_iso, d.fii_buy, d.fii_sell, d.fii_net, d.dii_buy, d.dii_sell, d.dii_net});
+    return exec_write("INSERT OR REPLACE INTO fii_dii_daily "
+                      "(date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net, fetched_at) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                      {d.date_iso, d.fii_buy, d.fii_sell, d.fii_net, d.dii_buy, d.dii_sell, d.dii_net});
 }
 
 Result<void> FiiDiiRepository::upsert_batch(const QVector<FiiDiiDay>& days) {
@@ -55,24 +54,20 @@ Result<void> FiiDiiRepository::upsert_batch(const QVector<FiiDiiDay>& days) {
 }
 
 Result<QVector<FiiDiiDay>> FiiDiiRepository::get_recent(int limit) {
-    return query_list(
-        "SELECT date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net "
-        "FROM fii_dii_daily ORDER BY date_iso DESC LIMIT ?",
-        {limit}, &FiiDiiRepository::map_row);
+    return query_list("SELECT date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net "
+                      "FROM fii_dii_daily ORDER BY date_iso DESC LIMIT ?",
+                      {limit}, &FiiDiiRepository::map_row);
 }
 
-Result<QVector<FiiDiiDay>> FiiDiiRepository::get_window(const QString& since_iso,
-                                                         const QString& until_iso) {
+Result<QVector<FiiDiiDay>> FiiDiiRepository::get_window(const QString& since_iso, const QString& until_iso) {
     if (until_iso.isEmpty()) {
-        return query_list(
-            "SELECT date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net "
-            "FROM fii_dii_daily WHERE date_iso >= ? ORDER BY date_iso ASC",
-            {since_iso}, &FiiDiiRepository::map_row);
+        return query_list("SELECT date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net "
+                          "FROM fii_dii_daily WHERE date_iso >= ? ORDER BY date_iso ASC",
+                          {since_iso}, &FiiDiiRepository::map_row);
     }
-    return query_list(
-        "SELECT date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net "
-        "FROM fii_dii_daily WHERE date_iso >= ? AND date_iso <= ? ORDER BY date_iso ASC",
-        {since_iso, until_iso}, &FiiDiiRepository::map_row);
+    return query_list("SELECT date_iso, fii_buy, fii_sell, fii_net, dii_buy, dii_sell, dii_net "
+                      "FROM fii_dii_daily WHERE date_iso >= ? AND date_iso <= ? ORDER BY date_iso ASC",
+                      {since_iso, until_iso}, &FiiDiiRepository::map_row);
 }
 
 } // namespace fincept

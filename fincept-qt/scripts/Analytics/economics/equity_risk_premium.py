@@ -133,11 +133,8 @@ def estimate_erp():
 
 
 def main():
-    try:
-        sys.stdin.read()
-    except Exception:
-        pass
-
+    # Qt bridge invokes as (command, json); this analytic takes no params, so argv
+    # is ignored. (Previously read stdin, which can block under a held-open pipe.)
     result = estimate_erp()
     print(json.dumps(convert_numpy(result)))
 

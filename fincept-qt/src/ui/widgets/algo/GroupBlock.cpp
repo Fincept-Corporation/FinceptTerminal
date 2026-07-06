@@ -8,8 +8,7 @@
 
 namespace fincept::ui::algo {
 
-GroupBlock::GroupBlock(bool is_entry, QWidget* parent)
-    : QFrame(parent), is_entry_(is_entry) {
+GroupBlock::GroupBlock(bool is_entry, QWidget* parent) : QFrame(parent), is_entry_(is_entry) {
     setObjectName(QStringLiteral("conditionGroupBlock"));
     setFrameShape(QFrame::StyledPanel);
     build_ui();
@@ -22,12 +21,18 @@ void GroupBlock::changeEvent(QEvent* event) {
 }
 
 void GroupBlock::retranslateUi() {
-    if (tag_) tag_->setText(tr("GROUP"));
-    if (and_btn_) and_btn_->setText(tr("AND"));
-    if (or_btn_) or_btn_->setText(tr("OR"));
-    if (add_cond_btn_) add_cond_btn_->setText(tr("+ Condition"));
-    if (add_group_btn_) add_group_btn_->setText(tr("+ Group"));
-    if (remove_btn_) remove_btn_->setToolTip(tr("Remove group"));
+    if (tag_)
+        tag_->setText(tr("GROUP"));
+    if (and_btn_)
+        and_btn_->setText(tr("AND"));
+    if (or_btn_)
+        or_btn_->setText(tr("OR"));
+    if (add_cond_btn_)
+        add_cond_btn_->setText(tr("+ Condition"));
+    if (add_group_btn_)
+        add_group_btn_->setText(tr("+ Group"));
+    if (remove_btn_)
+        remove_btn_->setToolTip(tr("Remove group"));
 }
 
 void GroupBlock::build_ui() {
@@ -76,8 +81,14 @@ void GroupBlock::build_ui() {
     nodes_layout_->setSpacing(2);
     main->addLayout(nodes_layout_);
 
-    connect(and_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("AND")); emit changed(); });
-    connect(or_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("OR")); emit changed(); });
+    connect(and_btn_, &QPushButton::clicked, this, [this]() {
+        set_logic(QStringLiteral("AND"));
+        emit changed();
+    });
+    connect(or_btn_, &QPushButton::clicked, this, [this]() {
+        set_logic(QStringLiteral("OR"));
+        emit changed();
+    });
     connect(add_cond_btn_, &QPushButton::clicked, this, &GroupBlock::add_condition);
     connect(add_group_btn_, &QPushButton::clicked, this, &GroupBlock::add_group);
     connect(remove_btn_, &QPushButton::clicked, this, &GroupBlock::remove_requested);
@@ -127,7 +138,8 @@ void GroupBlock::add_group() {
 
 void GroupBlock::remove_node(QWidget* node) {
     const int idx = nodes_.indexOf(node);
-    if (idx < 0) return;
+    if (idx < 0)
+        return;
     nodes_.removeAt(idx);
     node->deleteLater();
     rebuild_layout();

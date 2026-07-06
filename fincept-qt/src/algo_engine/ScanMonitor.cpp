@@ -19,11 +19,11 @@
 
 namespace fincept::algo {
 
-using fincept::ui::ToastService;
-using fincept::notifications::NotificationService;
 using fincept::notifications::NotificationRequest;
+using fincept::notifications::NotificationService;
 using fincept::notifications::NotifLevel;
 using fincept::notifications::NotifTrigger;
+using fincept::ui::ToastService;
 
 ScanMonitor& ScanMonitor::instance() {
     static ScanMonitor s;
@@ -33,8 +33,7 @@ ScanMonitor& ScanMonitor::instance() {
 void ScanMonitor::start() {
     auto r = ScanWatchRepository::instance().list_active();
     if (r.is_err()) {
-        LOG_ERROR("ScanMonitor", QString("load active watches: %1")
-                                     .arg(QString::fromStdString(r.error())));
+        LOG_ERROR("ScanMonitor", QString("load active watches: %1").arg(QString::fromStdString(r.error())));
         return;
     }
     for (const auto& w : r.value()) {
@@ -79,17 +78,25 @@ void ScanMonitor::stop_watch(const QString& id) {
 
 void ScanMonitor::reload(const QString& id) {
     auto r = ScanWatchRepository::instance().get(id);
-    if (r.is_err()) { stop_watch(id); return; }
+    if (r.is_err()) {
+        stop_watch(id);
+        return;
+    }
     const ScanWatch w = r.value();
-    if (!w.active) { stop_watch(id); return; }
+    if (!w.active) {
+        stop_watch(id);
+        return;
+    }
     start_watch(w);
 }
 
 void ScanMonitor::poll(const QString& id) {
     auto it = runners_.find(id);
-    if (it == runners_.end()) return;
+    if (it == runners_.end())
+        return;
     const ScanWatch& w = it.value()->watch;
-    if (w.symbols.isEmpty() || w.conditions.isEmpty()) return;
+    if (w.symbols.isEmpty() || w.conditions.isEmpty())
+        return;
 
     const DataSource src = data_source_from_string(w.data_source);
     CandleDataFetcher::instance().fetch_multi(
@@ -100,10 +107,10 @@ void ScanMonitor::poll(const QString& id) {
         });
 }
 
-void ScanMonitor::on_candles(const QString& id,
-                             const QHash<QString, QVector<OhlcvCandle>>& data) {
+void ScanMonitor::on_candles(const QString& id, const QHash<QString, QVector<OhlcvCandle>>& data) {
     auto it = runners_.find(id);
-    if (it == runners_.end()) return; // watch removed mid-fetch
+    if (it == runners_.end())
+        return; // watch removed mid-fetch
     Runner* run = it.value();
     const ScanWatch& w = run->watch;
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -115,15 +122,17 @@ void ScanMonitor::on_candles(const QString& id,
         const auto& candles = sit.value();
         SymState& st = run->states[sym];
 
-        if (candles.size() < 2) { any_warming = true; continue; }
+        if (candles.size() < 2) {
+            any_warming = true;
+            continue;
+        }
         auto eval = ConditionEvaluator::evaluate_group(w.conditions, w.logic, candles);
 
         if (eval.triggered) {
             if (st.armed && now - st.last_fired_ms >= cooldown_ms) {
                 QStringList parts;
                 for (const auto& d : eval.details)
-                    parts << QString("%1 %2 %3").arg(d.indicator, d.op,
-                                                      QString::number(d.target_value, 'f', 2));
+                    parts << QString("%1 %2 %3").arg(d.indicator, d.op, QString::number(d.target_value, 'f', 2));
                 dispatch(w, sym, parts.join(" & "));
                 st.last_fired_ms = now;
                 st.armed = false;
@@ -151,10 +160,9 @@ void ScanMonitor::on_candles(const QString& id,
 QStringList ScanMonitor::resolve_universe(const ScanWatch& w) {
     const QString u = w.universe;
     if (u == QStringLiteral("NSE_EQ") || u == QStringLiteral("BSE_EQ")) {
-        const QString exch = (u == QStringLiteral("NSE_EQ")) ? QStringLiteral("NSE")
-                                                             : QStringLiteral("BSE");
-        const auto rows = fincept::trading::InstrumentRepository::instance().list(
-            exch, w.broker_id, fincept::trading::InstrumentType::EQ);
+        const QString exch = (u == QStringLiteral("NSE_EQ")) ? QStringLiteral("NSE") : QStringLiteral("BSE");
+        const auto rows = fincept::trading::InstrumentRepository::instance().list(exch, w.broker_id,
+                                                                                  fincept::trading::InstrumentType::EQ);
         QStringList out;
         out.reserve(rows.size());
         for (const auto& inst : rows)
@@ -175,9 +183,9 @@ void ScanMonitor::start_realtime(const ScanWatch& w) {
         ScanWatchRepository::instance().touch_status(w.id, QStringLiteral("error"),
                                                      QDateTime::currentMSecsSinceEpoch());
         emit watch_status_changed(w.id, QStringLiteral("error"));
-        LOG_WARN("ScanMonitor",
-                 QString("realtime watch %1: empty universe (instrument master loaded for %2?)")
-                     .arg(w.id, w.broker_id));
+        LOG_WARN(
+            "ScanMonitor",
+            QString("realtime watch %1: empty universe (instrument master loaded for %2?)").arg(w.id, w.broker_id));
         return;
     }
 
@@ -188,17 +196,14 @@ void ScanMonitor::start_realtime(const ScanWatch& w) {
     }
 
     const int sweep_ms = w.actions.value(QStringLiteral("sweep_ms")).toInt(500);
-    auto* rt = new RealtimeScanRunner(w.id, syms, w.conditions, w.logic, w.timeframe,
-                                      w.broker_id, w.account_id, w.data_source,
-                                      sweep_ms, w.cooldown_min);
+    auto* rt = new RealtimeScanRunner(w.id, syms, w.conditions, w.logic, w.timeframe, w.broker_id, w.account_id,
+                                      w.data_source, sweep_ms, w.cooldown_min);
     rt->moveToThread(scan_thread_);
     connect(rt, &RealtimeScanRunner::match_found, this, &ScanMonitor::on_realtime_match);
-    connect(rt, &RealtimeScanRunner::status_changed, this,
-            [this](const QString& id, const QString& s) {
-                ScanWatchRepository::instance().touch_status(
-                    id, s, QDateTime::currentMSecsSinceEpoch());
-                emit watch_status_changed(id, s);
-            });
+    connect(rt, &RealtimeScanRunner::status_changed, this, [this](const QString& id, const QString& s) {
+        ScanWatchRepository::instance().touch_status(id, s, QDateTime::currentMSecsSinceEpoch());
+        emit watch_status_changed(id, s);
+    });
 
     auto* run = new Runner();
     run->watch = w;
@@ -212,11 +217,9 @@ void ScanMonitor::start_realtime(const ScanWatch& w) {
     // forward is guarded by a runners_ lookup (main-thread-only map) so a stop()
     // mid-fetch is a no-op, and uses the receiver-context invoke so it is cancelled
     // if the runner is deleted before delivery.
-    const QString tf = (w.timeframe == QStringLiteral("live")) ? QStringLiteral("1m")
-                                                               : w.timeframe;
-    const int lookback = w.lookback_days > 0
-                             ? w.lookback_days
-                             : fincept::services::algo::algo_default_lookback_days(tf);
+    const QString tf = (w.timeframe == QStringLiteral("live")) ? QStringLiteral("1m") : w.timeframe;
+    const int lookback =
+        w.lookback_days > 0 ? w.lookback_days : fincept::services::algo::algo_default_lookback_days(tf);
     const DataSource src = data_source_from_string(w.data_source);
     const QString id = w.id, broker = w.broker_id, acct = w.account_id;
     constexpr int kChunk = 50; // throttle: batch the fetch to respect broker rate limits
@@ -232,22 +235,19 @@ void ScanMonitor::start_realtime(const ScanWatch& w) {
                 for (auto d = data.begin(); d != data.end(); ++d) {
                     const QString sym = d.key();
                     const QVector<OhlcvCandle> candles = d.value();
-                    QMetaObject::invokeMethod(rt, [rt, sym, candles]() {
-                        rt->warm(sym, candles);
-                    }, Qt::QueuedConnection);
+                    QMetaObject::invokeMethod(
+                        rt, [rt, sym, candles]() { rt->warm(sym, candles); }, Qt::QueuedConnection);
                 }
             });
     }
 
-    ScanWatchRepository::instance().touch_status(w.id, QStringLiteral("warming"),
-                                                 QDateTime::currentMSecsSinceEpoch());
+    ScanWatchRepository::instance().touch_status(w.id, QStringLiteral("warming"), QDateTime::currentMSecsSinceEpoch());
     emit watch_status_changed(w.id, QStringLiteral("warming"));
-    LOG_INFO("ScanMonitor",
-             QString("realtime watch %1 started: %2 symbols").arg(w.id).arg(syms.size()));
+    LOG_INFO("ScanMonitor", QString("realtime watch %1 started: %2 symbols").arg(w.id).arg(syms.size()));
 }
 
-void ScanMonitor::on_realtime_match(const QString& watch_id, const QString& symbol,
-                                    double price, const QString& detail) {
+void ScanMonitor::on_realtime_match(const QString& watch_id, const QString& symbol, double price,
+                                    const QString& detail) {
     auto it = runners_.find(watch_id);
     if (it == runners_.end())
         return;
@@ -268,25 +268,24 @@ void ScanMonitor::dispatch(const ScanWatch& w, const QString& symbol, const QStr
 
     if (actions.value("providers").toBool(false)) {
         NotificationRequest req;
-        req.title   = QString("Alert: %1").arg(w.name);
+        req.title = QString("Alert: %1").arg(w.name);
         req.message = msg;
-        req.level   = NotifLevel::Warning;
+        req.level = NotifLevel::Warning;
         req.trigger = NotifTrigger::PriceAlert;
         NotificationService::instance().send(req);
     }
 
     ScanWatchRepository::instance().touch_fired(w.id, QDateTime::currentMSecsSinceEpoch());
-    fincept::ScanEventRepository::instance().record(w.id, symbol, detail,
-                                                    QDateTime::currentMSecsSinceEpoch());
+    fincept::ScanEventRepository::instance().record(w.id, symbol, detail, QDateTime::currentMSecsSinceEpoch());
     LOG_INFO("ScanMonitor", QString("FIRE %1 / %2: %3").arg(w.name, symbol, detail));
     emit watch_fired(w.id, symbol, detail);
 }
 
 void ScanMonitor::test_fire(const QString& id, const QString& symbol) {
     auto r = ScanWatchRepository::instance().get(id);
-    if (r.is_err()) return;
-    dispatch(r.value(), symbol.isEmpty() ? QStringLiteral("TEST") : symbol,
-             QStringLiteral("test fire"));
+    if (r.is_err())
+        return;
+    dispatch(r.value(), symbol.isEmpty() ? QStringLiteral("TEST") : symbol, QStringLiteral("test fire"));
 }
 
 } // namespace fincept::algo

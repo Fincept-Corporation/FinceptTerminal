@@ -18,10 +18,14 @@ enum class PortSource {
 
 inline QString port_source_name(PortSource s) {
     switch (s) {
-        case PortSource::Wikidata:      return QStringLiteral("Wikidata");
-        case PortSource::MarineRegions: return QStringLiteral("MarineRegions");
-        case PortSource::OSM:           return QStringLiteral("OSM");
-        default:                        return QStringLiteral("?");
+        case PortSource::Wikidata:
+            return QStringLiteral("Wikidata");
+        case PortSource::MarineRegions:
+            return QStringLiteral("MarineRegions");
+        case PortSource::OSM:
+            return QStringLiteral("OSM");
+        default:
+            return QStringLiteral("?");
     }
 }
 
@@ -32,8 +36,8 @@ struct PortRecord {
     QString name;
     QString country;
     QString locode;
-    double  latitude  = 0.0;
-    double  longitude = 0.0;
+    double latitude = 0.0;
+    double longitude = 0.0;
     PortSource source = PortSource::Unknown;
 };
 

@@ -4,8 +4,6 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
-#include <array>
-
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -13,6 +11,8 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+#include <array>
 
 namespace fincept::screens {
 
@@ -37,8 +37,8 @@ class TemplatePreview : public QWidget {
         static const auto make_colors = []() {
             const auto& t = ui::ThemeManager::instance().tokens();
             return std::array<QColor, 6>{
-                QColor(t.accent),    QColor(t.positive), QColor(t.info),
-                QColor(t.negative),  QColor(t.cyan),     QColor(t.warning),
+                QColor(t.accent),   QColor(t.positive), QColor(t.info),
+                QColor(t.negative), QColor(t.cyan),     QColor(t.warning),
             };
         };
         const auto colors = make_colors();
@@ -150,16 +150,22 @@ void TemplatePicker::changeEvent(QEvent* event) {
 
 void TemplatePicker::retranslateUi() {
     setWindowTitle(tr("Choose Dashboard Template"));
-    if (title_lbl_)  title_lbl_->setText(tr("CHOOSE TEMPLATE"));
-    if (sub_lbl_)    sub_lbl_->setText(tr("Select a template to reset your dashboard. Current layout will be replaced."));
-    if (cancel_btn_) cancel_btn_->setText(tr("CANCEL"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("CHOOSE TEMPLATE"));
+    if (sub_lbl_)
+        sub_lbl_->setText(tr("Select a template to reset your dashboard. Current layout will be replaced."));
+    if (cancel_btn_)
+        cancel_btn_->setText(tr("CANCEL"));
     const auto templates = all_dashboard_templates();
     for (auto& c : cards_) {
-        if (c.apply) c.apply->setText(tr("APPLY"));
+        if (c.apply)
+            c.apply->setText(tr("APPLY"));
         for (const auto& t : templates) {
             if (t.id == c.id) {
-                if (c.name) c.name->setText(template_display_name_tr(t));
-                if (c.desc) c.desc->setText(template_description_tr(t));
+                if (c.name)
+                    c.name->setText(template_display_name_tr(t));
+                if (c.desc)
+                    c.desc->setText(template_description_tr(t));
                 break;
             }
         }

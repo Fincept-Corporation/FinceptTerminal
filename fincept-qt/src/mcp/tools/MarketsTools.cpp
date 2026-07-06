@@ -9,9 +9,9 @@
 #include "storage/cache/CacheManager.h"
 
 #include <QDateTime>
-#include <QTimeZone>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTimeZone>
 
 namespace fincept::mcp::tools {
 
@@ -49,18 +49,19 @@ std::vector<ToolDef> get_markets_tools() {
             bool ok = false;
             services::QuoteData q;
             detail::run_async_wait(svc, [svc, symbol, &ok, &q](auto signal_done) {
-                svc->fetch_quotes({symbol}, [&ok, &q, symbol, signal_done](bool success, QVector<services::QuoteData> quotes) {
-                    if (success) {
-                        for (const auto& candidate : quotes) {
-                            if (candidate.symbol.compare(symbol, Qt::CaseInsensitive) == 0) {
-                                q = candidate;
-                                ok = true;
-                                break;
-                            }
-                        }
-                    }
-                    signal_done();
-                });
+                svc->fetch_quotes({symbol},
+                                  [&ok, &q, symbol, signal_done](bool success, QVector<services::QuoteData> quotes) {
+                                      if (success) {
+                                          for (const auto& candidate : quotes) {
+                                              if (candidate.symbol.compare(symbol, Qt::CaseInsensitive) == 0) {
+                                                  q = candidate;
+                                                  ok = true;
+                                                  break;
+                                              }
+                                          }
+                                      }
+                                      signal_done();
+                                  });
             });
 
             if (!ok) {
@@ -93,28 +94,29 @@ std::vector<ToolDef> get_markets_tools() {
     {
         ToolDef t;
         t.name = "lookup_symbol";
-        t.description =
-            "Resolve a company name or partial ticker to its exchange-suffixed Yahoo ticker. "
-            "Returns the top candidates as {symbol, name, exchange, type, currency}. "
-            "ALWAYS call this BEFORE add_to_watchlist / get_quote when the user names a company "
-            "(e.g. 'RITES Limited', 'Apple', 'Tata Consultancy') rather than giving a ticker — "
-            "guessing the ticker from prior knowledge frequently gets the suffix wrong "
-            "(.NS for NSE, .BO for BSE, .T for Tokyo, .L for London, etc.) and stores a "
-            "broken symbol. Backed by Yahoo Finance's search API.";
+        t.description = "Resolve a company name or partial ticker to its exchange-suffixed Yahoo ticker. "
+                        "Returns the top candidates as {symbol, name, exchange, type, currency}. "
+                        "ALWAYS call this BEFORE add_to_watchlist / get_quote when the user names a company "
+                        "(e.g. 'RITES Limited', 'Apple', 'Tata Consultancy') rather than giving a ticker — "
+                        "guessing the ticker from prior knowledge frequently gets the suffix wrong "
+                        "(.NS for NSE, .BO for BSE, .T for Tokyo, .L for London, etc.) and stores a "
+                        "broken symbol. Backed by Yahoo Finance's search API.";
         t.category = "markets";
         t.input_schema.properties = QJsonObject{
-            {"query", QJsonObject{{"type", "string"},
-                                  {"description", "Company name or partial ticker (e.g. 'RITES Limited', 'Apple', 'TCS')"}}},
-            {"limit", QJsonObject{{"type", "integer"},
-                                  {"description", "Max results to return (1-20, default 10)"}}}};
+            {"query",
+             QJsonObject{{"type", "string"},
+                         {"description", "Company name or partial ticker (e.g. 'RITES Limited', 'Apple', 'TCS')"}}},
+            {"limit", QJsonObject{{"type", "integer"}, {"description", "Max results to return (1-20, default 10)"}}}};
         t.input_schema.required = {"query"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString query = args["query"].toString().trimmed();
             if (query.isEmpty())
                 return ToolResult::fail("Missing 'query'");
             int limit = args["limit"].toInt(10);
-            if (limit < 1) limit = 1;
-            if (limit > 20) limit = 20;
+            if (limit < 1)
+                limit = 1;
+            if (limit > 20)
+                limit = 20;
 
             const QString cache_key = QString("symsearch:%1:%2").arg(query.toLower()).arg(limit);
             const QVariant cached = fincept::CacheManager::instance().get(cache_key);
@@ -130,8 +132,7 @@ std::vector<ToolDef> get_markets_tools() {
             auto* runner = &fincept::python::PythonRunner::instance();
             const QStringList py_args = {"search", query, QString::number(limit)};
             detail::run_async_wait(runner, [&](auto signal_done) {
-                runner->run("yfinance_data.py", py_args,
-                            [&, signal_done](const fincept::python::PythonResult& r) {
+                runner->run("yfinance_data.py", py_args, [&, signal_done](const fincept::python::PythonResult& r) {
                     if (!r.success) {
                         error = r.error.isEmpty() ? r.output : r.error;
                     } else {
@@ -153,10 +154,10 @@ std::vector<ToolDef> get_markets_tools() {
                                 for (const auto& v : o.value("results").toArray()) {
                                     QJsonObject row = v.toObject();
                                     QJsonObject keep;
-                                    keep["symbol"]   = row.value("symbol").toString();
-                                    keep["name"]     = row.value("name").toString();
+                                    keep["symbol"] = row.value("symbol").toString();
+                                    keep["name"] = row.value("name").toString();
                                     keep["exchange"] = row.value("exchange").toString();
-                                    keep["type"]     = row.value("type").toString();
+                                    keep["type"] = row.value("type").toString();
                                     keep["currency"] = row.value("currency").toString();
                                     trimmed.append(keep);
                                 }
@@ -177,13 +178,11 @@ std::vector<ToolDef> get_markets_tools() {
 
             if (result_obj.value("count").toInt() == 0) {
                 LOG_INFO(TAG, "lookup_symbol no matches for " + query);
-                return ToolResult::ok("No matches — refine the query or pass a known ticker directly.",
-                                      result_obj);
+                return ToolResult::ok("No matches — refine the query or pass a known ticker directly.", result_obj);
             }
 
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(result_obj).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(result_obj).toJson(QJsonDocument::Compact))),
                 kSymbolSearchTtlSec, "markets");
             return ToolResult::ok_data(result_obj);
         };
@@ -202,8 +201,7 @@ std::vector<ToolDef> get_markets_tools() {
                         "close, volume}. Backed by yfinance.";
         t.category = "markets";
         t.input_schema.properties = QJsonObject{
-            {"symbol", QJsonObject{{"type", "string"},
-                                   {"description", "Ticker symbol (e.g. AAPL, BTC-USD)"}}},
+            {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL, BTC-USD)"}}},
             {"period", QJsonObject{{"type", "string"},
                                    {"description", "1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max (default 1mo)"}}},
             {"interval", QJsonObject{{"type", "string"},
@@ -216,9 +214,11 @@ std::vector<ToolDef> get_markets_tools() {
                 return ToolResult::fail("Missing 'symbol'");
 
             QString period = args["period"].toString().trimmed();
-            if (period.isEmpty()) period = "1mo";
+            if (period.isEmpty())
+                period = "1mo";
             QString interval = args["interval"].toString().trimmed();
-            if (interval.isEmpty()) interval = "1d";
+            if (interval.isEmpty())
+                interval = "1d";
 
             auto* svc = &services::MarketDataService::instance();
             bool ok = false;
@@ -226,10 +226,10 @@ std::vector<ToolDef> get_markets_tools() {
             detail::run_async_wait(svc, [svc, symbol, period, interval, &ok, &points](auto signal_done) {
                 svc->fetch_history(symbol, period, interval,
                                    [&ok, &points, signal_done](bool success, QVector<services::HistoryPoint> result) {
-                    ok = success;
-                    points = std::move(result);
-                    signal_done();
-                });
+                                       ok = success;
+                                       points = std::move(result);
+                                       signal_done();
+                                   });
             });
 
             if (!ok) {
@@ -249,12 +249,11 @@ std::vector<ToolDef> get_markets_tools() {
                     {"volume", static_cast<double>(p.volume)}});
             }
 
-            return ToolResult::ok_data(QJsonObject{
-                {"symbol", symbol},
-                {"period", period},
-                {"interval", interval},
-                {"count", bars.size()},
-                {"bars", bars}});
+            return ToolResult::ok_data(QJsonObject{{"symbol", symbol},
+                                                   {"period", period},
+                                                   {"interval", interval},
+                                                   {"count", bars.size()},
+                                                   {"bars", bars}});
         };
         tools.push_back(std::move(t));
     }

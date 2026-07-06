@@ -41,9 +41,7 @@ struct SymbolRef {
     QString selection;
 
     bool is_valid() const { return !symbol.isEmpty(); }
-    bool has_time_range() const {
-        return time_range_start.isValid() || time_range_end.isValid();
-    }
+    bool has_time_range() const { return time_range_start.isValid() || time_range_end.isValid(); }
     bool has_selection() const { return !selection.isEmpty(); }
 
     /// "AAPL US Equity" / "BTCUSD Binance Crypto"; falls back to raw symbol.
@@ -62,8 +60,7 @@ struct SymbolRef {
 
     bool operator==(const SymbolRef& o) const {
         return symbol == o.symbol && asset_class == o.asset_class && exchange == o.exchange &&
-               time_range_start == o.time_range_start && time_range_end == o.time_range_end &&
-               selection == o.selection;
+               time_range_start == o.time_range_start && time_range_end == o.time_range_end && selection == o.selection;
     }
     bool operator!=(const SymbolRef& o) const { return !(*this == o); }
 

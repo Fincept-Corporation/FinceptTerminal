@@ -216,6 +216,18 @@ def calculate_ultimate_oscillator(data, period1=7, period2=14, period3=28, weigh
 
 def main():
     try:
+        # Qt bridge: accept (indicator_type, {"symbol":..., ...}) and expand into the
+        # native (symbol, indicator_type, params_json) argv. No effect on the CLI form
+        # (a plain indicator_type in argv[2] is not JSON, so this falls through).
+        if len(sys.argv) == 3:
+            try:
+                _qp = json.loads(sys.argv[2])
+                if isinstance(_qp, dict) and "symbol" in _qp:
+                    _qsym = _qp.pop("symbol")
+                    sys.argv = [sys.argv[0], str(_qsym), str(sys.argv[1]), json.dumps(_qp)]
+            except Exception:
+                pass
+
         if len(sys.argv) < 3:
             raise ValueError("Usage: python momentum_indicators.py <symbol> <indicator_type> <params_json>")
 

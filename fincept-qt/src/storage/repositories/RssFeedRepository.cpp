@@ -30,16 +30,16 @@ Result<QVector<RssFeedRow>> RssFeedRepository::list_all() const {
 }
 
 Result<void> RssFeedRepository::upsert(const RssFeedRow& r) const {
-    auto res = exec_write("INSERT INTO rss_feeds "
-                      "(id, name, url, category, region, source, tier, is_builtin, enabled, updated_at) "
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')) "
-                      "ON CONFLICT(id) DO UPDATE SET "
-                      "  name=excluded.name, url=excluded.url, category=excluded.category, "
-                      "  region=excluded.region, source=excluded.source, tier=excluded.tier, "
-                      "  is_builtin=excluded.is_builtin, enabled=excluded.enabled, "
-                      "  updated_at=datetime('now')",
-                      {r.id, r.name, r.url, r.category, r.region, r.source, r.tier,
-                       r.is_builtin ? 1 : 0, r.enabled ? 1 : 0});
+    auto res = exec_write(
+        "INSERT INTO rss_feeds "
+        "(id, name, url, category, region, source, tier, is_builtin, enabled, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')) "
+        "ON CONFLICT(id) DO UPDATE SET "
+        "  name=excluded.name, url=excluded.url, category=excluded.category, "
+        "  region=excluded.region, source=excluded.source, tier=excluded.tier, "
+        "  is_builtin=excluded.is_builtin, enabled=excluded.enabled, "
+        "  updated_at=datetime('now')",
+        {r.id, r.name, r.url, r.category, r.region, r.source, r.tier, r.is_builtin ? 1 : 0, r.enabled ? 1 : 0});
     if (res.is_ok())
         SyncOutbox::record_unique("news_feed", r.id, "upsert");
     return res;

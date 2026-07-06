@@ -16,8 +16,7 @@ Notebook NotebookRepository::map_row(QSqlQuery& q) {
     };
 }
 
-static const char* kNotebookCols =
-    "id, name, description, cells, metadata, execution_counter, created_at, updated_at";
+static const char* kNotebookCols = "id, name, description, cells, metadata, execution_counter, created_at, updated_at";
 
 Result<QVector<Notebook>> NotebookRepository::list_all() {
     return query_list(QString("SELECT %1 FROM notebooks ORDER BY updated_at DESC").arg(kNotebookCols), {}, map_row);

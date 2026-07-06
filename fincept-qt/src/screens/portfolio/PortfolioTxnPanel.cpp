@@ -55,8 +55,8 @@ void PortfolioTxnPanel::build_ui() {
     layout->addWidget(header.header);
 
     // Table
-    const QStringList headers = {tr("Date"), tr("Symbol"), tr("Type"), tr("Qty"),
-                                  tr("Price"), tr("Total"), tr("Notes")};
+    const QStringList headers = {tr("Date"),  tr("Symbol"), tr("Type"), tr("Qty"),
+                                 tr("Price"), tr("Total"),  tr("Notes")};
     table_ = new QTableWidget(0, headers.size(), this);
     table_->setHorizontalHeaderLabels(headers);
     table_->verticalHeader()->setVisible(false);
@@ -216,12 +216,14 @@ void PortfolioTxnPanel::changeEvent(QEvent* event) {
 }
 
 void PortfolioTxnPanel::retranslateUi() {
-    if (title_label_)   title_label_->setText(tr("TRANSACTION HISTORY"));
-    if (collapse_btn_)  collapse_btn_->setToolTip(tr("Collapse / expand transaction history"));
+    if (title_label_)
+        title_label_->setText(tr("TRANSACTION HISTORY"));
+    if (collapse_btn_)
+        collapse_btn_->setToolTip(tr("Collapse / expand transaction history"));
 
     if (table_) {
-        const QStringList headers = {tr("Date"), tr("Symbol"), tr("Type"), tr("Qty"),
-                                     tr("Price"), tr("Total"), tr("Notes")};
+        const QStringList headers = {tr("Date"),  tr("Symbol"), tr("Type"), tr("Qty"),
+                                     tr("Price"), tr("Total"),  tr("Notes")};
         table_->setHorizontalHeaderLabels(headers);
     }
     if (count_label_ && !txns_.isEmpty())

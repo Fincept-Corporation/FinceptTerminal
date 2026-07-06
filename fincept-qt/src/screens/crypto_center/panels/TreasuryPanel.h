@@ -48,7 +48,7 @@ class TreasuryPanel : public QWidget {
     void update_demo_chip();
 
     // Head
-    QLabel* title_ = nullptr;          // "TREASURY"
+    QLabel* title_ = nullptr; // "TREASURY"
     QLabel* status_pill_ = nullptr;
 
     // Body

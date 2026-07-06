@@ -2,7 +2,6 @@
 // Method definition split from MAModulePanel.cpp.
 
 #include "screens/ma_analytics/MAModulePanel.h"
-
 #include "services/ma_analytics/MAAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
@@ -39,8 +38,8 @@ QWidget* MAModulePanel::build_startup_panel() {
     bvl->setContentsMargins(12, 12, 12, 12);
     bvl->setSpacing(8);
 
-    QStringList berkus_factors = {tr("Sound Idea"), tr("Prototype"), tr("Quality Team"),
-                                  tr("Strategic Relationships"), tr("Product Rollout")};
+    QStringList berkus_factors = {tr("Sound Idea"), tr("Prototype"), tr("Quality Team"), tr("Strategic Relationships"),
+                                  tr("Product Rollout")};
     for (int i = 0; i < berkus_factors.size(); ++i) {
         auto* spin = make_double_spin(0, 100, 50, 0, "%", berkus);
         double_inputs_[QString("berkus_%1").arg(i)] = spin;
@@ -77,9 +76,9 @@ QWidget* MAModulePanel::build_startup_panel() {
     combo_inputs_["sc_stage"] = sc_stage;
     scvl->addWidget(build_input_row(tr("Stage"), sc_stage, sc));
 
-    QStringList sc_factors = {tr("Management Team"),  tr("Market Size"),      tr("Product/Technology"),
-                              tr("Competition"),      tr("Marketing/Sales"),  tr("Need for Funding"),
-                              tr("Other")};
+    QStringList sc_factors = {
+        tr("Management Team"),  tr("Market Size"), tr("Product/Technology"), tr("Competition"), tr("Marketing/Sales"),
+        tr("Need for Funding"), tr("Other")};
     for (int i = 0; i < sc_factors.size(); ++i) {
         auto* spin = make_double_spin(0.5, 2.0, 1.0, 1, "x", sc);
         double_inputs_[QString("sc_%1").arg(i)] = spin;
@@ -191,10 +190,10 @@ QWidget* MAModulePanel::build_startup_panel() {
     double_inputs_["rf_base"] = rf_base;
     rf_vl->addWidget(build_input_row(tr("Base Valuation") + " ($)", rf_base, rf));
 
-    QStringList risk_factors = {tr("Management"),        tr("Stage"),         tr("Legislation"),
-                                tr("Manufacturing"),     tr("Sales & Marketing"), tr("Funding"),
-                                tr("Competition"),       tr("Technology"),    tr("Litigation"),
-                                tr("International"),      tr("Reputation"),    tr("Exit Opportunity")};
+    QStringList risk_factors = {
+        tr("Management"),        tr("Stage"),         tr("Legislation"), tr("Manufacturing"),
+        tr("Sales & Marketing"), tr("Funding"),       tr("Competition"), tr("Technology"),
+        tr("Litigation"),        tr("International"), tr("Reputation"),  tr("Exit Opportunity")};
     for (int i = 0; i < risk_factors.size(); ++i) {
         auto* spin = make_int_spin(-2, 2, 0, rf);
         int_inputs_[QString("rf_%1").arg(i)] = spin;

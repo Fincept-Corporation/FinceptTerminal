@@ -1,9 +1,8 @@
 #include "screens/dashboard/widgets/SectorHeatmapWidget.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QFrame>
 #include <QLabel>
@@ -18,9 +17,10 @@ QStringList SectorHeatmapWidget::sector_symbols() {
 
 QMap<QString, QString> SectorHeatmapWidget::sector_labels() {
     return {
-        {"XLK", tr("Technology")},     {"XLV", tr("Healthcare")},  {"XLF", tr("Financials")},     {"XLE", tr("Energy")},
-        {"XLY", tr("Consumer Disc.")}, {"XLI", tr("Industrials")}, {"XLB", tr("Materials")},      {"XLU", tr("Utilities")},
-        {"XLRE", tr("Real Estate")},   {"XLC", tr("Comm. Svc.")},  {"XLP", tr("Consumer Stap.")}, {"SOXX", tr("Semis")},
+        {"XLK", tr("Technology")}, {"XLV", tr("Healthcare")},     {"XLF", tr("Financials")},
+        {"XLE", tr("Energy")},     {"XLY", tr("Consumer Disc.")}, {"XLI", tr("Industrials")},
+        {"XLB", tr("Materials")},  {"XLU", tr("Utilities")},      {"XLRE", tr("Real Estate")},
+        {"XLC", tr("Comm. Svc.")}, {"XLP", tr("Consumer Stap.")}, {"SOXX", tr("Semis")},
     };
 }
 
@@ -36,7 +36,6 @@ SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget(tr("SECTO
 
     apply_styles();
     set_loading(true);
-
 }
 
 void SectorHeatmapWidget::apply_styles() {
@@ -69,9 +68,8 @@ void SectorHeatmapWidget::refresh_data() {
     QStringList topics;
     for (const auto& sym : sector_symbols())
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
+    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
 }
-
 
 void SectorHeatmapWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
@@ -107,7 +105,6 @@ void SectorHeatmapWidget::rebuild_from_cache() {
         populate(quotes);
 }
 
-
 void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
     // Clear grid
     QLayoutItem* item;
@@ -128,8 +125,8 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
         tint.setAlpha(40 + intensity);
         QString bg_color = tint.name(QColor::HexArgb);
 
-        cell->setStyleSheet(
-            QString("background: %1; border: 1px solid %2; border-radius: 2px;").arg(bg_color, ui::colors::BORDER_DIM()));
+        cell->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
+                                .arg(bg_color, ui::colors::BORDER_DIM()));
 
         auto* cl = new QVBoxLayout(cell);
         cl->setContentsMargins(4, 2, 4, 2);

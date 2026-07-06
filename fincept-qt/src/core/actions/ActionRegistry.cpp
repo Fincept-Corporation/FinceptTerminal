@@ -4,6 +4,7 @@
 #include "core/telemetry/TelemetryProvider.h"
 
 #include <QVariantMap>
+
 #include <algorithm>
 
 namespace fincept {
@@ -79,7 +80,8 @@ QList<const ActionDef*> ActionRegistry::match(const QString& prefix, int max_res
 
     for (const QString& id : insertion_order_) {
         const ActionDef* def = find(id);
-        if (!def) continue;
+        if (!def)
+            continue;
         const QString id_lc = def->id.toLower();
         if (id_lc == p) {
             tier_id_exact.append(def);
@@ -101,10 +103,26 @@ QList<const ActionDef*> ActionRegistry::match(const QString& prefix, int max_res
         }
     }
 
-    for (const auto* d : tier_id_exact) { if (out.size() >= max_results) break; out.append(d); }
-    for (const auto* d : tier_id_prefix) { if (out.size() >= max_results) break; out.append(d); }
-    for (const auto* d : tier_display_prefix) { if (out.size() >= max_results) break; out.append(d); }
-    for (const auto* d : tier_alias_prefix) { if (out.size() >= max_results) break; out.append(d); }
+    for (const auto* d : tier_id_exact) {
+        if (out.size() >= max_results)
+            break;
+        out.append(d);
+    }
+    for (const auto* d : tier_id_prefix) {
+        if (out.size() >= max_results)
+            break;
+        out.append(d);
+    }
+    for (const auto* d : tier_display_prefix) {
+        if (out.size() >= max_results)
+            break;
+        out.append(d);
+    }
+    for (const auto* d : tier_alias_prefix) {
+        if (out.size() >= max_results)
+            break;
+        out.append(d);
+    }
     return out;
 }
 
@@ -118,9 +136,7 @@ Result<void> ActionRegistry::invoke(const QString& id, const CommandContext& ctx
         return Result<void>::err(("Action unavailable in current context: " + id).toStdString());
     }
 
-    Result<void> result = def->handler
-                              ? def->handler(ctx)
-                              : Result<void>::ok();
+    Result<void> result = def->handler ? def->handler(ctx) : Result<void>::ok();
     if (!def->handler) {
         // Placeholder handler. Common during phased rollout — registered
         // for discoverability but not yet wired. Treat as success so
@@ -143,7 +159,8 @@ Result<void> ActionRegistry::invoke(const QString& id, const CommandContext& ctx
             // come from our own code so they don't carry user PII, but
             // we cap length defensively.
             QString err = QString::fromStdString(result.error());
-            if (err.size() > 200) err = err.left(200);
+            if (err.size() > 200)
+                err = err.left(200);
             payload.insert("err", err);
         }
         telemetry::TelemetrySink::instance().record("action.invoke", payload);

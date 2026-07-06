@@ -45,16 +45,16 @@ AdapterResult wf_result(const CloudResponse& resp) {
 
 QString wf_status_to_str(workflow::WorkflowStatus s) {
     switch (s) {
-    case workflow::WorkflowStatus::Idle:
-        return QStringLiteral("idle");
-    case workflow::WorkflowStatus::Running:
-        return QStringLiteral("running");
-    case workflow::WorkflowStatus::Completed:
-        return QStringLiteral("completed");
-    case workflow::WorkflowStatus::Error:
-        return QStringLiteral("error");
-    default:
-        return QStringLiteral("draft");
+        case workflow::WorkflowStatus::Idle:
+            return QStringLiteral("idle");
+        case workflow::WorkflowStatus::Running:
+            return QStringLiteral("running");
+        case workflow::WorkflowStatus::Completed:
+            return QStringLiteral("completed");
+        case workflow::WorkflowStatus::Error:
+            return QStringLiteral("error");
+        default:
+            return QStringLiteral("draft");
     }
 }
 workflow::WorkflowStatus wf_status_from_str(const QString& s) {

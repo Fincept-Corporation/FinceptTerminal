@@ -6,10 +6,9 @@
 //
 // Part of the partial-class split of CreateAgentPanel.cpp.
 
-#include "screens/agent_config/CreateAgentPanel.h"
-
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "screens/agent_config/CreateAgentPanel.h"
 #include "services/agents/AgentService.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -135,17 +134,14 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
 
     // Terminal MCP bridge — default ON if the key is absent (matches
     // build_payload's default-true semantics for legacy configs).
-    const bool tt_enabled = c.contains("terminal_tools_enabled")
-                                ? c["terminal_tools_enabled"].toBool()
-                                : true;
+    const bool tt_enabled = c.contains("terminal_tools_enabled") ? c["terminal_tools_enabled"].toBool() : true;
     terminal_tools_check_->setChecked(tt_enabled);
     terminal_sub_->setVisible(tt_enabled);
     terminal_destructive_check_->setChecked(c["allow_destructive_tools"].toBool(false));
     // Default ON for legacy configs (key absent) — matches build_payload's
     // default-true semantics.
-    terminal_external_check_->setChecked(c.contains("include_external_mcp")
-                                              ? c["include_external_mcp"].toBool()
-                                              : true);
+    terminal_external_check_->setChecked(c.contains("include_external_mcp") ? c["include_external_mcp"].toBool()
+                                                                            : true);
     terminal_dry_run_check_->setChecked(c["tools_dry_run"].toBool(false));
     QSet<QString> cat_set;
     const QJsonObject tf = c["tool_filter"].toObject();
@@ -411,40 +407,68 @@ void CreateAgentPanel::import_json() {
 
 QVariantMap CreateAgentPanel::save_draft() const {
     QVariantMap d;
-    if (name_edit_) d["name"] = name_edit_->text();
-    if (desc_edit_) d["desc"] = desc_edit_->toPlainText();
-    if (instructions_edit_) d["instructions"] = instructions_edit_->toPlainText();
-    if (knowledge_urls_edit_) d["knowledge_urls"] = knowledge_urls_edit_->toPlainText();
-    if (memory_db_path_edit_) d["memory_db"] = memory_db_path_edit_->text();
-    if (memory_table_edit_) d["memory_table"] = memory_table_edit_->text();
-    if (storage_db_path_edit_) d["storage_db"] = storage_db_path_edit_->text();
-    if (storage_table_edit_) d["storage_table"] = storage_table_edit_->text();
-    if (agentic_memory_user_id_edit_) d["agentic_user_id"] = agentic_memory_user_id_edit_->text();
-    if (terminal_exclude_cats_edit_) d["term_exclude"] = terminal_exclude_cats_edit_->text();
-    if (terminal_name_include_edit_) d["term_include"] = terminal_name_include_edit_->text();
-    if (terminal_name_exclude_edit_) d["term_name_exclude"] = terminal_name_exclude_edit_->text();
-    if (test_query_edit_) d["test_query"] = test_query_edit_->toPlainText();
+    if (name_edit_)
+        d["name"] = name_edit_->text();
+    if (desc_edit_)
+        d["desc"] = desc_edit_->toPlainText();
+    if (instructions_edit_)
+        d["instructions"] = instructions_edit_->toPlainText();
+    if (knowledge_urls_edit_)
+        d["knowledge_urls"] = knowledge_urls_edit_->toPlainText();
+    if (memory_db_path_edit_)
+        d["memory_db"] = memory_db_path_edit_->text();
+    if (memory_table_edit_)
+        d["memory_table"] = memory_table_edit_->text();
+    if (storage_db_path_edit_)
+        d["storage_db"] = storage_db_path_edit_->text();
+    if (storage_table_edit_)
+        d["storage_table"] = storage_table_edit_->text();
+    if (agentic_memory_user_id_edit_)
+        d["agentic_user_id"] = agentic_memory_user_id_edit_->text();
+    if (terminal_exclude_cats_edit_)
+        d["term_exclude"] = terminal_exclude_cats_edit_->text();
+    if (terminal_name_include_edit_)
+        d["term_include"] = terminal_name_include_edit_->text();
+    if (terminal_name_exclude_edit_)
+        d["term_name_exclude"] = terminal_name_exclude_edit_->text();
+    if (test_query_edit_)
+        d["test_query"] = test_query_edit_->toPlainText();
     if (test_result_ && !test_result_->toPlainText().isEmpty())
         d["test_result"] = test_result_->toPlainText();
     return d;
 }
 
 void CreateAgentPanel::restore_draft(const QVariantMap& d) {
-    if (d.isEmpty()) return;
-    if (name_edit_ && d.contains("name")) name_edit_->setText(d["name"].toString());
-    if (desc_edit_ && d.contains("desc")) desc_edit_->setPlainText(d["desc"].toString());
-    if (instructions_edit_ && d.contains("instructions")) instructions_edit_->setPlainText(d["instructions"].toString());
-    if (knowledge_urls_edit_ && d.contains("knowledge_urls")) knowledge_urls_edit_->setPlainText(d["knowledge_urls"].toString());
-    if (memory_db_path_edit_ && d.contains("memory_db")) memory_db_path_edit_->setText(d["memory_db"].toString());
-    if (memory_table_edit_ && d.contains("memory_table")) memory_table_edit_->setText(d["memory_table"].toString());
-    if (storage_db_path_edit_ && d.contains("storage_db")) storage_db_path_edit_->setText(d["storage_db"].toString());
-    if (storage_table_edit_ && d.contains("storage_table")) storage_table_edit_->setText(d["storage_table"].toString());
-    if (agentic_memory_user_id_edit_ && d.contains("agentic_user_id")) agentic_memory_user_id_edit_->setText(d["agentic_user_id"].toString());
-    if (terminal_exclude_cats_edit_ && d.contains("term_exclude")) terminal_exclude_cats_edit_->setText(d["term_exclude"].toString());
-    if (terminal_name_include_edit_ && d.contains("term_include")) terminal_name_include_edit_->setText(d["term_include"].toString());
-    if (terminal_name_exclude_edit_ && d.contains("term_name_exclude")) terminal_name_exclude_edit_->setText(d["term_name_exclude"].toString());
-    if (test_query_edit_ && d.contains("test_query")) test_query_edit_->setPlainText(d["test_query"].toString());
-    if (test_result_ && d.contains("test_result")) test_result_->setPlainText(d["test_result"].toString());
+    if (d.isEmpty())
+        return;
+    if (name_edit_ && d.contains("name"))
+        name_edit_->setText(d["name"].toString());
+    if (desc_edit_ && d.contains("desc"))
+        desc_edit_->setPlainText(d["desc"].toString());
+    if (instructions_edit_ && d.contains("instructions"))
+        instructions_edit_->setPlainText(d["instructions"].toString());
+    if (knowledge_urls_edit_ && d.contains("knowledge_urls"))
+        knowledge_urls_edit_->setPlainText(d["knowledge_urls"].toString());
+    if (memory_db_path_edit_ && d.contains("memory_db"))
+        memory_db_path_edit_->setText(d["memory_db"].toString());
+    if (memory_table_edit_ && d.contains("memory_table"))
+        memory_table_edit_->setText(d["memory_table"].toString());
+    if (storage_db_path_edit_ && d.contains("storage_db"))
+        storage_db_path_edit_->setText(d["storage_db"].toString());
+    if (storage_table_edit_ && d.contains("storage_table"))
+        storage_table_edit_->setText(d["storage_table"].toString());
+    if (agentic_memory_user_id_edit_ && d.contains("agentic_user_id"))
+        agentic_memory_user_id_edit_->setText(d["agentic_user_id"].toString());
+    if (terminal_exclude_cats_edit_ && d.contains("term_exclude"))
+        terminal_exclude_cats_edit_->setText(d["term_exclude"].toString());
+    if (terminal_name_include_edit_ && d.contains("term_include"))
+        terminal_name_include_edit_->setText(d["term_include"].toString());
+    if (terminal_name_exclude_edit_ && d.contains("term_name_exclude"))
+        terminal_name_exclude_edit_->setText(d["term_name_exclude"].toString());
+    if (test_query_edit_ && d.contains("test_query"))
+        test_query_edit_->setPlainText(d["test_query"].toString());
+    if (test_result_ && d.contains("test_result"))
+        test_result_->setPlainText(d["test_result"].toString());
 }
 
 } // namespace fincept::screens

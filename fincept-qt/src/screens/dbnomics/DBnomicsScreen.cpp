@@ -130,8 +130,9 @@ void DBnomicsScreen::build_ui() {
     // View toggle bar (36px)
     auto* toggle_bar = new QWidget(right_widget);
     toggle_bar->setFixedHeight(36);
-    toggle_bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_MED()));
+    toggle_bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                                  .arg(ui::colors::BG_RAISED())
+                                  .arg(ui::colors::BORDER_MED()));
 
     auto* toggle_hl = new QHBoxLayout(toggle_bar);
     toggle_hl->setContentsMargins(8, 0, 8, 0);
@@ -187,8 +188,8 @@ void DBnomicsScreen::build_ui() {
 
     chart_type_label_ = new QLabel(tr("CHART:"), toggle_bar);
     chart_type_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:600;")
-                                        .arg(ui::colors::TEXT_TERTIARY())
-                                        .arg(ui::fonts::DATA_FAMILY));
+                                         .arg(ui::colors::TEXT_TERTIARY())
+                                         .arg(ui::fonts::DATA_FAMILY));
 
     chart_type_combo_ = new QComboBox(toggle_bar);
     chart_type_combo_->addItems({tr("LINE"), tr("AREA"), tr("BAR"), tr("SCATTER")});
@@ -273,8 +274,8 @@ void DBnomicsScreen::build_ui() {
     comparison_placeholder_->setAlignment(Qt::AlignCenter);
     comparison_placeholder_->setWordWrap(true);
     comparison_placeholder_->setStyleSheet(QString("color:%1; font-family:%2; font-size:13px;")
-                                        .arg(ui::colors::TEXT_TERTIARY())
-                                        .arg(ui::fonts::DATA_FAMILY));
+                                               .arg(ui::colors::TEXT_TERTIARY())
+                                               .arg(ui::fonts::DATA_FAMILY));
     comparison_layout_->addWidget(comparison_placeholder_);
     comparison_layout_->addStretch();
 
@@ -322,8 +323,9 @@ void DBnomicsScreen::build_ui() {
 QWidget* DBnomicsScreen::build_toolbar() {
     auto* toolbar = new QWidget(this);
     toolbar->setFixedHeight(44);
-    toolbar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED()).arg(ui::colors::BORDER_MED()));
+    toolbar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                               .arg(ui::colors::BG_RAISED())
+                               .arg(ui::colors::BORDER_MED()));
 
     auto* hl = new QHBoxLayout(toolbar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -331,8 +333,8 @@ QWidget* DBnomicsScreen::build_toolbar() {
 
     toolbar_title_ = new QLabel(tr("DBNOMICS TERMINAL"), toolbar);
     toolbar_title_->setStyleSheet(QString("color:%1; font-family:%2; font-size:14px; font-weight:700;")
-                             .arg(ui::colors::AMBER())
-                             .arg(ui::fonts::DATA_FAMILY));
+                                      .arg(ui::colors::AMBER())
+                                      .arg(ui::fonts::DATA_FAMILY));
 
     hl->addWidget(toolbar_title_);
     hl->addStretch();
@@ -384,15 +386,22 @@ void DBnomicsScreen::changeEvent(QEvent* event) {
 
 void DBnomicsScreen::retranslateUi() {
     // Toolbar
-    if (toolbar_title_) toolbar_title_->setText(tr("DBNOMICS TERMINAL"));
-    if (fetch_btn_)     fetch_btn_->setText(tr("FETCH"));
-    if (refresh_btn_)   refresh_btn_->setText(tr("REFRESH"));
-    if (export_btn_)    export_btn_->setText(tr("EXPORT CSV"));
+    if (toolbar_title_)
+        toolbar_title_->setText(tr("DBNOMICS TERMINAL"));
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("FETCH"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
+    if (export_btn_)
+        export_btn_->setText(tr("EXPORT CSV"));
 
     // View toggle
-    if (single_btn_)  single_btn_->setText(tr("SINGLE"));
-    if (compare_btn_) compare_btn_->setText(tr("COMPARE"));
-    if (chart_type_label_) chart_type_label_->setText(tr("CHART:"));
+    if (single_btn_)
+        single_btn_->setText(tr("SINGLE"));
+    if (compare_btn_)
+        compare_btn_->setText(tr("COMPARE"));
+    if (chart_type_label_)
+        chart_type_label_->setText(tr("CHART:"));
 
     // Chart-type combo — setItemText preserves the current selection/index.
     if (chart_type_combo_ && chart_type_combo_->count() >= 4) {
@@ -792,8 +801,8 @@ void DBnomicsScreen::rebuild_comparison_view() {
         comparison_placeholder_->setAlignment(Qt::AlignCenter);
         comparison_placeholder_->setWordWrap(true);
         comparison_placeholder_->setStyleSheet(QString("color:%1; font-family:%2; font-size:13px;")
-                                       .arg(ui::colors::TEXT_TERTIARY())
-                                       .arg(ui::fonts::DATA_FAMILY));
+                                                   .arg(ui::colors::TEXT_TERTIARY())
+                                                   .arg(ui::fonts::DATA_FAMILY));
         comparison_layout_->addWidget(comparison_placeholder_);
         comparison_layout_->addStretch();
         return;

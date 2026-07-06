@@ -19,7 +19,7 @@ struct NorenRow {
     QString raw_instrument; ///< Instrument column: EQ/BE/INDEX/UNDIND/OPTSTK/…
     QString option_type;    ///< XX (future) / CE / PE / "" (cash).
     double strike = 0.0;
-    QString expiry_raw;     ///< e.g. "30-JUN-2026".
+    QString expiry_raw; ///< e.g. "30-JUN-2026".
     int lot_size = 1;
     double tick_size = 0.05;
     bool is_bse_index = false; ///< Manually-injected BSE index (SENSEX/BANKEX).

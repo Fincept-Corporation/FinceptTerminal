@@ -64,7 +64,8 @@ const PredictionMarket* PolymarketMarketCardModel::market_at(int row) const {
 }
 
 bool PolymarketMarketCardModel::update_market(const PredictionMarket& market) {
-    if (view_mode_ != QStringLiteral("markets")) return false;
+    if (view_mode_ != QStringLiteral("markets"))
+        return false;
     for (int i = 0; i < markets_.size(); ++i) {
         if (markets_[i].key.market_id == market.key.market_id) {
             markets_[i] = market;
@@ -84,8 +85,7 @@ const PredictionEvent* PolymarketMarketCardModel::event_at(int row) const {
 
 // ── Delegate ────────────────────────────────────────────────────────────────
 
-PolymarketMarketCardDelegate::PolymarketMarketCardDelegate(QObject* parent)
-    : QStyledItemDelegate(parent) {}
+PolymarketMarketCardDelegate::PolymarketMarketCardDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
 
 QSize PolymarketMarketCardDelegate::sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const {
     return {280, 80};
@@ -123,7 +123,10 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     painter->drawLine(r.left() + (selected ? 3 : 0), r.bottom(), r.right(), r.bottom());
 
     auto* model = qobject_cast<const PolymarketMarketCardModel*>(index.model());
-    if (!model) { painter->restore(); return; }
+    if (!model) {
+        painter->restore();
+        return;
+    }
     const auto& pres = model->presentation();
 
     const int left_pad = selected ? r.left() + 10 : r.left() + 10;
@@ -132,7 +135,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     const int w = r.right() - 12 - x;
 
     const PredictionMarket* mkt = model->market_at(index.row());
-    const PredictionEvent* evt  = model->event_at(index.row());
+    const PredictionEvent* evt = model->event_at(index.row());
 
     QString title;
     double vol = 0;
@@ -142,17 +145,17 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     bool is_closed = false;
 
     if (mkt) {
-        title     = mkt->question;
-        vol       = mkt->volume;
-        outcomes  = mkt->outcomes;
+        title = mkt->question;
+        vol = mkt->volume;
+        outcomes = mkt->outcomes;
         is_active = mkt->active;
         is_closed = mkt->closed;
     } else if (evt) {
-        title            = evt->title;
-        vol              = evt->volume;
+        title = evt->title;
+        vol = evt->volume;
         sub_market_count = evt->markets.size();
-        is_active        = evt->active;
-        is_closed        = evt->closed;
+        is_active = evt->active;
+        is_closed = evt->closed;
         if (!evt->markets.isEmpty())
             outcomes = evt->markets[0].outcomes;
     } else {
@@ -166,31 +169,32 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
     painter->setFont(title_font);
 
     QColor title_color = selected ? accent : QColor(colors::TEXT_PRIMARY());
-    if (is_closed) title_color = QColor(colors::TEXT_DIM());
+    if (is_closed)
+        title_color = QColor(colors::TEXT_DIM());
     painter->setPen(title_color);
 
     const QRect title_rect(x, y, w, 28);
-    painter->drawText(title_rect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
-                      title.left(90));
+    painter->drawText(title_rect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, title.left(90));
     y += 30;
 
     // ── Outcome probability bars ──────────────────────────────────────────
     const int bars_to_draw = qMin(2, outcomes.size());
     if (bars_to_draw >= 1) {
-        const int bar_w   = w - 62;  // leave space for price label
-        const int bar_h   = 8;
-        const int gap     = 4;
+        const int bar_w = w - 62; // leave space for price label
+        const int bar_h = 8;
+        const int gap = 4;
 
         QFont price_font(fonts::DATA_FAMILY, 9);
         price_font.setWeight(QFont::Bold);
 
         for (int i = 0; i < bars_to_draw; ++i) {
-            const auto& o   = outcomes[i];
+            const auto& o = outcomes[i];
             const double pct = qBound(0.0, o.price, 1.0);
             const int filled = static_cast<int>(bar_w * pct);
 
             QColor bar_color = (i == 0) ? pres.accent : QColor(OUTCOME_BAR_COLORS[qMin(i, 4)]);
-            if (is_closed) bar_color = QColor(colors::BORDER_BRIGHT());
+            if (is_closed)
+                bar_color = QColor(colors::BORDER_BRIGHT());
 
             // Track (background)
             painter->fillRect(x, y, bar_w, bar_h, QColor(colors::BG_RAISED()));
@@ -202,8 +206,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
             painter->setFont(price_font);
             painter->setPen(is_closed ? QColor(colors::TEXT_DIM()) : bar_color);
             const QString price_str = pres.format_price(pct);
-            painter->drawText(x + bar_w + 4, y - 1, 56, bar_h + 2,
-                              Qt::AlignLeft | Qt::AlignVCenter, price_str);
+            painter->drawText(x + bar_w + 4, y - 1, 56, bar_h + 2, Qt::AlignLeft | Qt::AlignVCenter, price_str);
 
             y += bar_h + gap;
         }
@@ -212,8 +215,7 @@ void PolymarketMarketCardDelegate::paint(QPainter* painter, const QStyleOptionVi
         QFont meta_font(fonts::DATA_FAMILY, 9);
         painter->setFont(meta_font);
         painter->setPen(QColor(colors::TEXT_SECONDARY()));
-        painter->drawText(x, y, w, 14, Qt::AlignLeft | Qt::AlignVCenter,
-                          pres.format_volume(vol));
+        painter->drawText(x, y, w, 14, Qt::AlignLeft | Qt::AlignVCenter, pres.format_volume(vol));
         if (evt && sub_market_count > 0) {
             painter->drawText(x + 80, y, w - 80, 14, Qt::AlignLeft | Qt::AlignVCenter,
                               tr("%1 mkts").arg(sub_market_count));

@@ -180,17 +180,18 @@ void ChatModeScreen::on_session_selected(const QString& uuid) {
 
 void ChatModeScreen::on_new_session() {
     QPointer<ChatModeScreen> self = this;
-    ChatModeService::instance().create_session(tr("New Conversation"), [self](bool ok, ChatSession session, QString err) {
-        if (!self)
-            return;
-        if (!ok) {
-            LOG_WARN("ChatModeScreen", "Create session failed: " + err);
-            return;
-        }
-        self->message_panel_->clear_messages();
-        self->session_panel_->refresh_sessions();
-        self->on_session_selected(session.uuid);
-    });
+    ChatModeService::instance().create_session(tr("New Conversation"),
+                                               [self](bool ok, ChatSession session, QString err) {
+                                                   if (!self)
+                                                       return;
+                                                   if (!ok) {
+                                                       LOG_WARN("ChatModeScreen", "Create session failed: " + err);
+                                                       return;
+                                                   }
+                                                   self->message_panel_->clear_messages();
+                                                   self->session_panel_->refresh_sessions();
+                                                   self->on_session_selected(session.uuid);
+                                               });
 }
 
 void ChatModeScreen::on_delete_session(const QString& uuid) {
@@ -235,9 +236,8 @@ void ChatModeScreen::on_rename_session(const QString& uuid, const QString& title
 void ChatModeScreen::on_send_requested(const QString& message, StreamMode mode) {
     LOG_INFO("ChatModeScreen",
              QString("Send [%1]: \"%2\"").arg(mode == StreamMode::Deep ? "deep" : "lite").arg(message.left(60)));
-    ensure_active_session([message, mode](const QString& uuid) {
-        ChatModeService::instance().stream_message(message, uuid, mode);
-    });
+    ensure_active_session(
+        [message, mode](const QString& uuid) { ChatModeService::instance().stream_message(message, uuid, mode); });
 }
 
 void ChatModeScreen::ensure_active_session(std::function<void(const QString&)> then) {

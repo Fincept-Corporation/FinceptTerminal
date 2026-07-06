@@ -33,12 +33,14 @@ Result<void> apply_v026(QSqlDatabase& db) {
                 legs_json    TEXT    NOT NULL DEFAULT '[]'
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v026_sql(db, "CREATE INDEX IF NOT EXISTS idx_strategies_underlying "
                               "ON strategies(underlying, modified_at DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     return Result<void>::ok();
 }
@@ -47,7 +49,8 @@ Result<void> apply_v026(QSqlDatabase& db) {
 
 void register_migration_v026() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({26, "strategies", apply_v026});
 }

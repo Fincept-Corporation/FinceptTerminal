@@ -187,7 +187,7 @@ Result<QVector<PtOrder>> PaperTradingRepository::get_orders(const QString& portf
 }
 
 Result<QVector<PtOrder>> PaperTradingRepository::get_orders_between(const QString& portfolio_id,
-                                                                   const QString& from_iso, const QString& to_iso) {
+                                                                    const QString& from_iso, const QString& to_iso) {
     // created_at is stored as a naive UTC ISO string (fixed width), so lexical
     // comparison on the [from, to) UTC bounds yields the right day's orders.
     auto r = db().execute(QString("SELECT %1 FROM pt_orders WHERE portfolio_id = ? AND created_at >= ? "
@@ -274,13 +274,12 @@ Result<void> PaperTradingRepository::update_position(const QString& id, double q
     // position showed P&L against the OLD entry/qty. Recompute against the last
     // good current_price (guarded: a 0/unset mark keeps the existing value so we
     // never surface a phantom full-notional P&L).
-    return exec_write(
-        "UPDATE pt_positions SET quantity = ?, entry_price = ?, "
-        "unrealized_pnl = CASE WHEN current_price > 0 THEN "
-        "(CASE WHEN side = 'long' THEN (current_price - ?) * ? ELSE (? - current_price) * ? END) "
-        "ELSE unrealized_pnl END "
-        "WHERE id = ?",
-        {quantity, entry_price, entry_price, quantity, entry_price, quantity, id});
+    return exec_write("UPDATE pt_positions SET quantity = ?, entry_price = ?, "
+                      "unrealized_pnl = CASE WHEN current_price > 0 THEN "
+                      "(CASE WHEN side = 'long' THEN (current_price - ?) * ? ELSE (? - current_price) * ? END) "
+                      "ELSE unrealized_pnl END "
+                      "WHERE id = ?",
+                      {quantity, entry_price, entry_price, quantity, entry_price, quantity, id});
 }
 
 Result<void> PaperTradingRepository::update_position_price(const QString& portfolio_id, const QString& symbol,
@@ -377,7 +376,7 @@ Result<QVector<PtTrade>> PaperTradingRepository::get_trades(const QString& portf
 }
 
 Result<QVector<PtTrade>> PaperTradingRepository::get_trades_between(const QString& portfolio_id,
-                                                                  const QString& from_iso, const QString& to_iso) {
+                                                                    const QString& from_iso, const QString& to_iso) {
     auto r = db().execute(QString("SELECT %1 FROM pt_trades WHERE portfolio_id = ? AND timestamp >= ? "
                                   "AND timestamp < ? ORDER BY timestamp DESC")
                               .arg(kTradeCols),
@@ -401,22 +400,21 @@ Result<PtStats> PaperTradingRepository::get_stats(const QString& portfolio_id) {
     // today_pnl uses an IST (+330 min) day boundary so "today" matches the Indian
     // trading session regardless of the machine's local timezone. timestamp is a
     // naive UTC ISO string, so datetime() parses it and the +330 shift gives IST.
-    auto r = db().execute(
-        "SELECT "
-        "  COALESCE(SUM(pnl), 0),"                                                                       // 0 realized
-        "  COUNT(*),"                                                                                     // 1 fills
-        "  SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END),"                                                     // 2 winners
-        "  SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END),"                                                     // 3 losers
-        "  COALESCE(MAX(pnl), 0),"                                                                        // 4 max win
-        "  COALESCE(MIN(pnl), 0),"                                                                        // 5 max loss
-        "  COALESCE(SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END), 0),"                                      // 6 gross+
-        "  COALESCE(SUM(CASE WHEN pnl < 0 THEN pnl ELSE 0 END), 0),"                                      // 7 gross-
-        "  COALESCE(SUM(fee), 0),"                                                                        // 8 fees
-        "  COALESCE(SUM(price * quantity), 0),"                                                           // 9 turnover
-        "  COALESCE(SUM(CASE WHEN date(datetime(timestamp, '+330 minutes')) "
-        "    = date(datetime('now', '+330 minutes')) THEN pnl ELSE 0 END), 0)"                            // 10 today
-        " FROM pt_trades WHERE portfolio_id = ?",
-        {portfolio_id});
+    auto r = db().execute("SELECT "
+                          "  COALESCE(SUM(pnl), 0),"                                   // 0 realized
+                          "  COUNT(*),"                                                // 1 fills
+                          "  SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END),"                // 2 winners
+                          "  SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END),"                // 3 losers
+                          "  COALESCE(MAX(pnl), 0),"                                   // 4 max win
+                          "  COALESCE(MIN(pnl), 0),"                                   // 5 max loss
+                          "  COALESCE(SUM(CASE WHEN pnl > 0 THEN pnl ELSE 0 END), 0)," // 6 gross+
+                          "  COALESCE(SUM(CASE WHEN pnl < 0 THEN pnl ELSE 0 END), 0)," // 7 gross-
+                          "  COALESCE(SUM(fee), 0),"                                   // 8 fees
+                          "  COALESCE(SUM(price * quantity), 0),"                      // 9 turnover
+                          "  COALESCE(SUM(CASE WHEN date(datetime(timestamp, '+330 minutes')) "
+                          "    = date(datetime('now', '+330 minutes')) THEN pnl ELSE 0 END), 0)" // 10 today
+                          " FROM pt_trades WHERE portfolio_id = ?",
+                          {portfolio_id});
 
     if (r.is_err())
         return Result<PtStats>::err(r.error());
@@ -445,7 +443,8 @@ Result<PtStats> PaperTradingRepository::get_stats(const QString& portfolio_id) {
     s.avg_win = s.winning_trades > 0 ? s.gross_profit / static_cast<double>(s.winning_trades) : 0.0;
     s.avg_loss = s.losing_trades > 0 ? s.gross_loss / static_cast<double>(s.losing_trades) : 0.0;
     const double gross_loss_abs = s.gross_loss < 0 ? -s.gross_loss : s.gross_loss;
-    s.profit_factor = gross_loss_abs > 0 ? s.gross_profit / gross_loss_abs : (s.gross_profit > 0 ? s.gross_profit : 0.0);
+    s.profit_factor =
+        gross_loss_abs > 0 ? s.gross_profit / gross_loss_abs : (s.gross_profit > 0 ? s.gross_profit : 0.0);
     return Result<PtStats>::ok(s);
 }
 

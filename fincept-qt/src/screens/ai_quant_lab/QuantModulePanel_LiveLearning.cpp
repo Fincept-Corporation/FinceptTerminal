@@ -2,12 +2,11 @@
 // meta learning, and rolling retraining panel builders.
 // Method definitions split from QuantModulePanel_Misc.cpp.
 
+#include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
-#include "core/logging/Logger.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -59,7 +58,6 @@ using namespace fincept::services::quant;
 using namespace fincept::screens::quant_styles;
 using namespace fincept::screens::quant_common;
 using namespace fincept::screens::quant_gs_helpers;
-
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LIVE SIGNALS PANEL
@@ -465,7 +463,6 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     return w;
 }
 
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROLLING RETRAINING PANEL
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -485,9 +482,9 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     ltvl->setContentsMargins(12, 12, 12, 12);
     ltvl->setSpacing(10);
 
-    auto* lt_info = new QLabel(
-        tr("Schedules are persisted in ~/.fincept/rolling_schedules.json. "
-           "Click Refresh to load the latest state."), list_tab);
+    auto* lt_info = new QLabel(tr("Schedules are persisted in ~/.fincept/rolling_schedules.json. "
+                                  "Click Refresh to load the latest state."),
+                               list_tab);
     lt_info->setWordWrap(true);
     lt_info->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
     ltvl->addWidget(lt_info);
@@ -571,24 +568,26 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     btn_hl->setSpacing(8);
 
     auto* rr_preview = make_run_button(tr("PREVIEW WINDOWS"), btn_row);
-    rr_preview->setStyleSheet(QString(
-        "QPushButton{background:%1;color:%2;border:1px solid %1;border-radius:4px;"
-        "font-size:11px;font-weight:700;padding:6px 14px;}"
-        "QPushButton:hover{background:%3;}")
-        .arg(ui::colors::BG_RAISED(), accent, ui::colors::BG_HOVER()));
+    rr_preview->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %1;border-radius:4px;"
+                                      "font-size:11px;font-weight:700;padding:6px 14px;}"
+                                      "QPushButton:hover{background:%3;}")
+                                  .arg(ui::colors::BG_RAISED(), accent, ui::colors::BG_HOVER()));
     connect(rr_preview, &QPushButton::clicked, this, [this]() {
         const QString mid = text_inputs_["rr_model_id"]->text().trimmed();
-        const QString cp  = text_inputs_["rr_conf_path"]->text().trimmed();
+        const QString cp = text_inputs_["rr_conf_path"]->text().trimmed();
         if (mid.isEmpty() && cp.isEmpty()) {
             status_label_->setText(tr("Enter a Model ID or Config Path to preview."));
             return;
         }
         status_label_->setText(tr("Generating preview..."));
         QJsonObject params;
-        if (!mid.isEmpty()) params["model_id"] = mid;
-        if (!cp.isEmpty())  params["conf_path"] = cp;
+        if (!mid.isEmpty())
+            params["model_id"] = mid;
+        if (!cp.isEmpty())
+            params["conf_path"] = cp;
         const QString step = text_inputs_["rr_step"]->text().trimmed();
-        if (!step.isEmpty()) params["step"] = step.toInt();
+        if (!step.isEmpty())
+            params["step"] = step.toInt();
         AIQuantLabService::instance().rolling_preview_tasks(params);
     });
     btn_hl->addWidget(rr_preview, 1);
@@ -602,15 +601,18 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
         }
         status_label_->setText(tr("Creating schedule..."));
         QJsonObject params;
-        params["model_id"]  = mid;
+        params["model_id"] = mid;
         params["frequency"] = combo_inputs_["rr_frequency"]->currentText();
-        params["region"]    = combo_inputs_["rr_region"]->currentText();
-        const QString cp    = text_inputs_["rr_conf_path"]->text().trimmed();
-        if (!cp.isEmpty()) params["conf_path"] = cp;
-        const QString win   = text_inputs_["rr_window"]->text().trimmed();
-        if (!win.isEmpty()) params["window"] = win.toInt();
-        const QString step  = text_inputs_["rr_step"]->text().trimmed();
-        if (!step.isEmpty()) params["step"] = step.toInt();
+        params["region"] = combo_inputs_["rr_region"]->currentText();
+        const QString cp = text_inputs_["rr_conf_path"]->text().trimmed();
+        if (!cp.isEmpty())
+            params["conf_path"] = cp;
+        const QString win = text_inputs_["rr_window"]->text().trimmed();
+        if (!win.isEmpty())
+            params["window"] = win.toInt();
+        const QString step = text_inputs_["rr_step"]->text().trimmed();
+        if (!step.isEmpty())
+            params["step"] = step.toInt();
         AIQuantLabService::instance().rolling_create_schedule(params);
     });
     btn_hl->addWidget(rr_create, 1);
@@ -624,9 +626,9 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     retrainvl->setContentsMargins(12, 12, 12, 12);
     retrainvl->setSpacing(10);
 
-    auto* rt_info = new QLabel(
-        tr("Executes a full rolling retrain for a scheduled model. Each window trains "
-           "independently and progress is streamed live below."), retrain_tab);
+    auto* rt_info = new QLabel(tr("Executes a full rolling retrain for a scheduled model. Each window trains "
+                                  "independently and progress is streamed live below."),
+                               retrain_tab);
     rt_info->setWordWrap(true);
     rt_info->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
     retrainvl->addWidget(rt_info);
@@ -644,12 +646,11 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     rr_progress->setValue(0);
     rr_progress->setTextVisible(true);
     rr_progress->setFormat(tr("Idle"));
-    rr_progress->setStyleSheet(QString(
-        "QProgressBar{background:%1;border:1px solid %2;border-radius:4px;"
-        "color:%3;font-size:11px;font-weight:600;text-align:center;height:20px;}"
-        "QProgressBar::chunk{background:%4;border-radius:3px;}")
-        .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(),
-             ui::colors::TEXT_PRIMARY(), accent));
+    rr_progress->setStyleSheet(
+        QString("QProgressBar{background:%1;border:1px solid %2;border-radius:4px;"
+                "color:%3;font-size:11px;font-weight:600;text-align:center;height:20px;}"
+                "QProgressBar::chunk{background:%4;border-radius:3px;}")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), accent));
     retrainvl->addWidget(rr_progress);
 
     // Streaming log output

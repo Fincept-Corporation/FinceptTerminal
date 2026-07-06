@@ -52,7 +52,8 @@ static QWidget* make_contact_card(const QString& title, const QString& value, co
     vl->addWidget(v);
 
     auto* d = new QLabel(detail);
-    d->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
+    d->setStyleSheet(
+        QString("color: %1; font-size: 11px; background: transparent; %2").arg(colors::TEXT_TERTIARY(), MF));
     d->setWordWrap(true);
     vl->addWidget(d);
 
@@ -136,9 +137,11 @@ QWidget* ContactScreen::build_page() {
         grid->setSpacing(10);
 
         // Brand/contact values (email, phone, company name) are shown verbatim — not translated.
-        grid->addWidget(make_contact_card(tr("EMAIL SUPPORT"), "support@fincept.in", tr("Response within 4-6 hours")), 0, 0);
+        grid->addWidget(make_contact_card(tr("EMAIL SUPPORT"), "support@fincept.in", tr("Response within 4-6 hours")),
+                        0, 0);
         grid->addWidget(make_contact_card(tr("PHONE SUPPORT"), "+1-800-FINCEPT", tr("Mon-Fri, 9AM-6PM EST")), 0, 1);
-        grid->addWidget(make_contact_card(tr("SUPPORT HOURS"), tr("Mon-Fri 9AM-6PM EST"), tr("Saturday 10AM-4PM EST")), 1, 0);
+        grid->addWidget(make_contact_card(tr("SUPPORT HOURS"), tr("Mon-Fri 9AM-6PM EST"), tr("Saturday 10AM-4PM EST")),
+                        1, 0);
         grid->addWidget(make_contact_card(tr("OFFICE"), "Fincept Corporation", tr("New York, United States")), 1, 1);
 
         pvl->addWidget(body);

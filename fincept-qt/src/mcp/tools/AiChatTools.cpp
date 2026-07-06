@@ -23,11 +23,8 @@ std::vector<ToolDef> get_ai_chat_tools() {
         // Title was previously declared `required` but the handler defaulted
         // to "New Chat" when missing — contradictory. Match the actual
         // handler behaviour: optional, default "New Chat".
-        t.input_schema = ToolSchemaBuilder()
-            .string("title", "Chat session title")
-                .default_str("New Chat")
-                .length(1, 200)
-            .build();
+        t.input_schema =
+            ToolSchemaBuilder().string("title", "Chat session title").default_str("New Chat").length(1, 200).build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString title = args["title"].toString("New Chat");
             auto r = ChatRepository::instance().create_session(title);

@@ -40,13 +40,17 @@ inline int effective_ttl_ms(const TopicStateT& st) {
 // cheap. Caching adds cache-invalidation work that'd run on every
 // subscribe/unsubscribe and on Phase 5 cross-frame panel reparenting.
 bool is_owner_active_for_work(QObject* owner) {
-    if (!owner) return true;
+    if (!owner)
+        return true;
     auto* widget = qobject_cast<QWidget*>(owner);
-    if (!widget) return true; // non-widget owner (a service) — always active
+    if (!widget)
+        return true; // non-widget owner (a service) — always active
     QWidget* top = widget->window();
-    if (!top) return true;
+    if (!top)
+        return true;
     const QVariant v = top->property("fincept.active_for_work");
-    if (!v.isValid()) return true; // top isn't a frame that reports — assume active
+    if (!v.isValid())
+        return true; // top isn't a frame that reports — assume active
     return v.toBool();
 }
 } // namespace
@@ -62,9 +66,9 @@ DataHub::DataHub() {
     // Hub lives on whichever thread first touched instance() — almost
     // always the GUI thread at app startup. moveToThread not needed;
     // publish() marshals cross-thread via queued invocation.
-    scheduler_.setInterval(1000);  // 1 s tick — policies are ms, so this
-                                   // is plenty of resolution for TTLs
-                                   // measured in seconds.
+    scheduler_.setInterval(1000); // 1 s tick — policies are ms, so this
+                                  // is plenty of resolution for TTLs
+                                  // measured in seconds.
     connect(&scheduler_, &QTimer::timeout, this, &DataHub::scheduler_body);
     scheduler_.start();
 
@@ -77,18 +81,16 @@ DataHub::DataHub() {
     coalesce_timer_.setInterval(coalesce_window_ms_);
     connect(&coalesce_timer_, &QTimer::timeout, this, &DataHub::flush_coalesced_requests);
 
-    LOG_INFO("DataHub", QString("Initialised (scheduler tick = 1s, coalesce window = %1ms)")
-                            .arg(coalesce_window_ms_));
+    LOG_INFO("DataHub", QString("Initialised (scheduler tick = 1s, coalesce window = %1ms)").arg(coalesce_window_ms_));
 }
 
 void DataHub::set_coalesce_window_ms(int ms) {
-    if (ms < 0) ms = 0;
+    if (ms < 0)
+        ms = 0;
     coalesce_window_ms_ = ms;
     // Apply on the hub thread so the timer's internal state isn't touched
     // from a foreign thread.
-    QMetaObject::invokeMethod(this, [this, ms]() {
-        coalesce_timer_.setInterval(ms);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, [this, ms]() { coalesce_timer_.setInterval(ms); }, Qt::QueuedConnection);
 }
 
 // ── Pattern match ──────────────────────────────────────────────────────────
@@ -112,7 +114,7 @@ TopicPolicy DataHub::resolve_policy(const QString& topic) const {
     for (const auto& pp : pattern_policies_)
         if (pattern_matches(pp.first, topic))
             return pp.second;
-    return TopicPolicy{};  // defaults (30s TTL, 5s min interval, pull)
+    return TopicPolicy{}; // defaults (30s TTL, 5s min interval, pull)
 }
 
 DataHub::TopicState& DataHub::state_for(const QString& topic) {
@@ -132,8 +134,7 @@ Producer* DataHub::find_producer(const QString& topic) const {
     // whose prefix matches is also the most specific (longest-prefix win).
     for (const auto& e : pattern_index_) {
         if (e.is_wildcard) {
-            if (topic.size() >= e.prefix.size() &&
-                QStringView{topic}.startsWith(e.prefix))
+            if (topic.size() >= e.prefix.size() && QStringView{topic}.startsWith(e.prefix))
                 return e.owner;
         } else {
             if (topic == e.prefix)
@@ -163,9 +164,7 @@ void DataHub::rebuild_pattern_index() {
     // Sort longest prefix first so iteration in find_producer() returns
     // the most specific match.
     std::sort(pattern_index_.begin(), pattern_index_.end(),
-              [](const PatternEntry& a, const PatternEntry& b) {
-                  return a.prefix.size() > b.prefix.size();
-              });
+              [](const PatternEntry& a, const PatternEntry& b) { return a.prefix.size() > b.prefix.size(); });
 }
 
 // ── Subscription ───────────────────────────────────────────────────────────
@@ -173,7 +172,7 @@ void DataHub::rebuild_pattern_index() {
 void DataHub::on_owner_destroyed(QObject* owner) {
     // Note: owner is being destroyed, do NOT dereference it as QObject*.
     // We only use the pointer value as a map key.
-    QStringList newly_idle;  // emitted outside the lock at the end
+    QStringList newly_idle; // emitted outside the lock at the end
     {
         QMutexLocker lock(&mutex_);
 
@@ -183,20 +182,26 @@ void DataHub::on_owner_destroyed(QObject* owner) {
         if (auto eit = error_owner_topics_.find(owner); eit != error_owner_topics_.end()) {
             for (const auto& topic : eit.value()) {
                 auto bucket = error_subscriptions_.find(topic);
-                if (bucket == error_subscriptions_.end()) continue;
+                if (bucket == error_subscriptions_.end())
+                    continue;
                 bucket.value().erase(std::remove_if(bucket.value().begin(), bucket.value().end(),
-                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }), bucket.value().end());
-                if (bucket.value().isEmpty()) error_subscriptions_.erase(bucket);
+                                                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
+                                     bucket.value().end());
+                if (bucket.value().isEmpty())
+                    error_subscriptions_.erase(bucket);
             }
             error_owner_topics_.erase(eit);
         }
         if (auto epit = error_owner_patterns_.find(owner); epit != error_owner_patterns_.end()) {
             for (const auto& pattern : epit.value()) {
                 auto bucket = error_pattern_subscriptions_.find(pattern);
-                if (bucket == error_pattern_subscriptions_.end()) continue;
+                if (bucket == error_pattern_subscriptions_.end())
+                    continue;
                 bucket.value().erase(std::remove_if(bucket.value().begin(), bucket.value().end(),
-                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }), bucket.value().end());
-                if (bucket.value().isEmpty()) error_pattern_subscriptions_.erase(bucket);
+                                                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
+                                     bucket.value().end());
+                if (bucket.value().isEmpty())
+                    error_pattern_subscriptions_.erase(bucket);
             }
             error_owner_patterns_.erase(epit);
         }
@@ -205,16 +210,16 @@ void DataHub::on_owner_destroyed(QObject* owner) {
         if (topics_it != owner_topics_.end()) {
             for (const auto& topic : topics_it.value()) {
                 auto sub_it = subscriptions_.find(topic);
-                if (sub_it == subscriptions_.end()) continue;
+                if (sub_it == subscriptions_.end())
+                    continue;
                 auto& vec = sub_it.value();
                 vec.erase(std::remove_if(vec.begin(), vec.end(),
-                             [owner](const Subscription& s) { return s.owner.data() == owner; }),
+                                         [owner](const Subscription& s) { return s.owner.data() == owner; }),
                           vec.end());
                 if (vec.isEmpty()) {
                     subscriptions_.erase(sub_it);
                     // Topic just went idle — drop cached state if policy opted in.
-                    if (auto ts_it = topics_.find(topic);
-                        ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
+                    if (auto ts_it = topics_.find(topic); ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
                         topics_.erase(ts_it);
                     }
                     newly_idle.append(topic);
@@ -227,10 +232,11 @@ void DataHub::on_owner_destroyed(QObject* owner) {
         if (pats_it != owner_patterns_.end()) {
             for (const auto& pattern : pats_it.value()) {
                 auto sub_it = pattern_subscriptions_.find(pattern);
-                if (sub_it == pattern_subscriptions_.end()) continue;
+                if (sub_it == pattern_subscriptions_.end())
+                    continue;
                 auto& vec = sub_it.value();
                 vec.erase(std::remove_if(vec.begin(), vec.end(),
-                             [owner](const Subscription& s) { return s.owner.data() == owner; }),
+                                         [owner](const Subscription& s) { return s.owner.data() == owner; }),
                           vec.end());
                 if (vec.isEmpty())
                     pattern_subscriptions_.erase(sub_it);
@@ -243,22 +249,25 @@ void DataHub::on_owner_destroyed(QObject* owner) {
         // a producer refresh() for a topic nobody is listening to anymore.
         if (!newly_idle.isEmpty()) {
             QSet<QString> idle_set;
-            for (const auto& t : newly_idle) idle_set.insert(t);
-            for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end(); ) {
+            for (const auto& t : newly_idle)
+                idle_set.insert(t);
+            for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end();) {
                 it.value().erase(std::remove_if(it.value().begin(), it.value().end(),
-                    [&idle_set](const QString& t) { return idle_set.contains(t); }),
-                    it.value().end());
-                if (it.value().isEmpty()) it = coalesce_pending_.erase(it);
-                else ++it;
+                                                [&idle_set](const QString& t) { return idle_set.contains(t); }),
+                                 it.value().end());
+                if (it.value().isEmpty())
+                    it = coalesce_pending_.erase(it);
+                else
+                    ++it;
             }
         }
     }
-    for (const auto& topic : newly_idle) emit topic_idle(topic);
+    for (const auto& topic : newly_idle)
+        emit topic_idle(topic);
 }
 
-void DataHub::deliver_initial_value(
-    QObject* owner, const QString& topic,
-    const std::function<void(const QVariant&)>& slot) {
+void DataHub::deliver_initial_value(QObject* owner, const QString& topic,
+                                    const std::function<void(const QVariant&)>& slot) {
     // Caller has released mutex_. We snapshot the value under the lock,
     // then deliver the slot on the owner's thread via queued invocation.
     QVariant snapshot;
@@ -268,25 +277,27 @@ void DataHub::deliver_initial_value(
         auto it = topics_.find(topic);
         if (it != topics_.end() && it->value.isValid()) {
             const auto policy = it->policy;
-            if (policy.push_only ||
-                (now_ms() - it->last_publish_ms) < effective_ttl_ms(it.value())) {
+            if (policy.push_only || (now_ms() - it->last_publish_ms) < effective_ttl_ms(it.value())) {
                 snapshot = it->value;
                 have_value = true;
             }
         }
     }
-    if (!have_value) return;
+    if (!have_value)
+        return;
 
     QPointer<QObject> safe_owner = owner;
-    QMetaObject::invokeMethod(owner, [safe_owner, slot, snapshot]() {
-        if (safe_owner)
-            slot(snapshot);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        owner,
+        [safe_owner, slot, snapshot]() {
+            if (safe_owner)
+                slot(snapshot);
+        },
+        Qt::QueuedConnection);
 }
 
-QMetaObject::Connection DataHub::subscribe(
-    QObject* owner, const QString& topic,
-    std::function<void(const QVariant&)> slot) {
+QMetaObject::Connection DataHub::subscribe(QObject* owner, const QString& topic,
+                                           std::function<void(const QVariant&)> slot) {
     Q_ASSERT(owner && "subscribe requires a non-null owner for lifetime tracking");
 
     bool became_active = false;
@@ -299,7 +310,8 @@ QMetaObject::Connection DataHub::subscribe(
         sub.is_pattern = false;
 
         auto& bucket = subscriptions_[topic];
-        if (bucket.isEmpty()) became_active = true;
+        if (bucket.isEmpty())
+            became_active = true;
         bucket.append(std::move(sub));
         owner_topics_[owner].insert(topic);
 
@@ -311,8 +323,8 @@ QMetaObject::Connection DataHub::subscribe(
         // tick rather than waiting for TTL/min_interval to line up. `push_only`
         // topics have no producer-side pull, so skip — they only get data via
         // explicit publish() calls.
-        const bool have_fresh_value = st.value.isValid() && st.last_publish_ms > 0 &&
-                                       (now_ms() - st.last_publish_ms) < effective_ttl_ms(st);
+        const bool have_fresh_value =
+            st.value.isValid() && st.last_publish_ms > 0 && (now_ms() - st.last_publish_ms) < effective_ttl_ms(st);
         if (!have_fresh_value && !st.in_flight && !st.policy.push_only) {
             needs_cold_start_fetch = true;
         }
@@ -327,9 +339,8 @@ QMetaObject::Connection DataHub::subscribe(
     // would create a fresh slot pointer per call, defeating dedup.
     // The destroyed signal hands us the dying QObject* — use it directly
     // instead of capturing.
-    auto conn = connect(owner, &QObject::destroyed, this,
-        &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+    auto conn = connect(owner, &QObject::destroyed, this, &DataHub::on_owner_destroyed,
+                        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
 
     if (became_active) {
         emit topic_active(topic);
@@ -344,9 +355,8 @@ QMetaObject::Connection DataHub::subscribe(
     return conn;
 }
 
-QMetaObject::Connection DataHub::subscribe_pattern(
-    QObject* owner, const QString& pattern,
-    std::function<void(const QString&, const QVariant&)> slot) {
+QMetaObject::Connection DataHub::subscribe_pattern(QObject* owner, const QString& pattern,
+                                                   std::function<void(const QString&, const QVariant&)> slot) {
     Q_ASSERT(owner && "subscribe_pattern requires a non-null owner");
     QStringList cold_start_topics;
     {
@@ -365,13 +375,16 @@ QMetaObject::Connection DataHub::subscribe_pattern(
         // expiry + a scheduler tick before seeing anything.
         const qint64 t = now_ms();
         for (auto it = topics_.begin(); it != topics_.end(); ++it) {
-            if (!pattern_matches(pattern, it.key())) continue;
-            if (it->policy.push_only) continue;
-            if (it->in_flight) continue;
-            const bool have_fresh =
-                it->value.isValid() && it->last_publish_ms > 0 &&
-                (t - it->last_publish_ms) < effective_ttl_ms(it.value());
-            if (!have_fresh) cold_start_topics.append(it.key());
+            if (!pattern_matches(pattern, it.key()))
+                continue;
+            if (it->policy.push_only)
+                continue;
+            if (it->in_flight)
+                continue;
+            const bool have_fresh = it->value.isValid() && it->last_publish_ms > 0 &&
+                                    (t - it->last_publish_ms) < effective_ttl_ms(it.value());
+            if (!have_fresh)
+                cold_start_topics.append(it.key());
         }
     }
     // Gap 8 fix: bind to the member function (not a fresh lambda) so
@@ -380,9 +393,8 @@ QMetaObject::Connection DataHub::subscribe_pattern(
     // would create a fresh slot pointer per call, defeating dedup.
     // The destroyed signal hands us the dying QObject* — use it directly
     // instead of capturing.
-    auto conn = connect(owner, &QObject::destroyed, this,
-        &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+    auto conn = connect(owner, &QObject::destroyed, this, &DataHub::on_owner_destroyed,
+                        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
     if (!cold_start_topics.isEmpty())
         request(cold_start_topics, /*force=*/true);
     return conn;
@@ -401,36 +413,40 @@ void DataHub::unsubscribe(QObject* owner, const QString& topic) {
             // Still need to clean owner_topics_ in case of bookkeeping skew.
             if (auto it = owner_topics_.find(owner); it != owner_topics_.end()) {
                 it.value().remove(topic);
-                if (it.value().isEmpty()) owner_topics_.erase(it);
+                if (it.value().isEmpty())
+                    owner_topics_.erase(it);
             }
             return;
         }
         auto& vec = sub_it.value();
-        vec.erase(std::remove_if(vec.begin(), vec.end(),
-                     [owner](const Subscription& s) { return s.owner.data() == owner; }),
-                  vec.end());
+        vec.erase(
+            std::remove_if(vec.begin(), vec.end(), [owner](const Subscription& s) { return s.owner.data() == owner; }),
+            vec.end());
         if (vec.isEmpty()) {
             subscriptions_.erase(sub_it);
-            if (auto ts_it = topics_.find(topic);
-                ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
+            if (auto ts_it = topics_.find(topic); ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
                 topics_.erase(ts_it);
             }
             became_idle = true;
             // Gap 4 fix: if the topic was buffered for a coalesced refresh,
             // drop it now — there's no point dispatching a producer call for
             // a topic that has no subscribers left.
-            for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end(); ) {
+            for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end();) {
                 it.value().removeAll(topic);
-                if (it.value().isEmpty()) it = coalesce_pending_.erase(it);
-                else ++it;
+                if (it.value().isEmpty())
+                    it = coalesce_pending_.erase(it);
+                else
+                    ++it;
             }
         }
         if (auto it = owner_topics_.find(owner); it != owner_topics_.end()) {
             it.value().remove(topic);
-            if (it.value().isEmpty()) owner_topics_.erase(it);
+            if (it.value().isEmpty())
+                owner_topics_.erase(it);
         }
     }
-    if (became_idle) emit topic_idle(topic);
+    if (became_idle)
+        emit topic_idle(topic);
 }
 
 void DataHub::unsubscribe_pattern(QObject* owner, const QString& pattern) {
@@ -438,22 +454,23 @@ void DataHub::unsubscribe_pattern(QObject* owner, const QString& pattern) {
     auto sub_it = pattern_subscriptions_.find(pattern);
     if (sub_it != pattern_subscriptions_.end()) {
         auto& vec = sub_it.value();
-        vec.erase(std::remove_if(vec.begin(), vec.end(),
-                     [owner](const Subscription& s) { return s.owner.data() == owner; }),
-                  vec.end());
-        if (vec.isEmpty()) pattern_subscriptions_.erase(sub_it);
+        vec.erase(
+            std::remove_if(vec.begin(), vec.end(), [owner](const Subscription& s) { return s.owner.data() == owner; }),
+            vec.end());
+        if (vec.isEmpty())
+            pattern_subscriptions_.erase(sub_it);
     }
     if (auto it = owner_patterns_.find(owner); it != owner_patterns_.end()) {
         it.value().remove(pattern);
-        if (it.value().isEmpty()) owner_patterns_.erase(it);
+        if (it.value().isEmpty())
+            owner_patterns_.erase(it);
     }
 }
 
 // ── Error subscriptions (Gap 7 fix) ────────────────────────────────────────
 
-QMetaObject::Connection DataHub::subscribe_errors(
-    QObject* owner, const QString& topic,
-    std::function<void(const QString&)> slot) {
+QMetaObject::Connection DataHub::subscribe_errors(QObject* owner, const QString& topic,
+                                                  std::function<void(const QString&)> slot) {
     Q_ASSERT(owner && "subscribe_errors requires a non-null owner");
     {
         QMutexLocker lock(&mutex_);
@@ -464,14 +481,12 @@ QMetaObject::Connection DataHub::subscribe_errors(
         error_subscriptions_[topic].append(std::move(e));
         error_owner_topics_[owner].insert(topic);
     }
-    return connect(owner, &QObject::destroyed, this,
-        &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+    return connect(owner, &QObject::destroyed, this, &DataHub::on_owner_destroyed,
+                   Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
 }
 
-QMetaObject::Connection DataHub::subscribe_pattern_errors(
-    QObject* owner, const QString& pattern,
-    std::function<void(const QString&, const QString&)> slot) {
+QMetaObject::Connection DataHub::subscribe_pattern_errors(QObject* owner, const QString& pattern,
+                                                          std::function<void(const QString&, const QString&)> slot) {
     Q_ASSERT(owner && "subscribe_pattern_errors requires a non-null owner");
     {
         QMutexLocker lock(&mutex_);
@@ -482,23 +497,24 @@ QMetaObject::Connection DataHub::subscribe_pattern_errors(
         error_pattern_subscriptions_[pattern].append(std::move(e));
         error_owner_patterns_[owner].insert(pattern);
     }
-    return connect(owner, &QObject::destroyed, this,
-        &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+    return connect(owner, &QObject::destroyed, this, &DataHub::on_owner_destroyed,
+                   Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
 }
 
 void DataHub::unsubscribe_errors(QObject* owner, const QString& topic) {
     QMutexLocker lock(&mutex_);
     if (auto it = error_subscriptions_.find(topic); it != error_subscriptions_.end()) {
         auto& vec = it.value();
-        vec.erase(std::remove_if(vec.begin(), vec.end(),
-                     [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
-                  vec.end());
-        if (vec.isEmpty()) error_subscriptions_.erase(it);
+        vec.erase(
+            std::remove_if(vec.begin(), vec.end(), [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
+            vec.end());
+        if (vec.isEmpty())
+            error_subscriptions_.erase(it);
     }
     if (auto it = error_owner_topics_.find(owner); it != error_owner_topics_.end()) {
         it.value().remove(topic);
-        if (it.value().isEmpty()) error_owner_topics_.erase(it);
+        if (it.value().isEmpty())
+            error_owner_topics_.erase(it);
     }
 }
 
@@ -506,14 +522,16 @@ void DataHub::unsubscribe_pattern_errors(QObject* owner, const QString& pattern)
     QMutexLocker lock(&mutex_);
     if (auto it = error_pattern_subscriptions_.find(pattern); it != error_pattern_subscriptions_.end()) {
         auto& vec = it.value();
-        vec.erase(std::remove_if(vec.begin(), vec.end(),
-                     [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
-                  vec.end());
-        if (vec.isEmpty()) error_pattern_subscriptions_.erase(it);
+        vec.erase(
+            std::remove_if(vec.begin(), vec.end(), [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
+            vec.end());
+        if (vec.isEmpty())
+            error_pattern_subscriptions_.erase(it);
     }
     if (auto it = error_owner_patterns_.find(owner); it != error_owner_patterns_.end()) {
         it.value().remove(pattern);
-        if (it.value().isEmpty()) error_owner_patterns_.erase(it);
+        if (it.value().isEmpty())
+            error_owner_patterns_.erase(it);
     }
 }
 
@@ -547,19 +565,22 @@ void DataHub::emit_to_subscribers(const QString& topic, const QVariant& value) {
 
         if (auto it = subscriptions_.find(topic); it != subscriptions_.end()) {
             for (const auto& s : it.value())
-                if (s.owner) direct.append({s.owner, s.slot});
+                if (s.owner)
+                    direct.append({s.owner, s.slot});
         }
-        for (auto it = pattern_subscriptions_.begin();
-             it != pattern_subscriptions_.end(); ++it) {
-            if (!pattern_matches(it.key(), topic)) continue;
+        for (auto it = pattern_subscriptions_.begin(); it != pattern_subscriptions_.end(); ++it) {
+            if (!pattern_matches(it.key(), topic))
+                continue;
             for (const auto& s : it.value())
-                if (s.owner) pattern.append({s.owner, s.pattern_slot});
+                if (s.owner)
+                    pattern.append({s.owner, s.pattern_slot});
         }
     }
 
     int suppressed = 0;
     for (const auto& p : direct) {
-        if (!p.owner) continue; // owner died between snapshot and invoke
+        if (!p.owner)
+            continue; // owner died between snapshot and invoke
         if (pause_when_inactive && !is_owner_active_for_work(p.owner.data())) {
             ++suppressed;
             continue;
@@ -567,7 +588,8 @@ void DataHub::emit_to_subscribers(const QString& topic, const QVariant& value) {
         p.slot(value);
     }
     for (const auto& p : pattern) {
-        if (!p.owner) continue;
+        if (!p.owner)
+            continue;
         if (pause_when_inactive && !is_owner_active_for_work(p.owner.data())) {
             ++suppressed;
             continue;
@@ -579,20 +601,17 @@ void DataHub::emit_to_subscribers(const QString& topic, const QVariant& value) {
     // subscriber received the value (or pause is off). Avoids waking
     // global topic_updated listeners when the only consumers are
     // inactive-frame panels.
-    const bool any_delivered =
-        !pause_when_inactive ||
-        (suppressed < direct.size() + pattern.size());
+    const bool any_delivered = !pause_when_inactive || (suppressed < direct.size() + pattern.size());
     if (any_delivered)
         emit topic_updated(topic, value);
 
     if (suppressed > 0) {
-        LOG_DEBUG("DataHub", QString("Suppressed %1 inactive-frame fanout(s) for topic '%2'")
-                                 .arg(suppressed).arg(topic));
+        LOG_DEBUG("DataHub",
+                  QString("Suppressed %1 inactive-frame fanout(s) for topic '%2'").arg(suppressed).arg(topic));
     }
 }
 
-void DataHub::do_publish(const QString& topic, const QVariant& value,
-                         std::chrono::milliseconds ttl_override) {
+void DataHub::do_publish(const QString& topic, const QVariant& value, std::chrono::milliseconds ttl_override) {
     int coalesce_ms = 0;
     bool defer = false;
     {
@@ -602,19 +621,17 @@ void DataHub::do_publish(const QString& topic, const QVariant& value,
         st.last_publish_ms = now_ms();
         st.total_publishes += 1;
         st.in_flight = false;
-        st.last_error.clear();  // successful publish clears any stored error
+        st.last_error.clear(); // successful publish clears any stored error
         // Gap 3 fix: store the per-publish TTL separately so the next
         // override-less publish reverts to policy.ttl_ms. Zero = no
         // override, fall back to policy.ttl_ms.
-        st.ttl_override_ms = ttl_override.count() > 0
-                                 ? static_cast<int>(ttl_override.count())
-                                 : 0;
+        st.ttl_override_ms = ttl_override.count() > 0 ? static_cast<int>(ttl_override.count()) : 0;
         coalesce_ms = st.policy.coalesce_within_ms;
         if (coalesce_ms > 0) {
             st.coalesce_latest = value;
             if (!st.coalesce_pending) {
                 st.coalesce_pending = true;
-                defer = true;  // we must arm the timer outside the lock
+                defer = true; // we must arm the timer outside the lock
             }
             // else: a timer is already armed; it will pick up the new latest value
         }
@@ -624,9 +641,7 @@ void DataHub::do_publish(const QString& topic, const QVariant& value,
             // Arm a one-shot timer. Runs on hub thread (we're already there
             // inside do_publish, but be explicit for callers who invoke via
             // QueuedConnection).
-            QTimer::singleShot(coalesce_ms, this, [this, topic]() {
-                do_coalesced_flush(topic);
-            });
+            QTimer::singleShot(coalesce_ms, this, [this, topic]() { do_coalesced_flush(topic); });
         }
         // Fan-out is deferred until the timer fires.
         return;
@@ -639,7 +654,8 @@ void DataHub::do_coalesced_flush(const QString& topic) {
     {
         QMutexLocker lock(&mutex_);
         auto it = topics_.find(topic);
-        if (it == topics_.end() || !it->coalesce_pending) return;
+        if (it == topics_.end() || !it->coalesce_pending)
+            return;
         value = it->coalesce_latest;
         it->coalesce_pending = false;
         it->coalesce_latest.clear();
@@ -649,20 +665,18 @@ void DataHub::do_coalesced_flush(const QString& topic) {
 
 void DataHub::publish(const QString& topic, const QVariant& value) {
     if (QThread::currentThread() != this->thread()) {
-        QMetaObject::invokeMethod(this, [this, topic, value]() {
-            do_publish(topic, value, std::chrono::milliseconds(0));
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this, [this, topic, value]() { do_publish(topic, value, std::chrono::milliseconds(0)); },
+            Qt::QueuedConnection);
         return;
     }
     do_publish(topic, value, std::chrono::milliseconds(0));
 }
 
-void DataHub::publish(const QString& topic, const QVariant& value,
-                      std::chrono::milliseconds ttl) {
+void DataHub::publish(const QString& topic, const QVariant& value, std::chrono::milliseconds ttl) {
     if (QThread::currentThread() != this->thread()) {
-        QMetaObject::invokeMethod(this, [this, topic, value, ttl]() {
-            do_publish(topic, value, ttl);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this, [this, topic, value, ttl]() { do_publish(topic, value, ttl); }, Qt::QueuedConnection);
         return;
     }
     do_publish(topic, value, ttl);
@@ -670,9 +684,7 @@ void DataHub::publish(const QString& topic, const QVariant& value,
 
 void DataHub::publish_error(const QString& topic, const QString& error) {
     if (QThread::currentThread() != this->thread()) {
-        QMetaObject::invokeMethod(this, [this, topic, error]() {
-            publish_error(topic, error);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, [this, topic, error]() { publish_error(topic, error); }, Qt::QueuedConnection);
         return;
     }
 
@@ -695,19 +707,24 @@ void DataHub::publish_error(const QString& topic, const QString& error) {
 
         if (auto it = error_subscriptions_.find(topic); it != error_subscriptions_.end()) {
             for (const auto& e : it.value())
-                if (e.owner) error_targets.append({e.owner, e.single_slot, {}, false});
+                if (e.owner)
+                    error_targets.append({e.owner, e.single_slot, {}, false});
         }
-        for (auto it = error_pattern_subscriptions_.begin();
-             it != error_pattern_subscriptions_.end(); ++it) {
-            if (!pattern_matches(it.key(), topic)) continue;
+        for (auto it = error_pattern_subscriptions_.begin(); it != error_pattern_subscriptions_.end(); ++it) {
+            if (!pattern_matches(it.key(), topic))
+                continue;
             for (const auto& e : it.value())
-                if (e.owner) error_targets.append({e.owner, {}, e.pattern_slot, true});
+                if (e.owner)
+                    error_targets.append({e.owner, {}, e.pattern_slot, true});
         }
     }
     for (const auto& t : error_targets) {
-        if (!t.owner) continue;
-        if (t.is_pattern) t.pattern_slot(topic, error);
-        else              t.single_slot(error);
+        if (!t.owner)
+            continue;
+        if (t.is_pattern)
+            t.pattern_slot(topic, error);
+        else
+            t.single_slot(error);
     }
 
     LOG_WARN("DataHub", QString("publish_error topic='%1' error='%2'").arg(topic).arg(error.left(200)));
@@ -765,7 +782,7 @@ void DataHub::set_policy_pattern(const QString& pattern, const TopicPolicy& poli
 int DataHub::clear_policy_pattern(const QString& pattern) {
     QMutexLocker lock(&mutex_);
     int removed = 0;
-    for (auto it = pattern_policies_.begin(); it != pattern_policies_.end(); ) {
+    for (auto it = pattern_policies_.begin(); it != pattern_policies_.end();) {
         if (it->first == pattern) {
             it = pattern_policies_.erase(it);
             ++removed;
@@ -789,7 +806,7 @@ QVariant DataHub::peek(const QString& topic) const {
     if (it->last_publish_ms <= 0)
         return {};
     if ((now_ms() - it->last_publish_ms) >= effective_ttl_ms(it.value()))
-        return {};  // stale
+        return {}; // stale
     return it->value;
 }
 
@@ -830,9 +847,9 @@ void DataHub::request(const QStringList& topics, bool force) {
         const qint64 t = now_ms();
         for (const auto& topic : topics) {
             auto& st = state_for(topic);
-            if (st.in_flight) continue;
-            if (!force && st.policy.min_interval_ms > 0 &&
-                st.last_refresh_request_ms > 0 &&
+            if (st.in_flight)
+                continue;
+            if (!force && st.policy.min_interval_ms > 0 && st.last_refresh_request_ms > 0 &&
                 (t - st.last_refresh_request_ms) < st.policy.min_interval_ms) {
                 continue;
             }
@@ -859,13 +876,12 @@ void DataHub::request(const QStringList& topics, bool force) {
         // topic string. Surface it loudly so the miss is obvious during
         // development — silent orphans cause "subscribe but never get
         // data" bugs that are hard to trace.
-        LOG_ERROR("DataHub",
-                  QString("ORPHAN TOPIC(S) — %1 topic(s) have no registered producer. "
-                          "Check that the owning service ran ensure_registered_with_hub() "
-                          "in main.cpp BEFORE any consumer subscribed, and verify the "
-                          "topic string spelling. First few: %2")
-                      .arg(orphan_topics.size())
-                      .arg(orphan_topics.mid(0, 5).join(QStringLiteral(", "))));
+        LOG_ERROR("DataHub", QString("ORPHAN TOPIC(S) — %1 topic(s) have no registered producer. "
+                                     "Check that the owning service ran ensure_registered_with_hub() "
+                                     "in main.cpp BEFORE any consumer subscribed, and verify the "
+                                     "topic string spelling. First few: %2")
+                                 .arg(orphan_topics.size())
+                                 .arg(orphan_topics.mid(0, 5).join(QStringLiteral(", "))));
     }
     if (need_arm) {
         // The coalesce timer lives on the hub thread; arming from another
@@ -873,10 +889,13 @@ void DataHub::request(const QStringList& topics, bool force) {
         // restart resets the window, which is the behaviour we want: a
         // second request() inside the window extends coalescing, it
         // doesn't flush early.
-        QMetaObject::invokeMethod(this, [this]() {
-            if (!coalesce_timer_.isActive())
-                coalesce_timer_.start();
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this,
+            [this]() {
+                if (!coalesce_timer_.isActive())
+                    coalesce_timer_.start();
+            },
+            Qt::QueuedConnection);
     }
 }
 
@@ -893,7 +912,7 @@ void DataHub::flush_coalesced_requests() {
         // flush, so checking once per producer is the correct granularity.
         // Producers caught inside the rate window keep their topics in
         // coalesce_pending_ and the timer is re-armed below.
-        for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end(); ) {
+        for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end();) {
             Producer* p = it.key();
             const int rps = p->max_requests_per_sec();
             if (rps > 0) {
@@ -915,10 +934,13 @@ void DataHub::flush_coalesced_requests() {
         // Re-arm the timer on the hub thread so the deferred batch flushes
         // after another coalesce window. Producer rate limits this short
         // (10 rps → 100 ms) almost always clear inside one window.
-        QMetaObject::invokeMethod(this, [this]() {
-            if (!coalesce_timer_.isActive())
-                coalesce_timer_.start();
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this,
+            [this]() {
+                if (!coalesce_timer_.isActive())
+                    coalesce_timer_.start();
+            },
+            Qt::QueuedConnection);
     }
 
     if (work.isEmpty())
@@ -933,8 +955,7 @@ void DataHub::flush_coalesced_requests() {
         it.key()->refresh(it.value());
     }
     if (total > 0) {
-        LOG_DEBUG("DataHub", QString("coalesce flushed %1 topics across %2 producers")
-                                 .arg(total).arg(work.size()));
+        LOG_DEBUG("DataHub", QString("coalesce flushed %1 topics across %2 producers").arg(total).arg(work.size()));
     }
 }
 
@@ -953,9 +974,12 @@ void DataHub::scheduler_body() {
         // refresh_timeout_ms window. Without this a crashed / hung producer
         // pins the topic forever and subscribers never see fresh data.
         for (auto it = topics_.begin(); it != topics_.end(); ++it) {
-            if (!it->in_flight) continue;
-            if (it->policy.refresh_timeout_ms <= 0) continue;
-            if (it->last_refresh_request_ms <= 0) continue;
+            if (!it->in_flight)
+                continue;
+            if (it->policy.refresh_timeout_ms <= 0)
+                continue;
+            if (it->last_refresh_request_ms <= 0)
+                continue;
             if ((t - it->last_refresh_request_ms) >= it->policy.refresh_timeout_ms) {
                 it->in_flight = false;
                 timed_out_topics.append(it.key());
@@ -965,7 +989,7 @@ void DataHub::scheduler_body() {
         // Drop empty subscription buckets left behind by unsubscribe churn.
         // The scheduler would otherwise skip them forever while still paying
         // the hash iteration cost on every tick.
-        for (auto it = subscriptions_.begin(); it != subscriptions_.end(); ) {
+        for (auto it = subscriptions_.begin(); it != subscriptions_.end();) {
             if (it.value().isEmpty())
                 it = subscriptions_.erase(it);
             else
@@ -979,21 +1003,24 @@ void DataHub::scheduler_body() {
         QHash<Producer*, QStringList> candidates;
         for (auto it = subscriptions_.begin(); it != subscriptions_.end(); ++it) {
             const QString& topic = it.key();
-            if (it.value().isEmpty()) continue;
+            if (it.value().isEmpty())
+                continue;
 
             auto& st = state_for(topic);
-            if (st.policy.push_only) continue;
-            if (st.in_flight) continue;
+            if (st.policy.push_only)
+                continue;
+            if (st.in_flight)
+                continue;
 
             const bool have_value = st.value.isValid() && st.last_publish_ms > 0;
-            const bool ttl_expired = !have_value ||
-                (t - st.last_publish_ms) >= effective_ttl_ms(st);
-            const bool min_interval_ok =
-                (t - st.last_refresh_request_ms) >= st.policy.min_interval_ms;
-            if (!ttl_expired || !min_interval_ok) continue;
+            const bool ttl_expired = !have_value || (t - st.last_publish_ms) >= effective_ttl_ms(st);
+            const bool min_interval_ok = (t - st.last_refresh_request_ms) >= st.policy.min_interval_ms;
+            if (!ttl_expired || !min_interval_ok)
+                continue;
 
             Producer* p = find_producer(topic);
-            if (!p) continue;
+            if (!p)
+                continue;
             candidates[p].append(topic);
         }
 
@@ -1008,7 +1035,8 @@ void DataHub::scheduler_body() {
             if (rps > 0) {
                 const qint64 last = producer_last_refresh_ms_.value(p, 0);
                 const qint64 min_gap = 1000 / std::max(1, rps);
-                if (last > 0 && (t - last) < min_gap) continue;
+                if (last > 0 && (t - last) < min_gap)
+                    continue;
             }
             QStringList& batch = work[p];
             batch.reserve(batch.size() + it.value().size());
@@ -1024,8 +1052,9 @@ void DataHub::scheduler_body() {
 
     for (const QString& topic : timed_out_topics) {
         LOG_WARN("DataHub", QString("Producer refresh timed out for topic '%1' — clearing in_flight. "
-                                     "The producer failed to publish() or publish_error() within "
-                                     "refresh_timeout_ms; hub will retry on the next scheduler pass.").arg(topic));
+                                    "The producer failed to publish() or publish_error() within "
+                                    "refresh_timeout_ms; hub will retry on the next scheduler pass.")
+                                .arg(topic));
         emit topic_error(topic, QStringLiteral("refresh_timeout"));
     }
 
@@ -1067,8 +1096,7 @@ QVector<TopicStats> DataHub::stats() const {
             s.subscriber_count = sub_it.value().size();
         out.append(std::move(s));
     }
-    std::sort(out.begin(), out.end(),
-              [](const TopicStats& a, const TopicStats& b) { return a.topic < b.topic; });
+    std::sort(out.begin(), out.end(), [](const TopicStats& a, const TopicStats& b) { return a.topic < b.topic; });
     return out;
 }
 
@@ -1076,10 +1104,12 @@ QList<QObject*> DataHub::subscribers(const QString& topic) const {
     QMutexLocker lock(&mutex_);
     QList<QObject*> out;
     auto it = subscriptions_.find(topic);
-    if (it == subscriptions_.end()) return out;
+    if (it == subscriptions_.end())
+        return out;
     out.reserve(it.value().size());
     for (const auto& s : it.value()) {
-        if (s.owner) out.append(s.owner.data());
+        if (s.owner)
+            out.append(s.owner.data());
     }
     return out;
 }

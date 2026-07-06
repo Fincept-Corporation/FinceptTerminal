@@ -5,8 +5,8 @@
 #include <QCheckBox>
 #include <QEvent>
 #include <QLabel>
-#include <QPushButton>
 #include <QPointer>
+#include <QPushButton>
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QWidget>

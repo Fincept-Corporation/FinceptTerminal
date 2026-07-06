@@ -50,7 +50,8 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
     // drive resize and the collapse animation can drive maximumWidth → 0.
     setMinimumWidth(0);
     setMaximumWidth(240);
-    setStyleSheet(QString("background: %1; border-right: 1px solid %2;").arg(ui::colors::PANEL(), ui::colors::BORDER()));
+    setStyleSheet(
+        QString("background: %1; border-right: 1px solid %2;").arg(ui::colors::PANEL(), ui::colors::BORDER()));
 
     // Wrap content in a scroll area so it doesn't clip on small displays
     auto* scroll = new QScrollArea(this);
@@ -117,8 +118,8 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 
     // Type ids are stable data keys; the visible label comes from
     // component_type_label() so it can be localized + retranslated.
-    const char* type_ids[] = {"heading",  "text",        "table",   "image",  "chart",
-                              "sparkline", "stats_block", "callout", "code",   "divider",
+    const char* type_ids[] = {"heading",   "text",        "table",       "image",      "chart",
+                              "sparkline", "stats_block", "callout",     "code",       "divider",
                               "quote",     "list",        "market_data", "page_break", "toc"};
 
     for (const char* type : type_ids) {
@@ -183,11 +184,11 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 
     structure_list_ = new QListWidget;
     structure_list_->setMinimumHeight(120);
-    structure_list_->setStyleSheet(
-        QString("QListWidget { background: %1; border: 1px solid %2; } "
-                "QListWidget::item { color: %3; padding: 3px; font-size: 11px; } "
-                "QListWidget::item:selected { background: %4; color: %5; }")
-            .arg(ui::colors::DARK(), ui::colors::BORDER(), ui::colors::GRAY(), ui::colors::BG_RAISED(), ui::colors::WHITE()));
+    structure_list_->setStyleSheet(QString("QListWidget { background: %1; border: 1px solid %2; } "
+                                           "QListWidget::item { color: %3; padding: 3px; font-size: 11px; } "
+                                           "QListWidget::item:selected { background: %4; color: %5; }")
+                                       .arg(ui::colors::DARK(), ui::colors::BORDER(), ui::colors::GRAY(),
+                                            ui::colors::BG_RAISED(), ui::colors::WHITE()));
     connect(structure_list_, &QListWidget::currentRowChanged, this, &ComponentToolbar::structure_selected);
     vl->addWidget(structure_list_, 1);
 
@@ -244,11 +245,11 @@ ComponentToolbar::ComponentToolbar(QWidget* parent) : QWidget(parent) {
 void ComponentToolbar::add_type_button(QVBoxLayout* layout, const QString& type) {
     auto* btn = new QPushButton(component_type_label(type));
     btn->setFixedHeight(26);
-    btn->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
-                "text-align: left; padding: 0 8px; font-size: 12px; }"
-                "QPushButton:hover { background: %4; color: %5; }")
-            .arg(ui::colors::DARK(), ui::colors::GRAY(), ui::colors::BORDER(), ui::colors::BG_RAISED(), ui::colors::WHITE()));
+    btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; border: 1px solid %3; "
+                               "text-align: left; padding: 0 8px; font-size: 12px; }"
+                               "QPushButton:hover { background: %4; color: %5; }")
+                           .arg(ui::colors::DARK(), ui::colors::GRAY(), ui::colors::BORDER(), ui::colors::BG_RAISED(),
+                                ui::colors::WHITE()));
     connect(btn, &QPushButton::clicked, this, [this, type]() { emit add_component(type); });
     type_buttons_.insert(type, btn);
     layout->addWidget(btn);
@@ -261,23 +262,38 @@ void ComponentToolbar::changeEvent(QEvent* event) {
 }
 
 void ComponentToolbar::retranslateUi() {
-    if (sec_file_) sec_file_->setText(tr("FILE"));
-    if (sec_document_) sec_document_->setText(tr("DOCUMENT"));
-    if (sec_add_) sec_add_->setText(tr("ADD COMPONENT"));
-    if (sec_font_) sec_font_->setText(tr("FONT"));
-    if (sec_structure_) sec_structure_->setText(tr("STRUCTURE"));
+    if (sec_file_)
+        sec_file_->setText(tr("FILE"));
+    if (sec_document_)
+        sec_document_->setText(tr("DOCUMENT"));
+    if (sec_add_)
+        sec_add_->setText(tr("ADD COMPONENT"));
+    if (sec_font_)
+        sec_font_->setText(tr("FONT"));
+    if (sec_structure_)
+        sec_structure_->setText(tr("STRUCTURE"));
 
-    if (new_btn_) new_btn_->setText(tr("New Report"));
-    if (open_btn_) open_btn_->setText(tr("Open..."));
-    if (recent_btn_) recent_btn_->setText(tr("Recent Reports..."));
-    if (meta_btn_) meta_btn_->setText(tr("Metadata..."));
-    if (template_btn_) template_btn_->setText(tr("Templates..."));
-    if (theme_btn_) theme_btn_->setText(tr("Theme..."));
+    if (new_btn_)
+        new_btn_->setText(tr("New Report"));
+    if (open_btn_)
+        open_btn_->setText(tr("Open..."));
+    if (recent_btn_)
+        recent_btn_->setText(tr("Recent Reports..."));
+    if (meta_btn_)
+        meta_btn_->setText(tr("Metadata..."));
+    if (template_btn_)
+        template_btn_->setText(tr("Templates..."));
+    if (theme_btn_)
+        theme_btn_->setText(tr("Theme..."));
 
-    if (up_btn_) up_btn_->setText(tr("Up"));
-    if (dn_btn_) dn_btn_->setText(tr("Dn"));
-    if (dup_btn_) dup_btn_->setText(tr("Dup"));
-    if (del_btn_) del_btn_->setText(tr("Del"));
+    if (up_btn_)
+        up_btn_->setText(tr("Up"));
+    if (dn_btn_)
+        dn_btn_->setText(tr("Dn"));
+    if (dup_btn_)
+        dup_btn_->setText(tr("Dup"));
+    if (del_btn_)
+        del_btn_->setText(tr("Del"));
 
     // Component "add" buttons — re-label by stable type id.
     for (auto it = type_buttons_.constBegin(); it != type_buttons_.constEnd(); ++it) {

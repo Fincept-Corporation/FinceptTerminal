@@ -1,6 +1,7 @@
 // src/algo_engine/fno/FnoDataBridge.h
 #pragma once
 #include "services/options/OptionChainTypes.h"
+
 #include <QHash>
 #include <QMutex>
 #include <QObject>
@@ -26,8 +27,7 @@ class FnoDataBridge : public QObject {
     fincept::services::options::OptionChain snapshot(const QString& broker, const QString& underlying,
                                                      const QString& expiry) const;
     // Engine-thread-safe. Pins concrete contract symbols into the live WS window.
-    void pin_legs(const QString& broker, const QString& underlying, const QString& expiry,
-                  const QStringList& symbols);
+    void pin_legs(const QString& broker, const QString& underlying, const QString& expiry, const QStringList& symbols);
 
     // Test/seam hook — ingest a chain as if chain_published fired (used by the
     // headless selftest; also the slot connected to OptionChainService).

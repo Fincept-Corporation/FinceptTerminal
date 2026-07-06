@@ -57,9 +57,7 @@ ParsedCommand CommandParser::parse(const QString& input) {
 
 ParsedCommand CommandParser::try_function_code_(const QString& input) {
     // Single token without dots — dotted forms go through verb-object.
-    static const QRegularExpression rx(
-        R"(^[A-Z0-9][A-Z0-9_]*$)",
-        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rx(R"(^[A-Z0-9][A-Z0-9_]*$)", QRegularExpression::CaseInsensitiveOption);
     if (!rx.match(input).hasMatch())
         return ParsedCommand{ParsedCommand::Kind::Unknown, {}, {}, input, {}};
 
@@ -84,7 +82,8 @@ ParsedCommand CommandParser::try_verb_object_(const QString& input) {
         return ParsedCommand{ParsedCommand::Kind::Empty, {}, {}, {}, {}};
     }
 
-    // Greedy: longest prefix wins. "layout switch foo" → tries "layout.switch.foo", then "layout.switch", then "layout".
+    // Greedy: longest prefix wins. "layout switch foo" → tries "layout.switch.foo", then "layout.switch", then
+    // "layout".
     auto& reg = ActionRegistry::instance();
     for (int n = tokens.size(); n > 0; --n) {
         QStringList prefix = tokens.mid(0, n);
@@ -102,7 +101,8 @@ ParsedCommand CommandParser::try_verb_object_(const QString& input) {
 
     for (const QString& id : reg.all_ids()) {
         const ActionDef* def = reg.find(id);
-        if (!def) continue;
+        if (!def)
+            continue;
         for (const QString& alias : def->aliases) {
             if (input.startsWith(alias, Qt::CaseInsensitive)) {
                 const QStringList rest = tokenise(input.mid(alias.size()).trimmed());
@@ -123,8 +123,7 @@ ParsedCommand CommandParser::try_verb_object_(const QString& input) {
     return p;
 }
 
-QVariantMap CommandParser::bind_positional_(const QList<ParameterSlot>& slot_list,
-                                            const QStringList& positionals) {
+QVariantMap CommandParser::bind_positional_(const QList<ParameterSlot>& slot_list, const QStringList& positionals) {
     QVariantMap out;
     for (int i = 0; i < slot_list.size() && i < positionals.size(); ++i) {
         const ParameterSlot& slot = slot_list.at(i);

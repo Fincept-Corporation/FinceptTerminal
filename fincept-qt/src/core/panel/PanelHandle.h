@@ -50,10 +50,7 @@ class PanelHandle : public QObject {
     };
     Q_ENUM(State)
 
-    PanelHandle(PanelInstanceId instance_id,
-                QString type_id,
-                QString title,
-                WindowId frame_id,
+    PanelHandle(PanelInstanceId instance_id, QString type_id, QString title, WindowId frame_id,
                 QObject* parent = nullptr);
 
     PanelInstanceId instance_id() const { return instance_id_; }

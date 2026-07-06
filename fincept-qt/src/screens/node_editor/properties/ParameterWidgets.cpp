@@ -4,8 +4,8 @@
 #include "services/agents/AgentService.h"
 #include "services/agents/AgentTypes.h"
 #include "services/file_manager/FileManagerService.h"
-#include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/DataSourceRepository.h"
+#include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QCoreApplication>
@@ -13,8 +13,8 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QJsonDocument>
-#include <QPushButton>
 #include <QPointer>
+#include <QPushButton>
 #include <QtConcurrent/QtConcurrent>
 
 #include <memory>
@@ -74,13 +74,13 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
     } else if (param.type == "boolean") {
         auto* check = new QCheckBox(param.label);
         check->setChecked(current_value.toBool(param.default_value.toBool()));
-        check->setStyleSheet(
-            QString("QCheckBox { color: %1; font-family: Consolas; font-size: 12px; }"
-                    "QCheckBox::indicator {"
-                    "  width: 14px; height: 14px; background: %2; border: 1px solid %3;"
-                    "}"
-                    "QCheckBox::indicator:checked { background: %4; }")
-                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
+        check->setStyleSheet(QString("QCheckBox { color: %1; font-family: Consolas; font-size: 12px; }"
+                                     "QCheckBox::indicator {"
+                                     "  width: 14px; height: 14px; background: %2; border: 1px solid %3;"
+                                     "}"
+                                     "QCheckBox::indicator:checked { background: %4; }")
+                                 .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED(),
+                                      ui::colors::AMBER()));
         layout->addWidget(check);
 
         // Remove the label since checkbox has its own
@@ -217,9 +217,10 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         // Hint showing allowed extensions
         if (!allowed_exts.isEmpty()) {
-            auto* hint = new QLabel(QCoreApplication::translate("ParameterWidgetFactory",
-                                                               "Accepted: %1  •  Or pick an already-imported file above")
-                                        .arg(allowed_exts.join(", ").toUpper()));
+            auto* hint =
+                new QLabel(QCoreApplication::translate("ParameterWidgetFactory",
+                                                       "Accepted: %1  •  Or pick an already-imported file above")
+                               .arg(allowed_exts.join(", ").toUpper()));
             hint->setStyleSheet(
                 QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY()));
             hint->setWordWrap(true);
@@ -229,26 +230,25 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         QObject::connect(combo, &QComboBox::currentIndexChanged, container,
                          [key, on_change, combo](int) { on_change(key, QJsonValue(combo->currentData().toString())); });
 
-        QObject::connect(import_btn, &QPushButton::clicked, container,
-                         [populate, dialog_filter, key, on_change, import_btn]() {
-                             QString path = QFileDialog::getOpenFileName(
-                                 import_btn->window(), QCoreApplication::translate("ParameterWidgetFactory", "Import File"),
-                                 QString(), dialog_filter);
-                             if (path.isEmpty())
-                                 return;
+        QObject::connect(
+            import_btn, &QPushButton::clicked, container, [populate, dialog_filter, key, on_change, import_btn]() {
+                QString path = QFileDialog::getOpenFileName(
+                    import_btn->window(), QCoreApplication::translate("ParameterWidgetFactory", "Import File"),
+                    QString(), dialog_filter);
+                if (path.isEmpty())
+                    return;
 
-                             QString file_id =
-                                 fincept::services::FileManagerService::instance().import_file(path, "workflow_node");
-                             if (file_id.isEmpty())
-                                 return;
+                QString file_id = fincept::services::FileManagerService::instance().import_file(path, "workflow_node");
+                if (file_id.isEmpty())
+                    return;
 
-                             // Find the full managed path for the newly imported file
-                             auto f = fincept::services::FileManagerService::instance().find_by_id(file_id);
-                             QString full_path = fincept::services::FileManagerService::instance().full_path(f.name);
+                // Find the full managed path for the newly imported file
+                auto f = fincept::services::FileManagerService::instance().find_by_id(file_id);
+                QString full_path = fincept::services::FileManagerService::instance().full_path(f.name);
 
-                             populate(full_path);
-                             on_change(key, QJsonValue(full_path));
-                         });
+                populate(full_path);
+                on_change(key, QJsonValue(full_path));
+            });
     } else if (param.type == "agent_select") {
         auto* row = new QWidget(parent);
         auto* rl = new QHBoxLayout(row);
@@ -354,7 +354,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         auto* hint = new QLabel(QCoreApplication::translate(
             "ParameterWidgetFactory", "Leave blank to use the LLM assigned to the agent in Agent Config"));
-        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+        hint->setStyleSheet(
+            QString("color:%1; font-family:Consolas; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
         hint->setWordWrap(true);
         layout->addWidget(hint);
 
@@ -429,7 +430,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         auto* hint = new QLabel(QCoreApplication::translate(
             "ParameterWidgetFactory", "All Fincept internal tools. Input JSON flows in as arguments."));
-        hint->setStyleSheet(QString("color:%1; font-family:Consolas; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
+        hint->setStyleSheet(
+            QString("color:%1; font-family:Consolas; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
         hint->setWordWrap(true);
         layout->addWidget(hint);
 
@@ -456,35 +458,42 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         QPointer<QComboBox> p_combo(combo);
         auto populate_connections = [p_combo, provider, current_value]() {
-            if (!p_combo) return;
+            if (!p_combo)
+                return;
             p_combo->clear();
-            p_combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "Loading connections..."), QString());
+            p_combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "Loading connections..."),
+                             QString());
 
             // Load all saved connections of this provider type asynchronously
             (void)QtConcurrent::run([p_combo, provider, current_value]() {
                 auto res = std::make_shared<Result<QVector<DataSource>>>(DataSourceRepository::instance().list_all());
 
                 // Post results back to combo box on the UI thread
-                QMetaObject::invokeMethod(p_combo.data(), [p_combo, provider, current_value, res]() {
-                    if (!p_combo) return;
+                QMetaObject::invokeMethod(
+                    p_combo.data(),
+                    [p_combo, provider, current_value, res]() {
+                        if (!p_combo)
+                            return;
 
-                    QString saved = p_combo->count() > 0 ? p_combo->currentData().toString() : current_value.toString();
-                    p_combo->clear();
-                    p_combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "— select connection —"),
-                                     QString());
+                        QString saved =
+                            p_combo->count() > 0 ? p_combo->currentData().toString() : current_value.toString();
+                        p_combo->clear();
+                        p_combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "— select connection —"),
+                                         QString());
 
-                    if (res->is_ok()) {
-                        for (const auto& ds : res->value()) {
-                            if (ds.provider == provider && ds.enabled) {
-                                QString display = ds.display_name + "  [" + ds.alias + "]";
-                                p_combo->addItem(display, ds.id);
-                                if (ds.id == saved) {
-                                    p_combo->setCurrentIndex(p_combo->count() - 1);
+                        if (res->is_ok()) {
+                            for (const auto& ds : res->value()) {
+                                if (ds.provider == provider && ds.enabled) {
+                                    QString display = ds.display_name + "  [" + ds.alias + "]";
+                                    p_combo->addItem(display, ds.id);
+                                    if (ds.id == saved) {
+                                        p_combo->setCurrentIndex(p_combo->count() - 1);
+                                    }
                                 }
                             }
                         }
-                    }
-                }, Qt::QueuedConnection);
+                    },
+                    Qt::QueuedConnection);
             });
         };
 
@@ -501,13 +510,11 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
 
         layout->addWidget(row);
 
-        QObject::connect(combo, &QComboBox::currentIndexChanged, container, [key, on_change, combo](int) {
-            on_change(key, QJsonValue(combo->currentData().toString()));
-        });
+        QObject::connect(combo, &QComboBox::currentIndexChanged, container,
+                         [key, on_change, combo](int) { on_change(key, QJsonValue(combo->currentData().toString())); });
 
-        QObject::connect(refresh_btn, &QPushButton::clicked, container, [populate_connections]() {
-            populate_connections();
-        });
+        QObject::connect(refresh_btn, &QPushButton::clicked, container,
+                         [populate_connections]() { populate_connections(); });
     }
 
     return container;

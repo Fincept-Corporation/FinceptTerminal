@@ -143,11 +143,11 @@ void ForumFeedPanel::build_toolbar() {
     new_post_btn_->setFixedHeight(30);
     new_post_btn_->setCursor(Qt::PointingHandCursor);
     new_post_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
-                                   "border:1px solid rgba(217,119,6,0.25);padding:0 16px;"
-                                   "font-size:11px;font-weight:700;letter-spacing:0.5px;%2}"
-                                   "QPushButton:hover{background:rgba(217,119,6,0.2);color:%3;"
-                                   "border-color:rgba(217,119,6,0.5);}")
-                               .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
+                                         "border:1px solid rgba(217,119,6,0.25);padding:0 16px;"
+                                         "font-size:11px;font-weight:700;letter-spacing:0.5px;%2}"
+                                         "QPushButton:hover{background:rgba(217,119,6,0.2);color:%3;"
+                                         "border-color:rgba(217,119,6,0.5);}")
+                                     .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
     connect(new_post_btn_, &QPushButton::clicked, this, [this]() { emit new_post_clicked(); });
 
     top_hl->addWidget(hash);
@@ -629,7 +629,8 @@ void ForumFeedPanel::changeEvent(QEvent* event) {
 }
 
 void ForumFeedPanel::retranslateUi() {
-    if (new_post_btn_) new_post_btn_->setText(tr("+ NEW POST"));
+    if (new_post_btn_)
+        new_post_btn_->setText(tr("+ NEW POST"));
     // header_lbl_ / header_count_lbl_ and the post cards reflect live data and
     // are re-rendered (in the active language) on the next category/feed load.
 }

@@ -31,19 +31,17 @@ class ErrorPipeline : public QObject {
 
     /// Per-panel error. `panel_id` is the dock router string id (or the
     /// PanelInstanceId UUID — either works as a key, callers choose).
-    void report_panel_error(const QString& panel_id, Severity sev,
-                            const QString& message, const QString& source = {});
+    void report_panel_error(const QString& panel_id, Severity sev, const QString& message, const QString& source = {});
     void clear_panel_errors(const QString& panel_id);
 
     /// Shell-level category error ("network", "telemetry", "auth", ...).
     /// Setting message to empty string clears the category.
-    void report_shell_error(const QString& category, Severity sev,
-                            const QString& message, const QString& source = {});
+    void report_shell_error(const QString& category, Severity sev, const QString& message, const QString& source = {});
     void clear_shell_error(const QString& category);
 
     /// Inspectors for surfaces.
-    int panel_error_count() const;            ///< total panels with at least one error
-    int shell_error_count() const;            ///< total shell categories with active errors
+    int panel_error_count() const; ///< total panels with at least one error
+    int shell_error_count() const; ///< total shell categories with active errors
 
   signals:
     void panel_errors_changed(const QString& panel_id);

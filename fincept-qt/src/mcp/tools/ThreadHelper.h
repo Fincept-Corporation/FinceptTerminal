@@ -16,6 +16,7 @@
 // helpers consolidate that pattern so each tool file doesn't re-implement
 // it (poorly).
 
+#include <QEventLoop>
 #include <QMetaObject>
 #include <QMutex>
 #include <QObject>
@@ -76,8 +77,7 @@ void run_on_target_thread_sync(QObject* target, F&& fn) {
 // called with a default-constructed args (caller decides what that means).
 // Defaults to no timeout — relies on the underlying API to call back.
 template <typename Start, typename OnDone>
-void run_async_callback_sync(QObject* target, Start&& start, OnDone&& on_done,
-                              int /*timeout_ms*/ = 0) {
+void run_async_callback_sync(QObject* target, Start&& start, OnDone&& on_done, int /*timeout_ms*/ = 0) {
     // We use a small heap-allocated Resolution so the resolve() lambda can
     // outlive both the worker and the target — the target may invoke resolve
     // synchronously (still on worker) or after queuing (on target thread).
@@ -116,9 +116,7 @@ void run_async_callback_sync(QObject* target, Start&& start, OnDone&& on_done,
         std::forward<Start>(start)(resolve);
     } else {
         QMetaObject::invokeMethod(
-            target,
-            [start = std::forward<Start>(start), resolve]() mutable { start(resolve); },
-            Qt::QueuedConnection);
+            target, [start = std::forward<Start>(start), resolve]() mutable { start(resolve); }, Qt::QueuedConnection);
     }
 
     QMutexLocker lock(&res->m);
@@ -152,6 +150,7 @@ void run_async_wait(QObject* target, Start&& start) {
         QMutex m;
         QWaitCondition cv;
         bool done = false;
+        QEventLoop* loop = nullptr; // set only while a same-thread nested loop is waiting
     };
     auto w = std::make_shared<Wait>();
 
@@ -159,16 +158,39 @@ void run_async_wait(QObject* target, Start&& start) {
         QMutexLocker lock(&w->m);
         w->done = true;
         w->cv.wakeAll();
+        if (w->loop) // same-thread waiter: quit its nested loop (queued → cross-thread-safe)
+            QMetaObject::invokeMethod(w->loop, &QEventLoop::quit, Qt::QueuedConnection);
     };
 
     if (!target || QThread::currentThread() == target->thread()) {
+        // We are ON the target's own thread — the very event loop that must
+        // deliver the async result. Blocking it on the QWaitCondition (as the
+        // cross-thread path below does) would freeze that loop → deadlock. So
+        // spin a nested event loop until signal_done fires. Everything stays on
+        // this thread, so any thread_local call-state (e.g. destructive-gate
+        // flags read by AgentService) is preserved; ExcludeUserInputEvents keeps
+        // UI clicks from re-entering the handler.
+        QEventLoop loop;
+        {
+            QMutexLocker lock(&w->m);
+            w->loop = &loop;
+        }
         std::forward<Start>(start)(signal_done);
-    } else {
-        QMetaObject::invokeMethod(
-            target,
-            [start = std::forward<Start>(start), signal_done]() mutable { start(signal_done); },
-            Qt::QueuedConnection);
+        bool already_done = false;
+        {
+            QMutexLocker lock(&w->m);
+            already_done = w->done; // start() may have resolved synchronously
+        }
+        if (!already_done)
+            loop.exec(QEventLoop::ExcludeUserInputEvents);
+        QMutexLocker lock(&w->m);
+        w->loop = nullptr;
+        return;
     }
+
+    QMetaObject::invokeMethod(
+        target, [start = std::forward<Start>(start), signal_done]() mutable { start(signal_done); },
+        Qt::QueuedConnection);
 
     QMutexLocker lock(&w->m);
     while (!w->done)

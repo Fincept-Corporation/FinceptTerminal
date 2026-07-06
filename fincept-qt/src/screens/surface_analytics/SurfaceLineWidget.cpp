@@ -33,13 +33,9 @@ void SurfaceLineWidget::changeEvent(QEvent* event) {
     QWidget::changeEvent(event);
 }
 
-void SurfaceLineWidget::set_curve(const QString& title,
-                                  const std::vector<float>& x_values,
-                                  const std::vector<float>& y_values,
-                                  const QStringList& x_labels,
-                                  const QString& x_axis_title,
-                                  const QString& y_axis_title,
-                                  const QColor& line_color) {
+void SurfaceLineWidget::set_curve(const QString& title, const std::vector<float>& x_values,
+                                  const std::vector<float>& y_values, const QStringList& x_labels,
+                                  const QString& x_axis_title, const QString& y_axis_title, const QColor& line_color) {
     Series s;
     s.name = title;
     s.x_values = x_values;
@@ -54,9 +50,7 @@ void SurfaceLineWidget::set_curve(const QString& title,
     update();
 }
 
-void SurfaceLineWidget::set_series(const QString& title,
-                                   const std::vector<Series>& series,
-                                   const QString& x_axis_title,
+void SurfaceLineWidget::set_series(const QString& title, const std::vector<Series>& series, const QString& x_axis_title,
                                    const QString& y_axis_title) {
     title_ = title;
     series_ = series;
@@ -129,8 +123,7 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
         p.setPen(grid);
         p.drawLine(QPointF(plot.left(), py), QPointF(plot.right(), py));
         p.setPen(QColor(colors::TEXT_DIM()));
-        p.drawText(QRectF(0, py - 8, 55, 16), Qt::AlignRight | Qt::AlignVCenter,
-                   QString::number(v, 'f', 2));
+        p.drawText(QRectF(0, py - 8, 55, 16), Qt::AlignRight | Qt::AlignVCenter, QString::number(v, 'f', 2));
     }
 
     // ── X tick labels ───────────────────────────────────────────────────────
@@ -140,8 +133,7 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
         float px = plot.left() + frac * plot.width();
         QString label;
         if (!x_labels_.isEmpty()) {
-            int idx = std::min((int)x_labels_.size() - 1, i * ((int)x_labels_.size() - 1) /
-                                                              std::max(1, n_ticks - 1));
+            int idx = std::min((int)x_labels_.size() - 1, i * ((int)x_labels_.size() - 1) / std::max(1, n_ticks - 1));
             label = x_labels_.at(idx);
         } else {
             float v = x_min_ + frac * (x_max_ - x_min_);
@@ -186,8 +178,7 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
 
     p.setPen(QColor(colors::TEXT_SECONDARY()));
     if (!x_axis_title_.isEmpty())
-        p.drawText(QRectF(plot.left(), plot.bottom() + 22, plot.width(), 16),
-                   Qt::AlignCenter, x_axis_title_);
+        p.drawText(QRectF(plot.left(), plot.bottom() + 22, plot.width(), 16), Qt::AlignCenter, x_axis_title_);
     if (!y_axis_title_.isEmpty()) {
         p.save();
         p.translate(14, plot.center().y());
@@ -203,8 +194,7 @@ void SurfaceLineWidget::paintEvent(QPaintEvent* /*event*/) {
             p.setPen(QPen(s.color, 2));
             p.drawLine(QPointF(plot.right() - 110, y + 6), QPointF(plot.right() - 95, y + 6));
             p.setPen(QColor(colors::TEXT_SECONDARY()));
-            p.drawText(QRectF(plot.right() - 90, y, 90, 14), Qt::AlignLeft | Qt::AlignVCenter,
-                       s.name);
+            p.drawText(QRectF(plot.right() - 90, y, 90, 14), Qt::AlignLeft | Qt::AlignVCenter, s.name);
             y += 16;
         }
     }

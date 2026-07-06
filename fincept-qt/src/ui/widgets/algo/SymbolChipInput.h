@@ -19,8 +19,8 @@ class SymbolChipInput : public QFrame {
   public:
     explicit SymbolChipInput(QWidget* parent = nullptr);
 
-    QStringList symbols() const;                 // current chips, in order
-    void set_symbols(const QStringList& syms);   // replace all chips
+    QStringList symbols() const;               // current chips, in order
+    void set_symbols(const QStringList& syms); // replace all chips
     void clear();
 
   signals:
@@ -39,12 +39,12 @@ class SymbolChipInput : public QFrame {
     void fetch_price(const QString& symbol);
 
     class FlowLayout* flow_ = nullptr;
-    QLineEdit*        edit_ = nullptr;
-    QCompleter*       completer_ = nullptr;
+    QLineEdit* edit_ = nullptr;
+    QCompleter* completer_ = nullptr;
     QStringListModel* model_ = nullptr;
-    QHash<QString, QString> sugg_map_;          // suggestion label → real symbol
-    QStringList       symbols_;                 // source of truth, upper-cased
-    QVector<QWidget*> chips_;                   // parallel to symbols_
+    QHash<QString, QString> sugg_map_; // suggestion label → real symbol
+    QStringList symbols_;              // source of truth, upper-cased
+    QVector<QWidget*> chips_;          // parallel to symbols_
 };
 
 } // namespace fincept::ui::algo

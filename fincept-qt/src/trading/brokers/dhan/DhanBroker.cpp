@@ -658,8 +658,7 @@ ApiResponse<QVector<BrokerCandle>> DhanBroker::get_history(const BrokerCredentia
             static const QSet<QString> kIdxRoots = {"NIFTY",      "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY",
                                                     "NIFTYNXT50", "SENSEX",    "BANKEX",   "SENSEX50"};
             const bool isIdx =
-                std::any_of(kIdxRoots.begin(), kIdxRoots.end(),
-                            [&](const QString& r) { return name.startsWith(r); });
+                std::any_of(kIdxRoots.begin(), kIdxRoots.end(), [&](const QString& r) { return name.startsWith(r); });
             // Heuristic: option contract names end in CE/PE; futures contain FUT.
             if (name.endsWith("CE") || name.endsWith("PE"))
                 instrument = isIdx ? "OPTIDX" : "OPTSTK";
@@ -729,9 +728,8 @@ ApiResponse<QVector<BrokerCandle>> DhanBroker::get_history(const BrokerCredentia
 // POST /v2/marketfeed/ltp — {NSE_EQ: [securityId1, securityId2...]}
 // Groups symbols by exchange segment, max 1000.
 // Response: {"data": {"NSE_EQ": {"12345": {"last_price": 500.0, ohlc: {...}}}}}
-ApiResponse<QVector<BrokerQuote>> DhanBroker::get_multi_quotes(
-    const BrokerCredentials& creds,
-    const QVector<QPair<QString, QString>>& symbols) {
+ApiResponse<QVector<BrokerQuote>> DhanBroker::get_multi_quotes(const BrokerCredentials& creds,
+                                                               const QVector<QPair<QString, QString>>& symbols) {
 
     int64_t ts = now_ts();
     if (symbols.isEmpty())
@@ -799,9 +797,8 @@ ApiResponse<QVector<BrokerQuote>> DhanBroker::get_multi_quotes(
 // POST /v2/marketfeed/ohlc — {NSE_EQ: [securityId]}
 // Returns OHLC + depth data for the requested security.
 // Response: {"data": {"NSE_EQ": {"12345": {last_price, ohlc:{...}, depth:{buy:[...], sell:[...]}}}}}
-ApiResponse<MarketDepth> DhanBroker::get_market_depth(
-    const BrokerCredentials& creds,
-    const QString& symbol, const QString& exchange) {
+ApiResponse<MarketDepth> DhanBroker::get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                                      const QString& exchange) {
 
     int64_t ts = now_ts();
     const QString exch = exchange.isEmpty() ? "NSE" : exchange;
@@ -901,9 +898,9 @@ ApiResponse<OrderMargin> DhanBroker::get_order_margins(const BrokerCredentials& 
     m.quantity = order.quantity;
     m.price = order.price;
     m.total = j.value("totalMargin").toDouble();
-    m.var_margin = j.value("spanMargin").toDouble();      // SPAN
-    m.elm = j.value("exposureMargin").toDouble();         // Exposure
-    m.additional = j.value("variableMargin").toDouble();  // VAR / variable margin
+    m.var_margin = j.value("spanMargin").toDouble();     // SPAN
+    m.elm = j.value("exposureMargin").toDouble();        // Exposure
+    m.additional = j.value("variableMargin").toDouble(); // VAR / variable margin
     m.cash = j.value("availableBalance").toDouble();
     m.leverage = j.value("leverage").toDouble();
     if (m.leverage <= 0.0) {

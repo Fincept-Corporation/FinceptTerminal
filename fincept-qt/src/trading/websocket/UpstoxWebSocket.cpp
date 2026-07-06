@@ -54,19 +54,19 @@ namespace {
 
 // Decoded LTPC (last traded price + close).
 struct PbLtpc {
-    double ltp = 0.0;   // field 1
-    int64_t ltt = 0;    // field 2 (epoch ms)
-    int64_t ltq = 0;    // field 3
-    double cp = 0.0;    // field 4 (previous close)
+    double ltp = 0.0; // field 1
+    int64_t ltt = 0;  // field 2 (epoch ms)
+    int64_t ltq = 0;  // field 3
+    double cp = 0.0;  // field 4 (previous close)
     bool present = false;
 };
 
 // One level of the bid/ask ladder (MarketDataFeedV3.Quote).
 struct PbQuote {
-    int64_t bidQ = 0;   // field 1
-    double bidP = 0.0;  // field 2
-    int64_t askQ = 0;   // field 3
-    double askP = 0.0;  // field 4
+    int64_t bidQ = 0;  // field 1
+    double bidP = 0.0; // field 2
+    int64_t askQ = 0;  // field 3
+    double askP = 0.0; // field 4
 };
 
 // One OHLC bucket (MarketDataFeedV3.OHLC).
@@ -83,13 +83,13 @@ struct PbOhlc {
 // Aggregated decode of a single Feed for one instrument key.
 struct PbFeed {
     PbLtpc ltpc;
-    double atp = 0.0;     // MarketFullFeed.atp     (field 5)
-    int64_t vtt = 0;      // MarketFullFeed.vtt     (field 6, volume traded today)
-    double oi = 0.0;      // MarketFullFeed.oi      (field 7)
-    double tbq = 0.0;     // MarketFullFeed.tbq     (field 9)
-    double tsq = 0.0;     // MarketFullFeed.tsq     (field 10)
-    std::vector<PbOhlc> ohlc;     // MarketOHLC.ohlc        (repeated)
-    std::vector<PbQuote> bidAsk;  // MarketLevel.bidAskQuote (repeated, up to 5)
+    double atp = 0.0;            // MarketFullFeed.atp     (field 5)
+    int64_t vtt = 0;             // MarketFullFeed.vtt     (field 6, volume traded today)
+    double oi = 0.0;             // MarketFullFeed.oi      (field 7)
+    double tbq = 0.0;            // MarketFullFeed.tbq     (field 9)
+    double tsq = 0.0;            // MarketFullFeed.tsq     (field 10)
+    std::vector<PbOhlc> ohlc;    // MarketOHLC.ohlc        (repeated)
+    std::vector<PbQuote> bidAsk; // MarketLevel.bidAskQuote (repeated, up to 5)
     bool hasFullFeed = false;
 };
 
@@ -513,8 +513,7 @@ void UpstoxWebSocket::subscribe(const QVector<qint64>& tokens) {
             QString seg = inst->brexchange.isEmpty() ? QStringLiteral("NSE_EQ") : inst->brexchange;
             keys.append(seg + "|" + QString::number(token));
         } else {
-            LOG_WARN(TAG_UPSTOX_WS,
-                     QString("No instrument for token %1 — skipping subscribe").arg(token));
+            LOG_WARN(TAG_UPSTOX_WS, QString("No instrument for token %1 — skipping subscribe").arg(token));
         }
     }
     if (!keys.isEmpty())
@@ -596,13 +595,11 @@ QString UpstoxWebSocket::fetch_ws_url() const {
 
     BrokerHttpResponse resp = BrokerHttp::instance().get(kAuthEndpoint, headers);
     if (!resp.success) {
-        LOG_ERROR(TAG_UPSTOX_WS,
-                  QString("Authorize HTTP %1: %2").arg(resp.status_code).arg(resp.error));
+        LOG_ERROR(TAG_UPSTOX_WS, QString("Authorize HTTP %1: %2").arg(resp.status_code).arg(resp.error));
         return QString();
     }
     // { "status":"success", "data": { "authorized_redirect_uri": "wss://..." } }
-    const QString uri =
-        resp.json.value("data").toObject().value("authorized_redirect_uri").toString();
+    const QString uri = resp.json.value("data").toObject().value("authorized_redirect_uri").toString();
     if (uri.isEmpty())
         LOG_ERROR(TAG_UPSTOX_WS, "authorize response missing authorized_redirect_uri");
     return uri;
@@ -796,8 +793,7 @@ void UpstoxWebSocket::parse_feed_response(const QByteArray& data) {
         LOG_DEBUG(TAG_UPSTOX_WS, "FeedResponse with no decodable feeds (control/market-info frame)");
 }
 
-void UpstoxWebSocket::enrich_symbol(const QString& instrument_key, QString& symbol,
-                                    QString& exchange) const {
+void UpstoxWebSocket::enrich_symbol(const QString& instrument_key, QString& symbol, QString& exchange) const {
     // instrument_key = "SEGMENT|TOKEN" (e.g. "NSE_EQ|256265" or "NSE_EQ|INE002A01018").
     symbol = instrument_key;
     exchange.clear();
@@ -810,9 +806,8 @@ void UpstoxWebSocket::enrich_symbol(const QString& instrument_key, QString& symb
 
     // Canonical exchange from the Upstox segment.
     static const QMap<QString, QString> seg_map = {
-        {"NSE_EQ", "NSE"},       {"BSE_EQ", "BSE"}, {"NSE_FO", "NFO"},
-        {"BSE_FO", "BFO"},       {"NSE_CD", "CDS"}, {"MCX_FO", "MCX"},
-        {"NSE_INDEX", "NSE_INDEX"}, {"BSE_INDEX", "BSE_INDEX"},
+        {"NSE_EQ", "NSE"}, {"BSE_EQ", "BSE"}, {"NSE_FO", "NFO"},          {"BSE_FO", "BFO"},
+        {"NSE_CD", "CDS"}, {"MCX_FO", "MCX"}, {"NSE_INDEX", "NSE_INDEX"}, {"BSE_INDEX", "BSE_INDEX"},
     };
     exchange = seg_map.value(seg, seg);
 

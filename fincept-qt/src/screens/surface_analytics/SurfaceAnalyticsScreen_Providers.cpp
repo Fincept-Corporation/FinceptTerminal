@@ -5,9 +5,8 @@
 //
 // Part of the partial-class split of SurfaceAnalyticsScreen.cpp.
 
-#include "SurfaceAnalyticsScreen.h"
-
 #include "Surface3DWidget.h"
+#include "SurfaceAnalyticsScreen.h"
 #include "SurfaceCapabilities.h"
 #include "SurfaceControlPanel.h"
 #include "SurfaceCsvImporter.h"
@@ -31,8 +30,8 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStringList>
-#include <QVariant>
 #include <QVBoxLayout>
+#include <QVariant>
 
 namespace fincept::surface {
 
@@ -116,8 +115,7 @@ void SurfaceAnalyticsScreen::on_ohlcv_received(const fincept::DatabentoOhlcvResu
             QVector<QStringList> rows;
             for (auto it = r.data.constBegin(); it != r.data.constEnd(); ++it) {
                 for (const QJsonObject& bar : it.value()) {
-                    rows.push_back({it.key(),
-                                    bar.value("date").toString(),
+                    rows.push_back({it.key(), bar.value("date").toString(),
                                     QString::number(bar.value("open").toDouble(), 'f', 2),
                                     QString::number(bar.value("high").toDouble(), 'f', 2),
                                     QString::number(bar.value("low").toDouble(), 'f', 2),
@@ -220,9 +218,7 @@ void SurfaceAnalyticsScreen::on_db_fetch_failed(const QString& err) {
 void SurfaceAnalyticsScreen::on_db_connection_tested(bool ok, const QString& msg) {
     if (!control_panel_)
         return;
-    control_panel_->set_provider_status("databento",
-                                        ok ? "connected" : "error",
-                                        ok ? QString() : msg);
+    control_panel_->set_provider_status("databento", ok ? "connected" : "error", ok ? QString() : msg);
 }
 
 void SurfaceAnalyticsScreen::on_db_raw_response(const QString& cmd, const QString& raw_stdout) {

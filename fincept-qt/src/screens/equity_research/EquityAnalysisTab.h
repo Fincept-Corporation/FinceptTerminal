@@ -84,7 +84,7 @@ class EquityAnalysisTab : public QWidget {
     // ── Formatting ─────────────────────────────────────────────────────────────
     QString fmt(double v, int decimals = 2) const;
     static QString fmt_large(double v);
-    QString fmt_pct(double v) const; ///< v is a fraction (0.31 → "31.00%")
+    QString fmt_pct(double v) const;   ///< v is a fraction (0.31 → "31.00%")
     QString fmt_money(double v) const; ///< currency-symbol prefixed price
     QString cur_symbol_() const;       ///< $/₹/€/£ from cached_info_.currency
     QString color_for_(Tone t) const;
@@ -97,11 +97,11 @@ class EquityAnalysisTab : public QWidget {
 
     // Hero
     AnalysisPriceTargetGauge* gauge_ = nullptr;
-    QLabel* hero_price_ = nullptr;    ///< "$182.40 now"
-    QLabel* hero_upside_ = nullptr;   ///< "+18.3% to mean target"
-    QLabel* hero_reco_ = nullptr;     ///< recommendation badge
-    QLabel* hero_count_ = nullptr;    ///< "34 analysts"
-    QLabel* hero_empty_ = nullptr;    ///< "No analyst coverage" fallback
+    QLabel* hero_price_ = nullptr;  ///< "$182.40 now"
+    QLabel* hero_upside_ = nullptr; ///< "+18.3% to mean target"
+    QLabel* hero_reco_ = nullptr;   ///< recommendation badge
+    QLabel* hero_count_ = nullptr;  ///< "34 analysts"
+    QLabel* hero_empty_ = nullptr;  ///< "No analyst coverage" fallback
 
     // Verdict cards (one per Dim)
     std::array<VerdictCard, kDimCount> cards_{};

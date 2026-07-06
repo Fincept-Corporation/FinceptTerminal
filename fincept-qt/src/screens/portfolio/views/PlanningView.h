@@ -147,7 +147,7 @@ class PlanningView : public QWidget {
 
     // Retirement: Monte Carlo + stress + assumptions note
     QLabel* retire_assump_note_ = nullptr;
-    QLabel* retire_mc_label_ = nullptr;    // "Success: 72% | P5 … P95 …"
+    QLabel* retire_mc_label_ = nullptr;     // "Success: 72% | P5 … P95 …"
     QLabel* retire_stress_label_ = nullptr; // drawdown/VaR stress line
     QPushButton* retire_optimize_btn_ = nullptr;
 
@@ -174,8 +174,8 @@ class PlanningView : public QWidget {
     QString currency_;
     QVector<portfolio::PortfolioSnapshot> snapshots_;
     portfolio::ComputedMetrics metrics_;
-    double hist_cagr_ = 0.0;  // derived annualised return (decimal), 0 if unknown
-    double hist_vol_ = 0.0;   // derived annualised volatility (decimal), 0 if unknown
+    double hist_cagr_ = 0.0; // derived annualised return (decimal), 0 if unknown
+    double hist_vol_ = 0.0;  // derived annualised volatility (decimal), 0 if unknown
     bool have_history_ = false;
     bool has_data_ = false;
 };

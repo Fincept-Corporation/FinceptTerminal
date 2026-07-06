@@ -1,6 +1,6 @@
 #pragma once
-#include <QStringList>
 #include <QString>
+#include <QStringList>
 #include <QUuid>
 
 namespace fincept::screens {
@@ -19,17 +19,17 @@ inline QStringList default_market_columns() {
 }
 
 struct MarketPanelConfig {
-    QString     id;
-    QString     title;
+    QString id;
+    QString title;
     QStringList symbols;
-    bool        show_name      = false;         // legacy — kept for JSON compat
-    QStringList column_order;                   // display column order; empty = use default_market_columns()
-    int         column_index   = 0;             // which horizontal splitter column (0-based)
-    int         splitter_index = 0;             // position within that column's vertical splitter
+    bool show_name = false;   // legacy — kept for JSON compat
+    QStringList column_order; // display column order; empty = use default_market_columns()
+    int column_index = 0;     // which horizontal splitter column (0-based)
+    int splitter_index = 0;   // position within that column's vertical splitter
 
     static MarketPanelConfig make(const QString& title, const QStringList& symbols, bool /*show_name*/ = false) {
-        return { QUuid::createUuid().toString(QUuid::WithoutBraces), title, symbols,
-                 false, default_market_columns(), 0, 0 };
+        return {
+            QUuid::createUuid().toString(QUuid::WithoutBraces), title, symbols, false, default_market_columns(), 0, 0};
     }
 };
 

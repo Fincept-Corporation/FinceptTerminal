@@ -29,8 +29,7 @@ namespace fincept::trading {
 class AlpacaWebSocket : public QObject {
     Q_OBJECT
   public:
-    explicit AlpacaWebSocket(const QString& api_key, const QString& api_secret,
-                             QObject* parent = nullptr);
+    explicit AlpacaWebSocket(const QString& api_key, const QString& api_secret, QObject* parent = nullptr);
     ~AlpacaWebSocket() override;
 
     void open();

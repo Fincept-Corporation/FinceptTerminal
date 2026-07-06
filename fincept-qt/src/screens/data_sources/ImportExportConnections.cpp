@@ -28,9 +28,9 @@ constexpr const char* TAG = "DataSources";
 } // namespace
 
 bool export_connections(QWidget* parent) {
-    const QString path = QFileDialog::getSaveFileName(
-        parent, QObject::tr("Export Connections"), "fincept_connections.json",
-        QObject::tr("JSON Files (*.json);;All Files (*)"));
+    const QString path =
+        QFileDialog::getSaveFileName(parent, QObject::tr("Export Connections"), "fincept_connections.json",
+                                     QObject::tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return false;
 
@@ -41,18 +41,18 @@ bool export_connections(QWidget* parent) {
     QJsonArray arr;
     for (const auto& ds : all.value()) {
         QJsonObject obj;
-        obj["id"]           = ds.id;
-        obj["alias"]        = ds.alias;
+        obj["id"] = ds.id;
+        obj["alias"] = ds.alias;
         obj["display_name"] = ds.display_name;
-        obj["description"]  = ds.description;
-        obj["type"]         = ds.type;
-        obj["provider"]     = ds.provider;
-        obj["category"]     = ds.category;
-        obj["config"]       = QJsonDocument::fromJson(ds.config.toUtf8()).object();
-        obj["enabled"]      = ds.enabled;
-        obj["tags"]         = ds.tags;
-        obj["created_at"]   = ds.created_at;
-        obj["updated_at"]   = ds.updated_at;
+        obj["description"] = ds.description;
+        obj["type"] = ds.type;
+        obj["provider"] = ds.provider;
+        obj["category"] = ds.category;
+        obj["config"] = QJsonDocument::fromJson(ds.config.toUtf8()).object();
+        obj["enabled"] = ds.enabled;
+        obj["tags"] = ds.tags;
+        obj["created_at"] = ds.created_at;
+        obj["updated_at"] = ds.updated_at;
         arr.append(obj);
     }
 
@@ -70,8 +70,8 @@ bool export_connections(QWidget* parent) {
 }
 
 bool import_connections(QWidget* parent, int* imported_out, int* skipped_out) {
-    const QString path = QFileDialog::getOpenFileName(
-        parent, QObject::tr("Import Connections"), "", QObject::tr("JSON Files (*.json);;All Files (*)"));
+    const QString path = QFileDialog::getOpenFileName(parent, QObject::tr("Import Connections"), "",
+                                                      QObject::tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return false;
 
@@ -98,37 +98,43 @@ bool import_connections(QWidget* parent, int* imported_out, int* skipped_out) {
         }
 
         DataSource ds;
-        ds.id           = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        ds.alias        = obj["alias"].toString();
+        ds.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        ds.alias = obj["alias"].toString();
         ds.display_name = obj["display_name"].toString();
-        ds.description  = obj["description"].toString();
-        ds.type         = obj["type"].toString();
-        ds.provider     = provider;
-        ds.category     = obj["category"].toString();
-        ds.config       = QJsonDocument(obj["config"].toObject()).toJson(QJsonDocument::Compact);
-        ds.enabled      = obj["enabled"].toBool(false);
-        ds.tags         = obj["tags"].toString();
+        ds.description = obj["description"].toString();
+        ds.type = obj["type"].toString();
+        ds.provider = provider;
+        ds.category = obj["category"].toString();
+        ds.config = QJsonDocument(obj["config"].toObject()).toJson(QJsonDocument::Compact);
+        ds.enabled = obj["enabled"].toBool(false);
+        ds.tags = obj["tags"].toString();
 
-        if (ds.display_name.isEmpty()) ds.display_name = provider;
-        if (ds.alias.isEmpty())        ds.alias = provider + "_" + ds.id.left(8);
+        if (ds.display_name.isEmpty())
+            ds.display_name = provider;
+        if (ds.alias.isEmpty())
+            ds.alias = provider + "_" + ds.id.left(8);
 
         const auto result = DataSourceRepository::instance().save(ds);
-        if (result.is_ok()) ++imported;
-        else                ++skipped;
+        if (result.is_ok())
+            ++imported;
+        else
+            ++skipped;
     }
 
     LOG_INFO(TAG, QString("Import complete: %1 imported, %2 skipped").arg(imported).arg(skipped));
     services::FileManagerService::instance().import_file(path, "data_sources");
 
-    if (imported_out) *imported_out = imported;
-    if (skipped_out)  *skipped_out  = skipped;
+    if (imported_out)
+        *imported_out = imported;
+    if (skipped_out)
+        *skipped_out = skipped;
     return true;
 }
 
 bool download_connector_template(QWidget* parent) {
-    const QString path = QFileDialog::getSaveFileName(
-        parent, QObject::tr("Save Connector Template"), "fincept_connections_template.json",
-        QObject::tr("JSON Files (*.json);;All Files (*)"));
+    const QString path = QFileDialog::getSaveFileName(parent, QObject::tr("Save Connector Template"),
+                                                      "fincept_connections_template.json",
+                                                      QObject::tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return false;
 
@@ -138,31 +144,29 @@ bool download_connector_template(QWidget* parent) {
     for (const auto& cfg : all) {
         QJsonObject config_obj;
         for (const auto& field : cfg.fields) {
-            QString val = !field.default_value.isEmpty()
-                              ? field.default_value
-                              : (!field.placeholder.isEmpty() ? field.placeholder : "");
+            QString val = !field.default_value.isEmpty() ? field.default_value
+                                                         : (!field.placeholder.isEmpty() ? field.placeholder : "");
             config_obj[field.name] = val;
         }
 
         QJsonObject entry;
-        entry["provider"]     = cfg.id;
+        entry["provider"] = cfg.id;
         entry["display_name"] = cfg.name;
-        entry["alias"]        = cfg.id + "_1";
-        entry["description"]  = cfg.description;
-        entry["type"]         = cfg.type;
-        entry["category"]     = category_str(cfg.category);
-        entry["enabled"]      = false;
-        entry["tags"]         = "";
-        entry["config"]       = config_obj;
-        entry["_help"]        = QString("Fill in the 'config' fields and set 'enabled' to true. "
-                                        "Remove this '_help' key before importing.");
+        entry["alias"] = cfg.id + "_1";
+        entry["description"] = cfg.description;
+        entry["type"] = cfg.type;
+        entry["category"] = category_str(cfg.category);
+        entry["enabled"] = false;
+        entry["tags"] = "";
+        entry["config"] = config_obj;
+        entry["_help"] = QString("Fill in the 'config' fields and set 'enabled' to true. "
+                                 "Remove this '_help' key before importing.");
 
         by_category[category_label(cfg.category)].append(entry);
     }
 
-    QStringList cat_order = {"Databases",   "APIs",        "Streaming",          "File Sources",
-                             "Cloud Storage", "Time Series", "Market Data", "Search & Analytics",
-                             "Data Warehouses"};
+    QStringList cat_order = {"Databases",   "APIs",        "Streaming",          "File Sources",   "Cloud Storage",
+                             "Time Series", "Market Data", "Search & Analytics", "Data Warehouses"};
     QJsonArray out;
     for (const auto& cat : cat_order) {
         if (by_category.contains(cat)) {

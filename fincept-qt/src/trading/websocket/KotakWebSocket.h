@@ -55,9 +55,8 @@ class KotakWebSocket : public BrokerWebSocketBase {
     ///   sid         — redis session id, sent as the "Sid" field of the cn frame
     ///   hs_server_id, access_token — retained for completeness (not needed on the
     ///                 streaming socket itself; the URL/host already carries auth).
-    explicit KotakWebSocket(const QString& auth_token, const QString& sid,
-                            const QString& hs_server_id, const QString& access_token,
-                            QObject* parent = nullptr);
+    explicit KotakWebSocket(const QString& auth_token, const QString& sid, const QString& hs_server_id,
+                            const QString& access_token, QObject* parent = nullptr);
 
     void open() override;
     void close() override;
@@ -90,8 +89,8 @@ class KotakWebSocket : public BrokerWebSocketBase {
     static QByteArray build_connection_request(const QString& jwt, const QString& sid);
     // subscribe_type: 4 = SUBSCRIBE_TYPE, 5 = UNSUBSCRIBE_TYPE.
     // prefix: "sf" / "if" / "dp". channel_num: HSI channel (default 1).
-    static QByteArray build_subs_request(const QString& scrips_amp, int subscribe_type,
-                                         const QString& prefix, int channel_num);
+    static QByteArray build_subs_request(const QString& scrips_amp, int subscribe_type, const QString& prefix,
+                                         int channel_num);
     static QByteArray build_ack_request(qint32 msg_num);
 
     // ── Inbound decode ──────────────────────────────────────────────────────
@@ -118,10 +117,10 @@ class KotakWebSocket : public BrokerWebSocketBase {
     // string fields like symbol/exchange) can be back-filled. Capped to avoid
     // unbounded growth from unsolicited topics.
     struct TopicRecord {
-        QString feed_type;  // "sf" / "if" / "dp"
+        QString feed_type; // "sf" / "if" / "dp"
         QString exchange;
-        QString token;      // numeric token as string (the "tk" field)
-        QString tsymbol;    // trading symbol name (the "ts" field)
+        QString token;   // numeric token as string (the "tk" field)
+        QString tsymbol; // trading symbol name (the "ts" field)
         double multiplier = 1.0;
         double precision_value = 100.0; // 10^precision
         int precision = 2;

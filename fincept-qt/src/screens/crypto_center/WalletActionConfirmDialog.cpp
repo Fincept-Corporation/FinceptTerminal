@@ -14,26 +14,25 @@ namespace fincept::screens {
 
 namespace {
 
-constexpr int kArmTickMs = 100;       // 10 Hz countdown tick — smooth-enough
+constexpr int kArmTickMs = 100; // 10 Hz countdown tick — smooth-enough
 constexpr int kMinDialogWidth = 480;
 constexpr int kRowMinHeight = 28;
 
 QString fontStack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 QString format_remaining(int ms) {
     // 1500 → "1.5s", 800 → "0.8s", <=0 → ""
-    if (ms <= 0) return QString();
+    if (ms <= 0)
+        return QString();
     const double secs = ms / 1000.0;
     return QStringLiteral("%1s").arg(secs, 0, 'f', 1);
 }
 
 } // namespace
 
-WalletActionConfirmDialog::WalletActionConfirmDialog(WalletActionSummary summary,
-                                                     QWidget* parent)
+WalletActionConfirmDialog::WalletActionConfirmDialog(WalletActionSummary summary, QWidget* parent)
     : QDialog(parent), summary_(std::move(summary)) {
     setObjectName(QStringLiteral("walletActionConfirmDialog"));
     setModal(true);
@@ -42,8 +41,7 @@ WalletActionConfirmDialog::WalletActionConfirmDialog(WalletActionSummary summary
 
     arm_timer_ = new QTimer(this);
     arm_timer_->setInterval(kArmTickMs);
-    connect(arm_timer_, &QTimer::timeout, this,
-            &WalletActionConfirmDialog::on_arm_tick);
+    connect(arm_timer_, &QTimer::timeout, this, &WalletActionConfirmDialog::on_arm_tick);
 
     build_ui();
     apply_theme();
@@ -111,9 +109,8 @@ void WalletActionConfirmDialog::build_ui() {
             auto* label = new QLabel(r.label, row_widget);
             label->setObjectName(QStringLiteral("walletActionDialogRowLabel"));
             auto* value = new QLabel(r.value, row_widget);
-            value->setObjectName(r.monospace
-                                     ? QStringLiteral("walletActionDialogRowValueMono")
-                                     : QStringLiteral("walletActionDialogRowValue"));
+            value->setObjectName(r.monospace ? QStringLiteral("walletActionDialogRowValueMono")
+                                             : QStringLiteral("walletActionDialogRowValue"));
             value->setWordWrap(!r.monospace);
             value->setTextInteractionFlags(Qt::TextSelectableByMouse);
             rl->addWidget(label);
@@ -157,9 +154,8 @@ void WalletActionConfirmDialog::build_ui() {
     cancel_button_->setCursor(Qt::PointingHandCursor);
 
     primary_button_ = new QPushButton(summary_.primary_button_text, footer);
-    primary_button_->setObjectName(
-        summary_.primary_is_safe ? QStringLiteral("walletActionDialogPrimary")
-                                 : QStringLiteral("walletActionDialogPrimaryDanger"));
+    primary_button_->setObjectName(summary_.primary_is_safe ? QStringLiteral("walletActionDialogPrimary")
+                                                            : QStringLiteral("walletActionDialogPrimaryDanger"));
     primary_button_->setFixedHeight(30);
     primary_button_->setCursor(Qt::PointingHandCursor);
     primary_button_->setEnabled(false); // armed by timer
@@ -185,78 +181,77 @@ void WalletActionConfirmDialog::apply_theme() {
     const QString font = fontStack();
 
     const QString ss = QStringLiteral(
-        // Root
-        "QDialog#walletActionConfirmDialog { background:%1; }"
+                           // Root
+                           "QDialog#walletActionConfirmDialog { background:%1; }"
 
-        // Header
-        "QWidget#walletActionDialogHeader { background:%2; border-bottom:1px solid %3; }"
-        "QLabel#walletActionDialogTitle { color:%4; font-family:%5; font-size:12px;"
-        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-        "QLabel#walletActionDialogHeadStatus { color:%6; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                           // Header
+                           "QWidget#walletActionDialogHeader { background:%2; border-bottom:1px solid %3; }"
+                           "QLabel#walletActionDialogTitle { color:%4; font-family:%5; font-size:12px;"
+                           "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
+                           "QLabel#walletActionDialogHeadStatus { color:%6; font-family:%5; font-size:10px;"
+                           "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
 
-        // Body
-        "QWidget#walletActionDialogBody { background:%1; }"
-        "QLabel#walletActionDialogLede { color:%7; font-family:%5; font-size:12px;"
-        "  background:transparent; }"
+                           // Body
+                           "QWidget#walletActionDialogBody { background:%1; }"
+                           "QLabel#walletActionDialogLede { color:%7; font-family:%5; font-size:12px;"
+                           "  background:transparent; }"
 
-        // Row block
-        "QFrame#walletActionDialogRowsBlock { background:%8; border:1px solid %3; }"
-        "QWidget#walletActionDialogRow { background:transparent;"
-        "  border-bottom:1px solid %3; }"
-        "QWidget#walletActionDialogRow[isLast=\"true\"] { border-bottom:none; }"
-        "QLabel#walletActionDialogRowLabel { color:%6; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#walletActionDialogRowValue { color:%9; font-family:%5; font-size:12px;"
-        "  background:transparent; }"
-        "QLabel#walletActionDialogRowValueMono { color:%9; font-family:%5; font-size:12px;"
-        "  background:transparent; }"
+                           // Row block
+                           "QFrame#walletActionDialogRowsBlock { background:%8; border:1px solid %3; }"
+                           "QWidget#walletActionDialogRow { background:transparent;"
+                           "  border-bottom:1px solid %3; }"
+                           "QWidget#walletActionDialogRow[isLast=\"true\"] { border-bottom:none; }"
+                           "QLabel#walletActionDialogRowLabel { color:%6; font-family:%5; font-size:10px;"
+                           "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                           "QLabel#walletActionDialogRowValue { color:%9; font-family:%5; font-size:12px;"
+                           "  background:transparent; }"
+                           "QLabel#walletActionDialogRowValueMono { color:%9; font-family:%5; font-size:12px;"
+                           "  background:transparent; }"
 
-        // Warnings
-        "QFrame#walletActionDialogWarnBlock { background:rgba(220,38,38,0.10);"
-        "  border:1px solid %10; }"
-        "QLabel#walletActionDialogWarnText { color:%10; font-family:%5; font-size:11px;"
-        "  background:transparent; }"
+                           // Warnings
+                           "QFrame#walletActionDialogWarnBlock { background:rgba(220,38,38,0.10);"
+                           "  border:1px solid %10; }"
+                           "QLabel#walletActionDialogWarnText { color:%10; font-family:%5; font-size:11px;"
+                           "  background:transparent; }"
 
-        // Footer
-        "QWidget#walletActionDialogFooter { background:%2; border-top:1px solid %3; }"
+                           // Footer
+                           "QWidget#walletActionDialogFooter { background:%2; border-top:1px solid %3; }"
 
-        // Cancel button
-        "QPushButton#walletActionDialogCancel { background:%8; color:%7; border:1px solid %3;"
-        "  font-family:%5; font-size:11px; font-weight:700; letter-spacing:1px; padding:0 14px; }"
-        "QPushButton#walletActionDialogCancel:hover { background:%11; color:%9;"
-        "  border-color:%12; }"
+                           // Cancel button
+                           "QPushButton#walletActionDialogCancel { background:%8; color:%7; border:1px solid %3;"
+                           "  font-family:%5; font-size:11px; font-weight:700; letter-spacing:1px; padding:0 14px; }"
+                           "QPushButton#walletActionDialogCancel:hover { background:%11; color:%9;"
+                           "  border-color:%12; }"
 
-        // Primary (safe — amber)
-        "QPushButton#walletActionDialogPrimary { background:rgba(217,119,6,0.10); color:%4;"
-        "  border:1px solid %13; font-family:%5; font-size:11px; font-weight:700;"
-        "  letter-spacing:1.2px; padding:0 16px; }"
-        "QPushButton#walletActionDialogPrimary:hover { background:%4; color:%1; }"
-        "QPushButton#walletActionDialogPrimary:disabled { background:%8; color:%6;"
-        "  border-color:%3; }"
+                           // Primary (safe — amber)
+                           "QPushButton#walletActionDialogPrimary { background:rgba(217,119,6,0.10); color:%4;"
+                           "  border:1px solid %13; font-family:%5; font-size:11px; font-weight:700;"
+                           "  letter-spacing:1.2px; padding:0 16px; }"
+                           "QPushButton#walletActionDialogPrimary:hover { background:%4; color:%1; }"
+                           "QPushButton#walletActionDialogPrimary:disabled { background:%8; color:%6;"
+                           "  border-color:%3; }"
 
-        // Primary (danger — red)
-        "QPushButton#walletActionDialogPrimaryDanger { background:rgba(220,38,38,0.10); color:%10;"
-        "  border:1px solid %14; font-family:%5; font-size:11px; font-weight:700;"
-        "  letter-spacing:1.2px; padding:0 16px; }"
-        "QPushButton#walletActionDialogPrimaryDanger:hover { background:%10; color:%9; }"
-        "QPushButton#walletActionDialogPrimaryDanger:disabled { background:%8; color:%6;"
-        "  border-color:%3; }"
-    )
-        .arg(BG_BASE(),         // %1
-             BG_SURFACE(),      // %2
-             BORDER_DIM(),      // %3
-             AMBER(),           // %4
-             font,              // %5
-             TEXT_TERTIARY(),   // %6
-             TEXT_SECONDARY(),  // %7
-             BG_RAISED(),       // %8
-             TEXT_PRIMARY())    // %9
-        .arg(NEGATIVE(),                       // %10
-             BG_HOVER(),                       // %11
-             BORDER_BRIGHT(),                  // %12
-             QStringLiteral("#78350f"),        // %13 darker amber border
-             QStringLiteral("#7f1d1d"));       // %14 darker red border
+                           // Primary (danger — red)
+                           "QPushButton#walletActionDialogPrimaryDanger { background:rgba(220,38,38,0.10); color:%10;"
+                           "  border:1px solid %14; font-family:%5; font-size:11px; font-weight:700;"
+                           "  letter-spacing:1.2px; padding:0 16px; }"
+                           "QPushButton#walletActionDialogPrimaryDanger:hover { background:%10; color:%9; }"
+                           "QPushButton#walletActionDialogPrimaryDanger:disabled { background:%8; color:%6;"
+                           "  border-color:%3; }")
+                           .arg(BG_BASE(),                  // %1
+                                BG_SURFACE(),               // %2
+                                BORDER_DIM(),               // %3
+                                AMBER(),                    // %4
+                                font,                       // %5
+                                TEXT_TERTIARY(),            // %6
+                                TEXT_SECONDARY(),           // %7
+                                BG_RAISED(),                // %8
+                                TEXT_PRIMARY())             // %9
+                           .arg(NEGATIVE(),                 // %10
+                                BG_HOVER(),                 // %11
+                                BORDER_BRIGHT(),            // %12
+                                QStringLiteral("#78350f"),  // %13 darker amber border
+                                QStringLiteral("#7f1d1d")); // %14 darker red border
 
     setStyleSheet(ss);
 }
@@ -270,9 +265,12 @@ void WalletActionConfirmDialog::changeEvent(QEvent* event) {
 void WalletActionConfirmDialog::retranslateUi() {
     // Window title + primary-button text are caller-supplied summary data,
     // not translatable UI literals. Only fixed chrome is retranslated here.
-    if (summary_.title.isEmpty()) setWindowTitle(tr("Confirm"));
-    if (head_status_label_) head_status_label_->setText(tr("AWAITING CONFIRMATION"));
-    if (cancel_button_) cancel_button_->setText(tr("CANCEL"));
+    if (summary_.title.isEmpty())
+        setWindowTitle(tr("Confirm"));
+    if (head_status_label_)
+        head_status_label_->setText(tr("AWAITING CONFIRMATION"));
+    if (cancel_button_)
+        cancel_button_->setText(tr("CANCEL"));
 }
 
 void WalletActionConfirmDialog::showEvent(QShowEvent* e) {
@@ -284,9 +282,7 @@ void WalletActionConfirmDialog::showEvent(QShowEvent* e) {
         return;
     }
     primary_button_->setEnabled(false);
-    primary_button_->setText(tr("%1 in %2")
-                                 .arg(summary_.primary_button_text,
-                                      format_remaining(arm_remaining_ms_)));
+    primary_button_->setText(tr("%1 in %2").arg(summary_.primary_button_text, format_remaining(arm_remaining_ms_)));
     arm_timer_->start();
 }
 
@@ -298,9 +294,7 @@ void WalletActionConfirmDialog::on_arm_tick() {
         primary_button_->setText(summary_.primary_button_text);
         return;
     }
-    primary_button_->setText(tr("%1 in %2")
-                                 .arg(summary_.primary_button_text,
-                                      format_remaining(arm_remaining_ms_)));
+    primary_button_->setText(tr("%1 in %2").arg(summary_.primary_button_text, format_remaining(arm_remaining_ms_)));
 }
 
 } // namespace fincept::screens

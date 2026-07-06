@@ -61,12 +61,12 @@ class HoldingsBar : public QWidget {
 
     QLabel* sol_value_ = nullptr;
     QLabel* fncpt_value_ = nullptr;
-    QLabel* total_value_ = nullptr;     ///< sum of all priced holdings
+    QLabel* total_value_ = nullptr;       ///< sum of all priced holdings
     QLabel* fncpt_price_value_ = nullptr; ///< $FNCPT spot for legacy display
     QLabel* updated_value_ = nullptr;
     QLabel* feed_status_ = nullptr;
     QLabel* rpc_indicator_ = nullptr;
-    QLabel* discount_chip_ = nullptr;  // hidden until Stage 2C wires it
+    QLabel* discount_chip_ = nullptr; // hidden until Stage 2C wires it
 
     // Metric caption labels (fixed UI text — cached for retranslateUi)
     QLabel* sol_caption_ = nullptr;
@@ -80,8 +80,8 @@ class HoldingsBar : public QWidget {
     QString current_pubkey_;
     QString current_balance_topic_;
     fincept::wallet::WalletBalance latest_balance_;
-    QHash<QString, double> price_usd_;     ///< mint → USD price
-    QHash<QString, QString> price_topic_;  ///< mint → topic for unsubscribe
+    QHash<QString, double> price_usd_;    ///< mint → USD price
+    QHash<QString, QString> price_topic_; ///< mint → topic for unsubscribe
     qint64 last_balance_ts_ = 0;
     FeedStatus feed_status_state_ = FeedStatus::Idle;
     bool first_publish_received_ = false;

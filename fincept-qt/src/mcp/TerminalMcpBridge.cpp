@@ -307,11 +307,9 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
     // dispatch — the auth check runs there before call_tool_async returns
     // its future.
     auto it_state = states_.find(sock);
-    const QString destructive_hdr = (it_state != states_.end())
-                                        ? it_state.value().headers.value("x-mcp-allow-destructive")
-                                        : QString();
-    const bool destructive_ok =
-        !destructive_token_.isEmpty() && destructive_hdr == destructive_token_;
+    const QString destructive_hdr =
+        (it_state != states_.end()) ? it_state.value().headers.value("x-mcp-allow-destructive") : QString();
+    const bool destructive_ok = !destructive_token_.isEmpty() && destructive_hdr == destructive_token_;
 
     QFuture<ToolResult> future;
     {
@@ -328,24 +326,21 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
     }
 
     auto* watcher = new QFutureWatcher<ToolResult>(this);
-    connect(watcher, &QFutureWatcher<ToolResult>::finished, this,
-            [self, sock_guard, tool_name, call_id, watcher]() {
-                const auto fut = watcher->future();
-                ToolResult result = (fut.resultCount() > 0)
-                                        ? fut.result()
-                                        : ToolResult::fail("Tool produced no result");
-                watcher->deleteLater();
+    connect(watcher, &QFutureWatcher<ToolResult>::finished, this, [self, sock_guard, tool_name, call_id, watcher]() {
+        const auto fut = watcher->future();
+        ToolResult result = (fut.resultCount() > 0) ? fut.result() : ToolResult::fail("Tool produced no result");
+        watcher->deleteLater();
 
-                if (!self || !sock_guard) {
-                    return; // bridge or peer gone
-                }
+        if (!self || !sock_guard) {
+            return; // bridge or peer gone
+        }
 
-                QJsonObject payload = result.to_json();
-                if (!call_id.isEmpty())
-                    payload["id"] = call_id;
-                self->write_json_response(sock_guard, 200, payload);
-                emit self->tool_called(tool_name, result.success);
-            });
+        QJsonObject payload = result.to_json();
+        if (!call_id.isEmpty())
+            payload["id"] = call_id;
+        self->write_json_response(sock_guard, 200, payload);
+        emit self->tool_called(tool_name, result.success);
+    });
     watcher->setFuture(future);
 }
 
@@ -366,14 +361,22 @@ void TerminalMcpBridge::handle_get_tools(QTcpSocket* sock) {
 
 static const char* status_text(int code) {
     switch (code) {
-        case 200: return "OK";
-        case 400: return "Bad Request";
-        case 401: return "Unauthorized";
-        case 404: return "Not Found";
-        case 413: return "Payload Too Large";
-        case 431: return "Request Header Fields Too Large";
-        case 500: return "Internal Server Error";
-        default:  return "Unknown";
+        case 200:
+            return "OK";
+        case 400:
+            return "Bad Request";
+        case 401:
+            return "Unauthorized";
+        case 404:
+            return "Not Found";
+        case 413:
+            return "Payload Too Large";
+        case 431:
+            return "Request Header Fields Too Large";
+        case 500:
+            return "Internal Server Error";
+        default:
+            return "Unknown";
     }
 }
 

@@ -79,8 +79,7 @@ inline QVector<QuantModule> all_quant_modules() {
         {"fortitudo", "Fortitudo", "FORT", "ANALYTICS", QColor("#FF5722"),
          "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
          "Portfolio metrics, MV/CVaR optimization, efficient frontier, exp-decay weights"},
-        {"gluonts", "GluonTS", "GLUON", "ANALYTICS", QColor("#795548"),
-         "Analytics/gluonts_wrapper/gluonts_service.py",
+        {"gluonts", "GluonTS", "GLUON", "ANALYTICS", QColor("#795548"), "Analytics/gluonts_wrapper/gluonts_service.py",
          "Probabilistic + quantile forecasts, distribution fits, forecast evaluation, baselines"},
     };
 }

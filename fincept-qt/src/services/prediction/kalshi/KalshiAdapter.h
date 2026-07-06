@@ -60,8 +60,7 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     void fetch_user_activity(int limit) override;
     void place_order(const fincept::services::prediction::OrderRequest& req) override;
     void cancel_order(const QString& order_id) override;
-    void cancel_all_for_market(const fincept::services::prediction::MarketKey& key,
-                               const QString& asset_id) override;
+    void cancel_all_for_market(const fincept::services::prediction::MarketKey& key, const QString& asset_id) override;
 
     void ensure_registered_with_hub() override;
 
@@ -75,8 +74,7 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     void fetch_exchange_status();
     void fetch_exchange_schedule();
     /// GET /markets/candlesticks (batch). Results arrive on batch_candles_ready.
-    void fetch_batch_candles(const QStringList& tickers, int period_interval_min,
-                             qint64 start_ts, qint64 end_ts);
+    void fetch_batch_candles(const QStringList& tickers, int period_interval_min, qint64 start_ts, qint64 end_ts);
     /// GET /series/{series_ticker}. Result arrives on series_detail_ready.
     /// Cached per ticker — repeat calls are free.
     void fetch_series_detail(const QString& series_ticker);
@@ -84,14 +82,10 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     /// empty object if we haven't fetched this series yet.
     QJsonObject cached_series(const QString& series_ticker) const;
     /// GET /historical/markets / candlesticks / trades.
-    void fetch_historical_markets(const QString& series_ticker = QString(),
-                                  int limit = 100,
+    void fetch_historical_markets(const QString& series_ticker = QString(), int limit = 100,
                                   const QString& cursor = QString());
-    void fetch_historical_candles(const QString& ticker, int period_interval_min,
-                                  qint64 start_ts, qint64 end_ts);
-    void fetch_historical_trades(const QString& ticker = QString(),
-                                 int limit = 100,
-                                 const QString& cursor = QString());
+    void fetch_historical_candles(const QString& ticker, int period_interval_min, qint64 start_ts, qint64 end_ts);
+    void fetch_historical_trades(const QString& ticker = QString(), int limit = 100, const QString& cursor = QString());
 
     // ── Kalshi-specific trading (pass through to Python bridge) ─────────
 
@@ -114,23 +108,18 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
 
     void exchange_status_ready(const QJsonObject& status);
     void exchange_schedule_ready(const QJsonObject& schedule);
-    void batch_candles_ready(
-        const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
+    void batch_candles_ready(const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
     void series_detail_ready(const QString& series_ticker, const QJsonObject& series);
 
-    void historical_markets_ready(
-        const QVector<fincept::services::prediction::PredictionMarket>& markets,
-        const QString& next_cursor);
-    void historical_candles_ready(
-        const fincept::services::prediction::PriceHistory& history, const QString& ticker);
-    void historical_trades_ready(
-        const QVector<fincept::services::prediction::PredictionTrade>& trades,
-        const QString& next_cursor);
+    void historical_markets_ready(const QVector<fincept::services::prediction::PredictionMarket>& markets,
+                                  const QString& next_cursor);
+    void historical_candles_ready(const fincept::services::prediction::PriceHistory& history, const QString& ticker);
+    void historical_trades_ready(const QVector<fincept::services::prediction::PredictionTrade>& trades,
+                                 const QString& next_cursor);
 
     void order_amended(const QString& order_id, bool ok, const QString& error);
     void single_order_ready(const QJsonObject& order);
-    void orders_batch_cancelled(const QStringList& order_ids, bool ok,
-                                const QString& error);
+    void orders_batch_cancelled(const QStringList& order_ids, bool ok, const QString& error);
 
   private:
     void wire();
@@ -139,8 +128,8 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     /// Run a command against prediction_kalshi.py with the stored creds
     /// merged into `extra`. Invokes `on_ok` with the parsed JSON on
     /// success; emits error_occurred() on failure.
-    void run_py(const QString& command, const QJsonObject& extra,
-                std::function<void(const QJsonObject&)> on_ok, const QString& ctx);
+    void run_py(const QString& command, const QJsonObject& extra, std::function<void(const QJsonObject&)> on_ok,
+                const QString& ctx);
     QJsonObject creds_to_json() const;
 
     /// Kalshi asset IDs look like "TICKER:yes" / "TICKER:no". Split into

@@ -14,6 +14,7 @@
 #include <QMouseEvent>
 #include <QPointer>
 #include <QSpinBox>
+
 #include <algorithm>
 
 namespace fincept::screens::widgets {
@@ -38,22 +39,30 @@ QString format_relative(const QString& iso) {
 }
 
 QString priority_color(const QString& p) {
-    if (p == QStringLiteral("CRITICAL")) return ui::colors::NEGATIVE();
-    if (p == QStringLiteral("HIGH"))     return ui::colors::WARNING();
-    if (p == QStringLiteral("MEDIUM"))   return ui::colors::AMBER();
+    if (p == QStringLiteral("CRITICAL"))
+        return ui::colors::NEGATIVE();
+    if (p == QStringLiteral("HIGH"))
+        return ui::colors::WARNING();
+    if (p == QStringLiteral("MEDIUM"))
+        return ui::colors::AMBER();
     return ui::colors::TEXT_TERTIARY(); // LOW or empty
 }
 
 QString sentiment_glyph(const QString& s) {
-    if (s == QStringLiteral("BULLISH")) return QStringLiteral("▲");
-    if (s == QStringLiteral("BEARISH")) return QStringLiteral("▼");
-    if (s == QStringLiteral("NEUTRAL")) return QStringLiteral("◆");
+    if (s == QStringLiteral("BULLISH"))
+        return QStringLiteral("▲");
+    if (s == QStringLiteral("BEARISH"))
+        return QStringLiteral("▼");
+    if (s == QStringLiteral("NEUTRAL"))
+        return QStringLiteral("◆");
     return QString();
 }
 
 QString sentiment_color(const QString& s) {
-    if (s == QStringLiteral("BULLISH")) return ui::colors::POSITIVE();
-    if (s == QStringLiteral("BEARISH")) return ui::colors::NEGATIVE();
+    if (s == QStringLiteral("BULLISH"))
+        return ui::colors::POSITIVE();
+    if (s == QStringLiteral("BEARISH"))
+        return ui::colors::NEGATIVE();
     return ui::colors::TEXT_SECONDARY();
 }
 } // namespace
@@ -96,8 +105,7 @@ void NotesWidget::apply_config(const QJsonObject& cfg) {
     filter_ = (f == QStringLiteral("favorites")) ? QStringLiteral("favorites") : QStringLiteral("recent");
     max_rows_ = qBound(3, cfg.value("max_rows").toInt(8), 50);
 
-    set_title(filter_ == QStringLiteral("favorites") ? tr("NOTES — FAVORITES")
-                                                     : tr("NOTES — RECENT"));
+    set_title(filter_ == QStringLiteral("favorites") ? tr("NOTES — FAVORITES") : tr("NOTES — RECENT"));
     refresh_data();
 }
 
@@ -121,7 +129,8 @@ void NotesWidget::subscribe_events() {
         if (!self)
             return;
         QMetaObject::invokeMethod(
-            self.data(), [self]() {
+            self.data(),
+            [self]() {
                 if (self)
                     self->refresh_data();
             },
@@ -156,8 +165,8 @@ void NotesWidget::refresh_data() {
     if (!result.is_ok()) {
         auto* err = new QLabel(tr("Failed to load notes: %1").arg(QString::fromStdString(result.error())));
         err->setAlignment(Qt::AlignCenter);
-        err->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;padding:16px;")
-                               .arg(ui::colors::NEGATIVE()));
+        err->setStyleSheet(
+            QString("color:%1;font-size:10px;background:transparent;padding:16px;").arg(ui::colors::NEGATIVE()));
         list_layout_->addWidget(err);
         list_layout_->addStretch();
         set_loading(false);
@@ -190,8 +199,8 @@ void NotesWidget::refresh_data() {
                                 : tr("No notes yet — open Notes screen to add one");
         auto* empty = new QLabel(msg);
         empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;padding:16px;")
-                                 .arg(ui::colors::TEXT_TERTIARY()));
+        empty->setStyleSheet(
+            QString("color:%1;font-size:10px;background:transparent;padding:16px;").arg(ui::colors::TEXT_TERTIARY()));
         list_layout_->addWidget(empty);
         list_layout_->addStretch();
         set_loading(false);
@@ -215,8 +224,7 @@ void NotesWidget::refresh_data() {
 
         if (note.is_favorite) {
             auto* star = new QLabel(QStringLiteral("★"));
-            star->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;")
-                                    .arg(ui::colors::AMBER()));
+            star->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;").arg(ui::colors::AMBER()));
             top->addWidget(star);
         }
 
@@ -227,16 +235,16 @@ void NotesWidget::refresh_data() {
             title_text = title_text.left(48) + QStringLiteral("…");
         auto* title_lbl = new QLabel(title_text);
         title_lbl->setToolTip(note.title);
-        title_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:600;background:transparent;")
-                                     .arg(ui::colors::TEXT_PRIMARY()));
+        title_lbl->setStyleSheet(
+            QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
         top->addWidget(title_lbl, 1);
 
         const QString sgly = sentiment_glyph(note.sentiment);
         if (!sgly.isEmpty()) {
             auto* sent = new QLabel(sgly);
             sent->setToolTip(note.sentiment);
-            sent->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;")
-                                    .arg(sentiment_color(note.sentiment)));
+            sent->setStyleSheet(
+                QString("color:%1;font-size:10px;background:transparent;").arg(sentiment_color(note.sentiment)));
             top->addWidget(sent);
         }
         rl->addLayout(top);
@@ -249,15 +257,15 @@ void NotesWidget::refresh_data() {
         if (!note.priority.isEmpty()) {
             auto* prio = new QLabel(QStringLiteral("●"));
             prio->setToolTip(QStringLiteral("Priority: ") + note.priority);
-            prio->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                    .arg(priority_color(note.priority)));
+            prio->setStyleSheet(
+                QString("color:%1;font-size:9px;background:transparent;").arg(priority_color(note.priority)));
             bot->addWidget(prio);
         }
 
         if (!note.category.isEmpty()) {
             auto* cat = new QLabel(note.category);
-            cat->setStyleSheet(QString("color:%1;font-size:9px;font-weight:600;background:transparent;")
-                                   .arg(ui::colors::CYAN()));
+            cat->setStyleSheet(
+                QString("color:%1;font-size:9px;font-weight:600;background:transparent;").arg(ui::colors::CYAN()));
             bot->addWidget(cat);
         }
 
@@ -267,8 +275,8 @@ void NotesWidget::refresh_data() {
                 tkr = tkr.left(16) + QStringLiteral("…");
             auto* tlbl = new QLabel(tkr);
             tlbl->setToolTip(note.tickers);
-            tlbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                    .arg(ui::colors::TEXT_SECONDARY()));
+            tlbl->setStyleSheet(
+                QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
             bot->addWidget(tlbl);
         }
 
@@ -276,8 +284,8 @@ void NotesWidget::refresh_data() {
 
         const QString age = format_relative(note.updated_at.isEmpty() ? note.created_at : note.updated_at);
         auto* age_lbl = new QLabel(age);
-        age_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                   .arg(ui::colors::TEXT_TERTIARY()));
+        age_lbl->setStyleSheet(
+            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         bot->addWidget(age_lbl);
 
         rl->addLayout(bot);
@@ -304,8 +312,7 @@ bool NotesWidget::eventFilter(QObject* obj, QEvent* event) {
             if (auto* w = qobject_cast<QWidget*>(obj)) {
                 const QVariant id_var = w->property("note_id");
                 if (id_var.isValid()) {
-                    EventBus::instance().publish("nav.switch_screen",
-                                                 QVariantMap{{"screen_id", "notes"}});
+                    EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", "notes"}});
                     return true;
                 }
             }
@@ -354,12 +361,11 @@ void NotesWidget::on_theme_changed() {
 }
 
 void NotesWidget::apply_styles() {
-    scroll_->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:4px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:2px;min-height:20px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BORDER_MED()));
+    scroll_->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+                                   "QScrollBar:vertical{width:4px;background:transparent;}"
+                                   "QScrollBar::handle:vertical{background:%1;border-radius:2px;min-height:20px;}"
+                                   "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                               .arg(ui::colors::BORDER_MED()));
 }
 
 void NotesWidget::retranslateUi() {

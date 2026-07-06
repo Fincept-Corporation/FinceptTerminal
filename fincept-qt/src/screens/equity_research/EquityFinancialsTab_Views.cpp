@@ -6,7 +6,6 @@
 // Part of the partial-class split of EquityFinancialsTab.cpp.
 
 #include "screens/equity_research/EquityFinancialsTab.h"
-
 #include "screens/equity_research/EquityFinancialsTab_internal.h"
 #include "services/equity/EquityResearchService.h"
 #include "services/file_manager/FileManagerService.h"
@@ -31,8 +30,8 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QStackedWidget>
-#include <QTableWidget>
 #include <QTabWidget>
+#include <QTableWidget>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <QValueAxis>
@@ -40,7 +39,6 @@
 namespace fincept::screens {
 
 using namespace financials_internal;
-
 
 void EquityFinancialsTab::build_ui() {
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
@@ -57,8 +55,7 @@ void EquityFinancialsTab::build_ui() {
     btn_hl->setContentsMargins(10, 6, 10, 6);
     btn_hl->setSpacing(6);
 
-    QString btn_style =
-        QString(R"(
+    QString btn_style = QString(R"(
         QPushButton {
             background:transparent; color:%1; border:1px solid %2;
             border-radius:3px; padding:4px 14px; font-size:11px; font-weight:700;
@@ -66,7 +63,8 @@ void EquityFinancialsTab::build_ui() {
         QPushButton:checked { background:%3; color:%4; border-color:%3; }
         QPushButton:hover:!checked { border-color:%3; background:%5; }
     )")
-            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), kAmber, ui::colors::BG_BASE(), ui::colors::BG_HOVER());
+                            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), kAmber, ui::colors::BG_BASE(),
+                                 ui::colors::BG_HOVER());
 
     auto make_btn = [&](const QString& label, QPushButton*& out) {
         out = new QPushButton(label);
@@ -75,8 +73,8 @@ void EquityFinancialsTab::build_ui() {
         btn_hl->addWidget(out);
     };
     make_btn(tr("Income Statement"), btn_income_);
-    make_btn(tr("Balance Sheet"),    btn_balance_);
-    make_btn(tr("Cash Flow"),        btn_cashflow_);
+    make_btn(tr("Balance Sheet"), btn_balance_);
+    make_btn(tr("Cash Flow"), btn_cashflow_);
     btn_income_->setChecked(true);
     btn_hl->addStretch();
 
@@ -88,7 +86,7 @@ void EquityFinancialsTab::build_ui() {
         }
         QPushButton:hover { background:%1; color:#000; }
     )")
-                                  .arg(kAmber));
+                                       .arg(kAmber));
     btn_hl->addWidget(btn_export_csv_);
 
     connect(btn_export_csv_, &QPushButton::clicked, this, [this]() {
@@ -188,10 +186,10 @@ QWidget* EquityFinancialsTab::build_income_view() {
         // Row 1: 4 large cards
         auto* r1 = new QHBoxLayout;
         r1->setSpacing(8);
-        r1->addWidget(metric_card(tr("TOTAL REVENUE"),     inc_revenue_val_,   inc_revenue_sub_,   kGreen));
-        r1->addWidget(metric_card(tr("GROSS PROFIT"),      inc_gross_val_,     inc_gross_sub_,     kCyan));
-        r1->addWidget(metric_card(tr("OPERATING INCOME"),  inc_opincome_val_,  inc_opincome_sub_,  kBlue));
-        r1->addWidget(metric_card(tr("NET INCOME"),        inc_netincome_val_, inc_netincome_sub_, kGreen));
+        r1->addWidget(metric_card(tr("TOTAL REVENUE"), inc_revenue_val_, inc_revenue_sub_, kGreen));
+        r1->addWidget(metric_card(tr("GROSS PROFIT"), inc_gross_val_, inc_gross_sub_, kCyan));
+        r1->addWidget(metric_card(tr("OPERATING INCOME"), inc_opincome_val_, inc_opincome_sub_, kBlue));
+        r1->addWidget(metric_card(tr("NET INCOME"), inc_netincome_val_, inc_netincome_sub_, kGreen));
         svl->addLayout(r1);
 
         // Row 2: EBITDA + margins
@@ -201,10 +199,10 @@ QWidget* EquityFinancialsTab::build_income_view() {
 
         // Margin cards (no subtitle needed)
         QLabel* dummy = nullptr;
-        auto* gm = metric_card(tr("GROSS MARGIN"),     inc_gross_margin_,  dummy, kGreen,  QStringLiteral("—"), QString());
-        auto* om = metric_card(tr("OPERATING MARGIN"), inc_op_margin_,     dummy, kCyan,   QStringLiteral("—"), QString());
-        auto* nm = metric_card(tr("NET MARGIN"),       inc_net_margin_,    dummy, kOrange, QStringLiteral("—"), QString());
-        auto* em = metric_card(tr("EBITDA MARGIN"),    inc_ebitda_margin_, dummy, kPurple, QStringLiteral("—"), QString());
+        auto* gm = metric_card(tr("GROSS MARGIN"), inc_gross_margin_, dummy, kGreen, QStringLiteral("—"), QString());
+        auto* om = metric_card(tr("OPERATING MARGIN"), inc_op_margin_, dummy, kCyan, QStringLiteral("—"), QString());
+        auto* nm = metric_card(tr("NET MARGIN"), inc_net_margin_, dummy, kOrange, QStringLiteral("—"), QString());
+        auto* em = metric_card(tr("EBITDA MARGIN"), inc_ebitda_margin_, dummy, kPurple, QStringLiteral("—"), QString());
         r2->addWidget(gm);
         r2->addWidget(om);
         r2->addWidget(nm);
@@ -248,8 +246,8 @@ QWidget* EquityFinancialsTab::build_income_view() {
                                          "background:transparent; border:0;")
                                      .arg(kCyan));
         rvl->addWidget(ret_title);
-        ret_roe_val_  = ratio_row(ret_frame, tr("Return on Equity (ROE)"), kCyan);
-        ret_roa_val_  = ratio_row(ret_frame, tr("Return on Assets (ROA)"), kCyan);
+        ret_roe_val_ = ratio_row(ret_frame, tr("Return on Equity (ROE)"), kCyan);
+        ret_roa_val_ = ratio_row(ret_frame, tr("Return on Assets (ROA)"), kCyan);
         ret_roic_val_ = ratio_row(ret_frame, tr("Return on Inv. Capital"), kBlue);
         ret_roce_val_ = ratio_row(ret_frame, tr("Return on Cap. Employed"), kBlue);
         rvl->addStretch();
@@ -288,8 +286,8 @@ QWidget* EquityFinancialsTab::build_income_view() {
         };
         auto make_op = [&](const QString& sym) {
             auto* op = new QLabel(sym);
-            op->setStyleSheet(
-                QString("color:%1; font-size:16px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+            op->setStyleSheet(QString("color:%1; font-size:16px; background:transparent; border:0;")
+                                  .arg(ui::colors::TEXT_TERTIARY()));
             op->setAlignment(Qt::AlignCenter);
             formula_hl->addWidget(op);
         };
@@ -297,7 +295,7 @@ QWidget* EquityFinancialsTab::build_income_view() {
         make_op("×");
         make_dp_val(dupont_asset_turn_, tr("Asset Turn"));
         make_op("×");
-        make_dp_val(dupont_eq_mult_,    tr("Eq. Mult"));
+        make_dp_val(dupont_eq_mult_, tr("Eq. Mult"));
         make_op("=");
         make_dp_val(dupont_roe_result_, tr("ROE"));
         dupont_roe_result_->setStyleSheet(QString("color:%1; font-size:16px; font-weight:700; "
@@ -348,11 +346,13 @@ QWidget* EquityFinancialsTab::build_balance_view() {
         auto* r1 = new QHBoxLayout;
         r1->setSpacing(8);
         QLabel* dummy = nullptr;
-        r1->addWidget(metric_card(tr("TOTAL ASSETS"),        bal_assets_val_,      dummy, kBlue,   QStringLiteral("—"), QString()));
-        r1->addWidget(metric_card(tr("TOTAL LIABILITIES"),   bal_liabilities_val_, dummy, kRed,    QStringLiteral("—"), QString()));
-        r1->addWidget(metric_card(tr("STOCKHOLDERS EQUITY"), bal_equity_val_,      dummy, kGreen,  QStringLiteral("—"), QString()));
-        r1->addWidget(metric_card(tr("TOTAL DEBT"),          bal_debt_val_,        dummy, kOrange, QStringLiteral("—"), QString()));
-        r1->addWidget(metric_card(tr("CASH & EQUIV."),       bal_cash_val_,        dummy, kCyan,   QStringLiteral("—"), QString()));
+        r1->addWidget(metric_card(tr("TOTAL ASSETS"), bal_assets_val_, dummy, kBlue, QStringLiteral("—"), QString()));
+        r1->addWidget(
+            metric_card(tr("TOTAL LIABILITIES"), bal_liabilities_val_, dummy, kRed, QStringLiteral("—"), QString()));
+        r1->addWidget(
+            metric_card(tr("STOCKHOLDERS EQUITY"), bal_equity_val_, dummy, kGreen, QStringLiteral("—"), QString()));
+        r1->addWidget(metric_card(tr("TOTAL DEBT"), bal_debt_val_, dummy, kOrange, QStringLiteral("—"), QString()));
+        r1->addWidget(metric_card(tr("CASH & EQUIV."), bal_cash_val_, dummy, kCyan, QStringLiteral("—"), QString()));
         svl->addLayout(r1);
         vl->addWidget(sec);
     }
@@ -383,9 +383,9 @@ QWidget* EquityFinancialsTab::build_balance_view() {
                                   "background:transparent; border:0;")
                               .arg(kCyan));
         lvl->addWidget(lt);
-        bal_current_ratio_ = ratio_row(liq, tr("Current Ratio"),   kCyan);
-        bal_quick_ratio_   = ratio_row(liq, tr("Quick Ratio"),     kCyan);
-        bal_working_cap_   = ratio_row(liq, tr("Working Capital"), kGreen);
+        bal_current_ratio_ = ratio_row(liq, tr("Current Ratio"), kCyan);
+        bal_quick_ratio_ = ratio_row(liq, tr("Quick Ratio"), kCyan);
+        bal_working_cap_ = ratio_row(liq, tr("Working Capital"), kGreen);
         lvl->addStretch();
         hl->addWidget(liq, 1);
 
@@ -400,8 +400,8 @@ QWidget* EquityFinancialsTab::build_balance_view() {
                                   "background:transparent; border:0;")
                               .arg(kOrange));
         evl->addWidget(et);
-        bal_debt_equity_  = ratio_row(lev, tr("Debt / Equity"),     kOrange);
-        bal_debt_assets_  = ratio_row(lev, tr("Debt / Assets"),     kOrange);
+        bal_debt_equity_ = ratio_row(lev, tr("Debt / Equity"), kOrange);
+        bal_debt_assets_ = ratio_row(lev, tr("Debt / Assets"), kOrange);
         bal_int_coverage_ = ratio_row(lev, tr("Interest Coverage"), kYellow);
         evl->addStretch();
         hl->addWidget(lev, 1);
@@ -444,20 +444,22 @@ QWidget* EquityFinancialsTab::build_cashflow_view() {
         auto* r1 = new QHBoxLayout;
         r1->setSpacing(8);
         QLabel* dummy1 = nullptr;
-        r1->addWidget(metric_card(tr("OPERATING CF"),   cf_operating_val_, dummy1,     kGreen));
-        r1->addWidget(metric_card(tr("INVESTING CF"),   cf_investing_val_, dummy1,     kOrange));
-        r1->addWidget(metric_card(tr("FINANCING CF"),   cf_financing_val_, dummy1,     kPurple));
-        r1->addWidget(metric_card(tr("FREE CASH FLOW"), cf_fcf_val_,       cf_fcf_sub_, kCyan));
+        r1->addWidget(metric_card(tr("OPERATING CF"), cf_operating_val_, dummy1, kGreen));
+        r1->addWidget(metric_card(tr("INVESTING CF"), cf_investing_val_, dummy1, kOrange));
+        r1->addWidget(metric_card(tr("FINANCING CF"), cf_financing_val_, dummy1, kPurple));
+        r1->addWidget(metric_card(tr("FREE CASH FLOW"), cf_fcf_val_, cf_fcf_sub_, kCyan));
         svl->addLayout(r1);
 
         auto* r2 = new QHBoxLayout;
         r2->setSpacing(8);
         QLabel* dummy = nullptr;
-        r2->addWidget(metric_card(tr("CAPEX"),          cf_capex_val_,     dummy, kRed,    QStringLiteral("—"), QString()));
-        r2->addWidget(metric_card(tr("DIVIDENDS PAID"), cf_dividends_val_, dummy, kYellow, QStringLiteral("—"), QString()));
-        r2->addWidget(metric_card(tr("STOCK BUYBACKS"), cf_buybacks_val_,  dummy, kBlue,   QStringLiteral("—"), QString()));
-        r2->addWidget(metric_card(tr("FCF MARGIN"),     cf_fcf_margin_,    dummy, kCyan,   QStringLiteral("—"), QString()));
-        r2->addWidget(metric_card(tr("CAPEX/REVENUE"),  cf_capex_rev_,     dummy, kOrange, QStringLiteral("—"), QString()));
+        r2->addWidget(metric_card(tr("CAPEX"), cf_capex_val_, dummy, kRed, QStringLiteral("—"), QString()));
+        r2->addWidget(
+            metric_card(tr("DIVIDENDS PAID"), cf_dividends_val_, dummy, kYellow, QStringLiteral("—"), QString()));
+        r2->addWidget(
+            metric_card(tr("STOCK BUYBACKS"), cf_buybacks_val_, dummy, kBlue, QStringLiteral("—"), QString()));
+        r2->addWidget(metric_card(tr("FCF MARGIN"), cf_fcf_margin_, dummy, kCyan, QStringLiteral("—"), QString()));
+        r2->addWidget(metric_card(tr("CAPEX/REVENUE"), cf_capex_rev_, dummy, kOrange, QStringLiteral("—"), QString()));
         svl->addLayout(r2);
         vl->addWidget(sec);
     }

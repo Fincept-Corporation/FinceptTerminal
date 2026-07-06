@@ -19,8 +19,8 @@
 #if defined(Q_OS_WIN)
 // windows.h must come first — psapi.h depends on its types (BOOL, WINAPI, …)
 // and including psapi.h alone yields C2146 / C2086 cascades.
-#    include <windows.h>
 #    include <psapi.h>
+#    include <windows.h>
 #elif defined(Q_OS_MAC)
 #    include <mach/mach.h>
 #elif defined(Q_OS_LINUX)
@@ -173,7 +173,7 @@ void DashboardStatusBar::refresh_theme() {
                           "#dsMem { color:%7; background:transparent; }"
                           "#dsLatency { color:%4; font-weight:bold; background:transparent; }"
                           "#dsReady { color:%5; font-weight:bold; background:transparent; }")
-                      .arg(ui::colors::BG_BASE())         // %1 — match global status bar
+                      .arg(ui::colors::BG_BASE())        // %1 — match global status bar
                       .arg(ui::colors::BORDER_DIM())     // %2
                       .arg(ui::colors::BORDER_MED())     // %3
                       .arg(ui::colors::TEXT_SECONDARY()) // %4
@@ -234,15 +234,14 @@ void DashboardStatusBar::update_memory() {
     double rss_mb = -1.0;
 #if defined(Q_OS_WIN)
     PROCESS_MEMORY_COUNTERS_EX pmc{};
-    if (GetProcessMemoryInfo(GetCurrentProcess(),
-                             reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc), sizeof(pmc))) {
+    if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc), sizeof(pmc))) {
         rss_mb = static_cast<double>(pmc.WorkingSetSize) / (1024.0 * 1024.0);
     }
 #elif defined(Q_OS_MAC)
     mach_task_basic_info_data_t info{};
     mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
-    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
-                  reinterpret_cast<task_info_t>(&info), &count) == KERN_SUCCESS) {
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) ==
+        KERN_SUCCESS) {
         rss_mb = static_cast<double>(info.resident_size) / (1024.0 * 1024.0);
     }
 #elif defined(Q_OS_LINUX)
@@ -260,7 +259,7 @@ void DashboardStatusBar::update_memory() {
         return;
     }
     // Colour: green < 512 MB, amber < 1024 MB, red beyond.
-    const QString color = rss_mb < 512.0 ? ui::colors::POSITIVE()
+    const QString color = rss_mb < 512.0    ? ui::colors::POSITIVE()
                           : rss_mb < 1024.0 ? ui::colors::AMBER()
                                             : ui::colors::NEGATIVE();
     mem_label_->setText(tr("MEM: %1 MB").arg(rss_mb, 0, 'f', 0));
@@ -298,16 +297,25 @@ void DashboardStatusBar::changeEvent(QEvent* event) {
 }
 
 void DashboardStatusBar::retranslateUi() {
-    if (session_lbl_)         session_lbl_->setText(tr("SESSION:"));
-    if (layout_caption_lbl_)  layout_caption_lbl_->setText(tr("LAYOUT:"));
-    if (feeds_caption_lbl_)   feeds_caption_lbl_->setText(tr("FEEDS:"));
-    if (ready_lbl_)           ready_lbl_->setText(QString::fromUtf8("● ") + tr("READY"));
-    if (layout_label_)        layout_label_->setText(layout_count_ > 0 ? tr("ACTIVE") : tr("EMPTY"));
-    if (feeds_label_)         feeds_label_->setText(feeds_connected_ ? tr("CONNECTED") : tr("DISCONNECTED"));
+    if (session_lbl_)
+        session_lbl_->setText(tr("SESSION:"));
+    if (layout_caption_lbl_)
+        layout_caption_lbl_->setText(tr("LAYOUT:"));
+    if (feeds_caption_lbl_)
+        feeds_caption_lbl_->setText(tr("FEEDS:"));
+    if (ready_lbl_)
+        ready_lbl_->setText(QString::fromUtf8("● ") + tr("READY"));
+    if (layout_label_)
+        layout_label_->setText(layout_count_ > 0 ? tr("ACTIVE") : tr("EMPTY"));
+    if (feeds_label_)
+        feeds_label_->setText(feeds_connected_ ? tr("CONNECTED") : tr("DISCONNECTED"));
     if (latency_label_) {
-        if (last_latency_ms_ == -2)      latency_label_->setText(tr("LAT: ---"));
-        else if (last_latency_ms_ < 0)   latency_label_->setText(tr("LAT: ERR"));
-        else                              latency_label_->setText(tr("LAT: %1ms").arg(last_latency_ms_));
+        if (last_latency_ms_ == -2)
+            latency_label_->setText(tr("LAT: ---"));
+        else if (last_latency_ms_ < 0)
+            latency_label_->setText(tr("LAT: ERR"));
+        else
+            latency_label_->setText(tr("LAT: %1ms").arg(last_latency_ms_));
     }
     // mem_label_ refreshes on its own timer; immediate re-tick keeps the label fresh.
     update_memory();

@@ -30,7 +30,6 @@
 #include <cmath>
 #include <numeric>
 
-
 namespace fincept::services {
 
 PortfolioService& PortfolioService::instance() {
@@ -108,16 +107,13 @@ void PortfolioService::delete_portfolio(const QString& id) {
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 
-
 void PortfolioService::add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
-                                 const QString& date,
-                                 const QString& broker_symbol, const QString& exchange) {
+                                 const QString& date, const QString& broker_symbol, const QString& exchange) {
     auto& repo = PortfolioRepository::instance();
 
     // Sector left empty here — SectorResolver fills it asynchronously after
     // the asset lands in the DB. Broker fields pass through verbatim.
-    auto r = repo.add_asset(portfolio_id, symbol, qty, price, date, /*sector=*/QString(),
-                            broker_symbol, exchange);
+    auto r = repo.add_asset(portfolio_id, symbol, qty, price, date, /*sector=*/QString(), broker_symbol, exchange);
     if (r.is_err()) {
         LOG_ERROR("PortfolioSvc", "Failed to add asset: " + QString::fromStdString(r.error()));
         return;
@@ -213,7 +209,6 @@ void PortfolioService::record_dividend(const QString& portfolio_id, const QStrin
 }
 
 // ── Historical correlation ────────────────────────────────────────────────────
-
 
 void PortfolioService::invalidate_cache(const QString& portfolio_id) {
     QMutexLocker lock(&cache_mutex_);

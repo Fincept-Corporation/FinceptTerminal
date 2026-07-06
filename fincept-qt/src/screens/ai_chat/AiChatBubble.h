@@ -60,40 +60,40 @@ class AiChatBubble : public QWidget {
     enum class Status { Idle, Listening, Thinking, Speaking, Error };
 
     // ── UI panels ────────────────────────────────────────────────────────────
-    QWidget*     bubble_btn_  = nullptr;
-    QWidget*     chat_panel_  = nullptr;
-    QLabel*      unread_badge_ = nullptr;
+    QWidget* bubble_btn_ = nullptr;
+    QWidget* chat_panel_ = nullptr;
+    QLabel* unread_badge_ = nullptr;
 
     // Panel internals
-    QScrollArea*    scroll_area_      = nullptr;
-    QWidget*        msg_container_    = nullptr;
-    QVBoxLayout*    msg_layout_       = nullptr;
-    QWidget*        welcome_widget_   = nullptr;   // shown when chat is empty
-    QLabel*         welcome_heading_  = nullptr;   // cached for retranslateUi
-    QLabel*         welcome_sub_      = nullptr;
-    QLabel*         hdr_title_lbl_    = nullptr;   // "Quick Chat"
-    QLabel*         hdr_subtitle_lbl_ = nullptr;   // "Not saved · separate from AI Chat tab"
-    QPlainTextEdit* input_box_        = nullptr;
-    QPushButton*    send_btn_         = nullptr;
-    QPushButton*    mic_btn_          = nullptr;
-    QPushButton*    voice_mode_btn_   = nullptr;
-    QPushButton*    new_btn_          = nullptr;
-    QPushButton*    close_btn_        = nullptr;
+    QScrollArea* scroll_area_ = nullptr;
+    QWidget* msg_container_ = nullptr;
+    QVBoxLayout* msg_layout_ = nullptr;
+    QWidget* welcome_widget_ = nullptr; // shown when chat is empty
+    QLabel* welcome_heading_ = nullptr; // cached for retranslateUi
+    QLabel* welcome_sub_ = nullptr;
+    QLabel* hdr_title_lbl_ = nullptr;    // "Quick Chat"
+    QLabel* hdr_subtitle_lbl_ = nullptr; // "Not saved · separate from AI Chat tab"
+    QPlainTextEdit* input_box_ = nullptr;
+    QPushButton* send_btn_ = nullptr;
+    QPushButton* mic_btn_ = nullptr;
+    QPushButton* voice_mode_btn_ = nullptr;
+    QPushButton* new_btn_ = nullptr;
+    QPushButton* close_btn_ = nullptr;
 
     // Unified status strip — replaces the old typing_row + voice_status_bar.
-    QWidget*        status_strip_     = nullptr;
-    QLabel*         status_dot_       = nullptr;
-    QLabel*         status_lbl_       = nullptr;
-    QPushButton*    stop_speech_btn_  = nullptr;
+    QWidget* status_strip_ = nullptr;
+    QLabel* status_dot_ = nullptr;
+    QLabel* status_lbl_ = nullptr;
+    QPushButton* stop_speech_btn_ = nullptr;
 
     // ── State ────────────────────────────────────────────────────────────────
-    bool is_open_      = false;
-    bool voice_mode_   = false;
+    bool is_open_ = false;
+    bool voice_mode_ = false;
     bool is_listening_ = false;
-    bool is_speaking_  = false;
-    bool streaming_    = false;
+    bool is_speaking_ = false;
+    bool streaming_ = false;
     QString error_msg_;
-    int unread_count_  = 0;
+    int unread_count_ = 0;
 
     /// In-memory only — never written to ChatRepository. The whole point of
     /// the bubble is to stay separate from the AI Chat tab.
@@ -127,7 +127,7 @@ class AiChatBubble : public QWidget {
     void stop_tts();
 
     // ── Status / mic visuals ─────────────────────────────────────────────────
-    void render_status();                  // derive Status from flags + paint
+    void render_status(); // derive Status from flags + paint
     void set_mic_listening_visual(bool on);
 };
 

@@ -17,20 +17,20 @@ namespace fincept::ui::algo {
 /// `(A AND B) OR C`. Serializes to `{type:"group", logic, children:[...]}`.
 class GroupBlock : public QFrame {
     Q_OBJECT
-public:
+  public:
     explicit GroupBlock(bool is_entry, QWidget* parent = nullptr);
 
     QJsonObject to_json() const;
     void from_json(const QJsonObject& obj);
 
-signals:
+  signals:
     void remove_requested();
     void changed();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     void build_ui();
     void add_condition();
     void add_group();

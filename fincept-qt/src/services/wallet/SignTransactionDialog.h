@@ -43,9 +43,7 @@ class SignTransactionDialog : public QDialog {
     /// `title`:     dialog window title, e.g. "Sign swap" / "Sign burn".
     /// `lede`:      one-liner shown above the status message, e.g.
     ///              "Sign the swap in Phantom to complete the trade."
-    SignTransactionDialog(const QString& tx_base64,
-                          const QString& title,
-                          const QString& lede,
+    SignTransactionDialog(const QString& tx_base64, const QString& title, const QString& lede,
                           QWidget* parent = nullptr);
     ~SignTransactionDialog() override;
 

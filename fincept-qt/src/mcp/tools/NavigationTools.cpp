@@ -78,10 +78,10 @@ std::vector<ToolDef> get_navigation_tools() {
                         "DockScreenRouter, not hardcoded.";
         t.category = "navigation";
         t.input_schema = ToolSchemaBuilder()
-            .string("tab", "Screen id to navigate to (use list_tabs to discover live ids)")
-                .required()
-                .length(1, 64)
-            .build();
+                             .string("tab", "Screen id to navigate to (use list_tabs to discover live ids)")
+                             .required()
+                             .length(1, 64)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString tab = args["tab"].toString().trimmed();
             if (tab.isEmpty())
@@ -98,17 +98,26 @@ std::vector<ToolDef> get_navigation_tools() {
             // because we go off the live registry, no display-name aliases.
             QString resolved;
             for (const auto& id : snap.ids) {
-                if (id == tab) { resolved = id; break; }
+                if (id == tab) {
+                    resolved = id;
+                    break;
+                }
             }
             if (resolved.isEmpty()) {
                 for (const auto& id : snap.ids) {
-                    if (id.compare(tab, Qt::CaseInsensitive) == 0) { resolved = id; break; }
+                    if (id.compare(tab, Qt::CaseInsensitive) == 0) {
+                        resolved = id;
+                        break;
+                    }
                 }
             }
             if (resolved.isEmpty()) {
                 const QString tab_lower = tab.toLower();
                 for (const auto& id : snap.ids) {
-                    if (id.toLower().contains(tab_lower)) { resolved = id; break; }
+                    if (id.toLower().contains(tab_lower)) {
+                        resolved = id;
+                        break;
+                    }
                 }
             }
 
@@ -142,12 +151,10 @@ std::vector<ToolDef> get_navigation_tools() {
             QJsonArray tabs;
             // title_for_id is a thread-safe static lookup (string→string map).
             for (const auto& id : snap.ids) {
-                tabs.append(QJsonObject{{"id", id},
-                                        {"title", fincept::DockScreenRouter::title_for_id(id)}});
+                tabs.append(QJsonObject{{"id", id}, {"title", fincept::DockScreenRouter::title_for_id(id)}});
             }
-            return ToolResult::ok_data(QJsonObject{{"count", tabs.size()},
-                                                   {"current", snap.current_id},
-                                                   {"tabs", tabs}});
+            return ToolResult::ok_data(
+                QJsonObject{{"count", tabs.size()}, {"current", snap.current_id}, {"tabs", tabs}});
         };
         tools.push_back(std::move(t));
     }
@@ -165,8 +172,7 @@ std::vector<ToolDef> get_navigation_tools() {
                 return ToolResult::fail("No active screen — terminal may not be ready yet");
 
             return ToolResult::ok_data(QJsonObject{
-                {"id", snap.current_id},
-                {"title", fincept::DockScreenRouter::title_for_id(snap.current_id)}});
+                {"id", snap.current_id}, {"title", fincept::DockScreenRouter::title_for_id(snap.current_id)}});
         };
         tools.push_back(std::move(t));
     }

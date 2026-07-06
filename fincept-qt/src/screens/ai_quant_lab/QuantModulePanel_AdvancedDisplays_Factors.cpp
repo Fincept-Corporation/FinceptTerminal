@@ -11,7 +11,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "ui/theme/Theme.h"
 
 #include <QAbstractItemView>
@@ -85,10 +84,9 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
             gs_make_card(tr("IC STD"), QString::number(ic_std, 'f', 4), this),
             gs_make_card(tr("ICIR"), QString::number(icir, 'f', 3), this,
                          icir >= 0.5 ? ui::colors::POSITIVE()
-                                     : icir > 0 ? ui::colors::WARNING()
-                                                : ui::colors::NEGATIVE()),
-            gs_make_card(tr("POS RATE"),
-                         QString::number(ic_pos * 100, 'f', 1) + "%", this,
+                         : icir > 0  ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
+            gs_make_card(tr("POS RATE"), QString::number(ic_pos * 100, 'f', 1) + "%", this,
                          ic_pos > 0.55 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
@@ -137,8 +135,8 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
             }
             results_layout_->addWidget(table);
         }
-        status_label_->setText(tr("IC=%1 ICIR=%2 p=%3")
-                                   .arg(ic_mean, 0, 'f', 4).arg(icir, 0, 'f', 3).arg(pval, 0, 'f', 4));
+        status_label_->setText(
+            tr("IC=%1 ICIR=%2 p=%3").arg(ic_mean, 0, 'f', 4).arg(icir, 0, 'f', 3).arg(pval, 0, 'f', 4));
         return;
     }
 
@@ -152,12 +150,11 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
         QList<QWidget*> top = {
             gs_make_card(tr("L/S SHARPE"), QString::number(ls_sharpe, 'f', 3), this,
                          ls_sharpe >= 1.0 ? ui::colors::POSITIVE()
-                                          : ls_sharpe > 0 ? ui::colors::WARNING()
-                                                           : ui::colors::NEGATIVE()),
+                         : ls_sharpe > 0  ? ui::colors::WARNING()
+                                          : ui::colors::NEGATIVE()),
             gs_make_card(tr("L/S MEAN RET"), fmt_pct_safe(QJsonValue(ls_ret), 4), this, gs_pos_neg_color(ls_ret)),
             gs_make_card(tr("SPREAD"), fmt_pct_safe(QJsonValue(spread), 4), this, gs_pos_neg_color(spread)),
-            gs_make_card(tr("MONOTONICITY"),
-                         QString::number(mono * 100, 'f', 1) + "%", this,
+            gs_make_card(tr("MONOTONICITY"), QString::number(mono * 100, 'f', 1) + "%", this,
                          mono >= 0.7 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
@@ -167,11 +164,11 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
             QList<QPair<QString, QJsonObject>> rows;
             for (auto it = qs.begin(); it != qs.end(); ++it)
                 rows.append({it.key(), it.value().toObject()});
-            std::sort(rows.begin(), rows.end(),
-                      [](const auto& a, const auto& b) { return a.first < b.first; });
+            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
             auto* table = new QTableWidget(rows.size(), 5, this);
-            table->setHorizontalHeaderLabels({tr("Quantile"), tr("Mean Return"), tr("Std"), tr("Sharpe"), tr("Win Rate")});
+            table->setHorizontalHeaderLabels(
+                {tr("Quantile"), tr("Mean Return"), tr("Std"), tr("Sharpe"), tr("Win Rate")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -200,8 +197,7 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
             }
             results_layout_->addWidget(table);
         }
-        status_label_->setText(tr("L/S Sharpe=%1  spread=%2%")
-                                   .arg(ls_sharpe, 0, 'f', 3).arg(spread * 100, 0, 'f', 4));
+        status_label_->setText(tr("L/S Sharpe=%1  spread=%2%").arg(ls_sharpe, 0, 'f', 3).arg(spread * 100, 0, 'f', 4));
         return;
     }
 
@@ -227,25 +223,24 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
                          ui::colors::WARNING()),
             gs_make_card(tr("VaR 95%"), fmt_pct_safe(payload.value("var_95")), this, ui::colors::WARNING()),
             gs_make_card(tr("CVaR 95%"), fmt_pct_safe(payload.value("cvar_95")), this, ui::colors::NEGATIVE()),
-            gs_make_card(tr("DD DURATION"),
-                         tr("%1 days").arg(payload.value("max_drawdown_duration").toInt()), this),
+            gs_make_card(tr("DD DURATION"), tr("%1 days").arg(payload.value("max_drawdown_duration").toInt()), this),
         };
         results_layout_->addWidget(gs_card_row(tail, this));
 
         QList<QWidget*> capture = {
-            gs_make_card(tr("UP CAPTURE"),
-                         QString::number(payload.value("up_capture").toDouble() * 100, 'f', 1) + "%", this,
+            gs_make_card(tr("UP CAPTURE"), QString::number(payload.value("up_capture").toDouble() * 100, 'f', 1) + "%",
+                         this,
                          payload.value("up_capture").toDouble() > 1.0 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-            gs_make_card(tr("DOWN CAPTURE"),
-                         QString::number(payload.value("down_capture").toDouble() * 100, 'f', 1) + "%", this,
-                         payload.value("down_capture").toDouble() < 1.0 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+            gs_make_card(
+                tr("DOWN CAPTURE"), QString::number(payload.value("down_capture").toDouble() * 100, 'f', 1) + "%", this,
+                payload.value("down_capture").toDouble() < 1.0 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("SKEWNESS"), QString::number(payload.value("skewness").toDouble(), 'f', 3), this,
                          gs_pos_neg_color(payload.value("skewness").toDouble())),
             gs_make_card(tr("KURTOSIS"), QString::number(payload.value("kurtosis").toDouble(), 'f', 3), this),
         };
         results_layout_->addWidget(gs_card_row(capture, this));
-        status_label_->setText(tr("Vol=%1%  MaxDD=%2%  β=%3")
-                                   .arg(vol * 100, 0, 'f', 2).arg(mdd * 100, 0, 'f', 2).arg(beta, 0, 'f', 3));
+        status_label_->setText(
+            tr("Vol=%1%  MaxDD=%2%  β=%3").arg(vol * 100, 0, 'f', 2).arg(mdd * 100, 0, 'f', 2).arg(beta, 0, 'f', 3));
         return;
     }
 
@@ -261,12 +256,12 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
         QList<QWidget*> top = {
             gs_make_card(tr("FACTOR"), rep.value("factor_name").toString(), this),
             gs_make_card(tr("OVERALL SCORE"), QString::number(score, 'f', 1) + tr(" / 100"), this,
-                         score >= 70 ? ui::colors::POSITIVE()
-                                     : score >= 40 ? ui::colors::WARNING()
-                                                   : ui::colors::NEGATIVE()),
+                         score >= 70   ? ui::colors::POSITIVE()
+                         : score >= 40 ? ui::colors::WARNING()
+                                       : ui::colors::NEGATIVE()),
             gs_make_card(tr("RATING"), rating.toUpper(), this, verdict_color_for(rating)),
-            gs_make_card(tr("PERIODS"),
-                         QString::number(rep.value("data_range").toObject().value("periods").toInt()), this),
+            gs_make_card(tr("PERIODS"), QString::number(rep.value("data_range").toObject().value("periods").toInt()),
+                         this),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
@@ -276,8 +271,8 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
                          gs_pos_neg_color(ic.value("IC_mean").toDouble())),
             gs_make_card(tr("ICIR"), QString::number(ic.value("ICIR").toDouble(), 'f', 3), this,
                          ic.value("ICIR").toDouble() >= 0.5 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-            gs_make_card(tr("POS RATE"),
-                         QString::number(ic.value("IC_positive_rate").toDouble() * 100, 'f', 1) + "%", this),
+            gs_make_card(tr("POS RATE"), QString::number(ic.value("IC_positive_rate").toDouble() * 100, 'f', 1) + "%",
+                         this),
             gs_make_card(tr("p-VALUE"), QString::number(ic.value("p_value").toDouble(), 'f', 4), this,
                          ic.value("p_value").toDouble() < 0.05 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
@@ -286,14 +281,14 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
         results_layout_->addWidget(gs_section_header(tr("QUANTILE ANALYSIS"), accent));
         QList<QWidget*> qa_cards = {
             gs_make_card(tr("L/S SHARPE"), QString::number(qa.value("long_short_sharpe").toDouble(), 'f', 3), this,
-                         qa.value("long_short_sharpe").toDouble() >= 1.0 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+                         qa.value("long_short_sharpe").toDouble() >= 1.0 ? ui::colors::POSITIVE()
+                                                                         : ui::colors::WARNING()),
             gs_make_card(tr("SPREAD"), fmt_pct_safe(qa.value("spread"), 4), this,
                          gs_pos_neg_color(qa.value("spread").toDouble())),
-            gs_make_card(tr("MONOTONICITY"),
-                         QString::number(qa.value("monotonicity").toDouble() * 100, 'f', 1) + "%", this,
+            gs_make_card(tr("MONOTONICITY"), QString::number(qa.value("monotonicity").toDouble() * 100, 'f', 1) + "%",
+                         this,
                          qa.value("monotonicity").toDouble() >= 0.7 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-            gs_make_card(tr("L/S MEAN RET"),
-                         fmt_pct_safe(qa.value("long_short_mean_return"), 4), this,
+            gs_make_card(tr("L/S MEAN RET"), fmt_pct_safe(qa.value("long_short_mean_return"), 4), this,
                          gs_pos_neg_color(qa.value("long_short_mean_return").toDouble())),
         };
         results_layout_->addWidget(gs_card_row(qa_cards, this));
@@ -308,9 +303,8 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
             };
             results_layout_->addWidget(gs_card_row(tu_cards, this));
         }
-        status_label_->setText(tr("%1: %2/100 (%3)")
-                                   .arg(rep.value("factor_name").toString())
-                                   .arg(score, 0, 'f', 1).arg(rating));
+        status_label_->setText(
+            tr("%1: %2/100 (%3)").arg(rep.value("factor_name").toString()).arg(score, 0, 'f', 1).arg(rating));
         return;
     }
 
@@ -335,7 +329,8 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
         QList<QWidget*> top = {
             gs_make_card(tr("QLIB"), payload.value("qlib_available").toBool() ? tr("AVAILABLE") : tr("MISSING"), this,
                          payload.value("qlib_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("PANDAS"), payload.value("pandas_available").toBool() ? tr("AVAILABLE") : tr("MISSING"), this,
+            gs_make_card(tr("PANDAS"), payload.value("pandas_available").toBool() ? tr("AVAILABLE") : tr("MISSING"),
+                         this,
                          payload.value("pandas_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
             gs_make_card(tr("NUMPY"), payload.value("numpy_available").toBool() ? tr("AVAILABLE") : tr("MISSING"), this,
                          payload.value("numpy_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
@@ -358,7 +353,9 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
             gs_make_card(tr("ANN. RETURN"), fmt_pct_safe(QJsonValue(ann)), this, gs_pos_neg_color(ann)),
             gs_make_card(tr("VOLATILITY"), fmt_pct_safe(payload.value("volatility")), this),
             gs_make_card(tr("SHARPE"), QString::number(sh, 'f', 3), this,
-                         sh >= 1.0 ? ui::colors::POSITIVE() : sh > 0 ? ui::colors::WARNING() : ui::colors::NEGATIVE()),
+                         sh >= 1.0 ? ui::colors::POSITIVE()
+                         : sh > 0  ? ui::colors::WARNING()
+                                   : ui::colors::NEGATIVE()),
             gs_make_card(tr("MAX DD"), fmt_pct_safe(QJsonValue(mdd)), this,
                          mdd <= -0.20 ? ui::colors::NEGATIVE() : ui::colors::WARNING()),
         };
@@ -366,18 +363,20 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
 
         QList<QWidget*> ratios = {
             gs_make_card(tr("SORTINO"), QString::number(payload.value("sortino_ratio").toDouble(), 'f', 3), this,
-                         payload.value("sortino_ratio").toDouble() >= 1.0 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+                         payload.value("sortino_ratio").toDouble() >= 1.0 ? ui::colors::POSITIVE()
+                                                                          : ui::colors::WARNING()),
             gs_make_card(tr("CALMAR"), QString::number(cal, 'f', 3), this,
                          cal >= 0.5 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("INFO RATIO"), QString::number(payload.value("information_ratio").toDouble(), 'f', 3), this,
-                         payload.value("information_ratio").toDouble() > 0.5 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+                         payload.value("information_ratio").toDouble() > 0.5 ? ui::colors::POSITIVE()
+                                                                             : ui::colors::WARNING()),
             gs_make_card(tr("BETA"), QString::number(payload.value("beta").toDouble(), 'f', 3), this),
         };
         results_layout_->addWidget(gs_card_row(ratios, this));
 
         QList<QWidget*> day = {
-            gs_make_card(tr("WIN RATE"),
-                         QString::number(payload.value("win_rate").toDouble() * 100, 'f', 1) + "%", this,
+            gs_make_card(tr("WIN RATE"), QString::number(payload.value("win_rate").toDouble() * 100, 'f', 1) + "%",
+                         this,
                          payload.value("win_rate").toDouble() > 0.55 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("BEST DAY"), fmt_pct_safe(payload.value("best_day"), 3), this, ui::colors::POSITIVE()),
             gs_make_card(tr("WORST DAY"), fmt_pct_safe(payload.value("worst_day"), 3), this, ui::colors::NEGATIVE()),
@@ -386,7 +385,9 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
         };
         results_layout_->addWidget(gs_card_row(day, this));
         status_label_->setText(tr("Annual %1%  Sharpe %2  MaxDD %3%")
-                                   .arg(ann * 100, 0, 'f', 2).arg(sh, 0, 'f', 3).arg(mdd * 100, 0, 'f', 2));
+                                   .arg(ann * 100, 0, 'f', 2)
+                                   .arg(sh, 0, 'f', 3)
+                                   .arg(mdd * 100, 0, 'f', 2));
         return;
     }
 
@@ -407,12 +408,10 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
                 gs_make_card(tr("EXP. RETURN"), fmt_pct_safe(payload.value("expected_return")), this,
                              gs_pos_neg_color(payload.value("expected_return").toDouble())),
                 gs_make_card(tr("EXP. VOL"), fmt_pct_safe(payload.value("expected_volatility")), this),
-                gs_make_card(tr("SHARPE"),
-                             QString::number(payload.value("sharpe_ratio").toDouble(), 'f', 3), this,
+                gs_make_card(tr("SHARPE"), QString::number(payload.value("sharpe_ratio").toDouble(), 'f', 3), this,
                              payload.value("sharpe_ratio").toDouble() >= 1.0 ? ui::colors::POSITIVE()
-                                                                              : ui::colors::WARNING()),
-                gs_make_card(tr("RISK-FREE"),
-                             fmt_pct_safe(payload.value("risk_free_rate")), this, ui::colors::INFO()),
+                                                                             : ui::colors::WARNING()),
+                gs_make_card(tr("RISK-FREE"), fmt_pct_safe(payload.value("risk_free_rate")), this, ui::colors::INFO()),
             };
             results_layout_->addWidget(gs_card_row(mv, this));
         } else if (payload.contains("target_risk")) {
@@ -457,17 +456,21 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
         if (payload.contains("expected_tracking_error") || payload.contains("expected_alpha")) {
             QList<QWidget*> ei = {
                 gs_make_card(tr("TRACKING ERROR"), payload.value("expected_tracking_error").toString(), this),
-                gs_make_card(tr("ALPHA TARGET"), payload.value("expected_alpha").toString(), this, ui::colors::POSITIVE()),
-                gs_make_card(tr("BENCHMARK"),
-                             payload.value("config").toObject().value("benchmark").toString(), this, ui::colors::INFO()),
-                gs_make_card(tr("ACTIVE SHARE"),
-                             QString::number(payload.value("config").toObject().value("active_share").toDouble() * 100, 'f', 1) + "%",
-                             this),
+                gs_make_card(tr("ALPHA TARGET"), payload.value("expected_alpha").toString(), this,
+                             ui::colors::POSITIVE()),
+                gs_make_card(tr("BENCHMARK"), payload.value("config").toObject().value("benchmark").toString(), this,
+                             ui::colors::INFO()),
+                gs_make_card(
+                    tr("ACTIVE SHARE"),
+                    QString::number(payload.value("config").toObject().value("active_share").toDouble() * 100, 'f', 1) +
+                        "%",
+                    this),
             };
             results_layout_->addWidget(gs_card_row(ei, this));
         } else if (payload.contains("expected_turnover")) {
             QList<QWidget*> tk = {
-                gs_make_card(tr("EXPECTED TURNOVER"), payload.value("expected_turnover").toString(), this, ui::colors::WARNING()),
+                gs_make_card(tr("EXPECTED TURNOVER"), payload.value("expected_turnover").toString(), this,
+                             ui::colors::WARNING()),
             };
             results_layout_->addWidget(gs_card_row(tk, this));
         }
@@ -478,18 +481,19 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
     if (!desc.isEmpty()) {
         auto* lbl = new QLabel(desc);
         lbl->setWordWrap(true);
-        lbl->setStyleSheet(QString("color:%1; font-size:11px; padding:8px 10px; background:%2; border-left:3px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
+        lbl->setStyleSheet(
+            QString("color:%1; font-size:11px; padding:8px 10px; background:%2; border-left:3px solid %3;")
+                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
         results_layout_->addWidget(lbl);
     }
     const auto sf = payload.value("suitable_for").toArray();
     if (!sf.isEmpty()) {
         QStringList sf_list;
-        for (const auto& v : sf) sf_list << "• " + v.toString();
+        for (const auto& v : sf)
+            sf_list << "• " + v.toString();
         auto* sf_lbl = new QLabel(tr("Suitable for:\n%1").arg(sf_list.join("\n")));
         sf_lbl->setWordWrap(true);
-        sf_lbl->setStyleSheet(QString("color:%1; font-size:10px; padding:6px 10px;")
-                                  .arg(ui::colors::TEXT_SECONDARY()));
+        sf_lbl->setStyleSheet(QString("color:%1; font-size:10px; padding:6px 10px;").arg(ui::colors::TEXT_SECONDARY()));
         results_layout_->addWidget(sf_lbl);
     }
 

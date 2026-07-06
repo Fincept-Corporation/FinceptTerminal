@@ -29,21 +29,16 @@ namespace fincept::events {
 struct NavSwitchScreen {
     QString screen_id;
     QVariantMap to_map() const { return {{"screen_id", screen_id}}; }
-    static NavSwitchScreen from_map(const QVariantMap& m) {
-        return {m.value(QStringLiteral("screen_id")).toString()};
-    }
+    static NavSwitchScreen from_map(const QVariantMap& m) { return {m.value(QStringLiteral("screen_id")).toString()}; }
     static constexpr const char* name() { return "nav.switch_screen"; }
 };
 
 struct EquityResearchLoadSymbol {
     QString symbol;
     QString exchange;
-    QVariantMap to_map() const {
-        return {{"symbol", symbol}, {"exchange", exchange}};
-    }
+    QVariantMap to_map() const { return {{"symbol", symbol}, {"exchange", exchange}}; }
     static EquityResearchLoadSymbol from_map(const QVariantMap& m) {
-        return {m.value(QStringLiteral("symbol")).toString(),
-                m.value(QStringLiteral("exchange")).toString()};
+        return {m.value(QStringLiteral("symbol")).toString(), m.value(QStringLiteral("exchange")).toString()};
     }
     static constexpr const char* name() { return "equity_research.load_symbol"; }
 };
@@ -64,9 +59,7 @@ inline void publish(const E& e) {
 template <typename E, typename Slot>
 inline EventBus::HandlerId on(QObject* owner, Slot slot) {
     auto& bus = EventBus::instance();
-    auto handler = [slot = std::forward<Slot>(slot)](const QVariantMap& m) {
-        slot(E::from_map(m));
-    };
+    auto handler = [slot = std::forward<Slot>(slot)](const QVariantMap& m) { slot(E::from_map(m)); };
     EventBus::HandlerId id = bus.subscribe(QString::fromUtf8(E::name()), std::move(handler));
     if (owner) {
         QObject::connect(owner, &QObject::destroyed, &bus, [id] { EventBus::instance().unsubscribe(id); });

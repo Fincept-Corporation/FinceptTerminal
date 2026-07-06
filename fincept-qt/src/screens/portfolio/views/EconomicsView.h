@@ -46,9 +46,9 @@ class EconomicsView : public QWidget {
     QLabel* macro_note_ = nullptr;
     QPushButton* macro_set_key_btn_ = nullptr; // shown when no FRED key configured
     QTableWidget* macro_table_ = nullptr;
-    QHash<QString, double> macro_values_;     // series_id -> latest value
-    QHash<QString, QString> macro_dates_;      // series_id -> as-of date
-    QString macro_status_;                     // "" ok, else error/hint
+    QHash<QString, double> macro_values_; // series_id -> latest value
+    QHash<QString, QString> macro_dates_; // series_id -> as-of date
+    QString macro_status_;                // "" ok, else error/hint
     bool macro_loading_ = false;
     bool macro_loaded_ = false;
 

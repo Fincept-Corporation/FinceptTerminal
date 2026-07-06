@@ -83,8 +83,10 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.description = "Get full config and current status for one installed external MCP server by id.";
         t.category = "mcp-servers";
         t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id (lowercase, underscore-separated)").required().length(1, 128)
-            .build();
+                             .string("id", "Server id (lowercase, underscore-separated)")
+                             .required()
+                             .length(1, 128)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString();
             for (const auto& s : McpManager::instance().get_servers()) {
@@ -103,9 +105,13 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.description = "Get captured stdout/stderr log lines for a running server (most recent first up to N).";
         t.category = "mcp-servers";
         t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id").required().length(1, 128)
-            .integer("limit", "Max lines to return").default_int(100).between(1, 500)
-            .build();
+                             .string("id", "Server id")
+                             .required()
+                             .length(1, 128)
+                             .integer("limit", "Max lines to return")
+                             .default_int(100)
+                             .between(1, 500)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString();
             const int limit = args["limit"].toInt(100);
@@ -147,9 +153,9 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.description = "List preset external MCP servers from the built-in marketplace catalog.";
         t.category = "mcp-servers";
         t.input_schema = ToolSchemaBuilder()
-            .string("category", "Filter by category (utilities, developer, database). Empty = all.")
-                .default_str("")
-            .build();
+                             .string("category", "Filter by category (utilities, developer, database). Empty = all.")
+                             .default_str("")
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString filter = args["category"].toString().toLower();
             QJsonArray arr;
@@ -180,15 +186,19 @@ std::vector<ToolDef> get_mcp_servers_tools() {
     {
         ToolDef t;
         t.name = "install_mcp_server_from_marketplace";
-        t.description = "Install a preset external MCP server by its marketplace name. Required env vars must be supplied.";
+        t.description =
+            "Install a preset external MCP server by its marketplace name. Required env vars must be supplied.";
         t.category = "mcp-servers";
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.input_schema = ToolSchemaBuilder()
-            .string("name", "Marketplace entry name (e.g. 'Fetch', 'PostgreSQL')").required().length(1, 64)
-            .object("env", "Environment variables {KEY: value} required by the entry")
-            .boolean("auto_start", "Auto-start this server on app launch").default_bool(false)
-            .build();
+                             .string("name", "Marketplace entry name (e.g. 'Fetch', 'PostgreSQL')")
+                             .required()
+                             .length(1, 64)
+                             .object("env", "Environment variables {KEY: value} required by the entry")
+                             .boolean("auto_start", "Auto-start this server on app launch")
+                             .default_bool(false)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString name = args["name"].toString().trimmed();
             const MarketplaceEntry* entry = nullptr;
@@ -237,15 +247,23 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.input_schema = ToolSchemaBuilder()
-            .string("name", "Display name").required().length(1, 64)
-            .string("command", "Executable command (e.g. 'uvx', 'npx', 'python')").required().length(1, 128)
-            .array("args", "Command arguments",
-                   QJsonObject{{"type", "string"}})
-            .object("env", "Environment variables {KEY: value}")
-            .string("description", "Optional description").default_str("").length(0, 512)
-            .string("category", "Category tag").default_str("utilities").length(0, 32)
-            .boolean("auto_start", "Auto-start on launch").default_bool(false)
-            .build();
+                             .string("name", "Display name")
+                             .required()
+                             .length(1, 64)
+                             .string("command", "Executable command (e.g. 'uvx', 'npx', 'python')")
+                             .required()
+                             .length(1, 128)
+                             .array("args", "Command arguments", QJsonObject{{"type", "string"}})
+                             .object("env", "Environment variables {KEY: value}")
+                             .string("description", "Optional description")
+                             .default_str("")
+                             .length(0, 512)
+                             .string("category", "Category tag")
+                             .default_str("utilities")
+                             .length(0, 32)
+                             .boolean("auto_start", "Auto-start on launch")
+                             .default_bool(false)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString name = args["name"].toString().trimmed();
             const QString command = args["command"].toString().trimmed();
@@ -283,9 +301,7 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.category = "mcp-servers";
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
-        t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id").required().length(1, 128)
-            .build();
+        t.input_schema = ToolSchemaBuilder().string("id", "Server id").required().length(1, 128).build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString();
             const auto r = McpManager::instance().remove_server(id);
@@ -305,9 +321,12 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.category = "mcp-servers";
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id").required().length(1, 128)
-            .boolean("enabled", "true to enable, false to disable").required()
-            .build();
+                             .string("id", "Server id")
+                             .required()
+                             .length(1, 128)
+                             .boolean("enabled", "true to enable, false to disable")
+                             .required()
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString();
             const bool enabled = args["enabled"].toBool();
@@ -322,7 +341,7 @@ std::vector<ToolDef> get_mcp_servers_tools() {
                 if (r.is_err())
                     return ToolResult::fail(QString::fromStdString(r.error()));
                 return ToolResult::ok(QString("Server %1").arg(enabled ? "enabled" : "disabled"),
-                                       QJsonObject{{"id", id}, {"enabled", enabled}});
+                                      QJsonObject{{"id", id}, {"enabled", enabled}});
             }
             return ToolResult::fail("Server not found: " + id);
         };
@@ -337,9 +356,12 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.category = "mcp-servers";
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id").required().length(1, 128)
-            .boolean("auto_start", "true to enable auto-start, false to disable").required()
-            .build();
+                             .string("id", "Server id")
+                             .required()
+                             .length(1, 128)
+                             .boolean("auto_start", "true to enable auto-start, false to disable")
+                             .required()
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString();
             const bool auto_start = args["auto_start"].toBool();
@@ -351,8 +373,7 @@ std::vector<ToolDef> get_mcp_servers_tools() {
                 const auto r = McpManager::instance().save_server(cfg);
                 if (r.is_err())
                     return ToolResult::fail(QString::fromStdString(r.error()));
-                return ToolResult::ok("Auto-start updated",
-                                       QJsonObject{{"id", id}, {"auto_start", auto_start}});
+                return ToolResult::ok("Auto-start updated", QJsonObject{{"id", id}, {"auto_start", auto_start}});
             }
             return ToolResult::fail("Server not found: " + id);
         };
@@ -370,19 +391,15 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = 60000;
-        t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id").required().length(1, 128)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().string("id", "Server id").required().length(1, 128).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString id = args["id"].toString();
             (void)QtConcurrent::run([id, promise, ctx]() {
                 if (ctx.cancelled())
                     return resolve_async(promise, ToolResult::fail("cancelled"));
                 const auto r = McpManager::instance().start_server(id);
-                resolve_async(promise,
-                              r.is_ok() ? ToolResult::ok("Server started", QJsonObject{{"id", id}})
-                                        : ToolResult::fail(QString::fromStdString(r.error())));
+                resolve_async(promise, r.is_ok() ? ToolResult::ok("Server started", QJsonObject{{"id", id}})
+                                                 : ToolResult::fail(QString::fromStdString(r.error())));
             });
         };
         tools.push_back(std::move(t));
@@ -396,19 +413,15 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.category = "mcp-servers";
         t.is_destructive = true;
         t.default_timeout_ms = 30000;
-        t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id").required().length(1, 128)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().string("id", "Server id").required().length(1, 128).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString id = args["id"].toString();
             (void)QtConcurrent::run([id, promise, ctx]() {
                 if (ctx.cancelled())
                     return resolve_async(promise, ToolResult::fail("cancelled"));
                 const auto r = McpManager::instance().stop_server(id);
-                resolve_async(promise,
-                              r.is_ok() ? ToolResult::ok("Server stopped", QJsonObject{{"id", id}})
-                                        : ToolResult::fail(QString::fromStdString(r.error())));
+                resolve_async(promise, r.is_ok() ? ToolResult::ok("Server stopped", QJsonObject{{"id", id}})
+                                                 : ToolResult::fail(QString::fromStdString(r.error())));
             });
         };
         tools.push_back(std::move(t));
@@ -423,19 +436,15 @@ std::vector<ToolDef> get_mcp_servers_tools() {
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = 60000;
-        t.input_schema = ToolSchemaBuilder()
-            .string("id", "Server id").required().length(1, 128)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().string("id", "Server id").required().length(1, 128).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString id = args["id"].toString();
             (void)QtConcurrent::run([id, promise, ctx]() {
                 if (ctx.cancelled())
                     return resolve_async(promise, ToolResult::fail("cancelled"));
                 const auto r = McpManager::instance().restart_server(id);
-                resolve_async(promise,
-                              r.is_ok() ? ToolResult::ok("Server restarted", QJsonObject{{"id", id}})
-                                        : ToolResult::fail(QString::fromStdString(r.error())));
+                resolve_async(promise, r.is_ok() ? ToolResult::ok("Server restarted", QJsonObject{{"id", id}})
+                                                 : ToolResult::fail(QString::fromStdString(r.error())));
             });
         };
         tools.push_back(std::move(t));
@@ -447,26 +456,29 @@ std::vector<ToolDef> get_mcp_servers_tools() {
     {
         ToolDef t;
         t.name = "call_external_mcp_tool";
-        t.description = "Invoke a tool exposed by a running external MCP server. Use list_external_mcp_tools to discover names.";
+        t.description =
+            "Invoke a tool exposed by a running external MCP server. Use list_external_mcp_tools to discover names.";
         t.category = "mcp-servers";
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = 60000;
         t.input_schema = ToolSchemaBuilder()
-            .string("server_id", "Server id from list_mcp_servers").required().length(1, 128)
-            .string("tool_name", "Tool name from list_external_mcp_tools").required().length(1, 128)
-            .object("args", "Tool arguments object (matches the external tool's input schema)")
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("server_id", "Server id from list_mcp_servers")
+                             .required()
+                             .length(1, 128)
+                             .string("tool_name", "Tool name from list_external_mcp_tools")
+                             .required()
+                             .length(1, 128)
+                             .object("args", "Tool arguments object (matches the external tool's input schema)")
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString server_id = args["server_id"].toString();
             const QString tool_name = args["tool_name"].toString();
             const QJsonObject inner_args = args["args"].toObject();
             (void)QtConcurrent::run([server_id, tool_name, inner_args, promise, ctx]() {
                 if (ctx.cancelled())
                     return resolve_async(promise, ToolResult::fail("cancelled"));
-                resolve_async(promise,
-                              McpService::instance().execute_tool(server_id, tool_name, inner_args));
+                resolve_async(promise, McpService::instance().execute_tool(server_id, tool_name, inner_args));
             });
         };
         tools.push_back(std::move(t));

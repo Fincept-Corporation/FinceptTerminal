@@ -13,8 +13,7 @@ namespace fincept::ui {
 class LayoutSaveAsDialog : public QDialog {
     Q_OBJECT
   public:
-    explicit LayoutSaveAsDialog(QWidget* parent = nullptr,
-                                const QString& initial_name = {});
+    explicit LayoutSaveAsDialog(QWidget* parent = nullptr, const QString& initial_name = {});
 
     /// Trimmed name. Valid only after exec() returns Accepted.
     QString name() const;

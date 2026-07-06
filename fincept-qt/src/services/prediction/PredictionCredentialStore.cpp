@@ -60,10 +60,12 @@ QString encode(const QJsonObject& obj) {
 }
 
 std::optional<QJsonObject> decode(const QString& s) {
-    if (s.isEmpty()) return std::nullopt;
+    if (s.isEmpty())
+        return std::nullopt;
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(s.toUtf8(), &err);
-    if (doc.isNull() || !doc.isObject()) return std::nullopt;
+    if (doc.isNull() || !doc.isObject())
+        return std::nullopt;
     return doc.object();
 }
 
@@ -73,22 +75,24 @@ std::optional<QJsonObject> decode(const QString& s) {
 
 std::optional<PolymarketCredentials> PredictionCredentialStore::load_polymarket() {
     auto r = fincept::SecureStorage::instance().retrieve(QString::fromLatin1(kPolymarketKey));
-    if (r.is_err()) return std::nullopt;
+    if (r.is_err())
+        return std::nullopt;
     auto obj = decode(r.value());
-    if (!obj) return std::nullopt;
+    if (!obj)
+        return std::nullopt;
     auto creds = from_json_polymarket(*obj);
-    if (!creds.is_valid()) return std::nullopt;
+    if (!creds.is_valid())
+        return std::nullopt;
     return creds;
 }
 
 bool PredictionCredentialStore::save_polymarket(const PolymarketCredentials& creds) {
-    if (!creds.is_valid()) return false;
-    auto r = fincept::SecureStorage::instance().store(QString::fromLatin1(kPolymarketKey),
-                                                      encode(to_json(creds)));
+    if (!creds.is_valid())
+        return false;
+    auto r = fincept::SecureStorage::instance().store(QString::fromLatin1(kPolymarketKey), encode(to_json(creds)));
     if (r.is_err()) {
         LOG_ERROR("PredictionCreds",
-                  QStringLiteral("SecureStorage.store(polymarket) failed: ") +
-                      QString::fromStdString(r.error()));
+                  QStringLiteral("SecureStorage.store(polymarket) failed: ") + QString::fromStdString(r.error()));
         return false;
     }
     return true;
@@ -103,22 +107,24 @@ bool PredictionCredentialStore::clear_polymarket() {
 
 std::optional<kalshi_ns::KalshiCredentials> PredictionCredentialStore::load_kalshi() {
     auto r = fincept::SecureStorage::instance().retrieve(QString::fromLatin1(kKalshiKey));
-    if (r.is_err()) return std::nullopt;
+    if (r.is_err())
+        return std::nullopt;
     auto obj = decode(r.value());
-    if (!obj) return std::nullopt;
+    if (!obj)
+        return std::nullopt;
     auto creds = from_json_kalshi(*obj);
-    if (!creds.is_valid()) return std::nullopt;
+    if (!creds.is_valid())
+        return std::nullopt;
     return creds;
 }
 
 bool PredictionCredentialStore::save_kalshi(const kalshi_ns::KalshiCredentials& creds) {
-    if (!creds.is_valid()) return false;
-    auto r = fincept::SecureStorage::instance().store(QString::fromLatin1(kKalshiKey),
-                                                      encode(to_json(creds)));
+    if (!creds.is_valid())
+        return false;
+    auto r = fincept::SecureStorage::instance().store(QString::fromLatin1(kKalshiKey), encode(to_json(creds)));
     if (r.is_err()) {
         LOG_ERROR("PredictionCreds",
-                  QStringLiteral("SecureStorage.store(kalshi) failed: ") +
-                      QString::fromStdString(r.error()));
+                  QStringLiteral("SecureStorage.store(kalshi) failed: ") + QString::fromStdString(r.error()));
         return false;
     }
     return true;

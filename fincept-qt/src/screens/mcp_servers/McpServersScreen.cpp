@@ -38,7 +38,6 @@
 
 // ── Stylesheet ────────────────────────────────────────────────────────────────
 
-
 namespace {
 using namespace fincept::ui;
 
@@ -224,7 +223,8 @@ void McpServersScreen::changeEvent(QEvent* event) {
 // matching the active view.
 
 void McpServersScreen::retranslateUi() {
-    if (header_title_) header_title_->setText(tr("MCP SERVERS"));
+    if (header_title_)
+        header_title_->setText(tr("MCP SERVERS"));
 
     // View tabs: index order matches enum (Marketplace, Installed, Tools)
     const QStringList view_labels = {tr("MARKETPLACE"), tr("INSTALLED"), tr("TOOLS")};
@@ -232,10 +232,13 @@ void McpServersScreen::retranslateUi() {
         view_btns_[i]->setText(view_labels[i]);
     }
 
-    if (search_input_) search_input_->setPlaceholderText(tr("Search..."));
-    if (refresh_btn_)  refresh_btn_->setText(tr("↺  REFRESH"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search..."));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("↺  REFRESH"));
 
-    if (cat_header_lbl_) cat_header_lbl_->setText(tr("  CATEGORY"));
+    if (cat_header_lbl_)
+        cat_header_lbl_->setText(tr("  CATEGORY"));
 
     // Category list — user data holds the lowercase API key; display text is
     // re-set per row from its key. "all" maps to the localized "All" label.
@@ -243,15 +246,21 @@ void McpServersScreen::retranslateUi() {
         for (int i = 0; i < mkt_cat_list_->count(); ++i) {
             auto* item = mkt_cat_list_->item(i);
             const QString key = item->data(Qt::UserRole).toString();
-            if (key == "all")             item->setText(tr("ALL"));
-            else if (key == "utilities")  item->setText(tr("UTILITIES"));
-            else if (key == "developer")  item->setText(tr("DEVELOPER"));
-            else if (key == "database")   item->setText(tr("DATABASE"));
-            else                          item->setText(key.toUpper());
+            if (key == "all")
+                item->setText(tr("ALL"));
+            else if (key == "utilities")
+                item->setText(tr("UTILITIES"));
+            else if (key == "developer")
+                item->setText(tr("DEVELOPER"));
+            else if (key == "database")
+                item->setText(tr("DATABASE"));
+            else
+                item->setText(key.toUpper());
         }
     }
 
-    if (add_server_btn_) add_server_btn_->setText(tr("＋  ADD CUSTOM MCP SERVER"));
+    if (add_server_btn_)
+        add_server_btn_->setText(tr("＋  ADD CUSTOM MCP SERVER"));
 
     if (tools_toolbar_lbl_)
         tools_toolbar_lbl_->setText(
@@ -261,7 +270,8 @@ void McpServersScreen::retranslateUi() {
         tools_table_->setHorizontalHeaderLabels(
             {tr("ON"), tr("TOOL NAME"), tr("SERVER"), tr("CATEGORY"), tr("DESCRIPTION")});
 
-    if (status_screen_lbl_) status_screen_lbl_->setText(tr("MCP SERVERS"));
+    if (status_screen_lbl_)
+        status_screen_lbl_->setText(tr("MCP SERVERS"));
 
     if (status_view_) {
         // Re-derive from active_view_ rather than reading the (now-stale) text.
@@ -272,9 +282,12 @@ void McpServersScreen::retranslateUi() {
 
     // Re-render whichever view is active so cards/rows pick up new strings.
     if (loaded_) {
-        if (active_view_ == 0) populate_marketplace();
-        else if (active_view_ == 1) refresh_installed();
-        else if (active_view_ == 2) refresh_tools();
+        if (active_view_ == 0)
+            populate_marketplace();
+        else if (active_view_ == 1)
+            refresh_installed();
+        else if (active_view_ == 2)
+            refresh_tools();
         update_status_bar();
     }
 }
@@ -297,7 +310,8 @@ void McpServersScreen::setup_ui() {
 
 QVariantMap McpServersScreen::save_state() const {
     QVariantMap state{{"active_view", active_view_}};
-    if (search_input_) state["search"] = search_input_->text();
+    if (search_input_)
+        state["search"] = search_input_->text();
     return state;
 }
 

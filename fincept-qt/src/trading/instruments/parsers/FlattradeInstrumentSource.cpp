@@ -13,9 +13,14 @@ namespace fincept::trading {
 namespace {
 
 const QStringList kFiles = {
-    "NSE_Equity.csv",          "Nfo_Equity_Derivatives.csv", "Nfo_Index_Derivatives.csv",
-    "Currency_Derivatives.csv", "Commodity.csv",             "BSE_Equity.csv",
-    "Bfo_Index_Derivatives.csv", "Bfo_Equity_Derivatives.csv",
+    "NSE_Equity.csv",
+    "Nfo_Equity_Derivatives.csv",
+    "Nfo_Index_Derivatives.csv",
+    "Currency_Derivatives.csv",
+    "Commodity.csv",
+    "BSE_Equity.csv",
+    "Bfo_Index_Derivatives.csv",
+    "Bfo_Equity_Derivatives.csv",
 };
 
 QByteArray download_flattrade(const BrokerCredentials&) {

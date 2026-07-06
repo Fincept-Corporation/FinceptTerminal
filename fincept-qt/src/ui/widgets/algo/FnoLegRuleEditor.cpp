@@ -15,13 +15,13 @@ namespace fincept::ui::algo {
 namespace {
 
 // Column indices
-constexpr int kColSide   = 0;
-constexpr int kColType   = 1;
+constexpr int kColSide = 0;
+constexpr int kColType = 1;
 constexpr int kColStrike = 2;
-constexpr int kColValue  = 3;
-constexpr int kColLots   = 4;
+constexpr int kColValue = 3;
+constexpr int kColLots = 4;
 constexpr int kColDelete = 5;
-constexpr int kNumCols   = 6;
+constexpr int kNumCols = 6;
 
 const char* kStyle = R"(
 QWidget#fnoLegRuleEditor {
@@ -96,8 +96,7 @@ QPushButton#deleteLegBtn:hover {
 
 } // namespace
 
-FnoLegRuleEditor::FnoLegRuleEditor(QWidget* parent)
-    : QWidget(parent) {
+FnoLegRuleEditor::FnoLegRuleEditor(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("fnoLegRuleEditor"));
     setStyleSheet(QString::fromLatin1(kStyle));
 
@@ -108,15 +107,14 @@ FnoLegRuleEditor::FnoLegRuleEditor(QWidget* parent)
     // ── Table ────────────────────────────────────────────────────────────────
     table_ = new QTableWidget(0, kNumCols, this);
     table_->setObjectName(QStringLiteral("fnoLegTable"));
-    table_->setHorizontalHeaderLabels(
-        {tr("B/S"), tr("Type"), tr("Strike"), tr("Value"), tr("Lots"), tr("")});
+    table_->setHorizontalHeaderLabels({tr("B/S"), tr("Type"), tr("Strike"), tr("Value"), tr("Lots"), tr("")});
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setDefaultSectionSize(90);
-    table_->setColumnWidth(kColSide,   70);
-    table_->setColumnWidth(kColType,   60);
+    table_->setColumnWidth(kColSide, 70);
+    table_->setColumnWidth(kColType, 60);
     table_->setColumnWidth(kColStrike, 100);
-    table_->setColumnWidth(kColValue,  90);
-    table_->setColumnWidth(kColLots,   70);
+    table_->setColumnWidth(kColValue, 90);
+    table_->setColumnWidth(kColLots, 70);
     table_->setColumnWidth(kColDelete, 32);
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -166,8 +164,8 @@ void FnoLegRuleEditor::add_row(const fincept::algo::fno::AlgoFnoLeg& leg) {
 
     // Strike mode combo
     auto* strike_cb = new QComboBox(this);
-    strike_cb->addItems({QStringLiteral("ATM"), QStringLiteral("ATM_OFFSET"),
-                         QStringLiteral("DELTA"), QStringLiteral("ABSOLUTE")});
+    strike_cb->addItems(
+        {QStringLiteral("ATM"), QStringLiteral("ATM_OFFSET"), QStringLiteral("DELTA"), QStringLiteral("ABSOLUTE")});
     strike_cb->setCurrentText(leg.strike_mode.isEmpty() ? QStringLiteral("ATM") : leg.strike_mode);
     table_->setCellWidget(row, kColStrike, strike_cb);
 
@@ -193,16 +191,12 @@ void FnoLegRuleEditor::add_row(const fincept::algo::fno::AlgoFnoLeg& leg) {
 
     // Connect change signals — use this->table_ capture to scan for current row
     // at click time (avoids stale index after row removal).
-    connect(side_cb, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) { emit legs_changed(); });
-    connect(type_cb, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) { emit legs_changed(); });
-    connect(strike_cb, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) { emit legs_changed(); });
-    connect(val_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { emit legs_changed(); });
-    connect(lots_spin, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, [this](int) { emit legs_changed(); });
+    connect(side_cb, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emit legs_changed(); });
+    connect(type_cb, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emit legs_changed(); });
+    connect(strike_cb, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emit legs_changed(); });
+    connect(val_spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+            [this](double) { emit legs_changed(); });
+    connect(lots_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int) { emit legs_changed(); });
 
     // Delete: find the row by scanning cellWidget at click time
     connect(del_btn, &QPushButton::clicked, this, [this, del_btn]() {

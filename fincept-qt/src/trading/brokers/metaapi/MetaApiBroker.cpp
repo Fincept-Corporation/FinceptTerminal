@@ -1,7 +1,7 @@
 #include "trading/brokers/metaapi/MetaApiBroker.h"
-#include "trading/brokers/metaapi/MetaApiRateLimiter.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/metaapi/MetaApiRateLimiter.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -82,16 +82,15 @@ bool MetaApiBroker::is_deployment_error(const BrokerHttpResponse& resp) {
         return true;
     if (!resp.json.isEmpty()) {
         const QString err = resp.json.value("error").toString();
-        if (err.contains("not deployed", Qt::CaseInsensitive) ||
-            err.contains("not synchronized", Qt::CaseInsensitive))
+        if (err.contains("not deployed", Qt::CaseInsensitive) || err.contains("not synchronized", Qt::CaseInsensitive))
             return true;
     }
     return false;
 }
 
 bool MetaApiBroker::try_redeploy(const BrokerCredentials& creds) {
-    const QString url = provisioning_url() +
-                        QStringLiteral("/users/current/accounts/%1/deploy").arg(creds.access_token);
+    const QString url =
+        provisioning_url() + QStringLiteral("/users/current/accounts/%1/deploy").arg(creds.access_token);
     auto resp = BrokerHttp::instance().post_json(url, QJsonObject{}, auth_headers(creds));
     return resp.success || resp.status_code == 204;
 }
@@ -108,8 +107,7 @@ QString MetaApiBroker::action_type_for(OrderSide side, OrderType type) {
         case OrderType::StopLoss:
             return buy ? QStringLiteral("ORDER_TYPE_BUY_STOP") : QStringLiteral("ORDER_TYPE_SELL_STOP");
         case OrderType::StopLossLimit:
-            return buy ? QStringLiteral("ORDER_TYPE_BUY_STOP_LIMIT")
-                       : QStringLiteral("ORDER_TYPE_SELL_STOP_LIMIT");
+            return buy ? QStringLiteral("ORDER_TYPE_BUY_STOP_LIMIT") : QStringLiteral("ORDER_TYPE_SELL_STOP_LIMIT");
     }
     return buy ? QStringLiteral("ORDER_TYPE_BUY") : QStringLiteral("ORDER_TYPE_SELL");
 }
@@ -147,7 +145,7 @@ QString MetaApiBroker::map_timeframe(const QString& resolution) {
 // ── Authentication (MetaAPI account provisioning) ────────────────────────────
 
 TokenExchangeResponse MetaApiBroker::exchange_token(const QString& api_key, const QString& /*api_secret*/,
-                                                     const QString& auth_code) {
+                                                    const QString& auth_code) {
     TokenExchangeResponse result;
 
     const auto payload = QJsonDocument::fromJson(auth_code.toUtf8()).object();
@@ -195,8 +193,7 @@ TokenExchangeResponse MetaApiBroker::exchange_token(const QString& api_key, cons
             const auto arr = doc.array();
             for (const auto& item : arr) {
                 const auto obj = item.toObject();
-                if (obj.value("login").toString() == mt4_login &&
-                    obj.value("server").toString() == server_name) {
+                if (obj.value("login").toString() == mt4_login && obj.value("server").toString() == server_name) {
                     account_id = obj.value("_id").toString();
                     break;
                 }
@@ -212,15 +209,13 @@ TokenExchangeResponse MetaApiBroker::exchange_token(const QString& api_key, cons
     }
 
     // Poll until deployed (max 60 seconds)
-    const QString status_url =
-        provisioning_url() + QStringLiteral("/users/current/accounts/%1").arg(account_id);
+    const QString status_url = provisioning_url() + QStringLiteral("/users/current/accounts/%1").arg(account_id);
     for (int i = 0; i < 20; ++i) {
         auto status_resp = BrokerHttp::instance().get(status_url, headers);
         if (status_resp.success) {
             const QString state = status_resp.json.value("state").toString();
             const QString conn = status_resp.json.value("connectionStatus").toString();
-            if (state == "DEPLOYED" &&
-                (conn == "CONNECTED" || conn == "AUTHENTICATED" || conn.isEmpty())) {
+            if (state == "DEPLOYED" && (conn == "CONNECTED" || conn == "AUTHENTICATED" || conn.isEmpty())) {
                 break;
             }
         }
@@ -233,8 +228,7 @@ TokenExchangeResponse MetaApiBroker::exchange_token(const QString& api_key, cons
 
     // Verify connection by fetching account info
     const QString base = trading_url(region);
-    const QString info_url =
-        base + QStringLiteral("/users/current/accounts/%1/account-information").arg(account_id);
+    const QString info_url = base + QStringLiteral("/users/current/accounts/%1/account-information").arg(account_id);
     auto info_resp = BrokerHttp::instance().get(info_url, headers);
 
     if (!info_resp.success) {
@@ -246,10 +240,11 @@ TokenExchangeResponse MetaApiBroker::exchange_token(const QString& api_key, cons
     result.access_token = account_id;
     result.user_id = mt4_login;
     result.additional_data = QString::fromUtf8(QJsonDocument(QJsonObject{
-        {"region", region},
-        {"server", server_name},
-        {"platform", "mt4"},
-    }).toJson(QJsonDocument::Compact));
+                                                                 {"region", region},
+                                                                 {"server", server_name},
+                                                                 {"platform", "mt4"},
+                                                             })
+                                                   .toJson(QJsonDocument::Compact));
 
     return result;
 }
@@ -266,8 +261,7 @@ OrderPlaceResponse MetaApiBroker::place_order(const BrokerCredentials& creds, co
     }
 
     const QString region = region_from_creds(creds);
-    const QString url =
-        trading_url(region) + QStringLiteral("/users/current/accounts/%1/trade").arg(account_id);
+    const QString url = trading_url(region) + QStringLiteral("/users/current/accounts/%1/trade").arg(account_id);
 
     QJsonObject body;
     body["actionType"] = action_type_for(order.side, order.order_type);
@@ -320,16 +314,14 @@ OrderPlaceResponse MetaApiBroker::place_order(const BrokerCredentials& creds, co
 
 // ── Order modification ───────────────────────────────────────────────────────
 
-ApiResponse<QJsonObject> MetaApiBroker::modify_order(const BrokerCredentials& creds,
-                                                      const QString& order_id,
-                                                      const QJsonObject& mods) {
+ApiResponse<QJsonObject> MetaApiBroker::modify_order(const BrokerCredentials& creds, const QString& order_id,
+                                                     const QJsonObject& mods) {
     const QString account_id = creds.access_token;
     if (!MetaApiRateLimiter::instance().try_consume(account_id, metaapi_credits::kTrade))
         return {false, std::nullopt, "MetaAPI rate limit. Retry shortly."};
 
     const QString region = region_from_creds(creds);
-    const QString url =
-        trading_url(region) + QStringLiteral("/users/current/accounts/%1/trade").arg(account_id);
+    const QString url = trading_url(region) + QStringLiteral("/users/current/accounts/%1/trade").arg(account_id);
 
     QJsonObject body;
     body["actionType"] = QStringLiteral("ORDER_MODIFY");
@@ -359,15 +351,13 @@ ApiResponse<QJsonObject> MetaApiBroker::modify_order(const BrokerCredentials& cr
 
 // ── Order cancellation ───────────────────────────────────────────────────────
 
-ApiResponse<QJsonObject> MetaApiBroker::cancel_order(const BrokerCredentials& creds,
-                                                      const QString& order_id) {
+ApiResponse<QJsonObject> MetaApiBroker::cancel_order(const BrokerCredentials& creds, const QString& order_id) {
     const QString account_id = creds.access_token;
     if (!MetaApiRateLimiter::instance().try_consume(account_id, metaapi_credits::kTrade))
         return {false, std::nullopt, "MetaAPI rate limit. Retry shortly."};
 
     const QString region = region_from_creds(creds);
-    const QString url =
-        trading_url(region) + QStringLiteral("/users/current/accounts/%1/trade").arg(account_id);
+    const QString url = trading_url(region) + QStringLiteral("/users/current/accounts/%1/trade").arg(account_id);
 
     QJsonObject body;
     body["actionType"] = QStringLiteral("ORDER_CANCEL");
@@ -398,8 +388,7 @@ ApiResponse<QVector<BrokerOrderInfo>> MetaApiBroker::get_orders(const BrokerCred
         return {false, std::nullopt, "MetaAPI rate limit. Retry shortly."};
 
     const QString region = region_from_creds(creds);
-    const QString url =
-        trading_url(region) + QStringLiteral("/users/current/accounts/%1/orders").arg(account_id);
+    const QString url = trading_url(region) + QStringLiteral("/users/current/accounts/%1/orders").arg(account_id);
 
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
 
@@ -470,9 +459,9 @@ ApiResponse<QJsonObject> MetaApiBroker::get_trade_book(const BrokerCredentials& 
     const auto now = QDateTime::currentDateTimeUtc();
     const auto start = now.addDays(-30);
 
-    const QString url = trading_url(region) +
-                        QStringLiteral("/users/current/accounts/%1/history-deals/time/%2/%3")
-                            .arg(account_id, start.toString(Qt::ISODate), now.toString(Qt::ISODate));
+    const QString url =
+        trading_url(region) + QStringLiteral("/users/current/accounts/%1/history-deals/time/%2/%3")
+                                  .arg(account_id, start.toString(Qt::ISODate), now.toString(Qt::ISODate));
 
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
     if (!resp.success)
@@ -488,8 +477,7 @@ ApiResponse<QVector<BrokerPosition>> MetaApiBroker::get_positions(const BrokerCr
         return {false, std::nullopt, "MetaAPI rate limit. Retry shortly."};
 
     const QString region = region_from_creds(creds);
-    const QString url =
-        trading_url(region) + QStringLiteral("/users/current/accounts/%1/positions").arg(account_id);
+    const QString url = trading_url(region) + QStringLiteral("/users/current/accounts/%1/positions").arg(account_id);
 
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
 
@@ -571,8 +559,7 @@ ApiResponse<BrokerFunds> MetaApiBroker::get_funds(const BrokerCredentials& creds
 
     const QString region = region_from_creds(creds);
     const QString url =
-        trading_url(region) +
-        QStringLiteral("/users/current/accounts/%1/account-information").arg(account_id);
+        trading_url(region) + QStringLiteral("/users/current/accounts/%1/account-information").arg(account_id);
 
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
 
@@ -602,7 +589,7 @@ ApiResponse<BrokerFunds> MetaApiBroker::get_funds(const BrokerCredentials& creds
 // ── Quotes ───────────────────────────────────────────────────────────────────
 
 ApiResponse<QVector<BrokerQuote>> MetaApiBroker::get_quotes(const BrokerCredentials& creds,
-                                                             const QVector<QString>& symbols) {
+                                                            const QVector<QString>& symbols) {
     const QString account_id = creds.access_token;
     const QString region = region_from_creds(creds);
     const QString base = trading_url(region);
@@ -615,9 +602,7 @@ ApiResponse<QVector<BrokerQuote>> MetaApiBroker::get_quotes(const BrokerCredenti
             continue;
 
         const QString url =
-            base +
-            QStringLiteral("/users/current/accounts/%1/symbols/%2/current-price")
-                .arg(account_id, sym);
+            base + QStringLiteral("/users/current/accounts/%1/symbols/%2/current-price").arg(account_id, sym);
 
         auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
         if (!resp.success)
@@ -648,11 +633,9 @@ ApiResponse<QVector<BrokerQuote>> MetaApiBroker::get_quotes(const BrokerCredenti
 
 // ── Historical candles ───────────────────────────────────────────────────────
 
-ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCredentials& creds,
-                                                               const QString& symbol,
-                                                               const QString& resolution,
-                                                               const QString& from_date,
-                                                               const QString& to_date) {
+ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
+                                                              const QString& resolution, const QString& from_date,
+                                                              const QString& to_date) {
     const QString account_id = creds.access_token;
     if (!MetaApiRateLimiter::instance().try_consume(account_id, metaapi_credits::kRead))
         return {false, std::nullopt, "MetaAPI rate limit. Retry shortly."};
@@ -668,11 +651,13 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
         QDateTime dt = QDateTime::fromString(s, Qt::ISODate);
         if (!dt.isValid()) {
             const QDate d = QDate::fromString(s, "yyyy-MM-dd");
-            if (d.isValid()) dt = QDateTime(d, QTime(0, 0), QTimeZone::utc());
+            if (d.isValid())
+                dt = QDateTime(d, QTime(0, 0), QTimeZone::utc());
         }
         if (!dt.isValid()) {
             dt = QDateTime::fromString(s, "yyyy-MM-dd HH:mm");
-            if (dt.isValid()) dt.setTimeZone(QTimeZone::utc());
+            if (dt.isValid())
+                dt.setTimeZone(QTimeZone::utc());
         }
         return dt.isValid() ? dt.toUTC() : QDateTime();
     };
@@ -695,15 +680,12 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
     // candles returned, and records the millisecond-precision time of the
     // OLDEST candle in the page. Returns false only on HTTP failure.
     QVector<BrokerCandle> candles;
-    const auto fetch_page = [&](const QDateTime& startTime,
-                                int& page_count,
-                                QDateTime& oldest_dt) -> bool {
+    const auto fetch_page = [&](const QDateTime& startTime, int& page_count, QDateTime& oldest_dt) -> bool {
         const QString start_str = startTime.toUTC().toString(Qt::ISODateWithMs);
         const QString url =
             market_data_url(region) +
-            QStringLiteral(
-                "/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
-                "?startTime=%4&limit=%5")
+            QStringLiteral("/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
+                           "?startTime=%4&limit=%5")
                 .arg(account_id, symbol, tf, start_str)
                 .arg(kLimit);
 
@@ -750,9 +732,8 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
         const QString start_str = start_dt.toUTC().toString(Qt::ISODateWithMs);
         const QString url =
             market_data_url(region) +
-            QStringLiteral(
-                "/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
-                "?startTime=%4&limit=%5")
+            QStringLiteral("/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
+                           "?startTime=%4&limit=%5")
                 .arg(account_id, symbol, tf, start_str)
                 .arg(kLimit);
 
@@ -792,8 +773,7 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
     if (from_valid) {
         constexpr int kMaxIterations = 30;
         int iterations = 0;
-        while (page_count == kLimit && oldest.isValid() && oldest > from_dt &&
-               iterations < kMaxIterations) {
+        while (page_count == kLimit && oldest.isValid() && oldest > from_dt && iterations < kMaxIterations) {
             ++iterations;
 
             // Next page ends 1 ms before the oldest candle we already have.
@@ -803,35 +783,29 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
             int next_count = 0;
             QDateTime page_oldest;
             if (!fetch_page(next_start, next_count, page_oldest))
-                break;  // later-page failure: stop, return what we collected
+                break; // later-page failure: stop, return what we collected
 
             page_count = next_count;
             if (next_count == 0 || !page_oldest.isValid())
-                break;  // empty / unparseable page: stop
+                break; // empty / unparseable page: stop
             if (!(page_oldest < prev_oldest))
-                break;  // no backward progress: avoid infinite loop
+                break; // no backward progress: avoid infinite loop
             oldest = page_oldest;
         }
     }
 
     // --- Merge: sort ascending by time, dedupe identical timestamps ---------
     std::sort(candles.begin(), candles.end(),
-              [](const BrokerCandle& a, const BrokerCandle& b) {
-                  return a.timestamp < b.timestamp;
-              });
+              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
     candles.erase(std::unique(candles.begin(), candles.end(),
-                              [](const BrokerCandle& a, const BrokerCandle& b) {
-                                  return a.timestamp == b.timestamp;
-                              }),
+                              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
                   candles.end());
 
     // Drop candles older than the requested lower bound (only when valid).
     if (from_valid) {
         const int64_t from_ts = from_dt.toSecsSinceEpoch();
         candles.erase(std::remove_if(candles.begin(), candles.end(),
-                                     [from_ts](const BrokerCandle& c) {
-                                         return c.timestamp < from_ts;
-                                     }),
+                                     [from_ts](const BrokerCandle& c) { return c.timestamp < from_ts; }),
                       candles.end());
     }
 
@@ -856,8 +830,7 @@ QStringList MetaApiBroker::fetch_symbols(const BrokerCredentials& creds) {
         return {};
 
     const QString region = region_from_creds(creds);
-    const QString url =
-        trading_url(region) + QStringLiteral("/users/current/accounts/%1/symbols").arg(account_id);
+    const QString url = trading_url(region) + QStringLiteral("/users/current/accounts/%1/symbols").arg(account_id);
 
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
     if (!resp.success)

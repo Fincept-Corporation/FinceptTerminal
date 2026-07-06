@@ -130,8 +130,8 @@ void MaritimeVesselsWidget::build_rows() {
     if (imos_.isEmpty()) {
         status_label_ = new QLabel(tr("No vessels configured — click gear to add IMOs"));
         status_label_->setAlignment(Qt::AlignCenter);
-        status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:16px;background:transparent;")
-                                         .arg(ui::colors::TEXT_TERTIARY()));
+        status_label_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         list_layout_->addWidget(status_label_);
         list_layout_->addStretch();
         return;
@@ -154,8 +154,8 @@ void MaritimeVesselsWidget::build_rows() {
         rl->addWidget(r.name, 3);
 
         r.route = new QLabel(QStringLiteral("—"));
-        r.route->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                   .arg(ui::colors::TEXT_SECONDARY()));
+        r.route->setStyleSheet(
+            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(r.route, 4);
 
         r.speed = new QLabel(QStringLiteral("—"));
@@ -166,8 +166,7 @@ void MaritimeVesselsWidget::build_rows() {
 
         r.progress = new QLabel(QStringLiteral("—"));
         r.progress->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        r.progress->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                      .arg(ui::colors::CYAN()));
+        r.progress->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::CYAN()));
         rl->addWidget(r.progress, 1);
 
         list_layout_->addWidget(row);
@@ -244,8 +243,8 @@ void MaritimeVesselsWidget::on_vessel(const QString& imo, const QVariant& v) {
         pc = ui::colors::POSITIVE();
     else if (pct < 25)
         pc = ui::colors::WARNING();
-    it->progress->setStyleSheet(QString("color:%1;font-size:9px;font-weight:bold;background:transparent;")
-                                    .arg(pc.name()));
+    it->progress->setStyleSheet(
+        QString("color:%1;font-size:9px;font-weight:bold;background:transparent;").arg(pc.name()));
 
     set_loading(false);
 }
@@ -292,15 +291,14 @@ void MaritimeVesselsWidget::apply_styles() {
         lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:bold;background:transparent;")
                                .arg(ui::colors::TEXT_TERTIARY()));
     header_sep_->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
-    scroll_area_->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:4px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:2px;min-height:20px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BORDER_MED()));
+    scroll_area_->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+                                        "QScrollBar:vertical{width:4px;background:transparent;}"
+                                        "QScrollBar::handle:vertical{background:%1;border-radius:2px;min-height:20px;}"
+                                        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                                    .arg(ui::colors::BORDER_MED()));
     if (status_label_)
-        status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:16px;background:transparent;")
-                                         .arg(ui::colors::TEXT_TERTIARY()));
+        status_label_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 }
 
 void MaritimeVesselsWidget::retranslateUi() {

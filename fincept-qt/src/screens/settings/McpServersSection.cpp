@@ -109,7 +109,7 @@ void McpServersSection::build_ui() {
         return btn;
     };
     servers_tab_btn_ = make_tab(tr("Installed Servers"), 0);
-    tools_tab_btn_   = make_tab(tr("Tools"), 1);
+    tools_tab_btn_ = make_tab(tr("Tools"), 1);
     tbbl->addStretch();
     root->addWidget(tab_bar);
 
@@ -145,7 +145,8 @@ QWidget* McpServersSection::build_servers_tab() {
     lvl->setSpacing(6);
 
     server_list_lbl_ = new QLabel(tr("External Servers"));
-    server_list_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
+    server_list_lbl_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) +
+                                    ";font-weight:700;letter-spacing:1px;");
     lvl->addWidget(server_list_lbl_);
 
     server_list_ = new QListWidget;
@@ -533,14 +534,14 @@ void McpServersSection::refresh_server_detail(const QString& server_id) {
         detail_lbl_->setText(QString("<b style='color:" + QString(ui::colors::TEXT_PRIMARY()) +
                                      "'>%1</b><br>"
                                      "<span style='color:" +
-                                     QString(ui::colors::TEXT_SECONDARY()) +
-                                     ";'>" + tr("Status: %2") + "</span><br>"
+                                     QString(ui::colors::TEXT_SECONDARY()) + ";'>" + tr("Status: %2") +
+                                     "</span><br>"
                                      "<span style='color:" +
-                                     QString(ui::colors::TEXT_TERTIARY()) +
-                                     ";'>" + tr("Command: %3 %4") + "</span><br>"
+                                     QString(ui::colors::TEXT_TERTIARY()) + ";'>" + tr("Command: %3 %4") +
+                                     "</span><br>"
                                      "<span style='color:" +
-                                     QString(ui::colors::TEXT_TERTIARY()) +
-                                     ";'>" + tr("Category: %5") + "</span><br>"
+                                     QString(ui::colors::TEXT_TERTIARY()) + ";'>" + tr("Category: %5") +
+                                     "</span><br>"
                                      "<span style='color:" +
                                      QString(ui::colors::TEXT_TERTIARY()) + ";'>" + tr("Auto-start: %6") + "</span>")
                                  .arg(cfg.name, status_str, cfg.command, cfg.args.join(' '),
@@ -657,19 +658,28 @@ void McpServersSection::changeEvent(QEvent* event) {
 
 void McpServersSection::retranslateUi() {
     // Title bar.
-    if (title_lbl_)   title_lbl_->setText(tr("MCP SERVERS"));
-    if (tools_badge_) tools_badge_->setText(tr("%1 internal tools active").arg(McpService::instance().tool_count()));
+    if (title_lbl_)
+        title_lbl_->setText(tr("MCP SERVERS"));
+    if (tools_badge_)
+        tools_badge_->setText(tr("%1 internal tools active").arg(McpService::instance().tool_count()));
 
     // Tab buttons.
-    if (servers_tab_btn_) servers_tab_btn_->setText(tr("Installed Servers"));
-    if (tools_tab_btn_)   tools_tab_btn_->setText(tr("Tools"));
+    if (servers_tab_btn_)
+        servers_tab_btn_->setText(tr("Installed Servers"));
+    if (tools_tab_btn_)
+        tools_tab_btn_->setText(tr("Tools"));
 
     // Servers tab chrome.
-    if (server_list_lbl_) server_list_lbl_->setText(tr("External Servers"));
-    if (add_btn_)         add_btn_->setText(tr("+ Add"));
-    if (remove_btn_)      remove_btn_->setText(tr("Remove"));
-    if (start_btn_)       start_btn_->setText(tr("▶  Start"));
-    if (stop_btn_)        stop_btn_->setText(tr("■  Stop"));
+    if (server_list_lbl_)
+        server_list_lbl_->setText(tr("External Servers"));
+    if (add_btn_)
+        add_btn_->setText(tr("+ Add"));
+    if (remove_btn_)
+        remove_btn_->setText(tr("Remove"));
+    if (start_btn_)
+        start_btn_->setText(tr("▶  Start"));
+    if (stop_btn_)
+        stop_btn_->setText(tr("■  Stop"));
 
     // Tools tab chrome.
     if (tools_info_lbl_)

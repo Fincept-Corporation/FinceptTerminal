@@ -54,19 +54,13 @@ const QVector<BasemapDef>& basemap_catalog() {
          QStringLiteral("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
                         "MapServer/tile/${z}/${y}/${x}"),
          0, 19},
-        {QStringLiteral("DARK"),
-         QStringLiteral("https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"),
-         0, 20},
+        {QStringLiteral("DARK"), QStringLiteral("https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png"), 0, 20},
         {QStringLiteral("OCEAN"),
          QStringLiteral("https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/"
                         "World_Ocean_Base/MapServer/tile/${z}/${y}/${x}"),
          0, 13},
-        {QStringLiteral("STREETS"),
-         QStringLiteral("https://tile.openstreetmap.org/${z}/${x}/${y}.png"),
-         0, 19},
-        {QStringLiteral("LIGHT"),
-         QStringLiteral("https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png"),
-         0, 20},
+        {QStringLiteral("STREETS"), QStringLiteral("https://tile.openstreetmap.org/${z}/${x}/${y}.png"), 0, 19},
+        {QStringLiteral("LIGHT"), QStringLiteral("https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png"), 0, 20},
         {QStringLiteral("TERRAIN"),
          QStringLiteral("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/"
                         "MapServer/tile/${z}/${y}/${x}"),
@@ -92,7 +86,7 @@ class FinceptTileLayer : public QGVLayerTilesOnline {
     int minZoomlevel() const override { return min_zoom_; }
     int maxZoomlevel() const override { return max_zoom_; }
     QString tilePosToUrl(const QGV::GeoTilePos& tilePos) const override {
-        QString url = url_;  // case-preserving (unlike QGVLayerOSM)
+        QString url = url_; // case-preserving (unlike QGVLayerOSM)
         url.replace(QStringLiteral("${z}"), QString::number(tilePos.zoom()));
         url.replace(QStringLiteral("${x}"), QString::number(tilePos.pos().x()));
         url.replace(QStringLiteral("${y}"), QString::number(tilePos.pos().y()));
@@ -130,9 +124,9 @@ double haversine_km(double lat1, double lng1, double lat2, double lng2) {
     constexpr double kEarthR = 6371.0088;
     const double dlat = qDegreesToRadians(lat2 - lat1);
     const double dlng = qDegreesToRadians(lng2 - lng1);
-    const double a = std::sin(dlat / 2) * std::sin(dlat / 2) +
-                     std::cos(qDegreesToRadians(lat1)) * std::cos(qDegreesToRadians(lat2)) *
-                         std::sin(dlng / 2) * std::sin(dlng / 2);
+    const double a = std::sin(dlat / 2) * std::sin(dlat / 2) + std::cos(qDegreesToRadians(lat1)) *
+                                                                   std::cos(qDegreesToRadians(lat2)) *
+                                                                   std::sin(dlng / 2) * std::sin(dlng / 2);
     return 2 * kEarthR * std::asin(std::min(1.0, std::sqrt(a)));
 }
 
@@ -149,7 +143,8 @@ class ShapeDrawItem : public QGVDrawItem {
     QPainterPath projShape() const override {
         QPainterPath path;
         auto* proj = map_ ? map_->getProjection() : nullptr;
-        if (!proj) return path;
+        if (!proj)
+            return path;
         if (shape_.type == MapShape::Type::Rectangle || shape_.radius_km <= 0.0) {
             const QPointF tl = proj->geoToProj(QGV::GeoPos(shape_.max_lat, shape_.min_lng));
             const QPointF br = proj->geoToProj(QGV::GeoPos(shape_.min_lat, shape_.max_lng));
@@ -166,12 +161,13 @@ class ShapeDrawItem : public QGVDrawItem {
 
     void projPaint(QPainter* painter) override {
         const QPainterPath path = projShape();
-        if (path.isEmpty()) return;
-        QColor fill(0xF5, 0x9E, 0x0B, 48);   // amber, translucent
+        if (path.isEmpty())
+            return;
+        QColor fill(0xF5, 0x9E, 0x0B, 48); // amber, translucent
         QColor stroke(0xF5, 0x9E, 0x0B, 220);
         painter->setBrush(fill);
         QPen pen(stroke);
-        pen.setCosmetic(true);  // constant 1.6px regardless of zoom
+        pen.setCosmetic(true); // constant 1.6px regardless of zoom
         pen.setWidthF(1.6);
         painter->setPen(pen);
         painter->drawPath(path);
@@ -198,7 +194,7 @@ class PathDrawItem : public QGVDrawItem {
             return path;
         bool first = true;
         for (const QPointF& p : pts_) {
-            const QPointF pr = proj->geoToProj(QGV::GeoPos(p.x(), p.y()));  // x=lat, y=lng
+            const QPointF pr = proj->geoToProj(QGV::GeoPos(p.x(), p.y())); // x=lat, y=lng
             if (first) {
                 path.moveTo(pr);
                 first = false;
@@ -213,8 +209,8 @@ class PathDrawItem : public QGVDrawItem {
         const QPainterPath path = projShape();
         if (path.isEmpty())
             return;
-        QPen pen(QColor(0xF5, 0x9E, 0x0B, 205));  // amber, matches the trail dots
-        pen.setCosmetic(true);                     // constant width regardless of zoom
+        QPen pen(QColor(0xF5, 0x9E, 0x0B, 205)); // amber, matches the trail dots
+        pen.setCosmetic(true);                   // constant width regardless of zoom
         pen.setWidthF(2.0);
         pen.setJoinStyle(Qt::RoundJoin);
         painter->setPen(pen);
@@ -227,7 +223,7 @@ class PathDrawItem : public QGVDrawItem {
     QGVMap* map_ = nullptr;
 };
 
-}  // namespace
+} // namespace
 
 // ── MapShape ─────────────────────────────────────────────────────────────────
 bool MapShape::contains(double lat, double lng) const {
@@ -485,10 +481,14 @@ void WorldMapWidget::fit_to_pins() {
 
     double min_lat = 90, max_lat = -90, min_lng = 180, max_lng = -180;
     for (const auto& pin : pins_) {
-        if (pin.latitude < min_lat)  min_lat = pin.latitude;
-        if (pin.latitude > max_lat)  max_lat = pin.latitude;
-        if (pin.longitude < min_lng) min_lng = pin.longitude;
-        if (pin.longitude > max_lng) max_lng = pin.longitude;
+        if (pin.latitude < min_lat)
+            min_lat = pin.latitude;
+        if (pin.latitude > max_lat)
+            max_lat = pin.latitude;
+        if (pin.longitude < min_lng)
+            min_lng = pin.longitude;
+        if (pin.longitude > max_lng)
+            max_lng = pin.longitude;
     }
 
     // World-view fallback rectangle. Avoids the polar tile-coverage gap and
@@ -503,8 +503,7 @@ void WorldMapWidget::fit_to_pins() {
     // Globally-scattered pins → snap to world view; tighter zoom would just
     // wrap pins around the dateline gutter and leave big dark gaps.
     if (lng_span > 200.0 || lat_span > 110.0) {
-        auto world = QGV::GeoRect(QGV::GeoPos(kWorldMaxLat, kWorldMinLng),
-                                  QGV::GeoPos(kWorldMinLat, kWorldMaxLng));
+        auto world = QGV::GeoRect(QGV::GeoPos(kWorldMaxLat, kWorldMinLng), QGV::GeoPos(kWorldMinLat, kWorldMaxLng));
         map_->flyTo(QGVCameraActions(map_).scaleTo(world));
         return;
     }
@@ -529,7 +528,8 @@ void WorldMapWidget::fit_to_pins() {
     double widget_aspect = w / h;
     double centre_lat = (box_min_lat + box_max_lat) * 0.5;
     double mercator_k = std::cos(centre_lat * 3.14159265358979 / 180.0);
-    if (mercator_k < 0.2) mercator_k = 0.2;
+    if (mercator_k < 0.2)
+        mercator_k = 0.2;
 
     double box_lat_h = box_max_lat - box_min_lat;
     double box_lng_w = box_max_lng - box_min_lng;
@@ -561,14 +561,12 @@ void WorldMapWidget::fit_to_pins() {
     // After clamping, if the box now covers most of the world horizontally,
     // skip straight to the canonical world view to avoid an off-centre look.
     if ((box_max_lng - box_min_lng) > (kWorldMaxLng - kWorldMinLng) * 0.85) {
-        auto world = QGV::GeoRect(QGV::GeoPos(kWorldMaxLat, kWorldMinLng),
-                                  QGV::GeoPos(kWorldMinLat, kWorldMaxLng));
+        auto world = QGV::GeoRect(QGV::GeoPos(kWorldMaxLat, kWorldMinLng), QGV::GeoPos(kWorldMinLat, kWorldMaxLng));
         map_->flyTo(QGVCameraActions(map_).scaleTo(world));
         return;
     }
 
-    auto target = QGV::GeoRect(QGV::GeoPos(box_max_lat, box_min_lng),
-                               QGV::GeoPos(box_min_lat, box_max_lng));
+    auto target = QGV::GeoRect(QGV::GeoPos(box_max_lat, box_min_lng), QGV::GeoPos(box_min_lat, box_max_lng));
     map_->flyTo(QGVCameraActions(map_).scaleTo(target));
 }
 
@@ -578,7 +576,8 @@ void WorldMapWidget::set_draw_mode(MapDrawMode mode) {
     draw_mode_ = mode;
     drawing_ = false;
     has_preview_ = false;
-    if (!map_) return;
+    if (!map_)
+        return;
     // While a draw tool is active, disable map mouse panning so a drag draws
     // a shape. Zoom (wheel) stays available. Restore full navigation on None.
     if (mode == MapDrawMode::None) {
@@ -601,9 +600,11 @@ void WorldMapWidget::clear_shapes() {
 }
 
 bool WorldMapWidget::pixel_to_geo(const QPoint& viewport_px, double* out_lat, double* out_lng) const {
-    if (!map_) return false;
+    if (!map_)
+        return false;
     auto* proj = map_->getProjection();
-    if (!proj) return false;
+    if (!proj)
+        return false;
     // QGVMap::mapToProj expects a position relative to the QGVMap widget. The
     // event filter watches the view's viewport, whose origin matches the map
     // widget's content origin, so the pixel maps through directly.
@@ -615,7 +616,8 @@ bool WorldMapWidget::pixel_to_geo(const QPoint& viewport_px, double* out_lat, do
 }
 
 void WorldMapWidget::rebuild_shape_overlays() {
-    if (!map_ready_ || !shape_layer_) return;
+    if (!map_ready_ || !shape_layer_)
+        return;
     while (shape_layer_->countItems() > 0) {
         auto* item = shape_layer_->getItem(0);
         shape_layer_->removeItem(item);
@@ -632,8 +634,7 @@ bool WorldMapWidget::eventFilter(QObject* watched, QEvent* event) {
         return QWidget::eventFilter(watched, event);
 
     const QEvent::Type t = event->type();
-    if (t != QEvent::MouseButtonPress && t != QEvent::MouseMove &&
-        t != QEvent::MouseButtonRelease)
+    if (t != QEvent::MouseButtonPress && t != QEvent::MouseMove && t != QEvent::MouseButtonRelease)
         return QWidget::eventFilter(watched, event);
 
     auto* me = static_cast<QMouseEvent*>(event);
@@ -642,7 +643,7 @@ bool WorldMapWidget::eventFilter(QObject* watched, QEvent* event) {
             drawing_ = true;
             has_preview_ = false;
         }
-        return true;  // consume so the map doesn't start a pan
+        return true; // consume so the map doesn't start a pan
     }
 
     if (t == QEvent::MouseMove && drawing_) {
@@ -660,8 +661,8 @@ bool WorldMapWidget::eventFilter(QObject* watched, QEvent* event) {
                 s.radius_km = haversine_km(drag_start_lat_, drag_start_lng_, cur_lat, cur_lng);
                 // Bounding box of the circle for union / quick tests.
                 const double dlat = (s.radius_km / 111.0);
-                const double dlng = s.radius_km /
-                                    (111.320 * std::max(0.05, std::cos(qDegreesToRadians(drag_start_lat_))));
+                const double dlng =
+                    s.radius_km / (111.320 * std::max(0.05, std::cos(qDegreesToRadians(drag_start_lat_))));
                 s.min_lat = drag_start_lat_ - dlat;
                 s.max_lat = drag_start_lat_ + dlat;
                 s.min_lng = drag_start_lng_ - dlng;

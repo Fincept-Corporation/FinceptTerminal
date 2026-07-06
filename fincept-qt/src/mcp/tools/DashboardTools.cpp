@@ -54,11 +54,14 @@ screens::DashboardScreen* find_dashboard_screen() {
     // Walk every WindowFrame's DockScreenRouter looking for the "dashboard"
     // dock widget. Whichever frame has it gives us the live screen.
     for (auto* w : WindowRegistry::instance().frames()) {
-        if (!w || !w->dock_router()) continue;
+        if (!w || !w->dock_router())
+            continue;
         auto* dw = w->dock_router()->find_dock_widget("dashboard");
-        if (!dw) continue;
+        if (!dw)
+            continue;
         auto* widget = dw->widget();
-        if (!widget) continue;
+        if (!widget)
+            continue;
         if (auto* ds = qobject_cast<screens::DashboardScreen*>(widget))
             return ds;
         // The dashboard may be wrapped in a group-badge container — descend.
@@ -78,9 +81,9 @@ screens::TickerBar* find_ticker_bar() {
     return ds ? ds->findChild<screens::TickerBar*>() : nullptr;
 }
 
-screens::WidgetTile* find_tile_by_instance_id(screens::DashboardCanvas* canvas,
-                                                const QString& instance_id) {
-    if (!canvas) return nullptr;
+screens::WidgetTile* find_tile_by_instance_id(screens::DashboardCanvas* canvas, const QString& instance_id) {
+    if (!canvas)
+        return nullptr;
     for (auto* tile : canvas->findChildren<screens::WidgetTile*>()) {
         if (tile && tile->instance_id() == instance_id)
             return tile;
@@ -91,18 +94,23 @@ screens::WidgetTile* find_tile_by_instance_id(screens::DashboardCanvas* canvas,
 // ── JSON serialisers ───────────────────────────────────────────────────
 
 QJsonObject cell_to_json(const screens::GridCell& c) {
-    return QJsonObject{{"x", c.x}, {"y", c.y}, {"w", c.w}, {"h", c.h},
-                        {"min_w", c.min_w}, {"min_h", c.min_h}};
+    return QJsonObject{{"x", c.x}, {"y", c.y}, {"w", c.w}, {"h", c.h}, {"min_w", c.min_w}, {"min_h", c.min_h}};
 }
 
 [[maybe_unused]] screens::GridCell json_to_cell(const QJsonObject& j, const screens::GridCell& fallback = {}) {
     screens::GridCell c = fallback;
-    if (j.contains("x"))     c.x = j["x"].toInt();
-    if (j.contains("y"))     c.y = j["y"].toInt();
-    if (j.contains("w"))     c.w = j["w"].toInt();
-    if (j.contains("h"))     c.h = j["h"].toInt();
-    if (j.contains("min_w")) c.min_w = j["min_w"].toInt();
-    if (j.contains("min_h")) c.min_h = j["min_h"].toInt();
+    if (j.contains("x"))
+        c.x = j["x"].toInt();
+    if (j.contains("y"))
+        c.y = j["y"].toInt();
+    if (j.contains("w"))
+        c.w = j["w"].toInt();
+    if (j.contains("h"))
+        c.h = j["h"].toInt();
+    if (j.contains("min_w"))
+        c.min_w = j["min_w"].toInt();
+    if (j.contains("min_h"))
+        c.min_h = j["min_h"].toInt();
     return c;
 }
 
@@ -118,7 +126,8 @@ QJsonObject grid_item_to_json(const screens::GridItem& it) {
 
 QJsonObject grid_layout_to_json(const screens::GridLayout& L) {
     QJsonArray items;
-    for (const auto& it : L.items) items.append(grid_item_to_json(it));
+    for (const auto& it : L.items)
+        items.append(grid_item_to_json(it));
     return QJsonObject{
         {"items", items},
         {"cols", L.cols},
@@ -129,20 +138,17 @@ QJsonObject grid_layout_to_json(const screens::GridLayout& L) {
 
 QJsonObject widget_meta_to_json(const screens::WidgetMeta& m) {
     return QJsonObject{
-        {"type_id", m.type_id},
-        {"display_name", m.display_name},
-        {"category", m.category},
-        {"description", m.description},
-        {"default_w", m.default_w},
-        {"default_h", m.default_h},
-        {"min_w", m.min_w},
-        {"min_h", m.min_h},
+        {"type_id", m.type_id},     {"display_name", m.display_name},
+        {"category", m.category},   {"description", m.description},
+        {"default_w", m.default_w}, {"default_h", m.default_h},
+        {"min_w", m.min_w},         {"min_h", m.min_h},
     };
 }
 
 QJsonObject template_to_json(const screens::DashboardTemplate& t) {
     QJsonArray items;
-    for (const auto& it : t.items) items.append(grid_item_to_json(it));
+    for (const auto& it : t.items)
+        items.append(grid_item_to_json(it));
     return QJsonObject{
         {"id", t.id},
         {"display_name", t.display_name},
@@ -169,11 +175,11 @@ std::vector<ToolDef> get_dashboard_tools() {
     {
         ToolDef t;
         t.name = "list_dashboard_widgets";
-        t.description = "List every registered dashboard widget type with metadata (display name, category, description, default size, min size).";
+        t.description = "List every registered dashboard widget type with metadata (display name, category, "
+                        "description, default size, min size).";
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QJsonArray arr;
                 for (const auto& m : screens::WidgetRegistry::instance().all())
@@ -187,14 +193,12 @@ std::vector<ToolDef> get_dashboard_tools() {
     {
         ToolDef t;
         t.name = "list_dashboard_widgets_by_category";
-        t.description = "List dashboard widgets in a single category (Markets, Research, Portfolio, Trading, Tools, Geopolitics).";
+        t.description =
+            "List dashboard widgets in a single category (Markets, Research, Portfolio, Trading, Tools, Geopolitics).";
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("category", "Category name").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().string("category", "Category name").required().length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 QJsonArray arr;
                 for (const auto& m : screens::WidgetRegistry::instance().by_category(args["category"].toString()))
@@ -212,13 +216,17 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("type_id", "Widget type id (use list_dashboard_widgets)").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("type_id", "Widget type id (use list_dashboard_widgets)")
+                             .required()
+                             .length(1, 64)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const auto* m = screens::WidgetRegistry::instance().find(args["type_id"].toString());
-                if (!m) { resolve(ToolResult::fail("Unknown widget type_id")); return; }
+                if (!m) {
+                    resolve(ToolResult::fail("Unknown widget type_id"));
+                    return;
+                }
                 resolve(ToolResult::ok_data(widget_meta_to_json(*m)));
             });
         };
@@ -228,11 +236,11 @@ std::vector<ToolDef> get_dashboard_tools() {
     {
         ToolDef t;
         t.name = "list_dashboard_templates";
-        t.description = "List built-in dashboard templates (portfolio_manager, hedge_fund, crypto_trader, equity_trader, macro_economist, geopolitics).";
+        t.description = "List built-in dashboard templates (portfolio_manager, hedge_fund, crypto_trader, "
+                        "equity_trader, macro_economist, geopolitics).";
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QJsonArray arr;
                 for (const auto& tpl : screens::all_dashboard_templates())
@@ -253,11 +261,13 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Get the live dashboard canvas layout (items + cols + row_h + margin).";
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 resolve(ToolResult::ok_data(grid_layout_to_json(canvas->current_layout())));
             });
         };
@@ -273,20 +283,27 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("profile_name", "Profile name (default = 'default')").default_str("default").length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("profile_name", "Profile name (default = 'default')")
+                             .default_str("default")
+                             .length(1, 64)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 auto r = DashboardLayoutRepository::instance().load_layout(args["profile_name"].toString("default"));
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 canvas->load_layout(r.value());
                 resolve(ToolResult::ok("Layout loaded", QJsonObject{
-                    {"profile_name", args["profile_name"].toString("default")},
-                    {"widget_count", static_cast<int>(r.value().items.size())},
-                }));
+                                                            {"profile_name", args["profile_name"].toString("default")},
+                                                            {"widget_count", static_cast<int>(r.value().items.size())},
+                                                        }));
             });
         };
         tools.push_back(std::move(t));
@@ -299,21 +316,26 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("profile_name", "Profile name").default_str("default").length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().string("profile_name", "Profile name").default_str("default").length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 auto layout = canvas->current_layout();
-                auto r = DashboardLayoutRepository::instance().save_layout(layout, args["profile_name"].toString("default"));
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                auto r =
+                    DashboardLayoutRepository::instance().save_layout(layout, args["profile_name"].toString("default"));
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Layout saved", QJsonObject{
-                    {"profile_name", args["profile_name"].toString("default")},
-                    {"widget_count", static_cast<int>(layout.items.size())},
-                }));
+                                                           {"profile_name", args["profile_name"].toString("default")},
+                                                           {"widget_count", static_cast<int>(layout.items.size())},
+                                                       }));
             });
         };
         tools.push_back(std::move(t));
@@ -332,18 +354,22 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("template_id", "Template id (use list_dashboard_templates)").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("template_id", "Template id (use list_dashboard_templates)")
+                             .required()
+                             .length(1, 64)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 canvas->apply_template(args["template_id"].toString());
                 resolve(ToolResult::ok("Template applied", QJsonObject{
-                    {"template_id", args["template_id"].toString()},
-                    {"widget_count", canvas->tile_count()},
-                }));
+                                                               {"template_id", args["template_id"].toString()},
+                                                               {"widget_count", canvas->tile_count()},
+                                                           }));
             });
         };
         tools.push_back(std::move(t));
@@ -352,21 +378,23 @@ std::vector<ToolDef> get_dashboard_tools() {
     {
         ToolDef t;
         t.name = "clear_dashboard_layout";
-        t.description = "Delete all widget instances for a profile (does NOT touch the live canvas — call load_dashboard_layout after to refresh).";
+        t.description = "Delete all widget instances for a profile (does NOT touch the live canvas — call "
+                        "load_dashboard_layout after to refresh).";
         t.category = "dashboard";
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("profile_name", "Profile name").default_str("default").length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().string("profile_name", "Profile name").default_str("default").length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto r = DashboardLayoutRepository::instance().clear_layout(args["profile_name"].toString("default"));
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Layout cleared",
-                                        QJsonObject{{"profile_name", args["profile_name"].toString("default")}}));
+                                       QJsonObject{{"profile_name", args["profile_name"].toString("default")}}));
             });
         };
         tools.push_back(std::move(t));
@@ -375,23 +403,36 @@ std::vector<ToolDef> get_dashboard_tools() {
     {
         ToolDef t;
         t.name = "add_dashboard_widget";
-        t.description = "Add a widget to the live canvas. Optional cell position and per-instance config (e.g. {symbol: 'AAPL'} for stock_quote). Returns the new instance_id.";
+        t.description = "Add a widget to the live canvas. Optional cell position and per-instance config (e.g. "
+                        "{symbol: 'AAPL'} for stock_quote). Returns the new instance_id.";
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("type_id", "Widget type id (use list_dashboard_widgets)").required().length(1, 64)
-            .object("config", "Optional per-instance config object (e.g. {symbol: 'AAPL'})")
-            .integer("x", "Grid column (-1 = auto-place)").default_int(-1).min(-1)
-            .integer("y", "Grid row (-1 = auto-place)").default_int(-1).min(-1)
-            .integer("w", "Width in columns (0 = use widget default)").default_int(0).min(0)
-            .integer("h", "Height in rows (0 = use widget default)").default_int(0).min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("type_id", "Widget type id (use list_dashboard_widgets)")
+                             .required()
+                             .length(1, 64)
+                             .object("config", "Optional per-instance config object (e.g. {symbol: 'AAPL'})")
+                             .integer("x", "Grid column (-1 = auto-place)")
+                             .default_int(-1)
+                             .min(-1)
+                             .integer("y", "Grid row (-1 = auto-place)")
+                             .default_int(-1)
+                             .min(-1)
+                             .integer("w", "Width in columns (0 = use widget default)")
+                             .default_int(0)
+                             .min(0)
+                             .integer("h", "Height in rows (0 = use widget default)")
+                             .default_int(0)
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
 
                 const QString type_id = args["type_id"].toString();
                 if (!screens::WidgetRegistry::instance().find(type_id)) {
@@ -410,7 +451,10 @@ std::vector<ToolDef> get_dashboard_tools() {
                 QString new_id;
                 auto after = canvas->current_layout();
                 for (const auto& it : after.items) {
-                    if (!before.contains(it.instance_id)) { new_id = it.instance_id; break; }
+                    if (!before.contains(it.instance_id)) {
+                        new_id = it.instance_id;
+                        break;
+                    }
                 }
                 if (new_id.isEmpty()) {
                     resolve(ToolResult::fail("Widget add failed (no new instance detected)"));
@@ -428,12 +472,18 @@ std::vector<ToolDef> get_dashboard_tools() {
                 if (cell_override || !cfg.isEmpty()) {
                     auto layout = canvas->current_layout();
                     for (auto& it : layout.items) {
-                        if (it.instance_id != new_id) continue;
-                        if (x >= 0) it.cell.x = x;
-                        if (y >= 0) it.cell.y = y;
-                        if (w > 0)  it.cell.w = std::max(w, it.cell.min_w);
-                        if (h > 0)  it.cell.h = std::max(h, it.cell.min_h);
-                        if (!cfg.isEmpty()) it.config = cfg;
+                        if (it.instance_id != new_id)
+                            continue;
+                        if (x >= 0)
+                            it.cell.x = x;
+                        if (y >= 0)
+                            it.cell.y = y;
+                        if (w > 0)
+                            it.cell.w = std::max(w, it.cell.min_w);
+                        if (h > 0)
+                            it.cell.h = std::max(h, it.cell.min_h);
+                        if (!cfg.isEmpty())
+                            it.config = cfg;
                         break;
                     }
                     canvas->load_layout(layout);
@@ -448,9 +498,9 @@ std::vector<ToolDef> get_dashboard_tools() {
                 }
 
                 resolve(ToolResult::ok("Widget added", QJsonObject{
-                    {"instance_id", new_id},
-                    {"type_id", type_id},
-                }));
+                                                           {"instance_id", new_id},
+                                                           {"type_id", type_id},
+                                                       }));
             });
         };
         tools.push_back(std::move(t));
@@ -464,13 +514,17 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("instance_id", "Widget instance UUID (from get_current_dashboard_layout)").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("instance_id", "Widget instance UUID (from get_current_dashboard_layout)")
+                             .required()
+                             .length(1, 64)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 const QString id = args["instance_id"].toString();
                 canvas->remove_widget(id);
                 resolve(ToolResult::ok("Widget removed", QJsonObject{{"instance_id", id}}));
@@ -487,32 +541,44 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("instance_id", "Widget instance UUID").required().length(1, 64)
-            .integer("x", "New grid column").required().min(0)
-            .integer("y", "New grid row").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("instance_id", "Widget instance UUID")
+                             .required()
+                             .length(1, 64)
+                             .integer("x", "New grid column")
+                             .required()
+                             .min(0)
+                             .integer("y", "New grid row")
+                             .required()
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 const QString id = args["instance_id"].toString();
                 auto layout = canvas->current_layout();
                 bool found = false;
                 for (auto& it : layout.items) {
-                    if (it.instance_id != id) continue;
+                    if (it.instance_id != id)
+                        continue;
                     it.cell.x = args["x"].toInt();
                     it.cell.y = args["y"].toInt();
                     found = true;
                     break;
                 }
-                if (!found) { resolve(ToolResult::fail("Widget instance not found")); return; }
+                if (!found) {
+                    resolve(ToolResult::fail("Widget instance not found"));
+                    return;
+                }
                 canvas->load_layout(layout);
                 resolve(ToolResult::ok("Widget moved", QJsonObject{
-                    {"instance_id", id},
-                    {"x", args["x"].toInt()},
-                    {"y", args["y"].toInt()},
-                }));
+                                                           {"instance_id", id},
+                                                           {"x", args["x"].toInt()},
+                                                           {"y", args["y"].toInt()},
+                                                       }));
             });
         };
         tools.push_back(std::move(t));
@@ -526,32 +592,44 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("instance_id", "Widget instance UUID").required().length(1, 64)
-            .integer("w", "New column span").required().min(1)
-            .integer("h", "New row span").required().min(1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("instance_id", "Widget instance UUID")
+                             .required()
+                             .length(1, 64)
+                             .integer("w", "New column span")
+                             .required()
+                             .min(1)
+                             .integer("h", "New row span")
+                             .required()
+                             .min(1)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 const QString id = args["instance_id"].toString();
                 auto layout = canvas->current_layout();
                 bool found = false;
                 for (auto& it : layout.items) {
-                    if (it.instance_id != id) continue;
+                    if (it.instance_id != id)
+                        continue;
                     it.cell.w = std::max(args["w"].toInt(), it.cell.min_w);
                     it.cell.h = std::max(args["h"].toInt(), it.cell.min_h);
                     found = true;
                     break;
                 }
-                if (!found) { resolve(ToolResult::fail("Widget instance not found")); return; }
+                if (!found) {
+                    resolve(ToolResult::fail("Widget instance not found"));
+                    return;
+                }
                 canvas->load_layout(layout);
                 resolve(ToolResult::ok("Widget resized", QJsonObject{
-                    {"instance_id", id},
-                    {"w", args["w"].toInt()},
-                    {"h", args["h"].toInt()},
-                }));
+                                                             {"instance_id", id},
+                                                             {"w", args["w"].toInt()},
+                                                             {"h", args["h"].toInt()},
+                                                         }));
             });
         };
         tools.push_back(std::move(t));
@@ -567,17 +645,19 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Read per-instance config of a widget (free-form JSON; shape is widget-type-specific).";
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("instance_id", "Widget instance UUID").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().string("instance_id", "Widget instance UUID").required().length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 auto* tile = find_tile_by_instance_id(canvas, args["instance_id"].toString());
                 if (!tile || !tile->content_widget()) {
-                    resolve(ToolResult::fail("Widget instance not found")); return;
+                    resolve(ToolResult::fail("Widget instance not found"));
+                    return;
                 }
                 resolve(ToolResult::ok_data(tile->content_widget()->config()));
             });
@@ -588,23 +668,30 @@ std::vector<ToolDef> get_dashboard_tools() {
     {
         ToolDef t;
         t.name = "set_dashboard_widget_config";
-        t.description = "Write per-instance config to a widget (e.g. {symbol:'AAPL'} for stock_quote, {category:'earnings'} for news_category, {broker:'zerodha'} for holdings).";
+        t.description = "Write per-instance config to a widget (e.g. {symbol:'AAPL'} for stock_quote, "
+                        "{category:'earnings'} for news_category, {broker:'zerodha'} for holdings).";
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("instance_id", "Widget instance UUID").required().length(1, 64)
-            .object("config", "Widget-type-specific config object").required()
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("instance_id", "Widget instance UUID")
+                             .required()
+                             .length(1, 64)
+                             .object("config", "Widget-type-specific config object")
+                             .required()
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 const QString id = args["instance_id"].toString();
                 auto* tile = find_tile_by_instance_id(canvas, id);
                 if (!tile || !tile->content_widget()) {
-                    resolve(ToolResult::fail("Widget instance not found")); return;
+                    resolve(ToolResult::fail("Widget instance not found"));
+                    return;
                 }
                 const QJsonObject cfg = args["config"].toObject();
                 tile->content_widget()->apply_config(cfg);
@@ -612,14 +699,17 @@ std::vector<ToolDef> get_dashboard_tools() {
                 // Also persist into the layout's GridItem.config so save/load round-trips.
                 auto layout = canvas->current_layout();
                 for (auto& it : layout.items) {
-                    if (it.instance_id == id) { it.config = cfg; break; }
+                    if (it.instance_id == id) {
+                        it.config = cfg;
+                        break;
+                    }
                 }
                 canvas->load_layout(layout);
 
                 resolve(ToolResult::ok("Widget config applied", QJsonObject{
-                    {"instance_id", id},
-                    {"config", cfg},
-                }));
+                                                                    {"instance_id", id},
+                                                                    {"config", cfg},
+                                                                }));
             });
         };
         tools.push_back(std::move(t));
@@ -632,21 +722,23 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("instance_id", "Widget instance UUID").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().string("instance_id", "Widget instance UUID").required().length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 auto* tile = find_tile_by_instance_id(canvas, args["instance_id"].toString());
                 if (!tile || !tile->content_widget()) {
-                    resolve(ToolResult::fail("Widget instance not found")); return;
+                    resolve(ToolResult::fail("Widget instance not found"));
+                    return;
                 }
                 tile->content_widget()->request_refresh();
-                resolve(ToolResult::ok("Refresh dispatched",
-                                        QJsonObject{{"instance_id", args["instance_id"].toString()}}));
+                resolve(
+                    ToolResult::ok("Refresh dispatched", QJsonObject{{"instance_id", args["instance_id"].toString()}}));
             });
         };
         tools.push_back(std::move(t));
@@ -659,14 +751,15 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("row_height", "Row height in pixels").required().between(20, 200)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().integer("row_height", "Row height in pixels").required().between(20, 200).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 const int px = args["row_height"].toInt();
                 canvas->set_row_height(px);
                 resolve(ToolResult::ok("Row height set", QJsonObject{{"row_height", px}}));
@@ -686,17 +779,21 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
-                if (!canvas) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!canvas) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 int n = 0;
                 for (auto* w : canvas->findChildren<screens::widgets::BaseWidget*>()) {
-                    if (w) { w->request_refresh(); ++n; }
+                    if (w) {
+                        w->request_refresh();
+                        ++n;
+                    }
                 }
-                resolve(ToolResult::ok("Refresh dispatched",
-                                        QJsonObject{{"widget_count", n}}));
+                resolve(ToolResult::ok("Refresh dispatched", QJsonObject{{"widget_count", n}}));
             });
         };
         tools.push_back(std::move(t));
@@ -709,14 +806,19 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* ds = find_dashboard_screen();
-                if (!ds) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!ds) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 // Emit the toolbar's signal so the same slot path runs.
                 auto* tb = ds->findChild<screens::DashboardToolBar*>();
-                if (!tb) { resolve(ToolResult::fail("Toolbar not found")); return; }
+                if (!tb) {
+                    resolve(ToolResult::fail("Toolbar not found"));
+                    return;
+                }
                 emit tb->toggle_pulse_clicked();
                 resolve(ToolResult::ok("Market pulse toggled"));
             });
@@ -731,13 +833,18 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* ds = find_dashboard_screen();
-                if (!ds) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!ds) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 auto* tb = ds->findChild<screens::DashboardToolBar*>();
-                if (!tb) { resolve(ToolResult::fail("Toolbar not found")); return; }
+                if (!tb) {
+                    resolve(ToolResult::fail("Toolbar not found"));
+                    return;
+                }
                 emit tb->toggle_compact_clicked();
                 resolve(ToolResult::ok("Compact mode toggled"));
             });
@@ -751,8 +858,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Get dashboard runtime stats (widget count, grid cols/row_h, screen open).";
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
                 if (!canvas) {
@@ -782,8 +888,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Get the current ticker-bar symbol list.";
         t.category = "dashboard";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QStringList symbols;
                 if (auto* tb = find_ticker_bar()) {
@@ -795,7 +900,8 @@ std::vector<ToolDef> get_dashboard_tools() {
                         symbols = r.value().split(',', Qt::SkipEmptyParts);
                 }
                 QJsonArray arr;
-                for (const auto& s : symbols) arr.append(s);
+                for (const auto& s : symbols)
+                    arr.append(s);
                 resolve(ToolResult::ok_data(QJsonObject{
                     {"symbols", arr},
                     {"count", static_cast<int>(symbols.size())},
@@ -812,29 +918,32 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .array("symbols", "Symbol list (e.g. ['SPY','QQQ','AAPL'])",
-                   QJsonObject{{"type", "string"}})
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder()
+                .array("symbols", "Symbol list (e.g. ['SPY','QQQ','AAPL'])", QJsonObject{{"type", "string"}})
+                .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 QStringList symbols;
                 for (const auto& v : args["symbols"].toArray()) {
                     const QString s = v.toString().trimmed().toUpper();
-                    if (!s.isEmpty()) symbols.append(s);
+                    if (!s.isEmpty())
+                        symbols.append(s);
                 }
                 // Persist via the same SettingsRepository key the ticker bar uses.
                 auto r = SettingsRepository::instance().set(kTickerSymbolsKey, symbols.join(','), "dashboard");
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
 
                 // If the dashboard is open, push the change so it re-subscribes.
                 if (auto* tb = find_ticker_bar())
                     emit tb->symbols_changed(symbols);
 
                 resolve(ToolResult::ok("Ticker symbols updated", QJsonObject{
-                    {"count", static_cast<int>(symbols.size())},
-                }));
+                                                                     {"count", static_cast<int>(symbols.size())},
+                                                                 }));
             });
         };
         tools.push_back(std::move(t));
@@ -847,15 +956,17 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* tb = find_ticker_bar();
-                if (!tb) { resolve(ToolResult::fail("Dashboard not open")); return; }
+                if (!tb) {
+                    resolve(ToolResult::fail("Dashboard not open"));
+                    return;
+                }
                 // Re-emit symbols_changed — DashboardScreen's slot is the refresh path.
                 emit tb->symbols_changed(tb->symbols());
                 resolve(ToolResult::ok("Ticker refresh dispatched",
-                                        QJsonObject{{"symbol_count", static_cast<int>(tb->symbols().size())}}));
+                                       QJsonObject{{"symbol_count", static_cast<int>(tb->symbols().size())}}));
             });
         };
         tools.push_back(std::move(t));

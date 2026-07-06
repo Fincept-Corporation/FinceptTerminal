@@ -20,20 +20,20 @@ namespace fincept::ui::algo {
 /// field/offset on the left; compare_* / value on the right).
 class ConditionBlock : public QFrame {
     Q_OBJECT
-public:
+  public:
     explicit ConditionBlock(bool is_entry, QWidget* parent = nullptr);
 
     QJsonObject to_json() const;
     void from_json(const QJsonObject& obj);
 
-signals:
+  signals:
     void remove_requested();
     void changed();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     void build_ui();
     void populate_operators();
     void on_operator_changed();

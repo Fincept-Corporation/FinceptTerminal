@@ -286,9 +286,19 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
                        const QString& order_type, double quantity, std::optional<double> price,
                        std::optional<double> stop_price, bool reduce_only, const QString& exchange,
                        const QString& product) {
+    // Normalize order-type vocabulary. UnifiedOrder serializes via order_type_str()
+    // as "stop_loss"/"stop_loss_limit", but the paper engine's canonical spellings
+    // are "stop"/"stop_limit" (what OrderMatcher matches on). Accept both and store
+    // the canonical form so SL / SL-Limit paper orders are not rejected here.
+    QString type = order_type;
+    if (type == "stop_loss")
+        type = "stop";
+    else if (type == "stop_loss_limit")
+        type = "stop_limit";
+
     // Validation
-    if (order_type != "market" && order_type != "limit" && order_type != "stop" && order_type != "stop_limit")
-        throw std::runtime_error("Invalid order type: " + order_type.toStdString());
+    if (type != "market" && type != "limit" && type != "stop" && type != "stop_limit")
+        throw std::runtime_error("Invalid order type: " + type.toStdString());
     if (side != "buy" && side != "sell")
         throw std::runtime_error("Invalid side: " + side.toStdString());
     if (!std::isfinite(quantity) || quantity <= 0.0)
@@ -297,18 +307,28 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
         throw std::runtime_error("Invalid price");
     if (stop_price && (!std::isfinite(*stop_price) || *stop_price <= 0.0))
         throw std::runtime_error("Invalid stop price");
-    if (order_type == "limit" && !price)
+    if (type == "limit" && !price)
         throw std::runtime_error("Limit order requires price");
-    if ((order_type == "stop" || order_type == "stop_limit") && !stop_price)
+    if ((type == "stop" || type == "stop_limit") && !stop_price)
         throw std::runtime_error("Stop order requires stop_price");
+
+    // Serialize the balance read-modify-write against concurrent fills/cancels.
+    // pt_fill_order / pt_cancel_order already hold s_fill_mutex while they read
+    // and write portfolio.balance; without this lock a fill landing between our
+    // balance read (here) and the margin-block write (below) has its balance
+    // delta silently reverted. Safe: the helpers called under the lock
+    // (pt_get_portfolio, pt_calculate_required_margin, pt_is_market_open) never
+    // take s_fill_mutex — pt_convert_position_product already calls them under
+    // it — and reject_order's throw releases the lock via RAII.
+    QMutexLocker fill_lock(&s_fill_mutex);
 
     auto portfolio = pt_get_portfolio(portfolio_id);
 
     // Exchange-hours enforcement — opt-in per portfolio (default off preserves
     // existing behavior). Only enforced when an exchange is supplied.
     if (pt_get_enforce_market_hours(portfolio_id) && !exchange.isEmpty() && !pt_is_market_open(exchange)) {
-        reject_order(portfolio_id, symbol, side, order_type, quantity, price, stop_price, reduce_only, product,
-                     exchange, ("Market closed for exchange " + exchange).toStdString());
+        reject_order(portfolio_id, symbol, side, type, quantity, price, stop_price, reduce_only, product, exchange,
+                     ("Market closed for exchange " + exchange).toStdString());
     }
 
     // Margin blocking — skip for reduce_only orders and for the portion of an
@@ -336,7 +356,7 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
                 pt_calculate_required_margin(portfolio_id, symbol, exchange, product, net_new_qty, ref, side);
 
             if (margin_to_block > portfolio.balance) {
-                reject_order(portfolio_id, symbol, side, order_type, quantity, price, stop_price, reduce_only, product,
+                reject_order(portfolio_id, symbol, side, type, quantity, price, stop_price, reduce_only, product,
                              exchange, "Insufficient margin");
             }
         }
@@ -347,7 +367,7 @@ PtOrder pt_place_order(const QString& portfolio_id, const QString& symbol, const
     order.portfolio_id = portfolio_id;
     order.symbol = symbol;
     order.side = side;
-    order.order_type = order_type;
+    order.order_type = type;
     order.quantity = quantity;
     order.price = price;
     order.stop_price = stop_price;
@@ -619,15 +639,15 @@ QDate ist_date_of(const QString& iso_utc, const QDate& fallback) {
 
 QVector<PtOrder> pt_get_orders_for_day(const QString& portfolio_id, const QDate& ist_day) {
     const QDateTime start = ist_day_start_utc(ist_day);
-    auto r = repo().get_orders_between(portfolio_id, start.toString(Qt::ISODate),
-                                       start.addDays(1).toString(Qt::ISODate));
+    auto r =
+        repo().get_orders_between(portfolio_id, start.toString(Qt::ISODate), start.addDays(1).toString(Qt::ISODate));
     return r.is_ok() ? r.value() : QVector<PtOrder>{};
 }
 
 QVector<PtTrade> pt_get_trades_for_day(const QString& portfolio_id, const QDate& ist_day) {
     const QDateTime start = ist_day_start_utc(ist_day);
-    auto r = repo().get_trades_between(portfolio_id, start.toString(Qt::ISODate),
-                                       start.addDays(1).toString(Qt::ISODate));
+    auto r =
+        repo().get_trades_between(portfolio_id, start.toString(Qt::ISODate), start.addDays(1).toString(Qt::ISODate));
     return r.is_ok() ? r.value() : QVector<PtTrade>{};
 }
 

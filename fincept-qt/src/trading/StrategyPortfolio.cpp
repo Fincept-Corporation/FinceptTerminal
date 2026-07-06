@@ -133,8 +133,7 @@ std::optional<SavedStrategy> StrategyPortfolio::get(const QString& id) const {
 
 QVector<SavedStrategy> StrategyPortfolio::list() const {
     QVector<SavedStrategy> out;
-    auto r = Database::instance().execute(
-        "SELECT * FROM saved_strategies ORDER BY created_at DESC");
+    auto r = Database::instance().execute("SELECT * FROM saved_strategies ORDER BY created_at DESC");
     if (r.is_err())
         return out;
     auto& q = r.value();
@@ -148,9 +147,8 @@ QVector<SavedStrategy> StrategyPortfolio::list() const {
 int qty_freeze_limit(const QString& symbol, const QString& exchange) {
     if (symbol.isEmpty())
         return 0;
-    auto r = Database::instance().execute(
-        "SELECT freeze_qty FROM qty_freeze WHERE symbol=? AND exchange=?",
-        {symbol, exchange});
+    auto r = Database::instance().execute("SELECT freeze_qty FROM qty_freeze WHERE symbol=? AND exchange=?",
+                                          {symbol, exchange});
     if (r.is_err())
         return 0;
     auto& q = r.value();
@@ -165,15 +163,14 @@ bool set_qty_freeze_limit(const QString& symbol, const QString& exchange, int fr
         return false;
 
     if (freeze_qty <= 0) {
-        auto r = Database::instance().execute(
-            "DELETE FROM qty_freeze WHERE symbol=? AND exchange=?", {symbol, exchange});
+        auto r =
+            Database::instance().execute("DELETE FROM qty_freeze WHERE symbol=? AND exchange=?", {symbol, exchange});
         return r.is_ok();
     }
 
-    auto r = Database::instance().execute(
-        "INSERT INTO qty_freeze (symbol, exchange, freeze_qty) VALUES (?, ?, ?) "
-        "ON CONFLICT(symbol, exchange) DO UPDATE SET freeze_qty=excluded.freeze_qty",
-        {symbol, exchange, freeze_qty});
+    auto r = Database::instance().execute("INSERT INTO qty_freeze (symbol, exchange, freeze_qty) VALUES (?, ?, ?) "
+                                          "ON CONFLICT(symbol, exchange) DO UPDATE SET freeze_qty=excluded.freeze_qty",
+                                          {symbol, exchange, freeze_qty});
     if (r.is_err()) {
         LOG_ERROR(kLog, QString("set_qty_freeze_limit failed: %1").arg(QString::fromStdString(r.error())));
         return false;

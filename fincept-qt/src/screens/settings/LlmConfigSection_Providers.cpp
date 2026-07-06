@@ -6,10 +6,9 @@
 //
 // Part of the partial-class split of LlmConfigSection.cpp.
 
-#include "screens/settings/LlmConfigSection.h"
-
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "screens/settings/LlmConfigSection.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -24,7 +23,9 @@
 // (another anonymous-namespace TAG). Unique identifier prevents ambiguous
 // lookup if all three land in one TU. Same convention applied across
 // AiChatScreen_Sessions.cpp after a real-world collision surfaced.
-namespace { constexpr const char* TAG_PROVIDERS = "LlmConfigSection"; }
+namespace {
+constexpr const char* TAG_PROVIDERS = "LlmConfigSection";
+}
 
 #include <QFormLayout>
 #include <QFrame>
@@ -74,7 +75,8 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
     vl->setSpacing(6);
 
     provider_list_title_ = new QLabel(tr("Providers"));
-    provider_list_title_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
+    provider_list_title_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) +
+                                        ";font-weight:700;letter-spacing:1px;");
     vl->addWidget(provider_list_title_);
 
     provider_list_ = new QListWidget;
@@ -109,7 +111,8 @@ QWidget* LlmConfigSection::build_provider_list_panel() {
             display_to_id.insert(disp, id);
         }
         bool ok;
-        QString chosen = QInputDialog::getItem(this, tr("Add Provider"), tr("Select provider:"), choices, 0, false, &ok);
+        QString chosen =
+            QInputDialog::getItem(this, tr("Add Provider"), tr("Select provider:"), choices, 0, false, &ok);
         if (!ok || chosen.isEmpty())
             return;
         QString provider = display_to_id.value(chosen, chosen);
@@ -688,13 +691,13 @@ void LlmConfigSection::on_save_provider() {
     auto r2 = LlmConfigRepository::instance().save_provider(cfg);
     if (r2.is_err()) {
         show_status(tr("Failed to save: ") + QString::fromStdString(r2.error()), true);
-        LOG_ERROR(TAG_PROVIDERS,"save_provider failed for " + provider + ": " + QString::fromStdString(r2.error()));
+        LOG_ERROR(TAG_PROVIDERS, "save_provider failed for " + provider + ": " + QString::fromStdString(r2.error()));
         return;
     }
     auto r3 = LlmConfigRepository::instance().set_active(provider);
     if (r3.is_err()) {
         show_status(tr("Failed to activate: ") + QString::fromStdString(r3.error()), true);
-        LOG_ERROR(TAG_PROVIDERS,"set_active failed for " + provider + ": " + QString::fromStdString(r3.error()));
+        LOG_ERROR(TAG_PROVIDERS, "set_active failed for " + provider + ": " + QString::fromStdString(r3.error()));
         return;
     }
 
@@ -704,11 +707,10 @@ void LlmConfigSection::on_save_provider() {
     // only finds out on restart.
     auto verify = LlmConfigRepository::instance().get_active_provider();
     if (!verify.is_ok() || verify.value().provider.toLower() != provider) {
-        QString detail = verify.is_ok()
-                             ? tr("active is '%1' not '%2'").arg(verify.value().provider, provider)
-                             : QString::fromStdString(verify.error());
+        QString detail = verify.is_ok() ? tr("active is '%1' not '%2'").arg(verify.value().provider, provider)
+                                        : QString::fromStdString(verify.error());
         show_status(tr("Save verification failed: ") + detail, true);
-        LOG_ERROR(TAG_PROVIDERS,"Save verification failed — " + detail);
+        LOG_ERROR(TAG_PROVIDERS, "Save verification failed — " + detail);
         return;
     }
 
@@ -717,7 +719,7 @@ void LlmConfigSection::on_save_provider() {
     ai_chat::LlmService::instance().reload_config();
     emit config_changed();
 
-    LOG_INFO(TAG_PROVIDERS,"LLM provider saved and verified: " + provider + " / " + cfg.model);
+    LOG_INFO(TAG_PROVIDERS, "LLM provider saved and verified: " + provider + " / " + cfg.model);
 }
 
 void LlmConfigSection::on_delete_provider() {
@@ -870,7 +872,7 @@ void LlmConfigSection::on_models_fetched(const QString& provider, const QStringL
         model_combo_->setCurrentIndex(0);
 
     show_status(tr("%1 models loaded for %2").arg(models.size()).arg(provider), false);
-    LOG_INFO(TAG_PROVIDERS,QString("Fetched %1 models for %2").arg(models.size()).arg(provider));
+    LOG_INFO(TAG_PROVIDERS, QString("Fetched %1 models for %2").arg(models.size()).arg(provider));
 }
 
 } // namespace fincept::screens

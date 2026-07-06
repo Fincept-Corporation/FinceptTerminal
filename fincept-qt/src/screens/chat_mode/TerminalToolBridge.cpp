@@ -141,32 +141,30 @@ void TerminalToolBridge::execute_call(const QString& call_id, const QString& too
     auto future = mcp::McpProvider::instance().call_tool_async(local_name, arguments);
 
     auto* watcher = new QFutureWatcher<mcp::ToolResult>(this);
-    QObject::connect(watcher, &QFutureWatcher<mcp::ToolResult>::finished, this,
-                     [self, call_id, local_name, watcher]() {
-                         // resultCount() lives on QFuture, not QFutureWatcher —
-                         // use future() to reach it.
-                         const auto fut = watcher->future();
-                         mcp::ToolResult result = (fut.resultCount() > 0)
-                                                      ? fut.result()
-                                                      : mcp::ToolResult::fail("Tool produced no result");
-                         watcher->deleteLater();
+    QObject::connect(watcher, &QFutureWatcher<mcp::ToolResult>::finished, this, [self, call_id, local_name, watcher]() {
+        // resultCount() lives on QFuture, not QFutureWatcher —
+        // use future() to reach it.
+        const auto fut = watcher->future();
+        mcp::ToolResult result =
+            (fut.resultCount() > 0) ? fut.result() : mcp::ToolResult::fail("Tool produced no result");
+        watcher->deleteLater();
 
-                         if (!self || !self->active_) return;
+        if (!self || !self->active_)
+            return;
 
-                         // Capture result by value into the submit callback —
-                         // avoids the init-capture pattern (which Clang on
-                         // Windows was rejecting for nested-lambda scoping).
-                         ChatModeService::instance().submit_tool_result(
-                             call_id, result.to_json(),
-                             [self, local_name, result](bool ok, QString err) {
-                                 if (!self) return;
-                                 if (!ok) {
-                                     LOG_WARN("TerminalToolBridge",
-                                              QString("Failed to submit result for %1: %2").arg(local_name, err));
-                                 }
-                                 emit self->tool_executed(local_name, result.success);
-                             });
-                     });
+        // Capture result by value into the submit callback —
+        // avoids the init-capture pattern (which Clang on
+        // Windows was rejecting for nested-lambda scoping).
+        ChatModeService::instance().submit_tool_result(
+            call_id, result.to_json(), [self, local_name, result](bool ok, QString err) {
+                if (!self)
+                    return;
+                if (!ok) {
+                    LOG_WARN("TerminalToolBridge", QString("Failed to submit result for %1: %2").arg(local_name, err));
+                }
+                emit self->tool_executed(local_name, result.success);
+            });
+    });
     watcher->setFuture(future);
 }
 

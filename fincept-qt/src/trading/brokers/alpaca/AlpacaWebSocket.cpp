@@ -22,8 +22,7 @@ QString compact_json(const QJsonObject& obj) {
 
 // ── Construction ────────────────────────────────────────────────────────────
 
-AlpacaWebSocket::AlpacaWebSocket(const QString& api_key, const QString& api_secret,
-                                 QObject* parent)
+AlpacaWebSocket::AlpacaWebSocket(const QString& api_key, const QString& api_secret, QObject* parent)
     : QObject(parent), api_key_(api_key), api_secret_(api_secret) {
     ws_ = new fincept::WebSocketClient(this);
     connect(ws_, &fincept::WebSocketClient::connected, this, &AlpacaWebSocket::on_ws_connected);
@@ -56,7 +55,8 @@ void AlpacaWebSocket::open() {
 
     (void)QtConcurrent::run([self, api_key, api_secret]() {
         auto* broker = BrokerRegistry::instance().get("alpaca");
-        if (!broker) return;
+        if (!broker)
+            return;
 
         BrokerCredentials creds;
         creds.broker_id = "alpaca";
@@ -64,26 +64,30 @@ void AlpacaWebSocket::open() {
         creds.api_secret = api_secret;
 
         auto result = broker->get_clock(creds);
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self) return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
 
-            bool should_connect = true;
-            if (result.success && result.data) {
-                const auto& clock = *result.data;
-                if (!clock.is_open) {
-                    LOG_INFO(kTag, QString("Market is closed. Next open: %1").arg(clock.next_open));
-                    should_connect = false;
-                    emit self->market_closed();
+                bool should_connect = true;
+                if (result.success && result.data) {
+                    const auto& clock = *result.data;
+                    if (!clock.is_open) {
+                        LOG_INFO(kTag, QString("Market is closed. Next open: %1").arg(clock.next_open));
+                        should_connect = false;
+                        emit self->market_closed();
+                    }
                 }
-            }
 
-            if (should_connect) {
-                LOG_INFO(kTag, QString("Connecting to %1").arg(kWsUrl));
-                self->ws_->connect_to(QString::fromLatin1(kWsUrl));
-            }
+                if (should_connect) {
+                    LOG_INFO(kTag, QString("Connecting to %1").arg(kWsUrl));
+                    self->ws_->connect_to(QString::fromLatin1(kWsUrl));
+                }
 
-            self->clock_timer_->start();
-        }, Qt::QueuedConnection);
+                self->clock_timer_->start();
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -157,7 +161,8 @@ void AlpacaWebSocket::on_clock_check() {
 
     (void)QtConcurrent::run([self, api_key, api_secret]() {
         auto* broker = BrokerRegistry::instance().get("alpaca");
-        if (!broker) return;
+        if (!broker)
+            return;
 
         BrokerCredentials creds;
         creds.broker_id = "alpaca";
@@ -165,21 +170,26 @@ void AlpacaWebSocket::on_clock_check() {
         creds.api_secret = api_secret;
 
         auto result = broker->get_clock(creds);
-        QMetaObject::invokeMethod(self, [self, result]() {
-            if (!self) return;
-            if (!result.success || !result.data) return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                if (!result.success || !result.data)
+                    return;
 
-            const auto& clock = *result.data;
-            if (clock.is_open && !self->connected_.load()) {
-                LOG_INFO(kTag, "Market opened — connecting WebSocket");
-                self->ws_->connect_to(QString::fromLatin1(kWsUrl));
-            } else if (!clock.is_open && self->connected_.load()) {
-                LOG_INFO(kTag, "Market closed — disconnecting WebSocket");
-                self->close();
-                self->clock_timer_->start();
-                emit self->market_closed();
-            }
-        }, Qt::QueuedConnection);
+                const auto& clock = *result.data;
+                if (clock.is_open && !self->connected_.load()) {
+                    LOG_INFO(kTag, "Market opened — connecting WebSocket");
+                    self->ws_->connect_to(QString::fromLatin1(kWsUrl));
+                } else if (!clock.is_open && self->connected_.load()) {
+                    LOG_INFO(kTag, "Market closed — disconnecting WebSocket");
+                    self->close();
+                    self->clock_timer_->start();
+                    emit self->market_closed();
+                }
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -194,7 +204,8 @@ void AlpacaWebSocket::send_auth() {
 }
 
 void AlpacaWebSocket::send_subscribe(const QStringList& symbols) {
-    if (symbols.isEmpty()) return;
+    if (symbols.isEmpty())
+        return;
 
     QJsonArray syms;
     for (const auto& s : symbols)
@@ -211,7 +222,8 @@ void AlpacaWebSocket::send_subscribe(const QStringList& symbols) {
 }
 
 void AlpacaWebSocket::send_unsubscribe(const QStringList& symbols) {
-    if (symbols.isEmpty()) return;
+    if (symbols.isEmpty())
+        return;
 
     QJsonArray syms;
     for (const auto& s : symbols)
@@ -242,7 +254,8 @@ void AlpacaWebSocket::on_ws_message(const QString& message) {
 
     const auto arr = doc.array();
     for (const auto& val : arr) {
-        if (!val.isObject()) continue;
+        if (!val.isObject())
+            continue;
         handle_message(val.toObject());
     }
 }
@@ -250,12 +263,18 @@ void AlpacaWebSocket::on_ws_message(const QString& message) {
 void AlpacaWebSocket::handle_message(const QJsonObject& msg) {
     const QString type = msg.value("T").toString();
 
-    if (type == QLatin1String("success"))       handle_success(msg);
-    else if (type == QLatin1String("error"))     handle_error(msg);
-    else if (type == QLatin1String("subscription")) handle_subscription(msg);
-    else if (type == QLatin1String("t"))         handle_trade(msg);
-    else if (type == QLatin1String("q"))         handle_quote(msg);
-    else if (type == QLatin1String("b"))         handle_bar(msg);
+    if (type == QLatin1String("success"))
+        handle_success(msg);
+    else if (type == QLatin1String("error"))
+        handle_error(msg);
+    else if (type == QLatin1String("subscription"))
+        handle_subscription(msg);
+    else if (type == QLatin1String("t"))
+        handle_trade(msg);
+    else if (type == QLatin1String("q"))
+        handle_quote(msg);
+    else if (type == QLatin1String("b"))
+        handle_bar(msg);
 }
 
 void AlpacaWebSocket::handle_success(const QJsonObject& msg) {
@@ -293,7 +312,9 @@ void AlpacaWebSocket::handle_subscription(const QJsonObject& msg) {
     const auto quotes = msg.value("quotes").toArray();
     const auto bars = msg.value("bars").toArray();
     LOG_INFO(kTag, QString("Subscribed — trades: %1, quotes: %2, bars: %3")
-                       .arg(trades.size()).arg(quotes.size()).arg(bars.size()));
+                       .arg(trades.size())
+                       .arg(quotes.size())
+                       .arg(bars.size()));
 }
 
 void AlpacaWebSocket::handle_trade(const QJsonObject& msg) {
@@ -309,7 +330,8 @@ void AlpacaWebSocket::handle_trade(const QJsonObject& msg) {
     for (const auto& c : conditions)
         trade.conditions.append(c.toString());
 
-    if (trade.price <= 0.0) return;
+    if (trade.price <= 0.0)
+        return;
     emit trade_received(trade);
 }
 
@@ -346,16 +368,19 @@ void AlpacaWebSocket::handle_bar(const QJsonObject& msg) {
     candle.volume = msg.value("v").toDouble();
     candle.timestamp = parse_rfc3339_to_ms(msg.value("t").toString());
 
-    if (candle.open <= 0.0) return;
+    if (candle.open <= 0.0)
+        return;
     emit bar_received(symbol, candle);
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 int64_t AlpacaWebSocket::parse_rfc3339_to_ms(const QString& ts) {
-    if (ts.isEmpty()) return 0;
+    if (ts.isEmpty())
+        return 0;
     const auto dt = QDateTime::fromString(ts, Qt::ISODateWithMs);
-    if (dt.isValid()) return dt.toMSecsSinceEpoch();
+    if (dt.isValid())
+        return dt.toMSecsSinceEpoch();
     const auto dt2 = QDateTime::fromString(ts, Qt::ISODate);
     return dt2.isValid() ? dt2.toMSecsSinceEpoch() : 0;
 }

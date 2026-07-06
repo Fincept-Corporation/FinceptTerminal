@@ -55,27 +55,44 @@ QString DhanWebSocket::inst_key(const Instrument& i) {
 
 QString DhanWebSocket::segment_code_to_exchange(int code) {
     switch (code) {
-        case 0: return QStringLiteral("NSE_INDEX"); // IDX_I (both NSE/BSE index → default NSE)
-        case 1: return QStringLiteral("NSE");       // NSE_EQ
-        case 2: return QStringLiteral("NFO");       // NSE_FNO
-        case 3: return QStringLiteral("CDS");       // NSE_CURRENCY
-        case 4: return QStringLiteral("BSE");       // BSE_EQ
-        case 5: return QStringLiteral("MCX");       // MCX_COMM
-        case 7: return QStringLiteral("BCD");       // BSE_CURRENCY
-        case 8: return QStringLiteral("BFO");       // BSE_FNO
-        default: return QString();
+        case 0:
+            return QStringLiteral("NSE_INDEX"); // IDX_I (both NSE/BSE index → default NSE)
+        case 1:
+            return QStringLiteral("NSE"); // NSE_EQ
+        case 2:
+            return QStringLiteral("NFO"); // NSE_FNO
+        case 3:
+            return QStringLiteral("CDS"); // NSE_CURRENCY
+        case 4:
+            return QStringLiteral("BSE"); // BSE_EQ
+        case 5:
+            return QStringLiteral("MCX"); // MCX_COMM
+        case 7:
+            return QStringLiteral("BCD"); // BSE_CURRENCY
+        case 8:
+            return QStringLiteral("BFO"); // BSE_FNO
+        default:
+            return QString();
     }
 }
 
 QString DhanWebSocket::exchange_to_segment_string(const QString& exchange) {
-    if (exchange == "NSE") return QStringLiteral("NSE_EQ");
-    if (exchange == "BSE") return QStringLiteral("BSE_EQ");
-    if (exchange == "NFO") return QStringLiteral("NSE_FNO");
-    if (exchange == "BFO") return QStringLiteral("BSE_FNO");
-    if (exchange == "MCX") return QStringLiteral("MCX_COMM");
-    if (exchange == "CDS") return QStringLiteral("NSE_CURRENCY");
-    if (exchange == "BCD") return QStringLiteral("BSE_CURRENCY");
-    if (exchange == "NSE_INDEX" || exchange == "BSE_INDEX") return QStringLiteral("IDX_I");
+    if (exchange == "NSE")
+        return QStringLiteral("NSE_EQ");
+    if (exchange == "BSE")
+        return QStringLiteral("BSE_EQ");
+    if (exchange == "NFO")
+        return QStringLiteral("NSE_FNO");
+    if (exchange == "BFO")
+        return QStringLiteral("BSE_FNO");
+    if (exchange == "MCX")
+        return QStringLiteral("MCX_COMM");
+    if (exchange == "CDS")
+        return QStringLiteral("NSE_CURRENCY");
+    if (exchange == "BCD")
+        return QStringLiteral("BSE_CURRENCY");
+    if (exchange == "NSE_INDEX" || exchange == "BSE_INDEX")
+        return QStringLiteral("IDX_I");
     return QStringLiteral("NSE_EQ"); // safe default
 }
 
@@ -98,8 +115,8 @@ DhanWebSocket::DhanWebSocket(const QString& access_token, const QString& client_
 
 void DhanWebSocket::open() {
     // 5-depth endpoint. authType=2 + token + clientId in the query string.
-    QString url = QString("%1?version=2&token=%2&clientId=%3&authType=2")
-                      .arg(QString(kFiveDepthUrl), access_token_, client_id_);
+    QString url =
+        QString("%1?version=2&token=%2&clientId=%3&authType=2").arg(QString(kFiveDepthUrl), access_token_, client_id_);
     // Log the connection params with the token redacted — never log the JWT.
     const QString tok_tail = access_token_.size() > 6 ? access_token_.right(6) : QStringLiteral("??????");
     LOG_INFO(TAG_DHAN_WS, QString("Connecting to Dhan 5-depth feed (clientId=%1, token=…%2, len=%3)")
@@ -252,49 +269,54 @@ void DhanWebSocket::on_binary_message(const QByteArray& data) {
         if (message_length < 8 || offset + message_length > total) {
             // Truncated / malformed packet — stop to avoid reading past the buffer.
             LOG_DEBUG(TAG_DHAN_WS, QString("Incomplete packet (code=%1 len=%2 have=%3)")
-                                       .arg(response_code).arg(message_length).arg(total - offset));
+                                       .arg(response_code)
+                                       .arg(message_length)
+                                       .arg(total - offset));
             break;
         }
 
         const uchar* payload = hdr + 8;
         const int payload_len = message_length - 8;
         const QString fallback = QString::number(security_id);
+        // Dhan securityIds are only unique per exchange segment (the same id can
+        // be an NSE equity and a CDS option). Scope the merge-cache key by the
+        // header's segment so colliding instruments never blend into one quote.
+        const QString merge_key = QString::number(exchange_segment) + QLatin1Char('|') + fallback;
 
         switch (response_code) {
             case 2: { // TICKER (8B payload: ltp f32, ltt u32)
                 BrokerQuote q = parse_ticker(payload, payload_len, exchange_segment, security_id);
-                emit_tick(merge_tick(fallback, q));
+                emit_tick(merge_tick(merge_key, q));
                 break;
             }
             case 4: { // QUOTE (42B payload)
                 BrokerQuote q = parse_quote(payload, payload_len, exchange_segment, security_id);
-                emit_tick(merge_tick(fallback, q));
+                emit_tick(merge_tick(merge_key, q));
                 break;
             }
             case 5: { // OI (4B payload: oi u32)
                 if (payload_len >= 4) {
                     BrokerQuote q;
-                    q.symbol = symbol_for_security(security_id, fallback);
+                    q.symbol = symbol_for_security(security_id, exchange_segment, fallback);
                     q.oi = qint64(read_u32(payload));
-                    emit_tick(merge_tick(fallback, q));
+                    emit_tick(merge_tick(merge_key, q));
                 }
                 break;
             }
             case 6: { // PREV_CLOSE (8B payload: prev_close f32, prev_oi u32)
                 if (payload_len >= 4) {
                     BrokerQuote q;
-                    q.symbol = symbol_for_security(security_id, fallback);
+                    q.symbol = symbol_for_security(security_id, exchange_segment, fallback);
                     q.close = read_f32(payload); // previous close carried into close field
-                    emit_tick(merge_tick(fallback, q));
+                    emit_tick(merge_tick(merge_key, q));
                 }
                 break;
             }
             case 8: { // FULL (154B payload: quote + 5-level depth)
                 MarketDepth depth;
                 bool has_depth = false;
-                BrokerQuote q =
-                    parse_full(payload, payload_len, exchange_segment, security_id, depth, has_depth);
-                emit_tick(merge_tick(fallback, q));
+                BrokerQuote q = parse_full(payload, payload_len, exchange_segment, security_id, depth, has_depth);
+                emit_tick(merge_tick(merge_key, q));
                 if (has_depth)
                     emit depth_received(depth);
                 break;
@@ -355,20 +377,29 @@ void DhanWebSocket::resubscribe_all() {
 // Symbol enrichment
 // ─────────────────────────────────────────────────────────────────────────────
 
-QString DhanWebSocket::symbol_for_security(quint32 security_id, const QString& fallback) const {
+QString DhanWebSocket::symbol_for_security(quint32 security_id, int segment, const QString& fallback) const {
     auto inst = InstrumentService::instance().find_by_token(security_id, "dhan");
-    return inst.has_value() && !inst->symbol.isEmpty() ? inst->symbol : fallback;
+    if (!inst.has_value() || inst->symbol.isEmpty())
+        return fallback;
+    // find_by_token is segment-blind while Dhan securityIds collide across
+    // segments (the master keys on token+exchange; the in-memory index keeps
+    // the collision-ranked winner, usually the equity). Only trust the lookup
+    // when the resolved instrument's exchange matches the tick's segment — else
+    // return the numeric fallback instead of a colliding symbol.
+    const QString ex = segment_code_to_exchange(segment);
+    const bool matches = (segment == 0) ? inst->exchange.endsWith(QLatin1String("_INDEX"))
+                                        : inst->exchange.compare(ex, Qt::CaseInsensitive) == 0;
+    return matches ? inst->symbol : fallback;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Binary packet parsers — offsets per dhan_websocket.py
 // ─────────────────────────────────────────────────────────────────────────────
 
-BrokerQuote DhanWebSocket::parse_ticker(const uchar* payload, int len, int /*segment*/,
-                                        quint32 security_id) const {
+BrokerQuote DhanWebSocket::parse_ticker(const uchar* payload, int len, int segment, quint32 security_id) const {
     // _parse_ticker_packet: ltp f32 @0, ltt u32 @4 (epoch seconds).
     BrokerQuote q;
-    q.symbol = symbol_for_security(security_id, QString::number(security_id));
+    q.symbol = symbol_for_security(security_id, segment, QString::number(security_id));
     if (len < 8)
         return q;
     q.ltp = read_f32(payload + 0);
@@ -378,14 +409,13 @@ BrokerQuote DhanWebSocket::parse_ticker(const uchar* payload, int len, int /*seg
     return q;
 }
 
-BrokerQuote DhanWebSocket::parse_quote(const uchar* payload, int len, int /*segment*/,
-                                       quint32 security_id) const {
+BrokerQuote DhanWebSocket::parse_quote(const uchar* payload, int len, int segment, quint32 security_id) const {
     // _parse_quote_packet (42 bytes):
     //   ltp f32 @0, ltq u16 @4, ltt u32 @6, atp f32 @10, volume u32 @14,
     //   total_sell_qty u32 @18, total_buy_qty u32 @22,
     //   open f32 @26, close f32 @30, high f32 @34, low f32 @38.
     BrokerQuote q;
-    q.symbol = symbol_for_security(security_id, QString::number(security_id));
+    q.symbol = symbol_for_security(security_id, segment, QString::number(security_id));
     if (len < 42)
         return q;
     q.ltp = read_f32(payload + 0);
@@ -415,7 +445,7 @@ BrokerQuote DhanWebSocket::parse_full(const uchar* payload, int len, int segment
     //   ask_orders u16, bid_price f32, ask_price f32.
     has_depth = false;
     BrokerQuote q;
-    q.symbol = symbol_for_security(security_id, QString::number(security_id));
+    q.symbol = symbol_for_security(security_id, segment, QString::number(security_id));
     if (len < 154)
         return q;
 

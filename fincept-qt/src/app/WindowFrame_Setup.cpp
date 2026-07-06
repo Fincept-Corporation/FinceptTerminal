@@ -6,10 +6,9 @@
 //
 // Part of the partial-class split of WindowFrame.cpp.
 
-#include "app/WindowFrame.h"
-
 #include "app/DockScreenRouter.h"
 #include "app/TerminalShell.h"
+#include "app/WindowFrame.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/lock/LockOverlayController.h"
@@ -19,7 +18,6 @@
 #include "core/layout/LayoutCatalog.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
-#include "screens/common/ComingSoonScreen.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
 #include "screens/ai_chat/AiChatScreen.h"
@@ -37,6 +35,7 @@
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "screens/code_editor/CodeEditorScreen.h"
+#include "screens/common/ComingSoonScreen.h"
 #include "screens/crypto_center/CryptoCenterScreen.h"
 #include "screens/crypto_trading/CryptoTradingScreen.h"
 #include "screens/dashboard/DashboardScreen.h"
@@ -168,11 +167,10 @@ void WindowFrame::setup_docking_mode() {
         // Per-widget removal: DockWidgetFloatable feature (in
         // DockScreenRouter::create_dock_widget) — see note there.
         ads::CDockManager::setConfigFlags(
-            ads::CDockManager::DefaultOpaqueConfig |
-            ads::CDockManager::AlwaysShowTabs | ads::CDockManager::DockAreaHasTabsMenuButton |
-            ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility |
+            ads::CDockManager::DefaultOpaqueConfig | ads::CDockManager::AlwaysShowTabs |
+            ads::CDockManager::DockAreaHasTabsMenuButton | ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility |
             ads::CDockManager::FloatingContainerHasWidgetTitle | ads::CDockManager::FloatingContainerHasWidgetIcon |
-            ads::CDockManager::EqualSplitOnInsertion       // prevents new panels from spawning tiny slivers
+            ads::CDockManager::EqualSplitOnInsertion // prevents new panels from spawning tiny slivers
         );
         // Disable auto-hide entirely: the pin button converts panels to collapsible
         // sidebars which collapse when another panel is opened beside them.
@@ -212,18 +210,16 @@ void WindowFrame::setup_docking_mode() {
     // or close is also captured.
     connect(dock_manager_, &ads::CDockManager::dockAreaCreated, this,
             [this](ads::CDockAreaWidget*) { schedule_dock_layout_save(); });
-    connect(dock_manager_, &ads::CDockManager::dockWidgetAdded, this,
-            [this](ads::CDockWidget* dw) {
-                schedule_dock_layout_save();
-                // Per-widget close persistence: when a tab is closed via
-                // the X button, ADS calls toggleView(false) which emits
-                // viewToggled but no manager-level signal (dockWidgetRemoved
-                // only fires on full removal, not hide). Without this
-                // connection, closing a tab doesn't persist — the tab
-                // reappears on next launch.
-                connect(dw, &ads::CDockWidget::viewToggled, this,
-                        [this](bool) { schedule_dock_layout_save(); });
-            });
+    connect(dock_manager_, &ads::CDockManager::dockWidgetAdded, this, [this](ads::CDockWidget* dw) {
+        schedule_dock_layout_save();
+        // Per-widget close persistence: when a tab is closed via
+        // the X button, ADS calls toggleView(false) which emits
+        // viewToggled but no manager-level signal (dockWidgetRemoved
+        // only fires on full removal, not hide). Without this
+        // connection, closing a tab doesn't persist — the tab
+        // reappears on next launch.
+        connect(dw, &ads::CDockWidget::viewToggled, this, [this](bool) { schedule_dock_layout_save(); });
+    });
     connect(dock_manager_, &ads::CDockManager::dockWidgetRemoved, this,
             [this](ads::CDockWidget*) { schedule_dock_layout_save(); });
     connect(dock_manager_, &ads::CDockManager::floatingWidgetCreated, this,
@@ -285,8 +281,7 @@ void WindowFrame::setup_dock_screens() {
                     // the path to the live CodeEditorScreen after it materializes.
                     if (route_id == "code_editor" && !file_path.isEmpty()) {
                         dock_router_->materialize_now(route_id);
-                        if (auto* nb =
-                                qobject_cast<screens::CodeEditorScreen*>(dock_router_->screen_widget(route_id)))
+                        if (auto* nb = qobject_cast<screens::CodeEditorScreen*>(dock_router_->screen_widget(route_id)))
                             nb->open_notebook_path(file_path);
                     }
                 });

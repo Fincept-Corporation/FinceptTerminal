@@ -2,7 +2,6 @@
 // Method definition split from MAModulePanel.cpp.
 
 #include "screens/ma_analytics/MAModulePanel.h"
-
 #include "services/ma_analytics/MAAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
@@ -122,9 +121,9 @@ QWidget* MAModulePanel::build_fairness_panel() {
     pq_vl->setContentsMargins(12, 12, 12, 12);
     pq_vl->setSpacing(8);
 
-    QStringList pq_factors = {tr("Board Independence"),  tr("Special Committee"), tr("Independent Advisor"),
-                              tr("Market Check"),        tr("Negotiation Process"), tr("Due Diligence"),
-                              tr("Disclosure Quality"),  tr("Timing Adequacy")};
+    QStringList pq_factors = {tr("Board Independence"), tr("Special Committee"),   tr("Independent Advisor"),
+                              tr("Market Check"),       tr("Negotiation Process"), tr("Due Diligence"),
+                              tr("Disclosure Quality"), tr("Timing Adequacy")};
     for (int i = 0; i < pq_factors.size(); ++i) {
         auto* spin = make_int_spin(1, 5, 3, pq);
         int_inputs_[QString("pq_%1").arg(i)] = spin;

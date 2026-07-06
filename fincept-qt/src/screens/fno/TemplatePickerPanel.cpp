@@ -10,11 +10,11 @@
 
 namespace fincept::screens::fno {
 
+using fincept::services::options::catalog;
+using fincept::services::options::find;
 using fincept::services::options::StrategyCategory;
 using fincept::services::options::StrategyInstantiationOptions;
 using fincept::services::options::StrategyTemplate;
-using fincept::services::options::catalog;
-using fincept::services::options::find;
 using namespace fincept::ui;
 
 namespace {
@@ -25,54 +25,57 @@ struct CatDef {
 };
 
 constexpr CatDef kCats[5] = {
-    {StrategyCategory::Bullish, "BULLISH"},
-    {StrategyCategory::Bearish, "BEARISH"},
-    {StrategyCategory::Neutral, "NEUTRAL"},
-    {StrategyCategory::Volatility, "VOLATILE"},
+    {StrategyCategory::Bullish, "BULLISH"}, {StrategyCategory::Bearish, "BEARISH"},
+    {StrategyCategory::Neutral, "NEUTRAL"}, {StrategyCategory::Volatility, "VOLATILE"},
     {StrategyCategory::Others, "OTHERS"},
 };
 
 /// Translated category label for the strip button at index i (0..4).
 QString cat_label(int i) {
     switch (i) {
-        case 0: return QCoreApplication::translate("TemplatePickerPanel", "BULLISH");
-        case 1: return QCoreApplication::translate("TemplatePickerPanel", "BEARISH");
-        case 2: return QCoreApplication::translate("TemplatePickerPanel", "NEUTRAL");
-        case 3: return QCoreApplication::translate("TemplatePickerPanel", "VOLATILE");
-        case 4: return QCoreApplication::translate("TemplatePickerPanel", "OTHERS");
-        default: return {};
+        case 0:
+            return QCoreApplication::translate("TemplatePickerPanel", "BULLISH");
+        case 1:
+            return QCoreApplication::translate("TemplatePickerPanel", "BEARISH");
+        case 2:
+            return QCoreApplication::translate("TemplatePickerPanel", "NEUTRAL");
+        case 3:
+            return QCoreApplication::translate("TemplatePickerPanel", "VOLATILE");
+        case 4:
+            return QCoreApplication::translate("TemplatePickerPanel", "OTHERS");
+        default:
+            return {};
     }
 }
 
-}  // namespace
+} // namespace
 
 TemplatePickerPanel::TemplatePickerPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoPickerPanel");
-    setStyleSheet(QStringLiteral(
-        "#fnoPickerPanel { background:%1; }"
-        "#fnoPickerCatBtn { background:%2; color:%3; border:none; padding:5px 12px; "
-        "                    font-size:9px; font-weight:700; letter-spacing:0.5px; }"
-        "#fnoPickerCatBtn:hover { background:%4; color:%5; }"
-        "#fnoPickerCatBtn[active=\"true\"] { background:%6; color:%2; }"
-        "#fnoPickerList { background:%1; color:%5; border:1px solid %7; }"
-        "#fnoPickerList::item { padding:6px 8px; border-bottom:1px solid %7; }"
-        "#fnoPickerList::item:selected { background:%4; color:%5; }"
-        "#fnoPickerList::item:hover { background:%4; }"
-        "#fnoUseBtn { background:%6; color:%2; border:none; padding:6px 16px; "
-        "             font-size:10px; font-weight:700; letter-spacing:0.5px; }"
-        "#fnoUseBtn:hover { background:%5; color:%2; }"
-        "#fnoUseBtn:disabled { background:%7; color:%3; }"
-        "#fnoPickerLabel { color:%3; font-size:9px; font-weight:700; "
-        "                  letter-spacing:0.4px; background:transparent; }"
-        "QSpinBox { background:%2; color:%5; border:1px solid %7; padding:2px 4px; "
-        "           font-size:11px; min-width:48px; }")
-                      .arg(colors::BG_BASE(),     // %1 panel bg
-                           colors::BG_RAISED(),   // %2 button bg
+    setStyleSheet(QStringLiteral("#fnoPickerPanel { background:%1; }"
+                                 "#fnoPickerCatBtn { background:%2; color:%3; border:none; padding:5px 12px; "
+                                 "                    font-size:9px; font-weight:700; letter-spacing:0.5px; }"
+                                 "#fnoPickerCatBtn:hover { background:%4; color:%5; }"
+                                 "#fnoPickerCatBtn[active=\"true\"] { background:%6; color:%2; }"
+                                 "#fnoPickerList { background:%1; color:%5; border:1px solid %7; }"
+                                 "#fnoPickerList::item { padding:6px 8px; border-bottom:1px solid %7; }"
+                                 "#fnoPickerList::item:selected { background:%4; color:%5; }"
+                                 "#fnoPickerList::item:hover { background:%4; }"
+                                 "#fnoUseBtn { background:%6; color:%2; border:none; padding:6px 16px; "
+                                 "             font-size:10px; font-weight:700; letter-spacing:0.5px; }"
+                                 "#fnoUseBtn:hover { background:%5; color:%2; }"
+                                 "#fnoUseBtn:disabled { background:%7; color:%3; }"
+                                 "#fnoPickerLabel { color:%3; font-size:9px; font-weight:700; "
+                                 "                  letter-spacing:0.4px; background:transparent; }"
+                                 "QSpinBox { background:%2; color:%5; border:1px solid %7; padding:2px 4px; "
+                                 "           font-size:11px; min-width:48px; }")
+                      .arg(colors::BG_BASE(),        // %1 panel bg
+                           colors::BG_RAISED(),      // %2 button bg
                            colors::TEXT_SECONDARY(), // %3 dim text
-                           colors::BG_HOVER(),    // %4 hover
-                           colors::TEXT_PRIMARY(), // %5 primary text
-                           colors::AMBER(),       // %6 active
-                           colors::BORDER_DIM())); // %7 border
+                           colors::BG_HOVER(),       // %4 hover
+                           colors::TEXT_PRIMARY(),   // %5 primary text
+                           colors::AMBER(),          // %6 active
+                           colors::BORDER_DIM()));   // %7 border
 
     setup_ui();
     rebuild_list_for_category(active_category_);
@@ -208,10 +211,14 @@ void TemplatePickerPanel::retranslateUi() {
     for (int i = 0; i < category_btns_.size() && i < 5; ++i)
         if (category_btns_.at(i))
             category_btns_.at(i)->setText(cat_label(i));
-    if (width_label_) width_label_->setText(tr("WIDTH"));
-    if (shift_label_) shift_label_->setText(tr("SHIFT"));
-    if (lots_label_)  lots_label_->setText(tr("LOTS"));
-    if (use_btn_)     use_btn_->setText(tr("USE"));
+    if (width_label_)
+        width_label_->setText(tr("WIDTH"));
+    if (shift_label_)
+        shift_label_->setText(tr("SHIFT"));
+    if (lots_label_)
+        lots_label_->setText(tr("LOTS"));
+    if (use_btn_)
+        use_btn_->setText(tr("USE"));
 }
 
 } // namespace fincept::screens::fno

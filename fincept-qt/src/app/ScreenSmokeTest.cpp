@@ -60,19 +60,16 @@ int run_screen_smoke_test(DockScreenRouter* router) {
     }
 
     if (failures.isEmpty()) {
-        std::fprintf(stderr, "[Smoke] OK: all %d screens constructed\n",
-                     static_cast<int>(ids.size()));
+        std::fprintf(stderr, "[Smoke] OK: all %d screens constructed\n", static_cast<int>(ids.size()));
         std::fflush(stderr);
         LOG_INFO("Smoke", "All screens constructed OK");
         return 0;
     }
 
-    std::fprintf(stderr, "[Smoke] FAIL: %d screen(s) did not construct: %s\n",
-                 static_cast<int>(failures.size()), qUtf8Printable(failures.join(", ")));
+    std::fprintf(stderr, "[Smoke] FAIL: %d screen(s) did not construct: %s\n", static_cast<int>(failures.size()),
+                 qUtf8Printable(failures.join(", ")));
     std::fflush(stderr);
-    LOG_ERROR("Smoke", QString("%1 screen(s) failed: %2")
-                           .arg(failures.size())
-                           .arg(failures.join(", ")));
+    LOG_ERROR("Smoke", QString("%1 screen(s) failed: %2").arg(failures.size()).arg(failures.join(", ")));
     return 1;
 }
 

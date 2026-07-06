@@ -42,7 +42,7 @@ void WindowCycler::focus_window_by_index(int n) {
     if (n < 0 || n >= list.size())
         return;
     auto* w = list.at(n);
-    w->showNormal();  // de-minimise if needed
+    w->showNormal(); // de-minimise if needed
     w->raise();
     w->activateWindow();
     w->setFocus(Qt::ShortcutFocusReason);
@@ -99,9 +99,9 @@ void WindowCycler::new_window_on_next_monitor() {
 void WindowCycler::move_current_window_to_monitor(int monitor_index) {
     const auto screens = QGuiApplication::screens();
     if (monitor_index < 0 || monitor_index >= screens.size()) {
-        LOG_DEBUG("WindowCycler",
-                  QString("Ignoring move-to-monitor %1 — only %2 screen(s) connected")
-                      .arg(monitor_index).arg(screens.size()));
+        LOG_DEBUG("WindowCycler", QString("Ignoring move-to-monitor %1 — only %2 screen(s) connected")
+                                      .arg(monitor_index)
+                                      .arg(screens.size()));
         return;
     }
     auto* w = current_focused();

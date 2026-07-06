@@ -153,8 +153,9 @@ void ScreenStateManager::flush_pending() {
         write_async_by_uuid(instance_uuid, screen_key, state, version, sid);
     }
 
-    LOG_DEBUG("ScreenState", QString("Flushed %1 legacy + %2 UUID-keyed screen states")
-                                 .arg(snapshot.size()).arg(uuid_snapshot.size()));
+    LOG_DEBUG(
+        "ScreenState",
+        QString("Flushed %1 legacy + %2 UUID-keyed screen states").arg(snapshot.size()).arg(uuid_snapshot.size()));
 }
 
 // ── Private static: async SQLite write ───────────────────────────────────────
@@ -176,23 +177,19 @@ void ScreenStateManager::write_async(const QString& key, const QVariantMap& stat
     });
 }
 
-void ScreenStateManager::write_async_by_uuid(const QString& instance_uuid,
-                                             const QString& screen_key,
-                                             const QVariantMap& state,
-                                             int version,
-                                             const QString& session_id) {
+void ScreenStateManager::write_async_by_uuid(const QString& instance_uuid, const QString& screen_key,
+                                             const QVariantMap& state, int version, const QString& session_id) {
     std::ignore = QtConcurrent::run([instance_uuid, screen_key, state, version, session_id]() {
         QJsonObject obj;
         for (auto it = state.constBegin(); it != state.constEnd(); ++it)
             obj.insert(it.key(), QJsonValue::fromVariant(it.value()));
 
-        auto r = TabSessionStore::instance().save_screen_state_by_uuid(
-            instance_uuid, screen_key, obj, version, session_id);
+        auto r =
+            TabSessionStore::instance().save_screen_state_by_uuid(instance_uuid, screen_key, obj, version, session_id);
 
         if (r.is_err()) {
-            LOG_WARN("ScreenState",
-                     QString("UUID write failed for %1 (%2): %3")
-                         .arg(instance_uuid, screen_key, QString::fromStdString(r.error())));
+            LOG_WARN("ScreenState", QString("UUID write failed for %1 (%2): %3")
+                                        .arg(instance_uuid, screen_key, QString::fromStdString(r.error())));
         }
     });
 }
@@ -214,22 +211,20 @@ void ScreenStateManager::save_now_sync(screens::IStatefulScreen* screen) {
     screen->flush_pending_state();
     const QString key = screen->state_key();
     pending_saves_.remove(key);
-    auto r = TabSessionStore::instance().save_screen_state(
-        key, to_json_obj(screen->save_state()), screen->state_version(), session_id_);
+    auto r = TabSessionStore::instance().save_screen_state(key, to_json_obj(screen->save_state()),
+                                                           screen->state_version(), session_id_);
     if (r.is_err())
         LOG_WARN("ScreenState", "save_now_sync failed for '" + key + "': " + QString::fromStdString(r.error()));
 }
 
-void ScreenStateManager::save_now_by_uuid_sync(screens::IStatefulScreen* screen,
-                                               const QString& instance_uuid) {
+void ScreenStateManager::save_now_by_uuid_sync(screens::IStatefulScreen* screen, const QString& instance_uuid) {
     if (!screen || instance_uuid.isEmpty())
         return;
     screen->flush_pending_state();
     const QString screen_key = screen->state_key();
     pending_uuid_saves_.remove(instance_uuid);
     auto r = TabSessionStore::instance().save_screen_state_by_uuid(
-        instance_uuid, screen_key, to_json_obj(screen->save_state()), screen->state_version(),
-        session_id_);
+        instance_uuid, screen_key, to_json_obj(screen->save_state()), screen->state_version(), session_id_);
     if (r.is_err())
         LOG_WARN("ScreenState", QString("save_now_by_uuid_sync failed for %1 (%2): %3")
                                     .arg(instance_uuid, screen_key, QString::fromStdString(r.error())));
@@ -237,8 +232,7 @@ void ScreenStateManager::save_now_by_uuid_sync(screens::IStatefulScreen* screen,
 
 // ── UUID-keyed public API ────────────────────────────────────────────────────
 
-void ScreenStateManager::restore_by_uuid(screens::IStatefulScreen* screen,
-                                         const QString& instance_uuid,
+void ScreenStateManager::restore_by_uuid(screens::IStatefulScreen* screen, const QString& instance_uuid,
                                          bool fallback_to_screen_key) {
     if (!screen)
         return;
@@ -247,8 +241,8 @@ void ScreenStateManager::restore_by_uuid(screens::IStatefulScreen* screen,
     // First try the UUID-keyed row (the new path).
     auto by_uuid = TabSessionStore::instance().load_screen_state_by_uuid(instance_uuid, expected);
     if (by_uuid.is_err()) {
-        LOG_WARN("ScreenState", QString("UUID load failed for %1: %2")
-                                    .arg(instance_uuid, QString::fromStdString(by_uuid.error())));
+        LOG_WARN("ScreenState",
+                 QString("UUID load failed for %1: %2").arg(instance_uuid, QString::fromStdString(by_uuid.error())));
         // Fall through to legacy path — a transient DB error (SQLITE_BUSY,
         // corrupt WAL) should not prevent fallback when a legacy row exists.
     }
@@ -280,8 +274,7 @@ void ScreenStateManager::restore_by_uuid(screens::IStatefulScreen* screen,
     LOG_DEBUG("ScreenState", QString("Restored state for uuid=%1").arg(instance_uuid));
 }
 
-void ScreenStateManager::save_now_by_uuid(screens::IStatefulScreen* screen,
-                                          const QString& instance_uuid) {
+void ScreenStateManager::save_now_by_uuid(screens::IStatefulScreen* screen, const QString& instance_uuid) {
     if (!screen || instance_uuid.isEmpty())
         return;
 
@@ -295,8 +288,7 @@ void ScreenStateManager::save_now_by_uuid(screens::IStatefulScreen* screen,
     LOG_DEBUG("ScreenState", QString("save_now_by_uuid dispatched for %1").arg(instance_uuid));
 }
 
-void ScreenStateManager::notify_changed_by_uuid(screens::IStatefulScreen* screen,
-                                                const QString& instance_uuid) {
+void ScreenStateManager::notify_changed_by_uuid(screens::IStatefulScreen* screen, const QString& instance_uuid) {
     if (!screen || instance_uuid.isEmpty())
         return;
     pending_uuid_saves_.insert(instance_uuid, screen);
@@ -310,8 +302,7 @@ void ScreenStateManager::erase_by_uuid(const QString& instance_uuid) {
         auto r = TabSessionStore::instance().remove_screen_state_by_uuid(instance_uuid);
         if (r.is_err()) {
             LOG_WARN("ScreenState",
-                     QString("erase_by_uuid failed for %1: %2")
-                         .arg(instance_uuid, QString::fromStdString(r.error())));
+                     QString("erase_by_uuid failed for %1: %2").arg(instance_uuid, QString::fromStdString(r.error())));
         }
     });
 }

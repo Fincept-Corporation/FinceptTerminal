@@ -26,10 +26,10 @@ class SuggestionIndex : public QObject {
 
     struct Match {
         SourceKind source = SourceKind::Action;
-        QString id;          ///< action id, layout uuid, panel uuid, etc.
-        QString display;     ///< user-visible text
-        QString category;    ///< for grouping in palette UI
-        int score = 0;       ///< higher = better match (relevance)
+        QString id;       ///< action id, layout uuid, panel uuid, etc.
+        QString display;  ///< user-visible text
+        QString category; ///< for grouping in palette UI
+        int score = 0;    ///< higher = better match (relevance)
     };
 
     static SuggestionIndex& instance();

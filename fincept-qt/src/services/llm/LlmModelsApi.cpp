@@ -1,11 +1,10 @@
 // Per-provider model-list discovery. Async GET on the GUI thread; emits models_fetched.
 
-#include "services/llm/LlmService.h"
-
-#include "services/llm/ProviderCatalog.h"
 #include "auth/AuthManager.h"
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
+#include "services/llm/LlmService.h"
+#include "services/llm/ProviderCatalog.h"
 #include "storage/repositories/SettingsRepository.h"
 
 #include <QByteArray>
@@ -50,8 +49,7 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
         while (base.endsWith('/'))
             base.chop(1);
 
-        const QString suffix = (p == "anthropic") ? QStringLiteral("/models?limit=1000")
-                                                  : QStringLiteral("/models");
+        const QString suffix = (p == "anthropic") ? QStringLiteral("/models?limit=1000") : QStringLiteral("/models");
 
         // Already a full endpoint — use verbatim.
         if (base.contains(QStringLiteral("/models")))
@@ -65,18 +63,27 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
         return base + QStringLiteral("/v1") + suffix;
     }
 
-    if (p == "openai")     return "https://api.openai.com/v1/models";
-    if (p == "anthropic")  return "https://api.anthropic.com/v1/models?limit=1000";
+    if (p == "openai")
+        return "https://api.openai.com/v1/models";
+    if (p == "anthropic")
+        return "https://api.anthropic.com/v1/models?limit=1000";
     if (p == "gemini" || p == "google") {
         return "https://generativelanguage.googleapis.com/v1beta/models?pageSize=100";
     }
-    if (p == "groq")       return "https://api.groq.com/openai/v1/models";
-    if (p == "deepseek")   return "https://api.deepseek.com/models";
-    if (p == "openrouter") return "https://openrouter.ai/api/v1/models";
-    if (p == "xai")     return "https://api.x.ai/v1/models";
-    if (p == "kimi")    return "https://api.moonshot.ai/v1/models";
-    if (p == "aihubmix") return "https://aihubmix.com/v1/models"; // fallback if prefilled base_url was cleared
-    if (p == "fincept") return fincept::AppConfig::instance().api_base_url() + "/research/llm/models";
+    if (p == "groq")
+        return "https://api.groq.com/openai/v1/models";
+    if (p == "deepseek")
+        return "https://api.deepseek.com/models";
+    if (p == "openrouter")
+        return "https://openrouter.ai/api/v1/models";
+    if (p == "xai")
+        return "https://api.x.ai/v1/models";
+    if (p == "kimi")
+        return "https://api.moonshot.ai/v1/models";
+    if (p == "aihubmix")
+        return "https://aihubmix.com/v1/models"; // fallback if prefilled base_url was cleared
+    if (p == "fincept")
+        return fincept::AppConfig::instance().api_base_url() + "/research/llm/models";
     // minimax has no public /v1/models — caller falls back to known models.
     return {};
 }

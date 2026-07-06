@@ -15,8 +15,6 @@
 #include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
-#include <QSet>
-
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -26,6 +24,7 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
+#include <QSet>
 #include <QShowEvent>
 #include <QSpinBox>
 #include <QStackedLayout>
@@ -88,13 +87,12 @@ ChainSubTab::ChainSubTab(QWidget* parent) : QWidget(parent) {
     connect(header_, &FnoHeaderBar::refresh_requested, this, &ChainSubTab::on_refresh_clicked);
     connect(table_, &OptionChainTable::order_requested, this, &ChainSubTab::on_order_requested);
 
-    connect(&InstrumentService::instance(), &InstrumentService::refresh_done,
-            this, [this](const QString& broker_id) {
-                if (broker_id == header_->broker_id())
-                    rebuild_picker_for_broker(broker_id, true);
-            });
-    connect(&InstrumentService::instance(), &InstrumentService::refresh_failed,
-            this, [this](const QString& broker_id, const QString& error) {
+    connect(&InstrumentService::instance(), &InstrumentService::refresh_done, this, [this](const QString& broker_id) {
+        if (broker_id == header_->broker_id())
+            rebuild_picker_for_broker(broker_id, true);
+    });
+    connect(&InstrumentService::instance(), &InstrumentService::refresh_failed, this,
+            [this](const QString& broker_id, const QString& error) {
                 if (broker_id == header_->broker_id())
                     show_empty_state(tr("Failed to load %1 instruments: %2").arg(broker_id, error));
             });
@@ -105,19 +103,18 @@ ChainSubTab::ChainSubTab(QWidget* parent) : QWidget(parent) {
     QTimer::singleShot(0, this, [this]() {
         static const QString kDatabento = QStringLiteral("databento");
         QStringList broker_ids;
-        QString connected_broker;  // first account in ConnectionState::Connected
-        QString active_broker;     // first active broker account (fallback)
+        QString connected_broker; // first account in ConnectionState::Connected
+        QString active_broker;    // first active broker account (fallback)
         for (const auto& acc : AccountManager::instance().active_accounts()) {
             if (!broker_ids.contains(acc.broker_id))
                 broker_ids.append(acc.broker_id);
             if (active_broker.isEmpty())
                 active_broker = acc.broker_id;
-            if (connected_broker.isEmpty() &&
-                AccountManager::instance().connection_state(acc.account_id) ==
-                    fincept::trading::ConnectionState::Connected)
+            if (connected_broker.isEmpty() && AccountManager::instance().connection_state(acc.account_id) ==
+                                                  fincept::trading::ConnectionState::Connected)
                 connected_broker = acc.broker_id;
         }
-        broker_ids.append(kDatabento);  // always available, listed last
+        broker_ids.append(kDatabento); // always available, listed last
 
         // Auto-select: sticky real-broker choice → connected → any active → Databento.
         QString prefer;
@@ -157,7 +154,7 @@ void ChainSubTab::restore_state(const QVariantMap& state) {
 void ChainSubTab::request_underlying(const QString& underlying) {
     if (!header_ || underlying.isEmpty())
         return;
-    last_underlying_ = underlying;  // sticky across picker rebuilds
+    last_underlying_ = underlying; // sticky across picker rebuilds
     // If the combo already has it, flip — the underlying_changed signal
     // wires through to on_underlying_changed which rebuilds expiries +
     // resubscribes. If the symbol isn't in the broker's NFO list yet,
@@ -231,8 +228,10 @@ void ChainSubTab::on_underlying_changed(const QString& underlying) {
     if (link_group == fincept::SymbolGroup::None)
         return;
     static const QSet<QString> kIndexNames = {
-        QStringLiteral("NIFTY"), QStringLiteral("BANKNIFTY"),
-        QStringLiteral("FINNIFTY"), QStringLiteral("MIDCPNIFTY"),
+        QStringLiteral("NIFTY"),
+        QStringLiteral("BANKNIFTY"),
+        QStringLiteral("FINNIFTY"),
+        QStringLiteral("MIDCPNIFTY"),
     };
     fincept::SymbolRef ref;
     ref.symbol = underlying;
@@ -240,8 +239,7 @@ void ChainSubTab::on_underlying_changed(const QString& underlying) {
         ref.asset_class = QStringLiteral("equity");
         ref.exchange = QStringLiteral("US");
     } else {
-        ref.asset_class = kIndexNames.contains(underlying) ? QStringLiteral("index")
-                                                           : QStringLiteral("equity");
+        ref.asset_class = kIndexNames.contains(underlying) ? QStringLiteral("index") : QStringLiteral("equity");
         ref.exchange = QStringLiteral("NSE");
     }
     fincept::SymbolContext::instance().set_group_symbol(link_group, ref, this);
@@ -269,7 +267,8 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
     }
     if (broker_id == QStringLiteral("databento")) {
         if (!fincept::DatabentoService::instance().has_api_key()) {
-            show_empty_state(tr("Databento selected — enter your API key in Settings > Credentials to load US options data."));
+            show_empty_state(
+                tr("Databento selected — enter your API key in Settings > Credentials to load US options data."));
             header_->set_underlyings({});
             header_->set_expiries({});
             return;
@@ -298,10 +297,12 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
         QPointer<ChainSubTab> self = this;
         InstrumentService::instance().load_from_db_async(broker_id, [self, broker_id](int count) {
             if (!self) {
-                LOG_WARN("FnoChain", QString("load_from_db_async callback: widget destroyed, broker='%1'").arg(broker_id));
+                LOG_WARN("FnoChain",
+                         QString("load_from_db_async callback: widget destroyed, broker='%1'").arg(broker_id));
                 return;
             }
-            LOG_INFO("FnoChain", QString("load_from_db_async callback: broker='%1' count=%2").arg(broker_id).arg(count));
+            LOG_INFO("FnoChain",
+                     QString("load_from_db_async callback: broker='%1' count=%2").arg(broker_id).arg(count));
             if (count > 0) {
                 self->rebuild_picker_for_broker(broker_id, true);
                 return;
@@ -309,7 +310,8 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
             QString account_id = find_account_for_broker(broker_id);
             LOG_INFO("FnoChain", QString("find_account_for_broker('%1') → '%2'").arg(broker_id, account_id));
             if (account_id.isEmpty()) {
-                self->show_empty_state(ChainSubTab::tr("No account configured for %1. Connect one in Equity Trading.").arg(broker_id));
+                self->show_empty_state(
+                    ChainSubTab::tr("No account configured for %1. Connect one in Equity Trading.").arg(broker_id));
                 return;
             }
             self->show_empty_state(ChainSubTab::tr("Downloading %1 instruments from broker...").arg(broker_id));
@@ -331,8 +333,8 @@ void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_
         prefer = last_underlying_;
     else
         prefer = unders.contains("NIFTY") ? "NIFTY" : unders.first();
-    LOG_INFO("FnoChain", QString("Setting underlyings for '%1', prefer='%2' (%3 items)")
-                             .arg(broker_id, prefer).arg(unders.size()));
+    LOG_INFO("FnoChain",
+             QString("Setting underlyings for '%1', prefer='%2' (%3 items)").arg(broker_id, prefer).arg(unders.size()));
     header_->set_underlyings(unders, prefer);
     LOG_INFO("FnoChain", "set_underlyings done, calling rebuild_expiries_for_underlying");
     rebuild_expiries_for_underlying(broker_id, prefer, keep_selection);
@@ -358,12 +360,13 @@ void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, cons
         show_empty_state(tr("Loading expiries for %1 from Databento...").arg(underlying));
         QPointer<ChainSubTab> self = this;
         OptionChainService::instance().list_databento_expiries(
-            underlying,
-            [self, underlying, keep_selection](const QStringList& exps) {
-                if (!self) return;
+            underlying, [self, underlying, keep_selection](const QStringList& exps) {
+                if (!self)
+                    return;
                 if (exps.isEmpty()) {
                     self->show_empty_state(
-                        ChainSubTab::tr("No expiries found for %1. Check Databento API key and OPRA access.").arg(underlying));
+                        ChainSubTab::tr("No expiries found for %1. Check Databento API key and OPRA access.")
+                            .arg(underlying));
                     return;
                 }
                 QString prefer;
@@ -391,9 +394,10 @@ void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, cons
     if (keep_selection && exps.contains(last_expiry_))
         prefer = last_expiry_;
     else
-        prefer = exps.first();  // nearest expiry
+        prefer = exps.first(); // nearest expiry
     LOG_INFO("FnoChain", QString("Setting expiries for '%1/%2', prefer='%3', visible=%4")
-                             .arg(broker_id, underlying, prefer).arg(is_visible_));
+                             .arg(broker_id, underlying, prefer)
+                             .arg(is_visible_));
     header_->set_expiries(exps, prefer);
     if (is_visible_)
         resubscribe();
@@ -488,8 +492,7 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
 
     const QString broker = header_->broker_id();
     if (broker.isEmpty() || broker == QStringLiteral("databento")) {
-        QMessageBox::warning(this, tr("Place Order"),
-                             tr("Connect a trading broker to place F&O orders."));
+        QMessageBox::warning(this, tr("Place Order"), tr("Connect a trading broker to place F&O orders."));
         return;
     }
     const QString account_id = find_account_for_broker(broker);
@@ -506,10 +509,16 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     double ltp = 0;
     for (const auto& r : chain.rows) {
         if (is_call && r.ce_token == token) {
-            sym = r.ce_symbol; lot = r.lot_size; ltp = r.ce_quote.ltp; break;
+            sym = r.ce_symbol;
+            lot = r.lot_size;
+            ltp = r.ce_quote.ltp;
+            break;
         }
         if (!is_call && r.pe_token == token) {
-            sym = r.pe_symbol; lot = r.lot_size; ltp = r.pe_quote.ltp; break;
+            sym = r.pe_symbol;
+            lot = r.lot_size;
+            ltp = r.pe_quote.ltp;
+            break;
         }
     }
     if (sym.isEmpty()) {
@@ -555,8 +564,8 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     QString bare_sym = order_symbol;
     if (const int c = bare_sym.indexOf(QLatin1Char(':')); c >= 0)
         bare_sym = bare_sym.mid(c + 1);
-    for (const auto& suf : {QStringLiteral("-CE"), QStringLiteral("-PE"), QStringLiteral("-FUT"),
-                            QStringLiteral("-EQ")}) {
+    for (const auto& suf :
+         {QStringLiteral("-CE"), QStringLiteral("-PE"), QStringLiteral("-FUT"), QStringLiteral("-EQ")}) {
         if (bare_sym.endsWith(suf)) {
             bare_sym.chop(int(suf.size()));
             break;
@@ -610,9 +619,11 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     connect(type_combo, qOverload<int>(&QComboBox::currentIndexChanged), &dlg, sync_type);
     sync_type(type_combo->currentIndex());
 
-    auto* ctx = new QLabel(
-        QStringLiteral("%1  ·  LTP %2  ·  [%3]").arg(acct_name).arg(ltp, 0, 'f', 2).arg(is_paper ? tr("PAPER") : tr("LIVE")),
-        &dlg);
+    auto* ctx = new QLabel(QStringLiteral("%1  ·  LTP %2  ·  [%3]")
+                               .arg(acct_name)
+                               .arg(ltp, 0, 'f', 2)
+                               .arg(is_paper ? tr("PAPER") : tr("LIVE")),
+                           &dlg);
     ctx->setStyleSheet(QStringLiteral("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
     form->addRow(ctx);
 
@@ -635,7 +646,7 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     order.side = is_buy ? OrderSide::Buy : OrderSide::Sell;
     order.order_type = is_market ? OrderType::Market : OrderType::Limit;
     order.quantity = double(lots_spin->value()) * double(lot);
-    order.price = is_market ? ltp : px_spin->value();  // ltp lets paper fill a market order; live ignores it
+    order.price = is_market ? ltp : px_spin->value(); // ltp lets paper fill a market order; live ignores it
     order.product_type = (product_combo->currentIndex() == 1) ? ProductType::Intraday : ProductType::Margin;
     order.validity = QStringLiteral("DAY");
     order.instrument_token = QString::number(token);

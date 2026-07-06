@@ -18,10 +18,14 @@ namespace {
 
 QString type_str(InstrumentType t) {
     switch (t) {
-        case InstrumentType::CE:    return "CE";
-        case InstrumentType::PE:    return "PE";
-        case InstrumentType::FUT:   return "FUT";
-        default:                    return "—";
+        case InstrumentType::CE:
+            return "CE";
+        case InstrumentType::PE:
+            return "PE";
+        case InstrumentType::FUT:
+            return "FUT";
+        default:
+            return "—";
     }
 }
 
@@ -34,8 +38,7 @@ find_row_in_chain(const fincept::services::options::OptionChain& chain, double s
     return nullptr;
 }
 
-double lookup_ltp(const StrategyLeg& leg,
-                  const fincept::services::options::OptionChain& chain) {
+double lookup_ltp(const StrategyLeg& leg, const fincept::services::options::OptionChain& chain) {
     const auto* row = find_row_in_chain(chain, leg.strike);
     if (!row)
         return 0;
@@ -43,8 +46,7 @@ double lookup_ltp(const StrategyLeg& leg,
     return is_call ? row->ce_quote.ltp : row->pe_quote.ltp;
 }
 
-double lookup_delta(const StrategyLeg& leg,
-                    const fincept::services::options::OptionChain& chain) {
+double lookup_delta(const StrategyLeg& leg, const fincept::services::options::OptionChain& chain) {
     const auto* row = find_row_in_chain(chain, leg.strike);
     if (!row)
         return 0;
@@ -53,7 +55,7 @@ double lookup_delta(const StrategyLeg& leg,
     return g.valid ? g.delta : 0;
 }
 
-}  // namespace
+} // namespace
 
 // ── LegEditorModel ─────────────────────────────────────────────────────────
 
@@ -97,8 +99,8 @@ QVariant LegEditorModel::data(const QModelIndex& index, int role) const {
         return leg.is_active ? Qt::Checked : Qt::Unchecked;
 
     if (role == Qt::TextAlignmentRole) {
-        if (col == ColStrike || col == ColLots || col == ColEntry || col == ColIv
-            || col == ColLtp || col == ColDelta || col == ColPnl)
+        if (col == ColStrike || col == ColLots || col == ColEntry || col == ColIv || col == ColLtp || col == ColDelta ||
+            col == ColPnl)
             return int(Qt::AlignRight | Qt::AlignVCenter);
         return int(Qt::AlignCenter | Qt::AlignVCenter);
     }
@@ -126,15 +128,21 @@ QVariant LegEditorModel::data(const QModelIndex& index, int role) const {
 
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
         switch (col) {
-            case ColActive:   return QVariant();  // checkstate-only
-            case ColBuySell:  return leg.lots >= 0 ? tr("BUY") : tr("SELL");
-            case ColType:     return type_str(leg.type);
-            case ColStrike:   return QString::number(leg.strike, 'f', leg.strike < 100 ? 2 : 0);
-            case ColLots:     return leg.lots;
-            case ColEntry:    return QString::number(leg.entry_price, 'f', 2);
-            case ColIv:       return leg.iv_at_entry > 0
-                                  ? QString::number(leg.iv_at_entry * 100.0, 'f', 2) + "%"
-                                  : QString::fromUtf8("—");
+            case ColActive:
+                return QVariant(); // checkstate-only
+            case ColBuySell:
+                return leg.lots >= 0 ? tr("BUY") : tr("SELL");
+            case ColType:
+                return type_str(leg.type);
+            case ColStrike:
+                return QString::number(leg.strike, 'f', leg.strike < 100 ? 2 : 0);
+            case ColLots:
+                return leg.lots;
+            case ColEntry:
+                return QString::number(leg.entry_price, 'f', 2);
+            case ColIv:
+                return leg.iv_at_entry > 0 ? QString::number(leg.iv_at_entry * 100.0, 'f', 2) + "%"
+                                           : QString::fromUtf8("—");
             case ColLtp: {
                 double ltp = resolve_ltp(leg);
                 return ltp > 0 ? QString::number(ltp, 'f', 2) : QString::fromUtf8("—");
@@ -149,7 +157,8 @@ QVariant LegEditorModel::data(const QModelIndex& index, int role) const {
                     return QString::fromUtf8("—");
                 return QString::number(pnl, 'f', 2);
             }
-            case ColDelete:   return QString::fromUtf8("✕");
+            case ColDelete:
+                return QString::fromUtf8("✕");
         }
     }
     return {};
@@ -209,10 +218,8 @@ QVariant LegEditorModel::headerData(int section, Qt::Orientation orient, int rol
     if (orient != Qt::Horizontal || role != Qt::DisplayRole)
         return {};
     // tr() per-call — owning QHeaderView re-polls on QEvent::LanguageChange.
-    const QString headers[ColCount] = {
-        tr("On"), tr("B/S"), tr("Type"), tr("Strike"), tr("Lots"), tr("Entry"),
-        tr("IV"), tr("LTP"), tr("Delta"), tr("P&L"), QString()
-    };
+    const QString headers[ColCount] = {tr("On"), tr("B/S"), tr("Type"),  tr("Strike"), tr("Lots"), tr("Entry"),
+                                       tr("IV"), tr("LTP"), tr("Delta"), tr("P&L"),    QString()};
     if (section < 0 || section >= ColCount)
         return {};
     return headers[section];

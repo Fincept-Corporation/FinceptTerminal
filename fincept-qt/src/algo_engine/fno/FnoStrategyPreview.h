@@ -11,8 +11,7 @@ namespace fincept::algo::fno {
 // options::Strategy whose StrategyLegs (strike/lots/entry_price/iv/lot_size) feed
 // the F&O analytics/payoff components for a live PREVIEW. Pure: no I/O, no globals.
 // Unresolved legs (e.g. FUT, or a strike with no contract) are skipped.
-fincept::services::options::Strategy
-build_preview_strategy(const QVector<AlgoFnoLeg>& legs,
-                       const fincept::services::options::OptionChain& chain);
+fincept::services::options::Strategy build_preview_strategy(const QVector<AlgoFnoLeg>& legs,
+                                                            const fincept::services::options::OptionChain& chain);
 
 } // namespace fincept::algo::fno

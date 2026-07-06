@@ -5,12 +5,12 @@
 // Result rendering (display_result + the huge on_result dispatch) lives in
 // QuantModulePanel_Results.cpp.
 #include "screens/ai_quant_lab/QuantModulePanel.h"
-#include "screens/ai_quant_lab/QuantModulePanel_Common.h"
-#include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
-#include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 
 #include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
+#include "screens/ai_quant_lab/QuantModulePanel_Common.h"
+#include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
+#include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -23,25 +23,25 @@
 #include <QDateTime>
 #include <QDateTimeAxis>
 #include <QDesktopServices>
-#include <QLineSeries>
-#include <QValueAxis>
 #include <QFile>
 #include <QFileInfo>
+#include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QRegularExpression>
-#include <QFrame>
+#include <QLineSeries>
 #include <QPlainTextEdit>
 #include <QProgressBar>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QUrl>
+#include <QValueAxis>
 
 #include <cmath>
 
@@ -429,7 +429,6 @@ void QuantModulePanel::display_error(const QString& msg) {
     status_label_->setText(tr("Error"));
 }
 
-
 // ── Loading spinner shown while a Python op is in flight ─────────────────────
 
 void QuantModulePanel::show_loading(const QString& message) {
@@ -460,7 +459,8 @@ void QuantModulePanel::show_loading(const QString& message) {
     int frame_idx = 0;
     QPointer<QLabel> spin_guard(spinner);
     connect(timer, &QTimer::timeout, box, [spin_guard, frame_idx]() mutable {
-        if (!spin_guard) return;
+        if (!spin_guard)
+            return;
         frame_idx = (frame_idx + 1) % kFrames.size();
         spin_guard->setText(kFrames[frame_idx]);
     });
@@ -475,8 +475,7 @@ void QuantModulePanel::show_loading(const QString& message) {
                                "first invocation per session takes longer (cold start)."),
                             box);
     hint->setWordWrap(true);
-    hint->setStyleSheet(QString("color:%1; font-size:9px; background:transparent;")
-                            .arg(ui::colors::TEXT_TERTIARY()));
+    hint->setStyleSheet(QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 
     auto* text_col = new QVBoxLayout;
     text_col->setContentsMargins(0, 0, 0, 0);
@@ -489,7 +488,6 @@ void QuantModulePanel::show_loading(const QString& message) {
 
     results_layout_->addWidget(box);
 }
-
 
 void QuantModulePanel::on_error(const QString& module_id, const QString& message) {
     if (module_id != module_.id)

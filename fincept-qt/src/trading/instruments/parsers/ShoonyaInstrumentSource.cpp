@@ -71,7 +71,8 @@ bool extract_row(const QString& ex, const QStringList& c, NorenRow& out) {
         return true;
     }
     if (ex == "CDS") {
-        // Exchange, Token, LotSize, Precision, Multiplier, Symbol, TradingSymbol, Expiry, Instrument, OptionType, StrikePrice, TickSize
+        // Exchange, Token, LotSize, Precision, Multiplier, Symbol, TradingSymbol, Expiry, Instrument, OptionType,
+        // StrikePrice, TickSize
         if (c.size() < 12)
             return false;
         out.token = c[1];

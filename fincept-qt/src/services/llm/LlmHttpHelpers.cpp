@@ -2,9 +2,8 @@
 // extraction used by LlmService. These are static methods of LlmService living
 // in this TU so the main file stays smaller.
 
-#include "services/llm/LlmService.h"
-
 #include "services/llm/LlmContentExtractors.h"
+#include "services/llm/LlmService.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -125,8 +124,8 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
         return result;
     }
 
-    result.status  = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    result.body    = reply->readAll();
+    result.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    result.body = reply->readAll();
     result.success = (result.status >= 200 && result.status < 300);
     if (!result.success) {
         const QString server_msg = parse_server_error_message(result.body);
@@ -144,14 +143,12 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
 // do_streaming_request; this helper is for non-streamed bodies (tool-loop
 // final synthesis, Gemini/Fincept fallback).
 QString strip_think_blocks(QString content) {
-    static const QRegularExpression rx(
-        QStringLiteral("<\\s*think\\s*>[\\s\\S]*?<\\s*/\\s*think\\s*>"),
-        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rx(QStringLiteral("<\\s*think\\s*>[\\s\\S]*?<\\s*/\\s*think\\s*>"),
+                                       QRegularExpression::CaseInsensitiveOption);
     content.remove(rx);
     // Drop a dangling unmatched <think>…(no closing) — emit nothing past it.
-    static const QRegularExpression rx_open(
-        QStringLiteral("<\\s*think\\s*>[\\s\\S]*$"),
-        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression rx_open(QStringLiteral("<\\s*think\\s*>[\\s\\S]*$"),
+                                            QRegularExpression::CaseInsensitiveOption);
     content.remove(rx_open);
     return content.trimmed();
 }
@@ -214,13 +211,13 @@ void LlmService::parse_usage(LlmResponse& resp, const QJsonObject& rj, const QSt
         return;
     QJsonObject u = rj["usage"].toObject();
     if (provider == "anthropic") {
-        resp.prompt_tokens     = u["input_tokens"].toInt();
+        resp.prompt_tokens = u["input_tokens"].toInt();
         resp.completion_tokens = u["output_tokens"].toInt();
-        resp.total_tokens      = resp.prompt_tokens + resp.completion_tokens;
+        resp.total_tokens = resp.prompt_tokens + resp.completion_tokens;
     } else {
-        resp.prompt_tokens     = u["prompt_tokens"].toInt();
+        resp.prompt_tokens = u["prompt_tokens"].toInt();
         resp.completion_tokens = u["completion_tokens"].toInt();
-        resp.total_tokens      = u["total_tokens"].toInt();
+        resp.total_tokens = u["total_tokens"].toInt();
     }
 }
 

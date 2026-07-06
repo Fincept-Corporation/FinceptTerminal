@@ -132,9 +132,12 @@ void CryptoWatchlist::changeEvent(QEvent* event) {
 }
 
 void CryptoWatchlist::retranslateUi() {
-    if (title_label_) title_label_->setText(tr("WATCHLIST"));
-    if (filter_edit_) filter_edit_->setPlaceholderText(tr("Search..."));
-    if (table_) table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Price"), tr("%")});
+    if (title_label_)
+        title_label_->setText(tr("WATCHLIST"));
+    if (filter_edit_)
+        filter_edit_->setPlaceholderText(tr("Search..."));
+    if (table_)
+        table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Price"), tr("%")});
 }
 
 void CryptoWatchlist::set_symbols(const QStringList& symbols) {

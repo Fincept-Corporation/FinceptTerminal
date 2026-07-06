@@ -202,10 +202,6 @@ void MAModulePanel::build_ui() {
     root->addWidget(scroll, 1);
 }
 
-
-
-
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // RESULT DISPLAY
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -358,9 +354,8 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
     // The Deals module shows SEC/EDGAR filing values, which are USD — pin them
     // so they don't get repainted with the user's preferred currency symbol.
     // Every other M&A module is a calculator the user denominates themselves.
-    const QString intrinsic = (module_.id == fincept::services::ma::ModuleId::Deals)
-                                  ? QStringLiteral("USD")
-                                  : QString();
+    const QString intrinsic =
+        (module_.id == fincept::services::ma::ModuleId::Deals) ? QStringLiteral("USD") : QString();
 
     // Section header
     auto* header = new QLabel(tr("RESULTS"));
@@ -384,7 +379,8 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
         has_scalars = true;
         QString label = it.key();
         label.replace('_', ' ');
-        auto* card = build_metric_card(label.toUpper(), format_value(it.value(), intrinsic), module_.color.name(), grid);
+        auto* card =
+            build_metric_card(label.toUpper(), format_value(it.value(), intrinsic), module_.color.name(), grid);
         gl->addWidget(card, row, col);
         col++;
         if (col >= 3) {

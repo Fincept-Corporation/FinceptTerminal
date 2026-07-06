@@ -87,9 +87,8 @@ SentimentSourceSnapshot parse_compare_payload(const QString& source_id, const QJ
     snapshot.buzz_score = first_numeric(stock, {"buzz_score"});
     snapshot.bullish_pct = first_numeric(stock, {"bullish_pct"});
     snapshot.sentiment_score = first_numeric(stock, {"sentiment_score", "sentiment"});
-    snapshot.activity_count = first_numeric(
-        stock,
-        {"mentions", "trade_count", "unique_posts", "source_count", "subreddit_count", "market_count", "unique_traders"});
+    snapshot.activity_count = first_numeric(stock, {"mentions", "trade_count", "unique_posts", "source_count",
+                                                    "subreddit_count", "market_count", "unique_traders"});
     snapshot.available = source_has_signal(snapshot);
 
     return snapshot;

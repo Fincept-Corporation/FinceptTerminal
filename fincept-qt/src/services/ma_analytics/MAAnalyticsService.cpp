@@ -2,11 +2,10 @@
 #include "services/ma_analytics/MAAnalyticsService.h"
 
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -16,10 +15,11 @@ namespace fincept::services::ma {
 
 namespace {
 inline void publish_ma_result(bool hub_registered, const QString& context, const QJsonObject& obj) {
-    if (!hub_registered) return;
+    if (!hub_registered)
+        return;
     fincept::datahub::DataHub::instance().publish(QStringLiteral("ma:") + context, QVariant(obj));
 }
-}  // namespace
+} // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 MAAnalyticsService& MAAnalyticsService::instance() {
@@ -303,557 +303,317 @@ void MAAnalyticsService::run_regression(const QJsonObject& params) {
 
 // Financial Statement Analysis
 void MAAnalyticsService::analyze_income_statement(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/financial_analysis_cli.py",
-        "analyze_income",
-        params,
-        "income_analysis");
+    run_python_json("Analytics/financial_analysis_cli.py", "analyze_income", params, "income_analysis");
 }
 
 void MAAnalyticsService::analyze_balance_sheet(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/financial_analysis_cli.py",
-        "analyze_balance",
-        params,
-        "balance_analysis");
+    run_python_json("Analytics/financial_analysis_cli.py", "analyze_balance", params, "balance_analysis");
 }
 
 void MAAnalyticsService::analyze_cashflow_statement(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/financial_analysis_cli.py",
-        "analyze_cashflow",
-        params,
-        "cashflow_analysis");
+    run_python_json("Analytics/financial_analysis_cli.py", "analyze_cashflow", params, "cashflow_analysis");
 }
 
 void MAAnalyticsService::analyze_comprehensive_financials(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/financial_analysis_cli.py",
-        "analyze_comprehensive",
-        params,
-        "financial_analysis");
+    run_python_json("Analytics/financial_analysis_cli.py", "analyze_comprehensive", params, "financial_analysis");
 }
 
 void MAAnalyticsService::get_financial_key_metrics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/financial_analysis_cli.py",
-        "get_key_metrics",
-        params,
-        "financial_key_metrics");
+    run_python_json("Analytics/financial_analysis_cli.py", "get_key_metrics", params, "financial_key_metrics");
 }
 
 // QuantStats Analytics
 void MAAnalyticsService::quantstats_stats(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/quantstats_analytics.py",
-        "stats",
-        params,
-        "quantstats_stats");
+    run_python_json("Analytics/quantstats_analytics.py", "stats", params, "quantstats_stats");
 }
 
 void MAAnalyticsService::quantstats_returns(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/quantstats_analytics.py",
-        "returns",
-        params,
-        "quantstats_returns");
+    run_python_json("Analytics/quantstats_analytics.py", "returns", params, "quantstats_returns");
 }
 
 void MAAnalyticsService::quantstats_drawdown(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/quantstats_analytics.py",
-        "drawdown",
-        params,
-        "quantstats_drawdown");
+    run_python_json("Analytics/quantstats_analytics.py", "drawdown", params, "quantstats_drawdown");
 }
 
 void MAAnalyticsService::quantstats_rolling(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/quantstats_analytics.py",
-        "rolling",
-        params,
-        "quantstats_rolling");
+    run_python_json("Analytics/quantstats_analytics.py", "rolling", params, "quantstats_rolling");
 }
 
 void MAAnalyticsService::quantstats_full_report(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/quantstats_analytics.py",
-        "full_report",
-        params,
-        "quantstats_full_report");
+    run_python_json("Analytics/quantstats_analytics.py", "full_report", params, "quantstats_full_report");
 }
 
 // Statsmodels Analytics
 void MAAnalyticsService::fit_arima(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/statsmodels_cli.py",
-        "arima",
-        params,
-        "arima");
+    run_python_json("Analytics/statsmodels_cli.py", "arima", params, "arima");
 }
 
 void MAAnalyticsService::forecast_arima(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/statsmodels_cli.py",
-        "arima_forecast",
-        params,
-        "arima_forecast");
+    run_python_json("Analytics/statsmodels_cli.py", "arima_forecast", params, "arima_forecast");
 }
 
 void MAAnalyticsService::fit_ols(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/statsmodels_cli.py",
-        "ols",
-        params,
-        "ols");
+    run_python_json("Analytics/statsmodels_cli.py", "ols", params, "ols");
 }
 
 void MAAnalyticsService::descriptive_statistics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/statsmodels_cli.py",
-        "descriptive",
-        params,
-        "descriptive_statistics");
+    run_python_json("Analytics/statsmodels_cli.py", "descriptive", params, "descriptive_statistics");
 }
 
 // FFN Analytics
 void MAAnalyticsService::calculate_ffn_performance(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/ffn_wrapper/ffn_service.py",
-        "calculate_performance",
-        params,
-        "ffn_performance");
+    run_python_json("Analytics/ffn_wrapper/ffn_service.py", "calculate_performance", params, "ffn_performance");
 }
 
 void MAAnalyticsService::calculate_ffn_drawdowns(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/ffn_wrapper/ffn_service.py",
-        "calculate_drawdowns",
-        params,
-        "ffn_drawdowns");
+    run_python_json("Analytics/ffn_wrapper/ffn_service.py", "calculate_drawdowns", params, "ffn_drawdowns");
 }
 
 void MAAnalyticsService::calculate_ffn_rolling_metrics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/ffn_wrapper/ffn_service.py",
-        "calculate_rolling_metrics",
-        params,
-        "ffn_rolling_metrics");
+    run_python_json("Analytics/ffn_wrapper/ffn_service.py", "calculate_rolling_metrics", params, "ffn_rolling_metrics");
 }
 
 void MAAnalyticsService::calculate_ffn_risk_metrics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/ffn_wrapper/ffn_service.py",
-        "risk_metrics",
-        params,
-        "ffn_risk_metrics");
+    run_python_json("Analytics/ffn_wrapper/ffn_service.py", "risk_metrics", params, "ffn_risk_metrics");
 }
 
 void MAAnalyticsService::optimize_ffn_portfolio(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/ffn_wrapper/ffn_service.py",
-        "portfolio_optimization",
-        params,
-        "ffn_portfolio");
+    run_python_json("Analytics/ffn_wrapper/ffn_service.py", "portfolio_optimization", params, "ffn_portfolio");
 }
 
 void MAAnalyticsService::run_ffn_full_analysis(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/ffn_wrapper/ffn_service.py",
-        "full_analysis",
-        params,
-        "ffn_full_analysis");
+    run_python_json("Analytics/ffn_wrapper/ffn_service.py", "full_analysis", params, "ffn_full_analysis");
 }
 
 void MAAnalyticsService::perform_pca(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/statsmodels_cli.py",
-        "pca",
-        params,
-        "pca");
+    run_python_json("Analytics/statsmodels_cli.py", "pca", params, "pca");
 }
 
 // Functime Analytics
 void MAAnalyticsService::functime_forecast(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/functime_wrapper/functime_service.py",
-        "forecast",
-        params,
-        "functime_forecast");
+    run_python_json("Analytics/functime_wrapper/functime_service.py", "forecast", params, "functime_forecast");
 }
 
 void MAAnalyticsService::functime_anomaly_detection(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/functime_wrapper/functime_service.py",
-        "anomaly_detection",
-        params,
-        "functime_anomaly_detection");
+    run_python_json("Analytics/functime_wrapper/functime_service.py", "anomaly_detection", params,
+                    "functime_anomaly_detection");
 }
 
 void MAAnalyticsService::functime_seasonality(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/functime_wrapper/functime_service.py",
-        "seasonality",
-        params,
-        "functime_seasonality");
+    run_python_json("Analytics/functime_wrapper/functime_service.py", "seasonality", params, "functime_seasonality");
 }
 
 void MAAnalyticsService::functime_metrics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/functime_wrapper/functime_service.py",
-        "metrics",
-        params,
-        "functime_metrics");
+    run_python_json("Analytics/functime_wrapper/functime_service.py", "metrics", params, "functime_metrics");
 }
 
 void MAAnalyticsService::functime_confidence_intervals(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/functime_wrapper/functime_service.py",
-        "confidence_intervals",
-        params,
-        "functime_confidence_intervals");
+    run_python_json("Analytics/functime_wrapper/functime_service.py", "confidence_intervals", params,
+                    "functime_confidence_intervals");
 }
 
 void MAAnalyticsService::functime_stationarity(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/functime_wrapper/functime_service.py",
-        "stationarity",
-        params,
-        "functime_stationarity");
+    run_python_json("Analytics/functime_wrapper/functime_service.py", "stationarity", params, "functime_stationarity");
 }
 
 // PyPortfolioOpt Analytics
 void MAAnalyticsService::optimize_portfolio(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "optimize",
-        params,
-        "portfolio_optimize");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "optimize", params,
+                    "portfolio_optimize");
 }
 
 void MAAnalyticsService::generate_efficient_frontier(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "efficient_frontier",
-        params,
-        "efficient_frontier");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "efficient_frontier", params,
+                    "efficient_frontier");
 }
 
 void MAAnalyticsService::calculate_discrete_allocation(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "discrete_allocation",
-        params,
-        "discrete_allocation");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "discrete_allocation", params,
+                    "discrete_allocation");
 }
 
 void MAAnalyticsService::run_portfolio_backtest(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "backtest",
-        params,
-        "portfolio_backtest");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "backtest", params,
+                    "portfolio_backtest");
 }
 
 void MAAnalyticsService::calculate_risk_decomposition(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "risk_decomposition",
-        params,
-        "risk_decomposition");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "risk_decomposition", params,
+                    "risk_decomposition");
 }
 
 void MAAnalyticsService::optimize_black_litterman(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "black_litterman",
-        params,
-        "black_litterman");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "black_litterman", params,
+                    "black_litterman");
 }
 
 void MAAnalyticsService::optimize_hrp(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "hrp",
-        params,
-        "hrp_optimization");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "hrp", params, "hrp_optimization");
 }
 
 void MAAnalyticsService::generate_portfolio_report(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py",
-        "generate_report",
-        params,
-        "portfolio_report");
+    run_python_json("Analytics/pyportfolioopt_wrapper/pyportfolioopt_service.py", "generate_report", params,
+                    "portfolio_report");
 }
 
 // GS Quant Analytics
 void MAAnalyticsService::calculate_risk_metrics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gs_quant_wrapper/gs_quant_service.py",
-        "risk_metrics",
-        params,
-        "gs_risk_metrics");
+    run_python_json("Analytics/gs_quant_wrapper/gs_quant_service.py", "risk_metrics", params, "gs_risk_metrics");
 }
 
 void MAAnalyticsService::analyze_portfolio(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gs_quant_wrapper/gs_quant_service.py",
-        "portfolio_analytics",
-        params,
-        "gs_portfolio");
+    run_python_json("Analytics/gs_quant_wrapper/gs_quant_service.py", "portfolio_analytics", params, "gs_portfolio");
 }
 
 void MAAnalyticsService::calculate_greeks(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gs_quant_wrapper/gs_quant_service.py",
-        "greeks",
-        params,
-        "gs_greeks");
+    run_python_json("Analytics/gs_quant_wrapper/gs_quant_service.py", "greeks", params, "gs_greeks");
 }
 
 void MAAnalyticsService::perform_var_analysis(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gs_quant_wrapper/gs_quant_service.py",
-        "var_analysis",
-        params,
-        "gs_var");
+    run_python_json("Analytics/gs_quant_wrapper/gs_quant_service.py", "var_analysis", params, "gs_var");
 }
 
 void MAAnalyticsService::perform_stress_test(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gs_quant_wrapper/gs_quant_service.py",
-        "stress_test",
-        params,
-        "gs_stress_test");
+    run_python_json("Analytics/gs_quant_wrapper/gs_quant_service.py", "stress_test", params, "gs_stress_test");
 }
 
 void MAAnalyticsService::run_gs_backtest(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gs_quant_wrapper/gs_quant_service.py",
-        "backtest",
-        params,
-        "gs_backtest");
+    run_python_json("Analytics/gs_quant_wrapper/gs_quant_service.py", "backtest", params, "gs_backtest");
 }
 
 void MAAnalyticsService::calculate_statistics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gs_quant_wrapper/gs_quant_service.py",
-        "statistics",
-        params,
-        "gs_statistics");
+    run_python_json("Analytics/gs_quant_wrapper/gs_quant_service.py", "statistics", params, "gs_statistics");
 }
 
 // Fortitudo Tech Analytics
 void MAAnalyticsService::fortitudo_check_status(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "check_status",
-        params,
-        "fortitudo_check_status");
+    run_python_json("Analytics/fortitudo_tech_wrapper/fortitudo_service.py", "check_status", params,
+                    "fortitudo_check_status");
 }
 
 void MAAnalyticsService::fortitudo_portfolio_metrics(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "portfolio_metrics",
-        params,
-        "fortitudo_portfolio_metrics");
+    run_python_json("Analytics/fortitudo_tech_wrapper/fortitudo_service.py", "portfolio_metrics", params,
+                    "fortitudo_portfolio_metrics");
 }
 
 void MAAnalyticsService::fortitudo_covariance_matrix(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "covariance_matrix",
-        params,
-        "fortitudo_covariance_matrix");
+    run_python_json("Analytics/fortitudo_tech_wrapper/fortitudo_service.py", "covariance_matrix", params,
+                    "fortitudo_covariance_matrix");
 }
 
 void MAAnalyticsService::fortitudo_mean_variance_optimize(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "mean_variance_optimize",
-        params,
-        "fortitudo_mean_variance_optimize");
+    run_python_json("Analytics/fortitudo_tech_wrapper/fortitudo_service.py", "mean_variance_optimize", params,
+                    "fortitudo_mean_variance_optimize");
 }
 
 void MAAnalyticsService::fortitudo_mean_cvar_optimize(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "mean_cvar_optimize",
-        params,
-        "fortitudo_mean_cvar_optimize");
+    run_python_json("Analytics/fortitudo_tech_wrapper/fortitudo_service.py", "mean_cvar_optimize", params,
+                    "fortitudo_mean_cvar_optimize");
 }
 
 void MAAnalyticsService::fortitudo_efficient_frontier(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "efficient_frontier",
-        params,
-        "fortitudo_efficient_frontier");
+    run_python_json("Analytics/fortitudo_tech_wrapper/fortitudo_service.py", "efficient_frontier", params,
+                    "fortitudo_efficient_frontier");
 }
 
 void MAAnalyticsService::fortitudo_exp_decay_probabilities(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
-        "exp_decay_probabilities",
-        params,
-        "fortitudo_exp_decay_probabilities");
+    run_python_json("Analytics/fortitudo_tech_wrapper/fortitudo_service.py", "exp_decay_probabilities", params,
+                    "fortitudo_exp_decay_probabilities");
 }
 
 // PyPME Analytics
 void MAAnalyticsService::calculate_pme(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pypme_wrapper/pypme_service.py",
-        "pme",
-        params,
-        "pme");
+    run_python_json("Analytics/pypme_wrapper/pypme_service.py", "pme", params, "pme");
 }
 
 void MAAnalyticsService::calculate_verbose_pme(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pypme_wrapper/pypme_service.py",
-        "verbose_pme",
-        params,
-        "verbose_pme");
+    run_python_json("Analytics/pypme_wrapper/pypme_service.py", "verbose_pme", params, "verbose_pme");
 }
 
 void MAAnalyticsService::calculate_xpme(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pypme_wrapper/pypme_service.py",
-        "xpme",
-        params,
-        "xpme");
+    run_python_json("Analytics/pypme_wrapper/pypme_service.py", "xpme", params, "xpme");
 }
 
 void MAAnalyticsService::calculate_verbose_xpme(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pypme_wrapper/pypme_service.py",
-        "verbose_xpme",
-        params,
-        "verbose_xpme");
+    run_python_json("Analytics/pypme_wrapper/pypme_service.py", "verbose_xpme", params, "verbose_xpme");
 }
 
 void MAAnalyticsService::calculate_tessa_xpme(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pypme_wrapper/pypme_service.py",
-        "tessa_xpme",
-        params,
-        "tessa_xpme");
+    run_python_json("Analytics/pypme_wrapper/pypme_service.py", "tessa_xpme", params, "tessa_xpme");
 }
 
 void MAAnalyticsService::calculate_tessa_verbose_xpme(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/pypme_wrapper/pypme_service.py",
-        "tessa_verbose_xpme",
-        params,
-        "tessa_verbose_xpme");
+    run_python_json("Analytics/pypme_wrapper/pypme_service.py", "tessa_verbose_xpme", params, "tessa_verbose_xpme");
 }
 
 // PyVollib Analytics
 void MAAnalyticsService::calculate_black_price(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "black_price", params, "black_price");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "black_price", params, "black_price");
 }
 
 void MAAnalyticsService::calculate_black_greeks(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "black_greeks", params, "black_greeks");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "black_greeks", params, "black_greeks");
 }
 
 void MAAnalyticsService::calculate_black_iv(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "black_iv", params, "black_iv");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "black_iv", params, "black_iv");
 }
 
 void MAAnalyticsService::calculate_bs_price(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "bs_price", params, "bs_price");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "bs_price", params, "bs_price");
 }
 
 void MAAnalyticsService::calculate_bs_greeks(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "bs_greeks", params, "bs_greeks");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "bs_greeks", params, "bs_greeks");
 }
 
 void MAAnalyticsService::calculate_bs_iv(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "bs_iv", params, "bs_iv");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "bs_iv", params, "bs_iv");
 }
 
 void MAAnalyticsService::calculate_bsm_price(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "bsm_price", params, "bsm_price");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "bsm_price", params, "bsm_price");
 }
 
 void MAAnalyticsService::calculate_bsm_greeks(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "bsm_greeks", params, "bsm_greeks");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "bsm_greeks", params, "bsm_greeks");
 }
 
 void MAAnalyticsService::calculate_bsm_iv(const QJsonObject& params) {
-    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py",
-                    "bsm_iv", params, "bsm_iv");
+    run_python_json("Analytics/py_vollib_wrapper/vollib_service.py", "bsm_iv", params, "bsm_iv");
 }
 
 // GluonTS Analytics
 void MAAnalyticsService::gluonts_check_status(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gluonts_wrapper/gluonts_service.py",
-        "check_status",
-        params,
-        "gluonts_check_status");
+    run_python_json("Analytics/gluonts_wrapper/gluonts_service.py", "check_status", params, "gluonts_check_status");
 }
 
 void MAAnalyticsService::gluonts_probabilistic_forecast(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gluonts_wrapper/gluonts_service.py",
-        "probabilistic_forecast",
-        params,
-        "gluonts_probabilistic_forecast");
+    run_python_json("Analytics/gluonts_wrapper/gluonts_service.py", "probabilistic_forecast", params,
+                    "gluonts_probabilistic_forecast");
 }
 
 void MAAnalyticsService::gluonts_quantile_forecast(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gluonts_wrapper/gluonts_service.py",
-        "quantile_forecast",
-        params,
-        "gluonts_quantile_forecast");
+    run_python_json("Analytics/gluonts_wrapper/gluonts_service.py", "quantile_forecast", params,
+                    "gluonts_quantile_forecast");
 }
 
 void MAAnalyticsService::gluonts_distribution_fit(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gluonts_wrapper/gluonts_service.py",
-        "distribution_fit",
-        params,
-        "gluonts_distribution_fit");
+    run_python_json("Analytics/gluonts_wrapper/gluonts_service.py", "distribution_fit", params,
+                    "gluonts_distribution_fit");
 }
 
 void MAAnalyticsService::gluonts_evaluate_forecast(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gluonts_wrapper/gluonts_service.py",
-        "evaluate_forecast",
-        params,
-        "gluonts_evaluate_forecast");
+    run_python_json("Analytics/gluonts_wrapper/gluonts_service.py", "evaluate_forecast", params,
+                    "gluonts_evaluate_forecast");
 }
 
 void MAAnalyticsService::gluonts_seasonal_naive(const QJsonObject& params) {
-    run_python_json(
-        "Analytics/gluonts_wrapper/gluonts_service.py",
-        "seasonal_naive",
-        params,
-        "gluonts_seasonal_naive");
+    run_python_json("Analytics/gluonts_wrapper/gluonts_service.py", "seasonal_naive", params, "gluonts_seasonal_naive");
 }
 
-void MAAnalyticsService::run_fixed_income_command(
-    const QString& command,
-    const QJsonObject& params)
-{
-    run_python_json(
-        "Analytics/fixedIncome/cli.py",
-        command,
-        params,
-        "fixed_income_" + command);
+void MAAnalyticsService::run_fixed_income_command(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/fixedIncome/cli.py", command, params, "fixed_income_" + command);
 }
 
 // skfolio Analytics — script dispatches on the operation name (args[0]); the
@@ -997,6 +757,96 @@ void MAAnalyticsService::analyze_industry_deals(const QJsonObject& params) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Technical Analysis / Economics / Deal Scanner  (multi-arg CLIs via Qt bridge shim)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void MAAnalyticsService::business_cycle(const QJsonObject& params) {
+    run_python_json("Analytics/economics/business_cycle.py", "get_indicators", params, "business_cycle");
+}
+void MAAnalyticsService::equity_risk_premium(const QJsonObject& params) {
+    run_python_json("Analytics/economics/equity_risk_premium.py", "estimate_erp", params, "equity_risk_premium");
+}
+void MAAnalyticsService::momentum_indicator(const QString& indicator_type, const QJsonObject& params) {
+    // indicator_type rides the command slot; the script's shim moves "symbol" out of
+    // the JSON and re-lays the native (symbol, indicator_type, params) argv.
+    run_python_json("Analytics/technical_analysis/momentum_indicators.py", indicator_type, params,
+                    "momentum_" + indicator_type);
+}
+void MAAnalyticsService::run_deal_scanner(const QString& command, const QJsonObject& params) {
+    run_python_json("Analytics/corporateFinance/deal_database/deal_scanner.py", command, params, "deal_" + command);
+}
+void MAAnalyticsService::sec_dcf_inputs(const QJsonObject& params) {
+    run_python_json("Analytics/corporateFinance/valuation/sec_data_adapter.py", "build_dcf_inputs", params,
+                    "sec_dcf_inputs");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Backtesting bridges — run a registered Fincept strategy (FCT-…) across providers.
+// Bridge ABI is (strategy_id, params_json): strategy_id occupies the command slot.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void MAAnalyticsService::run_backtest(const QString& provider, const QString& strategy_id, const QJsonObject& params) {
+    QString script;
+    if (provider == "backtestingpy")
+        script = "Analytics/backtesting/backtestingpy/btp_fincept_bridge.py";
+    else if (provider == "fasttrade")
+        script = "Analytics/backtesting/fasttrade/ft_fincept_bridge.py";
+    else if (provider == "vectorbt")
+        script = "Analytics/backtesting/vectorbt/vbt_fincept_bridge.py";
+    else if (provider == "zipline")
+        script = "Analytics/backtesting/zipline/zp_fincept_bridge.py";
+    else
+        script = "Analytics/backtesting/bt/bt_fincept_bridge.py"; // default provider: bt
+    run_python_json(script, strategy_id, params, "backtest_" + provider);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VisionQuant — candlestick-pattern intelligence (CNN autoencoder + FAISS index).
+// All four CLIs use the standard (command, JSON) protocol → no shim. venv-numpy2
+// (torch/faiss/PIL present). build_index is long-running; the rest are one-shot.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void MAAnalyticsService::run_vision_engine(const QString& command, const QJsonObject& params) {
+    run_python_json("vision_quant/engine.py", command, params, "vq_engine_" + command);
+}
+void MAAnalyticsService::run_vision_scorer(const QString& command, const QJsonObject& params) {
+    run_python_json("vision_quant/scorer.py", command, params, "vq_scorer_" + command);
+}
+void MAAnalyticsService::run_vision_backtest(const QJsonObject& params) {
+    run_python_json("vision_quant/backtester.py", "backtest", params, "vq_backtest");
+}
+void MAAnalyticsService::run_vision_index(const QString& command, const QJsonObject& params) {
+    run_python_json("vision_quant/setup_index.py", command, params, "vq_index_" + command);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Data connectors — keyless *_data.py CLIs. Positional argv (command + args), and
+// (unlike run_python) tolerant of a top-level JSON array result → wrapped as {data}.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void MAAnalyticsService::run_data_connector(const QString& script, const QStringList& args, const QString& context) {
+    QPointer<MAAnalyticsService> self = this;
+    python::PythonRunner::instance().run(script, args, [self, context](python::PythonResult result) {
+        if (!self)
+            return;
+        if (!result.success) {
+            LOG_ERROR("MAAnalytics", QString("Connector failed [%1]: %2").arg(context, result.error));
+            emit self->error_occurred(context, result.error);
+            return;
+        }
+        const auto json_str = python::extract_json(result.output);
+        const auto doc = QJsonDocument::fromJson(json_str.toUtf8());
+        if (doc.isNull()) {
+            emit self->error_occurred(context, "Invalid JSON response from connector");
+            return;
+        }
+        const QJsonObject obj = doc.isArray() ? QJsonObject{{"data", doc.array()}} : doc.object();
+        emit self->result_ready(context, obj);
+        publish_ma_result(self->hub_registered_, context, obj);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // DATAHUB PRODUCER — ma:*
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -1017,17 +867,18 @@ void MAAnalyticsService::refresh(const QStringList& topics) {
 }
 
 int MAAnalyticsService::max_requests_per_sec() const {
-    return 1;  // Heavy Python analytics; callers drive their own cadence.
+    return 1; // Heavy Python analytics; callers drive their own cadence.
 }
 
 void MAAnalyticsService::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 
     fincept::datahub::TopicPolicy policy;
     policy.push_only = true;
-    policy.ttl_ms = kResultTtlSec * 1000;  // 2 min cache for latecomers.
+    policy.ttl_ms = kResultTtlSec * 1000; // 2 min cache for latecomers.
     hub.set_policy_pattern(QStringLiteral("ma:*"), policy);
 
     hub_registered_ = true;

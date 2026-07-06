@@ -22,11 +22,11 @@ namespace fincept::services::alpha_arena {
 /// Submitted order request — the venue is responsible for assigning a
 /// venue-side order id and signalling fills through fill_callback.
 struct OrderRequest {
-    QString agent_id;          // logical agent identity (DB FK)
-    QString coin;              // base symbol, e.g. "BTC"
-    QString side;              // "buy" | "sell"
-    double qty = 0.0;          // base-asset units, > 0
-    int leverage = 1;          // [1, 20]
+    QString agent_id; // logical agent identity (DB FK)
+    QString coin;     // base symbol, e.g. "BTC"
+    QString side;     // "buy" | "sell"
+    double qty = 0.0; // base-asset units, > 0
+    int leverage = 1; // [1, 20]
     /// Always market+IOC for entries in v1. Held here for forward compat.
     QString type = QStringLiteral("market");
     QString tif = QStringLiteral("ioc");
@@ -42,8 +42,8 @@ struct OrderRequest {
 /// asynchronously via fill_callback.
 struct OrderAck {
     QString venue_order_id;
-    QString status;            // "accepted" | "rejected"
-    QString error;             // populated when status="rejected"
+    QString status; // "accepted" | "rejected"
+    QString error;  // populated when status="rejected"
 };
 
 /// One execution against an order. Venue may emit multiple per order
@@ -64,7 +64,7 @@ struct FillEvent {
 struct FundingEvent {
     QString agent_id;
     QString coin;
-    double amount_usd = 0.0;   // signed: negative = paid out
+    double amount_usd = 0.0; // signed: negative = paid out
     qint64 utc_ms = 0;
 };
 
@@ -94,8 +94,7 @@ class IExchangeVenue {
 
     /// Async order placement. Ack arrives via callback; later fills arrive
     /// through the channel installed via on_fill().
-    virtual void place_order(const OrderRequest& req,
-                             std::function<void(OrderAck)> ack_cb) = 0;
+    virtual void place_order(const OrderRequest& req, std::function<void(OrderAck)> ack_cb) = 0;
 
     /// Best-effort cancellation. May complete after the order has already
     /// filled — callers must handle the race.

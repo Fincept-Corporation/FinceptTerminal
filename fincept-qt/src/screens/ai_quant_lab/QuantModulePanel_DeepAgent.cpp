@@ -6,7 +6,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
@@ -66,7 +65,7 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
 
     auto* desc =
         new QLabel(tr("Multi-agent financial analysis powered by LangGraph. Delegates to specialist subagents "
-                   "(research, data-analyst, trading, risk-analyzer, portfolio-optimizer, backtester, reporter)."),
+                      "(research, data-analyst, trading, risk-analyzer, portfolio-optimizer, backtester, reporter)."),
                    da_w);
     desc->setWordWrap(true);
     desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
@@ -77,8 +76,8 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
 
     auto* task_edit = new QTextEdit(da_w);
     task_edit->setPlaceholderText(tr("Describe your analysis task...\n"
-                                  "e.g. \"Conduct a full investment analysis of NVDA: research fundamentals, "
-                                  "assess risks, and give a buy/sell/hold recommendation with price target\""));
+                                     "e.g. \"Conduct a full investment analysis of NVDA: research fundamentals, "
+                                     "assess risks, and give a buy/sell/hold recommendation with price target\""));
     task_edit->setFixedHeight(90);
     task_edit->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
                                      "font-family:%4; font-size:%5px; padding:6px; }")
@@ -217,8 +216,8 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     mcp_btn->setCursor(Qt::PointingHandCursor);
     mcp_btn->setCheckable(true);
     mcp_btn->setToolTip(tr("Start/stop the Fincept MCP tool server\n"
-                        "Gives RD-Agent loops access to market data,\n"
-                        "financial news and economics tools."));
+                           "Gives RD-Agent loops access to market data,\n"
+                           "financial news and economics tools."));
     mcp_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                    "font-family:%2; font-size:%3px; padding:2px 8px; border-radius:2px; }"
                                    "QPushButton:checked { background:%4; color:%5; border-color:%4; }"
@@ -247,7 +246,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     fm_vl->setSpacing(10);
 
     auto* fm_desc = new QLabel(tr("Autonomous alpha factor discovery via FactorRDLoop. The agent proposes, codes, runs "
-                               "and evaluates factors iteratively until the target IC is reached."),
+                                  "and evaluates factors iteratively until the target IC is reached."),
                                fm_w);
     fm_desc->setWordWrap(true);
     fm_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
@@ -309,9 +308,10 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     mo_vl->setContentsMargins(14, 14, 14, 14);
     mo_vl->setSpacing(10);
 
-    auto* mo_desc = new QLabel(tr("ML model hyperparameter optimization via ModelRDLoop. Supports LightGBM, XGBoost, "
-                               "LSTM, GRU, Transformer and TCN. Optimizes for Sharpe, IC, max drawdown, or win rate."),
-                               mo_w);
+    auto* mo_desc =
+        new QLabel(tr("ML model hyperparameter optimization via ModelRDLoop. Supports LightGBM, XGBoost, "
+                      "LSTM, GRU, Transformer and TCN. Optimizes for Sharpe, IC, max drawdown, or win rate."),
+                   mo_w);
     mo_desc->setWordWrap(true);
     mo_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                                .arg(ui::colors::TEXT_SECONDARY())
@@ -362,7 +362,7 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     qr_vl->setSpacing(10);
 
     auto* qr_desc = new QLabel(tr("Combined factor discovery + model optimization via QuantRDLoop. Runs the full "
-                               "research pipeline end-to-end: propose factors, code them, backtest, refine."),
+                                  "research pipeline end-to-end: propose factors, code them, backtest, refine."),
                                qr_w);
     qr_desc->setWordWrap(true);
     qr_desc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
@@ -497,7 +497,8 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
 
     // Task table
     rd_task_table_ = new QTableWidget(0, 6, tm_w);
-    rd_task_table_->setHorizontalHeaderLabels({tr("Task ID"), tr("Type"), tr("Status"), tr("Progress"), tr("Best IC"), tr("Elapsed")});
+    rd_task_table_->setHorizontalHeaderLabels(
+        {tr("Task ID"), tr("Type"), tr("Status"), tr("Progress"), tr("Best IC"), tr("Elapsed")});
     rd_task_table_->horizontalHeader()->setStretchLastSection(true);
     rd_task_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     rd_task_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);

@@ -6,9 +6,8 @@
 //
 // Part of the partial-class split of SurfaceAnalyticsScreen.cpp.
 
-#include "SurfaceAnalyticsScreen.h"
-
 #include "Surface3DWidget.h"
+#include "SurfaceAnalyticsScreen.h"
 #include "SurfaceCapabilities.h"
 #include "SurfaceControlPanel.h"
 #include "SurfaceCsvImporter.h"
@@ -32,8 +31,8 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStringList>
-#include <QVariant>
 #include <QVBoxLayout>
+#include <QVariant>
 
 namespace fincept::surface {
 
@@ -601,41 +600,76 @@ void SurfaceAnalyticsScreen::update_metrics() {
 
 const std::vector<std::vector<float>>* SurfaceAnalyticsScreen::active_z_grid() const {
     switch (active_chart_) {
-        case ChartType::Volatility: return &vol_data_.z;
-        case ChartType::DeltaSurface: return &delta_data_.z;
-        case ChartType::GammaSurface: return &gamma_data_.z;
-        case ChartType::VegaSurface: return &vega_data_.z;
-        case ChartType::ThetaSurface: return &theta_data_.z;
-        case ChartType::SkewSurface: return &skew_data_.z;
-        case ChartType::LocalVolSurface: return &local_vol_data_.z;
-        case ChartType::YieldCurve: return &yield_data_.z;
-        case ChartType::SwaptionVol: return &swaption_data_.z;
-        case ChartType::CapFloorVol: return &capfloor_data_.z;
-        case ChartType::BondSpread: return &bond_spread_data_.z;
-        case ChartType::OISBasis: return &ois_data_.z;
-        case ChartType::RealYield: return &real_yield_data_.z;
-        case ChartType::ForwardRate: return &fwd_rate_data_.z;
-        case ChartType::FXVol: return &fx_vol_data_.z;
-        case ChartType::FXForwardPoints: return &fx_fwd_data_.z;
-        case ChartType::CrossCurrencyBasis: return &xccy_data_.z;
-        case ChartType::CDSSpread: return &cds_data_.z;
-        case ChartType::CreditTransition: return &credit_trans_data_.z;
-        case ChartType::RecoveryRate: return &recovery_data_.z;
-        case ChartType::CommodityForward: return &cmdty_fwd_data_.z;
-        case ChartType::CommodityVol: return &cmdty_vol_data_.z;
-        case ChartType::CrackSpread: return &crack_data_.z;
-        case ChartType::ContangoBackwardation: return &contango_data_.z;
-        case ChartType::Correlation: return &corr_data_.z;
-        case ChartType::PCA: return &pca_data_.z;
-        case ChartType::VaR: return &var_data_.z;
-        case ChartType::StressTestPnL: return &stress_data_.z;
-        case ChartType::FactorExposure: return &factor_data_.z;
-        case ChartType::LiquidityHeatmap: return &liquidity_data_.z;
-        case ChartType::Drawdown: return &drawdown_data_.z;
-        case ChartType::BetaSurface: return &beta_data_.z;
-        case ChartType::ImpliedDividend: return &impl_div_data_.z;
-        case ChartType::InflationExpectations: return &inflation_data_.z;
-        case ChartType::MonetaryPolicyPath: return &monetary_data_.z;
+        case ChartType::Volatility:
+            return &vol_data_.z;
+        case ChartType::DeltaSurface:
+            return &delta_data_.z;
+        case ChartType::GammaSurface:
+            return &gamma_data_.z;
+        case ChartType::VegaSurface:
+            return &vega_data_.z;
+        case ChartType::ThetaSurface:
+            return &theta_data_.z;
+        case ChartType::SkewSurface:
+            return &skew_data_.z;
+        case ChartType::LocalVolSurface:
+            return &local_vol_data_.z;
+        case ChartType::YieldCurve:
+            return &yield_data_.z;
+        case ChartType::SwaptionVol:
+            return &swaption_data_.z;
+        case ChartType::CapFloorVol:
+            return &capfloor_data_.z;
+        case ChartType::BondSpread:
+            return &bond_spread_data_.z;
+        case ChartType::OISBasis:
+            return &ois_data_.z;
+        case ChartType::RealYield:
+            return &real_yield_data_.z;
+        case ChartType::ForwardRate:
+            return &fwd_rate_data_.z;
+        case ChartType::FXVol:
+            return &fx_vol_data_.z;
+        case ChartType::FXForwardPoints:
+            return &fx_fwd_data_.z;
+        case ChartType::CrossCurrencyBasis:
+            return &xccy_data_.z;
+        case ChartType::CDSSpread:
+            return &cds_data_.z;
+        case ChartType::CreditTransition:
+            return &credit_trans_data_.z;
+        case ChartType::RecoveryRate:
+            return &recovery_data_.z;
+        case ChartType::CommodityForward:
+            return &cmdty_fwd_data_.z;
+        case ChartType::CommodityVol:
+            return &cmdty_vol_data_.z;
+        case ChartType::CrackSpread:
+            return &crack_data_.z;
+        case ChartType::ContangoBackwardation:
+            return &contango_data_.z;
+        case ChartType::Correlation:
+            return &corr_data_.z;
+        case ChartType::PCA:
+            return &pca_data_.z;
+        case ChartType::VaR:
+            return &var_data_.z;
+        case ChartType::StressTestPnL:
+            return &stress_data_.z;
+        case ChartType::FactorExposure:
+            return &factor_data_.z;
+        case ChartType::LiquidityHeatmap:
+            return &liquidity_data_.z;
+        case ChartType::Drawdown:
+            return &drawdown_data_.z;
+        case ChartType::BetaSurface:
+            return &beta_data_.z;
+        case ChartType::ImpliedDividend:
+            return &impl_div_data_.z;
+        case ChartType::InflationExpectations:
+            return &inflation_data_.z;
+        case ChartType::MonetaryPolicyPath:
+            return &monetary_data_.z;
     }
     return nullptr;
 }
@@ -648,9 +682,8 @@ void SurfaceAnalyticsScreen::update_inspector_lineage() {
     if (control_panel_) {
         const auto& s = control_panel_->state();
         if (s.start_date.isValid() && s.end_date.isValid())
-            date_range = QString("%1 → %2")
-                             .arg(s.start_date.toString("yyyy-MM-dd"))
-                             .arg(s.end_date.toString("yyyy-MM-dd"));
+            date_range =
+                QString("%1 → %2").arg(s.start_date.toString("yyyy-MM-dd")).arg(s.end_date.toString("yyyy-MM-dd"));
     }
     QString sym = current_symbol_or_default();
     if (cap.tier == SurfaceTier::EQUITIES && control_panel_)
@@ -659,10 +692,8 @@ void SurfaceAnalyticsScreen::update_inspector_lineage() {
     if (const auto* z = active_z_grid())
         for (const auto& row : *z)
             count += (qint64)row.size();
-    data_inspector_->set_lineage(QString::fromUtf8(cap.dataset),
-                                 QString::fromUtf8(cap.schema),
-                                 QString::fromUtf8(cap.symbology),
-                                 sym, date_range, count, 0.0);
+    data_inspector_->set_lineage(QString::fromUtf8(cap.dataset), QString::fromUtf8(cap.schema),
+                                 QString::fromUtf8(cap.symbology), sym, date_range, count, 0.0);
 
     // Fire-and-forget cost lookup. Skip for DEMO (no dataset) and for
     // capabilities whose schema is a composite ("definition+cbbo-1s") since
@@ -704,8 +735,7 @@ void SurfaceAnalyticsScreen::update_inspector_lineage() {
             return;
         if (!r.success)
             return;
-        self->data_inspector_->set_lineage(ds, sch, symb, sym_text, dr,
-                                           row_ct > 0 ? row_ct : r.record_count,
+        self->data_inspector_->set_lineage(ds, sch, symb, sym_text, dr, row_ct > 0 ? row_ct : r.record_count,
                                            r.cost_usd);
     });
 }
@@ -715,7 +745,8 @@ void SurfaceAnalyticsScreen::update_line_view() {
         return;
     auto fmt_months_str = [](const std::vector<int>& v) {
         QStringList out;
-        for (int i : v) out << QString("%1M").arg(i);
+        for (int i : v)
+            out << QString("%1M").arg(i);
         return out;
     };
 
@@ -729,8 +760,8 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 xs.push_back((float)yield_data_.maturities[i]);
                 ys.push_back(yield_data_.z[0].size() > i ? yield_data_.z[0][i] : 0.0f);
             }
-            surface_line_->set_curve("YIELD CURVE", xs, ys, fmt_months_str(yield_data_.maturities),
-                                     "Maturity (months)", "Yield %", QColor(63, 185, 80));
+            surface_line_->set_curve("YIELD CURVE", xs, ys, fmt_months_str(yield_data_.maturities), "Maturity (months)",
+                                     "Yield %", QColor(63, 185, 80));
             return;
         }
         case ChartType::ContangoBackwardation: {
@@ -741,9 +772,8 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < contango_data_.contract_months.size(); ++k)
                     s.x_values.push_back((float)contango_data_.contract_months[k]);
                 s.y_values.assign(contango_data_.z[i].begin(), contango_data_.z[i].end());
-                static const QColor palette[] = {
-                    QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
-                    QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),  QColor(63, 185, 80),
+                                                 QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
                 s.color = palette[i % 6];
                 series.push_back(s);
             }
@@ -758,9 +788,8 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < cmdty_fwd_data_.contract_months.size(); ++k)
                     s.x_values.push_back((float)cmdty_fwd_data_.contract_months[k]);
                 s.y_values.assign(cmdty_fwd_data_.z[i].begin(), cmdty_fwd_data_.z[i].end());
-                static const QColor palette[] = {
-                    QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
-                    QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),  QColor(63, 185, 80),
+                                                 QColor(220, 80, 80), QColor(155, 114, 255), QColor(89, 196, 217)};
                 s.color = palette[i % 6];
                 series.push_back(s);
             }
@@ -775,8 +804,8 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < crack_data_.contract_months.size(); ++k)
                     s.x_values.push_back((float)crack_data_.contract_months[k]);
                 s.y_values.assign(crack_data_.z[i].begin(), crack_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),
-                                                 QColor(63, 185, 80), QColor(220, 80, 80)};
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
+                                                 QColor(220, 80, 80)};
                 s.color = palette[i % 4];
                 series.push_back(s);
             }
@@ -791,8 +820,8 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < fx_fwd_data_.tenors.size(); ++k)
                     s.x_values.push_back((float)fx_fwd_data_.tenors[k]);
                 s.y_values.assign(fx_fwd_data_.z[i].begin(), fx_fwd_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),
-                                                 QColor(63, 185, 80), QColor(220, 80, 80)};
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
+                                                 QColor(220, 80, 80)};
                 s.color = palette[i % 4];
                 series.push_back(s);
             }
@@ -808,9 +837,9 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 ys.push_back(inflation_data_.z[0].size() > i ? inflation_data_.z[0][i] : 0.0f);
             }
             QStringList xl;
-            for (int h : inflation_data_.horizons) xl << QString("%1Y").arg(h);
-            surface_line_->set_curve("INFLATION EXPECTATIONS", xs, ys, xl,
-                                     "Horizon (years)", "Breakeven %",
+            for (int h : inflation_data_.horizons)
+                xl << QString("%1Y").arg(h);
+            surface_line_->set_curve("INFLATION EXPECTATIONS", xs, ys, xl, "Horizon (years)", "Breakeven %",
                                      QColor(89, 196, 217));
             return;
         }
@@ -822,8 +851,8 @@ void SurfaceAnalyticsScreen::update_line_view() {
                 for (size_t k = 0; k < monetary_data_.meetings_ahead.size(); ++k)
                     s.x_values.push_back((float)monetary_data_.meetings_ahead[k]);
                 s.y_values.assign(monetary_data_.z[i].begin(), monetary_data_.z[i].end());
-                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255),
-                                                 QColor(63, 185, 80), QColor(220, 80, 80)};
+                static const QColor palette[] = {QColor(217, 119, 6), QColor(88, 166, 255), QColor(63, 185, 80),
+                                                 QColor(220, 80, 80)};
                 s.color = palette[i % 4];
                 series.push_back(s);
             }

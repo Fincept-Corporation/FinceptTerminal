@@ -6,6 +6,7 @@
 #include "services/workflow/nodes/AnalyticsNodes.h"
 #include "services/workflow/nodes/ControlFlowNodes.h"
 #include "services/workflow/nodes/DataFormatNodes.h"
+#include "services/workflow/nodes/DataSourceNodes.h"
 #include "services/workflow/nodes/FileNodes.h"
 #include "services/workflow/nodes/IntegrationNodes.h"
 #include "services/workflow/nodes/MarketDataNodes.h"
@@ -14,7 +15,6 @@
 #include "services/workflow/nodes/TradingNodes.h"
 #include "services/workflow/nodes/TriggerNodes.h"
 #include "services/workflow/nodes/UtilityNodes.h"
-#include "services/workflow/nodes/DataSourceNodes.h"
 
 #include <QRegularExpression>
 

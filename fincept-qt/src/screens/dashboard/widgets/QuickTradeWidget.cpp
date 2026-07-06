@@ -1,9 +1,8 @@
 #include "screens/dashboard/widgets/QuickTradeWidget.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -238,7 +237,6 @@ void QuickTradeWidget::lookup_symbol() {
     set_loading(true);
 }
 
-
 void QuickTradeWidget::apply_quote(const services::QuoteData& q) {
     current_price_ = q.price;
     current_symbol_ = q.symbol.isEmpty() ? current_symbol_ : q.symbol;
@@ -272,11 +270,12 @@ void QuickTradeWidget::hub_unsubscribe_all() {
     hub_active_ = false;
 }
 
-
 void QuickTradeWidget::on_side_changed(int idx) {
     // BUY = green, SELL/SHORT = red
     QString color = (idx == 0) ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
-    submit_btn_->setText(idx == 0 ? tr("PLACE BUY ORDER") : idx == 1 ? tr("PLACE SELL ORDER") : tr("PLACE SHORT ORDER"));
+    submit_btn_->setText(idx == 0   ? tr("PLACE BUY ORDER")
+                         : idx == 1 ? tr("PLACE SELL ORDER")
+                                    : tr("PLACE SHORT ORDER"));
     submit_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %3; border: none; "
                                        "font-size: 11px; font-weight: bold; }"
                                        "QPushButton:hover { background: %2; }")
@@ -305,11 +304,15 @@ void QuickTradeWidget::submit_order() {
 void QuickTradeWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("QUICK TRADE"));
-    if (lookup_btn_)  lookup_btn_->setText(tr("LOOKUP"));
-    if (qty_lbl_)     qty_lbl_->setText(tr("QTY"));
-    if (price_lbl_)   price_lbl_->setText(tr("PRICE"));
+    if (lookup_btn_)
+        lookup_btn_->setText(tr("LOOKUP"));
+    if (qty_lbl_)
+        qty_lbl_->setText(tr("QTY"));
+    if (price_lbl_)
+        price_lbl_->setText(tr("PRICE"));
     // submit_btn_ text is side-aware ("PLACE BUY ORDER" etc.) — let on_side_changed re-derive it.
-    if (side_combo_) on_side_changed(side_combo_->currentIndex());
+    if (side_combo_)
+        on_side_changed(side_combo_->currentIndex());
 }
 
 } // namespace fincept::screens::widgets

@@ -33,40 +33,45 @@ class SecuritySection : public QWidget {
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
 
-    QLabel*      sec_pin_status_       = nullptr;
-    QComboBox*   sec_lock_timeout_     = nullptr;
-    QCheckBox*   sec_autolock_toggle_  = nullptr;
-    QCheckBox*   sec_lock_on_minimize_ = nullptr;
-    QListWidget* sec_audit_list_       = nullptr;
-    QLabel*      sec_lockout_status_   = nullptr;
-    QPushButton* sec_change_pin_btn_   = nullptr;
+    QLabel* sec_pin_status_ = nullptr;
+    QComboBox* sec_lock_timeout_ = nullptr;
+    QCheckBox* sec_autolock_toggle_ = nullptr;
+    QCheckBox* sec_lock_on_minimize_ = nullptr;
+    QListWidget* sec_audit_list_ = nullptr;
+    QLabel* sec_lockout_status_ = nullptr;
+    QPushButton* sec_change_pin_btn_ = nullptr;
 
     // Change PIN form (shown/hidden dynamically)
-    QWidget*   sec_change_pin_form_ = nullptr;
-    QLineEdit* sec_current_pin_    = nullptr;
-    QLineEdit* sec_new_pin_        = nullptr;
-    QLineEdit* sec_confirm_pin_    = nullptr;
-    QLabel*    sec_pin_error_      = nullptr;
-    QLabel*    sec_pin_success_    = nullptr;
+    QWidget* sec_change_pin_form_ = nullptr;
+    QLineEdit* sec_current_pin_ = nullptr;
+    QLineEdit* sec_new_pin_ = nullptr;
+    QLineEdit* sec_confirm_pin_ = nullptr;
+    QLabel* sec_pin_error_ = nullptr;
+    QLabel* sec_pin_success_ = nullptr;
 
     // Section titles, buttons, and row labels (cached for retranslateUi).
-    QLabel* title_pin_    = nullptr;
+    QLabel* title_pin_ = nullptr;
     QLabel* title_change_ = nullptr;
-    QLabel* title_lock_   = nullptr;
-    QLabel* title_audit_  = nullptr;
-    QLabel* audit_note_   = nullptr;
-    QPushButton* save_pin_btn_      = nullptr;
-    QPushButton* save_btn_          = nullptr;
+    QLabel* title_lock_ = nullptr;
+    QLabel* title_audit_ = nullptr;
+    QLabel* audit_note_ = nullptr;
+    QPushButton* save_pin_btn_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
     QPushButton* refresh_audit_btn_ = nullptr;
 
-    QLabel* row_pin_status_lbl_  = nullptr;  QLabel* row_pin_status_desc_  = nullptr;
-    QLabel* row_attempts_lbl_    = nullptr;  QLabel* row_attempts_desc_    = nullptr;
-    QLabel* row_current_lbl_     = nullptr;
-    QLabel* row_new_lbl_         = nullptr;
-    QLabel* row_confirm_lbl_     = nullptr;
-    QLabel* row_autolock_lbl_    = nullptr;  QLabel* row_autolock_desc_    = nullptr;
-    QLabel* row_timeout_lbl_     = nullptr;  QLabel* row_timeout_desc_     = nullptr;
-    QLabel* row_minimize_lbl_    = nullptr;  QLabel* row_minimize_desc_    = nullptr;
+    QLabel* row_pin_status_lbl_ = nullptr;
+    QLabel* row_pin_status_desc_ = nullptr;
+    QLabel* row_attempts_lbl_ = nullptr;
+    QLabel* row_attempts_desc_ = nullptr;
+    QLabel* row_current_lbl_ = nullptr;
+    QLabel* row_new_lbl_ = nullptr;
+    QLabel* row_confirm_lbl_ = nullptr;
+    QLabel* row_autolock_lbl_ = nullptr;
+    QLabel* row_autolock_desc_ = nullptr;
+    QLabel* row_timeout_lbl_ = nullptr;
+    QLabel* row_timeout_desc_ = nullptr;
+    QLabel* row_minimize_lbl_ = nullptr;
+    QLabel* row_minimize_desc_ = nullptr;
 };
 
 } // namespace fincept::screens

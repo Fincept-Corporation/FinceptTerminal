@@ -6,10 +6,9 @@
 //
 // Part of the partial-class split of DataMappingScreen.cpp.
 
+#include "core/logging/Logger.h"
 #include "screens/data_mapping/DataMappingScreen.h"
 #include "screens/data_mapping/DataMappingScreen_internal.h"
-
-#include "core/logging/Logger.h"
 #include "services/data_normalization/DataMappingTestClient.h"
 #include "services/data_normalization/DataNormalizationService.h"
 #include "storage/repositories/DataMappingRepository.h"
@@ -63,8 +62,7 @@ void DataMappingScreen::on_test_api() {
                 body = doc.object();
         }
         // PATCH historically routed through PUT — preserve that.
-        m = (method == "POST") ? DataMappingTestClient::Method::Post
-                               : DataMappingTestClient::Method::Put;
+        m = (method == "POST") ? DataMappingTestClient::Method::Post : DataMappingTestClient::Method::Put;
     } else if (method == "DELETE") {
         m = DataMappingTestClient::Method::Delete;
     }
@@ -194,7 +192,8 @@ void DataMappingScreen::on_run_mapping() {
             if (ok) {
                 const QString out = QJsonDocument(rec.normalized).toJson(QJsonDocument::Indented);
                 self->test_output_->setPlainText(out);
-                self->test_status_->setText(DataMappingScreen::tr("RUN OK — %1 fields extracted").arg(rec.normalized.size()));
+                self->test_status_->setText(
+                    DataMappingScreen::tr("RUN OK — %1 fields extracted").arg(rec.normalized.size()));
                 LOG_INFO("DataMapping", "Run complete: " + dm.name);
             } else {
                 const QString errs = rec.errors.join(", ");
@@ -308,6 +307,5 @@ void DataMappingScreen::build_mapping_config(QJsonObject& config) {
     }
     config["field_mappings"] = mappings;
 }
-
 
 } // namespace fincept::screens

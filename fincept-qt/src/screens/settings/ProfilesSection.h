@@ -25,7 +25,7 @@ class ProfilesSection : public QWidget {
     void rebuild();
 
     QVBoxLayout* host_layout_ = nullptr;
-    QWidget*     content_     = nullptr;
+    QWidget* content_ = nullptr;
 };
 
 } // namespace fincept::screens

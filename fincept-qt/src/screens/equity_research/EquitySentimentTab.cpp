@@ -98,7 +98,8 @@ void EquitySentimentTab::build_ui() {
     header_layout->addWidget(caption_label_);
 
     company_label_ = new QLabel;
-    company_label_->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;").arg("#22d3ee"));
+    company_label_->setStyleSheet(
+        QString("color:%1; font-size:10px; background:transparent; border:0;").arg("#22d3ee"));
     header_layout->addWidget(company_label_);
 
     header_layout->addStretch();
@@ -144,9 +145,8 @@ void EquitySentimentTab::build_ui() {
     badge_row->setSpacing(16);
 
     net_label_ = new QLabel(QStringLiteral("—"));
-    net_label_->setStyleSheet(
-        QString("color:%1; font-size:26px; font-weight:800; background:transparent; border:0;")
-            .arg(ui::colors::TEXT_PRIMARY()));
+    net_label_->setStyleSheet(QString("color:%1; font-size:26px; font-weight:800; background:transparent; border:0;")
+                                  .arg(ui::colors::TEXT_PRIMARY()));
     badge_row->addWidget(net_label_);
 
     net_score_label_ = new QLabel;
@@ -261,9 +261,8 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
         row_layout->setSpacing(8);
 
         auto* name = new QLabel(src.label);
-        name->setStyleSheet(
-            QString("color:%1; font-size:11px; font-weight:600; background:transparent; border:0;")
-                .arg(ui::colors::TEXT_PRIMARY()));
+        name->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; background:transparent; border:0;")
+                                .arg(ui::colors::TEXT_PRIMARY()));
         row_layout->addWidget(name);
         row_layout->addStretch();
 
@@ -345,15 +344,13 @@ void EquitySentimentTab::on_sentiment_loaded(QString symbol,
     cached_snapshot_ = snapshot;
     snapshot_loaded_ = true;
 
-    caption_label_->setText(snapshot.available && !snapshot.engine.isEmpty()
-                                ? tr("engine: %1").arg(snapshot.engine)
-                                : tr("self-computed"));
+    caption_label_->setText(snapshot.available && !snapshot.engine.isEmpty() ? tr("engine: %1").arg(snapshot.engine)
+                                                                             : tr("self-computed"));
 
     if (!snapshot.available) {
         content_widget_->hide();
-        status_label_->setText(snapshot.message.isEmpty()
-                                   ? tr("No sentiment is available for this symbol.")
-                                   : snapshot.message);
+        status_label_->setText(snapshot.message.isEmpty() ? tr("No sentiment is available for this symbol.")
+                                                          : snapshot.message);
         status_label_->show();
         return;
     }

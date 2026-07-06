@@ -24,16 +24,14 @@ QString ZerodhaBroker::kite_login_url(const QString& api_key) {
 }
 
 TokenExchangeResponse ZerodhaBroker::login_with_totp(const QString& user_id, const QString& password,
-                                                    const QString& api_key, const QString& api_secret,
-                                                    const QString& totp_secret,
-                                                    std::function<void(const QString&)> progress) {
-    auto result = zerodha::run_auto_login(user_id, password, api_key, api_secret, totp_secret,
-                                          std::move(progress));
+                                                     const QString& api_key, const QString& api_secret,
+                                                     const QString& totp_secret,
+                                                     std::function<void(const QString&)> progress) {
+    auto result = zerodha::run_auto_login(user_id, password, api_key, api_secret, totp_secret, std::move(progress));
     // Kite access tokens are flushed each morning (~06:00 IST). Record the
     // expiry hint; the live sweep re-validates and silent-relogins on expiry.
     if (result.token.success)
-        result.token.additional_data =
-            with_token_expiry(result.token.additional_data, next_ist_flush_epoch(6, 0));
+        result.token.additional_data = with_token_expiry(result.token.additional_data, next_ist_flush_epoch(6, 0));
     return result.token;
 }
 
@@ -44,8 +42,7 @@ TokenExchangeResponse ZerodhaBroker::refresh_session(const BrokerCredentials& cr
     const QString password = extra.value("password").toString();
     const QString totp_secret = extra.value("totp_secret").toString();
     if (creds.user_id.isEmpty() || password.isEmpty() || totp_secret.isEmpty()) {
-        return {false, "", "", "", "",
-                "Zerodha silent refresh requires stored user id, password and TOTP secret"};
+        return {false, "", "", "", "", "Zerodha silent refresh requires stored user id, password and TOTP secret"};
     }
     return login_with_totp(creds.user_id, password, creds.api_key, creds.api_secret, totp_secret, {});
 }
@@ -100,14 +97,32 @@ const char* ZerodhaBroker::zerodha_variety(ProductType p) {
 // listed them; current API rejects them with 400 invalid_input).
 QString ZerodhaBroker::zerodha_interval(const QString& resolution) {
     static const QMap<QString, QString> map = {
-        {"1", "minute"},    {"1m", "minute"},    {"3", "3minute"},    {"3m", "3minute"},   {"5", "5minute"},
-        {"5m", "5minute"},  {"10", "10minute"},  {"10m", "10minute"}, {"15", "15minute"},  {"15m", "15minute"},
-        {"30", "30minute"}, {"30m", "30minute"}, {"60", "60minute"},  {"60m", "60minute"}, {"1h", "60minute"},
-        {"D", "day"},       {"1D", "day"},       {"day", "day"},      {"W", "week"},       {"1W", "week"},
+        {"1", "minute"},
+        {"1m", "minute"},
+        {"3", "3minute"},
+        {"3m", "3minute"},
+        {"5", "5minute"},
+        {"5m", "5minute"},
+        {"10", "10minute"},
+        {"10m", "10minute"},
+        {"15", "15minute"},
+        {"15m", "15minute"},
+        {"30", "30minute"},
+        {"30m", "30minute"},
+        {"60", "60minute"},
+        {"60m", "60minute"},
+        {"1h", "60minute"},
+        {"D", "day"},
+        {"1D", "day"},
+        {"day", "day"},
+        {"W", "week"},
+        {"1W", "week"},
         {"week", "week"},
         // Aliases that Kite rejects — coerce to the nearest supported interval.
-        {"2h", "60minute"}, {"2H", "60minute"},
-        {"3d", "day"},      {"3D", "day"},
+        {"2h", "60minute"},
+        {"2H", "60minute"},
+        {"3d", "day"},
+        {"3D", "day"},
     };
     return map.value(resolution, QString());
 }
@@ -137,14 +152,18 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
     QString checksum = QCryptographicHash::hash(input, QCryptographicHash::Sha256).toHex();
 
     LOG_INFO("Zerodha", QString("exchange_token: api_key=%1 req_token_len=%2 secret_len=%3")
-                            .arg(api_key).arg(request_token.length()).arg(api_secret.length()));
+                            .arg(api_key)
+                            .arg(request_token.length())
+                            .arg(api_secret.length()));
 
     QMap<QString, QString> params = {{"api_key", api_key}, {"request_token", request_token}, {"checksum", checksum}};
     QMap<QString, QString> headers = {{"X-Kite-Version", kite_api_version}};
     auto resp = BrokerHttp::instance().post_form(QString(base_url()) + "/session/token", params, headers);
 
     LOG_INFO("Zerodha", QString("exchange_token HTTP %1 success=%2 body=%3")
-                            .arg(resp.status_code).arg(resp.success).arg(resp.raw_body.left(500)));
+                            .arg(resp.status_code)
+                            .arg(resp.success)
+                            .arg(resp.raw_body.left(500)));
 
     TokenExchangeResponse result;
     if (!resp.success) {
@@ -333,11 +352,6 @@ ApiResponse<QVector<BrokerHolding>> ZerodhaBroker::get_holdings(const BrokerCred
         hold.current_value = hold.quantity * hold.ltp;
         hold.pnl = h.value("pnl").toDouble();
         hold.pnl_pct = hold.avg_price > 0 ? ((hold.ltp - hold.avg_price) / hold.avg_price) * 100.0 : 0.0;
-        // [TEMP DEBUG] Dump the full raw Zerodha holding object so we can diagnose the
-        // average_price mismatch between the Kite app and the terminal. Remove after diagnosis.
-        LOG_INFO("Zerodha", QString("HOLDINGS_RAW %1: %2")
-                                .arg(hold.symbol,
-                                     QString::fromUtf8(QJsonDocument(h).toJson(QJsonDocument::Compact))));
         holdings.append(hold);
     }
     return {true, holdings, "", ts};
@@ -440,17 +454,16 @@ ApiResponse<QVector<BrokerCandle>> ZerodhaBroker::get_history(const BrokerCreden
 
     QString interval = zerodha_interval(resolution);
     if (interval.isEmpty()) {
-        return {false, std::nullopt,
-                "Zerodha get_history: unsupported resolution '" + resolution + "'", now_ts()};
+        return {false, std::nullopt, "Zerodha get_history: unsupported resolution '" + resolution + "'", now_ts()};
     }
 
     // Kite Connect caps the date range PER REQUEST by interval. Resolve the max
     // number of days allowed in a single request for the (already-resolved) interval.
     auto cap_days_for_interval = [](const QString& iv) -> int {
         static const QMap<QString, int> caps = {
-            {"minute", 60},  {"2minute", 60},  {"3minute", 100}, {"4minute", 100}, {"5minute", 100},
+            {"minute", 60},    {"2minute", 60},   {"3minute", 100},  {"4minute", 100},  {"5minute", 100},
             {"10minute", 100}, {"15minute", 200}, {"30minute", 200}, {"60minute", 400}, {"hour", 400},
-            {"2hour", 400}, {"3hour", 400}, {"4hour", 400}, {"day", 2000}, {"week", 2000},
+            {"2hour", 400},    {"3hour", 400},    {"4hour", 400},    {"day", 2000},     {"week", 2000},
         };
         return caps.value(iv, 2000);
     };
@@ -747,20 +760,22 @@ GttPlaceResponse ZerodhaBroker::gtt_place(const BrokerCredentials& creds, const 
         double ltp = mpp_order.last_price;
         if (ltp <= 0.0) {
             // Try to get a live quote for the symbol
-            QVector<QString> syms = {(mpp_order.exchange.isEmpty() ? "NSE" : mpp_order.exchange) + ":" + mpp_order.symbol};
+            QVector<QString> syms = {(mpp_order.exchange.isEmpty() ? "NSE" : mpp_order.exchange) + ":" +
+                                     mpp_order.symbol};
             auto quote_resp = get_quotes(creds, syms);
             if (quote_resp.success && quote_resp.data.has_value() && !quote_resp.data->isEmpty())
                 ltp = quote_resp.data->first().ltp;
         }
         if (ltp <= 0.0) {
-            LOG_WARN("Zerodha", QString("GTT MPP: could not determine LTP for %1 — sending Market as-is")
-                                    .arg(mpp_order.symbol));
+            LOG_WARN("Zerodha",
+                     QString("GTT MPP: could not determine LTP for %1 — sending Market as-is").arg(mpp_order.symbol));
             continue;
         }
 
         // Determine tick_size from InstrumentService (fall back to 0.05)
         double tick = 0.05;
-        auto inst = InstrumentService::instance().find(mpp_order.symbol, mpp_order.exchange.isEmpty() ? "NSE" : mpp_order.exchange, "zerodha");
+        auto inst = InstrumentService::instance().find(
+            mpp_order.symbol, mpp_order.exchange.isEmpty() ? "NSE" : mpp_order.exchange, "zerodha");
         if (inst.has_value() && inst->tick_size > 0)
             tick = inst->tick_size;
 
@@ -840,9 +855,8 @@ ApiResponse<QJsonObject> ZerodhaBroker::gtt_cancel(const BrokerCredentials& cred
 // Multi-Quote & Market Depth — Zerodha /quote endpoint
 // ============================================================================
 
-ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_multi_quotes(
-    const BrokerCredentials& creds,
-    const QVector<QPair<QString, QString>>& symbols) {
+ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_multi_quotes(const BrokerCredentials& creds,
+                                                                  const QVector<QPair<QString, QString>>& symbols) {
 
     QVector<BrokerQuote> all_quotes;
     constexpr int kBatchSize = 500;
@@ -862,8 +876,7 @@ ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_multi_quotes(
             query += key;
         }
 
-        auto resp = BrokerHttp::instance().get(
-            QString(base_url()) + "/quote?i=" + query, auth_headers(creds));
+        auto resp = BrokerHttp::instance().get(QString(base_url()) + "/quote?i=" + query, auth_headers(creds));
         int64_t ts = now_ts();
 
         if (!resp.success)
@@ -907,17 +920,15 @@ ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_multi_quotes(
     return {true, all_quotes, "", now_ts()};
 }
 
-ApiResponse<MarketDepth> ZerodhaBroker::get_market_depth(
-    const BrokerCredentials& creds,
-    const QString& symbol, const QString& exchange) {
+ApiResponse<MarketDepth> ZerodhaBroker::get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                                         const QString& exchange) {
 
     // Resolve broker-specific symbol
     auto br_sym = InstrumentService::instance().to_brsymbol(symbol, exchange, "zerodha");
     QString exch = exchange.isEmpty() ? "NSE" : exchange;
     QString key = exch + ":" + (br_sym.has_value() ? br_sym.value() : symbol);
 
-    auto resp = BrokerHttp::instance().get(
-        QString(base_url()) + "/quote?i=" + key, auth_headers(creds));
+    auto resp = BrokerHttp::instance().get(QString(base_url()) + "/quote?i=" + key, auth_headers(creds));
     int64_t ts = now_ts();
 
     if (!resp.success)

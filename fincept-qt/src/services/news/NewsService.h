@@ -1,4 +1,6 @@
 #pragma once
+#include "datahub/Producer.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -8,8 +10,6 @@
 #include <QStringList>
 #include <QTimer>
 #include <QVector>
-
-#    include "datahub/Producer.h"
 
 class QWebSocket;
 
@@ -81,9 +81,9 @@ struct RiskSignal {
 /// field (ticker for orgs, country_code for locations) when present.
 struct AnalysisEntity {
     QString name;
-    QString detail;        // ticker (orgs) or country code (locations); may be empty
-    QString sector;        // orgs only
-    double sentiment = 0;  // orgs only
+    QString detail;       // ticker (orgs) or country code (locations); may be empty
+    QString sector;       // orgs only
+    double sentiment = 0; // orgs only
 };
 
 /// Article fetch metadata reported by the analyze endpoint — lets the UI
@@ -139,9 +139,7 @@ struct HeadlineSummary {
 /// `news:category:*`, `news:cluster:*`. Existing `articles_updated`
 /// / `articles_partial` Qt signals remain live in parallel with hub
 /// publishes so consumers can migrate incrementally.
-class NewsService : public QObject
-    , public fincept::datahub::Producer
-{
+class NewsService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     using ArticlesCallback = std::function<void(bool ok, QVector<NewsArticle>)>;
@@ -160,7 +158,7 @@ class NewsService : public QObject
     /// `news:symbol:<sym>` / `news:category:<cat>` derive from the
     /// general fetch + filter; `news:cluster:*` is push-only.
     void refresh(const QStringList& topics) override;
-    int max_requests_per_sec() const override;  // RSS — cap at 2/s
+    int max_requests_per_sec() const override; // RSS — cap at 2/s
 
     void fetch_all_news(bool force, ArticlesCallback cb);
     void analyze_article(const QString& url, AnalysisCallback cb);
@@ -188,8 +186,8 @@ class NewsService : public QObject
     // has customized it.
     struct EditorFeed {
         RSSFeed feed;
-        bool is_builtin = false;     // came from default_feeds()
-        bool is_customized = false;  // has an overlay row (built-ins only)
+        bool is_builtin = false;    // came from default_feeds()
+        bool is_customized = false; // has an overlay row (built-ins only)
         bool enabled = true;
     };
     QVector<RSSFeed> list_effective_feeds() const;

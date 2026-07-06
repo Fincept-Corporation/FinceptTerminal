@@ -29,8 +29,8 @@ BroadcastOrderDialog::BroadcastOrderDialog(const trading::UnifiedOrder& order, Q
                           "QLabel#resultOk { color: %5; font-size: 11px; }"
                           "QLabel#resultErr { color: %6; font-size: 11px; }"
                           "QPushButton { padding: 8px 16px; font-weight: 700; font-size: 12px; border-radius: 2px; }")
-                      .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::AMBER(),
-                           colors::TEXT_SECONDARY(), colors::POSITIVE(), colors::NEGATIVE()));
+                      .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::AMBER(), colors::TEXT_SECONDARY(),
+                           colors::POSITIVE(), colors::NEGATIVE()));
     setup_ui();
 }
 
@@ -70,8 +70,8 @@ void BroadcastOrderDialog::setup_ui() {
     // Scrollable account list
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(QString("QScrollArea { border: 1px solid %1; background: %2; }")
-                              .arg(colors::BORDER_MED(), colors::BG_BASE()));
+    scroll->setStyleSheet(
+        QString("QScrollArea { border: 1px solid %1; background: %2; }").arg(colors::BORDER_MED(), colors::BG_BASE()));
 
     auto* list_widget = new QWidget(this);
     auto* list_layout = new QVBoxLayout(list_widget);
@@ -133,8 +133,8 @@ void BroadcastOrderDialog::setup_ui() {
     btn_row->addStretch();
 
     cancel_btn_ = new QPushButton(tr("CANCEL"));
-    cancel_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; }")
-                                  .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
+    cancel_btn_->setStyleSheet(
+        QString("QPushButton { background: %1; color: %2; }").arg(colors::BG_RAISED(), colors::TEXT_PRIMARY()));
     connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
     btn_row->addWidget(cancel_btn_);
 
@@ -174,8 +174,8 @@ void BroadcastOrderDialog::on_place_order() {
     int queued = 0;
     for (const QString& acct : selected) {
         if (ActionCenter::instance().should_queue(acct, "placeorder")) {
-            const QString pid = ActionCenter::instance().queue_order(
-                acct, "placeorder", ActionCenter::serialize_unified_order(order_));
+            const QString pid =
+                ActionCenter::instance().queue_order(acct, "placeorder", ActionCenter::serialize_unified_order(order_));
             if (!pid.isEmpty())
                 ++queued;
         } else {
@@ -195,9 +195,7 @@ void BroadcastOrderDialog::on_place_order() {
         cb->setEnabled(false);
 
     status_label_->setText(queued > 0
-                               ? tr("Placing %1 order(s); %2 queued for approval...")
-                                     .arg(immediate.size())
-                                     .arg(queued)
+                               ? tr("Placing %1 order(s); %2 queued for approval...").arg(immediate.size()).arg(queued)
                                : tr("Placing order across %1 account(s)...").arg(immediate.size()));
     status_label_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
 
@@ -282,9 +280,12 @@ void BroadcastOrderDialog::changeEvent(QEvent* event) {
 
 void BroadcastOrderDialog::retranslateUi() {
     setWindowTitle(tr("Broadcast Order"));
-    if (header_label_)  header_label_->setText(tr("BROADCAST ORDER"));
-    if (select_all_cb_) select_all_cb_->setText(tr("Select All"));
-    if (cancel_btn_)    cancel_btn_->setText(tr("CANCEL"));
+    if (header_label_)
+        header_label_->setText(tr("BROADCAST ORDER"));
+    if (select_all_cb_)
+        select_all_cb_->setText(tr("Select All"));
+    if (cancel_btn_)
+        cancel_btn_->setText(tr("CANCEL"));
     // place_btn_ becomes "DONE" once results are shown; before that it reflects
     // the order side. Account rows + result lines are data compositions and are
     // left as-is (re-rendered on the next broadcast).

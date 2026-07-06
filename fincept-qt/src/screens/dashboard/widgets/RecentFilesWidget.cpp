@@ -17,7 +17,8 @@ using fincept::services::FileManagerService;
 
 static const char* MF = "font-family:'Consolas','Courier New',monospace;";
 
-RecentFilesWidget::RecentFilesWidget(QWidget* parent) : BaseWidget(tr("Recent Files"), parent, ui::colors::AMBER.get()) {
+RecentFilesWidget::RecentFilesWidget(QWidget* parent)
+    : BaseWidget(tr("Recent Files"), parent, ui::colors::AMBER.get()) {
 
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
@@ -112,7 +113,8 @@ void RecentFilesWidget::refresh_data() {
         QString date_str =
             QDateTime::fromString(f["uploadedAt"].toString(), Qt::ISODate).toLocalTime().toString("MM/dd HH:mm");
         auto* date_lbl = new QLabel(date_str);
-        date_lbl->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
+        date_lbl->setStyleSheet(
+            QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
         rl->addWidget(date_lbl);
 
         list_layout_->addWidget(row);

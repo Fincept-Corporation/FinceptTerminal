@@ -58,29 +58,29 @@ class DeploymentDashboard : public QWidget {
     QTimer* age_timer_ = nullptr;
 
     // Summary stats (value labels captured by build_stat_card; captions cached for retranslate)
-    QLabel* active_count_      = nullptr;
-    QLabel* active_caption_    = nullptr;
-    QLabel* total_pnl_         = nullptr;
+    QLabel* active_count_ = nullptr;
+    QLabel* active_caption_ = nullptr;
+    QLabel* total_pnl_ = nullptr;
     QLabel* total_pnl_caption_ = nullptr;
-    QLabel* total_trades_      = nullptr;
+    QLabel* total_trades_ = nullptr;
     QLabel* total_trades_caption_ = nullptr;
-    QLabel* avg_win_rate_      = nullptr;
+    QLabel* avg_win_rate_ = nullptr;
     QLabel* avg_win_rate_caption_ = nullptr;
 
     // Equity curve placeholder
     QFrame* equity_placeholder_ = nullptr;
-    QLabel* eq_title_           = nullptr;
-    QLabel* eq_hint_            = nullptr;
+    QLabel* eq_title_ = nullptr;
+    QLabel* eq_hint_ = nullptr;
 
     // Control bar + section
-    QPushButton* refresh_btn_  = nullptr;
+    QPushButton* refresh_btn_ = nullptr;
     QPushButton* stop_all_btn_ = nullptr;
-    QLabel*      dep_title_     = nullptr;
+    QLabel* dep_title_ = nullptr;
 
     int deployment_count_ = 0; // for status_label_ retranslate
 
     QVBoxLayout* deployments_layout_ = nullptr;
-    QLabel*      status_label_       = nullptr;
+    QLabel* status_label_ = nullptr;
 };
 
 } // namespace fincept::screens

@@ -46,8 +46,7 @@ double leg_pnl_expiry(const StrategyLeg& leg, double S) {
 }
 
 /// Per-leg P/L at a given spot, target date — BSM-priced.
-double leg_pnl_target(const StrategyLeg& leg, double S, int days_remaining,
-                      double r, double sigma_fallback) {
+double leg_pnl_target(const StrategyLeg& leg, double S, int days_remaining, double r, double sigma_fallback) {
     const double signed_units = double(leg.lots) * double(leg.lot_size);
     if (days_remaining <= 0)
         return leg_pnl_expiry(leg, S);
@@ -86,7 +85,7 @@ double net_call_lots(const Strategy& s) {
     return n;
 }
 
-}  // namespace
+} // namespace
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -165,8 +164,7 @@ QVector<double> compute_breakevens(const QVector<PayoffPoint>& curve) {
         }
     }
     std::sort(bes.begin(), bes.end());
-    bes.erase(std::unique(bes.begin(), bes.end(),
-                          [](double a, double b) { return std::abs(a - b) < 1e-3; }),
+    bes.erase(std::unique(bes.begin(), bes.end(), [](double a, double b) { return std::abs(a - b) < 1e-3; }),
               bes.end());
     return bes;
 }
@@ -277,7 +275,7 @@ OptionGreeks combined_greeks(const Strategy& s, const OptionChain& chain) {
                 g = &it.value();
         }
         if (!g)
-            continue;  // Greeks genuinely not available for this leg — skip
+            continue; // Greeks genuinely not available for this leg — skip
         const double signed_units = double(leg.lots) * double(leg.lot_size);
         combined.delta += signed_units * g->delta;
         combined.gamma += signed_units * g->gamma;
@@ -288,8 +286,7 @@ OptionGreeks combined_greeks(const Strategy& s, const OptionChain& chain) {
     return combined;
 }
 
-StrategyAnalytics compute_all(const Strategy& s, const OptionChain& chain,
-                              const PayoffComputeOptions& opts) {
+StrategyAnalytics compute_all(const Strategy& s, const OptionChain& chain, const PayoffComputeOptions& opts) {
     StrategyAnalytics out;
     if (s.legs.isEmpty())
         return out;
@@ -317,7 +314,7 @@ StrategyAnalytics compute_all(const Strategy& s, const OptionChain& chain,
     out.breakevens = bes;
     out.pop = compute_pop(s, o.current_spot, t_years(dte), o.risk_free_rate, sigma_for_pop);
     out.premium_paid = net_premium(s);
-    out.margin_required = 0;       // Phase 6 wires IBroker::get_basket_margins
+    out.margin_required = 0; // Phase 6 wires IBroker::get_basket_margins
     out.margin_estimated = false;
     return out;
 }

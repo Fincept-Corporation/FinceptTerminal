@@ -140,7 +140,10 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     // Empty / loading state labels — kept for retranslateUi.
     QLabel* empty_title_label_ = nullptr;
     QLabel* empty_sub_label_ = nullptr;
-    struct CtaCardLabels { QLabel* title = nullptr; QLabel* subtitle = nullptr; };
+    struct CtaCardLabels {
+        QLabel* title = nullptr;
+        QLabel* subtitle = nullptr;
+    };
     CtaCardLabels empty_create_card_;
     CtaCardLabels empty_import_card_;
     CtaCardLabels empty_demo_card_;

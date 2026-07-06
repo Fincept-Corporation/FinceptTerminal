@@ -42,22 +42,17 @@ class TypedUuid {
     /// saved state would never be found again).
     static TypedUuid from_name(const QString& name) {
         // Fixed app namespace — arbitrary but constant so names map stably.
-        static const QUuid kNamespace(
-            QStringLiteral("{6b3f8a1e-2c4d-5e6f-8a9b-0c1d2e3f4a5b}"));
+        static const QUuid kNamespace(QStringLiteral("{6b3f8a1e-2c4d-5e6f-8a9b-0c1d2e3f4a5b}"));
         return TypedUuid(QUuid::createUuidV5(kNamespace, name.toUtf8()));
     }
 
     /// Parse from canonical 8-4-4-4-12 string. Returns a null TypedUuid on
     /// failure — call is_null() to discriminate.
-    static TypedUuid from_string(const QString& s) {
-        return TypedUuid(QUuid::fromString(s));
-    }
+    static TypedUuid from_string(const QString& s) { return TypedUuid(QUuid::fromString(s)); }
 
     /// Canonical hyphenated form without surrounding braces:
     ///   "ee5d3c0e-9c4b-4f0a-9e0a-1c2b3a4d5e6f"
-    QString to_string() const {
-        return uuid_.toString(QUuid::WithoutBraces);
-    }
+    QString to_string() const { return uuid_.toString(QUuid::WithoutBraces); }
 
     bool is_null() const { return uuid_.isNull(); }
     const QUuid& raw() const { return uuid_; }

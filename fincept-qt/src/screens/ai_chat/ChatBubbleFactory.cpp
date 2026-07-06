@@ -95,11 +95,11 @@ static QPushButton* make_copy_button(const QString& initial_text) {
 // `body` is added to the bubble frame; the column + row layouts handle role
 // label and alignment. The footer is built only when show_footer is true.
 struct Scaffold {
-    QWidget*     row      = nullptr;
-    QWidget*     column   = nullptr;
-    QVBoxLayout* col_vl   = nullptr;
-    QFrame*      frame    = nullptr;
-    QLabel*      role_lbl = nullptr;
+    QWidget* row = nullptr;
+    QWidget* column = nullptr;
+    QVBoxLayout* col_vl = nullptr;
+    QFrame* frame = nullptr;
+    QLabel* role_lbl = nullptr;
 };
 
 static Scaffold build_scaffold(const ChatBubbleFactory::Options& opts) {
@@ -155,17 +155,16 @@ ChatBubbleFactory::Bubble ChatBubbleFactory::build(const Options& opts) {
     body->setTextInteractionFlags(Qt::TextBrowserInteraction);
     body->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    body->setStyleSheet(QString("QLabel{background:transparent;color:%1;font-size:%2px;}")
-                            .arg(body_color(opts.role))
-                            .arg(fnt::BODY));
+    body->setStyleSheet(
+        QString("QLabel{background:transparent;color:%1;font-size:%2px;}").arg(body_color(opts.role)).arg(fnt::BODY));
     qobject_cast<QVBoxLayout*>(s.frame->layout())->addWidget(body);
 
     Bubble out;
-    out.row      = s.row;
-    out.column   = s.column;
-    out.frame    = s.frame;
+    out.row = s.row;
+    out.column = s.column;
+    out.frame = s.frame;
     out.role_lbl = s.role_lbl;
-    out.body     = body;
+    out.body = body;
 
     if (!opts.show_footer)
         return out;
@@ -220,17 +219,16 @@ ChatBubbleFactory::Bubble ChatBubbleFactory::build_streaming(const Options& opts
     body->setTextInteractionFlags(Qt::TextBrowserInteraction);
     body->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    body->setStyleSheet(QString("QLabel{background:transparent;color:%1;font-size:%2px;}")
-                            .arg(body_color(opts.role))
-                            .arg(fnt::BODY));
+    body->setStyleSheet(
+        QString("QLabel{background:transparent;color:%1;font-size:%2px;}").arg(body_color(opts.role)).arg(fnt::BODY));
     qobject_cast<QVBoxLayout*>(s.frame->layout())->addWidget(body);
 
     Bubble out;
-    out.row      = s.row;
-    out.column   = s.column;
-    out.frame    = s.frame;
+    out.row = s.row;
+    out.column = s.column;
+    out.frame = s.frame;
     out.role_lbl = s.role_lbl;
-    out.body     = body;
+    out.body = body;
 
     if (!opts.show_footer)
         return out;
@@ -248,7 +246,7 @@ ChatBubbleFactory::Bubble ChatBubbleFactory::build_streaming(const Options& opts
     QPushButton* copy_btn = nullptr;
     if (!is_user && !is_system) {
         copy_btn = make_copy_button({});
-        copy_btn->hide();   // shown by finalize_streaming
+        copy_btn->hide(); // shown by finalize_streaming
         fhl->addStretch();
         fhl->addWidget(copy_btn);
         // Stash on the body so finalize_streaming() can find it without an

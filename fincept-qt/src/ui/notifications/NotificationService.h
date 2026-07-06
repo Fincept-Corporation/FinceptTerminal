@@ -32,7 +32,7 @@ class ToastService : public QObject {
     struct Notification {
         Severity severity = Severity::Info;
         QString message;
-        QString source;          ///< panel id / service name / action id
+        QString source;                  ///< panel id / service name / action id
         QWidget* target_frame = nullptr; ///< nullptr = shell-level (any frame can show)
         qint64 ts_ms = 0;
     };
@@ -41,8 +41,7 @@ class ToastService : public QObject {
 
     /// Post a notification. Stores in history; emits `posted` synchronously
     /// so connected toast bars render immediately.
-    void post(Severity sev, const QString& message, const QString& source = {},
-              QWidget* target_frame = nullptr);
+    void post(Severity sev, const QString& message, const QString& source = {}, QWidget* target_frame = nullptr);
 
     /// History (most recent first), capped at `kHistoryLimit`.
     QList<Notification> history() const;

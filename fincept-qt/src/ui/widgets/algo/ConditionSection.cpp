@@ -7,8 +7,7 @@
 
 namespace fincept::ui::algo {
 
-ConditionSection::ConditionSection(Type type, QWidget* parent)
-    : QWidget(parent), type_(type) {
+ConditionSection::ConditionSection(Type type, QWidget* parent) : QWidget(parent), type_(type) {
     setObjectName(type == Type::Entry ? QStringLiteral("conditionSectionEntry")
                                       : QStringLiteral("conditionSectionExit"));
 
@@ -19,8 +18,7 @@ ConditionSection::ConditionSection(Type type, QWidget* parent)
     // ── Header: title + section AND/OR toggle ───────────────────────────────
     auto* header = new QHBoxLayout();
     header->setSpacing(6);
-    title_ = new QLabel(
-        type == Type::Entry ? tr("ENTRY CONDITIONS") : tr("EXIT CONDITIONS"), this);
+    title_ = new QLabel(type == Type::Entry ? tr("ENTRY CONDITIONS") : tr("EXIT CONDITIONS"), this);
     title_->setObjectName(type == Type::Entry ? QStringLiteral("condSectionHeaderEntry")
                                               : QStringLiteral("condSectionHeaderExit"));
     header->addWidget(title_);
@@ -61,8 +59,14 @@ ConditionSection::ConditionSection(Type type, QWidget* parent)
 
     main_layout->addStretch();
 
-    connect(and_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("AND")); emit conditions_changed(); });
-    connect(or_btn_, &QPushButton::clicked, this, [this]() { set_logic(QStringLiteral("OR")); emit conditions_changed(); });
+    connect(and_btn_, &QPushButton::clicked, this, [this]() {
+        set_logic(QStringLiteral("AND"));
+        emit conditions_changed();
+    });
+    connect(or_btn_, &QPushButton::clicked, this, [this]() {
+        set_logic(QStringLiteral("OR"));
+        emit conditions_changed();
+    });
     connect(add_cond_btn_, &QPushButton::clicked, this, &ConditionSection::add_condition);
     connect(add_group_btn_, &QPushButton::clicked, this, &ConditionSection::add_group);
 
@@ -79,11 +83,16 @@ void ConditionSection::changeEvent(QEvent* event) {
 void ConditionSection::retranslateUi() {
     if (title_)
         title_->setText(type_ == Type::Entry ? tr("ENTRY CONDITIONS") : tr("EXIT CONDITIONS"));
-    if (match_label_) match_label_->setText(tr("Match:"));
-    if (and_btn_) and_btn_->setText(tr("ALL (AND)"));
-    if (or_btn_) or_btn_->setText(tr("ANY (OR)"));
-    if (add_cond_btn_) add_cond_btn_->setText(tr("+ Add Condition"));
-    if (add_group_btn_) add_group_btn_->setText(tr("+ Add Group"));
+    if (match_label_)
+        match_label_->setText(tr("Match:"));
+    if (and_btn_)
+        and_btn_->setText(tr("ALL (AND)"));
+    if (or_btn_)
+        or_btn_->setText(tr("ANY (OR)"));
+    if (add_cond_btn_)
+        add_cond_btn_->setText(tr("+ Add Condition"));
+    if (add_group_btn_)
+        add_group_btn_->setText(tr("+ Add Group"));
     // Connector labels between rows are built from tr("AND")/tr("OR") — rebuild
     // so they pick up the new locale too.
     rebuild_layout();
@@ -131,8 +140,10 @@ void ConditionSection::add_group() {
 
 void ConditionSection::remove_node(QWidget* node) {
     const int idx = nodes_.indexOf(node);
-    if (idx < 0) return;
-    if (nodes_.size() <= 1) return; // keep at least one row
+    if (idx < 0)
+        return;
+    if (nodes_.size() <= 1)
+        return; // keep at least one row
     nodes_.removeAt(idx);
     node->deleteLater();
     rebuild_layout();
@@ -168,7 +179,9 @@ QJsonArray ConditionSection::conditions() const {
     return arr;
 }
 
-QString ConditionSection::combined_logic() const { return logic_; }
+QString ConditionSection::combined_logic() const {
+    return logic_;
+}
 
 void ConditionSection::set_conditions(const QJsonArray& conditions, const QString& logic) {
     set_logic(logic);

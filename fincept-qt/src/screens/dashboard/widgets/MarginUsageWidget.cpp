@@ -31,8 +31,7 @@ QString fmt_money(double v) {
 }
 } // namespace
 
-MarginUsageWidget::MarginUsageWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget(tr("MARGIN USAGE"), parent) {
+MarginUsageWidget::MarginUsageWidget(const QJsonObject& cfg, QWidget* parent) : BaseWidget(tr("MARGIN USAGE"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(6);
@@ -159,8 +158,7 @@ void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
     total_val_->setText(fmt_money(funds.total_balance));
     collateral_val_->setText(fmt_money(funds.collateral));
 
-    const double denom = funds.total_balance > 0 ? funds.total_balance
-                                                 : (funds.available_balance + funds.used_margin);
+    const double denom = funds.total_balance > 0 ? funds.total_balance : (funds.available_balance + funds.used_margin);
     int pct = 0;
     if (denom > 0) {
         pct = qBound(0, int((funds.used_margin / denom) * 100.0 + 0.5), 100);
@@ -173,10 +171,9 @@ void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
         bar_color = ui::colors::NEGATIVE();
     else if (pct >= 50)
         bar_color = ui::colors::WARNING();
-    usage_bar_->setStyleSheet(
-        QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
-                "QProgressBar::chunk{background:%2;border-radius:2px;}")
-            .arg(ui::colors::BG_RAISED(), bar_color.name()));
+    usage_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
+                                      "QProgressBar::chunk{background:%2;border-radius:2px;}")
+                                  .arg(ui::colors::BG_RAISED(), bar_color.name()));
 
     set_loading(false);
 }
@@ -219,22 +216,19 @@ void MarginUsageWidget::on_theme_changed() {
 
 void MarginUsageWidget::apply_styles() {
     header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;")
-            .arg(ui::colors::TEXT_TERTIARY()));
+        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
 
     const QString row_label_css =
         QString("color:%1;font-size:10px;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
     const QString row_value_css =
-        QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
-            .arg(ui::colors::TEXT_PRIMARY());
+        QString("color:%1;font-size:12px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
     for (QLabel* l : {available_val_, used_val_, total_val_, collateral_val_}) {
         if (l)
             l->setStyleSheet(row_value_css);
     }
     if (auto* parent = available_val_ ? available_val_->parentWidget() : nullptr) {
         parent->setStyleSheet(
-            QString("QLabel#marginUsageRowLabel{%1} QLabel#marginUsageRowValue{%2}")
-                .arg(row_label_css, row_value_css));
+            QString("QLabel#marginUsageRowLabel{%1} QLabel#marginUsageRowValue{%2}").arg(row_label_css, row_value_css));
     }
 
     if (usage_pct_label_)
@@ -243,10 +237,9 @@ void MarginUsageWidget::apply_styles() {
                 .arg(ui::colors::TEXT_SECONDARY()));
 
     if (usage_bar_)
-        usage_bar_->setStyleSheet(
-            QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
-                    "QProgressBar::chunk{background:%2;border-radius:2px;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE()));
+        usage_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
+                                          "QProgressBar::chunk{background:%2;border-radius:2px;}")
+                                      .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE()));
 }
 
 void MarginUsageWidget::retranslateUi() {

@@ -47,17 +47,17 @@ class MarketPanelEditor : public QDialog {
 
     MarketPanelConfig config_;
 
-    QLabel*      title_lbl_        = nullptr;
-    QLabel*      tickers_lbl_      = nullptr;
-    QLabel*      search_lbl_       = nullptr;
-    QPushButton* remove_btn_       = nullptr;
-    QLineEdit*   title_edit_       = nullptr;
-    QLineEdit*   search_edit_      = nullptr;
-    QListWidget* ticker_list_      = nullptr;
-    QListWidget* dropdown_         = nullptr;
-    QTimer*      search_debounce_  = nullptr;
-    QString      pending_query_;
-    bool         search_connected_ = false;
+    QLabel* title_lbl_ = nullptr;
+    QLabel* tickers_lbl_ = nullptr;
+    QLabel* search_lbl_ = nullptr;
+    QPushButton* remove_btn_ = nullptr;
+    QLineEdit* title_edit_ = nullptr;
+    QLineEdit* search_edit_ = nullptr;
+    QListWidget* ticker_list_ = nullptr;
+    QListWidget* dropdown_ = nullptr;
+    QTimer* search_debounce_ = nullptr;
+    QString pending_query_;
+    bool search_connected_ = false;
 };
 
 } // namespace fincept::screens

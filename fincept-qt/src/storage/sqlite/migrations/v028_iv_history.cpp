@@ -31,12 +31,14 @@ Result<void> apply_v028(QSqlDatabase& db) {
                 PRIMARY KEY (underlying, date_iso)
             ) WITHOUT ROWID
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v028_sql(db, "CREATE INDEX IF NOT EXISTS idx_iv_history_underlying_date "
                               "ON iv_history_daily(underlying, date_iso DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     return Result<void>::ok();
 }
@@ -45,7 +47,8 @@ Result<void> apply_v028(QSqlDatabase& db) {
 
 void register_migration_v028() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({28, "iv_history", apply_v028});
 }

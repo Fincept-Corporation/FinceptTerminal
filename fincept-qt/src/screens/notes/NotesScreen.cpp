@@ -288,7 +288,7 @@ QWidget* NotesScreen::build_editor_panel() {
 
     // ── Page 1: View mode ────────────────────────────────────────────────────
     auto* view_page = new QWidget(this);
-    view_page->setStyleSheet(QString("background: %1;").arg(BG_BASE() ));
+    view_page->setStyleSheet(QString("background: %1;").arg(BG_BASE()));
     auto* vl = new QVBoxLayout(view_page);
     vl->setContentsMargins(14, 14, 14, 14);
     vl->setSpacing(10);
@@ -751,7 +751,8 @@ void NotesScreen::changeEvent(QEvent* event) {
 }
 
 void NotesScreen::retranslateUi() {
-    if (category_header_) category_header_->setText(tr("  CATEGORIES"));
+    if (category_header_)
+        category_header_->setText(tr("  CATEGORIES"));
 
     // Category sidebar list — re-apply translated labels (ids stay as data).
     if (category_list_) {
@@ -766,38 +767,56 @@ void NotesScreen::retranslateUi() {
     }
 
     // Notes list panel
-    if (search_input_) search_input_->setPlaceholderText(tr("Search notes..."));
-    if (new_btn_) new_btn_->setText(tr("+ NEW"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search notes..."));
+    if (new_btn_)
+        new_btn_->setText(tr("+ NEW"));
 
     // Editor / viewer
-    if (empty_label_) empty_label_->setText(tr("Select a note or create a new one"));
+    if (empty_label_)
+        empty_label_->setText(tr("Select a note or create a new one"));
 
     // View-mode toolbar
-    if (view_edit_btn_) view_edit_btn_->setText(tr("EDIT"));
-    if (view_fav_btn_) view_fav_btn_->setText(tr("FAV"));
-    if (view_archive_btn_) view_archive_btn_->setText(tr("ARCHIVE"));
-    if (view_delete_btn_) view_delete_btn_->setText(tr("DELETE"));
+    if (view_edit_btn_)
+        view_edit_btn_->setText(tr("EDIT"));
+    if (view_fav_btn_)
+        view_fav_btn_->setText(tr("FAV"));
+    if (view_archive_btn_)
+        view_archive_btn_->setText(tr("ARCHIVE"));
+    if (view_delete_btn_)
+        view_delete_btn_->setText(tr("DELETE"));
 
     // Edit-mode toolbar
-    if (edit_save_btn_) edit_save_btn_->setText(tr("SAVE"));
-    if (edit_cancel_btn_) edit_cancel_btn_->setText(tr("CANCEL"));
+    if (edit_save_btn_)
+        edit_save_btn_->setText(tr("SAVE"));
+    if (edit_cancel_btn_)
+        edit_cancel_btn_->setText(tr("CANCEL"));
     if (edit_export_btn_) {
         edit_export_btn_->setText(tr("EXPORT"));
         edit_export_btn_->setToolTip(tr("Export this note as a Markdown file to the File Manager"));
     }
 
     // Edit-mode field labels
-    if (lbl_cat_) lbl_cat_->setText(tr("CAT:"));
-    if (lbl_pri_) lbl_pri_->setText(tr("PRI:"));
-    if (lbl_sent_) lbl_sent_->setText(tr("SENT:"));
-    if (lbl_tags_) lbl_tags_->setText(tr("TAGS:"));
-    if (lbl_tickers_) lbl_tickers_->setText(tr("TICKERS:"));
+    if (lbl_cat_)
+        lbl_cat_->setText(tr("CAT:"));
+    if (lbl_pri_)
+        lbl_pri_->setText(tr("PRI:"));
+    if (lbl_sent_)
+        lbl_sent_->setText(tr("SENT:"));
+    if (lbl_tags_)
+        lbl_tags_->setText(tr("TAGS:"));
+    if (lbl_tickers_)
+        lbl_tickers_->setText(tr("TICKERS:"));
 
     // Edit-mode placeholders
-    if (edit_title_) edit_title_->setPlaceholderText(tr("Note title..."));
-    if (edit_tags_) edit_tags_->setPlaceholderText(tr("tag1, tag2, ..."));
-    if (edit_tickers_) edit_tickers_->setPlaceholderText(tr("AAPL, MSFT, ..."));
-    if (edit_content_) edit_content_->setPlaceholderText(tr("Write your note here..."));
+    if (edit_title_)
+        edit_title_->setPlaceholderText(tr("Note title..."));
+    if (edit_tags_)
+        edit_tags_->setPlaceholderText(tr("tag1, tag2, ..."));
+    if (edit_tickers_)
+        edit_tickers_->setPlaceholderText(tr("AAPL, MSFT, ..."));
+    if (edit_content_)
+        edit_content_->setPlaceholderText(tr("Write your note here..."));
 
     // Re-render count + stats footers in the new language (without disturbing
     // the list selection — note titles are data and need no re-translation).
@@ -828,13 +847,20 @@ QVariantMap NotesScreen::save_state() const {
         {"editing", is_editing_},
     };
     if (is_editing_) {
-        if (edit_title_) state["draft_title"] = edit_title_->text();
-        if (edit_content_) state["draft_content"] = edit_content_->toPlainText();
-        if (edit_tags_) state["draft_tags"] = edit_tags_->text();
-        if (edit_tickers_) state["draft_tickers"] = edit_tickers_->text();
-        if (edit_category_) state["draft_category"] = edit_category_->currentIndex();
-        if (edit_priority_) state["draft_priority"] = edit_priority_->currentText();
-        if (edit_sentiment_) state["draft_sentiment"] = edit_sentiment_->currentText();
+        if (edit_title_)
+            state["draft_title"] = edit_title_->text();
+        if (edit_content_)
+            state["draft_content"] = edit_content_->toPlainText();
+        if (edit_tags_)
+            state["draft_tags"] = edit_tags_->text();
+        if (edit_tickers_)
+            state["draft_tickers"] = edit_tickers_->text();
+        if (edit_category_)
+            state["draft_category"] = edit_category_->currentIndex();
+        if (edit_priority_)
+            state["draft_priority"] = edit_priority_->currentText();
+        if (edit_sentiment_)
+            state["draft_sentiment"] = edit_sentiment_->currentText();
     }
     return state;
 }
@@ -868,10 +894,14 @@ void NotesScreen::restore_state(const QVariantMap& state) {
         else if (right_stack_)
             right_stack_->setCurrentIndex(2);
 
-        if (edit_title_) edit_title_->setText(state.value("draft_title").toString());
-        if (edit_content_) edit_content_->setPlainText(state.value("draft_content").toString());
-        if (edit_tags_) edit_tags_->setText(state.value("draft_tags").toString());
-        if (edit_tickers_) edit_tickers_->setText(state.value("draft_tickers").toString());
+        if (edit_title_)
+            edit_title_->setText(state.value("draft_title").toString());
+        if (edit_content_)
+            edit_content_->setPlainText(state.value("draft_content").toString());
+        if (edit_tags_)
+            edit_tags_->setText(state.value("draft_tags").toString());
+        if (edit_tickers_)
+            edit_tickers_->setText(state.value("draft_tickers").toString());
         if (edit_category_ && state.contains("draft_category"))
             edit_category_->setCurrentIndex(state.value("draft_category").toInt());
         if (edit_priority_ && state.contains("draft_priority"))
@@ -901,15 +931,21 @@ void NotesScreen::hideEvent(QHideEvent* event) {
 }
 
 void NotesScreen::subscribe_mcp_events() {
-    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+    if (!mcp_event_subs_.isEmpty())
+        return; // idempotent
 
     QPointer<NotesScreen> self = this;
     auto on_notes_changed = [self](const QVariantMap&) {
-        if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self]() {
-            if (!self) return;
-            self->load_notes();
-        }, Qt::QueuedConnection);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self]() {
+                if (!self)
+                    return;
+                self->load_notes();
+            },
+            Qt::QueuedConnection);
     };
 
     auto& bus = EventBus::instance();

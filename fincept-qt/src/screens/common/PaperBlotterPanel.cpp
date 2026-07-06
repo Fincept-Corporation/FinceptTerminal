@@ -3,8 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "trading/AccountManager.h"
-#include "trading/PaperTrading.h"
 #include "trading/PaperMarkService.h"
+#include "trading/PaperTrading.h"
 #include "trading/TradingTypes.h"
 #include "trading/UnifiedTrading.h"
 #include "ui/theme/Theme.h"
@@ -97,8 +97,8 @@ void PaperBlotterPanel::build_ui() {
                                  "QTabBar::tab { background:transparent; color:%4; padding:6px 14px; "
                                  "  font-size:10px; font-weight:700; } "
                                  "QTabBar::tab:selected { color:%5; border-bottom:2px solid %6; }")
-                      .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(),
-                           colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(), colors::AMBER()));
+                      .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::TEXT_SECONDARY(),
+                           colors::TEXT_PRIMARY(), colors::AMBER()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -124,10 +124,10 @@ void PaperBlotterPanel::build_ui() {
     root->addWidget(bar);
 
     tabs_ = new QTabWidget(this);
-    positions_ = make_table({tr("Account"), tr("Symbol"), tr("Product"), tr("Side"), tr("Qty"), tr("Avg"),
-                             tr("LTP"), tr("P&L"), tr("P&L %"), QString()});
-    orders_ = make_table({tr("Account"), tr("Symbol"), tr("Product"), tr("Side"), tr("Type"), tr("Qty"),
-                          tr("Price"), tr("Status"), tr("Time")});
+    positions_ = make_table({tr("Account"), tr("Symbol"), tr("Product"), tr("Side"), tr("Qty"), tr("Avg"), tr("LTP"),
+                             tr("P&L"), tr("P&L %"), QString()});
+    orders_ = make_table({tr("Account"), tr("Symbol"), tr("Product"), tr("Side"), tr("Type"), tr("Qty"), tr("Price"),
+                          tr("Status"), tr("Time")});
     trades_ = make_table({tr("Symbol"), tr("Side"), tr("Qty"), tr("Price"), tr("P&L"), tr("Time")});
     tabs_->addTab(positions_, tr("Positions"));
     tabs_->addTab(orders_, tr("Orders"));
@@ -170,8 +170,8 @@ void PaperBlotterPanel::refresh() {
         if (a.trading_mode != QLatin1String("paper") || a.paper_portfolio_id.isEmpty())
             continue;
         const QString glyph = currency_glyph(pt_get_portfolio(a.paper_portfolio_id).currency);
-        accts.push_back({a.account_id, a.display_name.isEmpty() ? a.account_id : a.display_name,
-                         a.paper_portfolio_id, glyph});
+        accts.push_back(
+            {a.account_id, a.display_name.isEmpty() ? a.account_id : a.display_name, a.paper_portfolio_id, glyph});
     }
 
     // ── Positions ───────────────────────────────────────────────────────────
@@ -188,10 +188,10 @@ void PaperBlotterPanel::refresh() {
             positions_->setItem(r, 0, cell(acct.name));
             positions_->setItem(r, 1, cell(p.symbol));
             positions_->setItem(r, 2, cell(p.product.isEmpty() ? QStringLiteral("MIS") : p.product.toUpper()));
-            positions_->setItem(r, 3, cell(p.side.toUpper(),
-                                           p.side.compare(QLatin1String("long"), Qt::CaseInsensitive) == 0
-                                               ? pos_color
-                                               : neg_color));
+            positions_->setItem(r, 3,
+                                cell(p.side.toUpper(), p.side.compare(QLatin1String("long"), Qt::CaseInsensitive) == 0
+                                                           ? pos_color
+                                                           : neg_color));
             positions_->setItem(r, 4, cell(QString::number(p.quantity, 'f', 0)));
             positions_->setItem(r, 5, cell(QString::number(p.entry_price, 'f', 2)));
             positions_->setItem(r, 6, cell(QString::number(p.current_price, 'f', 2)));
@@ -202,10 +202,11 @@ void PaperBlotterPanel::refresh() {
 
             auto* exit_btn = new QPushButton(tr("Exit"));
             exit_btn->setCursor(Qt::PointingHandCursor);
-            exit_btn->setStyleSheet(QStringLiteral("QPushButton { background:transparent; color:%1; "
-                                                   "  border:1px solid %1; padding:2px 10px; font-size:10px; "
-                                                   "  font-weight:700; } QPushButton:hover { background:%1; color:#fff; }")
-                                        .arg(colors::NEGATIVE()));
+            exit_btn->setStyleSheet(
+                QStringLiteral("QPushButton { background:transparent; color:%1; "
+                               "  border:1px solid %1; padding:2px 10px; font-size:10px; "
+                               "  font-weight:700; } QPushButton:hover { background:%1; color:#fff; }")
+                    .arg(colors::NEGATIVE()));
             const QString aid = acct.id, sym = p.symbol, prod = p.product;
             connect(exit_btn, &QPushButton::clicked, this,
                     [this, aid, sym, prod]() { square_off_one(aid, sym, prod); });
@@ -224,10 +225,7 @@ void PaperBlotterPanel::refresh() {
                                     .arg(colors::TEXT_SECONDARY()));
     } else {
         const QString glyph = accts.isEmpty() ? QStringLiteral("$") : accts.first().glyph;
-        summary_->setText(tr("%1 open · unrealized %2%3")
-                              .arg(open_count)
-                              .arg(glyph)
-                              .arg(total_pnl, 0, 'f', 2));
+        summary_->setText(tr("%1 open · unrealized %2%3").arg(open_count).arg(glyph).arg(total_pnl, 0, 'f', 2));
         summary_->setStyleSheet(QStringLiteral("color:%1;font-size:11px;font-weight:700;background:transparent;")
                                     .arg(total_pnl >= 0 ? colors::POSITIVE() : colors::NEGATIVE()));
     }
@@ -300,8 +298,8 @@ void PaperBlotterPanel::square_off_all() {
         return;
 
     if (QMessageBox::question(this, tr("Square off all"),
-                              tr("Close all %1 open paper position(s) at market?").arg(targets.size()))
-        != QMessageBox::Yes)
+                              tr("Close all %1 open paper position(s) at market?").arg(targets.size())) !=
+        QMessageBox::Yes)
         return;
 
     int ok = 0;

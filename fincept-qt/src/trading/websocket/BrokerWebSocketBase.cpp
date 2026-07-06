@@ -25,21 +25,36 @@ BrokerQuote BrokerWebSocketBase::merge_tick(const QString& key, const BrokerQuot
         return partial;
     }
     BrokerQuote& cached = it.value();
-    if (partial.ltp != 0) cached.ltp = partial.ltp;
-    if (partial.open != 0) cached.open = partial.open;
-    if (partial.high != 0) cached.high = partial.high;
-    if (partial.low != 0) cached.low = partial.low;
-    if (partial.close != 0) cached.close = partial.close;
-    if (partial.volume != 0) cached.volume = partial.volume;
-    if (partial.change != 0) cached.change = partial.change;
-    if (partial.change_pct != 0) cached.change_pct = partial.change_pct;
-    if (partial.bid != 0) cached.bid = partial.bid;
-    if (partial.ask != 0) cached.ask = partial.ask;
-    if (partial.bid_size != 0) cached.bid_size = partial.bid_size;
-    if (partial.ask_size != 0) cached.ask_size = partial.ask_size;
-    if (partial.oi != 0) cached.oi = partial.oi;
-    if (!partial.symbol.isEmpty()) cached.symbol = partial.symbol;
-    if (partial.timestamp != 0) cached.timestamp = partial.timestamp;
+    if (partial.ltp != 0)
+        cached.ltp = partial.ltp;
+    if (partial.open != 0)
+        cached.open = partial.open;
+    if (partial.high != 0)
+        cached.high = partial.high;
+    if (partial.low != 0)
+        cached.low = partial.low;
+    if (partial.close != 0)
+        cached.close = partial.close;
+    if (partial.volume != 0)
+        cached.volume = partial.volume;
+    if (partial.change != 0)
+        cached.change = partial.change;
+    if (partial.change_pct != 0)
+        cached.change_pct = partial.change_pct;
+    if (partial.bid != 0)
+        cached.bid = partial.bid;
+    if (partial.ask != 0)
+        cached.ask = partial.ask;
+    if (partial.bid_size != 0)
+        cached.bid_size = partial.bid_size;
+    if (partial.ask_size != 0)
+        cached.ask_size = partial.ask_size;
+    if (partial.oi != 0)
+        cached.oi = partial.oi;
+    if (!partial.symbol.isEmpty())
+        cached.symbol = partial.symbol;
+    if (partial.timestamp != 0)
+        cached.timestamp = partial.timestamp;
     return cached;
 }
 

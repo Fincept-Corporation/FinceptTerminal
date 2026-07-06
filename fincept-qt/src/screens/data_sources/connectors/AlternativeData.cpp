@@ -173,7 +173,8 @@ static QVector<ConnectorConfig> alt_data_configs() {
          Category::AlternativeData,
          "A",
          "#C06524",
-         "Cross-source US equity market sentiment across Reddit, X, finance news, and Polymarket. Exposed as an optional overlay in Equity Research.",
+         "Cross-source US equity market sentiment across Reddit, X, finance news, and Polymarket. Exposed as an "
+         "optional overlay in Equity Research.",
          true,
          true,
          {{"apiKey", "API Key", FieldType::Password, "sk_live_...", true, "", {}},

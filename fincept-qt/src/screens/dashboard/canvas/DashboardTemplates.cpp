@@ -95,13 +95,11 @@ QVector<DashboardTemplate> all_dashboard_templates() {
 }
 
 QString template_display_name_tr(const DashboardTemplate& t) {
-    return QCoreApplication::translate("fincept::screens::DashboardTemplates",
-                                       t.display_name.toUtf8().constData());
+    return QCoreApplication::translate("fincept::screens::DashboardTemplates", t.display_name.toUtf8().constData());
 }
 
 QString template_description_tr(const DashboardTemplate& t) {
-    return QCoreApplication::translate("fincept::screens::DashboardTemplates",
-                                       t.description.toUtf8().constData());
+    return QCoreApplication::translate("fincept::screens::DashboardTemplates", t.description.toUtf8().constData());
 }
 
 } // namespace fincept::screens

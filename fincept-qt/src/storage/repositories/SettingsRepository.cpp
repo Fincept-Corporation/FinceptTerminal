@@ -20,8 +20,8 @@ Setting SettingsRepository::map_row(QSqlQuery& q) {
 }
 
 Result<void> SettingsRepository::set(const QString& key, const QString& value, const QString& category) {
-    auto r = exec_write("INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)",
-                        {key, value, category});
+    auto r =
+        exec_write("INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)", {key, value, category});
     if (r.is_ok() && CloudSyncSettings::is_syncable_setting_key(key))
         SyncOutbox::record("setting", key, "upsert");
     return r;

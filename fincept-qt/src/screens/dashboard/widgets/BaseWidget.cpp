@@ -20,9 +20,8 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     pal.setColor(QPalette::Window, QColor(ui::colors::BG_SURFACE()));
     setPalette(pal);
 
-    setStyleSheet(
-        QString("#dashboardBaseWidget { background: %1; border: 1px solid %2; border-radius: 2px; }")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
+    setStyleSheet(QString("#dashboardBaseWidget { background: %1; border: 1px solid %2; border-radius: 2px; }")
+                      .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_BRIGHT()));
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -106,8 +105,8 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
         QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
                 "padding: 0px; }"
                 "QPushButton:hover { color: %4; border-color: %4; background: %5; }")
-            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE(),
-                 ui::colors::BG_HOVER()));
+            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(),
+                 ui::colors::NEGATIVE(), ui::colors::BG_HOVER()));
     connect(close_btn, &QPushButton::clicked, this, &BaseWidget::close_requested);
     hl->addWidget(close_btn);
 
@@ -292,8 +291,7 @@ void BaseWidget::on_watchdog_fired() {
     if (last_progress_loaded_ > 0) {
         loading_overlay_->finish();
     } else {
-        loading_overlay_->set_error(
-            tr("No data yet — click refresh to retry"));
+        loading_overlay_->set_error(tr("No data yet — click refresh to retry"));
     }
 }
 
@@ -304,8 +302,10 @@ void BaseWidget::changeEvent(QEvent* event) {
 }
 
 void BaseWidget::retranslateUi() {
-    if (config_btn_)  config_btn_->setToolTip(tr("Configure widget"));
-    if (refresh_btn_) refresh_btn_->setToolTip(tr("Refresh widget data"));
+    if (config_btn_)
+        config_btn_->setToolTip(tr("Configure widget"));
+    if (refresh_btn_)
+        refresh_btn_->setToolTip(tr("Refresh widget data"));
     // Close button is a local in the ctor — its tooltip won't be retranslated
     // dynamically. Acceptable tradeoff: it's an icon, the tooltip is short,
     // and a runtime language switch is rare.

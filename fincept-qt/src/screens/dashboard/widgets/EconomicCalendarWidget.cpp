@@ -15,14 +15,14 @@ constexpr const char* kTopic = "econ:fincept:upcoming_events";
 // each row has different text widths — long event names push their
 // neighbours rightward, breaking the table look. EVENT is the only
 // variable column; it takes whatever leftover space the layout has.
-constexpr int kColWidthCty   = 32;
-constexpr int kColWidthDate  = 86;
-constexpr int kColWidthRef   = 40;
-constexpr int kColWidthAct   = 56;
-constexpr int kColWidthFcst  = 48;
-constexpr int kColWidthCons  = 48;
-constexpr int kColWidthPrev  = 48;
-constexpr int kColWidthImp   = 40;
+constexpr int kColWidthCty = 32;
+constexpr int kColWidthDate = 86;
+constexpr int kColWidthRef = 40;
+constexpr int kColWidthAct = 56;
+constexpr int kColWidthFcst = 48;
+constexpr int kColWidthCons = 48;
+constexpr int kColWidthPrev = 48;
+constexpr int kColWidthImp = 40;
 } // namespace
 
 namespace fincept::screens::widgets {
@@ -172,11 +172,10 @@ void EconomicCalendarWidget::hub_subscribe() {
     // Per-topic error subscription — fires only when *our* topic errors,
     // unlike the global topic_error signal which fans every error to every
     // listener. Keeps the widget out of the global error broadcast path.
-    hub.subscribe_errors(this, QString::fromLatin1(kTopic),
-        [this](const QString& /*error*/) {
-            set_loading(false);
-            show_status(tr("Failed to load calendar"));
-        });
+    hub.subscribe_errors(this, QString::fromLatin1(kTopic), [this](const QString& /*error*/) {
+        set_loading(false);
+        show_status(tr("Failed to load calendar"));
+    });
     hub_active_ = true;
     // Cold-cache fallback: if the producer warmed the topic earlier, paint
     // it now even if it's slightly stale — beats a blank panel.
@@ -296,8 +295,7 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
         auto* ev_lbl = new QLabel(display_name);
         ev_lbl->setToolTip(tooltip);
         ev_lbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-        ev_lbl->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(event_color));
+        ev_lbl->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(event_color));
         rl->addWidget(ev_lbl, 1);
 
         auto* cty_lbl = new QLabel(country);

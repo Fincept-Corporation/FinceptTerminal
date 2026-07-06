@@ -397,8 +397,7 @@ ApiResponse<QVector<BrokerHolding>> AliceBlueBroker::get_holdings(const BrokerCr
     // /open-api/od/v1/holdings/{productType} only returns one product at a time.
     // Call both CNC (delivery) and MTF (margin trading facility) and merge.
     auto fetch = [&](const QString& product_type) -> std::optional<QString> {
-        auto resp = BrokerHttp::instance().get(
-            QString(API_BASE) + "/open-api/od/v1/holdings/" + product_type, hdrs);
+        auto resp = BrokerHttp::instance().get(QString(API_BASE) + "/open-api/od/v1/holdings/" + product_type, hdrs);
 
         if (!resp.success)
             return checked_error(resp, "Network error");
@@ -541,7 +540,8 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
     if (instrument_token.isEmpty())
         return {false, std::nullopt,
                 "AliceBlue get_history: instrument token not found for " + symbol +
-                    " (load instruments first, or pass EXCHANGE:SYMBOL:TOKEN)", ts};
+                    " (load instruments first, or pass EXCHANGE:SYMBOL:TOKEN)",
+                ts};
 
     // Convert YYYY-MM-DD to Unix milliseconds (IST 09:15 start, 23:59 end)
     auto to_epoch_ms = [](const QString& date_str, bool is_end) -> QString {
@@ -552,7 +552,7 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
             dt.setTime(QTime(23, 59, 59));
         else
             dt.setTime(QTime(9, 15, 0));
-        dt.setTimeZone(QTimeZone(19800));  // interpret wall-clock as IST (+5:30)
+        dt.setTimeZone(QTimeZone(19800)); // interpret wall-clock as IST (+5:30)
         return QString::number(dt.toMSecsSinceEpoch());
     };
 
@@ -588,7 +588,7 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
         BrokerCandle candle;
         // Response fields: time (YYYY-MM-DD HH:MM:SS), open, high, low, close, volume
         QDateTime dt = QDateTime::fromString(c["time"].toString(), "yyyy-MM-dd HH:mm:ss");
-        dt.setTimeZone(QTimeZone(19800));  // interpret wall-clock as IST (+5:30)
+        dt.setTimeZone(QTimeZone(19800)); // interpret wall-clock as IST (+5:30)
         candle.timestamp = dt.toMSecsSinceEpoch();
         candle.open = c["open"].toDouble();
         candle.high = c["high"].toDouble();

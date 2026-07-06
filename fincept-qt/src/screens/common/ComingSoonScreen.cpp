@@ -44,7 +44,8 @@ void ComingSoonScreen::changeEvent(QEvent* event) {
 }
 
 void ComingSoonScreen::retranslateUi() {
-    if (sub_label_) sub_label_->setText(tr("COMING SOON"));
+    if (sub_label_)
+        sub_label_->setText(tr("COMING SOON"));
     if (desc_label_)
         desc_label_->setText(tr("This module is under active development.\nIt will be available in a future update."));
 }

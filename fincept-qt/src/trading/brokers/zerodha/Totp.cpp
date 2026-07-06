@@ -33,13 +33,13 @@ QByteArray base32_decode(const QString& input) {
 namespace {
 quint64 int_pow10(int digits) {
     quint64 v = 1;
-    for (int i = 0; i < digits; ++i) v *= 10ULL;
+    for (int i = 0; i < digits; ++i)
+        v *= 10ULL;
     return v;
 }
 } // namespace
 
-QString generate_totp(const QString& base32_secret, qint64 unix_time_seconds,
-                      int digits, int step_seconds) {
+QString generate_totp(const QString& base32_secret, qint64 unix_time_seconds, int digits, int step_seconds) {
     const QByteArray key = base32_decode(base32_secret);
     if (key.isEmpty())
         return {};
@@ -56,10 +56,10 @@ QString generate_totp(const QString& base32_secret, qint64 unix_time_seconds,
     const QByteArray hmac = mac.result();
 
     const int offset = hmac.at(hmac.size() - 1) & 0x0F;
-    const quint32 bin_code = (static_cast<quint32>(hmac.at(offset) & 0x7F) << 24)
-                           | (static_cast<quint32>(hmac.at(offset + 1) & 0xFF) << 16)
-                           | (static_cast<quint32>(hmac.at(offset + 2) & 0xFF) << 8)
-                           | (static_cast<quint32>(hmac.at(offset + 3) & 0xFF));
+    const quint32 bin_code = (static_cast<quint32>(hmac.at(offset) & 0x7F) << 24) |
+                             (static_cast<quint32>(hmac.at(offset + 1) & 0xFF) << 16) |
+                             (static_cast<quint32>(hmac.at(offset + 2) & 0xFF) << 8) |
+                             (static_cast<quint32>(hmac.at(offset + 3) & 0xFF));
 
     const quint32 modulus = static_cast<quint32>(int_pow10(digits));
     const QString code = QString::number(bin_code % modulus);

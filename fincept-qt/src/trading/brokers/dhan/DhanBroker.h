@@ -66,13 +66,11 @@ class DhanBroker : public IBroker {
                                                    const QString& to_date) override;
 
     // --- Multi-quote & Market Depth ---
-    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
-        const BrokerCredentials& creds,
-        const QVector<QPair<QString, QString>>& symbols) override;
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const BrokerCredentials& creds,
+                                                       const QVector<QPair<QString, QString>>& symbols) override;
 
-    ApiResponse<MarketDepth> get_market_depth(
-        const BrokerCredentials& creds,
-        const QString& symbol, const QString& exchange) override;
+    ApiResponse<MarketDepth> get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                              const QString& exchange) override;
 
     // --- Margin Calculator --- POST /v2/margincalculator (native, single order)
     ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;

@@ -24,8 +24,7 @@
 
 namespace fincept::trading::hyperliquid {
 
-class HyperliquidVenue : public QObject,
-                         public fincept::services::alpha_arena::IExchangeVenue {
+class HyperliquidVenue : public QObject, public fincept::services::alpha_arena::IExchangeVenue {
     Q_OBJECT
   public:
     explicit HyperliquidVenue(QObject* parent = nullptr);
@@ -63,9 +62,7 @@ class HyperliquidVenue : public QObject,
     void on_liquidation(std::function<void(fincept::services::alpha_arena::LiquidationEvent)> cb) override {
         liq_cb_ = std::move(cb);
     }
-    void on_mark_update(std::function<void(QString, double, qint64)> cb) override {
-        mark_update_cb_ = std::move(cb);
-    }
+    void on_mark_update(std::function<void(QString, double, qint64)> cb) override { mark_update_cb_ = std::move(cb); }
 
   signals:
     /// Local-vs-remote drift detected by the 30-s reconcile loop. Currently

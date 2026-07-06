@@ -15,13 +15,19 @@ namespace {
 // (Qt stores all numbers as double). For "integer" we additionally require
 // the value to be representable losslessly as an int64.
 bool type_matches(const QString& expected, const QJsonValue& v) {
-    if (expected == "string")  return v.isString();
-    if (expected == "boolean") return v.isBool();
-    if (expected == "array")   return v.isArray();
-    if (expected == "object")  return v.isObject();
-    if (expected == "number")  return v.isDouble();
+    if (expected == "string")
+        return v.isString();
+    if (expected == "boolean")
+        return v.isBool();
+    if (expected == "array")
+        return v.isArray();
+    if (expected == "object")
+        return v.isObject();
+    if (expected == "number")
+        return v.isDouble();
     if (expected == "integer") {
-        if (!v.isDouble()) return false;
+        if (!v.isDouble())
+            return false;
         const double d = v.toDouble();
         return d == static_cast<double>(static_cast<qint64>(d));
     }
@@ -72,11 +78,15 @@ QString validate_legacy(const QString& /*key*/, const QJsonObject& spec, const Q
         const QJsonArray arr = spec["enum"].toArray();
         bool found = false;
         for (const auto& e : arr) {
-            if (e == v) { found = true; break; }
+            if (e == v) {
+                found = true;
+                break;
+            }
         }
         if (!found) {
             QStringList allowed;
-            for (const auto& e : arr) allowed.append(e.toString());
+            for (const auto& e : arr)
+                allowed.append(e.toString());
             return "must be one of [" + allowed.join(",") + "]";
         }
     }
@@ -108,7 +118,8 @@ Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
     // Legacy `properties` may also declare defaults inline.
     for (auto it = schema.properties.constBegin(); it != schema.properties.constEnd(); ++it) {
         const QString& key = it.key();
-        if (args.contains(key)) continue;
+        if (args.contains(key))
+            continue;
         const QJsonObject spec = it.value().toObject();
         if (spec.contains("default") && !schema.params.contains(key))
             args[key] = spec["default"];

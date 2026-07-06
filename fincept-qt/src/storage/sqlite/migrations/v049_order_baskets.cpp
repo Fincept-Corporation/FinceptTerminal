@@ -15,7 +15,7 @@ namespace {
 Result<void> apply_v049(QSqlDatabase& db) {
     QSqlQuery q(db);
     if (!q.exec("CREATE TABLE IF NOT EXISTS order_baskets ("
-                "  id         TEXT PRIMARY KEY,"          // UUID
+                "  id         TEXT PRIMARY KEY," // UUID
                 "  name       TEXT NOT NULL,"
                 "  legs       TEXT NOT NULL DEFAULT '[]'," // JSON array of serialized UnifiedOrders
                 "  created_at TEXT DEFAULT (datetime('now')),"

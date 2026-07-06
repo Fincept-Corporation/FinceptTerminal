@@ -34,8 +34,8 @@ class PredictionExchangeAdapter : public QObject {
 
     // ── Identity ─────────────────────────────────────────────────────────
 
-    virtual QString id() const = 0;            // "polymarket" | "kalshi"
-    virtual QString display_name() const = 0;  // "Polymarket", "Kalshi"
+    virtual QString id() const = 0;           // "polymarket" | "kalshi"
+    virtual QString display_name() const = 0; // "Polymarket", "Kalshi"
     virtual ExchangeCapabilities capabilities() const = 0;
 
     // ── Public / unsigned endpoints ──────────────────────────────────────
@@ -67,7 +67,7 @@ class PredictionExchangeAdapter : public QObject {
     // ── Authenticated / trading ──────────────────────────────────────────
 
     virtual bool has_credentials() const = 0;
-    virtual QString account_label() const = 0;  // e.g. truncated wallet address
+    virtual QString account_label() const = 0; // e.g. truncated wallet address
     virtual void fetch_balance() = 0;
     virtual void fetch_positions() = 0;
     virtual void fetch_open_orders() = 0;
@@ -104,7 +104,7 @@ class PredictionExchangeAdapter : public QObject {
     void ws_connection_changed(bool connected);
 
     // Account / trading
-    void credentials_changed();  // emitted when user adds/removes a credential set
+    void credentials_changed(); // emitted when user adds/removes a credential set
     void balance_ready(const fincept::services::prediction::AccountBalance& balance);
     void positions_ready(const QVector<fincept::services::prediction::PredictionPosition>& positions);
     void open_orders_ready(const QVector<fincept::services::prediction::OpenOrder>& orders);

@@ -16,12 +16,12 @@ class OrderConfirmDialog : public QDialog {
   public:
     // Returns true if the user pressed "Send Order". `ref_price` is used only to
     // show an estimated value line (<= 0 hides it).
-    static bool confirm(QWidget* parent, const trading::UnifiedOrder& order,
-                        const QString& account_label, double ref_price);
+    static bool confirm(QWidget* parent, const trading::UnifiedOrder& order, const QString& account_label,
+                        double ref_price);
 
   private:
-    OrderConfirmDialog(QWidget* parent, const trading::UnifiedOrder& order,
-                       const QString& account_label, double ref_price);
+    OrderConfirmDialog(QWidget* parent, const trading::UnifiedOrder& order, const QString& account_label,
+                       double ref_price);
 };
 
 } // namespace fincept::screens

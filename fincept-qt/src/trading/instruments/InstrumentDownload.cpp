@@ -16,8 +16,8 @@ namespace fincept::trading {
 namespace {
 
 // Run one request to completion on a private QNAM and return the raw body.
-QByteArray run_request(const QString& method, const QString& url, const QByteArray& body,
-                       const QString& content_type, const QMap<QString, QString>& headers, int timeout_ms) {
+QByteArray run_request(const QString& method, const QString& url, const QByteArray& body, const QString& content_type,
+                       const QMap<QString, QString>& headers, int timeout_ms) {
     auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(url)};
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);

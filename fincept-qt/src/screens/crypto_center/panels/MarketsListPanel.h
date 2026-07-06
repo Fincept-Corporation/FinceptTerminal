@@ -47,15 +47,13 @@ class MarketsListPanel : public QWidget {
     void apply_theme();
     void retranslateUi();
 
-    void on_markets_ready(
-        const QVector<fincept::services::prediction::PredictionMarket>& markets);
+    void on_markets_ready(const QVector<fincept::services::prediction::PredictionMarket>& markets);
     void on_error(const QString& context, const QString& message);
     void on_row_double_clicked(int row, int column);
 
     void set_status_demo(bool demo);
     void set_status_error(const QString& message);
-    void rebuild_table(
-        const QVector<fincept::services::prediction::PredictionMarket>& markets);
+    void rebuild_table(const QVector<fincept::services::prediction::PredictionMarket>& markets);
 
     QLabel* title_ = nullptr;
     QLabel* status_pill_ = nullptr;

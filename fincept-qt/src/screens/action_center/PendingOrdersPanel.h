@@ -41,8 +41,8 @@ class PendingOrdersPanel : public QWidget {
   private:
     void build_ui();
     void retranslateUi();
-    void reload_accounts();        // refresh the account selector from AccountManager
-    void refresh();                // reload table + stats for the active filter
+    void reload_accounts(); // refresh the account selector from AccountManager
+    void refresh();         // reload table + stats for the active filter
     void refresh_stats();
     QString selected_account() const; // empty == all accounts
 

@@ -30,9 +30,9 @@ enum class VenvId {
 };
 
 struct CatalogEntry {
-    QString name;        ///< Canonical logical name (e.g. "market.yfinance").
-    QString relpath;     ///< Path under fincept-qt/scripts/ (forward slashes).
-    VenvId  venv = VenvId::Numpy2;
+    QString name;    ///< Canonical logical name (e.g. "market.yfinance").
+    QString relpath; ///< Path under fincept-qt/scripts/ (forward slashes).
+    VenvId venv = VenvId::Numpy2;
 };
 
 /// Process-global script catalog.

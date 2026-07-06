@@ -174,7 +174,8 @@ static QVector<Instrument> parse_angel_master_json(const QByteArray& json_data) 
         if (raw_type == "AMXIDX") {
             inst.exchange = inst.brexchange + "_INDEX";
             // Final pass through the shared normalizer so the index name matches every broker.
-            inst.symbol = norm::normalise_index_symbol(normalise_index_symbol(inst.name.isEmpty() ? inst.brsymbol : inst.name));
+            inst.symbol =
+                norm::normalise_index_symbol(normalise_index_symbol(inst.name.isEmpty() ? inst.brsymbol : inst.name));
         } else if (raw_type.startsWith("FUT")) {
             inst.symbol = inst.name.toUpper() + exp_nd + "FUT";
         } else if (raw_type.startsWith("OPT")) {
@@ -249,11 +250,10 @@ void InstrumentService::refresh(const QString& broker_id, const BrokerCredential
         if (last.isValid()) {
             const qint64 age_hours = last.secsTo(QDateTime::currentDateTimeUtc()) / 3600;
             if (age_hours >= 0 && age_hours < max_age_hours) {
-                LOG_INFO("InstrumentService",
-                         QString("%1 instruments are fresh (%2h old < %3h) — skipping download")
-                             .arg(broker_id)
-                             .arg(age_hours)
-                             .arg(max_age_hours));
+                LOG_INFO("InstrumentService", QString("%1 instruments are fresh (%2h old < %3h) — skipping download")
+                                                  .arg(broker_id)
+                                                  .arg(age_hours)
+                                                  .arg(max_age_hours));
                 // Instruments on disk are fresh but may not be in the in-memory
                 // cache yet (e.g. first refresh() of a relaunch within
                 // max_age_hours). Without this, is_loaded() stays false forever
@@ -330,8 +330,7 @@ void InstrumentService::load_from_db(const QString& broker_id) {
     LOG_INFO("InstrumentService", QString("Loaded %1 instruments from DB for %2").arg(all.size()).arg(broker_id));
 }
 
-void InstrumentService::load_from_db_async(const QString& broker_id,
-                                            std::function<void(int)> callback) {
+void InstrumentService::load_from_db_async(const QString& broker_id, std::function<void(int)> callback) {
     // Fast path: if already loaded, fire callback immediately on UI thread.
     if (is_loaded(broker_id)) {
         int n = cached_count(broker_id);
@@ -349,17 +348,16 @@ void InstrumentService::load_from_db_async(const QString& broker_id,
 
     (void)QtConcurrent::run([self, broker_id, db_path, callback]() {
         // Each worker thread needs its own named QSqlDatabase connection.
-        const QString conn_name =
-            "inst_async_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+        const QString conn_name = "inst_async_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
         QVector<Instrument> all;
 
         {
             QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
             db.setDatabaseName(db_path);
             if (!db.open()) {
-                LOG_ERROR("InstrumentService",
-                          QString("load_from_db_async: failed to open DB for %1: %2")
-                              .arg(broker_id, db.lastError().text()));
+                LOG_ERROR(
+                    "InstrumentService",
+                    QString("load_from_db_async: failed to open DB for %1: %2").arg(broker_id, db.lastError().text()));
             } else {
                 // Single query for all exchanges — faster than 9 per-exchange queries.
                 QSqlQuery q(db);
@@ -372,9 +370,9 @@ void InstrumentService::load_from_db_async(const QString& broker_id,
                     while (q.next())
                         all.append(InstrumentRepository::map_row_static(q));
                 } else {
-                    LOG_ERROR("InstrumentService",
-                              QString("load_from_db_async: query failed for %1: %2")
-                                  .arg(broker_id, q.lastError().text()));
+                    LOG_ERROR(
+                        "InstrumentService",
+                        QString("load_from_db_async: query failed for %1: %2").arg(broker_id, q.lastError().text()));
                 }
                 db.close();
             }
@@ -397,9 +395,9 @@ void InstrumentService::load_from_db_async(const QString& broker_id,
                     LOG_INFO("InstrumentService",
                              QString("load_from_db_async: loaded %1 instruments for %2").arg(count).arg(broker_id));
                 } else {
-                    LOG_WARN("InstrumentService",
-                             QString("load_from_db_async: no instruments found in DB for %1 — run refresh")
-                                 .arg(broker_id));
+                    LOG_WARN(
+                        "InstrumentService",
+                        QString("load_from_db_async: no instruments found in DB for %1 — run refresh").arg(broker_id));
                 }
                 if (callback)
                     callback(count);
@@ -415,8 +413,7 @@ void InstrumentService::load_from_db_worker(const QString& broker_id) {
     if (is_loaded(broker_id))
         return;
     const QString db_path = fincept::Database::instance().path();
-    const QString conn_name =
-        "inst_sync_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QString conn_name = "inst_sync_" + broker_id + "_" + QUuid::createUuid().toString(QUuid::WithoutBraces);
     QVector<Instrument> all;
     {
         QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
@@ -431,13 +428,14 @@ void InstrumentService::load_from_db_worker(const QString& broker_id) {
                 while (q.next())
                     all.append(InstrumentRepository::map_row_static(q));
             } else {
-                LOG_ERROR("InstrumentService", QString("load_from_db_worker: query failed for %1: %2")
-                                                   .arg(broker_id, q.lastError().text()));
+                LOG_ERROR("InstrumentService",
+                          QString("load_from_db_worker: query failed for %1: %2").arg(broker_id, q.lastError().text()));
             }
             db.close();
         } else {
-            LOG_ERROR("InstrumentService", QString("load_from_db_worker: failed to open DB for %1: %2")
-                                               .arg(broker_id, db.lastError().text()));
+            LOG_ERROR(
+                "InstrumentService",
+                QString("load_from_db_worker: failed to open DB for %1: %2").arg(broker_id, db.lastError().text()));
         }
     }
     QSqlDatabase::removeDatabase(conn_name);
@@ -530,10 +528,14 @@ QVector<Instrument> InstrumentService::search_all(const QString& query, const QS
     // brokers whose cache isn't loaded in this session.
     auto type_rank = [](InstrumentType t) {
         switch (t) {
-            case InstrumentType::EQ: return 0;
-            case InstrumentType::INDEX: return 1;
-            case InstrumentType::FUT: return 2;
-            default: return 3;
+            case InstrumentType::EQ:
+                return 0;
+            case InstrumentType::INDEX:
+                return 1;
+            case InstrumentType::FUT:
+                return 2;
+            default:
+                return 3;
         }
     };
 
@@ -558,8 +560,7 @@ QVector<Instrument> InstrumentService::search_all(const QString& query, const QS
             for (const auto& inst : cit->by_token) {
                 if (!exch.isEmpty() && inst.exchange.compare(exch, Qt::CaseInsensitive) != 0)
                     continue;
-                if (inst.symbol.contains(q, Qt::CaseInsensitive) ||
-                    inst.brsymbol.contains(q, Qt::CaseInsensitive) ||
+                if (inst.symbol.contains(q, Qt::CaseInsensitive) || inst.brsymbol.contains(q, Qt::CaseInsensitive) ||
                     inst.name.contains(q, Qt::CaseInsensitive))
                     hits.append(inst);
             }
@@ -567,9 +568,11 @@ QVector<Instrument> InstrumentService::search_all(const QString& query, const QS
             std::sort(hits.begin(), hits.end(), [&](const Instrument& a, const Instrument& b) {
                 const bool ap = a.symbol.startsWith(q, Qt::CaseInsensitive);
                 const bool bp = b.symbol.startsWith(q, Qt::CaseInsensitive);
-                if (ap != bp) return ap;
+                if (ap != bp)
+                    return ap;
                 const int ar = type_rank(a.instrument_type), br = type_rank(b.instrument_type);
-                if (ar != br) return ar < br;
+                if (ar != br)
+                    return ar < br;
                 return a.symbol < b.symbol;
             });
             out += hits;
@@ -597,8 +600,8 @@ QStringList InstrumentService::list_underlyings(const QString& broker_id, const 
     for (const auto& inst : it->by_token) {
         if (inst.exchange != exchange)
             continue;
-        if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE
-            && inst.instrument_type != InstrumentType::FUT)
+        if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE &&
+            inst.instrument_type != InstrumentType::FUT)
             continue;
         if (!inst.name.isEmpty())
             seen.insert(inst.name);
@@ -622,8 +625,8 @@ QStringList InstrumentService::list_expiries(const QString& broker_id, const QSt
     for (const auto& inst : it->by_token) {
         if (inst.exchange != exchange || inst.name != underlying)
             continue;
-        if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE
-            && inst.instrument_type != InstrumentType::FUT)
+        if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE &&
+            inst.instrument_type != InstrumentType::FUT)
             continue;
         ++match_count;
         if (inst.expiry.isEmpty()) {
@@ -637,18 +640,30 @@ QStringList InstrumentService::list_expiries(const QString& broker_id, const QSt
             const QStringView mon = QStringView(inst.expiry).mid(3, 3);
             const int yr = 2000 + QStringView(inst.expiry).mid(7, 2).toInt();
             int month = 0;
-            if      (mon.compare(QLatin1String("JAN"), Qt::CaseInsensitive) == 0) month = 1;
-            else if (mon.compare(QLatin1String("FEB"), Qt::CaseInsensitive) == 0) month = 2;
-            else if (mon.compare(QLatin1String("MAR"), Qt::CaseInsensitive) == 0) month = 3;
-            else if (mon.compare(QLatin1String("APR"), Qt::CaseInsensitive) == 0) month = 4;
-            else if (mon.compare(QLatin1String("MAY"), Qt::CaseInsensitive) == 0) month = 5;
-            else if (mon.compare(QLatin1String("JUN"), Qt::CaseInsensitive) == 0) month = 6;
-            else if (mon.compare(QLatin1String("JUL"), Qt::CaseInsensitive) == 0) month = 7;
-            else if (mon.compare(QLatin1String("AUG"), Qt::CaseInsensitive) == 0) month = 8;
-            else if (mon.compare(QLatin1String("SEP"), Qt::CaseInsensitive) == 0) month = 9;
-            else if (mon.compare(QLatin1String("OCT"), Qt::CaseInsensitive) == 0) month = 10;
-            else if (mon.compare(QLatin1String("NOV"), Qt::CaseInsensitive) == 0) month = 11;
-            else if (mon.compare(QLatin1String("DEC"), Qt::CaseInsensitive) == 0) month = 12;
+            if (mon.compare(QLatin1String("JAN"), Qt::CaseInsensitive) == 0)
+                month = 1;
+            else if (mon.compare(QLatin1String("FEB"), Qt::CaseInsensitive) == 0)
+                month = 2;
+            else if (mon.compare(QLatin1String("MAR"), Qt::CaseInsensitive) == 0)
+                month = 3;
+            else if (mon.compare(QLatin1String("APR"), Qt::CaseInsensitive) == 0)
+                month = 4;
+            else if (mon.compare(QLatin1String("MAY"), Qt::CaseInsensitive) == 0)
+                month = 5;
+            else if (mon.compare(QLatin1String("JUN"), Qt::CaseInsensitive) == 0)
+                month = 6;
+            else if (mon.compare(QLatin1String("JUL"), Qt::CaseInsensitive) == 0)
+                month = 7;
+            else if (mon.compare(QLatin1String("AUG"), Qt::CaseInsensitive) == 0)
+                month = 8;
+            else if (mon.compare(QLatin1String("SEP"), Qt::CaseInsensitive) == 0)
+                month = 9;
+            else if (mon.compare(QLatin1String("OCT"), Qt::CaseInsensitive) == 0)
+                month = 10;
+            else if (mon.compare(QLatin1String("NOV"), Qt::CaseInsensitive) == 0)
+                month = 11;
+            else if (mon.compare(QLatin1String("DEC"), Qt::CaseInsensitive) == 0)
+                month = 12;
             if (month > 0 && day > 0 && day <= 31)
                 d = QDate(yr, month, day);
         }
@@ -657,23 +672,24 @@ QStringList InstrumentService::list_expiries(const QString& broker_id, const QSt
         if (d.isValid())
             by_date.insert(d, inst.expiry);
     }
-    LOG_INFO("InstrumentService",
-             QString("list_expiries('%1','%2','%3'): matched=%4 empty_expiry=%5 parsed=%6")
-                 .arg(broker_id, underlying, exchange).arg(match_count).arg(empty_expiry).arg(by_date.size()));
+    LOG_INFO("InstrumentService", QString("list_expiries('%1','%2','%3'): matched=%4 empty_expiry=%5 parsed=%6")
+                                      .arg(broker_id, underlying, exchange)
+                                      .arg(match_count)
+                                      .arg(empty_expiry)
+                                      .arg(by_date.size()));
     const auto vals = by_date.values();
     return QStringList(vals.begin(), vals.end());
 }
 
-QVector<Instrument> InstrumentService::find_options_for_underlying(const QString& broker_id,
-                                                                   const QString& underlying,
+QVector<Instrument> InstrumentService::find_options_for_underlying(const QString& broker_id, const QString& underlying,
                                                                    const QString& expiry,
                                                                    const QString& exchange) const {
     QMutexLocker lock(&mutex_);
     auto it = caches_.find(broker_id);
     if (it == caches_.end())
         return {};
-    QVector<Instrument> options;  // CE/PE
-    QVector<Instrument> futures;  // FUT (appended last)
+    QVector<Instrument> options; // CE/PE
+    QVector<Instrument> futures; // FUT (appended last)
     for (const auto& inst : it->by_token) {
         if (inst.exchange != exchange || inst.name != underlying || inst.expiry != expiry)
             continue;
@@ -716,12 +732,17 @@ bool InstrumentService::is_loaded(const QString& broker_id) const {
 // Lower rank = preferred. Globally-unique-token brokers never hit a collision.
 static int inst_token_collision_rank(const Instrument& i) {
     switch (i.instrument_type) {
-    case InstrumentType::EQ:    return 0;
-    case InstrumentType::INDEX: return 1;
-    case InstrumentType::FUT:   return 2;
-    case InstrumentType::CE:
-    case InstrumentType::PE:    return 3;
-    default:                    return 4;
+        case InstrumentType::EQ:
+            return 0;
+        case InstrumentType::INDEX:
+            return 1;
+        case InstrumentType::FUT:
+            return 2;
+        case InstrumentType::CE:
+        case InstrumentType::PE:
+            return 3;
+        default:
+            return 4;
     }
 }
 
@@ -989,8 +1010,7 @@ QByteArray InstrumentService::download_icici_csv() {
     // (Qt's QZipReader is a private-header dependency, gated on Qt6::GuiPrivate).
     // Own QNAM (not BrokerHttp) for the same reason as download_dhan_csv: a long
     // download must not starve concurrent quote/order calls.
-    static const QString kUrl =
-        "https://traderweb.icicidirect.com/Content/File/txtFile/ScripFile/StockScriptNew.csv";
+    static const QString kUrl = "https://traderweb.icicidirect.com/Content/File/txtFile/ScripFile/StockScriptNew.csv";
 
     auto* nam = new QNetworkAccessManager;
     QNetworkRequest req{QUrl(kUrl)};
@@ -1085,8 +1105,7 @@ QByteArray InstrumentService::download_fyers_json() {
         for (auto it = obj.begin(); it != obj.end(); ++it)
             merged.insert(it.key(), it.value());
 
-        LOG_INFO("InstrumentService",
-                 QString("Fyers: fetched %1 symbols from %2").arg(obj.size()).arg(url));
+        LOG_INFO("InstrumentService", QString("Fyers: fetched %1 symbols from %2").arg(obj.size()).arg(url));
     }
 
     nam->deleteLater();

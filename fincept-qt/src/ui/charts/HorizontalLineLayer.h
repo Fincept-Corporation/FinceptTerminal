@@ -20,7 +20,7 @@ struct HorizontalLevel {
 
 class HorizontalLineLayer : public OverlayLayer {
     Q_OBJECT
-public:
+  public:
     explicit HorizontalLineLayer(const QString& id, const QString& name, QObject* parent = nullptr);
 
     QString id() const override { return id_; }
@@ -35,7 +35,7 @@ public:
     void set_levels(const QVector<HorizontalLevel>& levels);
     const QVector<HorizontalLevel>& levels() const { return levels_; }
 
-private:
+  private:
     void rebuild_items();
     void clear_items();
 

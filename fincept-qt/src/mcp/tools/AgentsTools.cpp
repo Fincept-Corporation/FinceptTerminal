@@ -24,9 +24,9 @@
 // AgentsTools_internal.h.
 
 #include "mcp/tools/AgentsTools.h"
-#include "mcp/tools/AgentsTools_internal.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/tools/AgentsTools_internal.h"
 
 #include <QString>
 

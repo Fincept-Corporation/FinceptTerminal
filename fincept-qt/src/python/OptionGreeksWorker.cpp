@@ -40,13 +40,17 @@ OptionGreeksWorker::OptionGreeksWorker() {
     ready_watchdog_.setSingleShot(true);
     ready_watchdog_.setInterval(kReadyTimeoutMs);
     connect(&ready_watchdog_, &QTimer::timeout, this, [this]() {
-        if (ready_) return;
+        if (ready_)
+            return;
         LOG_WARN(kTag, "Daemon handshake timed out — killing and restarting");
-        if (proc_) proc_->kill();
+        if (proc_)
+            proc_->kill();
     });
 }
 
-OptionGreeksWorker::~OptionGreeksWorker() { stop(); }
+OptionGreeksWorker::~OptionGreeksWorker() {
+    stop();
+}
 
 void OptionGreeksWorker::submit(const QString& action, const QJsonObject& payload, Callback cb) {
     ensure_started();
@@ -72,7 +76,8 @@ void OptionGreeksWorker::submit(const QString& action, const QJsonObject& payloa
 
 void OptionGreeksWorker::stop() {
     shutting_down_ = true;
-    if (!proc_) return;
+    if (!proc_)
+        return;
     if (proc_->state() == QProcess::Running) {
         QJsonObject req;
         req["id"] = 0;
@@ -80,7 +85,7 @@ void OptionGreeksWorker::stop() {
         req["payload"] = QJsonObject{};
         proc_->write(encode_greeks_frame(req));
         proc_->closeWriteChannel();
-        proc_->waitForFinished(2'000);  // destructor — P1 allows
+        proc_->waitForFinished(2'000); // destructor — P1 allows
         if (proc_->state() != QProcess::NotRunning)
             proc_->kill();
     }
@@ -88,7 +93,8 @@ void OptionGreeksWorker::stop() {
 }
 
 void OptionGreeksWorker::ensure_started() {
-    if (proc_ && proc_->state() != QProcess::NotRunning) return;
+    if (proc_ && proc_->state() != QProcess::NotRunning)
+        return;
     launch_process();
 }
 
@@ -122,7 +128,7 @@ void OptionGreeksWorker::launch_process() {
 
 #ifdef _WIN32
     proc_->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000;  // CREATE_NO_WINDOW
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
     });
 #endif
 
@@ -131,7 +137,8 @@ void OptionGreeksWorker::launch_process() {
             &OptionGreeksWorker::on_process_finished);
     connect(proc_, &QProcess::errorOccurred, this, &OptionGreeksWorker::on_process_error);
     connect(proc_, &QProcess::readyReadStandardError, this, [this]() {
-        if (!proc_) return;
+        if (!proc_)
+            return;
         const QByteArray err = proc_->readAllStandardError();
         if (!err.isEmpty()) {
             LOG_WARN(kTag, QString("stderr: %1").arg(QString::fromUtf8(err).trimmed()));
@@ -152,11 +159,13 @@ void OptionGreeksWorker::on_process_finished(int exit_code, QProcess::ExitStatus
     LOG_INFO(kTag, reason);
 
     for (auto it = in_flight_.begin(); it != in_flight_.end(); ++it) {
-        if (it.value().cb) it.value().cb(false, {}, reason);
+        if (it.value().cb)
+            it.value().cb(false, {}, reason);
     }
     in_flight_.clear();
 
-    if (shutting_down_ || QCoreApplication::closingDown()) return;
+    if (shutting_down_ || QCoreApplication::closingDown())
+        return;
 
     if (restart_count_ >= kMaxRestarts) {
         LOG_ERROR(kTag, QString("Restart cap (%1) reached — giving up").arg(kMaxRestarts));
@@ -173,7 +182,8 @@ void OptionGreeksWorker::on_process_error(QProcess::ProcessError err) {
 }
 
 void OptionGreeksWorker::on_ready_read() {
-    if (!proc_) return;
+    if (!proc_)
+        return;
     read_buf_.append(proc_->readAllStandardOutput());
     try_drain_frames();
 }
@@ -189,10 +199,12 @@ void OptionGreeksWorker::try_drain_frames() {
         if (n > 64u * 1024u * 1024u) {
             LOG_ERROR(kTag, QString("Frame size %1 exceeds 64MB cap — resetting stream").arg(n));
             read_buf_.clear();
-            if (proc_) proc_->kill();
+            if (proc_)
+                proc_->kill();
             return;
         }
-        if (static_cast<quint32>(read_buf_.size()) < 4 + n) return;
+        if (static_cast<quint32>(read_buf_.size()) < 4 + n)
+            return;
 
         const QByteArray body = read_buf_.mid(4, static_cast<int>(n));
         read_buf_.remove(0, 4 + static_cast<int>(n));
@@ -237,12 +249,14 @@ void OptionGreeksWorker::try_drain_frames() {
         } else {
             result_obj["_value"] = rv;
         }
-        if (p.cb) p.cb(ok, result_obj, err);
+        if (p.cb)
+            p.cb(ok, result_obj, err);
     }
 }
 
 void OptionGreeksWorker::dispatch_queued() {
-    if (!ready_ || !proc_) return;
+    if (!ready_ || !proc_)
+        return;
     auto local = std::move(queue_);
     queue_.clear();
     for (auto& entry : local) {
@@ -259,11 +273,13 @@ void OptionGreeksWorker::dispatch_queued() {
 
 void OptionGreeksWorker::fail_all_pending(const QString& reason) {
     for (auto& entry : queue_) {
-        if (entry.second.cb) entry.second.cb(false, {}, reason);
+        if (entry.second.cb)
+            entry.second.cb(false, {}, reason);
     }
     queue_.clear();
     for (auto it = in_flight_.begin(); it != in_flight_.end(); ++it) {
-        if (it.value().cb) it.value().cb(false, {}, reason);
+        if (it.value().cb)
+            it.value().cb(false, {}, reason);
     }
     in_flight_.clear();
 }

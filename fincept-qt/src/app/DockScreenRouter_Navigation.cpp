@@ -8,7 +8,6 @@
 // Part of the partial-class split of DockScreenRouter.cpp.
 
 #include "app/DockScreenRouter.h"
-
 #include "app/WindowFrame.h"
 #include "auth/InactivityGuard.h"
 #include "core/components/PopularityTracker.h"
@@ -55,8 +54,10 @@ void DockScreenRouter::navigate(const QString& id, bool exclusive) {
         return;
     }
 
-    LOG_INFO("DockRouter",
-             QString(">>> navigate('%1', exclusive=%2) opened_areas=%3").arg(id).arg(exclusive).arg(manager_ ? manager_->openedDockAreas().size() : 0));
+    LOG_INFO("DockRouter", QString(">>> navigate('%1', exclusive=%2) opened_areas=%3")
+                               .arg(id)
+                               .arg(exclusive)
+                               .arg(manager_ ? manager_->openedDockAreas().size() : 0));
     // Bump popularity so the Component Browser surfaces frequently-used
     // panels at the top. Safe for unknown ids — PopularityTracker no-ops
     // on failure and we still fall into the unknown-screen branch below.
@@ -275,8 +276,7 @@ void DockScreenRouter::add_alongside(const QString& primary, const QString& seco
         materialize_screen(secondary);
 
         auto* primary_area = primary_dw->dockAreaWidget();
-        if (needs_add || !sec_dw->dockAreaWidget() ||
-            sec_dw->dockAreaWidget()->dockWidgets().size() > 1) {
+        if (needs_add || !sec_dw->dockAreaWidget() || sec_dw->dockAreaWidget()->dockWidgets().size() > 1) {
             if (primary_area)
                 manager_->addDockWidget(ads::RightDockWidgetArea, sec_dw, primary_area);
             else

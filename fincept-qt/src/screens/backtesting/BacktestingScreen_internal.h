@@ -74,13 +74,8 @@ inline void guard_all_inputs(QWidget* root, QObject* filter) {
 inline constexpr int kPillHeight = 24;
 inline constexpr int kPillPadH = 10;
 
-inline QString pill_qss(const QString& selector,
-                        const QString& fg,
-                        const QString& bg,
-                        const QString& border,
-                        int font_px,
-                        const QString& font_family,
-                        const QString& weight = QStringLiteral("700")) {
+inline QString pill_qss(const QString& selector, const QString& fg, const QString& bg, const QString& border,
+                        int font_px, const QString& font_family, const QString& weight = QStringLiteral("700")) {
     // Subtract 2px (the 1px top + bottom border) from min/max-height so the
     // total outer box equals kPillHeight in Qt's stylesheet box model.
     return QString("%1 {"

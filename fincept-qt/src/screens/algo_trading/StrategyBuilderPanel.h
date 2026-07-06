@@ -20,17 +20,19 @@
 
 // Forward-declare F&O widgets to avoid pulling heavy headers into every TU
 // that includes this header.
-namespace fincept::ui::algo { class FnoLegRuleEditor; }
-namespace fincept::screens::fno {
-    class PayoffChartWidget;
-    class BuilderAnalyticsRibbon;
+namespace fincept::ui::algo {
+class FnoLegRuleEditor;
 }
+namespace fincept::screens::fno {
+class PayoffChartWidget;
+class BuilderAnalyticsRibbon;
+} // namespace fincept::screens::fno
 
 namespace fincept::screens {
 
 class StrategyBuilderPanel : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit StrategyBuilderPanel(QWidget* parent = nullptr);
 
     QVariantMap save_draft() const;
@@ -41,22 +43,22 @@ public:
     void load_and_backtest(const services::algo::AlgoStrategy& strategy, const QString& symbol,
                            const QString& start_date, const QString& end_date);
 
-signals:
+  signals:
     // Emitted after a strategy is successfully deployed, so the parent screen can
     // switch to the Dashboard tab and refresh the deployment list.
     void deployed();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private slots:
+  private slots:
     void on_save();
     void on_backtest();
     void on_deploy();
     void on_backtest_result(const QJsonObject& data);
     void on_error(const QString& context, const QString& msg);
 
-private: // NOLINT(readability-redundant-access-specifiers) — needed to end private slots: section
+  private: // NOLINT(readability-redundant-access-specifiers) — needed to end private slots: section
     // --- F&O authoring (P2) ---
     void build_ui();
     void retranslateUi();
@@ -101,7 +103,7 @@ private: // NOLINT(readability-redundant-access-specifiers) — needed to end pr
     ui::algo::RiskManagementPanel* risk_panel_ = nullptr;
 
     // Right panel — backtest setup card
-    QWidget* bt_setup_card_ = nullptr;  // kept so we can show/hide in on_instrument_type_changed
+    QWidget* bt_setup_card_ = nullptr; // kept so we can show/hide in on_instrument_type_changed
     QLabel* bt_header_ = nullptr;
     QLabel* bt_symbol_label_ = nullptr;
     QLabel* bt_capital_label_ = nullptr;

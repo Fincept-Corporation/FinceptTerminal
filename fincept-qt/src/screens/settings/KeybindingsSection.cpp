@@ -37,8 +37,7 @@ KeyCaptureDialog::KeyCaptureDialog(KeyAction action, const QKeySequence& current
     hint_label_->setStyleSheet(QString("color:%1;font-weight:bold;").arg(ui::colors::TEXT_PRIMARY()));
 
     captured_label_ = new QLabel;
-    captured_label_->setStyleSheet(
-        QString("color:%1;font-size:16px;font-weight:700;").arg(ui::colors::AMBER()));
+    captured_label_->setStyleSheet(QString("color:%1;font-size:16px;font-weight:700;").arg(ui::colors::AMBER()));
     captured_label_->setAlignment(Qt::AlignCenter);
 
     conflict_label_ = new QLabel;
@@ -72,10 +71,14 @@ void KeyCaptureDialog::changeEvent(QEvent* event) {
 
 void KeyCaptureDialog::retranslateUi() {
     setWindowTitle(tr("Rebind: %1").arg(KeyConfigManager::instance().display_name(action_)));
-    if (current_label_) current_label_->setText(tr("Current: %1").arg(current_.toString(QKeySequence::NativeText)));
-    if (hint_label_)    hint_label_->setText(tr("Press new key combination..."));
-    if (apply_btn_)     apply_btn_->setText(tr("Apply"));
-    if (cancel_btn_)    cancel_btn_->setText(tr("Cancel"));
+    if (current_label_)
+        current_label_->setText(tr("Current: %1").arg(current_.toString(QKeySequence::NativeText)));
+    if (hint_label_)
+        hint_label_->setText(tr("Press new key combination..."));
+    if (apply_btn_)
+        apply_btn_->setText(tr("Apply"));
+    if (cancel_btn_)
+        cancel_btn_->setText(tr("Cancel"));
     // captured_label_ / conflict_label_ hold dynamically-built text reflecting
     // the last key press; left as-is (a modal capture dialog cannot outlive a
     // language switch in practice).
@@ -84,8 +87,7 @@ void KeyCaptureDialog::retranslateUi() {
 void KeyCaptureDialog::keyPressEvent(QKeyEvent* event) {
     // Ignore lone modifier keys
     const int key = event->key();
-    if (key == Qt::Key_Control || key == Qt::Key_Shift ||
-        key == Qt::Key_Alt    || key == Qt::Key_Meta)
+    if (key == Qt::Key_Control || key == Qt::Key_Shift || key == Qt::Key_Alt || key == Qt::Key_Meta)
         return;
 
     captured_ = QKeySequence(event->keyCombination());
@@ -109,8 +111,8 @@ KeybindingsSection::KeybindingsSection(QWidget* parent) : QWidget(parent) {
     build_ui();
 
     // Rebuild rows whenever any key changes (live update)
-    connect(&KeyConfigManager::instance(), &KeyConfigManager::key_changed,
-            this, [this](KeyAction, QKeySequence) { rebuild_rows(); });
+    connect(&KeyConfigManager::instance(), &KeyConfigManager::key_changed, this,
+            [this](KeyAction, QKeySequence) { rebuild_rows(); });
 }
 
 void KeybindingsSection::build_ui() {
@@ -124,8 +126,7 @@ void KeybindingsSection::build_ui() {
     search_input_->setStyleSheet(
         QString("QLineEdit{background:%1;color:%2;border:1px solid %3;padding:6px;}"
                 "QLineEdit:focus{border:1px solid %4;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::BORDER_MED(), ui::colors::AMBER()));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
     connect(search_input_, &QLineEdit::textChanged, this, [this](const QString&) { rebuild_rows(); });
 
     // Scrollable groups area
@@ -146,11 +147,9 @@ void KeybindingsSection::build_ui() {
     reset_all_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:1px solid %3;padding:0 12px;height:32px;}"
                 "QPushButton:hover{background:%4;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(reset_all_btn_, &QPushButton::clicked, this, []() {
-        KeyConfigManager::instance().reset_all();
-    });
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                 ui::colors::BG_HOVER()));
+    connect(reset_all_btn_, &QPushButton::clicked, this, []() { KeyConfigManager::instance().reset_all(); });
 
     root->addWidget(search_input_);
     root->addWidget(scroll, 1);
@@ -193,8 +192,7 @@ QWidget* KeybindingsSection::build_group(const QString& group_name, const QList<
 
     auto* title = new QLabel(group_name.toUpper());
     title->setStyleSheet(
-        QString("color:%1;font-weight:bold;letter-spacing:0.5px;padding:4px 0;")
-            .arg(ui::colors::AMBER()));
+        QString("color:%1;font-weight:bold;letter-spacing:0.5px;padding:4px 0;").arg(ui::colors::AMBER()));
     vbox->addWidget(title);
 
     auto* sep = new QFrame;
@@ -223,15 +221,12 @@ QWidget* KeybindingsSection::build_group(const QString& group_name, const QList<
 
         auto* reset_btn = new QPushButton(tr("Reset"));
         reset_btn->setFixedSize(56, 24);
-        reset_btn->setStyleSheet(
-            QString("QPushButton{background:%1;color:%2;border:1px solid %3;}"
-                    "QPushButton:hover{background:%4;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
-                     ui::colors::BORDER_DIM(), ui::colors::BG_HOVER()));
+        reset_btn->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;}"
+                                         "QPushButton:hover{background:%4;}")
+                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
+                                          ui::colors::BORDER_DIM(), ui::colors::BG_HOVER()));
         // Use a captured copy of a for the lambda
-        connect(reset_btn, &QPushButton::clicked, this, [a]() {
-            KeyConfigManager::instance().reset_key(a);
-        });
+        connect(reset_btn, &QPushButton::clicked, this, [a]() { KeyConfigManager::instance().reset_key(a); });
 
         hl->addWidget(name_lbl, 1);
         hl->addWidget(key_lbl);
@@ -250,8 +245,10 @@ void KeybindingsSection::changeEvent(QEvent* event) {
 }
 
 void KeybindingsSection::retranslateUi() {
-    if (search_input_)  search_input_->setPlaceholderText(tr("Search actions..."));
-    if (reset_all_btn_) reset_all_btn_->setText(tr("Reset All to Defaults"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search actions..."));
+    if (reset_all_btn_)
+        reset_all_btn_->setText(tr("Reset All to Defaults"));
     // Per-row "Reset" buttons live in dynamically-built groups; rebuild_rows()
     // recreates them (and re-reads action display names from KeyConfigManager).
     rebuild_rows();

@@ -34,12 +34,14 @@ Result<void> apply_v027(QSqlDatabase& db) {
                 fetched_at   TEXT NOT NULL DEFAULT (datetime('now'))
             )
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v027_sql(db, "CREATE INDEX IF NOT EXISTS idx_fii_dii_date "
                               "ON fii_dii_daily(date_iso DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     return Result<void>::ok();
 }
@@ -48,7 +50,8 @@ Result<void> apply_v027(QSqlDatabase& db) {
 
 void register_migration_v027() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({27, "fii_dii", apply_v027});
 }

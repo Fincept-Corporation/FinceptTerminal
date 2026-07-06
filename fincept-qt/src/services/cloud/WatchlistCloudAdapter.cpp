@@ -123,8 +123,8 @@ void WatchlistCloudAdapter::push_update(const OutboxRow& row, PushDone done) {
     body["color"] = w.color;
     body["sort_order"] = w.sort_order;
     body["is_default"] = w.is_default;
-    CloudClient::instance().put(wl_path(*remote), body, [done](CloudResponse resp) { done(wl_push_result(resp)); },
-                                this);
+    CloudClient::instance().put(
+        wl_path(*remote), body, [done](CloudResponse resp) { done(wl_push_result(resp)); }, this);
 }
 
 void WatchlistCloudAdapter::push_delete(const OutboxRow& row, PushDone done) {
@@ -169,8 +169,9 @@ void WatchlistCloudAdapter::push_stock_add(const OutboxRow& row, PushDone done) 
     body["symbol"] = sym;
     body["name"] = name;
     body["exchange"] = exch;
-    CloudClient::instance().post(wl_path(*remote) + QStringLiteral("/stocks"), body,
-                                 [done](CloudResponse resp) { done(wl_push_result(resp)); }, this);
+    CloudClient::instance().post(
+        wl_path(*remote) + QStringLiteral("/stocks"), body, [done](CloudResponse resp) { done(wl_push_result(resp)); },
+        this);
 }
 
 void WatchlistCloudAdapter::push_stock_remove(const OutboxRow& row, PushDone done) {
@@ -180,14 +181,15 @@ void WatchlistCloudAdapter::push_stock_remove(const OutboxRow& row, PushDone don
         return;
     }
     const QString sym = row.payload.toUpper();
-    CloudClient::instance().del(wl_path(*remote) + QStringLiteral("/stocks/") + sym,
-                                [done](CloudResponse resp) {
-                                    if (resp.ok || resp.status == 404)
-                                        done(wl_ok());
-                                    else
-                                        done(wl_push_result(resp));
-                                },
-                                this);
+    CloudClient::instance().del(
+        wl_path(*remote) + QStringLiteral("/stocks/") + sym,
+        [done](CloudResponse resp) {
+            if (resp.ok || resp.status == 404)
+                done(wl_ok());
+            else
+                done(wl_push_result(resp));
+        },
+        this);
 }
 
 // ── counts / first-enable ────────────────────────────────────────────────────

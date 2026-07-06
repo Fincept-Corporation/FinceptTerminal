@@ -9,11 +9,10 @@
 // Part of the partial-class split of BacktestingScreen.cpp; helpers shared
 // across split files live in BacktestingScreen_internal.h.
 
-#include "screens/backtesting/BacktestingScreen.h"
-#include "screens/backtesting/BacktestingScreen_internal.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/backtesting/BacktestingScreen.h"
+#include "screens/backtesting/BacktestingScreen_internal.h"
 #include "services/backtesting/BacktestingService.h"
 #include "ui/theme/Theme.h"
 
@@ -102,15 +101,20 @@ void BacktestingScreen::update_section_visibility() {
     const bool is_backtest_family = (cmd == "backtest" || cmd == "optimize" || cmd == "walk_forward");
     const bool needs_benchmark = is_backtest_family || cmd == "returns";
 
-    if (execution_section_) execution_section_->setVisible(is_backtest_family);
-    if (advanced_section_)  advanced_section_->setVisible(is_backtest_family);
-    if (benchmark_section_) benchmark_section_->setVisible(needs_benchmark);
-    if (strategy_section_)  strategy_section_->setVisible(is_backtest_family);
+    if (execution_section_)
+        execution_section_->setVisible(is_backtest_family);
+    if (advanced_section_)
+        advanced_section_->setVisible(is_backtest_family);
+    if (benchmark_section_)
+        benchmark_section_->setVisible(needs_benchmark);
+    if (strategy_section_)
+        strategy_section_->setVisible(is_backtest_family);
 
     // Show explicit MIN/MAX/STEP rows under each strategy param only for `optimize`.
     const bool is_optimize = (cmd == "optimize");
     for (auto* row : param_range_rows_)
-        if (row) row->setVisible(is_optimize);
+        if (row)
+            row->setVisible(is_optimize);
 }
 
 void BacktestingScreen::update_command_buttons() {
@@ -155,7 +159,8 @@ QJsonObject BacktestingScreen::gather_strategy_params() {
         int n_indicators = (combo_ind3_enabled_ && combo_ind3_enabled_->isChecked()) ? 3 : 2;
         for (int i = 0; i < n_indicators; ++i) {
             const auto& r = combo_rows_[i];
-            if (!r.type) continue;
+            if (!r.type)
+                continue;
             QJsonObject ind;
             ind["type"] = r.type->currentText();
             ind["period"] = r.period ? r.period->value() : 14;
@@ -235,8 +240,8 @@ QJsonObject BacktestingScreen::gather_args() {
 
     if (cmd_id == "optimize") {
         args["optimizeObjective"] = opt_objective_combo_->currentText();
-        args["optimizeMethod"]    = opt_method_combo_->currentText();
-        args["maxIterations"]     = opt_iterations_spin_->value();
+        args["optimizeMethod"] = opt_method_combo_->currentText();
+        args["maxIterations"] = opt_iterations_spin_->value();
 
         // Build paramRanges from the explicit per-param MIN/MAX/STEP editor.
         // rebuild_strategy_params keeps param_spinboxes_ and the three range
@@ -244,16 +249,19 @@ QJsonObject BacktestingScreen::gather_args() {
         QJsonObject ranges;
         for (int i = 0; i < param_spinboxes_.size(); ++i) {
             auto name = param_spinboxes_[i]->property("param_name").toString();
-            if (name.isEmpty()) continue;
-            if (i >= param_min_spinboxes_.size() || i >= param_max_spinboxes_.size()
-                || i >= param_step_spinboxes_.size()) continue;
+            if (name.isEmpty())
+                continue;
+            if (i >= param_min_spinboxes_.size() || i >= param_max_spinboxes_.size() ||
+                i >= param_step_spinboxes_.size())
+                continue;
             double mn = param_min_spinboxes_[i]->value();
             double mx = param_max_spinboxes_[i]->value();
             double st = qMax(0.0001, param_step_spinboxes_[i]->value());
-            if (mx < mn) std::swap(mn, mx);
+            if (mx < mn)
+                std::swap(mn, mx);
             QJsonObject range;
-            range["min"]  = mn;
-            range["max"]  = mx;
+            range["min"] = mn;
+            range["max"] = mx;
             range["step"] = st;
             ranges[name] = range;
         }
@@ -280,32 +288,32 @@ QJsonObject BacktestingScreen::gather_args() {
         // vectorbt uses long mode names ('crossover_signals'); zipline uses both
         // long and short forms. The params keys are the same across providers.
         if (m == "crossover_signals" || m == "crossover") {
-            params["fast_period"]   = is_fast_period_spin_->value();
-            params["slow_period"]   = is_slow_period_spin_->value();
-            params["fastPeriod"]    = is_fast_period_spin_->value(); // zipline alias
-            params["slowPeriod"]    = is_slow_period_spin_->value();
-            params["ma_type"]       = is_ma_type_combo_->currentText();
-            params["maType"]        = is_ma_type_combo_->currentText();
+            params["fast_period"] = is_fast_period_spin_->value();
+            params["slow_period"] = is_slow_period_spin_->value();
+            params["fastPeriod"] = is_fast_period_spin_->value(); // zipline alias
+            params["slowPeriod"] = is_slow_period_spin_->value();
+            params["ma_type"] = is_ma_type_combo_->currentText();
+            params["maType"] = is_ma_type_combo_->currentText();
             params["fast_indicator"] = is_ma_type_combo_->currentText(); // vectorbt key
             params["slow_indicator"] = is_ma_type_combo_->currentText();
         } else if (m == "threshold_signals" || m == "threshold") {
             params["period"] = is_period_spin_->value();
-            params["lower"]  = is_lower_spin_->value();
-            params["upper"]  = is_upper_spin_->value();
+            params["lower"] = is_lower_spin_->value();
+            params["upper"] = is_upper_spin_->value();
         } else if (m == "breakout_signals" || m == "breakout") {
-            params["period"]  = is_period_spin_->value();
+            params["period"] = is_period_spin_->value();
             params["channel"] = is_channel_combo_->currentText();
         } else if (m == "mean_reversion_signals" || m == "mean_reversion") {
-            params["period"]  = is_period_spin_->value();
+            params["period"] = is_period_spin_->value();
             params["z_entry"] = is_z_entry_spin_->value();
-            params["z_exit"]  = is_z_exit_spin_->value();
+            params["z_exit"] = is_z_exit_spin_->value();
         } else if (m == "signal_filter" || m == "filter") {
-            params["base_indicator"]   = ind_signal_indicator_combo_->currentData().toString();
-            params["base_period"]      = is_period_spin_->value();
+            params["base_indicator"] = ind_signal_indicator_combo_->currentData().toString();
+            params["base_period"] = is_period_spin_->value();
             params["filter_indicator"] = is_filter_indicator_combo_->currentText();
-            params["filter_period"]    = is_filter_period_spin_->value();
+            params["filter_period"] = is_filter_period_spin_->value();
             params["filter_threshold"] = is_filter_threshold_spin_->value();
-            params["filter_type"]      = is_filter_type_combo_->currentText();
+            params["filter_type"] = is_filter_type_combo_->currentText();
         }
         args["params"] = params;
     }
@@ -317,16 +325,16 @@ QJsonObject BacktestingScreen::gather_args() {
         // Send only the params the chosen generator consumes so the JSON stays
         // unambiguous; Python providers use defaults for anything missing.
         if (lt == "FIXLB") {
-            params["horizon"]   = labels_horizon_spin_->value();
+            params["horizon"] = labels_horizon_spin_->value();
             params["threshold"] = labels_threshold_spin_->value();
         } else if (lt == "MEANLB" || lt == "TRENDLB") {
-            params["window"]    = labels_window_spin_->value();
+            params["window"] = labels_window_spin_->value();
             params["threshold"] = labels_threshold_spin_->value();
         } else if (lt == "LEXLB") {
-            params["window"]    = labels_window_spin_->value();
+            params["window"] = labels_window_spin_->value();
         } else if (lt == "BOLB") {
-            params["window"]    = labels_window_spin_->value();
-            params["alpha"]     = labels_alpha_spin_->value();
+            params["window"] = labels_window_spin_->value();
+            params["alpha"] = labels_alpha_spin_->value();
         }
         args["params"] = params;
     }
@@ -340,23 +348,23 @@ QJsonObject BacktestingScreen::gather_args() {
         // Sending both keeps the JSON contract provider-agnostic.
         if (st == "RollingSplitter") {
             params["window_len"] = splitter_window_spin_->value();
-            params["windowLen"]  = splitter_window_spin_->value();
-            params["test_len"]   = splitter_test_spin_->value();
-            params["testLen"]    = splitter_test_spin_->value();
-            params["step"]       = splitter_step_spin_->value();
-        } else if (st == "ExpandingSplitter") {
-            params["min_len"]  = splitter_min_spin_->value();
-            params["minLen"]   = splitter_min_spin_->value();
+            params["windowLen"] = splitter_window_spin_->value();
             params["test_len"] = splitter_test_spin_->value();
-            params["testLen"]  = splitter_test_spin_->value();
-            params["step"]     = splitter_step_spin_->value();
+            params["testLen"] = splitter_test_spin_->value();
+            params["step"] = splitter_step_spin_->value();
+        } else if (st == "ExpandingSplitter") {
+            params["min_len"] = splitter_min_spin_->value();
+            params["minLen"] = splitter_min_spin_->value();
+            params["test_len"] = splitter_test_spin_->value();
+            params["testLen"] = splitter_test_spin_->value();
+            params["step"] = splitter_step_spin_->value();
         } else if (st == "PurgedKFoldSplitter" || st == "PurgedKFold") {
-            params["n_splits"]    = splitter_n_splits_spin_->value();
-            params["nSplits"]     = splitter_n_splits_spin_->value();
-            params["purge_len"]   = splitter_purge_spin_->value();
-            params["purgeLen"]    = splitter_purge_spin_->value();
+            params["n_splits"] = splitter_n_splits_spin_->value();
+            params["nSplits"] = splitter_n_splits_spin_->value();
+            params["purge_len"] = splitter_purge_spin_->value();
+            params["purgeLen"] = splitter_purge_spin_->value();
             params["embargo_len"] = splitter_embargo_spin_->value();
-            params["embargoLen"]  = splitter_embargo_spin_->value();
+            params["embargoLen"] = splitter_embargo_spin_->value();
         }
         args["params"] = params;
     }
@@ -375,8 +383,9 @@ QJsonObject BacktestingScreen::gather_args() {
             // vectorbt reads `metric` (singular string); zipline reads
             // `metrics` (list, used as a set-membership check). Send both.
             const QString m = returns_metric_combo_->currentText();
-            params["metric"]  = m;
-            QJsonArray ml; ml.append(m);
+            params["metric"] = m;
+            QJsonArray ml;
+            ml.append(m);
             params["metrics"] = ml;
         } else if (at == "ranges") {
             params["threshold"] = returns_threshold_spin_->value();
@@ -398,16 +407,16 @@ QJsonObject BacktestingScreen::gather_args() {
         if (g == "RANDNX") {
             params["min_hold"] = signal_min_hold_spin_->value();
             params["max_hold"] = signal_max_hold_spin_->value();
-            params["minHold"]  = signal_min_hold_spin_->value();
-            params["maxHold"]  = signal_max_hold_spin_->value();
+            params["minHold"] = signal_min_hold_spin_->value();
+            params["maxHold"] = signal_max_hold_spin_->value();
         }
         if (g == "RPROB" || g == "RPROBX") {
             params["entry_prob"] = signal_entry_prob_spin_->value();
-            params["entryProb"]  = signal_entry_prob_spin_->value();
+            params["entryProb"] = signal_entry_prob_spin_->value();
         }
         if (g == "RPROBX") {
             params["exit_prob"] = signal_exit_prob_spin_->value();
-            params["exitProb"]  = signal_exit_prob_spin_->value();
+            params["exitProb"] = signal_exit_prob_spin_->value();
         }
         args["params"] = params;
     }
@@ -419,19 +428,19 @@ QJsonObject BacktestingScreen::gather_args() {
         const QString lt = l2s_label_type_combo_->currentText();
         args["labelType"] = lt;
         args["entryLabel"] = l2s_entry_label_spin_->value();
-        args["exitLabel"]  = l2s_exit_label_spin_->value();
+        args["exitLabel"] = l2s_exit_label_spin_->value();
         QJsonObject params;
         if (lt == "FIXLB") {
-            params["horizon"]   = labels_horizon_spin_->value();
+            params["horizon"] = labels_horizon_spin_->value();
             params["threshold"] = labels_threshold_spin_->value();
         } else if (lt == "MEANLB" || lt == "TRENDLB") {
-            params["window"]    = labels_window_spin_->value();
+            params["window"] = labels_window_spin_->value();
             params["threshold"] = labels_threshold_spin_->value();
         } else if (lt == "LEXLB") {
-            params["window"]    = labels_window_spin_->value();
+            params["window"] = labels_window_spin_->value();
         } else if (lt == "BOLB") {
-            params["window"]    = labels_window_spin_->value();
-            params["alpha"]     = labels_alpha_spin_->value();
+            params["window"] = labels_window_spin_->value();
+            params["alpha"] = labels_alpha_spin_->value();
         }
         args["params"] = params;
     }
@@ -463,8 +472,7 @@ void BacktestingScreen::on_run() {
 
     // Validate command is supported by current provider
     if (!provider_info.commands.contains(command_id)) {
-        display_error(
-            tr("Command '%1' is not supported by provider '%2'").arg(command_id, provider_info.display_name));
+        display_error(tr("Command '%1' is not supported by provider '%2'").arg(command_id, provider_info.display_name));
         return;
     }
 

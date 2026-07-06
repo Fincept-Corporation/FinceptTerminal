@@ -7,20 +7,18 @@
 //
 // Part of the partial-class split of AgentService.cpp.
 
-#include "services/agents/AgentService.h"
-
-#include "services/llm/LlmService.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/TopicPolicy.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpTypes.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "python/PythonRunner.h"
+#include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
-
-#include "datahub/DataHub.h"
-#include "datahub/TopicPolicy.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -44,29 +42,29 @@ void AgentService::discover_agents() {
                 fincept::CacheManager::instance().remove("agents:list");
                 LOG_INFO("AgentService", "Discarding empty agents cache — re-discovering");
             } else {
-            LOG_DEBUG("AgentService", "agents: serving from cache");
-            QVector<AgentInfo> agents;
-            for (const auto& v : root["agents"].toArray()) {
-                const QJsonObject o = v.toObject();
-                AgentInfo info;
-                info.id = o["id"].toString();
-                info.name = o["name"].toString();
-                info.description = o["description"].toString();
-                info.category = o["category"].toString();
-                info.provider = o["provider"].toString();
-                info.version = o["version"].toString();
-                info.config = o["config"].toObject();
-                for (const auto& c : o["capabilities"].toArray())
-                    info.capabilities.append(c.toString());
-                agents.append(info);
-            }
-            QVector<AgentCategory> categories;
-            for (const auto& v : root["categories"].toArray()) {
-                const QJsonObject o = v.toObject();
-                categories.append({o["name"].toString(), o["count"].toInt()});
-            }
-            emit agents_discovered(agents, categories);
-            return;
+                LOG_DEBUG("AgentService", "agents: serving from cache");
+                QVector<AgentInfo> agents;
+                for (const auto& v : root["agents"].toArray()) {
+                    const QJsonObject o = v.toObject();
+                    AgentInfo info;
+                    info.id = o["id"].toString();
+                    info.name = o["name"].toString();
+                    info.description = o["description"].toString();
+                    info.category = o["category"].toString();
+                    info.provider = o["provider"].toString();
+                    info.version = o["version"].toString();
+                    info.config = o["config"].toObject();
+                    for (const auto& c : o["capabilities"].toArray())
+                        info.capabilities.append(c.toString());
+                    agents.append(info);
+                }
+                QVector<AgentCategory> categories;
+                for (const auto& v : root["categories"].toArray()) {
+                    const QJsonObject o = v.toObject();
+                    categories.append({o["name"].toString(), o["count"].toInt()});
+                }
+                emit agents_discovered(agents, categories);
+                return;
             }
         }
     }
@@ -184,7 +182,6 @@ void AgentService::discover_agents() {
 }
 
 // ── Agent execution ──────────────────────────────────────────────────────────
-
 
 void AgentService::get_system_info() {
     {
@@ -332,6 +329,5 @@ void AgentService::set_active_config(const QString& id) {
 }
 
 // ── Structured output ────────────────────────────────────────────────────────
-
 
 } // namespace fincept::services

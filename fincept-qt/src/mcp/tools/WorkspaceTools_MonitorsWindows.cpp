@@ -7,9 +7,6 @@
 //
 // Part of the topic-based split of WorkspaceTools.cpp.
 
-#include "mcp/tools/WorkspaceTools.h"
-#include "mcp/tools/WorkspaceTools_internal.h"
-
 #include "app/DockScreenRouter.h"
 #include "app/TerminalShell.h"
 #include "app/WindowFrame.h"
@@ -30,6 +27,8 @@
 #include "core/window/WindowRegistry.h"
 #include "mcp/AsyncDispatch.h"
 #include "mcp/ToolSchemaBuilder.h"
+#include "mcp/tools/WorkspaceTools.h"
+#include "mcp/tools/WorkspaceTools_internal.h"
 #include "storage/workspace/CrashRecovery.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 
@@ -58,8 +57,7 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.description = "List all connected monitors with geometry, DPI, refresh rate, and primary flag.";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 const auto screens = QGuiApplication::screens();
                 QJsonArray arr;
@@ -77,8 +75,7 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.description = "Get the monitor hosting the currently-focused window.";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* aw = qApp->activeWindow();
                 QScreen* s = aw ? aw->screen() : QGuiApplication::primaryScreen();
@@ -94,8 +91,7 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.description = "Get a stable key identifying the current monitor topology (used for layout-variant matching).";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 // Build the topology key from sorted screen serial+name+geometry
                 // — matches the spirit of layout::MonitorTopologyKey::current_key
@@ -129,8 +125,7 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.description = "List every live WindowFrame (id, uuid, title, monitor index, geometry, flags).";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QJsonArray arr;
                 for (auto* w : WindowRegistry::instance().frames())
@@ -147,14 +142,14 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.description = "Get the currently focused (active) WindowFrame, or the first frame if none has focus.";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* aw = qApp->activeWindow();
                 auto* wf = qobject_cast<WindowFrame*>(aw);
                 if (!wf) {
                     auto frames = WindowRegistry::instance().frames();
-                    if (!frames.isEmpty()) wf = frames.first();
+                    if (!frames.isEmpty())
+                        wf = frames.first();
                 }
                 if (!wf) {
                     resolve(ToolResult::fail("No window available"));
@@ -174,10 +169,11 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("monitor_index", "Target monitor index (-1 = next available)").default_int(-1).min(-1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("monitor_index", "Target monitor index (-1 = next available)")
+                             .default_int(-1)
+                             .min(-1)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const int monitor_idx = args["monitor_index"].toInt(-1);
                 auto* frame = new WindowFrame(WindowFrame::next_window_id(), nullptr);
@@ -201,11 +197,8 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("window_id", "Window id").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().integer("window_id", "Window id").required().min(0).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const int id = args["window_id"].toInt();
                 if (WindowRegistry::instance().frame_count() <= 1) {
@@ -213,7 +206,10 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
                     return;
                 }
                 auto* w = frame_by_id(id);
-                if (!w) { resolve(ToolResult::fail("Window not found")); return; }
+                if (!w) {
+                    resolve(ToolResult::fail("Window not found"));
+                    return;
+                }
                 w->close();
                 resolve(ToolResult::ok("Window closed", QJsonObject{{"window_id", id}}));
             });
@@ -229,16 +225,25 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("window_id", "Window id").required().min(0)
-            .integer("monitor_index", "Target monitor index").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("window_id", "Window id")
+                             .required()
+                             .min(0)
+                             .integer("monitor_index", "Target monitor index")
+                             .required()
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* w = frame_by_id(args["window_id"].toInt());
-                if (!w) { resolve(ToolResult::fail("Window not found")); return; }
+                if (!w) {
+                    resolve(ToolResult::fail("Window not found"));
+                    return;
+                }
                 auto* s = screen_by_index(args["monitor_index"].toInt());
-                if (!s) { resolve(ToolResult::fail("Monitor not found")); return; }
+                if (!s) {
+                    resolve(ToolResult::fail("Monitor not found"));
+                    return;
+                }
                 w->move_to_screen(s);
                 resolve(ToolResult::ok("Window moved", window_to_json(w)));
             });
@@ -254,19 +259,28 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("window_id", "Window id").required().min(0)
-            .integer("x", "X coordinate").required()
-            .integer("y", "Y coordinate").required()
-            .integer("width", "Width in pixels").required().min(1)
-            .integer("height", "Height in pixels").required().min(1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("window_id", "Window id")
+                             .required()
+                             .min(0)
+                             .integer("x", "X coordinate")
+                             .required()
+                             .integer("y", "Y coordinate")
+                             .required()
+                             .integer("width", "Width in pixels")
+                             .required()
+                             .min(1)
+                             .integer("height", "Height in pixels")
+                             .required()
+                             .min(1)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* w = frame_by_id(args["window_id"].toInt());
-                if (!w) { resolve(ToolResult::fail("Window not found")); return; }
-                w->setGeometry(args["x"].toInt(), args["y"].toInt(),
-                                args["width"].toInt(), args["height"].toInt());
+                if (!w) {
+                    resolve(ToolResult::fail("Window not found"));
+                    return;
+                }
+                w->setGeometry(args["x"].toInt(), args["y"].toInt(), args["width"].toInt(), args["height"].toInt());
                 resolve(ToolResult::ok("Geometry updated", window_to_json(w)));
             });
         };
@@ -281,18 +295,22 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("window_id", "Window id").required().min(0)
-            .boolean("on", "true to enable always-on-top, false to disable").required()
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("window_id", "Window id")
+                             .required()
+                             .min(0)
+                             .boolean("on", "true to enable always-on-top, false to disable")
+                             .required()
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* w = frame_by_id(args["window_id"].toInt());
-                if (!w) { resolve(ToolResult::fail("Window not found")); return; }
+                if (!w) {
+                    resolve(ToolResult::fail("Window not found"));
+                    return;
+                }
                 const bool on = args["on"].toBool();
                 w->set_always_on_top(on);
-                resolve(ToolResult::ok(on ? "Always-on-top enabled" : "Always-on-top disabled",
-                                        window_to_json(w)));
+                resolve(ToolResult::ok(on ? "Always-on-top enabled" : "Always-on-top disabled", window_to_json(w)));
             });
         };
         tools.push_back(std::move(t));
@@ -305,14 +323,14 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.category = "workspace";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("window_id", "Window id").required().min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().integer("window_id", "Window id").required().min(0).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* w = frame_by_id(args["window_id"].toInt());
-                if (!w) { resolve(ToolResult::fail("Window not found")); return; }
+                if (!w) {
+                    resolve(ToolResult::fail("Window not found"));
+                    return;
+                }
                 w->toggle_focus_mode();
                 resolve(ToolResult::ok("Focus mode toggled", window_to_json(w)));
             });
@@ -328,10 +346,10 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .boolean("forward", "true to cycle forward, false to cycle backward").default_bool(true)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .boolean("forward", "true to cycle forward, false to cycle backward")
+                             .default_bool(true)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const bool forward = args["forward"].toBool(true);
                 auto frames = WindowRegistry::instance().frames();
@@ -341,9 +359,9 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
                 }
                 auto* aw = qobject_cast<WindowFrame*>(qApp->activeWindow());
                 int idx = frames.indexOf(aw);
-                if (idx < 0) idx = 0;
-                idx = forward ? (idx + 1) % frames.size()
-                              : (idx - 1 + frames.size()) % frames.size();
+                if (idx < 0)
+                    idx = 0;
+                idx = forward ? (idx + 1) % frames.size() : (idx - 1 + frames.size()) % frames.size();
                 auto* target = frames.at(idx);
                 target->raise();
                 target->activateWindow();
@@ -352,6 +370,5 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         };
         tools.push_back(std::move(t));
     }
-
 }
 } // namespace fincept::mcp::tools

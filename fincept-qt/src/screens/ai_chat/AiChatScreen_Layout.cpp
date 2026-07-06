@@ -5,15 +5,14 @@
 //
 // Part of the partial-class split of AiChatScreen.cpp.
 
-#include "screens/ai_chat/AiChatScreen.h"
-
-#include "screens/ai_chat/ChatBubbleFactory.h"
-#include "services/llm/LlmService.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "mcp/McpService.h"
+#include "screens/ai_chat/AiChatScreen.h"
+#include "screens/ai_chat/ChatBubbleFactory.h"
+#include "services/llm/LlmService.h"
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -262,10 +261,11 @@ QWidget* AiChatScreen::build_header_bar() {
     sidebar_toggle_btn_->setCursor(Qt::PointingHandCursor);
     sidebar_toggle_btn_->setToolTip(tr("Collapse sidebar  (Ctrl+B)"));
     sidebar_toggle_btn_->setShortcut(QKeySequence("Ctrl+B"));
-    sidebar_toggle_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                               "border-radius:0px;font-size:18px;font-weight:700;padding:0;}"
-                                               "QPushButton:hover{background:%3;color:%4;border-color:%4;}")
-                                           .arg(col::TEXT_SECONDARY(), col::BORDER_DIM(), col::BG_HOVER(), col::AMBER()));
+    sidebar_toggle_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "border-radius:0px;font-size:18px;font-weight:700;padding:0;}"
+                "QPushButton:hover{background:%3;color:%4;border-color:%4;}")
+            .arg(col::TEXT_SECONDARY(), col::BORDER_DIM(), col::BG_HOVER(), col::AMBER()));
     connect(sidebar_toggle_btn_, &QPushButton::clicked, this, &AiChatScreen::on_toggle_sidebar);
     hl->addWidget(sidebar_toggle_btn_);
 
@@ -367,12 +367,12 @@ QWidget* AiChatScreen::build_welcome() {
         QString text;
     };
     const Sug suggestions[] = {
-        {tr("Markets"),   col::CYAN(),     tr("Show me today's top market movers")},
-        {tr("News"),      col::AMBER(),    tr("Summarize the latest financial news")},
+        {tr("Markets"), col::CYAN(), tr("Show me today's top market movers")},
+        {tr("News"), col::AMBER(), tr("Summarize the latest financial news")},
         {tr("Portfolio"), col::POSITIVE(), tr("Analyze my portfolio performance")},
-        {tr("Analytics"), col::AMBER(),    tr("Calculate valuation for AAPL")},
-        {tr("Economics"), col::CYAN(),     tr("Current GDP and inflation data")},
-        {tr("Research"),  col::POSITIVE(), tr("Tech sector market trends")},
+        {tr("Analytics"), col::AMBER(), tr("Calculate valuation for AAPL")},
+        {tr("Economics"), col::CYAN(), tr("Current GDP and inflation data")},
+        {tr("Research"), col::POSITIVE(), tr("Tech sector market trends")},
     };
 
     for (int i = 0; i < 6; ++i) {

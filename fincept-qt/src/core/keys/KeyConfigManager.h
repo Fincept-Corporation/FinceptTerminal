@@ -7,6 +7,7 @@
 #include <QMap>
 #include <QObject>
 #include <QString>
+
 #include <optional>
 
 namespace fincept {
@@ -58,7 +59,7 @@ class KeyConfigManager : public QObject {
     void load_from_storage();
     void persist(KeyAction a, const QKeySequence& seq);
 
-    QMap<KeyAction, QAction*>     actions_;
+    QMap<KeyAction, QAction*> actions_;
     QMap<KeyAction, QKeySequence> defaults_;
 };
 

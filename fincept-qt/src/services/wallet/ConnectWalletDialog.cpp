@@ -60,9 +60,7 @@ ConnectWalletDialog::ConnectWalletDialog(QWidget* parent) : QDialog(parent) {
     row->addWidget(cancel_button_);
     layout->addLayout(row);
 
-    connect(cancel_button_, &QPushButton::clicked, this, [this]() {
-        fail_and_close(tr("cancelled by user"));
-    });
+    connect(cancel_button_, &QPushButton::clicked, this, [this]() { fail_and_close(tr("cancelled by user")); });
     connect(reopen_button_, &QPushButton::clicked, this, [this]() {
         if (!last_open_url_.isEmpty()) {
             QDesktopServices::openUrl(QUrl(last_open_url_));
@@ -80,11 +78,14 @@ void ConnectWalletDialog::changeEvent(QEvent* event) {
 
 void ConnectWalletDialog::retranslateUi() {
     setWindowTitle(tr("Connect Wallet"));
-    if (title_label_) title_label_->setText(tr("Connect your Solana wallet"));
+    if (title_label_)
+        title_label_->setText(tr("Connect your Solana wallet"));
     // status_label_ is stateful (handshake progress / error text set live in
     // start_handshake / on_payload) — do not clobber it here.
-    if (reopen_button_) reopen_button_->setText(tr("Reopen browser"));
-    if (cancel_button_) cancel_button_->setText(tr("Cancel"));
+    if (reopen_button_)
+        reopen_button_->setText(tr("Reopen browser"));
+    if (cancel_button_)
+        cancel_button_->setText(tr("Cancel"));
 }
 
 void ConnectWalletDialog::showEvent(QShowEvent* e) {
@@ -103,16 +104,12 @@ void ConnectWalletDialog::closeEvent(QCloseEvent* e) {
 
 void ConnectWalletDialog::start_handshake() {
     nonce_hex_ = make_random_nonce();
-    expected_message_ = QByteArrayLiteral(
-        "Fincept Terminal wallet-connect challenge. Nonce: ") + nonce_hex_;
+    expected_message_ = QByteArrayLiteral("Fincept Terminal wallet-connect challenge. Nonce: ") + nonce_hex_;
 
     bridge_ = new LocalWalletBridge(this);
-    connect(bridge_, &LocalWalletBridge::connect_payload, this,
-            &ConnectWalletDialog::on_payload);
-    connect(bridge_, &LocalWalletBridge::timed_out, this,
-            &ConnectWalletDialog::on_timed_out);
-    connect(bridge_, &LocalWalletBridge::bridge_error, this,
-            &ConnectWalletDialog::on_bridge_error);
+    connect(bridge_, &LocalWalletBridge::connect_payload, this, &ConnectWalletDialog::on_payload);
+    connect(bridge_, &LocalWalletBridge::timed_out, this, &ConnectWalletDialog::on_timed_out);
+    connect(bridge_, &LocalWalletBridge::bridge_error, this, &ConnectWalletDialog::on_bridge_error);
 
     last_open_url_ = bridge_->start(nonce_hex_, /*timeout_seconds=*/120);
     if (last_open_url_.isEmpty()) {
@@ -120,17 +117,15 @@ void ConnectWalletDialog::start_handshake() {
         return;
     }
     QDesktopServices::openUrl(QUrl(last_open_url_));
-    status_label_->setText(
-        tr("Browser opened. Approve the connection and the signature in your wallet."));
+    status_label_->setText(tr("Browser opened. Approve the connection and the signature in your wallet."));
 }
 
 void ConnectWalletDialog::on_payload(QString pubkey, QString signature, QString label) {
-    LOG_INFO("ConnectWalletDialog",
-             QStringLiteral("on_payload: pubkey=%1 sig_chars=%2 label=%3 msg_len=%4")
-                 .arg(pubkey)
-                 .arg(signature.size())
-                 .arg(label)
-                 .arg(expected_message_.size()));
+    LOG_INFO("ConnectWalletDialog", QStringLiteral("on_payload: pubkey=%1 sig_chars=%2 label=%3 msg_len=%4")
+                                        .arg(pubkey)
+                                        .arg(signature.size())
+                                        .arg(label)
+                                        .arg(expected_message_.size()));
     if (handshake_done_) {
         LOG_WARN("ConnectWalletDialog", "ignoring late payload (handshake already done)");
         return;

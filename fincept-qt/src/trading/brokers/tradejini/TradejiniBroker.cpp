@@ -445,8 +445,7 @@ ApiResponse<BrokerFunds> TradejiniBroker::get_funds(const BrokerCredentials& cre
     funds.available_balance = m.value("availMargin").toVariant().toDouble();
     funds.used_margin = m.value("marginUsed").toVariant().toDouble();
     funds.collateral = m.value("stockCollateral").toVariant().toDouble();
-    funds.total_balance = funds.available_balance + funds.used_margin +
-                          m.value("realizedPnl").toVariant().toDouble();
+    funds.total_balance = funds.available_balance + funds.used_margin + m.value("realizedPnl").toVariant().toDouble();
     funds.raw_data = m;
 
     return {true, funds, "", ts};
@@ -499,8 +498,8 @@ static QVector<BrokerCandle> tj_aggregate_to_daily(const QVector<BrokerCandle>& 
 // only ~30 days of 1-minute history, so synthesised daily history is limited.
 
 ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
-                                                               const QString& resolution, const QString& from_date,
-                                                               const QString& to_date) {
+                                                                const QString& resolution, const QString& from_date,
+                                                                const QString& to_date) {
     int64_t ts = now_ts();
 
     // Symbol format: "EXCHANGE:SYMID" or just the broker symbol id.
@@ -520,7 +519,10 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
     // Native intervals are integer minutes. Daily ("D"/"1D"/"DAY") has no native
     // endpoint, so fetch 1-minute bars and aggregate to daily after collection.
     static const QMap<QString, QString> interval_map = {
-        {"1", "1"}, {"5", "5"}, {"15", "15"}, {"30", "30"},
+        {"1", "1"},
+        {"5", "5"},
+        {"15", "15"},
+        {"30", "30"},
     };
     const QString res_upper = resolution.toUpper();
     const bool want_daily = (res_upper == "D" || res_upper == "1D" || res_upper == "DAY");
@@ -532,7 +534,9 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
     else
         return {false, std::nullopt,
                 QString("Tradejini chart supports minute intervals (1,5,15,30) and synthesised daily (D); "
-                        "resolution '%1' is not supported").arg(resolution), ts};
+                        "resolution '%1' is not supported")
+                    .arg(resolution),
+                ts};
 
     auto& http = BrokerHttp::instance();
 
@@ -665,9 +669,7 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
     std::sort(candles.begin(), candles.end(),
               [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
     candles.erase(std::unique(candles.begin(), candles.end(),
-                              [](const BrokerCandle& a, const BrokerCandle& b) {
-                                  return a.timestamp == b.timestamp;
-                              }),
+                              [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
                   candles.end());
 
     // Synthesise daily candles from the collected 1-minute bars when requested.

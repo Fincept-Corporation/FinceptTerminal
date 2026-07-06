@@ -24,7 +24,7 @@ namespace fincept::ui::algo {
 /// is shown only for multi-output indicators.
 class OperandEditor : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit OperandEditor(bool allow_value, QWidget* parent = nullptr);
 
     bool is_value_mode() const;
@@ -41,13 +41,13 @@ public:
     void set_field(const QString& f);
     void set_offset(int o);
 
-signals:
+  signals:
     void changed();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     void build_ui();
     void populate_indicators();
     void on_mode_changed();

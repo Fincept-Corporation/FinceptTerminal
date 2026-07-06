@@ -3,6 +3,7 @@
 #include "storage/sqlite/CacheDatabase.h"
 
 #include <QSqlQuery>
+
 #include <utility>
 
 namespace fincept {

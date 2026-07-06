@@ -13,6 +13,7 @@
 
 #include <QMap>
 #include <QPointer>
+#include <QSet>
 #include <QTimer>
 #include <QtConcurrent/QtConcurrent>
 
@@ -50,6 +51,7 @@ void UnifiedPortfolioService::activate() {
     auto& mgr = AccountManager::instance();
     auto& dsm = DataStreamManager::instance();
     bool set_changed = false;
+    QSet<QString> seen; // account_ids kept this pass — anything else is pruned below
 
     for (const auto& acct : mgr.active_accounts()) {
         auto* broker = BrokerRegistry::instance().get(acct.broker_id);
@@ -60,6 +62,7 @@ void UnifiedPortfolioService::activate() {
             continue; // user-confirmed scope: ₹ brokers only for now
 
         Acct& a = accts_[acct.account_id];
+        seen.insert(acct.account_id);
         if (a.label.isEmpty()) {
             a.label = QString("%1 — %2").arg(profile.display_name, acct.display_name);
             a.broker_id = acct.broker_id;
@@ -77,6 +80,22 @@ void UnifiedPortfolioService::activate() {
         if (auto* stream = dsm.stream_for(acct.account_id)) {
             a.positions = stream->cached_positions();
             a.holdings = stream->cached_holdings();
+        }
+    }
+
+    // Prune accounts that were removed/deactivated or fell out of scope — else
+    // their cached positions/holdings linger in accts_ and keep polluting the
+    // merged INVESTED/CURRENT/P&L totals (and EXIT on the phantom row fails with
+    // "Account not found") until app restart. Disconnect this service from the
+    // stale stream first so a late tick can't re-insert the entry.
+    for (auto it = accts_.begin(); it != accts_.end();) {
+        if (!seen.contains(it.key())) {
+            if (auto* stream = dsm.stream_for(it.key()))
+                QObject::disconnect(stream, nullptr, this, nullptr);
+            it = accts_.erase(it);
+            set_changed = true;
+        } else {
+            ++it;
         }
     }
 
@@ -156,15 +175,13 @@ QVector<UnifiedPortfolioService::AccountInfo> UnifiedPortfolioService::accounts(
     out.reserve(accts_.size());
     for (auto it = accts_.constBegin(); it != accts_.constEnd(); ++it)
         out.append({it.key(), it->label, it->broker_id, it->default_exchange, it->paper_portfolio_id, it->live});
-    std::sort(out.begin(), out.end(),
-              [](const AccountInfo& x, const AccountInfo& y) { return x.label < y.label; });
+    std::sort(out.begin(), out.end(), [](const AccountInfo& x, const AccountInfo& y) { return x.label < y.label; });
     return out;
 }
 
 // ── Ingestion ────────────────────────────────────────────────────────────────
 
-void UnifiedPortfolioService::ingest_positions(const QString& account_id,
-                                               const QVector<BrokerPosition>& positions) {
+void UnifiedPortfolioService::ingest_positions(const QString& account_id, const QVector<BrokerPosition>& positions) {
     auto it = accts_.find(account_id);
     if (it == accts_.end())
         return; // not a tracked (INR) account
@@ -176,8 +193,7 @@ void UnifiedPortfolioService::ingest_positions(const QString& account_id,
     emit positions_changed();
 }
 
-void UnifiedPortfolioService::ingest_holdings(const QString& account_id,
-                                              const QVector<BrokerHolding>& holdings) {
+void UnifiedPortfolioService::ingest_holdings(const QString& account_id, const QVector<BrokerHolding>& holdings) {
     auto it = accts_.find(account_id);
     if (it == accts_.end())
         return;
@@ -191,8 +207,7 @@ void UnifiedPortfolioService::ingest_holdings(const QString& account_id,
 
 // Per-tick patch: O(children of one symbol). Keep this lean — quote ticks are
 // unthrottled on the GUI thread (project hot-path constraint).
-void UnifiedPortfolioService::ingest_quote(const QString& account_id, const QString& symbol,
-                                           const BrokerQuote& quote) {
+void UnifiedPortfolioService::ingest_quote(const QString& account_id, const QString& symbol, const BrokerQuote& quote) {
     if (!accts_.contains(account_id) || quote.ltp <= 0.0)
         return;
 
@@ -265,8 +280,7 @@ void UnifiedPortfolioService::rebuild_positions() {
             c.qty = p.quantity;
             c.avg_price = p.avg_price;
             c.ltp = p.ltp;
-            c.pnl = p.pnl != 0.0 ? p.pnl
-                                 : (p.ltp > 0.0 ? (p.ltp - p.avg_price) * signed_qty(p.side, p.quantity) : 0.0);
+            c.pnl = p.pnl != 0.0 ? p.pnl : (p.ltp > 0.0 ? (p.ltp - p.avg_price) * signed_qty(p.side, p.quantity) : 0.0);
             c.day_pnl = p.day_pnl;
             row.children.append(c);
         }
@@ -433,8 +447,7 @@ void UnifiedPortfolioService::recompute_summary() {
 namespace {
 // Close one paper position: reduce-only opposite market order filled at the
 // position's marked price. Returns true on success, fills `err` otherwise.
-bool close_paper_position(const QString& portfolio_id, const QString& symbol, const QString& product,
-                          QString* err) {
+bool close_paper_position(const QString& portfolio_id, const QString& symbol, const QString& product, QString* err) {
     for (const PtPosition& p : pt_get_positions(portfolio_id)) {
         if (p.symbol != symbol || (!product.isEmpty() && p.product != product) || p.quantity == 0.0)
             continue;
@@ -444,12 +457,11 @@ bool close_paper_position(const QString& portfolio_id, const QString& symbol, co
                 *err = QString("%1: no price available for fill").arg(symbol);
             return false;
         }
-        const QString side = p.side.startsWith(QLatin1Char('s'), Qt::CaseInsensitive)
-                                 ? QStringLiteral("buy")
-                                 : QStringLiteral("sell");
+        const QString side =
+            p.side.startsWith(QLatin1Char('s'), Qt::CaseInsensitive) ? QStringLiteral("buy") : QStringLiteral("sell");
         try {
-            auto order = pt_place_order(portfolio_id, p.symbol, side, QStringLiteral("market"), p.quantity,
-                                        px, std::nullopt, /*reduce_only=*/true, QString(), p.product);
+            auto order = pt_place_order(portfolio_id, p.symbol, side, QStringLiteral("market"), p.quantity, px,
+                                        std::nullopt, /*reduce_only=*/true, QString(), p.product);
             pt_fill_order(order.id, px);
             return true;
         } catch (const std::exception& e) {
@@ -464,8 +476,8 @@ bool close_paper_position(const QString& portfolio_id, const QString& symbol, co
 }
 } // namespace
 
-void UnifiedPortfolioService::exit_child(const QString& account_id, const QString& symbol,
-                                         const QString& exchange, const QString& product) {
+void UnifiedPortfolioService::exit_child(const QString& account_id, const QString& symbol, const QString& exchange,
+                                         const QString& product) {
     if (mode_ == Mode::Paper) {
         const QString pid = accts_.value(account_id).paper_portfolio_id;
         QString err;
@@ -478,8 +490,8 @@ void UnifiedPortfolioService::exit_child(const QString& account_id, const QStrin
     auto future = QtConcurrent::run([self, account_id, symbol, exchange, product]() {
         auto r = UnifiedTrading::instance().close_position(account_id, symbol, exchange, product);
         const bool ok = r.success;
-        const QString msg = ok ? QString("Squared off %1").arg(symbol)
-                               : QString("Exit %1 failed: %2").arg(symbol, r.error);
+        const QString msg =
+            ok ? QString("Squared off %1").arg(symbol) : QString("Exit %1 failed: %2").arg(symbol, r.error);
         QMetaObject::invokeMethod(
             self,
             [self, ok, msg]() {
@@ -493,8 +505,7 @@ void UnifiedPortfolioService::exit_child(const QString& account_id, const QStrin
     Q_UNUSED(future)
 }
 
-void UnifiedPortfolioService::exit_symbol(const QString& symbol, const QString& exchange,
-                                          bool from_holdings) {
+void UnifiedPortfolioService::exit_symbol(const QString& symbol, const QString& exchange, bool from_holdings) {
     // Snapshot the children on the main thread before hopping to the worker.
     QVector<AggChild> children;
     const QVector<AggRow>& rows = from_holdings ? holdings_ : positions_;
@@ -517,12 +528,11 @@ void UnifiedPortfolioService::exit_symbol(const QString& symbol, const QString& 
                 errors << err;
         }
         const bool all_ok = errors.isEmpty();
-        emit action_finished(all_ok,
-                             all_ok ? QString("Squared off %1 across %2 paper account(s)").arg(symbol).arg(ok_count)
-                                    : QString("%1 of %2 squared off; %3")
-                                          .arg(ok_count)
-                                          .arg(int(children.size()))
-                                          .arg(errors.join("; ")));
+        emit action_finished(
+            all_ok,
+            all_ok
+                ? QString("Squared off %1 across %2 paper account(s)").arg(symbol).arg(ok_count)
+                : QString("%1 of %2 squared off; %3").arg(ok_count).arg(int(children.size())).arg(errors.join("; ")));
         refresh_all();
         return;
     }
@@ -539,9 +549,9 @@ void UnifiedPortfolioService::exit_symbol(const QString& symbol, const QString& 
                 errors << QString("%1: %2").arg(c.broker_label, r.error);
         }
         const bool all_ok = errors.isEmpty();
-        const QString msg = all_ok
-            ? QString("Squared off %1 across %2 account(s)").arg(symbol).arg(ok_count)
-            : QString("%1 of %2 squared off; %3").arg(ok_count).arg(int(children.size())).arg(errors.join("; "));
+        const QString msg =
+            all_ok ? QString("Squared off %1 across %2 account(s)").arg(symbol).arg(ok_count)
+                   : QString("%1 of %2 squared off; %3").arg(ok_count).arg(int(children.size())).arg(errors.join("; "));
         QMetaObject::invokeMethod(
             self,
             [self, all_ok, msg]() {
@@ -573,9 +583,8 @@ void UnifiedPortfolioService::square_off_all_positions() {
             }
         }
         const bool all_ok = errors.isEmpty();
-        emit action_finished(all_ok,
-                             all_ok ? QString("Squared off %1 paper position(s)").arg(closed)
-                                    : QString("Closed %1; errors: %2").arg(closed).arg(errors.join("; ")));
+        emit action_finished(all_ok, all_ok ? QString("Squared off %1 paper position(s)").arg(closed)
+                                            : QString("Closed %1; errors: %2").arg(closed).arg(errors.join("; ")));
         refresh_all();
         return;
     }
@@ -627,8 +636,7 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
             if (auto* stream = DataStreamManager::instance().stream_for(account_id))
                 px = stream->cached_quote(order.symbol).ltp;
             if (px <= 0.0) {
-                emit action_finished(false,
-                                     QString("No live price for %1 yet — wait for quotes").arg(order.symbol));
+                emit action_finished(false, QString("No live price for %1 yet — wait for quotes").arg(order.symbol));
                 return;
             }
         }
@@ -636,15 +644,12 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
                                 : order.product_type == ProductType::Margin ? QStringLiteral("NRML")
                                                                             : QStringLiteral("MIS");
         try {
-            auto pt_order = pt_place_order(pid, order.symbol, side,
-                                           is_market ? QStringLiteral("market") : QStringLiteral("limit"),
-                                           order.quantity, px, std::nullopt, /*reduce_only=*/false,
-                                           order.exchange, product);
+            auto pt_order =
+                pt_place_order(pid, order.symbol, side, is_market ? QStringLiteral("market") : QStringLiteral("limit"),
+                               order.quantity, px, std::nullopt, /*reduce_only=*/false, order.exchange, product);
             if (is_market) {
                 pt_fill_order(pt_order.id, px);
-                emit action_finished(true, QString("Paper order filled: %1 @ %2")
-                                               .arg(order.symbol)
-                                               .arg(px, 0, 'f', 2));
+                emit action_finished(true, QString("Paper order filled: %1 @ %2").arg(order.symbol).arg(px, 0, 'f', 2));
             } else {
                 OrderMatcher::instance().add_order(pt_order);
                 emit action_finished(true, QString("Paper order queued: %1").arg(order.symbol));
@@ -659,9 +664,8 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
     QPointer<UnifiedPortfolioService> self(this);
     auto future = QtConcurrent::run([self, account_id, order]() {
         auto r = UnifiedTrading::instance().place_order(account_id, order);
-        const QString msg = r.success
-            ? QString("Order placed: %1 (%2)").arg(order.symbol, r.order_id)
-            : QString("Order failed for %1: %2").arg(order.symbol, r.message);
+        const QString msg = r.success ? QString("Order placed: %1 (%2)").arg(order.symbol, r.order_id)
+                                      : QString("Order failed for %1: %2").arg(order.symbol, r.message);
         QMetaObject::invokeMethod(
             self,
             [self, ok = r.success, msg]() {

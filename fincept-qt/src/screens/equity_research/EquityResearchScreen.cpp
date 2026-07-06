@@ -14,9 +14,7 @@
 #include "core/symbol/SymbolDragSource.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
-#include "trading/AccountManager.h"
-#include "trading/BrokerRegistry.h"
-#include "trading/BrokerTopic.h"
+#include "python/PythonRunner.h"
 #include "screens/equity_research/EquityAnalysisTab.h"
 #include "screens/equity_research/EquityFinancialsTab.h"
 #include "screens/equity_research/EquityNewsTab.h"
@@ -24,12 +22,13 @@
 #include "screens/equity_research/EquityPeersTab.h"
 #include "screens/equity_research/EquitySentimentTab.h"
 #include "screens/equity_research/EquityTechnicalsTab.h"
-
 #include "screens/equity_research/EquityValuationTab.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/equity/EquityResearchService.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
+#include "trading/BrokerTopic.h"
 #include "ui/theme/Theme.h"
-#include "python/PythonRunner.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -66,8 +65,8 @@ namespace fincept::screens {
 // Think of it as the "setup" function for the whole screen.
 // ═══════════════════════════════════════════════════════════════════════════════
 EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
-    build_ui();        // Step 1: build all the visual widgets
-    retranslateUi();   // Step 2: set all the text labels (supports multiple languages)
+    build_ui();      // Step 1: build all the visual widgets
+    retranslateUi(); // Step 2: set all the text labels (supports multiple languages)
 
     // A timer that refreshes the stock quote every 30 seconds automatically.
     // It only starts when the screen is visible (see showEvent below).
@@ -85,8 +84,8 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::equity::EquityResearchService::quote_loaded, this, &EquityResearchScreen::on_quote_loaded);
     connect(&svc, &services::equity::EquityResearchService::info_loaded, this, &EquityResearchScreen::on_info_loaded);
     // Financials feed the Valuation tab (DCF / scoring models).
-    connect(&svc, &services::equity::EquityResearchService::financials_loaded,
-            this, &EquityResearchScreen::on_financials_loaded);
+    connect(&svc, &services::equity::EquityResearchService::financials_loaded, this,
+            &EquityResearchScreen::on_financials_loaded);
     // Reset the quote bar off "Loading…" when the quote fetch fails (it's otherwise
     // updated only on the success path, so a failed symbol shows "Loading…" forever).
     connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
@@ -151,16 +150,15 @@ void EquityResearchScreen::hideEvent(QHideEvent* e) {
 // ═══════════════════════════════════════════════════════════════════════════════
 void EquityResearchScreen::build_ui() {
     // Set dark background and primary text color for the whole screen
-    setStyleSheet(QString("background:%1; color:%2;")
-        .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+    setStyleSheet(QString("background:%1; color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
 
     // QVBoxLayout stacks children vertically (top to bottom)
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    vl->addWidget(build_title_bar());  // row 1: "EQUITY RESEARCH  AAPL  [BACKTEST] [CSV]"
-    vl->addWidget(build_quote_bar());  // row 2: price, change %, volume, H/L, mkt cap
+    vl->addWidget(build_title_bar()); // row 1: "EQUITY RESEARCH  AAPL  [BACKTEST] [CSV]"
+    vl->addWidget(build_quote_bar()); // row 2: price, change %, volume, H/L, mkt cap
 
     // ── Tab Widget ───────────────────────────────────────────────────────────
     // QTabWidget is the clickable tabs bar + the content area below it.
@@ -182,14 +180,14 @@ void EquityResearchScreen::build_ui() {
         QTabBar::tab:selected { color:%4; border-bottom:2px solid %4; }
         QTabBar::tab:hover    { color:%5; }
     )")
-    .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
-         ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
+                                   .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                        ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
 
     // Create one instance of each tab widget.
     // Each tab is its own class that knows how to display its own content.
-    overview_tab_   = new EquityOverviewTab;
+    overview_tab_ = new EquityOverviewTab;
     financials_tab_ = new EquityFinancialsTab;
-    analysis_tab_   = new EquityAnalysisTab;
+    analysis_tab_ = new EquityAnalysisTab;
     technicals_tab_ = new EquityTechnicalsTab;
     peers_tab_ = new EquityPeersTab;
     news_tab_ = new EquityNewsTab;
@@ -198,20 +196,19 @@ void EquityResearchScreen::build_ui() {
 
     // Tab titles are re-set by retranslateUi(); add with placeholder strings
     // first so the tab order remains fixed regardless of locale text width.
-    tab_widget_->addTab(overview_tab_,   QString());  // index 0
-    tab_widget_->addTab(financials_tab_, QString());  // index 1
-    tab_widget_->addTab(analysis_tab_,   QString());  // index 2
-    tab_widget_->addTab(technicals_tab_, QString());  // index 3
-    tab_widget_->addTab(peers_tab_,      QString());  // index 4
-    tab_widget_->addTab(news_tab_,       QString());  // index 5
-    tab_widget_->addTab(sentiment_tab_,  QString());  // index 6
-    tab_widget_->addTab(valuation_tab_,  QString());  // index 7 ← new
+    tab_widget_->addTab(overview_tab_, QString());   // index 0
+    tab_widget_->addTab(financials_tab_, QString()); // index 1
+    tab_widget_->addTab(analysis_tab_, QString());   // index 2
+    tab_widget_->addTab(technicals_tab_, QString()); // index 3
+    tab_widget_->addTab(peers_tab_, QString());      // index 4
+    tab_widget_->addTab(news_tab_, QString());       // index 5
+    tab_widget_->addTab(sentiment_tab_, QString());  // index 6
+    tab_widget_->addTab(valuation_tab_, QString());  // index 7 ← new
 
     // When the user clicks a different tab, call on_tab_changed()
-    connect(tab_widget_, &QTabWidget::currentChanged,
-            this, &EquityResearchScreen::on_tab_changed);
+    connect(tab_widget_, &QTabWidget::currentChanged, this, &EquityResearchScreen::on_tab_changed);
 
-    vl->addWidget(tab_widget_, 1);  // "1" = stretch factor, fills remaining height
+    vl->addWidget(tab_widget_, 1); // "1" = stretch factor, fills remaining height
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -223,8 +220,7 @@ QWidget* EquityResearchScreen::build_title_bar() {
     auto* container = new QWidget(this);
     container->setFixedHeight(48);
     container->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     // QHBoxLayout stacks children horizontally (left to right)
     auto* hl = new QHBoxLayout(container);
@@ -234,20 +230,14 @@ QWidget* EquityResearchScreen::build_title_bar() {
     // "EQUITY RESEARCH" text on the left
     title_label_ = new QLabel;
     title_label_->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:700; letter-spacing:2px;")
-        .arg(ui::colors::AMBER()));
+        QString("color:%1; font-size:14px; font-weight:700; letter-spacing:2px;").arg(ui::colors::AMBER()));
     hl->addWidget(title_label_);
 
     // Current symbol (e.g. "AAPL") — draggable to other panels
     symbol_label_ = new QLabel;
-    symbol_label_->setStyleSheet(
-        QString("color:%1; font-size:14px; font-weight:600;")
-        .arg(ui::colors::TEXT_PRIMARY()));
+    symbol_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
     symbol_label_->setCursor(Qt::OpenHandCursor);
-    symbol_dnd::installDragSource(
-        symbol_label_,
-        [this]() { return current_symbol(); },
-        link_group_);
+    symbol_dnd::installDragSource(symbol_label_, [this]() { return current_symbol(); }, link_group_);
     hl->addWidget(symbol_label_);
 
     // BUY / SELL — visible only when a broker is connected (paper or live) and the
@@ -282,20 +272,20 @@ QWidget* EquityResearchScreen::build_title_bar() {
         QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                 "padding:0 10px; font-size:%3px; font-family:%4; font-weight:700; letter-spacing:0.5px; }"
                 "QPushButton:hover { background:%5; color:%6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
-        .arg(ui::fonts::TINY)
-        .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
+            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
     connect(backtest_btn, &QPushButton::clicked, this, [this]() {
-        if (current_symbol_.isEmpty()) return;
+        if (current_symbol_.isEmpty())
+            return;
         QJsonObject config;
         QJsonArray symbols;
         symbols.append(current_symbol_);
         config["symbols"] = symbols;
         config["autoRun"] = true;
         services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
-        EventBus::instance().publish("nav.switch_screen",
-            {{"screen_id", QString("backtesting")}, {"exclusive", true}});
+        EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}, {"exclusive", true}});
     });
     hl->addWidget(backtest_btn);
 
@@ -308,18 +298,17 @@ QWidget* EquityResearchScreen::build_title_bar() {
         QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
                 "padding:0 10px; font-size:%3px; font-family:%4; font-weight:700; letter-spacing:0.5px; }"
                 "QPushButton:hover { background:%5; color:%6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
-        .arg(ui::fonts::TINY)
-        .arg(ui::fonts::DATA_FAMILY)
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
+            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
     connect(csv_btn, &QPushButton::clicked, this, &EquityResearchScreen::on_download_csv_clicked);
     hl->addWidget(csv_btn);
 
-    hl->addStretch();  // pushes the hint label to the far right
+    hl->addStretch(); // pushes the hint label to the far right
 
     hint_label_ = new QLabel;
-    hint_label_->setStyleSheet(
-        QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY()));
+    hint_label_->setStyleSheet(QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(hint_label_);
 
     return container;
@@ -333,8 +322,7 @@ QWidget* EquityResearchScreen::build_quote_bar() {
     auto* bar = new QFrame;
     bar->setFixedHeight(44);
     bar->setStyleSheet(
-        QString("background:%1; border-bottom:1px solid %2;")
-        .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        QString("background:%1; border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(16, 0, 16, 0);
@@ -355,13 +343,13 @@ QWidget* EquityResearchScreen::build_quote_bar() {
 
     // Each make_label call creates one piece of the quote bar and saves
     // the pointer so we can update the text later when data arrives.
-    sym_label_    = make_label(QStringLiteral("—"), ui::colors::AMBER());
-    price_label_  = make_label(QStringLiteral("—"), ui::colors::TEXT_PRIMARY());
+    sym_label_ = make_label(QStringLiteral("—"), ui::colors::AMBER());
+    price_label_ = make_label(QStringLiteral("—"), ui::colors::TEXT_PRIMARY());
     change_label_ = make_label(QStringLiteral("—"));
-    vol_label_    = make_label(QString());
-    hl_label_     = make_label(QString());
+    vol_label_ = make_label(QString());
+    hl_label_ = make_label(QString());
     mktcap_label_ = make_label(QString());
-    rec_label_    = make_label(QStringLiteral("—"));
+    rec_label_ = make_label(QStringLiteral("—"));
     hl->addStretch();
 
     return bar;
@@ -387,10 +375,8 @@ void EquityResearchScreen::on_info_loaded(services::equity::StockInfo info) {
     // Update the market cap label in the title bar
     if (mktcap_label_) {
         if (info.market_cap > 0) {
-            const QString cs = EquityOverviewTab::currency_symbol(
-                info.currency.isEmpty() ? "USD" : info.currency);
-            mktcap_label_->setText(
-                tr("MKT CAP: %1%2").arg(cs, EquityOverviewTab::fmt_large(info.market_cap)));
+            const QString cs = EquityOverviewTab::currency_symbol(info.currency.isEmpty() ? "USD" : info.currency);
+            mktcap_label_->setText(tr("MKT CAP: %1%2").arg(cs, EquityOverviewTab::fmt_large(info.market_cap)));
         } else {
             mktcap_label_->setText(tr("MKT CAP: %1").arg(QStringLiteral("—")));
         }
@@ -414,7 +400,6 @@ void EquityResearchScreen::on_tab_changed(int index) {
 
     auto& svc = services::equity::EquityResearchService::instance();
 
-    
     switch (index) {
         case 1:
             financials_tab_->set_symbol(current_symbol_);
@@ -444,7 +429,7 @@ void EquityResearchScreen::on_tab_changed(int index) {
             svc.fetch_financials(current_symbol_);
             break;
         default:
-            break;  // case 0 (Overview) needs no lazy load
+            break; // case 0 (Overview) needs no lazy load
     }
 }
 
@@ -480,8 +465,7 @@ void EquityResearchScreen::load_symbol(const QString& symbol) {
 
     // Broadcast the new symbol to other linked panels (watchlist, trading, etc.)
     if (link_group_ != SymbolGroup::None) {
-        SymbolContext::instance().set_group_symbol(
-            link_group_, SymbolRef::equity(symbol), this);
+        SymbolContext::instance().set_group_symbol(link_group_, SymbolRef::equity(symbol), this);
     }
 }
 
@@ -520,27 +504,28 @@ void EquityResearchScreen::update_quote_bar(const services::equity::QuoteData& q
     price_label_->setText(QString("%1%2").arg(cs).arg(q.price, 0, 'f', 2));
 
     bool up = q.change_pct >= 0;
-    QString arrow    = up ? "\xe2\x96\xb2" : "\xe2\x96\xbc";  // ▲ or ▼
+    QString arrow = up ? "\xe2\x96\xb2" : "\xe2\x96\xbc"; // ▲ or ▼
     QString chg_color = up ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
     change_label_->setText(QString("%1%2  %3%4%")
-        .arg(up ? "+" : "")
-        .arg(q.change, 0, 'f', 2)
-        .arg(arrow)
-        .arg(qAbs(q.change_pct), 0, 'f', 2));
-    change_label_->setStyleSheet(
-        QString("font-size:13px; font-weight:600; color:%1;").arg(chg_color));
+                               .arg(up ? "+" : "")
+                               .arg(q.change, 0, 'f', 2)
+                               .arg(arrow)
+                               .arg(qAbs(q.change_pct), 0, 'f', 2));
+    change_label_->setStyleSheet(QString("font-size:13px; font-weight:600; color:%1;").arg(chg_color));
 
     // Format volume: show 1.2B, 450M, 12K instead of raw numbers
     auto fmt_vol = [](double v) -> QString {
-        if (v >= 1e9) return QString("%1B").arg(v / 1e9, 0, 'f', 1);
-        if (v >= 1e6) return QString("%1M").arg(v / 1e6, 0, 'f', 1);
-        if (v >= 1e3) return QString("%1K").arg(v / 1e3, 0, 'f', 0);
+        if (v >= 1e9)
+            return QString("%1B").arg(v / 1e9, 0, 'f', 1);
+        if (v >= 1e6)
+            return QString("%1M").arg(v / 1e6, 0, 'f', 1);
+        if (v >= 1e3)
+            return QString("%1K").arg(v / 1e3, 0, 'f', 0);
         return QString::number(static_cast<qint64>(v));
     };
 
     vol_label_->setText(tr("VOL: %1").arg(fmt_vol(q.volume)));
-    hl_label_->setText(tr("H:%1%2  L:%1%3")
-        .arg(cs).arg(q.high, 0, 'f', 2).arg(q.low, 0, 'f', 2));
+    hl_label_->setText(tr("H:%1%2  L:%1%3").arg(cs).arg(q.high, 0, 'f', 2).arg(q.low, 0, 'f', 2));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -565,8 +550,7 @@ void EquityResearchScreen::on_download_csv_clicked() {
     root->setContentsMargins(16, 16, 16, 16);
     root->setSpacing(10);
 
-    auto* title = new QLabel(
-        tr("Export Yahoo Finance price history for <b>%1</b> as CSV.").arg(symbol), dlg);
+    auto* title = new QLabel(tr("Export Yahoo Finance price history for <b>%1</b> as CSV.").arg(symbol), dlg);
     title->setWordWrap(true);
     root->addWidget(title);
 
@@ -584,8 +568,8 @@ void EquityResearchScreen::on_download_csv_clicked() {
     form->addRow(tr("Interval:"), interval_combo);
     root->addLayout(form);
 
-    auto* note = new QLabel(
-        tr("Note: intraday intervals (below 1d) are only available for roughly the last 60 days."), dlg);
+    auto* note =
+        new QLabel(tr("Note: intraday intervals (below 1d) are only available for roughly the last 60 days."), dlg);
     note->setWordWrap(true);
     note->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     root->addWidget(note);
@@ -597,7 +581,7 @@ void EquityResearchScreen::on_download_csv_clicked() {
 
     auto* buttons = new QHBoxLayout();
     buttons->addStretch();
-    auto* cancel_btn   = new QPushButton(tr("Cancel"), dlg);
+    auto* cancel_btn = new QPushButton(tr("Cancel"), dlg);
     auto* download_btn = new QPushButton(tr("Download"), dlg);
     download_btn->setDefault(true);
     buttons->addWidget(cancel_btn);
@@ -607,84 +591,78 @@ void EquityResearchScreen::on_download_csv_clicked() {
     connect(cancel_btn, &QPushButton::clicked, dlg, &QDialog::reject);
 
     connect(download_btn, &QPushButton::clicked, dlg,
-        [dlg, symbol, period_combo, interval_combo, status, download_btn, cancel_btn]() {
-            const QString period   = period_combo->currentText();
-            const QString interval = interval_combo->currentText();
+            [dlg, symbol, period_combo, interval_combo, status, download_btn, cancel_btn]() {
+                const QString period = period_combo->currentText();
+                const QString interval = interval_combo->currentText();
 
-            auto set_busy = [=](bool busy) {
-                download_btn->setEnabled(!busy);
-                cancel_btn->setEnabled(!busy);
-                period_combo->setEnabled(!busy);
-                interval_combo->setEnabled(!busy);
-            };
-            set_busy(true);
-            status->setVisible(true);
-            status->setStyleSheet(
-                QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
-            status->setText(tr("Fetching from Yahoo Finance…"));
+                auto set_busy = [=](bool busy) {
+                    download_btn->setEnabled(!busy);
+                    cancel_btn->setEnabled(!busy);
+                    period_combo->setEnabled(!busy);
+                    interval_combo->setEnabled(!busy);
+                };
+                set_busy(true);
+                status->setVisible(true);
+                status->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
+                status->setText(tr("Fetching from Yahoo Finance…"));
 
-            auto finish = [=](const QJsonArray& candles) {
-                if (candles.isEmpty()) {
-                    status->setStyleSheet(
-                        QString("color:%1; font-size:11px;").arg(ui::colors::NEGATIVE()));
-                    status->setText(tr("No data returned for %1 (%2). Try a longer period or a daily interval.")
-                        .arg(symbol, interval));
-                    set_busy(false);
-                    return;
-                }
+                auto finish = [=](const QJsonArray& candles) {
+                    if (candles.isEmpty()) {
+                        status->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::NEGATIVE()));
+                        status->setText(tr("No data returned for %1 (%2). Try a longer period or a daily interval.")
+                                            .arg(symbol, interval));
+                        set_busy(false);
+                        return;
+                    }
 
-                QString safe;
-                for (const QChar ch : symbol)
-                    safe += ch.isLetterOrNumber() ? ch : QChar('_');
-                const QString suggested =
-                    QStringLiteral("%1_%2_%3.csv").arg(safe, period, interval);
-                const QString path = QFileDialog::getSaveFileName(
-                    dlg, tr("Save Price Data"), suggested, tr("CSV Files (*.csv)"));
-                if (path.isEmpty()) {
-                    status->setText(tr("Save cancelled."));
-                    set_busy(false);
-                    return;
-                }
+                    QString safe;
+                    for (const QChar ch : symbol)
+                        safe += ch.isLetterOrNumber() ? ch : QChar('_');
+                    const QString suggested = QStringLiteral("%1_%2_%3.csv").arg(safe, period, interval);
+                    const QString path =
+                        QFileDialog::getSaveFileName(dlg, tr("Save Price Data"), suggested, tr("CSV Files (*.csv)"));
+                    if (path.isEmpty()) {
+                        status->setText(tr("Save cancelled."));
+                        set_busy(false);
+                        return;
+                    }
 
-                QFile file(path);
-                if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-                    QMessageBox::warning(dlg, tr("Export failed"),
-                        tr("Could not open the file for writing:\n%1").arg(file.errorString()));
-                    set_busy(false);
-                    return;
-                }
-                QTextStream out(&file);
-                out.setEncoding(QStringConverter::Utf8);
-                out << "datetime,timestamp,open,high,low,close,volume\n";
-                for (const auto& v : candles) {
-                    const QJsonObject c = v.toObject();
-                    const auto ts = static_cast<qint64>(c.value("timestamp").toDouble());
-                    const QString dt = QDateTime::fromSecsSinceEpoch(ts, QTimeZone::UTC)
-                        .toString("yyyy-MM-dd HH:mm:ss");
-                    out << dt << ',' << ts << ','
-                        << c.value("open").toDouble()  << ','
-                        << c.value("high").toDouble()  << ','
-                        << c.value("low").toDouble()   << ','
-                        << c.value("close").toDouble() << ','
-                        << static_cast<qint64>(c.value("volume").toDouble()) << '\n';
-                }
-                file.close();
-                QMessageBox::information(dlg, tr("Download complete"),
-                    tr("Saved %1 rows for %2 to:\n%3").arg(candles.size()).arg(symbol, path));
-                dlg->accept();
-            };
+                    QFile file(path);
+                    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                        QMessageBox::warning(dlg, tr("Export failed"),
+                                             tr("Could not open the file for writing:\n%1").arg(file.errorString()));
+                        set_busy(false);
+                        return;
+                    }
+                    QTextStream out(&file);
+                    out.setEncoding(QStringConverter::Utf8);
+                    out << "datetime,timestamp,open,high,low,close,volume\n";
+                    for (const auto& v : candles) {
+                        const QJsonObject c = v.toObject();
+                        const auto ts = static_cast<qint64>(c.value("timestamp").toDouble());
+                        const QString dt =
+                            QDateTime::fromSecsSinceEpoch(ts, QTimeZone::UTC).toString("yyyy-MM-dd HH:mm:ss");
+                        out << dt << ',' << ts << ',' << c.value("open").toDouble() << ',' << c.value("high").toDouble()
+                            << ',' << c.value("low").toDouble() << ',' << c.value("close").toDouble() << ','
+                            << static_cast<qint64>(c.value("volume").toDouble()) << '\n';
+                    }
+                    file.close();
+                    QMessageBox::information(dlg, tr("Download complete"),
+                                             tr("Saved %1 rows for %2 to:\n%3").arg(candles.size()).arg(symbol, path));
+                    dlg->accept();
+                };
 
-            // QPointer guard: if the dialog is closed before the Python call
-            // returns, "guard" becomes null and the callback safely does nothing.
-            QPointer<QDialog> guard(dlg);
-            python::PythonRunner::instance().run(
-                "yfinance_data.py", {"historical_period", symbol, period, interval},
-                [guard, finish](python::PythonResult res) {
-                    if (!guard) return;
-                    finish(QJsonDocument::fromJson(
-                        python::extract_json(res.output).toUtf8()).array());
-                });
-        });
+                // QPointer guard: if the dialog is closed before the Python call
+                // returns, "guard" becomes null and the callback safely does nothing.
+                QPointer<QDialog> guard(dlg);
+                python::PythonRunner::instance().run(
+                    "yfinance_data.py", {"historical_period", symbol, period, interval},
+                    [guard, finish](python::PythonResult res) {
+                        if (!guard)
+                            return;
+                        finish(QJsonDocument::fromJson(python::extract_json(res.output).toUtf8()).array());
+                    });
+            });
 
     dlg->exec();
     dlg->deleteLater();
@@ -704,13 +682,19 @@ void EquityResearchScreen::changeEvent(QEvent* event) {
 }
 
 void EquityResearchScreen::retranslateUi() {
-    if (title_label_)  title_label_->setText(tr("EQUITY RESEARCH"));
-    if (symbol_label_) symbol_label_->setToolTip(tr("Drag to broadcast this symbol to any panel"));
-    if (hint_label_)   hint_label_->setText(tr("Use /stock, /fund, /index... in command bar to search"));
+    if (title_label_)
+        title_label_->setText(tr("EQUITY RESEARCH"));
+    if (symbol_label_)
+        symbol_label_->setToolTip(tr("Drag to broadcast this symbol to any panel"));
+    if (hint_label_)
+        hint_label_->setText(tr("Use /stock, /fund, /index... in command bar to search"));
 
-    if (vol_label_)    vol_label_->setText(tr("VOL: %1").arg(QStringLiteral("—")));
-    if (hl_label_)     hl_label_->setText(tr("H/L: %1").arg(QStringLiteral("—")));
-    if (mktcap_label_) mktcap_label_->setText(tr("MKT CAP: %1").arg(QStringLiteral("—")));
+    if (vol_label_)
+        vol_label_->setText(tr("VOL: %1").arg(QStringLiteral("—")));
+    if (hl_label_)
+        hl_label_->setText(tr("H/L: %1").arg(QStringLiteral("—")));
+    if (mktcap_label_)
+        mktcap_label_->setText(tr("MKT CAP: %1").arg(QStringLiteral("—")));
 
     if (tab_widget_) {
         tab_widget_->setTabText(0, tr("Overview"));
@@ -730,12 +714,11 @@ void EquityResearchScreen::retranslateUi() {
 // when the user closes and reopens the panel.
 // ═══════════════════════════════════════════════════════════════════════════════
 QVariantMap EquityResearchScreen::save_state() const {
-    QVariantMap state{
-        {"symbol",    current_symbol_},
-        {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}
-    };
-    if (peers_tab_) state["peers"] = peers_tab_->peers_text();
-    if (news_tab_) state["news_provider"] = news_tab_->provider_key();
+    QVariantMap state{{"symbol", current_symbol_}, {"tab_index", tab_widget_ ? tab_widget_->currentIndex() : 0}};
+    if (peers_tab_)
+        state["peers"] = peers_tab_->peers_text();
+    if (news_tab_)
+        state["news_provider"] = news_tab_->provider_key();
     return state;
 }
 
@@ -767,9 +750,9 @@ void EquityResearchScreen::restore_state(const QVariantMap& state) {
 void EquityResearchScreen::hub_subscribe_broker_quote() {
     hub_unsubscribe_broker_quote();
 
-    if (current_symbol_.isEmpty()) return;
-    if (!current_symbol_.endsWith(QStringLiteral(".NS")) &&
-        !current_symbol_.endsWith(QStringLiteral(".BO")))
+    if (current_symbol_.isEmpty())
+        return;
+    if (!current_symbol_.endsWith(QStringLiteral(".NS")) && !current_symbol_.endsWith(QStringLiteral(".BO")))
         return;
 
     // Find a connected Indian-region broker account (any — not only Fyers). NSE/
@@ -792,31 +775,32 @@ void EquityResearchScreen::hub_subscribe_broker_quote() {
         return;
 
     QString broker_sym = current_symbol_.left(current_symbol_.length() - 3);
-    const QString topic = trading::broker_topic(quote_broker_id, quote_account_id,
-                                                QStringLiteral("quote"), broker_sym);
+    const QString topic = trading::broker_topic(quote_broker_id, quote_account_id, QStringLiteral("quote"), broker_sym);
     const QString sym = current_symbol_;
 
     datahub::DataHub::instance().subscribe(this, topic, [this, sym](const QVariant& v) {
-        if (!v.canConvert<trading::BrokerQuote>()) return;
+        if (!v.canConvert<trading::BrokerQuote>())
+            return;
         const auto bq = v.value<trading::BrokerQuote>();
         services::equity::QuoteData qd;
-        qd.symbol     = sym;
-        qd.price      = bq.ltp;
-        qd.change     = bq.change;
+        qd.symbol = sym;
+        qd.price = bq.ltp;
+        qd.change = bq.change;
         qd.change_pct = bq.change_pct;
-        qd.high       = bq.high;
-        qd.low        = bq.low;
-        qd.volume     = bq.volume;
-        qd.timestamp  = bq.timestamp;
+        qd.high = bq.high;
+        qd.low = bq.low;
+        qd.volume = bq.volume;
+        qd.timestamp = bq.timestamp;
         update_quote_bar(qd);
     });
 
-    refresh_timer_->stop();  // broker stream replaces polling
+    refresh_timer_->stop(); // broker stream replaces polling
     hub_broker_active_ = true;
 }
 
 void EquityResearchScreen::hub_unsubscribe_broker_quote() {
-    if (!hub_broker_active_) return;
+    if (!hub_broker_active_)
+        return;
     datahub::DataHub::instance().unsubscribe(this);
     hub_broker_active_ = false;
     if (isVisible())
@@ -836,8 +820,8 @@ void EquityResearchScreen::on_financials_loaded(services::equity::FinancialsData
 // empty for US where the broker routes by symbol and we can't tell NYSE/NASDAQ
 // apart). Unknown/forex symbols → not routable.
 struct ResearchTradeRoute {
-    QString bare;             // broker symbol (suffix stripped)
-    QString order_exchange;   // exchange for the order, or empty → broker default
+    QString bare;           // broker symbol (suffix stripped)
+    QString order_exchange; // exchange for the order, or empty → broker default
     QStringList match_exchanges;
     bool routable = false;
 };
@@ -852,8 +836,8 @@ static ResearchTradeRoute research_trade_route(const QString& sym) {
         const char* exchange;
     };
     static const Suffix kSuffixes[] = {
-        {".NS", "NSE"}, {".BO", "BSE"},  {".L", "LSE"},       {".TO", "TSX"},
-        {".HK", "HKEX"}, {".DE", "XETRA"}, {".PA", "EURONEXT"}, {".AS", "EURONEXT"}, {".SW", "SIX"},
+        {".NS", "NSE"},   {".BO", "BSE"},      {".L", "LSE"},       {".TO", "TSX"}, {".HK", "HKEX"},
+        {".DE", "XETRA"}, {".PA", "EURONEXT"}, {".AS", "EURONEXT"}, {".SW", "SIX"},
     };
     for (const auto& s : kSuffixes) {
         const QString suffix = QLatin1String(s.suffix);
@@ -925,12 +909,11 @@ void EquityResearchScreen::on_trade_clicked(bool is_buy) {
     // paper/live placement path and routes to a broker that serves match_exchanges.
     // WindowFrame materialises that screen (hidden, no tab switch) if needed, then
     // the app-modal ticket pops over this tab.
-    EventBus::instance().publish("equity.open_order_ticket",
-                                 {{"symbol", route.bare},
-                                  {"exchange", route.order_exchange},
-                                  {"match_exchanges", route.match_exchanges},
-                                  {"is_buy", is_buy},
-                                  {"price", last_price_}});
+    EventBus::instance().publish("equity.open_order_ticket", {{"symbol", route.bare},
+                                                              {"exchange", route.order_exchange},
+                                                              {"match_exchanges", route.match_exchanges},
+                                                              {"is_buy", is_buy},
+                                                              {"price", last_price_}});
 }
 
 } // namespace fincept::screens

@@ -130,7 +130,7 @@ class EquityBottomPanel : public QWidget {
     // Build the Positions "Action" cell: a SELL button (opens an order ticket
     // pre-filled with the held qty) plus, for paper intraday rows, a "→ CNC"
     // convert button. `paper_pid` is empty for live rows (no convert).
-    QWidget* make_positions_action_cell(const QString& symbol, const QString& product, double qty,
+    QWidget* make_positions_action_cell(const QString& symbol, const QString& product, double qty, const QString& side,
                                         bool show_convert, const QString& paper_pid);
 
     QTabWidget* tabs_ = nullptr;
@@ -139,7 +139,7 @@ class EquityBottomPanel : public QWidget {
     class QToolButton* collapse_btn_ = nullptr; // ▾/▴ toggle in the tab-bar corner
     QWidget* tab_content_ = nullptr;            // QTabWidget's page stack; hidden when collapsed
     bool collapsed_ = false;
-    QList<int> saved_split_sizes_;              // parent splitter sizes to restore on expand
+    QList<int> saved_split_sizes_; // parent splitter sizes to restore on expand
 
     // Tab indices (cached for retranslateUi tab text)
     int positions_tab_idx_ = -1;
@@ -154,8 +154,8 @@ class EquityBottomPanel : public QWidget {
     QTableWidget* positions_table_ = nullptr;
     // Backing data for the positions table, kept row-aligned with it so live
     // quotes can patch LTP / P&L / P&L% in place (no full rebuild, no flicker).
-    QVector<trading::BrokerPosition> last_positions_;     // live mode
-    QVector<trading::PtPosition> last_paper_positions_;   // paper mode
+    QVector<trading::BrokerPosition> last_positions_;   // live mode
+    QVector<trading::PtPosition> last_paper_positions_; // paper mode
 
     // Positions action-bar summary: net P&L + winners/losers chips, each with a
     // group square-off button. Updated by update_positions_summary().
@@ -184,8 +184,8 @@ class EquityBottomPanel : public QWidget {
     class QPushButton* holdings_square_off_btn_ = nullptr;
     QVector<trading::BrokerHolding> last_holdings_;
     QTableWidget* orders_table_ = nullptr;
-    QDateEdit* orders_date_edit_ = nullptr;        // per-day order book selector
-    bool suppress_orders_date_signal_ = false;     // guard during programmatic set
+    QDateEdit* orders_date_edit_ = nullptr;    // per-day order book selector
+    bool suppress_orders_date_signal_ = false; // guard during programmatic set
     QTableWidget* calendar_table_ = nullptr;
     QTableWidget* time_sales_table_ = nullptr;
     QString time_sales_symbol_;              // track last symbol to detect change

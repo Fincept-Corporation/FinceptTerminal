@@ -10,23 +10,22 @@
 // from a worker thread, never the UI thread.
 
 #include "trading/TradingTypes.h"
+
 #include <QString>
+
 #include <functional>
 
 namespace fincept::trading::zerodha {
 
 struct AutoLoginResult {
-    TokenExchangeResponse token;   // success + access_token + user_id, or error
-    QString detailed_error;        // e.g., "TwoFAException: Invalid TOTP"
+    TokenExchangeResponse token; // success + access_token + user_id, or error
+    QString detailed_error;      // e.g., "TwoFAException: Invalid TOTP"
 };
 
 using ProgressCallback = std::function<void(const QString& stage)>;
 
-AutoLoginResult run_auto_login(const QString& user_id,
-                               const QString& password,
-                               const QString& api_key,
-                               const QString& api_secret,
-                               const QString& totp_secret,
+AutoLoginResult run_auto_login(const QString& user_id, const QString& password, const QString& api_key,
+                               const QString& api_secret, const QString& totp_secret,
                                const ProgressCallback& progress = {});
 
 } // namespace fincept::trading::zerodha

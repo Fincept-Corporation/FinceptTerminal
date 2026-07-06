@@ -251,9 +251,9 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
         svl->addWidget(row);
     };
     add_stat(stat_modules_lbl_, QString::number(modules_.size()));
-    add_stat(stat_ml_lbl_,      "30+");
-    add_stat(stat_rl_lbl_,      "5");
-    add_stat(stat_py_lbl_,      "25+");
+    add_stat(stat_ml_lbl_, "30+");
+    add_stat(stat_rl_lbl_, "5");
+    add_stat(stat_py_lbl_, "25+");
     vl->addWidget(stats_card_);
 
     vl->addStretch();
@@ -468,17 +468,28 @@ void AIQuantLabScreen::changeEvent(QEvent* event) {
 }
 
 void AIQuantLabScreen::retranslateUi() {
-    if (brand_lbl_)        brand_lbl_->setText(tr("AI QUANT LAB"));
-    if (module_count_lbl_) module_count_lbl_->setText(tr("%1 MODULES").arg(modules_.size()));
-    if (sidebar_title_)    sidebar_title_->setText(tr("MODULES"));
-    if (info_title_)       info_title_->setText(tr("MODULE INFO"));
-    if (stats_title_)      stats_title_->setText(tr("PLATFORM STATS"));
-    if (stat_modules_lbl_) stat_modules_lbl_->setText(tr("Modules"));
-    if (stat_ml_lbl_)      stat_ml_lbl_->setText(tr("ML Models"));
-    if (stat_rl_lbl_)      stat_rl_lbl_->setText(tr("RL Algorithms"));
-    if (stat_py_lbl_)      stat_py_lbl_->setText(tr("Python Scripts"));
-    if (engine_lbl_)       engine_lbl_->setText(tr("ENGINE:"));
-    if (status_ready_lbl_) status_ready_lbl_->setText(tr("READY"));
+    if (brand_lbl_)
+        brand_lbl_->setText(tr("AI QUANT LAB"));
+    if (module_count_lbl_)
+        module_count_lbl_->setText(tr("%1 MODULES").arg(modules_.size()));
+    if (sidebar_title_)
+        sidebar_title_->setText(tr("MODULES"));
+    if (info_title_)
+        info_title_->setText(tr("MODULE INFO"));
+    if (stats_title_)
+        stats_title_->setText(tr("PLATFORM STATS"));
+    if (stat_modules_lbl_)
+        stat_modules_lbl_->setText(tr("Modules"));
+    if (stat_ml_lbl_)
+        stat_ml_lbl_->setText(tr("ML Models"));
+    if (stat_rl_lbl_)
+        stat_rl_lbl_->setText(tr("RL Algorithms"));
+    if (stat_py_lbl_)
+        stat_py_lbl_->setText(tr("Python Scripts"));
+    if (engine_lbl_)
+        engine_lbl_->setText(tr("ENGINE:"));
+    if (status_ready_lbl_)
+        status_ready_lbl_->setText(tr("READY"));
 
     // Re-render the active module's info panel so the "{category} module" /
     // "Script: {path}" sub-labels pick up the new language.

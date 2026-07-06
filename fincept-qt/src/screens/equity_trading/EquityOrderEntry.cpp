@@ -431,11 +431,10 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     broadcast_btn_->setFixedHeight(40);
     broadcast_btn_->setCursor(Qt::PointingHandCursor);
     broadcast_btn_->setToolTip(tr("Broadcast this order to multiple accounts"));
-    broadcast_btn_->setStyleSheet(
-        QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: 12px; "
-                "  border: 1px solid %3; border-radius: 4px; }"
-                "QPushButton:hover { background: %3; color: %2; }")
-            .arg(colors::BG_RAISED(), colors::AMBER(), colors::BORDER_MED()));
+    broadcast_btn_->setStyleSheet(QString("QPushButton { background: %1; color: %2; font-weight: 700; font-size: 12px; "
+                                          "  border: 1px solid %3; border-radius: 4px; }"
+                                          "QPushButton:hover { background: %3; color: %2; }")
+                                      .arg(colors::BG_RAISED(), colors::AMBER(), colors::BORDER_MED()));
     connect(broadcast_btn_, &QPushButton::clicked, this, [this]() {
         const double qty = qty_edit_->text().toDouble();
         if (qty <= 0) {
@@ -671,9 +670,8 @@ void EquityOrderEntry::rebuild_brokers_menu() {
 void EquityOrderEntry::update_brokers_btn() {
     const int n = int(broadcast_ids_.size());
     brokers_btn_->setText(n == 0 ? tr("BROKERS: FOCUSED ▾") : tr("BROKERS: %1 SELECTED ▾").arg(n));
-    brokers_btn_->setToolTip(n == 0
-                                 ? tr("Orders go to the focused account. Click to pick multiple brokers.")
-                                 : tr("BUY/SELL will fire this order on %1 account(s)").arg(n));
+    brokers_btn_->setToolTip(n == 0 ? tr("Orders go to the focused account. Click to pick multiple brokers.")
+                                    : tr("BUY/SELL will fire this order on %1 account(s)").arg(n));
     // Amber accent when armed so a multi-broker submit is never a surprise.
     brokers_btn_->setStyleSheet(
         QString("QToolButton{background:%1;border:1px solid %2;color:%3;font-size:10px;font-weight:700;"
@@ -888,15 +886,18 @@ void EquityOrderEntry::changeEvent(QEvent* event) {
 }
 
 void EquityOrderEntry::retranslateUi() {
-    if (title_label_) title_label_->setText(tr("ORDER ENTRY"));
-    if (mode_label_)  mode_label_->setText(is_paper_ ? tr("PAPER") : tr("LIVE"));
+    if (title_label_)
+        title_label_->setText(tr("ORDER ENTRY"));
+    if (mode_label_)
+        mode_label_->setText(is_paper_ ? tr("PAPER") : tr("LIVE"));
 
     // Side tabs + submit button (reflect current side + symbol)
-    if (buy_tab_)  buy_tab_->setText(tr("BUY"));
-    if (sell_tab_) sell_tab_->setText(tr("SELL"));
+    if (buy_tab_)
+        buy_tab_->setText(tr("BUY"));
+    if (sell_tab_)
+        sell_tab_->setText(tr("SELL"));
     if (submit_btn_)
-        submit_btn_->setText(is_buy_side_ ? tr("BUY %1").arg(current_symbol_)
-                                          : tr("SELL %1").arg(current_symbol_));
+        submit_btn_->setText(is_buy_side_ ? tr("BUY %1").arg(current_symbol_) : tr("SELL %1").arg(current_symbol_));
     if (broadcast_btn_) {
         broadcast_btn_->setText(tr("ALL"));
         broadcast_btn_->setToolTip(tr("Broadcast this order to multiple accounts"));
@@ -905,42 +906,61 @@ void EquityOrderEntry::retranslateUi() {
     // Order type segmented control
     const QString type_labels[] = {tr("MKT"), tr("LMT"), tr("SL"), tr("SL-L")};
     for (int i = 0; i < 4; ++i)
-        if (type_btns_[i]) type_btns_[i]->setText(type_labels[i]);
+        if (type_btns_[i])
+            type_btns_[i]->setText(type_labels[i]);
 
     // Static field / section titles
-    if (product_title_)       product_title_->setText(tr("PRODUCT"));
-    if (exchange_title_)      exchange_title_->setText(tr("EXCHANGE"));
-    if (qty_title_)           qty_title_->setText(tr("QTY"));
-    if (price_title_)         price_title_->setText(tr("PRICE"));
-    if (trigger_title_)       trigger_title_->setText(tr("TRIGGER"));
-    if (sl_title_)            sl_title_->setText(tr("SL"));
-    if (tp_title_)            tp_title_->setText(tr("TP"));
-    if (strat_title_)         strat_title_->setText(tr("STRATEGY"));
-    if (strat_strike_title_)  strat_strike_title_->setText(tr("ATM STRIKE"));
-    if (strat_expiry_title_)  strat_expiry_title_->setText(tr("EXPIRY (YYYY-MM-DD)"));
-    if (strat_lot_title_)     strat_lot_title_->setText(tr("LOT SIZE"));
-    if (strat_width_title_)   strat_width_title_->setText(tr("WIDTH (strangle / condor / spreads)"));
-    if (strat_legs_title_)    strat_legs_title_->setText(tr("LEGS"));
+    if (product_title_)
+        product_title_->setText(tr("PRODUCT"));
+    if (exchange_title_)
+        exchange_title_->setText(tr("EXCHANGE"));
+    if (qty_title_)
+        qty_title_->setText(tr("QTY"));
+    if (price_title_)
+        price_title_->setText(tr("PRICE"));
+    if (trigger_title_)
+        trigger_title_->setText(tr("TRIGGER"));
+    if (sl_title_)
+        sl_title_->setText(tr("SL"));
+    if (tp_title_)
+        tp_title_->setText(tr("TP"));
+    if (strat_title_)
+        strat_title_->setText(tr("STRATEGY"));
+    if (strat_strike_title_)
+        strat_strike_title_->setText(tr("ATM STRIKE"));
+    if (strat_expiry_title_)
+        strat_expiry_title_->setText(tr("EXPIRY (YYYY-MM-DD)"));
+    if (strat_lot_title_)
+        strat_lot_title_->setText(tr("LOT SIZE"));
+    if (strat_width_title_)
+        strat_width_title_->setText(tr("WIDTH (strangle / condor / spreads)"));
+    if (strat_legs_title_)
+        strat_legs_title_->setText(tr("LEGS"));
 
     // Placeholders
-    if (price_edit_)        price_edit_->setPlaceholderText(tr("Limit price"));
-    if (stop_price_edit_)   stop_price_edit_->setPlaceholderText(tr("Trigger price"));
-    if (sl_edit_)           sl_edit_->setPlaceholderText(tr("Stop Loss"));
-    if (tp_edit_)           tp_edit_->setPlaceholderText(tr("Take Profit"));
-    if (strat_strike_edit_) strat_strike_edit_->setPlaceholderText(tr("e.g. 22500"));
-    if (strat_width_edit_)  strat_width_edit_->setPlaceholderText(tr("e.g. 200"));
+    if (price_edit_)
+        price_edit_->setPlaceholderText(tr("Limit price"));
+    if (stop_price_edit_)
+        stop_price_edit_->setPlaceholderText(tr("Trigger price"));
+    if (sl_edit_)
+        sl_edit_->setPlaceholderText(tr("Stop Loss"));
+    if (tp_edit_)
+        tp_edit_->setPlaceholderText(tr("Take Profit"));
+    if (strat_strike_edit_)
+        strat_strike_edit_->setPlaceholderText(tr("e.g. 22500"));
+    if (strat_width_edit_)
+        strat_width_edit_->setPlaceholderText(tr("e.g. 200"));
 
     // Collapsible toggles reflect their expanded state
     if (advanced_toggle_ && advanced_section_)
         advanced_toggle_->setText(advanced_section_->isVisible() ? tr("- ADVANCED") : tr("+ ADVANCED"));
     if (strategy_toggle_ && strategy_section_)
-        strategy_toggle_->setText(strategy_section_->isVisible() ? tr("- OPTIONS STRATEGY")
-                                                                 : tr("+ OPTIONS STRATEGY"));
+        strategy_toggle_->setText(strategy_section_->isVisible() ? tr("- OPTIONS STRATEGY") : tr("+ OPTIONS STRATEGY"));
 
     // Strategy combo — re-apply fixed UI labels, preserving the selection.
     if (strategy_combo_) {
         const int sel = strategy_combo_->currentIndex();
-        const QStringList items = {tr("None"), tr("Long Straddle"), tr("Short Straddle"), tr("Long Strangle"),
+        const QStringList items = {tr("None"),        tr("Long Straddle"),    tr("Short Straddle"), tr("Long Strangle"),
                                    tr("Iron Condor"), tr("Bull Call Spread"), tr("Bear Put Spread")};
         for (int i = 0; i < items.size() && i < strategy_combo_->count(); ++i)
             strategy_combo_->setItemText(i, items[i]);

@@ -36,7 +36,9 @@ bool StressLoad::start(int n_frames, int m_panels_per_frame, int k_ticks_per_sec
     k_ticks_per_sec_ = std::clamp(k_ticks_per_sec, 1, 10000);
 
     LOG_INFO(kStressTag, QString("Starting stress: %1 frames × %2 panels, %3 ticks/sec")
-                             .arg(n_frames_).arg(m_panels_).arg(k_ticks_per_sec_));
+                             .arg(n_frames_)
+                             .arg(m_panels_)
+                             .arg(k_ticks_per_sec_));
 
     // Spawn frames beyond what already exists. Each spawn registers with
     // WindowRegistry automatically via WindowFrame's constructor.
@@ -95,7 +97,8 @@ void StressLoad::close_spawned_frames() {
     // Close frames the harness created. Other (user) frames are untouched.
     const auto frames = WindowRegistry::instance().frames();
     for (WindowFrame* w : frames) {
-        if (!w) continue;
+        if (!w)
+            continue;
         if (spawned_window_ids_.contains(w->window_id()))
             w->close();
     }

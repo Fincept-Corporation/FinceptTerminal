@@ -104,9 +104,8 @@ QString icici_iso_datetime(const QString& date, bool end_of_day) {
 // Map a generic resolution onto a Breeze historicalcharts interval.
 QString icici_interval(const QString& resolution) {
     static const QMap<QString, QString> map = {
-        {"1", "1minute"},   {"1m", "1minute"},   {"5", "5minute"},   {"5m", "5minute"},
-        {"30", "30minute"}, {"30m", "30minute"}, {"D", "1day"},      {"1D", "1day"},
-        {"day", "1day"},    {"1day", "1day"},
+        {"1", "1minute"},    {"1m", "1minute"}, {"5", "5minute"}, {"5m", "5minute"}, {"30", "30minute"},
+        {"30m", "30minute"}, {"D", "1day"},     {"1D", "1day"},   {"day", "1day"},   {"1day", "1day"},
     };
     return map.value(resolution, QString());
 }
@@ -130,11 +129,8 @@ QMap<QString, QString> IciciDirectBroker::breeze_headers(const BrokerCredentials
     const QByteArray to_sign = ts.toUtf8() + body + creds.api_secret.toUtf8();
     const QString checksum = QString::fromLatin1(QCryptographicHash::hash(to_sign, QCryptographicHash::Sha256).toHex());
     return {
-        {"Content-Type", "application/json"},
-        {"X-Checksum", "token " + checksum},
-        {"X-Timestamp", ts},
-        {"X-AppKey", creds.api_key},
-        {"X-SessionToken", creds.access_token},
+        {"Content-Type", "application/json"}, {"X-Checksum", "token " + checksum},    {"X-Timestamp", ts},
+        {"X-AppKey", creds.api_key},          {"X-SessionToken", creds.access_token},
     };
 }
 
@@ -194,8 +190,8 @@ TokenExchangeResponse IciciDirectBroker::exchange_token(const QString& api_key, 
                                 .arg(resp.raw_body.left(300)));
 
     if (!resp.success) {
-        result.error = resp.json.value("Error").toString(
-            resp.error.isEmpty() ? QString("HTTP %1").arg(resp.status_code) : resp.error);
+        result.error = resp.json.value("Error").toString(resp.error.isEmpty() ? QString("HTTP %1").arg(resp.status_code)
+                                                                              : resp.error);
         return result;
     }
 
@@ -283,13 +279,27 @@ OrderPlaceResponse IciciDirectBroker::place_order(const BrokerCredentials& creds
 
 ApiResponse<QJsonObject> IciciDirectBroker::modify_order(const BrokerCredentials& creds, const QString& order_id,
                                                          const QJsonObject& mods) {
+    // Resolve the exchange: caller-supplied wins, else recover the order's real
+    // exchange from the order book (NFO/BSE), else NSE default.
+    QString exchange_code = mods.value("exchange_code").toString();
+    if (exchange_code.isEmpty()) {
+        if (auto orders = get_orders(creds); orders.success && orders.data) {
+            for (const auto& o : *orders.data)
+                if (o.order_id == order_id && !o.exchange.isEmpty()) {
+                    exchange_code = o.exchange.toUpper();
+                    break;
+                }
+        }
+    }
+    if (exchange_code.isEmpty())
+        exchange_code = "NSE";
     QJsonObject payload{
         {"order_id", order_id},
-        {"exchange_code", mods.value("exchange_code").toString("NSE")},
+        {"exchange_code", exchange_code},
     };
-    for (const QString& k : {QStringLiteral("order_type"), QStringLiteral("quantity"), QStringLiteral("price"),
-                             QStringLiteral("stoploss"), QStringLiteral("validity"),
-                             QStringLiteral("disclosed_quantity"), QStringLiteral("validity_date")}) {
+    for (const QString& k :
+         {QStringLiteral("order_type"), QStringLiteral("quantity"), QStringLiteral("price"), QStringLiteral("stoploss"),
+          QStringLiteral("validity"), QStringLiteral("disclosed_quantity"), QStringLiteral("validity_date")}) {
         if (mods.contains(k))
             payload[k] = mods.value(k);
     }
@@ -309,6 +319,16 @@ ApiResponse<QJsonObject> IciciDirectBroker::cancel_order(const BrokerCredentials
         const QString e = ad.value("exchange").toString();
         if (!e.isEmpty())
             exchange = e.toUpper();
+    }
+    // Authoritative: recover the order's real exchange (NFO/BSE) from the order
+    // book so the cancel doesn't mis-target NSE. Falls back to the override/NSE
+    // above if the sweep fails or the order isn't found.
+    if (auto orders = get_orders(creds); orders.success && orders.data) {
+        for (const auto& o : *orders.data)
+            if (o.order_id == order_id && !o.exchange.isEmpty()) {
+                exchange = o.exchange.toUpper();
+                break;
+            }
     }
     QJsonObject payload{{"order_id", order_id}, {"exchange_code", exchange}};
     auto resp = breeze_request("DELETE", "/order", payload, creds);
@@ -399,8 +419,8 @@ ApiResponse<QVector<BrokerPosition>> IciciDirectBroker::get_positions(const Brok
 }
 
 ApiResponse<QVector<BrokerHolding>> IciciDirectBroker::get_holdings(const BrokerCredentials& creds) {
-    QJsonObject payload{{"exchange_code", "NSE"}, {"from_date", ""}, {"to_date", ""},
-                        {"stock_code", ""},       {"portfolio_type", ""}};
+    QJsonObject payload{
+        {"exchange_code", "NSE"}, {"from_date", ""}, {"to_date", ""}, {"stock_code", ""}, {"portfolio_type", ""}};
     auto resp = breeze_request("GET", "/portfolioholdings", payload, creds);
     int64_t ts = now_ts();
     if (!is_success(resp))
@@ -473,8 +493,8 @@ ApiResponse<QVector<BrokerQuote>> IciciDirectBroker::get_quotes(const BrokerCred
         }
 
         QJsonObject payload{
-            {"stock_code", stock_code}, {"exchange_code", exch},     {"product_type", product},
-            {"expiry_date", expiry_iso}, {"right", right},           {"strike_price", strike_str},
+            {"stock_code", stock_code},  {"exchange_code", exch}, {"product_type", product},
+            {"expiry_date", expiry_iso}, {"right", right},        {"strike_price", strike_str},
         };
         auto resp = breeze_request("GET", "/quotes", payload, creds);
         if (!is_success(resp)) {

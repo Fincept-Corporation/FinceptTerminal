@@ -2,12 +2,11 @@
 //
 // CellNavigator widget — the side panel listing cells with selection sync.
 
-#include "screens/code_editor/CodeEditorScreen.h"
-
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "python/PythonRunner.h"
+#include "screens/code_editor/CodeEditorScreen.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
@@ -92,17 +91,17 @@ CellNavigator::CellNavigator(QWidget* parent) : QWidget(parent) {
     layout->addWidget(header);
 
     list_ = new QListWidget(this);
-    list_->setStyleSheet(
-        QString("QListWidget { background:%1; border:none; outline:none;"
-                " font-family:%2, 'Menlo', 'SF Mono', monospace; font-size:%3px; }"
-                "QListWidget::item { color:%4; padding:7px 10px;"
-                " border-bottom:1px solid %5; }"
-                "QListWidget::item:selected { background:%6; color:%7;"
-                " border-left:2px solid %7; }"
-                "QListWidget::item:hover { background:%8; }")
-            .arg(colors::BG_SURFACE(), fonts::DATA_FAMILY)
-            .arg(fonts::TINY)
-            .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::BG_HOVER(), colors::AMBER(), colors::BG_HOVER()));
+    list_->setStyleSheet(QString("QListWidget { background:%1; border:none; outline:none;"
+                                 " font-family:%2, 'Menlo', 'SF Mono', monospace; font-size:%3px; }"
+                                 "QListWidget::item { color:%4; padding:7px 10px;"
+                                 " border-bottom:1px solid %5; }"
+                                 "QListWidget::item:selected { background:%6; color:%7;"
+                                 " border-left:2px solid %7; }"
+                                 "QListWidget::item:hover { background:%8; }")
+                             .arg(colors::BG_SURFACE(), fonts::DATA_FAMILY)
+                             .arg(fonts::TINY)
+                             .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::BG_HOVER(), colors::AMBER(),
+                                  colors::BG_HOVER()));
     list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     list_->setTextElideMode(Qt::ElideRight);
     list_->setWordWrap(false);

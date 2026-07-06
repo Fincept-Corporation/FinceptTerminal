@@ -35,12 +35,12 @@ Result<void> FeedItemRepository::upsert(const QString& feed_id, const QVector<Fe
         for (auto i = it.fields.begin(); i != it.fields.end(); ++i)
             o[i.key()] = i.value();
         const QString fj = QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
-        auto r = exec_write(
-            "INSERT INTO feed_items "
-            "(feed_id, item_id, title, summary, link, source, sort_ts, time, fields_json, fetched_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(feed_id, item_id) DO NOTHING",
-            {feed_id, it.id, it.title, it.summary, it.link, it.source, it.sort_ts, it.time, fj, fetched_at});
+        auto r =
+            exec_write("INSERT INTO feed_items "
+                       "(feed_id, item_id, title, summary, link, source, sort_ts, time, fields_json, fetched_at) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                       "ON CONFLICT(feed_id, item_id) DO NOTHING",
+                       {feed_id, it.id, it.title, it.summary, it.link, it.source, it.sort_ts, it.time, fj, fetched_at});
         if (r.is_err())
             return r;
     }

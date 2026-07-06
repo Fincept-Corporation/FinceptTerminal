@@ -5,14 +5,13 @@
 //
 // Part of the partial-class split of DataSourcesScreen.cpp.
 
-#include "screens/data_sources/DataSourcesScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/data_sources/ConnectionConfigDialog.h"
 #include "screens/data_sources/ConnectionTester.h"
 #include "screens/data_sources/ConnectorRegistry.h"
 #include "screens/data_sources/DataSourcesHelpers.h"
+#include "screens/data_sources/DataSourcesScreen.h"
 #include "screens/data_sources/DataSourcesStyles.h"
 #include "screens/data_sources/ImportExportConnections.h"
 #include "ui/theme/Theme.h"
@@ -219,7 +218,8 @@ QWidget* DataSourcesScreen::build_stats_strip() {
         vl->addWidget(lbl);
 
         *out = val;
-        if (label_out) *label_out = lbl;
+        if (label_out)
+            *label_out = lbl;
         return box;
     };
 
@@ -514,7 +514,8 @@ QWidget* DataSourcesScreen::build_detail_panel() {
         val->setObjectName("dsInfoValue");
         hl->addWidget(val);
         *value_out = val;
-        if (label_out) *label_out = lbl;
+        if (label_out)
+            *label_out = lbl;
         return row;
     };
 

@@ -595,7 +595,8 @@ void PolymarketService::fetch_tags() {
 
 void PolymarketService::fetch_comments(const QString& condition_id, int limit) {
     // Gamma /comments requires conditionId (0x hex), not the slug.
-    QString path = "/comments?conditionId=" + QUrl::toPercentEncoding(condition_id) + "&limit=" + QString::number(limit);
+    QString path =
+        "/comments?conditionId=" + QUrl::toPercentEncoding(condition_id) + "&limit=" + QString::number(limit);
 
     get_gamma(
         path,
@@ -764,8 +765,7 @@ void PolymarketService::fetch_leaderboard(int limit) {
     // Data API: /v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=N
     // Fields on each entry: rank, proxyWallet, userName, vol, pnl, profileImage.
     const int capped = qBound(1, limit, 50);
-    QString path = "/v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=" +
-                   QString::number(capped);
+    QString path = "/v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=" + QString::number(capped);
 
     get_data(
         path,
@@ -840,4 +840,3 @@ void PolymarketService::fetch_open_interest(const QStringList& condition_ids) {
 }
 
 } // namespace fincept::services::polymarket
-

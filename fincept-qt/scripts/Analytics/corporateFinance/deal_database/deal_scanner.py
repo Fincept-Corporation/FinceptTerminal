@@ -492,6 +492,21 @@ def main():
         sys.exit(1)
 
     command = sys.argv[1]
+    # Qt bridge: accept (command, {json}) and expand into the native positional
+    # scalar argv the handlers below expect. No effect on the legacy CLI form
+    # (a bare scalar in argv[2] isn't a JSON dict, so this falls through).
+    _QT_ARGMAP = {"scan": ["days_back"], "scan_company": ["ticker", "years_back"], "high_confidence": ["min_confidence"]}
+    if len(sys.argv) == 3 and command in _QT_ARGMAP:
+        try:
+            _qp = _json.loads(sys.argv[2])
+            if isinstance(_qp, dict):
+                _qav = [sys.argv[0], command]
+                for _qk in _QT_ARGMAP[command]:
+                    if _qk in _qp and _qp[_qk] is not None:
+                        _qav.append(str(_qp[_qk]))
+                sys.argv = _qav
+        except Exception:
+            pass
     scanner = MADealScanner()
 
     try:

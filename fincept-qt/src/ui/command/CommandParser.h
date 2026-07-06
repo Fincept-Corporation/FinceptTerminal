@@ -7,14 +7,14 @@
 namespace fincept::ui {
 
 /// Dual-grammar command parser.
-/// Tries function-code (^[A-Z][A-Z0-9._]*$ or leading digit) first, then verb-object ("layout switch" → "layout.switch").
-/// Pure — does not invoke. Caller dispatches via ActionRegistry::invoke.
+/// Tries function-code (^[A-Z][A-Z0-9._]*$ or leading digit) first, then verb-object ("layout switch" →
+/// "layout.switch"). Pure — does not invoke. Caller dispatches via ActionRegistry::invoke.
 struct ParsedCommand {
     enum class Kind {
         Empty,
         Action,
-        Symbol,    ///< ticker-shaped — caller may route to link.publish_to_group
-        Help,      ///< user typed `?`
+        Symbol, ///< ticker-shaped — caller may route to link.publish_to_group
+        Help,   ///< user typed `?`
         Unknown,
     };
     Kind kind = Kind::Empty;
@@ -33,8 +33,7 @@ class CommandParser {
     static ParsedCommand try_verb_object_(const QString& input);
 
     /// First N positionals fill the first N slots in declaration order.
-    static QVariantMap bind_positional_(const QList<ParameterSlot>& slot_list,
-                                        const QStringList& positionals);
+    static QVariantMap bind_positional_(const QList<ParameterSlot>& slot_list, const QStringList& positionals);
 };
 
 } // namespace fincept::ui

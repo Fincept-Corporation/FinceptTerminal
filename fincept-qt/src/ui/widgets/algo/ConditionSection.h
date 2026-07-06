@@ -20,7 +20,7 @@ namespace fincept::ui::algo {
 /// `{type:"group", ...}` elements.
 class ConditionSection : public QWidget {
     Q_OBJECT
-public:
+  public:
     enum class Type { Entry, Exit };
 
     explicit ConditionSection(Type type, QWidget* parent = nullptr);
@@ -30,16 +30,16 @@ public:
     void set_conditions(const QJsonArray& conditions, const QString& logic);
     void clear_all();
 
-signals:
+  signals:
     void conditions_changed();
 
-public slots:
+  public slots:
     void add_condition();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     void add_group();
     void attach_node(QWidget* node);
     void remove_node(QWidget* node);

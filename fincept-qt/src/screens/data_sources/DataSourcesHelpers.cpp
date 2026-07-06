@@ -46,17 +46,28 @@ QString connector_code(const ConnectorConfig& cfg) {
 
 QString connector_transport(const ConnectorConfig& cfg) {
     switch (cfg.category) {
-        case Category::Database:        return "SQL";
-        case Category::Api:             return "REST";
-        case Category::File:            return "FILE";
-        case Category::Streaming:       return "WS";
-        case Category::Cloud:           return "CLOUD";
-        case Category::TimeSeries:      return "TSDB";
-        case Category::MarketData:      return "MKT";
-        case Category::SearchAnalytics: return "SRCH";
-        case Category::DataWarehouse:   return "DW";
-        case Category::AlternativeData: return "ALT";
-        case Category::OpenBanking:     return "OB";
+        case Category::Database:
+            return "SQL";
+        case Category::Api:
+            return "REST";
+        case Category::File:
+            return "FILE";
+        case Category::Streaming:
+            return "WS";
+        case Category::Cloud:
+            return "CLOUD";
+        case Category::TimeSeries:
+            return "TSDB";
+        case Category::MarketData:
+            return "MKT";
+        case Category::SearchAnalytics:
+            return "SRCH";
+        case Category::DataWarehouse:
+            return "DW";
+        case Category::AlternativeData:
+            return "ALT";
+        case Category::OpenBanking:
+            return "OB";
     }
     return "API";
 }
@@ -67,14 +78,22 @@ QString persistence_type(const ConnectorConfig& cfg) {
 
 QString field_type_label(FieldType type) {
     switch (type) {
-        case FieldType::Text:     return "Text";
-        case FieldType::Password: return "Secret";
-        case FieldType::Number:   return "Number";
-        case FieldType::Url:      return "URL";
-        case FieldType::Select:   return "Select";
-        case FieldType::Textarea: return "Textarea";
-        case FieldType::Checkbox: return "Bool";
-        case FieldType::File:     return "File";
+        case FieldType::Text:
+            return "Text";
+        case FieldType::Password:
+            return "Secret";
+        case FieldType::Number:
+            return "Number";
+        case FieldType::Url:
+            return "URL";
+        case FieldType::Select:
+            return "Select";
+        case FieldType::Textarea:
+            return "Textarea";
+        case FieldType::Checkbox:
+            return "Bool";
+        case FieldType::File:
+            return "File";
     }
     return "Text";
 }

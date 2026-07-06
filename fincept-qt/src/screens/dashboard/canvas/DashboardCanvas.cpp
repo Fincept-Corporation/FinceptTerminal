@@ -569,13 +569,12 @@ void DashboardCanvas::connect_tile(WidgetTile* tile) {
     // and emit layout_changed so the DashboardScreen writes it through to sqlite.
     if (auto* content = tile->content_widget()) {
         const QString instance_id = tile->instance_id();
-        connect(content, &widgets::BaseWidget::config_changed, this,
-                [this, instance_id](const QJsonObject& cfg) {
-                    if (auto* item = item_for_id(instance_id)) {
-                        item->config = cfg;
-                        emit layout_changed(layout_);
-                    }
-                });
+        connect(content, &widgets::BaseWidget::config_changed, this, [this, instance_id](const QJsonObject& cfg) {
+            if (auto* item = item_for_id(instance_id)) {
+                item->config = cfg;
+                emit layout_changed(layout_);
+            }
+        });
     }
 }
 

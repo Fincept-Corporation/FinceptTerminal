@@ -1,6 +1,8 @@
 #include "services/alpha_arena/HyperliquidLiveVenue.h"
+
 #include "core/logging/Logger.h"
 #include "trading/exchanges/hyperliquid/HyperliquidVenue.h"
+
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -24,12 +26,14 @@ HyperliquidLiveVenue::HyperliquidLiveVenue(ArenaStore& store, const QString& com
     LOG_INFO(TAG, QStringLiteral("live venue up for competition %1 (mainnet)").arg(competition_id));
 }
 
-HyperliquidLiveVenue::~HyperliquidLiveVenue() { delete hl_; }
+HyperliquidLiveVenue::~HyperliquidLiveVenue() {
+    delete hl_;
+}
 
-Result<OrderRow> HyperliquidLiveVenue::execute(const QString& agent_id, const AgentAction& a,
-                                               int round_seq) {
+Result<OrderRow> HyperliquidLiveVenue::execute(const QString& agent_id, const AgentAction& a, int round_seq) {
     auto r = PaperExchange::execute(agent_id, a, round_seq);
-    if (r.is_ok() && r.value().status == QLatin1String("filled")) mirror_live(r.value());
+    if (r.is_ok() && r.value().status == QLatin1String("filled"))
+        mirror_live(r.value());
     return r;
 }
 
@@ -48,17 +52,16 @@ void HyperliquidLiveVenue::mirror_live(const OrderRow& o) {
     // live rejection is logged + persisted so the operator can reconcile.
     // Capture `o` by value only — the ack may outlive this venue.
     hl_->place_order(req, [o](aav::OrderAck ack) {
-        if (ack.status == QLatin1String("accepted")) return;
+        if (ack.status == QLatin1String("accepted"))
+            return;
         LOG_ERROR(TAG, QStringLiteral("live mirror failed for %1 %2 %3: %4")
-                           .arg(o.action, o.coin, o.id.isEmpty() ? QStringLiteral("(no id)") : o.id,
-                                ack.error));
+                           .arg(o.action, o.coin, o.id.isEmpty() ? QStringLiteral("(no id)") : o.id, ack.error));
         ArenaStore::instance().insert_event(
             o.competition_id, o.agent_id, QStringLiteral("live_mirror_failed"),
-            QString::fromUtf8(QJsonDocument(QJsonObject{{"order_id", o.id},
-                                                        {"coin", o.coin},
-                                                        {"action", o.action},
-                                                        {"error", ack.error}})
-                                  .toJson(QJsonDocument::Compact)));
+            QString::fromUtf8(
+                QJsonDocument(
+                    QJsonObject{{"order_id", o.id}, {"coin", o.coin}, {"action", o.action}, {"error", ack.error}})
+                    .toJson(QJsonDocument::Compact)));
     });
 }
 

@@ -74,20 +74,19 @@ void AlgoTradingScreen::build_ui() {
     dashboard_ = new DeploymentDashboard(this);
     universe_ = new UniverseScannerPanel(this);
 
-    content_stack_->addWidget(builder_);     // 0
-    content_stack_->addWidget(strategies_);  // 1
-    content_stack_->addWidget(scanner_);     // 2
-    content_stack_->addWidget(alerts_);      // 3
-    content_stack_->addWidget(dashboard_);   // 4
-    content_stack_->addWidget(universe_);    // 5
+    content_stack_->addWidget(builder_);    // 0
+    content_stack_->addWidget(strategies_); // 1
+    content_stack_->addWidget(scanner_);    // 2
+    content_stack_->addWidget(alerts_);     // 3
+    content_stack_->addWidget(dashboard_);  // 4
+    content_stack_->addWidget(universe_);   // 5
     root->addWidget(content_stack_, 1);
 
     // "Edit" in My Strategies opens the Builder (tab 0) pre-filled with that strategy.
-    connect(strategies_, &StrategyListPanel::edit_requested, this,
-            [this](const AlgoStrategy& s) {
-                builder_->load_strategy(s);
-                on_tab_changed(0);
-            });
+    connect(strategies_, &StrategyListPanel::edit_requested, this, [this](const AlgoStrategy& s) {
+        builder_->load_strategy(s);
+        on_tab_changed(0);
+    });
 
     // "Backtest" opens the Builder (tab 0) pre-filled and runs the backtest immediately.
     connect(strategies_, &StrategyListPanel::backtest_requested, this,
@@ -99,8 +98,8 @@ void AlgoTradingScreen::build_ui() {
     // Scanner → Alerts hand-off: pre-fills the AlertsPanel with the scan's conditions
     // and switches to the ALERTS tab. ScannerPanel::create_alert_requested is added in R3.
     connect(scanner_, &ScannerPanel::create_alert_requested, this,
-            [this](const QJsonArray& conds, const QString& logic, const QStringList& syms,
-                   const QString& tf, const QString& ds, const QString& acct) {
+            [this](const QJsonArray& conds, const QString& logic, const QStringList& syms, const QString& tf,
+                   const QString& ds, const QString& acct) {
                 on_tab_changed(3); // ALERTS
                 alerts_->prefill(conds, logic, syms, tf, ds, acct);
             });
@@ -126,7 +125,7 @@ QWidget* AlgoTradingScreen::build_top_bar() {
     // Title + subtitle matching Economics header style
     title_label_ = new QLabel(tr("ALGO TRADING"), bar);
     title_label_->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700;"
-                                         "letter-spacing:1.5px; background:transparent;")
+                                        "letter-spacing:1.5px; background:transparent;")
                                     .arg(ui::colors::TEXT_PRIMARY()));
     hl->addWidget(title_label_);
 
@@ -136,7 +135,8 @@ QWidget* AlgoTradingScreen::build_top_bar() {
     hl->addWidget(div);
 
     // Tab buttons
-    QStringList tabs   = {tr("BUILDER"), tr("MY STRATEGIES"), tr("SCANNER"), tr("ALERTS"), tr("DASHBOARD"), tr("UNIVERSE")};
+    QStringList tabs = {tr("BUILDER"), tr("MY STRATEGIES"), tr("SCANNER"),
+                        tr("ALERTS"),  tr("DASHBOARD"),     tr("UNIVERSE")};
     QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F", "#A78BFA"};
 
     for (int i = 0; i < tabs.size(); ++i) {
@@ -176,8 +176,9 @@ QWidget* AlgoTradingScreen::build_status_bar() {
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
-    auto s =
-        QString("color:%1; font-size:8px; font-family:%2;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::DATA_FAMILY);
+    auto s = QString("color:%1; font-size:8px; font-family:%2;")
+                 .arg(ui::colors::TEXT_TERTIARY())
+                 .arg(ui::fonts::DATA_FAMILY);
     engine_caption_ = new QLabel(tr("ENGINE:"), bar);
     engine_caption_->setStyleSheet(s);
     auto* v1 = new QLabel("ALGO v1.0", bar);
@@ -214,20 +215,18 @@ void AlgoTradingScreen::update_tab_buttons() {
     QStringList colors = {"#FF6B35", "#00E5FF", "#FFC400", "#FF4081", "#00D66F", "#A78BFA"};
     for (int i = 0; i < tab_buttons_.size(); ++i) {
         bool active = (i == active_tab_);
-        tab_buttons_[i]->setStyleSheet(
-            active
-                ? QString("QPushButton { color:%1; font-size:10px; font-family:%2;"
-                          " padding:4px 12px; border:none; border-bottom:2px solid %1;"
-                          " background:transparent; font-weight:700; }")
-                      .arg(colors[i])
-                      .arg(ui::fonts::DATA_FAMILY())
-                : QString("QPushButton { color:%1; font-size:10px; font-family:%2;"
-                          " padding:4px 12px; border:none;"
-                          " background:transparent; font-weight:400; }"
-                          "QPushButton:hover { color:%3; }")
-                      .arg(ui::colors::TEXT_TERTIARY())
-                      .arg(ui::fonts::DATA_FAMILY())
-                      .arg(colors[i]));
+        tab_buttons_[i]->setStyleSheet(active ? QString("QPushButton { color:%1; font-size:10px; font-family:%2;"
+                                                        " padding:4px 12px; border:none; border-bottom:2px solid %1;"
+                                                        " background:transparent; font-weight:700; }")
+                                                    .arg(colors[i])
+                                                    .arg(ui::fonts::DATA_FAMILY())
+                                              : QString("QPushButton { color:%1; font-size:10px; font-family:%2;"
+                                                        " padding:4px 12px; border:none;"
+                                                        " background:transparent; font-weight:400; }"
+                                                        "QPushButton:hover { color:%3; }")
+                                                    .arg(ui::colors::TEXT_TERTIARY())
+                                                    .arg(ui::fonts::DATA_FAMILY())
+                                                    .arg(colors[i]));
     }
 }
 
@@ -238,10 +237,14 @@ void AlgoTradingScreen::changeEvent(QEvent* event) {
 }
 
 void AlgoTradingScreen::retranslateUi() {
-    if (title_label_)   title_label_->setText(tr("ALGO TRADING"));
-    if (engine_caption_) engine_caption_->setText(tr("ENGINE:"));
-    if (status_label_)  status_label_->setText(tr("IDLE"));
-    if (deploy_count_label_) deploy_count_label_->setText(tr("%1 LIVE").arg(active_deployments_));
+    if (title_label_)
+        title_label_->setText(tr("ALGO TRADING"));
+    if (engine_caption_)
+        engine_caption_->setText(tr("ENGINE:"));
+    if (status_label_)
+        status_label_->setText(tr("IDLE"));
+    if (deploy_count_label_)
+        deploy_count_label_->setText(tr("%1 LIVE").arg(active_deployments_));
 
     // Tab button labels — fixed order matches build_top_bar().
     if (tab_buttons_.size() == 6) {

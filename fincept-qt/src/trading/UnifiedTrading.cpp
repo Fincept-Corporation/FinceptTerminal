@@ -3,15 +3,15 @@
 #include "trading/UnifiedTrading.h"
 
 #include "core/logging/Logger.h"
+#include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
-#include "trading/OrderValidator.h"
+#include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
+#include "trading/OrderValidator.h"
 #include "trading/PaperTrading.h"
 #include "trading/SmartOrderEngine.h"
 #include "trading/StrategyPortfolio.h"
 #include "trading/TradingEvents.h"
-
-#include "storage/sqlite/Database.h"
 
 #include <QJsonObject>
 #include <QMutexLocker>
@@ -199,23 +199,21 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
     // place_order_auto_split() instead.
     const int freeze = qty_freeze_limit(order.symbol, order.exchange);
     if (freeze > 0 && order.quantity > freeze) {
-        const QString err =
-            QString("Quantity %1 exceeds freeze limit %2 for %3 on %4 — "
-                    "use Split Order (split size %2) or place_order_auto_split().")
-                .arg(static_cast<qint64>(order.quantity))
-                .arg(freeze)
-                .arg(order.symbol, order.exchange);
+        const QString err = QString("Quantity %1 exceeds freeze limit %2 for %3 on %4 — "
+                                    "use Split Order (split size %2) or place_order_auto_split().")
+                                .arg(static_cast<qint64>(order.quantity))
+                                .arg(freeze)
+                                .arg(order.symbol, order.exchange);
         publish(OrderFailedEvent{account_id, "PLACE", order.symbol, err, account.trading_mode});
         return {false, "", err, account.trading_mode};
     }
 
-    UnifiedOrderResponse resp = (account.trading_mode == "paper")
-        ? place_paper_order_for_account(account_id, order)
-        : place_live_order_for_account(account_id, order);
+    UnifiedOrderResponse resp = (account.trading_mode == "paper") ? place_paper_order_for_account(account_id, order)
+                                                                  : place_live_order_for_account(account_id, order);
 
     if (resp.success) {
-        publish(OrderPlacedEvent{account_id, resp.order_id, order.symbol, order.exchange,
-                                 order.side, order.quantity, "PLACE", account.trading_mode});
+        publish(OrderPlacedEvent{account_id, resp.order_id, order.symbol, order.exchange, order.side, order.quantity,
+                                 "PLACE", account.trading_mode});
     } else {
         publish(OrderFailedEvent{account_id, "PLACE", order.symbol, resp.message, account.trading_mode});
     }
@@ -246,7 +244,7 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& account_id, con
 }
 
 UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, const QString& order_id,
-                                                   const QJsonObject& modifications) {
+                                                  const QJsonObject& modifications) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
         return {false, "", "Account not found: " + account_id, ""};
@@ -264,7 +262,7 @@ UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, con
 }
 
 UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString& account_id,
-                                                                    const UnifiedOrder& order) {
+                                                                   const UnifiedOrder& order) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.paper_portfolio_id.isEmpty())
         return {false, "", "No paper portfolio for this account", "paper"};
@@ -321,7 +319,7 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString
 }
 
 UnifiedOrderResponse UnifiedTrading::place_live_order_for_account(const QString& account_id,
-                                                                   const UnifiedOrder& order) {
+                                                                  const UnifiedOrder& order) {
     auto account = AccountManager::instance().get_account(account_id);
     auto* broker = BrokerRegistry::instance().get(account.broker_id);
     if (!broker)
@@ -378,8 +376,8 @@ ApiResponse<CancelAllResult> UnifiedTrading::cancel_all_orders(const QString& ac
             }
             result.total_attempted++;
         }
-        publish(AllOrdersCancelledEvent{account_id, (int)result.canceled_order_ids.size(),
-                                        (int)result.failed.size(), "paper"});
+        publish(AllOrdersCancelledEvent{account_id, (int)result.canceled_order_ids.size(), (int)result.failed.size(),
+                                        "paper"});
         return {true, result, {}};
     }
 
@@ -405,7 +403,8 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
         CloseAllResult result;
         auto positions = pt_get_positions(account.paper_portfolio_id);
         for (const auto& pos : positions) {
-            if (pos.quantity == 0) continue;
+            if (pos.quantity == 0)
+                continue;
             result.total_positions++;
             // Close with the OPPOSITE side. Paper positions store quantity as a
             // positive magnitude with side="long"/"short", so the quantity sign is
@@ -416,19 +415,22 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
             const QString side_str = is_short ? QStringLiteral("buy") : QStringLiteral("sell");
             const double fill = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
             try {
-                auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol,
-                    side_str, "market", std::abs(pos.quantity), fill, std::nullopt, false);
+                auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol, side_str, "market",
+                                                  std::abs(pos.quantity), fill, std::nullopt, false);
                 pt_fill_order(paper_order.id, fill);
                 result.closed_symbols.append(pos.symbol);
                 LOG_INFO("UnifiedTrading", QString("close_all paper: %1 %2 x%3 @ %4 (was %5)")
-                                               .arg(side_str, pos.symbol).arg(std::abs(pos.quantity)).arg(fill).arg(pos.side));
+                                               .arg(side_str, pos.symbol)
+                                               .arg(std::abs(pos.quantity))
+                                               .arg(fill)
+                                               .arg(pos.side));
             } catch (const std::exception& e) {
                 result.failed.append({pos.symbol, e.what()});
                 LOG_WARN("UnifiedTrading", QString("close_all paper failed for %1: %2").arg(pos.symbol, e.what()));
             }
         }
-        publish(AllPositionsClosedEvent{account_id, (int)result.closed_symbols.size(),
-                                        (int)result.failed.size(), "paper"});
+        publish(
+            AllPositionsClosedEvent{account_id, (int)result.closed_symbols.size(), (int)result.failed.size(), "paper"});
         return {true, result, {}};
     }
 
@@ -445,10 +447,8 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
     return resp;
 }
 
-ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(
-    const QString& account_id, const QString& symbol,
-    const QString& exchange, const QString& product_type)
-{
+ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(const QString& account_id, const QString& symbol,
+                                                               const QString& exchange, const QString& product_type) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
@@ -458,7 +458,8 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(
         for (const auto& pos : positions) {
             QString pos_sym = pos.symbol;
             if (pos_sym == symbol || pos_sym == exchange + ":" + symbol) {
-                if (pos.quantity == 0) continue;
+                if (pos.quantity == 0)
+                    continue;
                 // Close by the OPPOSITE of the position's `side` (quantity is a
                 // positive magnitude; shorts are +, so the sign is unreliable).
                 const QString dir = pos.side.toLower();
@@ -466,8 +467,8 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(
                 const QString side_str = is_short ? QStringLiteral("buy") : QStringLiteral("sell");
                 const double fill = pos.current_price > 0.0 ? pos.current_price : pos.entry_price;
                 try {
-                    auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol,
-                        side_str, "market", std::abs(pos.quantity), fill, std::nullopt, false);
+                    auto paper_order = pt_place_order(account.paper_portfolio_id, pos.symbol, side_str, "market",
+                                                      std::abs(pos.quantity), fill, std::nullopt, false);
                     pt_fill_order(paper_order.id, fill);
                     return {true, OrderPlaceResponse{true, paper_order.id, {}}, {}};
                 } catch (const std::exception& e) {
@@ -486,9 +487,7 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(
     return broker->close_position(creds, symbol, exchange, product_type);
 }
 
-ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(
-    const QString& account_id, const SmartOrder& order)
-{
+ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& account_id, const SmartOrder& order) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
@@ -513,31 +512,35 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(
             action = order.action;
             quantity = order.quantity;
             if (quantity <= 0)
-                return {true, SmartOrderResult{false, {}, {}, 0,
-                    "No action needed. Position is zero."}, {}};
+                return {true, SmartOrderResult{false, {}, {}, 0, "No action needed. Position is zero."}, {}};
         } else if (target == 0 && current > 0) {
-            action = OrderSide::Sell; quantity = std::abs(current);
+            action = OrderSide::Sell;
+            quantity = std::abs(current);
         } else if (target == 0 && current < 0) {
-            action = OrderSide::Buy; quantity = std::abs(current);
+            action = OrderSide::Buy;
+            quantity = std::abs(current);
         } else if (current == 0) {
             action = (target > 0) ? OrderSide::Buy : OrderSide::Sell;
             quantity = std::abs(target);
         } else if (target > current) {
-            action = OrderSide::Buy; quantity = target - current;
+            action = OrderSide::Buy;
+            quantity = target - current;
         } else if (target < current) {
-            action = OrderSide::Sell; quantity = current - target;
+            action = OrderSide::Sell;
+            quantity = current - target;
         } else {
-            return {true, SmartOrderResult{false, {}, {}, 0,
-                "No action needed. Position already at target."}, {}};
+            return {true, SmartOrderResult{false, {}, {}, 0, "No action needed. Position already at target."}, {}};
         }
 
         auto side_str = (action == OrderSide::Buy) ? QString("buy") : QString("sell");
         try {
-            auto paper_order = pt_place_order(account.paper_portfolio_id, paper_sym,
-                side_str, "market", quantity, std::nullopt, std::nullopt, false);
+            auto paper_order = pt_place_order(account.paper_portfolio_id, paper_sym, side_str, "market", quantity,
+                                              std::nullopt, std::nullopt, false);
             pt_fill_order(paper_order.id, 1000.0);
-            return {true, SmartOrderResult{true, paper_order.id, action, quantity,
-                QString("Paper: adjusted from %1 to %2").arg(current).arg(target)}, {}};
+            return {true,
+                    SmartOrderResult{true, paper_order.id, action, quantity,
+                                     QString("Paper: adjusted from %1 to %2").arg(current).arg(target)},
+                    {}};
         } catch (const std::exception& e) {
             return {false, std::nullopt, QString("Paper smart order failed: %1").arg(e.what())};
         }
@@ -551,10 +554,8 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(
     return SmartOrderEngine::instance().execute(broker, creds, order);
 }
 
-ApiResponse<QVector<BrokerQuote>> UnifiedTrading::get_multi_quotes(
-    const QString& account_id,
-    const QVector<QPair<QString, QString>>& symbols)
-{
+ApiResponse<QVector<BrokerQuote>> UnifiedTrading::get_multi_quotes(const QString& account_id,
+                                                                   const QVector<QPair<QString, QString>>& symbols) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
@@ -567,10 +568,8 @@ ApiResponse<QVector<BrokerQuote>> UnifiedTrading::get_multi_quotes(
     return broker->get_multi_quotes(creds, symbols);
 }
 
-ApiResponse<MarketDepth> UnifiedTrading::get_market_depth(
-    const QString& account_id,
-    const QString& symbol, const QString& exchange)
-{
+ApiResponse<MarketDepth> UnifiedTrading::get_market_depth(const QString& account_id, const QString& symbol,
+                                                          const QString& exchange) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
@@ -594,8 +593,7 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
         BasketOrderResult result;
         result.total = basket.orders.size();
         for (const auto& order : basket.orders) {
-            result.results.append({order.symbol, order.exchange, false, {},
-                                   "Account not found: " + account_id});
+            result.results.append({order.symbol, order.exchange, false, {}, "Account not found: " + account_id});
             result.failed++;
         }
         if (callback)
@@ -616,8 +614,8 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             BasketOrderResult result;
             result.total = basket.orders.size();
             for (const auto& order : basket.orders) {
-                result.results.append({order.symbol, order.exchange, false, {},
-                                       "Broker not found: " + account.broker_id});
+                result.results.append(
+                    {order.symbol, order.exchange, false, {}, "Broker not found: " + account.broker_id});
                 result.failed++;
             }
             if (callback)
@@ -629,9 +627,12 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             BasketOrderResult result;
             result.total = basket.orders.size();
             for (const auto& order : basket.orders) {
-                result.results.append({order.symbol, order.exchange, false, {},
-                                       "No credentials for account " + account.display_name +
-                                           ". Please authenticate."});
+                result.results.append(
+                    {order.symbol,
+                     order.exchange,
+                     false,
+                     {},
+                     "No credentials for account " + account.display_name + ". Please authenticate."});
                 result.failed++;
             }
             if (callback)
@@ -643,8 +644,25 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     // Order BUY legs first so that a basket which both buys and sells uses the
     // bought collateral before selling. stable_partition keeps relative order.
     QVector<UnifiedOrder> orders = basket.orders;
-    std::stable_partition(orders.begin(), orders.end(),
-                          [](const UnifiedOrder& o) { return o.side == OrderSide::Buy; });
+    std::stable_partition(orders.begin(), orders.end(), [](const UnifiedOrder& o) { return o.side == OrderSide::Buy; });
+
+    // Paper MARKET legs need a fill price, but basket builders (BasketOrdersDialog,
+    // options strategies) leave price = 0 on market legs. Backfill from the account
+    // stream's quote cache HERE on the calling (GUI) thread — cached_quote() is
+    // main-thread-only — mirroring how the single-order path injects the screen's
+    // live current_price_. Legs with no cached quote keep price 0 and fail with the
+    // existing "No live price for market fill" message.
+    if (is_paper) {
+        if (auto* stream = DataStreamManager::instance().stream_for(account_id)) {
+            for (auto& o : orders) {
+                if (o.order_type == OrderType::Market && o.price <= 0.0) {
+                    const double ltp = stream->cached_quote(o.symbol).ltp;
+                    if (ltp > 0.0)
+                        o.price = ltp;
+                }
+            }
+        }
+    }
 
     QPointer<UnifiedTrading> self = this;
     (void)QtConcurrent::run([self, orders, is_paper, broker, creds, paper_portfolio_id, callback]() {
@@ -683,9 +701,9 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
                     r.error = "No live price for market fill";
                 } else {
                     try {
-                        auto paper_order = pt_place_order(paper_portfolio_id, order.symbol, side_str, type_str,
-                                                          order.quantity, price_opt, stop_opt, false,
-                                                          order.exchange, product);
+                        auto paper_order =
+                            pt_place_order(paper_portfolio_id, order.symbol, side_str, type_str, order.quantity,
+                                           price_opt, stop_opt, false, order.exchange, product);
                         if (is_market)
                             pt_fill_order(paper_order.id, *price_opt);
                         else
@@ -728,8 +746,8 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty()) {
         SplitOrderResult result;
-        result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
-                               "Account not found: " + account_id});
+        result.results.append(
+            {request.base_order.symbol, request.base_order.exchange, false, {}, "Account not found: " + account_id});
         result.chunks_failed++;
         if (callback)
             callback(result);
@@ -738,8 +756,8 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
 
     if (request.split_size <= 0) {
         SplitOrderResult result;
-        result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
-                               "Invalid split size"});
+        result.results.append(
+            {request.base_order.symbol, request.base_order.exchange, false, {}, "Invalid split size"});
         result.chunks_failed++;
         if (callback)
             callback(result);
@@ -754,7 +772,10 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
 
     if (total_orders > 100) {
         SplitOrderResult result;
-        result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
+        result.results.append({request.base_order.symbol,
+                               request.base_order.exchange,
+                               false,
+                               {},
                                QString("Too many chunks (%1). Maximum is 100.").arg(total_orders)});
         result.chunks_failed++;
         if (callback)
@@ -771,7 +792,10 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         broker = BrokerRegistry::instance().get(account.broker_id);
         if (!broker) {
             SplitOrderResult result;
-            result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
+            result.results.append({request.base_order.symbol,
+                                   request.base_order.exchange,
+                                   false,
+                                   {},
                                    "Broker not found: " + account.broker_id});
             result.chunks_failed++;
             if (callback)
@@ -781,9 +805,11 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         creds = AccountManager::instance().load_credentials(account_id);
         if (creds.access_token.isEmpty()) {
             SplitOrderResult result;
-            result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
-                                   "No credentials for account " + account.display_name +
-                                       ". Please authenticate."});
+            result.results.append({request.base_order.symbol,
+                                   request.base_order.exchange,
+                                   false,
+                                   {},
+                                   "No credentials for account " + account.display_name + ". Please authenticate."});
             result.chunks_failed++;
             if (callback)
                 callback(result);
@@ -800,82 +826,92 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         chunk_qtys.append(remainder);
 
     UnifiedOrder base = request.base_order;
+    // Same paper MARKET-leg price backfill as place_basket_orders: resolve the live
+    // LTP from the account stream's quote cache on the calling (GUI) thread; falls
+    // through to the existing "No live price" error if no quote is cached yet.
+    if (is_paper && base.order_type == OrderType::Market && base.price <= 0.0) {
+        if (auto* stream = DataStreamManager::instance().stream_for(account_id)) {
+            const double ltp = stream->cached_quote(base.symbol).ltp;
+            if (ltp > 0.0)
+                base.price = ltp;
+        }
+    }
     const int delay_ms = request.delay_between_ms;
 
     QPointer<UnifiedTrading> self = this;
-    (void)QtConcurrent::run([self, base, chunk_qtys, delay_ms, is_paper, broker, creds,
-                       paper_portfolio_id, callback]() {
-        SplitOrderResult result;
+    (void)QtConcurrent::run(
+        [self, base, chunk_qtys, delay_ms, is_paper, broker, creds, paper_portfolio_id, callback]() {
+            SplitOrderResult result;
 
-        for (int i = 0; i < chunk_qtys.size(); ++i) {
-            if (i > 0)
-                QThread::msleep(delay_ms);
+            for (int i = 0; i < chunk_qtys.size(); ++i) {
+                if (i > 0)
+                    QThread::msleep(delay_ms);
 
-            UnifiedOrder chunk = base;
-            chunk.quantity = chunk_qtys.at(i);
+                UnifiedOrder chunk = base;
+                chunk.quantity = chunk_qtys.at(i);
 
-            BasketOrderResult::OrderResult r;
-            r.symbol = chunk.symbol;
-            r.exchange = chunk.exchange;
+                BasketOrderResult::OrderResult r;
+                r.symbol = chunk.symbol;
+                r.exchange = chunk.exchange;
 
-            if (is_paper) {
-                // Bare symbol + forwarded exchange/product (same contract as the
-                // keystone) so split chunks mark + square off; no 1000.0 sentinel.
-                const QString side_str = order_side_str(chunk.side);
-                const QString type_str = order_type_str(chunk.order_type);
-                const QString product = product_to_broker_str(chunk.product_type);
-                const bool is_market = (chunk.order_type == OrderType::Market);
-                std::optional<double> price_opt;
-                if (chunk.price > 0)
-                    price_opt = chunk.price;
-                std::optional<double> stop_opt;
-                if (chunk.stop_price > 0)
-                    stop_opt = chunk.stop_price;
-                if (is_market && !price_opt) {
-                    r.success = false;
-                    r.error = "No live price for market fill";
-                } else {
-                    try {
-                        auto paper_order = pt_place_order(paper_portfolio_id, chunk.symbol, side_str, type_str,
-                                                          chunk.quantity, price_opt, stop_opt, false,
-                                                          chunk.exchange, product);
-                        if (is_market)
-                            pt_fill_order(paper_order.id, *price_opt);
-                        else
-                            OrderMatcher::instance().add_order(paper_order);
-                        r.success = true;
-                        r.order_id = paper_order.id;
-                    } catch (const std::exception& e) {
+                if (is_paper) {
+                    // Bare symbol + forwarded exchange/product (same contract as the
+                    // keystone) so split chunks mark + square off; no 1000.0 sentinel.
+                    const QString side_str = order_side_str(chunk.side);
+                    const QString type_str = order_type_str(chunk.order_type);
+                    const QString product = product_to_broker_str(chunk.product_type);
+                    const bool is_market = (chunk.order_type == OrderType::Market);
+                    std::optional<double> price_opt;
+                    if (chunk.price > 0)
+                        price_opt = chunk.price;
+                    std::optional<double> stop_opt;
+                    if (chunk.stop_price > 0)
+                        stop_opt = chunk.stop_price;
+                    if (is_market && !price_opt) {
                         r.success = false;
-                        r.error = QString("Paper order failed: %1").arg(e.what());
+                        r.error = "No live price for market fill";
+                    } else {
+                        try {
+                            auto paper_order =
+                                pt_place_order(paper_portfolio_id, chunk.symbol, side_str, type_str, chunk.quantity,
+                                               price_opt, stop_opt, false, chunk.exchange, product);
+                            if (is_market)
+                                pt_fill_order(paper_order.id, *price_opt);
+                            else
+                                OrderMatcher::instance().add_order(paper_order);
+                            r.success = true;
+                            r.order_id = paper_order.id;
+                        } catch (const std::exception& e) {
+                            r.success = false;
+                            r.error = QString("Paper order failed: %1").arg(e.what());
+                        }
                     }
+                } else {
+                    OrderPlaceResponse resp = broker->place_order(creds, chunk);
+                    r.success = resp.success;
+                    r.order_id = resp.order_id;
+                    r.error = resp.error;
                 }
-            } else {
-                OrderPlaceResponse resp = broker->place_order(creds, chunk);
-                r.success = resp.success;
-                r.order_id = resp.order_id;
-                r.error = resp.error;
+
+                if (r.success) {
+                    result.chunks_successful++;
+                    result.total_quantity_placed += static_cast<int>(chunk.quantity);
+                } else {
+                    result.chunks_failed++;
+                }
+                result.results.append(r);
             }
 
-            if (r.success) {
-                result.chunks_successful++;
-                result.total_quantity_placed += static_cast<int>(chunk.quantity);
-            } else {
-                result.chunks_failed++;
-            }
-            result.results.append(r);
-        }
-
-        if (!self)
-            return;
-        QMetaObject::invokeMethod(
-            self,
-            [self, result, callback]() {
-                if (callback)
-                    callback(result);
-            },
-            Qt::QueuedConnection);
-    });
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, result, callback]() {
+                    if (callback)
+                        callback(result);
+                },
+                Qt::QueuedConnection);
+        });
 }
 
 void UnifiedTrading::place_order_auto_split(const QString& account_id, const UnifiedOrder& order,
@@ -908,11 +944,10 @@ void UnifiedTrading::place_order_auto_split(const QString& account_id, const Uni
     }
 
     // Over the freeze limit — auto-split into chunks of `freeze`.
-    LOG_INFO("UnifiedTrading",
-             QString("Auto-splitting %1 %2 (qty %3 > freeze %4) into chunks of %4")
-                 .arg(account_id, order.symbol)
-                 .arg(static_cast<qint64>(order.quantity))
-                 .arg(freeze));
+    LOG_INFO("UnifiedTrading", QString("Auto-splitting %1 %2 (qty %3 > freeze %4) into chunks of %4")
+                                   .arg(account_id, order.symbol)
+                                   .arg(static_cast<qint64>(order.quantity))
+                                   .arg(freeze));
     SplitOrderRequest req;
     req.base_order = order;
     req.split_size = freeze;

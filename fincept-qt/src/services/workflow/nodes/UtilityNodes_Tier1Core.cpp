@@ -5,9 +5,8 @@
 //
 // Part of the topic-based split of UtilityNodes.cpp.
 
-#include "services/workflow/nodes/UtilityNodes.h"
-
 #include "services/workflow/NodeRegistry.h"
+#include "services/workflow/nodes/UtilityNodes.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -459,6 +458,5 @@ void register_utility_tier1_core(NodeRegistry& registry) {
                 cb(true, out, {});
             },
     });
-
 }
 } // namespace fincept::workflow

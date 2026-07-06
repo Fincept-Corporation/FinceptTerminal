@@ -14,7 +14,9 @@
 
 class QTimer;
 
-namespace fincept::trading { struct BrokerQuote; }
+namespace fincept::trading {
+struct BrokerQuote;
+}
 
 namespace fincept::algo {
 
@@ -27,10 +29,9 @@ namespace fincept::algo {
 class RealtimeScanRunner : public QObject {
     Q_OBJECT
   public:
-    RealtimeScanRunner(QString watch_id, QStringList universe, QJsonArray conditions,
-                       QString logic, QString timeframe, QString broker_id,
-                       QString account_id, QString data_source, int sweep_ms,
-                       int cooldown_min, QObject* parent = nullptr);
+    RealtimeScanRunner(QString watch_id, QStringList universe, QJsonArray conditions, QString logic, QString timeframe,
+                       QString broker_id, QString account_id, QString data_source, int sweep_ms, int cooldown_min,
+                       QObject* parent = nullptr);
     ~RealtimeScanRunner() override;
 
     /// Minimum bars of history the conditions need: max(indicator period,
@@ -40,13 +41,12 @@ class RealtimeScanRunner : public QObject {
     static int required_bars(const QJsonArray& conditions);
 
   public slots:
-    void start();                                                  // scan thread
-    void stop();                                                   // scan thread
+    void start();                                                          // scan thread
+    void stop();                                                           // scan thread
     void warm(const QString& symbol, const QVector<OhlcvCandle>& candles); // scan thread
 
   signals:
-    void match_found(const QString& watch_id, const QString& symbol,
-                     double price, const QString& detail);
+    void match_found(const QString& watch_id, const QString& symbol, double price, const QString& detail);
     void status_changed(const QString& watch_id, const QString& status);
 
   private:
@@ -54,9 +54,9 @@ class RealtimeScanRunner : public QObject {
         std::unique_ptr<CandleAggregator> agg;
         double last_price = 0;
         double prev_price = 0;
-        bool   armed = true;     // edge gate: fire only on false→true
-        bool   dirty = false;    // priced since last sweep
-        bool   warmed = false;   // has history → eligible to evaluate
+        bool armed = true;   // edge gate: fire only on false→true
+        bool dirty = false;  // priced since last sweep
+        bool warmed = false; // has history → eligible to evaluate
         qint64 last_fired_ms = 0;
     };
 
@@ -65,18 +65,18 @@ class RealtimeScanRunner : public QObject {
     QString consumer_id(const QString& symbol) const;
     QVector<OhlcvCandle> eval_window(const SymbolState& st) const;
 
-    const QString    watch_id_;
+    const QString watch_id_;
     const QStringList universe_;
     const QJsonArray conditions_;
-    const QString    logic_;
-    const QString    timeframe_;
-    const Timeframe  tf_enum_;
-    const QString    broker_id_;
-    const QString    account_id_;
-    const QString    data_source_;
-    const int        sweep_ms_;
-    const int        cooldown_min_;
-    const int        required_bars_;
+    const QString logic_;
+    const QString timeframe_;
+    const Timeframe tf_enum_;
+    const QString broker_id_;
+    const QString account_id_;
+    const QString data_source_;
+    const int sweep_ms_;
+    const int cooldown_min_;
+    const int required_bars_;
 
     QHash<QString, SymbolState*> states_; // owned; built in start(), freed in dtor (scan thread)
     QTimer* sweep_timer_ = nullptr;

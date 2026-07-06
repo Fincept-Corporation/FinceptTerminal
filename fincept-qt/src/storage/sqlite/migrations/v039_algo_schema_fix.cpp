@@ -24,8 +24,7 @@ bool v039_column_exists(QSqlDatabase& db, const QString& table, const QString& c
     return false;
 }
 
-Result<void> v039_add_if_missing(QSqlDatabase& db, const QString& table, const QString& column,
-                                 const QString& decl) {
+Result<void> v039_add_if_missing(QSqlDatabase& db, const QString& table, const QString& column, const QString& decl) {
     if (v039_column_exists(db, table, column))
         return Result<void>::ok();
     QSqlQuery q(db);

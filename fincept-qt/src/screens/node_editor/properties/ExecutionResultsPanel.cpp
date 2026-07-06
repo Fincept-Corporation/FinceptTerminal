@@ -77,7 +77,8 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
 
     // Node ID (truncated)
     auto* id_lbl = new QLabel(result.node_id.left(8) + "…");
-    id_lbl->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
+    id_lbl->setStyleSheet(
+        QString("color: %1; font-family: Consolas; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
     id_lbl->setToolTip(result.node_id);
     hl->addWidget(id_lbl);
 
@@ -85,7 +86,8 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
 
     // Duration
     auto* dur_lbl = new QLabel(format_duration(result.duration_ms));
-    dur_lbl->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
+    dur_lbl->setStyleSheet(
+        QString("color: %1; font-family: Consolas; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(dur_lbl);
 
     vl->addWidget(header_row);
@@ -93,9 +95,9 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
     // ── Content ────────────────────────────────────────────────────
     if (!ok) {
         // Error message
-        auto* err = new QLabel(result.error.isEmpty()
-                                   ? QCoreApplication::translate("ExecutionResultsPanel", "Unknown error")
-                                   : result.error);
+        auto* err =
+            new QLabel(result.error.isEmpty() ? QCoreApplication::translate("ExecutionResultsPanel", "Unknown error")
+                                              : result.error);
         err->setWordWrap(true);
         err->setTextInteractionFlags(Qt::TextSelectableByMouse);
         err->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
@@ -174,7 +176,8 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
         auto* val = new QLabel(value_to_string(result.output));
         val->setWordWrap(true);
         val->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        val->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_PRIMARY()));
+        val->setStyleSheet(
+            QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_PRIMARY()));
         vl->addWidget(val);
     }
 
@@ -222,7 +225,7 @@ void ExecutionResultsPanel::build_ui() {
 
     title_label_ = new QLabel(tr("EXECUTION RESULTS"));
     title_label_->setStyleSheet(QString("color: %1; font-family: Consolas; font-size: 10px;"
-                                         " font-weight: bold; letter-spacing: 0.5px;")
+                                        " font-weight: bold; letter-spacing: 0.5px;")
                                     .arg(ui::colors::AMBER()));
     hl->addWidget(title_label_);
 
@@ -421,26 +424,26 @@ void ExecutionResultsPanel::refresh_status_label() {
     QString text;
     QString color = ui::colors::TEXT_TERTIARY.get();
     switch (run_state_) {
-    case RunState::Idle:
-        text = tr("IDLE");
-        color = ui::colors::TEXT_TERTIARY.get();
-        break;
-    case RunState::Running:
-        text = tr("RUNNING…");
-        color = ui::colors::AMBER.get();
-        break;
-    case RunState::Done:
-        text = tr("DONE  %1").arg(format_duration(last_total_ms_));
-        color = ui::colors::POSITIVE.get();
-        break;
-    case RunState::Stopped:
-        text = tr("STOPPED");
-        color = ui::colors::NEGATIVE.get();
-        break;
-    case RunState::Failed:
-        text = tr("FAILED  %1").arg(last_failure_);
-        color = ui::colors::NEGATIVE.get();
-        break;
+        case RunState::Idle:
+            text = tr("IDLE");
+            color = ui::colors::TEXT_TERTIARY.get();
+            break;
+        case RunState::Running:
+            text = tr("RUNNING…");
+            color = ui::colors::AMBER.get();
+            break;
+        case RunState::Done:
+            text = tr("DONE  %1").arg(format_duration(last_total_ms_));
+            color = ui::colors::POSITIVE.get();
+            break;
+        case RunState::Stopped:
+            text = tr("STOPPED");
+            color = ui::colors::NEGATIVE.get();
+            break;
+        case RunState::Failed:
+            text = tr("FAILED  %1").arg(last_failure_);
+            color = ui::colors::NEGATIVE.get();
+            break;
     }
     status_label_->setText(text);
     status_label_->setStyleSheet(QString("color: %1; font-family: Consolas;"
@@ -455,9 +458,12 @@ void ExecutionResultsPanel::changeEvent(QEvent* event) {
 }
 
 void ExecutionResultsPanel::retranslateUi() {
-    if (title_label_) title_label_->setText(tr("EXECUTION RESULTS"));
-    if (collapse_btn_) collapse_btn_->setToolTip(tr("Expand / Collapse"));
-    if (clear_btn_) clear_btn_->setText(tr("CLEAR"));
+    if (title_label_)
+        title_label_->setText(tr("EXECUTION RESULTS"));
+    if (collapse_btn_)
+        collapse_btn_->setToolTip(tr("Expand / Collapse"));
+    if (clear_btn_)
+        clear_btn_->setText(tr("CLEAR"));
     if (copy_btn_) {
         copy_btn_->setText(tr("COPY"));
         copy_btn_->setToolTip(tr("Copy all results to clipboard"));

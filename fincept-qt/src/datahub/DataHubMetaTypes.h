@@ -17,19 +17,19 @@
 //      DataHubMetaTypes.cpp::register_metatypes().
 
 #include "screens/relationship_map/RelationshipMapTypes.h" // RelationshipData
-#include "services/dbnomics/DBnomicsModels.h"            // DbnDataPoint
-#include "services/economics/EconomicsService.h"        // EconomicsResult
-#include "services/geopolitics/GeopoliticsTypes.h"       // NewsEvent, HDXDataset, UniqueCountry, UniqueCategory
-#include "services/gov_data/GovDataService.h"           // GovDataResult
-#include "services/maritime/MaritimeTypes.h"             // VesselData
-#include "services/markets/MarketDataService.h"         // QuoteData, HistoryPoint, InfoData
-#include "services/news/NewsService.h"                  // NewsArticle
-#include "services/options/FiiDiiTypes.h"                // FiiDiiDay
-#include "services/options/OptionChainTypes.h"          // OptionChain, OptionChainRow, Strategy, …
-#include "services/polymarket/PolymarketTypes.h"        // OrderBook
-#include "services/prediction/PredictionTypes.h"        // PredictionOrderBook, PredictionMarket, …
-#include "services/wallet/WalletTypes.h"               // WalletBalance, TokenHolding, TokenPrice (=FncptPrice), TokenMetadata
-#include "trading/TradingTypes.h"                       // TickerData, OrderBookData, Candle, TradeData, Broker*
+#include "services/dbnomics/DBnomicsModels.h"              // DbnDataPoint
+#include "services/economics/EconomicsService.h"           // EconomicsResult
+#include "services/geopolitics/GeopoliticsTypes.h"         // NewsEvent, HDXDataset, UniqueCountry, UniqueCategory
+#include "services/gov_data/GovDataService.h"              // GovDataResult
+#include "services/maritime/MaritimeTypes.h"               // VesselData
+#include "services/markets/MarketDataService.h"            // QuoteData, HistoryPoint, InfoData
+#include "services/news/NewsService.h"                     // NewsArticle
+#include "services/options/FiiDiiTypes.h"                  // FiiDiiDay
+#include "services/options/OptionChainTypes.h"             // OptionChain, OptionChainRow, Strategy, …
+#include "services/polymarket/PolymarketTypes.h"           // OrderBook
+#include "services/prediction/PredictionTypes.h"           // PredictionOrderBook, PredictionMarket, …
+#include "services/wallet/WalletTypes.h" // WalletBalance, TokenHolding, TokenPrice (=FncptPrice), TokenMetadata
+#include "trading/TradingTypes.h"        // TickerData, OrderBookData, Candle, TradeData, Broker*
 
 #include <QMetaType>
 

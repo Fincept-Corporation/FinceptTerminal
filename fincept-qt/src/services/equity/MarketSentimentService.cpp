@@ -134,7 +134,8 @@ void MarketSentimentService::fetch_snapshot(const QString& symbol, int days, boo
         int coverage = 0;
 
         for (const auto& source_id : ordered_sources) {
-            const auto source = pending->sources.value(source_id, SentimentSourceSnapshot{source_id, sentiment::source_label(source_id)});
+            const auto source = pending->sources.value(
+                source_id, SentimentSourceSnapshot{source_id, sentiment::source_label(source_id)});
             pending->snapshot.sources.append(source);
             if (source.available) {
                 total_buzz += source.buzz_score;
@@ -159,10 +160,8 @@ void MarketSentimentService::fetch_snapshot(const QString& symbol, int days, boo
         }
 
         CacheManager::instance().put(
-            key,
-            QVariant(QJsonDocument(sentiment::snapshot_to_json(pending->snapshot)).toJson(QJsonDocument::Compact)),
-            kCacheTtlSec,
-            "equity");
+            key, QVariant(QJsonDocument(sentiment::snapshot_to_json(pending->snapshot)).toJson(QJsonDocument::Compact)),
+            kCacheTtlSec, "equity");
 
         emit snapshot_loaded(pending->symbol, pending->snapshot);
     };
@@ -188,10 +187,9 @@ void MarketSentimentService::fetch_snapshot(const QString& symbol, int days, boo
                     snapshot = sentiment::parse_compare_payload(source_id, doc.object());
                 }
             } else {
-                LOG_WARN(
-                    "MarketSentiment",
-                    QString("Adanos request failed for %1 (%2): %3")
-                        .arg(source_id, request_url.toString(QUrl::RemoveQuery), reply->errorString()));
+                LOG_WARN("MarketSentiment",
+                         QString("Adanos request failed for %1 (%2): %3")
+                             .arg(source_id, request_url.toString(QUrl::RemoveQuery), reply->errorString()));
                 if (pending->request_id == active_request_id_) {
                     emit error_occurred(
                         "market_sentiment",

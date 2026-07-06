@@ -38,7 +38,7 @@ class CryptoTickerBar : public QWidget {
     double last_high_display_ = -1;
     double last_low_display_ = -1;
     double last_volume_display_ = -1;
-    int last_volume_unit_ = -1;  // 0=raw, 1=M, 2=B
+    int last_volume_unit_ = -1; // 0=raw, 1=M, 2=B
     double last_bid_display_ = -1;
     double last_ask_display_ = -1;
     double last_spread_display_ = -1;

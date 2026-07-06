@@ -225,8 +225,9 @@ void NorenWebSocket::on_ws_message(const QString& message) {
             resubscribe_all();
             emit connected();
         } else {
-            LOG_ERROR("NorenWS", QString("Auth failed: %1")
-                                     .arg(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))));
+            LOG_ERROR(
+                "NorenWS",
+                QString("Auth failed: %1").arg(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))));
             emit error_occurred(QStringLiteral("Authentication failed"));
         }
         return;

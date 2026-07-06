@@ -30,12 +30,11 @@
 #include "ui/charts/CandleData.h"
 #include "ui/charts/ChartOverlayManager.h"
 #include "ui/charts/IndicatorPicker.h"
-#include "ui/charts/layers/EmaLayer.h"
-#include "ui/charts/layers/VwapLayer.h"
 #include "ui/charts/layers/BollingerLayer.h"
-#include "ui/charts/layers/SupportResistanceLayer.h"
+#include "ui/charts/layers/EmaLayer.h"
 #include "ui/charts/layers/PivotLayer.h"
-
+#include "ui/charts/layers/SupportResistanceLayer.h"
+#include "ui/charts/layers/VwapLayer.h"
 #include "ui/theme/Theme.h"
 
 #include <QCandlestickSeries>
@@ -46,8 +45,8 @@
 #include <QDateTimeAxis>
 #include <QEnterEvent>
 #include <QFont>
-#include <QGraphicsLayout>
 #include <QGraphicsEllipseItem>
+#include <QGraphicsLayout>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
@@ -60,8 +59,8 @@
 #include <QPen>
 #include <QStyle>
 #include <QToolTip>
-#include <QValueAxis>
 #include <QVBoxLayout>
+#include <QValueAxis>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -80,12 +79,18 @@ namespace {
 // QCandlestickSeries renders bars as hairlines) and to pick the time-axis
 // label format.
 qint64 tf_slot_ms(const QString& tf) {
-    if (tf == QLatin1String("1m"))  return 60'000;
-    if (tf == QLatin1String("5m"))  return 5 * 60'000;
-    if (tf == QLatin1String("15m")) return 15 * 60'000;
-    if (tf == QLatin1String("1h"))  return 60 * 60'000;
-    if (tf == QLatin1String("4h"))  return 4 * 60 * 60'000;
-    if (tf == QLatin1String("1d"))  return 24 * 60 * 60'000;
+    if (tf == QLatin1String("1m"))
+        return 60'000;
+    if (tf == QLatin1String("5m"))
+        return 5 * 60'000;
+    if (tf == QLatin1String("15m"))
+        return 15 * 60'000;
+    if (tf == QLatin1String("1h"))
+        return 60 * 60'000;
+    if (tf == QLatin1String("4h"))
+        return 4 * 60 * 60'000;
+    if (tf == QLatin1String("1d"))
+        return 24 * 60 * 60'000;
     return 60'000;
 }
 
@@ -95,9 +100,12 @@ qint64 tf_slot_ms(const QString& tf) {
 QString time_format_for(qint64 span_ms) {
     constexpr qint64 kHour = 60LL * 60 * 1000;
     constexpr qint64 kDay = 24 * kHour;
-    if (span_ms <= 6 * kHour)        return QStringLiteral("HH:mm");
-    if (span_ms <= 3 * kDay)         return QStringLiteral("MMM dd HH:mm");
-    if (span_ms <= 90 * kDay)        return QStringLiteral("MMM dd");
+    if (span_ms <= 6 * kHour)
+        return QStringLiteral("HH:mm");
+    if (span_ms <= 3 * kDay)
+        return QStringLiteral("MMM dd HH:mm");
+    if (span_ms <= 90 * kDay)
+        return QStringLiteral("MMM dd");
     return QStringLiteral("MMM yy");
 }
 
@@ -117,8 +125,7 @@ QFont scene_font() {
 // itself. Also enables wheel-zoom on the price axis and drag-pan.
 class HoverChartView : public QChartView {
   public:
-    HoverChartView(QChart* chart, CryptoChart* host)
-        : QChartView(chart), host_(host) {
+    HoverChartView(QChart* chart, CryptoChart* host) : QChartView(chart), host_(host) {
         setMouseTracking(true);
         setRenderHint(QPainter::Antialiasing, true);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -136,7 +143,8 @@ class HoverChartView : public QChartView {
         QChartView::mouseMoveEvent(e);
     }
     void leaveEvent(QEvent* e) override {
-        if (host_) host_->on_hover_leave();
+        if (host_)
+            host_->on_hover_leave();
         QChartView::leaveEvent(e);
     }
     void wheelEvent(QWheelEvent* e) override {
@@ -185,7 +193,8 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
         tf_buttons_[i]->setObjectName("cryptoTfBtn");
         tf_buttons_[i]->setCursor(Qt::PointingHandCursor);
         tf_buttons_[i]->setFocusPolicy(Qt::NoFocus);
-        if (i == active_tf_) tf_buttons_[i]->setProperty("active", true);
+        if (i == active_tf_)
+            tf_buttons_[i]->setProperty("active", true);
         connect(tf_buttons_[i], &QPushButton::clicked, this, [this, i]() { set_active_tf(i); });
         h_layout->addWidget(tf_buttons_[i]);
     }
@@ -276,13 +285,12 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     QPen dot_pen;
     dot_pen.setColor(QColor(colors::AMBER()));
     dot_pen.setWidthF(1.0);
-    xhair_dot_ = scene->addEllipse(QRectF(-3, -3, 6, 6), dot_pen,
-                                    QBrush(QColor(colors::BG_BASE())));
+    xhair_dot_ = scene->addEllipse(QRectF(-3, -3, 6, 6), dot_pen, QBrush(QColor(colors::BG_BASE())));
     xhair_dot_->setZValue(23);
     xhair_dot_->setVisible(false);
 
-    auto build_tag = [&](QGraphicsRectItem*& bg, QGraphicsSimpleTextItem*& txt,
-                         const QColor& fill, const QColor& text_color) {
+    auto build_tag = [&](QGraphicsRectItem*& bg, QGraphicsSimpleTextItem*& txt, const QColor& fill,
+                         const QColor& text_color) {
         bg = scene->addRect(QRectF(), QPen(Qt::NoPen), QBrush(fill));
         bg->setZValue(21);
         bg->setVisible(false);
@@ -293,8 +301,8 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
         txt->setVisible(false);
     };
     build_tag(price_tag_bg_, price_tag_txt_, QColor(colors::BG_RAISED()), QColor(colors::TEXT_PRIMARY()));
-    build_tag(time_tag_bg_,  time_tag_txt_,  QColor(colors::BG_RAISED()), QColor(colors::TEXT_PRIMARY()));
-    build_tag(last_tag_bg_,  last_tag_txt_,  QColor(colors::AMBER()),     QColor(colors::BG_BASE()));
+    build_tag(time_tag_bg_, time_tag_txt_, QColor(colors::BG_RAISED()), QColor(colors::TEXT_PRIMARY()));
+    build_tag(last_tag_bg_, last_tag_txt_, QColor(colors::AMBER()), QColor(colors::BG_BASE()));
 
     // ── OHLC tooltip pinned to top-left of the chart widget ────────────────
     ohlc_tooltip_ = new QLabel(chart_view_);
@@ -309,20 +317,18 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     overlay_mgr_ = new fincept::ui::ChartOverlayManager(this);
     overlay_mgr_->set_chart(chart_view_->scene(), chart_);
 
-    connect(chart_, &QChart::plotAreaChanged, this, [this](const QRectF&) {
-        overlay_mgr_->reposition_all();
-    });
+    connect(chart_, &QChart::plotAreaChanged, this, [this](const QRectF&) { overlay_mgr_->reposition_all(); });
 
     indicator_picker_ = new fincept::ui::IndicatorPicker(overlay_mgr_, this);
     layout->insertWidget(layout->indexOf(chart_view_), indicator_picker_);
 
-    connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_requested,
-            this, [this](const QString& id) {
+    connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_requested, this, [this](const QString& id) {
         using namespace fincept::ui;
         OverlayLayer* layer = nullptr;
         if (id.startsWith("ema_")) {
             int period = id.mid(4).toInt();
-            if (period <= 0) period = 21;
+            if (period <= 0)
+                period = 21;
             const QColor colors[] = {QColor("#d97706"), QColor("#16a34a"), QColor("#2563eb"), QColor("#dc2626")};
             int idx = (period == 9) ? 0 : (period == 21) ? 1 : (period == 50) ? 2 : 3;
             layer = new EmaLayer(period, colors[idx]);
@@ -339,10 +345,8 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
             overlay_mgr_->add_layer(layer);
     });
 
-    connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_removed,
-            this, [this](const QString& id) {
-        overlay_mgr_->remove_layer(id);
-    });
+    connect(indicator_picker_, &fincept::ui::IndicatorPicker::indicator_removed, this,
+            [this](const QString& id) { overlay_mgr_->remove_layer(id); });
 }
 
 void CryptoChart::changeEvent(QEvent* event) {
@@ -352,7 +356,8 @@ void CryptoChart::changeEvent(QEvent* event) {
 }
 
 void CryptoChart::retranslateUi() {
-    if (title_label_) title_label_->setText(tr("CHART"));
+    if (title_label_)
+        title_label_->setText(tr("CHART"));
     // Timeframe button labels (1m/5m/…) are fixed codes, not translatable.
 }
 
@@ -425,8 +430,7 @@ void CryptoChart::append_candle(const trading::Candle& candle) {
         }
         if (sets.size() >= MAX_VISIBLE) {
             const auto* oldest = sets.first();
-            if (!bounds_dirty_ &&
-                (oldest->low() <= cached_min_price_ || oldest->high() >= cached_max_price_)) {
+            if (!bounds_dirty_ && (oldest->low() <= cached_min_price_ || oldest->high() >= cached_max_price_)) {
                 bounds_dirty_ = true;
             }
             series_->remove(sets.first());
@@ -477,11 +481,14 @@ void CryptoChart::recompute_bounds() {
 void CryptoChart::clear() {
     candles_.clear();
     series_->clear();
-    if (last_price_line_) last_price_line_->clear();
+    if (last_price_line_)
+        last_price_line_->clear();
     cached_min_price_ = cached_max_price_ = -1;
     bounds_dirty_ = true;
-    if (last_tag_bg_) last_tag_bg_->setVisible(false);
-    if (last_tag_txt_) last_tag_txt_->setVisible(false);
+    if (last_tag_bg_)
+        last_tag_bg_->setVisible(false);
+    if (last_tag_txt_)
+        last_tag_txt_->setVisible(false);
     on_hover_leave();
 }
 
@@ -515,8 +522,7 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
     }
 
     if (min_time != last_min_time_ || effective_max != last_max_time_) {
-        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time),
-                             QDateTime::fromMSecsSinceEpoch(effective_max));
+        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(effective_max));
         last_min_time_ = min_time;
         last_max_time_ = effective_max;
     }
@@ -525,7 +531,8 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
 }
 
 void CryptoChart::apply_tf_axis_format() {
-    if (!time_axis_) return;
+    if (!time_axis_)
+        return;
     const qint64 span = std::max<qint64>(0, last_max_time_ - last_min_time_);
     time_axis_->setFormat(time_format_for(span));
 }
@@ -553,8 +560,10 @@ void CryptoChart::rebuild_chart() {
         series_->append(new QCandlestickSet(c.open, c.high, c.low, c.close, c.timestamp));
         min_price = std::min(min_price, c.low);
         max_price = std::max(max_price, c.high);
-        if (c.timestamp < min_time) min_time = c.timestamp;
-        if (c.timestamp > max_time) max_time = c.timestamp;
+        if (c.timestamp < min_time)
+            min_time = c.timestamp;
+        if (c.timestamp > max_time)
+            max_time = c.timestamp;
     }
 
     if (min_price < max_price) {
@@ -568,8 +577,10 @@ void CryptoChart::rebuild_chart() {
 
 void CryptoChart::update_last_price_marker() {
     if (!last_price_line_ || candles_.isEmpty()) {
-        if (last_tag_bg_) last_tag_bg_->setVisible(false);
-        if (last_tag_txt_) last_tag_txt_->setVisible(false);
+        if (last_tag_bg_)
+            last_tag_bg_->setVisible(false);
+        if (last_tag_txt_)
+            last_tag_txt_->setVisible(false);
         return;
     }
     const auto& last = candles_.last();
@@ -601,7 +612,8 @@ void CryptoChart::update_last_price_marker() {
 }
 
 void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint& view_pos) {
-    if (!chart_ || candles_.isEmpty()) return;
+    if (!chart_ || candles_.isEmpty())
+        return;
 
     const QRectF plot = chart_->plotArea();
     if (!plot.contains(view_pos)) {
@@ -627,8 +639,10 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
     // While the cursor is over the chart, hide the always-visible "last
     // price" tag — otherwise it overlaps the live cursor price tag whenever
     // the cursor sits at the same y-level as the last close.
-    if (last_tag_bg_)  last_tag_bg_->setVisible(false);
-    if (last_tag_txt_) last_tag_txt_->setVisible(false);
+    if (last_tag_bg_)
+        last_tag_bg_->setVisible(false);
+    if (last_tag_txt_)
+        last_tag_txt_->setVisible(false);
 
     constexpr qreal kPadX = 6;
     constexpr qreal kPadY = 3;
@@ -676,76 +690,85 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
     qint64 best = std::numeric_limits<qint64>::max();
     for (const auto& c : candles_) {
         const qint64 d = std::llabs(static_cast<qint64>(c.timestamp) - cursor_ms);
-        if (d < best) { best = d; hit = &c; }
+        if (d < best) {
+            best = d;
+            hit = &c;
+        }
     }
     if (hit) {
         const bool up = hit->close >= hit->open;
         const double pct = (hit->close - hit->open) / std::max(1e-12, hit->open) * 100.0;
-        const QString chg = QString("%1%2%")
-                                .arg(pct >= 0 ? QStringLiteral("+") : QString())
-                                .arg(QString::number(pct, 'f', 2));
+        const QString chg =
+            QString("%1%2%").arg(pct >= 0 ? QStringLiteral("+") : QString()).arg(QString::number(pct, 'f', 2));
         const QString time_str =
             QDateTime::fromMSecsSinceEpoch(hit->timestamp).toString(QStringLiteral("MMM dd  HH:mm"));
-        const QString dir_color = up ? QString::fromLatin1(colors::POSITIVE())
-                                     : QString::fromLatin1(colors::NEGATIVE());
-        const QString dim   = QString::fromLatin1(colors::TEXT_TERTIARY());
-        const QString fg    = QString::fromLatin1(colors::TEXT_PRIMARY());
+        const QString dir_color =
+            up ? QString::fromLatin1(colors::POSITIVE()) : QString::fromLatin1(colors::NEGATIVE());
+        const QString dim = QString::fromLatin1(colors::TEXT_TERTIARY());
+        const QString fg = QString::fromLatin1(colors::TEXT_PRIMARY());
         const QString green = QString::fromLatin1(colors::POSITIVE());
-        const QString red   = QString::fromLatin1(colors::NEGATIVE());
+        const QString red = QString::fromLatin1(colors::NEGATIVE());
 
         // Vertical layout: header row + four label/value rows + change row.
         // Numeric values use a fixed-width <td> so different price magnitudes
         // (e.g. 79655.40 vs 9.50) don't push the values into different
         // columns from row to row. font-family:Consolas keeps digits aligned.
-        const QString tpl = QStringLiteral(
-            "<div style='font-family:Consolas,Courier New,monospace;'>"
-            "<div style='color:%1;font-size:10px;font-weight:700;letter-spacing:0.8px;"
-            "  margin-bottom:6px;'>%2</div>"
-            "<table cellspacing='0' cellpadding='0' style='border-spacing:0;font-size:12px;'>"
-            "<tr>"
-            "  <td style='color:%1;font-weight:700;padding-right:10px;'>O</td>"
-            "  <td style='color:%3;text-align:right;'>%4</td>"
-            "</tr><tr>"
-            "  <td style='color:%1;font-weight:700;padding-right:10px;padding-top:1px;'>H</td>"
-            "  <td style='color:%5;text-align:right;padding-top:1px;'>%6</td>"
-            "</tr><tr>"
-            "  <td style='color:%1;font-weight:700;padding-right:10px;padding-top:1px;'>L</td>"
-            "  <td style='color:%7;text-align:right;padding-top:1px;'>%8</td>"
-            "</tr><tr>"
-            "  <td style='color:%1;font-weight:700;padding-right:10px;padding-top:1px;'>C</td>"
-            "  <td style='color:%9;text-align:right;font-weight:700;padding-top:1px;'>%10</td>"
-            "</tr><tr>"
-            "  <td colspan='2' style='padding-top:6px;color:%9;font-weight:700;text-align:right;"
-            "    border-top:1px solid #1a1a1a;'>%11</td>"
-            "</tr>"
-            "</table>"
-            "</div>");
-        ohlc_tooltip_->setText(tpl
-            .arg(dim)                                      // %1 dim/label colour
-            .arg(time_str)                                 // %2 timestamp
-            .arg(fg)                                       // %3 open colour
-            .arg(QString::number(hit->open,  'f', 2))      // %4
-            .arg(green)                                    // %5 high colour
-            .arg(QString::number(hit->high,  'f', 2))      // %6
-            .arg(red)                                      // %7 low colour
-            .arg(QString::number(hit->low,   'f', 2))      // %8
-            .arg(dir_color)                                // %9 close + Δ%
-            .arg(QString::number(hit->close, 'f', 2))      // %10
-            .arg(chg));                                    // %11
+        const QString tpl =
+            QStringLiteral("<div style='font-family:Consolas,Courier New,monospace;'>"
+                           "<div style='color:%1;font-size:10px;font-weight:700;letter-spacing:0.8px;"
+                           "  margin-bottom:6px;'>%2</div>"
+                           "<table cellspacing='0' cellpadding='0' style='border-spacing:0;font-size:12px;'>"
+                           "<tr>"
+                           "  <td style='color:%1;font-weight:700;padding-right:10px;'>O</td>"
+                           "  <td style='color:%3;text-align:right;'>%4</td>"
+                           "</tr><tr>"
+                           "  <td style='color:%1;font-weight:700;padding-right:10px;padding-top:1px;'>H</td>"
+                           "  <td style='color:%5;text-align:right;padding-top:1px;'>%6</td>"
+                           "</tr><tr>"
+                           "  <td style='color:%1;font-weight:700;padding-right:10px;padding-top:1px;'>L</td>"
+                           "  <td style='color:%7;text-align:right;padding-top:1px;'>%8</td>"
+                           "</tr><tr>"
+                           "  <td style='color:%1;font-weight:700;padding-right:10px;padding-top:1px;'>C</td>"
+                           "  <td style='color:%9;text-align:right;font-weight:700;padding-top:1px;'>%10</td>"
+                           "</tr><tr>"
+                           "  <td colspan='2' style='padding-top:6px;color:%9;font-weight:700;text-align:right;"
+                           "    border-top:1px solid #1a1a1a;'>%11</td>"
+                           "</tr>"
+                           "</table>"
+                           "</div>");
+        ohlc_tooltip_->setText(tpl.arg(dim)                                  // %1 dim/label colour
+                                   .arg(time_str)                            // %2 timestamp
+                                   .arg(fg)                                  // %3 open colour
+                                   .arg(QString::number(hit->open, 'f', 2))  // %4
+                                   .arg(green)                               // %5 high colour
+                                   .arg(QString::number(hit->high, 'f', 2))  // %6
+                                   .arg(red)                                 // %7 low colour
+                                   .arg(QString::number(hit->low, 'f', 2))   // %8
+                                   .arg(dir_color)                           // %9 close + Δ%
+                                   .arg(QString::number(hit->close, 'f', 2)) // %10
+                                   .arg(chg));                               // %11
         ohlc_tooltip_->adjustSize();
         ohlc_tooltip_->setVisible(true);
     }
 }
 
 void CryptoChart::on_hover_leave() {
-    if (xhair_v_)      xhair_v_->setVisible(false);
-    if (xhair_h_)      xhair_h_->setVisible(false);
-    if (xhair_dot_)    xhair_dot_->setVisible(false);
-    if (price_tag_bg_) price_tag_bg_->setVisible(false);
-    if (price_tag_txt_)price_tag_txt_->setVisible(false);
-    if (time_tag_bg_)  time_tag_bg_->setVisible(false);
-    if (time_tag_txt_) time_tag_txt_->setVisible(false);
-    if (ohlc_tooltip_) ohlc_tooltip_->setVisible(false);
+    if (xhair_v_)
+        xhair_v_->setVisible(false);
+    if (xhair_h_)
+        xhair_h_->setVisible(false);
+    if (xhair_dot_)
+        xhair_dot_->setVisible(false);
+    if (price_tag_bg_)
+        price_tag_bg_->setVisible(false);
+    if (price_tag_txt_)
+        price_tag_txt_->setVisible(false);
+    if (time_tag_bg_)
+        time_tag_bg_->setVisible(false);
+    if (time_tag_txt_)
+        time_tag_txt_->setVisible(false);
+    if (ohlc_tooltip_)
+        ohlc_tooltip_->setVisible(false);
     // Bring the always-visible last-price tag back now that the cursor's
     // gone — recompute in case anything moved while we were hovering.
     update_last_price_marker();

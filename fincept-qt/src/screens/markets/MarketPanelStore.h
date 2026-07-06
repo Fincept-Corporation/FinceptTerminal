@@ -25,7 +25,7 @@ class MarketPanelStore {
     static QVector<MarketPanelConfig> build_defaults();
 
     static constexpr const char* kSettingsKey = "markets_panel_configs";
-    static constexpr const char* kCategory    = "markets_panels";
+    static constexpr const char* kCategory = "markets_panels";
 };
 
 } // namespace fincept::screens

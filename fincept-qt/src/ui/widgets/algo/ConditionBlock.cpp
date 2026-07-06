@@ -10,8 +10,7 @@ using fincept::services::algo::algo_operators;
 
 namespace fincept::ui::algo {
 
-ConditionBlock::ConditionBlock(bool is_entry, QWidget* parent)
-    : QFrame(parent), is_entry_(is_entry) {
+ConditionBlock::ConditionBlock(bool is_entry, QWidget* parent) : QFrame(parent), is_entry_(is_entry) {
     setObjectName(is_entry ? QStringLiteral("conditionBlockEntry") : QStringLiteral("conditionBlockExit"));
     setFrameShape(QFrame::StyledPanel);
     build_ui();
@@ -24,17 +23,17 @@ void ConditionBlock::changeEvent(QEvent* event) {
 }
 
 void ConditionBlock::retranslateUi() {
-    if (remove_btn_) remove_btn_->setToolTip(tr("Remove condition"));
-    if (between_and_) between_and_->setText(tr("and"));
+    if (remove_btn_)
+        remove_btn_->setToolTip(tr("Remove condition"));
+    if (between_and_)
+        between_and_->setText(tr("and"));
     // Re-apply the translatable operator labels in place (preserving each item's
     // stored operator data and the current selection). The first five entries are
     // raw comparison symbols (data, not translated); only the named operators do.
     if (operator_combo_) {
-        const QStringList labels = {QStringLiteral(">"),  QStringLiteral("<"),
-                                    QStringLiteral(">="), QStringLiteral("<="),
-                                    QStringLiteral("=="), tr("Crosses Above"),
-                                    tr("Crosses Below"),  tr("Rising"),
-                                    tr("Falling")};
+        const QStringList labels = {QStringLiteral(">"),  QStringLiteral("<"),  QStringLiteral(">="),
+                                    QStringLiteral("<="), QStringLiteral("=="), tr("Crosses Above"),
+                                    tr("Crosses Below"),  tr("Rising"),         tr("Falling")};
         for (int i = 0; i < operator_combo_->count() && i < labels.size(); ++i)
             operator_combo_->setItemText(i, labels[i]);
     }
@@ -109,8 +108,7 @@ void ConditionBlock::build_ui() {
 
 void ConditionBlock::populate_operators() {
     const auto ops = algo_operators();
-    const QStringList labels = {">", "<", ">=", "<=", "==",
-                                tr("Crosses Above"), tr("Crosses Below"),
+    const QStringList labels = {">",          "<",          ">=", "<=", "==", tr("Crosses Above"), tr("Crosses Below"),
                                 tr("Rising"), tr("Falling")};
     for (int i = 0; i < ops.size() && i < labels.size(); ++i)
         operator_combo_->addItem(labels[i], ops[i]);

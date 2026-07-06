@@ -69,8 +69,9 @@ void EconomicsView::build_ui() {
                                              "QHeaderView::section { background:%4; color:%5; border:none;"
                                              "  border-bottom:2px solid %6; padding:3px 8px; font-size:9px;"
                                              "  font-weight:700; letter-spacing:0.5px; }")
-                                         .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                                              ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
+                                         .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(),
+                                              ui::colors::BORDER_DIM(), ui::colors::BG_SURFACE(),
+                                              ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
     ind_layout->addWidget(indicators_table_, 1);
     layout->addWidget(ind_section, 5);
 
@@ -101,8 +102,9 @@ void EconomicsView::build_ui() {
     macro_set_key_btn_->setCursor(Qt::PointingHandCursor);
     macro_set_key_btn_->setFixedHeight(24);
     macro_set_key_btn_->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %1; font-size:9px;"
-                "  font-weight:700; letter-spacing:1px; padding:0 10px; } QPushButton:hover { background:%1; color:#000; }")
+        QString(
+            "QPushButton { background:transparent; color:%1; border:1px solid %1; font-size:9px;"
+            "  font-weight:700; letter-spacing:1px; padding:0 10px; } QPushButton:hover { background:%1; color:#000; }")
             .arg(ui::colors::AMBER()));
     macro_set_key_btn_->setVisible(false);
     connect(macro_set_key_btn_, &QPushButton::clicked, this, [this]() {
@@ -162,7 +164,8 @@ void EconomicsView::build_ui() {
 
     sensitivity_table_ = new QTableWidget;
     sensitivity_table_->setColumnCount(4);
-    sensitivity_table_->setHorizontalHeaderLabels({tr("FACTOR SHOCK"), tr("SENSITIVITY"), tr("DIRECTION"), tr("ESTIMATED IMPACT")});
+    sensitivity_table_->setHorizontalHeaderLabels(
+        {tr("FACTOR SHOCK"), tr("SENSITIVITY"), tr("DIRECTION"), tr("ESTIMATED IMPACT")});
     sensitivity_table_->setSelectionMode(QAbstractItemView::NoSelection);
     sensitivity_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     sensitivity_table_->setShowGrid(false);
@@ -215,37 +218,36 @@ void EconomicsView::fetch_macro() {
     args << QDate::currentDate().addDays(-120).toString("yyyy-MM-dd");
 
     QPointer<EconomicsView> self = this;
-    fincept::python::PythonRunner::instance().run(
-        "fred_data.py", args, [self](const fincept::python::PythonResult& r) {
-            if (!self)
-                return;
-            self->macro_loading_ = false;
-            self->macro_loaded_ = true;
-            self->macro_values_.clear();
-            self->macro_dates_.clear();
+    fincept::python::PythonRunner::instance().run("fred_data.py", args, [self](const fincept::python::PythonResult& r) {
+        if (!self)
+            return;
+        self->macro_loading_ = false;
+        self->macro_loaded_ = true;
+        self->macro_values_.clear();
+        self->macro_dates_.clear();
 
-            const auto doc = QJsonDocument::fromJson(r.output.trimmed().toUtf8());
-            if (!r.success || !doc.isArray()) {
-                self->macro_status_ =
-                    tr("Could not load live macro data. Add a free FRED API key in Settings → API Credentials.");
-                self->update_macro_table();
-                return;
-            }
-            for (const auto v : doc.array()) {
-                const auto o = v.toObject();
-                if (o.contains("error"))
-                    continue;
-                const QString id = o.value("series_id").toString();
-                const auto obs = o.value("observations").toArray();
-                if (obs.isEmpty())
-                    continue;
-                const auto last = obs.last().toObject();
-                self->macro_values_[id] = last.value("value").toDouble();
-                self->macro_dates_[id] = last.value("date").toString();
-            }
-            self->macro_status_.clear();
+        const auto doc = QJsonDocument::fromJson(r.output.trimmed().toUtf8());
+        if (!r.success || !doc.isArray()) {
+            self->macro_status_ =
+                tr("Could not load live macro data. Add a free FRED API key in Settings → API Credentials.");
             self->update_macro_table();
-        });
+            return;
+        }
+        for (const auto v : doc.array()) {
+            const auto o = v.toObject();
+            if (o.contains("error"))
+                continue;
+            const QString id = o.value("series_id").toString();
+            const auto obs = o.value("observations").toArray();
+            if (obs.isEmpty())
+                continue;
+            const auto last = obs.last().toObject();
+            self->macro_values_[id] = last.value("value").toDouble();
+            self->macro_dates_[id] = last.value("date").toString();
+        }
+        self->macro_status_.clear();
+        self->update_macro_table();
+    });
 }
 
 void EconomicsView::update_macro_table() {
@@ -256,8 +258,9 @@ void EconomicsView::update_macro_table() {
                                  ? tr("Live levels from the U.S. Federal Reserve (FRED). Your factor exposures below "
                                       "show how the portfolio reacts to moves in each.")
                                  : macro_status_);
-        macro_note_->setStyleSheet(QString("color:%1; font-size:9px;")
-                                       .arg(macro_status_.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::WARNING()));
+        macro_note_->setStyleSheet(
+            QString("color:%1; font-size:9px;")
+                .arg(macro_status_.isEmpty() ? ui::colors::TEXT_TERTIARY() : ui::colors::WARNING()));
     }
     // Offer the inline key-entry button whenever live data failed to load.
     if (macro_set_key_btn_)
@@ -275,7 +278,8 @@ void EconomicsView::update_macro_table() {
             macro_table_->setItem(r, col, it);
         };
         const bool have = macro_values_.contains(m.id);
-        const QString val = have ? (QString::number(macro_values_.value(m.id), 'f', 2) + m.suffix) : QStringLiteral("—");
+        const QString val =
+            have ? (QString::number(macro_values_.value(m.id), 'f', 2) + m.suffix) : QStringLiteral("—");
         set(0, tr(m.label), ui::colors::TEXT_PRIMARY, Qt::AlignLeft);
         set(1, val, have ? ui::colors::CYAN : ui::colors::TEXT_TERTIARY, Qt::AlignRight);
         set(2, macro_dates_.value(m.id, QStringLiteral("—")), ui::colors::TEXT_TERTIARY, Qt::AlignRight);
@@ -289,10 +293,14 @@ void EconomicsView::changeEvent(QEvent* event) {
 }
 
 void EconomicsView::retranslateUi() {
-    if (ind_title_)  ind_title_->setText(tr("PORTFOLIO ECONOMICS OVERVIEW"));
-    if (ind_note_)   ind_note_->setText(tr("Per-holding contribution to portfolio value, P&L, and risk"));
-    if (sens_title_) sens_title_->setText(tr("PORTFOLIO FACTOR SENSITIVITY"));
-    if (sens_note_)  sens_note_->setText(tr("Estimated portfolio impact from macro factor shocks, weighted by holdings"));
+    if (ind_title_)
+        ind_title_->setText(tr("PORTFOLIO ECONOMICS OVERVIEW"));
+    if (ind_note_)
+        ind_note_->setText(tr("Per-holding contribution to portfolio value, P&L, and risk"));
+    if (sens_title_)
+        sens_title_->setText(tr("PORTFOLIO FACTOR SENSITIVITY"));
+    if (sens_note_)
+        sens_note_->setText(tr("Estimated portfolio impact from macro factor shocks, weighted by holdings"));
 
     if (indicators_table_)
         indicators_table_->setHorizontalHeaderLabels(

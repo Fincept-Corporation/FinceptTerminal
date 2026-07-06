@@ -6,7 +6,6 @@
 
 #define QT_CHARTS_USE_NAMESPACE
 #include <QChart>
-#include <QTabBar>
 #include <QChartView>
 #include <QDateTimeAxis>
 #include <QEvent>
@@ -14,6 +13,7 @@
 #include <QHeaderView>
 #include <QLineSeries>
 #include <QMessageBox>
+#include <QTabBar>
 #include <QVBoxLayout>
 #include <QValueAxis>
 
@@ -219,7 +219,8 @@ QWidget* CustomIndexView::build_index_list_panel() {
 
     index_list_table_ = new QTableWidget;
     index_list_table_->setColumnCount(6);
-    index_list_table_->setHorizontalHeaderLabels({tr("NAME"), tr("METHOD"), tr("BASE"), tr("CURRENT VALUE"), tr("CHANGE"), tr("CREATED")});
+    index_list_table_->setHorizontalHeaderLabels(
+        {tr("NAME"), tr("METHOD"), tr("BASE"), tr("CURRENT VALUE"), tr("CHANGE"), tr("CREATED")});
     index_list_table_->setSelectionMode(QAbstractItemView::SingleSelection);
     index_list_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     index_list_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -264,7 +265,8 @@ QWidget* CustomIndexView::build_performance_panel() {
     // Page 0 — placeholder
     perf_placeholder_ = new QLabel(tr("Select an index from MY INDICES to see its performance."));
     perf_placeholder_->setAlignment(Qt::AlignCenter);
-    perf_placeholder_->setStyleSheet(QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
+    perf_placeholder_->setStyleSheet(
+        QString("color:%1; font-size:11px; padding:40px;").arg(ui::colors::TEXT_TERTIARY()));
     perf_stack_->addWidget(perf_placeholder_);
 
     // Page 1 — chart
@@ -539,19 +541,31 @@ void CustomIndexView::changeEvent(QEvent* event) {
 
 void CustomIndexView::retranslateUi() {
     if (tabs_) {
-        if (create_tab_index_ >= 0)     tabs_->setTabText(create_tab_index_, tr("CREATE INDEX"));
-        if (my_indices_tab_index_ >= 0) tabs_->setTabText(my_indices_tab_index_, tr("MY INDICES"));
-        if (performance_tab_index_ >= 0) tabs_->setTabText(performance_tab_index_, tr("PERFORMANCE"));
+        if (create_tab_index_ >= 0)
+            tabs_->setTabText(create_tab_index_, tr("CREATE INDEX"));
+        if (my_indices_tab_index_ >= 0)
+            tabs_->setTabText(my_indices_tab_index_, tr("MY INDICES"));
+        if (performance_tab_index_ >= 0)
+            tabs_->setTabText(performance_tab_index_, tr("PERFORMANCE"));
     }
-    if (create_title_)       create_title_->setText(tr("CREATE CUSTOM INDEX"));
-    if (name_field_label_)   name_field_label_->setText(tr("NAME:"));
-    if (method_field_label_) method_field_label_->setText(tr("METHOD:"));
-    if (base_field_label_)   base_field_label_->setText(tr("BASE:"));
-    if (name_edit_)          name_edit_->setPlaceholderText(tr("My Custom Index"));
-    if (create_btn_)         create_btn_->setText(tr("CREATE INDEX"));
-    if (const_title_)        const_title_->setText(tr("CONSTITUENTS (from portfolio holdings)"));
-    if (indices_title_)      indices_title_->setText(tr("MY CUSTOM INDICES"));
-    if (delete_btn_)         delete_btn_->setText(tr("DELETE SELECTED"));
+    if (create_title_)
+        create_title_->setText(tr("CREATE CUSTOM INDEX"));
+    if (name_field_label_)
+        name_field_label_->setText(tr("NAME:"));
+    if (method_field_label_)
+        method_field_label_->setText(tr("METHOD:"));
+    if (base_field_label_)
+        base_field_label_->setText(tr("BASE:"));
+    if (name_edit_)
+        name_edit_->setPlaceholderText(tr("My Custom Index"));
+    if (create_btn_)
+        create_btn_->setText(tr("CREATE INDEX"));
+    if (const_title_)
+        const_title_->setText(tr("CONSTITUENTS (from portfolio holdings)"));
+    if (indices_title_)
+        indices_title_->setText(tr("MY CUSTOM INDICES"));
+    if (delete_btn_)
+        delete_btn_->setText(tr("DELETE SELECTED"));
     if (list_empty_msg_)
         list_empty_msg_->setText(
             tr("No custom indices created yet.\nGo to CREATE INDEX tab to build one from your portfolio."));

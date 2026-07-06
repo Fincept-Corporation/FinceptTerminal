@@ -14,12 +14,12 @@ namespace fincept::cloud {
 
 /// Parsed finceptgo response envelope: { success, message, data, error, hint }.
 struct CloudResponse {
-    bool ok = false;     // transport succeeded AND envelope success AND 2xx
-    int status = 0;      // HTTP status code
-    QJsonValue data;     // envelope "data" (object or array)
-    QString error;       // envelope "error" code, or a transport error token
-    QString message;     // human-readable message
-    QString hint;        // optional fix-up hint
+    bool ok = false; // transport succeeded AND envelope success AND 2xx
+    int status = 0;  // HTTP status code
+    QJsonValue data; // envelope "data" (object or array)
+    QString error;   // envelope "error" code, or a transport error token
+    QString message; // human-readable message
+    QString hint;    // optional fix-up hint
 
     bool is_insufficient_credits() const { return error == QLatin1String("insufficient_credits"); }
     bool is_auth_error() const { return status == 401 || status == 403; }

@@ -29,33 +29,38 @@ double round_to(double v, int decimals) {
 
 // Bars per year for timeframe-aware Sharpe annualisation (mirrors the old engine).
 double bars_per_year(const QString& tf) {
-    if (tf == "1m")  return 252.0 * 390.0;
-    if (tf == "3m")  return 252.0 * 130.0;
-    if (tf == "5m")  return 252.0 * 78.0;
-    if (tf == "15m") return 252.0 * 26.0;
-    if (tf == "30m") return 252.0 * 13.0;
-    if (tf == "1h")  return 252.0 * 6.5;
-    if (tf == "4h")  return 252.0 * 1.625;
-    if (tf == "1d")  return 252.0;
+    if (tf == "1m")
+        return 252.0 * 390.0;
+    if (tf == "3m")
+        return 252.0 * 130.0;
+    if (tf == "5m")
+        return 252.0 * 78.0;
+    if (tf == "15m")
+        return 252.0 * 26.0;
+    if (tf == "30m")
+        return 252.0 * 13.0;
+    if (tf == "1h")
+        return 252.0 * 6.5;
+    if (tf == "4h")
+        return 252.0 * 1.625;
+    if (tf == "1d")
+        return 252.0;
     return 252.0;
 }
 
 } // namespace
 
-QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
-                                const QJsonArray& entry_conditions, const QString& entry_logic,
-                                const QJsonArray& exit_conditions, const QString& exit_logic,
-                                double stop_loss_pct, double take_profit_pct, double trailing_stop_pct,
-                                double initial_capital, const QString& timeframe,
+QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles, const QJsonArray& entry_conditions,
+                                const QString& entry_logic, const QJsonArray& exit_conditions,
+                                const QString& exit_logic, double stop_loss_pct, double take_profit_pct,
+                                double trailing_stop_pct, double initial_capital, const QString& timeframe,
                                 double position_size_pct) {
     const int n = candles.size();
     const double size_frac = std::clamp(position_size_pct, 1.0, 100.0) / 100.0;
     if (n < kWarmupBars + 10) {
         QJsonObject err;
         err["success"] = false;
-        err["error"] = QString("Insufficient data: %1 candles (need at least %2)")
-                           .arg(n)
-                           .arg(kWarmupBars + 10);
+        err["error"] = QString("Insufficient data: %1 candles (need at least %2)").arg(n).arg(kWarmupBars + 10);
         return err;
     }
 
@@ -180,14 +185,13 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
             if (!entry_sampled && !g.details.isEmpty() && !std::isnan(g.details.first().computed_value)) {
                 entry_sampled = true;
                 for (const auto& d : g.details)
-                    LOG_INFO("Backtest",
-                             QString("  entry[bar %1] %2.%3 %4  lhs=%5 rhs=%6 met=%7 err=%8")
-                                 .arg(i)
-                                 .arg(d.indicator, d.field, d.op)
-                                 .arg(d.computed_value)
-                                 .arg(d.target_value)
-                                 .arg(d.met ? QStringLiteral("Y") : QStringLiteral("N"))
-                                 .arg(d.error));
+                    LOG_INFO("Backtest", QString("  entry[bar %1] %2.%3 %4  lhs=%5 rhs=%6 met=%7 err=%8")
+                                             .arg(i)
+                                             .arg(d.indicator, d.field, d.op)
+                                             .arg(d.computed_value)
+                                             .arg(d.target_value)
+                                             .arg(d.met ? QStringLiteral("Y") : QStringLiteral("N"))
+                                             .arg(d.error));
             }
         } else if (in_pos && !exit_signal && !exit_conditions.isEmpty()) {
             if (ConditionEvaluator::evaluate_group(exit_conditions, exit_logic, window).triggered) {
@@ -211,14 +215,13 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
     if (in_pos)
         close_trade(candles[n - 1].close, "end_of_data", n - 1);
 
-    LOG_INFO("Backtest",
-             QString("done: evalBars=%1 entryTrue=%2 exitTrue=%3 entryErr=%4 trades=%5 lastErr='%6'")
-                 .arg(entry_eval_count)
-                 .arg(entry_true_count)
-                 .arg(exit_true_count)
-                 .arg(entry_err_count)
-                 .arg(trades.size())
-                 .arg(last_entry_err));
+    LOG_INFO("Backtest", QString("done: evalBars=%1 entryTrue=%2 exitTrue=%3 entryErr=%4 trades=%5 lastErr='%6'")
+                             .arg(entry_eval_count)
+                             .arg(entry_true_count)
+                             .arg(exit_true_count)
+                             .arg(entry_err_count)
+                             .arg(trades.size())
+                             .arg(last_entry_err));
 
     // ── Metrics ─────────────────────────────────────────────────────────────
     const int total_trades = trades.size();
@@ -361,7 +364,8 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles,
     }
 
     const double bench_final = benchmark_curve.isEmpty() ? initial_capital : benchmark_curve.last();
-    const double bench_return_pct = initial_capital > 0 ? (bench_final - initial_capital) / initial_capital * 100.0 : 0.0;
+    const double bench_return_pct =
+        initial_capital > 0 ? (bench_final - initial_capital) / initial_capital * 100.0 : 0.0;
 
     out["total_trades"] = total_trades;
     out["winning_trades"] = wins;

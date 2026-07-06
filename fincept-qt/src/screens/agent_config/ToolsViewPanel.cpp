@@ -65,7 +65,8 @@ static QString btn_primary_style() {
                    "font-size:11px;font-weight:700;letter-spacing:1px;}"
                    "QPushButton:hover{background:%3;}"
                    "QPushButton:disabled{background:%4;color:%5;}")
-        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(), ui::colors::BG_RAISED(), ui::colors::TEXT_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(), ui::colors::BG_RAISED(),
+             ui::colors::TEXT_DIM());
 }
 
 static QString btn_secondary_style() {
@@ -809,13 +810,20 @@ void ToolsViewPanel::changeEvent(QEvent* event) {
 
 void ToolsViewPanel::retranslateUi() {
     // Left panel.
-    if (assign_to_hdr_)     assign_to_hdr_->setText(tr("ASSIGN TO"));
-    if (radio_agent_)       radio_agent_->setText(tr("Agent"));
-    if (radio_team_)        radio_team_->setText(tr("Team"));
-    if (target_combo_)      target_combo_->setPlaceholderText(tr("Select target..."));
-    if (selected_tools_hdr_) selected_tools_hdr_->setText(tr("SELECTED TOOLS"));
-    if (remove_btn_)        remove_btn_->setText(tr("REMOVE"));
-    if (clear_btn_)         clear_btn_->setText(tr("CLEAR"));
+    if (assign_to_hdr_)
+        assign_to_hdr_->setText(tr("ASSIGN TO"));
+    if (radio_agent_)
+        radio_agent_->setText(tr("Agent"));
+    if (radio_team_)
+        radio_team_->setText(tr("Team"));
+    if (target_combo_)
+        target_combo_->setPlaceholderText(tr("Select target..."));
+    if (selected_tools_hdr_)
+        selected_tools_hdr_->setText(tr("SELECTED TOOLS"));
+    if (remove_btn_)
+        remove_btn_->setText(tr("REMOVE"));
+    if (clear_btn_)
+        clear_btn_->setText(tr("CLEAR"));
     if (assign_btn_) {
         assign_btn_->setText(tr("ASSIGN →"));
         assign_btn_->setToolTip(tr("Save selected tools to the chosen agent or team"));
@@ -826,20 +834,30 @@ void ToolsViewPanel::retranslateUi() {
         target_status_->setText(tr("No target selected"));
 
     // Center panel.
-    if (available_hdr_)  available_hdr_->setText(tr("AVAILABLE TOOLS"));
-    if (assigned_hint_)  assigned_hint_->setText(tr("● = already assigned"));
-    if (search_edit_)    search_edit_->setPlaceholderText(tr("Search tools..."));
-    if (add_btn_)        add_btn_->setText(tr("+ ADD TO SELECTION"));
+    if (available_hdr_)
+        available_hdr_->setText(tr("AVAILABLE TOOLS"));
+    if (assigned_hint_)
+        assigned_hint_->setText(tr("● = already assigned"));
+    if (search_edit_)
+        search_edit_->setPlaceholderText(tr("Search tools..."));
+    if (add_btn_)
+        add_btn_->setText(tr("+ ADD TO SELECTION"));
     if (copy_btn_ && copy_btn_->text() != tr("COPIED!"))
         copy_btn_->setText(tr("COPY NAME"));
 
     // Right panel section headers + placeholders.
-    if (detail_hdr_)      detail_hdr_->setText(tr("TOOL DETAIL"));
-    if (description_hdr_) description_hdr_->setText(tr("DESCRIPTION"));
-    if (parameters_hdr_)  parameters_hdr_->setText(tr("PARAMETERS"));
-    if (used_by_hdr_)     used_by_hdr_->setText(tr("USED BY"));
-    if (detail_desc_)     detail_desc_->setPlaceholderText(tr("Click a tool to see details..."));
-    if (detail_used_by_)  detail_used_by_->setPlaceholderText(tr("No agents or teams use this tool yet."));
+    if (detail_hdr_)
+        detail_hdr_->setText(tr("TOOL DETAIL"));
+    if (description_hdr_)
+        description_hdr_->setText(tr("DESCRIPTION"));
+    if (parameters_hdr_)
+        parameters_hdr_->setText(tr("PARAMETERS"));
+    if (used_by_hdr_)
+        used_by_hdr_->setText(tr("USED BY"));
+    if (detail_desc_)
+        detail_desc_->setPlaceholderText(tr("Click a tool to see details..."));
+    if (detail_used_by_)
+        detail_used_by_->setPlaceholderText(tr("No agents or teams use this tool yet."));
     // detail_name_ shows the selected tool name; only restore the prompt when idle.
     if (detail_name_ && current_tool_.isEmpty())
         detail_name_->setText(tr("Select a tool"));

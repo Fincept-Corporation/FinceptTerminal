@@ -131,7 +131,8 @@ Result<void> LayoutCatalog::upsert_index_row(const layout::Workspace& w) {
 Result<LayoutId> LayoutCatalog::save_workspace(const layout::Workspace& w_in) {
     if (!opened_) {
         auto r = open();
-        if (r.is_err()) return Result<LayoutId>::err(r.error());
+        if (r.is_err())
+            return Result<LayoutId>::err(r.error());
     }
 
     layout::Workspace w = w_in;
@@ -153,9 +154,8 @@ Result<LayoutId> LayoutCatalog::save_workspace(const layout::Workspace& w_in) {
 
     auto idx = upsert_index_row(w);
     if (idx.is_err()) {
-        LOG_WARN(kCatalogTag,
-                 QString("File written but index update failed for %1: %2")
-                     .arg(w.id.to_string(), QString::fromStdString(idx.error())));
+        LOG_WARN(kCatalogTag, QString("File written but index update failed for %1: %2")
+                                  .arg(w.id.to_string(), QString::fromStdString(idx.error())));
         return Result<LayoutId>::err(idx.error());
     }
     LOG_INFO(kCatalogTag, QString("Saved layout '%1' (uuid=%2)").arg(w.name, w.id.to_string()));
@@ -166,7 +166,8 @@ Result<LayoutId> LayoutCatalog::save_workspace(const layout::Workspace& w_in) {
 Result<layout::Workspace> LayoutCatalog::load_workspace(const LayoutId& id) {
     if (!opened_) {
         auto r = open();
-        if (r.is_err()) return Result<layout::Workspace>::err(r.error());
+        if (r.is_err())
+            return Result<layout::Workspace>::err(r.error());
     }
     const QString path = file_path_for_(id);
     QFile f(path);
@@ -188,7 +189,8 @@ Result<layout::Workspace> LayoutCatalog::load_workspace(const LayoutId& id) {
 Result<void> LayoutCatalog::remove_layout(const LayoutId& id) {
     if (!opened_) {
         auto r = open();
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     QFile::remove(file_path_for_(id));
     // Best-effort thumbnail cleanup; not fatal if it's missing.
@@ -219,7 +221,8 @@ Result<void> LayoutCatalog::remove_layout(const LayoutId& id) {
 Result<QList<LayoutCatalog::Entry>> LayoutCatalog::list_layouts() {
     if (!opened_) {
         auto r = open();
-        if (r.is_err()) return Result<QList<Entry>>::err(r.error());
+        if (r.is_err())
+            return Result<QList<Entry>>::err(r.error());
     }
     QSqlDatabase db = QSqlDatabase::database(kConnectionName);
     if (!db.isOpen())
@@ -248,20 +251,23 @@ Result<QList<LayoutCatalog::Entry>> LayoutCatalog::list_layouts() {
 
 Result<QList<LayoutCatalog::Entry>> LayoutCatalog::recent_layouts(int limit, bool include_auto) {
     auto r = list_layouts();
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
     QList<Entry> filtered;
     for (const auto& e : r.value()) {
         if (!include_auto && e.kind == QStringLiteral("auto"))
             continue;
         filtered.append(e);
-        if (filtered.size() >= limit) break;
+        if (filtered.size() >= limit)
+            break;
     }
     return Result<QList<Entry>>::ok(filtered);
 }
 
 LayoutId LayoutCatalog::find_by_name(const QString& name) {
     auto r = list_layouts();
-    if (r.is_err()) return LayoutId();
+    if (r.is_err())
+        return LayoutId();
     for (const auto& e : r.value()) {
         if (e.name.compare(name, Qt::CaseInsensitive) == 0)
             return e.id;
@@ -271,7 +277,8 @@ LayoutId LayoutCatalog::find_by_name(const QString& name) {
 
 Result<void> LayoutCatalog::export_to(const LayoutId& id, const QString& path) {
     auto wr = load_workspace(id);
-    if (wr.is_err()) return Result<void>::err(wr.error());
+    if (wr.is_err())
+        return Result<void>::err(wr.error());
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return Result<void>::err(("Export open failed: " + f.errorString()).toStdString());
@@ -310,14 +317,15 @@ Result<void> LayoutCatalog::set_meta(const QString& key, const QString& value) {
 
 Result<LayoutId> LayoutCatalog::last_loaded_id() const {
     auto m = meta(QStringLiteral("last_loaded_uuid"));
-    if (m.is_err()) return Result<LayoutId>::err(m.error());
-    if (m.value().isEmpty()) return Result<LayoutId>::ok(LayoutId());
+    if (m.is_err())
+        return Result<LayoutId>::err(m.error());
+    if (m.value().isEmpty())
+        return Result<LayoutId>::ok(LayoutId());
     return Result<LayoutId>::ok(LayoutId::from_string(m.value()));
 }
 
 Result<void> LayoutCatalog::set_last_loaded_id(const LayoutId& id) {
-    return set_meta(QStringLiteral("last_loaded_uuid"),
-                    id.is_null() ? QString() : id.to_string());
+    return set_meta(QStringLiteral("last_loaded_uuid"), id.is_null() ? QString() : id.to_string());
 }
 
 Result<LayoutId> LayoutCatalog::import_from(const QString& path) {

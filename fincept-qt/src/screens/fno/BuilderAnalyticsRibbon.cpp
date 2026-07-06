@@ -50,20 +50,19 @@ void set_pnl_color(QLabel* lbl, const QString& pnl_class) {
     lbl->style()->polish(lbl);
 }
 
-}  // namespace
+} // namespace
 
 BuilderAnalyticsRibbon::BuilderAnalyticsRibbon(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoBuilderRibbon");
-    setStyleSheet(QString(
-        "#fnoBuilderRibbon { background:%1; border-bottom:1px solid %2; }"
-        "#fnoRbnKey { color:%3; font-size:9px; font-weight:700; "
-        "  letter-spacing:0.6px; background:transparent; }"
-        "#fnoRbnVal { color:%4; font-size:11px; font-weight:700; background:transparent; }"
-        "QLabel[pnl=\"positive\"] { color: #16a34a; }"
-        "QLabel[pnl=\"negative\"] { color: #dc2626; }"
-        "QLabel[pnl=\"neutral\"]  { color: %4; }")
-                      .arg(colors::BG_RAISED(), colors::BORDER_DIM(),
-                           colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY()));
+    setStyleSheet(
+        QString("#fnoBuilderRibbon { background:%1; border-bottom:1px solid %2; }"
+                "#fnoRbnKey { color:%3; font-size:9px; font-weight:700; "
+                "  letter-spacing:0.6px; background:transparent; }"
+                "#fnoRbnVal { color:%4; font-size:11px; font-weight:700; background:transparent; }"
+                "QLabel[pnl=\"positive\"] { color: #16a34a; }"
+                "QLabel[pnl=\"negative\"] { color: #dc2626; }"
+                "QLabel[pnl=\"neutral\"]  { color: %4; }")
+            .arg(colors::BG_RAISED(), colors::BORDER_DIM(), colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY()));
     setup_ui();
 }
 
@@ -106,10 +105,10 @@ void BuilderAnalyticsRibbon::setup_ui() {
 void BuilderAnalyticsRibbon::update_from(const Strategy& s, const StrategyAnalytics& a) {
     Q_UNUSED(s);
 
-    lbl_premium_->setText(fmt_currency(std::abs(a.premium_paid)) +
-                          (a.premium_paid > 0 ? "  Dr" : a.premium_paid < 0 ? "  Cr" : ""));
-    set_pnl_color(lbl_premium_, a.premium_paid > 0 ? "negative"
-                                : a.premium_paid < 0 ? "positive" : "neutral");
+    lbl_premium_->setText(fmt_currency(std::abs(a.premium_paid)) + (a.premium_paid > 0   ? "  Dr"
+                                                                    : a.premium_paid < 0 ? "  Cr"
+                                                                                         : ""));
+    set_pnl_color(lbl_premium_, a.premium_paid > 0 ? "negative" : a.premium_paid < 0 ? "positive" : "neutral");
 
     lbl_max_profit_->setText(fmt_currency(a.max_profit));
     set_pnl_color(lbl_max_profit_, "positive");
@@ -154,8 +153,8 @@ void BuilderAnalyticsRibbon::update_from(const Strategy& s, const StrategyAnalyt
 }
 
 void BuilderAnalyticsRibbon::clear() {
-    for (auto* l : {lbl_premium_, lbl_max_profit_, lbl_max_loss_, lbl_breakevens_, lbl_pop_,
-                    lbl_delta_, lbl_gamma_, lbl_theta_, lbl_vega_, lbl_margin_}) {
+    for (auto* l : {lbl_premium_, lbl_max_profit_, lbl_max_loss_, lbl_breakevens_, lbl_pop_, lbl_delta_, lbl_gamma_,
+                    lbl_theta_, lbl_vega_, lbl_margin_}) {
         l->setText(QString::fromUtf8("—"));
         set_pnl_color(l, "neutral");
     }
@@ -180,16 +179,26 @@ void BuilderAnalyticsRibbon::changeEvent(QEvent* event) {
 
 void BuilderAnalyticsRibbon::retranslateUi() {
     // Keys mirror add_kv's .toUpper() rendering. Value cells carry data only.
-    if (key_premium_)     key_premium_->setText(tr("Premium").toUpper());
-    if (key_max_profit_)  key_max_profit_->setText(tr("Max Profit").toUpper());
-    if (key_max_loss_)    key_max_loss_->setText(tr("Max Loss").toUpper());
-    if (key_breakevens_)  key_breakevens_->setText(tr("Breakevens").toUpper());
-    if (key_pop_)         key_pop_->setText(tr("POP").toUpper());
-    if (key_delta_)       key_delta_->setText(tr("Delta").toUpper());
-    if (key_gamma_)       key_gamma_->setText(tr("Gamma").toUpper());
-    if (key_theta_)       key_theta_->setText(tr("Theta").toUpper());
-    if (key_vega_)        key_vega_->setText(tr("Vega").toUpper());
-    if (key_margin_)      key_margin_->setText(tr("Margin").toUpper());
+    if (key_premium_)
+        key_premium_->setText(tr("Premium").toUpper());
+    if (key_max_profit_)
+        key_max_profit_->setText(tr("Max Profit").toUpper());
+    if (key_max_loss_)
+        key_max_loss_->setText(tr("Max Loss").toUpper());
+    if (key_breakevens_)
+        key_breakevens_->setText(tr("Breakevens").toUpper());
+    if (key_pop_)
+        key_pop_->setText(tr("POP").toUpper());
+    if (key_delta_)
+        key_delta_->setText(tr("Delta").toUpper());
+    if (key_gamma_)
+        key_gamma_->setText(tr("Gamma").toUpper());
+    if (key_theta_)
+        key_theta_->setText(tr("Theta").toUpper());
+    if (key_vega_)
+        key_vega_->setText(tr("Vega").toUpper());
+    if (key_margin_)
+        key_margin_->setText(tr("Margin").toUpper());
 }
 
 } // namespace fincept::screens::fno

@@ -9,9 +9,11 @@ namespace {
 
 constexpr double kSqrt2 = 1.4142135623730951;
 
-inline double max0(double v) { return std::max(v, 0.0); }
+inline double max0(double v) {
+    return std::max(v, 0.0);
+}
 
-}  // namespace
+} // namespace
 
 double normal_cdf(double x) {
     return 0.5 * (1.0 + std::erf(x / kSqrt2));

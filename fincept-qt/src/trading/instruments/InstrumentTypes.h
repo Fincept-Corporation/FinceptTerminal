@@ -51,7 +51,7 @@ struct Instrument {
     int lot_size = 1;
     InstrumentType instrument_type = InstrumentType::UNKNOWN;
     double tick_size = 0.05;
-    QString broker_id; // "zerodha", "angelone", etc.
+    QString broker_id;    // "zerodha", "angelone", etc.
     QString broker_token; // Native non-numeric key (Upstox instrument_key "NSE_EQ|INE…",
                           // Samco "758960_NSE"). Empty for numeric-token brokers, which
                           // keep their value in instrument_token.
@@ -59,9 +59,7 @@ struct Instrument {
     /// Canonical DataHub topic id for this instrument: "<exchange>:<symbol>"
     /// when exchange is set, else just the symbol. Stable across brokers.
     /// Used to compose topics like "market:quote:NSE:RELIANCE".
-    QString canonical_topic_id() const {
-        return exchange.isEmpty() ? symbol : exchange + ":" + symbol;
-    }
+    QString canonical_topic_id() const { return exchange.isEmpty() ? symbol : exchange + ":" + symbol; }
 };
 
 } // namespace fincept::trading

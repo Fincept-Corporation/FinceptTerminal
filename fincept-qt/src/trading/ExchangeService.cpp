@@ -38,8 +38,7 @@ ExchangeService::ExchangeService() {
 
     // Re-emit the pool's ready() signal as our own daemon_ready() so existing
     // consumers (e.g. CryptoTradingScreen) need no changes.
-    connect(&ExchangeDaemonPool::instance(), &ExchangeDaemonPool::ready, this,
-            [this]() { emit daemon_ready(); });
+    connect(&ExchangeDaemonPool::instance(), &ExchangeDaemonPool::ready, this, [this]() { emit daemon_ready(); });
 }
 
 ExchangeService::~ExchangeService() {

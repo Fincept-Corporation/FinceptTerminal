@@ -72,7 +72,8 @@ void InactivityGuard::reset_timer() {
 }
 
 bool InactivityGuard::check_for_resume_lock() {
-    if (!enabled_) return false;
+    if (!enabled_)
+        return false;
     if (!last_activity_.isValid()) {
         last_activity_ = QDateTime::currentDateTime();
         return false;
@@ -81,9 +82,10 @@ bool InactivityGuard::check_for_resume_lock() {
     const int interval_ms = timer_->interval();
     if (elapsed_ms >= interval_ms) {
         LOG_INFO("Auth", QString("Resume detected — wall-clock elapsed %1ms >= timeout %2ms, forcing lock")
-                             .arg(elapsed_ms).arg(interval_ms));
-        SecurityAuditLog::instance().record(
-            "resume_lock", QString("elapsed_ms=%1 timeout_ms=%2").arg(elapsed_ms).arg(interval_ms));
+                             .arg(elapsed_ms)
+                             .arg(interval_ms));
+        SecurityAuditLog::instance().record("resume_lock",
+                                            QString("elapsed_ms=%1 timeout_ms=%2").arg(elapsed_ms).arg(interval_ms));
         emit lock_requested();
         return true;
     }

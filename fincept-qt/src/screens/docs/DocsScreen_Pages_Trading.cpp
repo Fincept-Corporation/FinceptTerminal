@@ -8,7 +8,6 @@
 
 #include "screens/docs/DocsScreen.h"
 #include "screens/docs/DocsScreen_internal.h"
-
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
@@ -41,11 +40,12 @@ QWidget* DocsScreen::page_crypto_trading() {
     sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
-    vl->addWidget(make_section_panel("■", tr("OVERVIEW"),
-                                     tr("A full-featured crypto trading terminal supporting 10+ exchanges with real-time "
-                                        "WebSocket feeds. Features OHLC charts, order book depth, order entry with market/"
-                                        "limit/stop orders, watchlist, and a paper trading engine for risk-free practice."),
-                                     ui::colors::AMBER));
+    vl->addWidget(
+        make_section_panel("■", tr("OVERVIEW"),
+                           tr("A full-featured crypto trading terminal supporting 10+ exchanges with real-time "
+                              "WebSocket feeds. Features OHLC charts, order book depth, order entry with market/"
+                              "limit/stop orders, watchlist, and a paper trading engine for risk-free practice."),
+                           ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("■", tr("SUPPORTED EXCHANGES"),
                                      tr("Kraken  |  Binance  |  Bybit  |  OKX  |  Coinbase  |  Bitget\n"
@@ -54,15 +54,16 @@ QWidget* DocsScreen::page_crypto_trading() {
                                         "ticker data, and trade history via WebSocket."),
                                      ui::colors::POSITIVE));
 
-    vl->addWidget(make_section_panel("■", tr("PANELS"),
-                                     tr("■  Command Bar — Exchange selector, symbol input, paper/live toggle, API config\n"
-                                        "■  Ticker Bar — Real-time price, 24h change, high/low, volume\n"
-                                        "■  Watchlist — 8+ default pairs with live prices\n"
-                                        "■  OHLC Chart — Candlestick chart with multiple timeframes\n"
-                                        "■  Order Entry — Market, Limit, Stop-Limit with SL/TP\n"
-                                        "■  Order Book — Live bid/ask depth visualization\n"
-                                        "■  Bottom Panel — Open orders, order history, positions, balances"),
-                                     ui::colors::INFO));
+    vl->addWidget(
+        make_section_panel("■", tr("PANELS"),
+                           tr("■  Command Bar — Exchange selector, symbol input, paper/live toggle, API config\n"
+                              "■  Ticker Bar — Real-time price, 24h change, high/low, volume\n"
+                              "■  Watchlist — 8+ default pairs with live prices\n"
+                              "■  OHLC Chart — Candlestick chart with multiple timeframes\n"
+                              "■  Order Entry — Market, Limit, Stop-Limit with SL/TP\n"
+                              "■  Order Book — Live bid/ask depth visualization\n"
+                              "■  Bottom Panel — Open orders, order history, positions, balances"),
+                           ui::colors::INFO));
 
     vl->addWidget(make_section_panel("■", tr("PAPER TRADING"),
                                      tr("Built-in paper trading engine with:\n"
@@ -127,10 +128,11 @@ QWidget* DocsScreen::page_algo_trading() {
                                         "■  Mean reversion: Detect overbought/oversold conditions\n"
                                         "■  Pairs trading: Monitor spread and auto-execute when divergence detected\n"
                                         "■  Market making: Automated bid/ask placement with spread capture")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Explore pre-built strategies, understand entry/exit logic\n"
-                                    "INTERMEDIATE: Modify strategy parameters, run scanner on your watchlist\n"
-                                    "ADVANCED: Build custom strategies, combine multiple signals, set risk limits\n"
-                                    "PRO: Deploy multi-strategy portfolios, optimize parameters, run live with real capital")},
+            {tr("SKILL LEVELS"),
+             tr("BEGINNER: Explore pre-built strategies, understand entry/exit logic\n"
+                "INTERMEDIATE: Modify strategy parameters, run scanner on your watchlist\n"
+                "ADVANCED: Build custom strategies, combine multiple signals, set risk limits\n"
+                "PRO: Deploy multi-strategy portfolios, optimize parameters, run live with real capital")},
         });
 }
 
@@ -168,8 +170,9 @@ QWidget* DocsScreen::page_equity_research() {
     return make_page(
         tr("EQUITY RESEARCH"), tr("Comprehensive stock analysis and fundamental research"),
         {
-            {tr("OVERVIEW"), tr("The Equity Research screen provides institutional-grade fundamental analysis tools "
-                                "including financial statements, valuation models, peer comparison, and analyst estimates.")},
+            {tr("OVERVIEW"),
+             tr("The Equity Research screen provides institutional-grade fundamental analysis tools "
+                "including financial statements, valuation models, peer comparison, and analyst estimates.")},
             {tr("KEY FEATURES"), tr("■  Financial statements — Income, Balance Sheet, Cash Flow (quarterly/annual)\n"
                                     "■  Valuation models — DCF, comparable analysis, precedent transactions\n"
                                     "■  Peer comparison — Compare metrics across competitors\n"
@@ -180,10 +183,11 @@ QWidget* DocsScreen::page_equity_research() {
                                         "■  Quarterly earnings analysis and comparison to estimates\n"
                                         "■  Sector analysis with peer group comparison\n"
                                         "■  Valuation-driven investment thesis development")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Look up basic financials (revenue, earnings, P/E ratio) for a stock\n"
-                                    "INTERMEDIATE: Compare peers, analyze quarterly trends, read cash flow statements\n"
-                                    "ADVANCED: Build DCF models, identify valuation discrepancies, create investment theses\n"
-                                    "PRO: Multi-factor screening + fundamental overlay, integrate with algo trading signals")},
+            {tr("SKILL LEVELS"),
+             tr("BEGINNER: Look up basic financials (revenue, earnings, P/E ratio) for a stock\n"
+                "INTERMEDIATE: Compare peers, analyze quarterly trends, read cash flow statements\n"
+                "ADVANCED: Build DCF models, identify valuation discrepancies, create investment theses\n"
+                "PRO: Multi-factor screening + fundamental overlay, integrate with algo trading signals")},
         });
 }
 
@@ -258,10 +262,11 @@ QWidget* DocsScreen::page_portfolio() {
                                         "■  Compare multiple portfolio strategies side by side\n"
                                         "■  Monitor sector allocation drift and rebalance\n"
                                         "■  Use AI agent to ask questions about your portfolio performance")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Create a portfolio, add holdings, track basic P&L\n"
-                                    "INTERMEDIATE: Use sector heatmap for diversification, review trade blotter\n"
-                                    "ADVANCED: Multiple portfolios for different strategies, FFN analytics\n"
-                                    "PRO: AI agent for portfolio optimization, factor exposure analysis, risk budgeting")},
+            {tr("SKILL LEVELS"),
+             tr("BEGINNER: Create a portfolio, add holdings, track basic P&L\n"
+                "INTERMEDIATE: Use sector heatmap for diversification, review trade blotter\n"
+                "ADVANCED: Multiple portfolios for different strategies, FFN analytics\n"
+                "PRO: AI agent for portfolio optimization, factor exposure analysis, risk budgeting")},
         });
 }
 
@@ -349,10 +354,11 @@ QWidget* DocsScreen::page_quantlib() {
                                         "■  Risk manager: Run VaR, stress tests, regulatory calculations\n"
                                         "■  Portfolio manager: Optimize allocation, efficient frontier analysis\n"
                                         "■  Fixed income: Yield curve construction, swap valuation")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Use the Statistics module for basic data analysis\n"
-                                    "INTERMEDIATE: Price bonds and options, build yield curves\n"
-                                    "ADVANCED: Calibrate vol models, run Monte Carlo simulations, regulatory calculations\n"
-                                    "PRO: Custom model development, multi-curve pricing, XVA calculations")},
+            {tr("SKILL LEVELS"),
+             tr("BEGINNER: Use the Statistics module for basic data analysis\n"
+                "INTERMEDIATE: Price bonds and options, build yield curves\n"
+                "ADVANCED: Calibrate vol models, run Monte Carlo simulations, regulatory calculations\n"
+                "PRO: Custom model development, multi-curve pricing, XVA calculations")},
         });
 }
 
@@ -371,10 +377,11 @@ QWidget* DocsScreen::page_ai_chat() {
                                         "■  Strategy help: \"Write a mean reversion strategy for crypto\"\n"
                                         "■  Learning: \"Explain how VaR is calculated\"\n"
                                         "■  Data queries: \"Compare AAPL and MSFT P/E ratios over 5 years\"")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Ask basic market questions, get explanations of financial concepts\n"
-                                    "INTERMEDIATE: Generate analysis code, get portfolio recommendations\n"
-                                    "ADVANCED: Complex multi-step analysis, custom strategy development\n"
-                                    "PRO: Multi-agent workflows, MCP server integration, automated research pipelines")},
+            {tr("SKILL LEVELS"),
+             tr("BEGINNER: Ask basic market questions, get explanations of financial concepts\n"
+                "INTERMEDIATE: Generate analysis code, get portfolio recommendations\n"
+                "ADVANCED: Complex multi-step analysis, custom strategy development\n"
+                "PRO: Multi-agent workflows, MCP server integration, automated research pipelines")},
         });
 }
 
@@ -398,33 +405,35 @@ QWidget* DocsScreen::page_agent_config() {
                                    "■  Trader Agent — Technical analysis and trade execution\n"
                                    "■  Investor Agent — Long-term fundamental analysis\n"
                                    "■  Deep Agent — Complex multi-step research tasks")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Browse pre-configured agents, chat with the general assistant\n"
-                                    "INTERMEDIATE: Create custom agents with specific tool access\n"
-                                    "ADVANCED: Build agent teams, define multi-step workflows\n"
-                                    "PRO: Custom MCP server integration, multi-agent orchestration, automated research")},
+            {tr("SKILL LEVELS"),
+             tr("BEGINNER: Browse pre-configured agents, chat with the general assistant\n"
+                "INTERMEDIATE: Create custom agents with specific tool access\n"
+                "ADVANCED: Build agent teams, define multi-step workflows\n"
+                "PRO: Custom MCP server integration, multi-agent orchestration, automated research")},
         });
 }
 
 QWidget* DocsScreen::page_alpha_arena() {
-    return make_page(tr("ALPHA ARENA"), tr("Competitive alpha research and strategy ranking"),
-                     {
-                         {tr("OVERVIEW"), tr("Alpha Arena is a competitive environment where trading strategies are ranked "
-                                             "by performance. Submit strategies, compare against peers, and discover new "
-                                             "alpha sources through community insights.")},
-                         {tr("KEY FEATURES"), tr("■  Strategy leaderboard with real-time rankings\n"
-                                                 "■  Performance metrics comparison (Sharpe, returns, drawdown)\n"
-                                                 "■  Strategy submission and backtesting\n"
-                                                 "■  Community insights and discussion\n"
-                                                 "■  Historical performance tracking")},
-                         {tr("REAL-WORLD USAGE"), tr("■  Benchmark your strategies against others\n"
-                                                     "■  Discover new trading ideas from top performers\n"
-                                                     "■  Competitive motivation to improve strategy quality\n"
-                                                     "■  Community learning through shared insights")},
-                         {tr("SKILL LEVELS"), tr("BEGINNER: Browse the leaderboard, study top strategies\n"
-                                                 "INTERMEDIATE: Submit your first strategy, analyze performance metrics\n"
-                                                 "ADVANCED: Optimize strategies for ranking, study factor exposures\n"
-                                                 "PRO: Multi-strategy submission, alpha decay analysis, ensemble approaches")},
-                     });
+    return make_page(
+        tr("ALPHA ARENA"), tr("Competitive alpha research and strategy ranking"),
+        {
+            {tr("OVERVIEW"), tr("Alpha Arena is a competitive environment where trading strategies are ranked "
+                                "by performance. Submit strategies, compare against peers, and discover new "
+                                "alpha sources through community insights.")},
+            {tr("KEY FEATURES"), tr("■  Strategy leaderboard with real-time rankings\n"
+                                    "■  Performance metrics comparison (Sharpe, returns, drawdown)\n"
+                                    "■  Strategy submission and backtesting\n"
+                                    "■  Community insights and discussion\n"
+                                    "■  Historical performance tracking")},
+            {tr("REAL-WORLD USAGE"), tr("■  Benchmark your strategies against others\n"
+                                        "■  Discover new trading ideas from top performers\n"
+                                        "■  Competitive motivation to improve strategy quality\n"
+                                        "■  Community learning through shared insights")},
+            {tr("SKILL LEVELS"), tr("BEGINNER: Browse the leaderboard, study top strategies\n"
+                                    "INTERMEDIATE: Submit your first strategy, analyze performance metrics\n"
+                                    "ADVANCED: Optimize strategies for ranking, study factor exposures\n"
+                                    "PRO: Multi-strategy submission, alpha decay analysis, ensemble approaches")},
+        });
 }
 
 // ============================================================================

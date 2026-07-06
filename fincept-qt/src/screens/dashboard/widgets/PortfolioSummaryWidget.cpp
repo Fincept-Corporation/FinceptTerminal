@@ -105,33 +105,29 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     // refresh. PortfolioService is the single source of truth; we listen to
     // its signals rather than polling.
     auto& svc = services::PortfolioService::instance();
-    connect(&svc, &services::PortfolioService::asset_added, this,
-            [this](const QString& pid) {
-                if (pid == selected_portfolio_id_)
-                    load_holdings();
-            });
-    connect(&svc, &services::PortfolioService::asset_sold, this,
-            [this](const QString& pid) {
-                if (pid == selected_portfolio_id_)
-                    load_holdings();
-            });
-    connect(&svc, &services::PortfolioService::portfolio_created, this,
-            [this](const portfolio::Portfolio&) {
-                refresh_portfolio_cache();
-                // If we had no selection yet, pick the first one now.
-                if (selected_portfolio_id_.isEmpty())
-                    load_holdings();
-            });
-    connect(&svc, &services::PortfolioService::portfolio_deleted, this,
-            [this](const QString& deleted_id) {
-                refresh_portfolio_cache();
-                if (deleted_id == selected_portfolio_id_) {
-                    selected_portfolio_id_.clear();
-                    selected_portfolio_name_.clear();
-                    emit config_changed(config());
-                    load_holdings();
-                }
-            });
+    connect(&svc, &services::PortfolioService::asset_added, this, [this](const QString& pid) {
+        if (pid == selected_portfolio_id_)
+            load_holdings();
+    });
+    connect(&svc, &services::PortfolioService::asset_sold, this, [this](const QString& pid) {
+        if (pid == selected_portfolio_id_)
+            load_holdings();
+    });
+    connect(&svc, &services::PortfolioService::portfolio_created, this, [this](const portfolio::Portfolio&) {
+        refresh_portfolio_cache();
+        // If we had no selection yet, pick the first one now.
+        if (selected_portfolio_id_.isEmpty())
+            load_holdings();
+    });
+    connect(&svc, &services::PortfolioService::portfolio_deleted, this, [this](const QString& deleted_id) {
+        refresh_portfolio_cache();
+        if (deleted_id == selected_portfolio_id_) {
+            selected_portfolio_id_.clear();
+            selected_portfolio_name_.clear();
+            emit config_changed(config());
+            load_holdings();
+        }
+    });
 
     apply_styles();
     set_loading(true);
@@ -250,8 +246,7 @@ void PortfolioSummaryWidget::load_holdings() {
     }
 
     if (holdings.isEmpty()) {
-        render_empty(tr("'%1' has no holdings.\nAdd positions from the Portfolio tab.")
-                         .arg(picked->name));
+        render_empty(tr("'%1' has no holdings.\nAdd positions from the Portfolio tab.").arg(picked->name));
         return;
     }
 
@@ -288,9 +283,8 @@ void PortfolioSummaryWidget::render_empty(const QString& message) {
 
     // Reset the colour overrides applied during a populated render so the
     // zeroed-out P&L labels don't get stuck red/green from the prior state.
-    const QString default_value_css =
-        QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-            .arg(ui::colors::TEXT_PRIMARY());
+    const QString default_value_css = QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
+                                          .arg(ui::colors::TEXT_PRIMARY());
     day_pnl_lbl_->setStyleSheet(default_value_css);
     total_pnl_lbl_->setStyleSheet(default_value_css);
 
@@ -339,8 +333,7 @@ void PortfolioSummaryWidget::rebuild_from_cache() {
         render(last_holdings_, quotes);
 }
 
-void PortfolioSummaryWidget::render(const QVector<Holding>& holdings,
-                                    const QVector<services::QuoteData>& quotes) {
+void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVector<services::QuoteData>& quotes) {
     last_holdings_ = holdings;
     last_quotes_ = quotes;
 
@@ -439,7 +432,8 @@ QDialog* PortfolioSummaryWidget::make_config_dialog(QWidget* parent) {
         combo->setEnabled(false);
     } else {
         for (const auto& p : portfolio_cache_) {
-            const QString label = p.name + (p.currency.isEmpty() ? QString() : QStringLiteral("  (%1)").arg(p.currency));
+            const QString label =
+                p.name + (p.currency.isEmpty() ? QString() : QStringLiteral("  (%1)").arg(p.currency));
             combo->addItem(label, p.id);
             if (p.id == selected_portfolio_id_)
                 combo->setCurrentIndex(combo->count() - 1);

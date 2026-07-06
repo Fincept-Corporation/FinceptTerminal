@@ -62,14 +62,14 @@ int note_priority_to_int(const QString& p) {
 }
 QString note_priority_from_int(int p) {
     switch (p) {
-    case 0:
-        return QStringLiteral("LOW");
-    case 2:
-        return QStringLiteral("HIGH");
-    case 3:
-        return QStringLiteral("CRITICAL");
-    default:
-        return QStringLiteral("MEDIUM");
+        case 0:
+            return QStringLiteral("LOW");
+        case 2:
+            return QStringLiteral("HIGH");
+        case 3:
+            return QStringLiteral("CRITICAL");
+        default:
+            return QStringLiteral("MEDIUM");
     }
 }
 
@@ -143,8 +143,8 @@ void NotesCloudAdapter::push_update(const OutboxRow& row, PushDone done) {
         done(note_ok());
         return;
     }
-    CloudClient::instance().put(note_path(*remote), note_body(note.value()),
-                                [done](CloudResponse resp) { done(note_result(resp)); }, this);
+    CloudClient::instance().put(
+        note_path(*remote), note_body(note.value()), [done](CloudResponse resp) { done(note_result(resp)); }, this);
 }
 
 void NotesCloudAdapter::push_delete(const OutboxRow& row, PushDone done) {
@@ -174,8 +174,9 @@ void NotesCloudAdapter::push_toggle(const OutboxRow& row, const QString& sub, Pu
         return;
     }
     // Toggle endpoints take no body; favourite/archive flips parity-preservingly.
-    CloudClient::instance().put(note_path(*remote) + QStringLiteral("/") + sub, QJsonObject(),
-                                [done](CloudResponse resp) { done(note_result(resp)); }, this);
+    CloudClient::instance().put(
+        note_path(*remote) + QStringLiteral("/") + sub, QJsonObject(),
+        [done](CloudResponse resp) { done(note_result(resp)); }, this);
 }
 
 // ── counts / first-enable ────────────────────────────────────────────────────

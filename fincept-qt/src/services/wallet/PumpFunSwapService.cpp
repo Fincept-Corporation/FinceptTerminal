@@ -23,20 +23,22 @@ constexpr double kPriorityFeeMin = 0.00001;
 constexpr double kPriorityFeeMax = 0.005;
 
 QString action_to_str(PumpFunSwapService::Action a) {
-    return (a == PumpFunSwapService::Action::Buy)
-               ? QStringLiteral("buy")
-               : QStringLiteral("sell");
+    return (a == PumpFunSwapService::Action::Buy) ? QStringLiteral("buy") : QStringLiteral("sell");
 }
 
 int clamp_slippage(int pct) {
-    if (pct < kSlippageMin) return kSlippageMin;
-    if (pct > kSlippageMax) return kSlippageMax;
+    if (pct < kSlippageMin)
+        return kSlippageMin;
+    if (pct > kSlippageMax)
+        return kSlippageMax;
     return pct;
 }
 
 double clamp_priority_fee(double sol) {
-    if (sol < kPriorityFeeMin) return kPriorityFeeMin;
-    if (sol > kPriorityFeeMax) return kPriorityFeeMax;
+    if (sol < kPriorityFeeMin)
+        return kPriorityFeeMin;
+    if (sol > kPriorityFeeMax)
+        return kPriorityFeeMax;
     return sol;
 }
 
@@ -48,24 +50,22 @@ PumpFunSwapService::PumpFunSwapService(QObject* parent) : QObject(parent) {
 
 PumpFunSwapService::~PumpFunSwapService() = default;
 
-void PumpFunSwapService::build_swap(Action action,
-                                    const QString& mint,
-                                    double amount,
-                                    bool denominated_in_sol,
-                                    const QString& user_pubkey,
-                                    int slippage_pct,
-                                    double priority_fee_sol,
+void PumpFunSwapService::build_swap(Action action, const QString& mint, double amount, bool denominated_in_sol,
+                                    const QString& user_pubkey, int slippage_pct, double priority_fee_sol,
                                     SwapBuildCallback cb) {
     if (mint.isEmpty()) {
-        if (cb) cb(Result<SwapTransaction>::err("missing_mint"));
+        if (cb)
+            cb(Result<SwapTransaction>::err("missing_mint"));
         return;
     }
     if (user_pubkey.isEmpty()) {
-        if (cb) cb(Result<SwapTransaction>::err("missing_pubkey"));
+        if (cb)
+            cb(Result<SwapTransaction>::err("missing_pubkey"));
         return;
     }
     if (amount <= 0.0) {
-        if (cb) cb(Result<SwapTransaction>::err("amount_must_be_positive"));
+        if (cb)
+            cb(Result<SwapTransaction>::err("amount_must_be_positive"));
         return;
     }
 
@@ -83,8 +83,7 @@ void PumpFunSwapService::build_swap(Action action,
     body[QStringLiteral("action")] = action_to_str(action);
     body[QStringLiteral("mint")] = mint;
     body[QStringLiteral("amount")] = amount;
-    body[QStringLiteral("denominatedInSol")] =
-        denominated_in_sol ? QStringLiteral("true") : QStringLiteral("false");
+    body[QStringLiteral("denominatedInSol")] = denominated_in_sol ? QStringLiteral("true") : QStringLiteral("false");
     body[QStringLiteral("slippage")] = slippage;
     body[QStringLiteral("priorityFee")] = prio_fee;
     body[QStringLiteral("pool")] = QStringLiteral("auto");
@@ -92,19 +91,16 @@ void PumpFunSwapService::build_swap(Action action,
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
 
     QNetworkRequest req{QUrl(QString::fromLatin1(kTradeLocalUrl))};
-    req.setHeader(QNetworkRequest::ContentTypeHeader,
-                  QStringLiteral("application/json"));
-    req.setRawHeader(QByteArrayLiteral("Accept"),
-                     QByteArrayLiteral("application/octet-stream"));
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/octet-stream"));
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
     auto* reply = nam_->post(req, payload);
     QPointer<PumpFunSwapService> self = this;
-    connect(reply, &QNetworkReply::finished, this,
-            [self, reply, cb = std::move(cb)]() {
+    connect(reply, &QNetworkReply::finished, this, [self, reply, cb = std::move(cb)]() {
         reply->deleteLater();
-        if (!self) return;
+        if (!self)
+            return;
 
         if (reply->error() != QNetworkReply::NoError) {
             const auto err_str = reply->errorString();
@@ -127,16 +123,17 @@ void PumpFunSwapService::build_swap(Action action,
                     detail = QString::fromUtf8(body_bytes.left(180));
                 }
             }
-            const QString combined =
-                detail.isEmpty() ? err_str : (err_str + ": " + detail);
+            const QString combined = detail.isEmpty() ? err_str : (err_str + ": " + detail);
             LOG_WARN("PumpFunSwap", "trade-local failed: " + combined);
-            if (cb) cb(Result<SwapTransaction>::err(combined.toStdString()));
+            if (cb)
+                cb(Result<SwapTransaction>::err(combined.toStdString()));
             return;
         }
 
         const QByteArray body_bytes = reply->readAll();
         if (body_bytes.isEmpty()) {
-            if (cb) cb(Result<SwapTransaction>::err("empty_response"));
+            if (cb)
+                cb(Result<SwapTransaction>::err("empty_response"));
             return;
         }
 
@@ -145,8 +142,7 @@ void PumpFunSwapService::build_swap(Action action,
         // (signature placeholder). Reject anything that doesn't look
         // remotely like a tx — protects against a server returning JSON
         // unexpectedly with a 200 status.
-        if (static_cast<unsigned char>(body_bytes.at(0)) > 16
-            || body_bytes.size() < 80) {
+        if (static_cast<unsigned char>(body_bytes.at(0)) > 16 || body_bytes.size() < 80) {
             // Likely JSON or HTML error page slipping through. Try to parse
             // it as JSON and surface the message; otherwise return the
             // first slice as-is.
@@ -158,25 +154,27 @@ void PumpFunSwapService::build_swap(Action action,
                 if (msg.isEmpty()) {
                     msg = root.value(QStringLiteral("message")).toString();
                 }
-                if (msg.isEmpty()) msg = QStringLiteral("unexpected_response");
-                if (cb) cb(Result<SwapTransaction>::err(msg.toStdString()));
+                if (msg.isEmpty())
+                    msg = QStringLiteral("unexpected_response");
+                if (cb)
+                    cb(Result<SwapTransaction>::err(msg.toStdString()));
                 return;
             }
-            if (cb) cb(Result<SwapTransaction>::err(
-                "unexpected_response: " +
-                std::string(body_bytes.left(80).constData(),
-                            std::min<int>(80, body_bytes.size()))));
+            if (cb)
+                cb(Result<SwapTransaction>::err(
+                    "unexpected_response: " +
+                    std::string(body_bytes.left(80).constData(), std::min<int>(80, body_bytes.size()))));
             return;
         }
 
         SwapTransaction out;
         out.tx_base64 = QString::fromLatin1(body_bytes.toBase64());
         // last_valid_block_height left at 0 — wallet/RPC will reject stale txs.
-        LOG_INFO("PumpFunSwap",
-                 QStringLiteral("trade-local ok (%1 raw bytes, %2 b64 chars)")
-                     .arg(body_bytes.size())
-                     .arg(out.tx_base64.size()));
-        if (cb) cb(Result<SwapTransaction>::ok(std::move(out)));
+        LOG_INFO("PumpFunSwap", QStringLiteral("trade-local ok (%1 raw bytes, %2 b64 chars)")
+                                    .arg(body_bytes.size())
+                                    .arg(out.tx_base64.size()));
+        if (cb)
+            cb(Result<SwapTransaction>::ok(std::move(out)));
     });
 }
 

@@ -7,10 +7,9 @@
 // Part of the partial-class split of BacktestingScreen.cpp; helpers shared
 // across split files live in BacktestingScreen_internal.h.
 
+#include "core/logging/Logger.h"
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/backtesting/BacktestingScreen_internal.h"
-
-#include "core/logging/Logger.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -27,8 +26,8 @@
 namespace fincept::screens {
 
 using namespace fincept::services::backtest;
-using fincept::screens::backtesting_internal::pill_qss;
 using fincept::screens::backtesting_internal::apply_pill_geometry;
+using fincept::screens::backtesting_internal::pill_qss;
 
 QWidget* BacktestingScreen::build_top_bar() {
     auto* bar = new QWidget(this);
@@ -47,11 +46,8 @@ QWidget* BacktestingScreen::build_top_bar() {
     brand_label_ = new QLabel(tr("BACKTESTING"), bar);
     brand_label_->setAlignment(Qt::AlignCenter);
     apply_pill_geometry(brand_label_);
-    brand_label_->setStyleSheet(pill_qss("QLabel",
-                                         ui::colors::AMBER(),
-                                         "rgba(217,119,6,0.1)",
-                                         ui::colors::AMBER_DIM(),
-                                         font_px, font_family));
+    brand_label_->setStyleSheet(
+        pill_qss("QLabel", ui::colors::AMBER(), "rgba(217,119,6,0.1)", ui::colors::AMBER_DIM(), font_px, font_family));
     hl->addWidget(brand_label_);
 
     auto* div = new QWidget(bar);
@@ -77,16 +73,12 @@ QWidget* BacktestingScreen::build_top_bar() {
     run_button_ = new QPushButton(tr("RUN"), bar);
     run_button_->setCursor(Qt::PointingHandCursor);
     apply_pill_geometry(run_button_);
-    run_button_->setStyleSheet(
-        pill_qss("QPushButton",
-                 ui::colors::AMBER(),
-                 "rgba(217,119,6,0.1)",
-                 ui::colors::AMBER_DIM(),
-                 font_px, font_family) +
-        QString("QPushButton:hover { background:%1; color:%2; }"
-                "QPushButton:disabled { background:%3; color:%4; border-color:%5; }")
-            .arg(ui::colors::AMBER(), ui::colors::BG_BASE(),
-                 ui::colors::BG_RAISED(), ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
+    run_button_->setStyleSheet(pill_qss("QPushButton", ui::colors::AMBER(), "rgba(217,119,6,0.1)",
+                                        ui::colors::AMBER_DIM(), font_px, font_family) +
+                               QString("QPushButton:hover { background:%1; color:%2; }"
+                                       "QPushButton:disabled { background:%3; color:%4; border-color:%5; }")
+                                   .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::BG_RAISED(),
+                                        ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
     connect(run_button_, &QPushButton::clicked, this, &BacktestingScreen::on_run);
     hl->addWidget(run_button_);
 
@@ -94,11 +86,8 @@ QWidget* BacktestingScreen::build_top_bar() {
     status_dot_ = new QLabel(tr("READY"), bar);
     status_dot_->setAlignment(Qt::AlignCenter);
     apply_pill_geometry(status_dot_);
-    status_dot_->setStyleSheet(pill_qss("QLabel",
-                                        ui::colors::POSITIVE(),
-                                        "rgba(22,163,74,0.08)",
-                                        "rgba(22,163,74,0.25)",
-                                        font_px, font_family));
+    status_dot_->setStyleSheet(pill_qss("QLabel", ui::colors::POSITIVE(), "rgba(22,163,74,0.08)",
+                                        "rgba(22,163,74,0.25)", font_px, font_family));
     hl->addWidget(status_dot_);
 
     return bar;
@@ -233,10 +222,11 @@ QWidget* BacktestingScreen::build_center_panel() {
     auto* hhl = new QHBoxLayout(header);
     hhl->setContentsMargins(16, 0, 16, 0);
     results_title_ = new QLabel(tr("RESULTS"), header);
-    results_title_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-                                      .arg(ui::colors::AMBER())
-                                      .arg(ui::fonts::TINY)
-                                      .arg(ui::fonts::DATA_FAMILY));
+    results_title_->setStyleSheet(
+        QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
+            .arg(ui::colors::AMBER())
+            .arg(ui::fonts::TINY)
+            .arg(ui::fonts::DATA_FAMILY));
     hhl->addWidget(results_title_);
     hhl->addStretch();
 
@@ -298,9 +288,10 @@ QWidget* BacktestingScreen::build_center_panel() {
     summary_layout_->setContentsMargins(16, 16, 16, 16);
     summary_layout_->setSpacing(12);
 
-    summary_hint_ = new QLabel(tr("Select a provider, command, and strategy, then click RUN to execute.\n\n"
-                                  "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
-                                  "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns"));
+    summary_hint_ =
+        new QLabel(tr("Select a provider, command, and strategy, then click RUN to execute.\n\n"
+                      "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
+                      "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns"));
     summary_hint_->setWordWrap(true);
     summary_hint_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; line-height:1.6;"
                                          "padding:20px; background:%4; border:1px solid %5;")
@@ -335,18 +326,19 @@ QWidget* BacktestingScreen::build_center_panel() {
     metrics_table_->setAlternatingRowColors(true);
     metrics_table_->horizontalHeader()->setStretchLastSection(true);
     metrics_table_->verticalHeader()->setVisible(false);
-    metrics_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
-                                          "font-family:%4; font-size:%5px; border:none; }"
-                                          "QTableWidget::item { padding:3px 8px; }"
-                                          "QHeaderView::section { background:%6; color:%7; font-weight:700;"
-                                          "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-                                          "QTableWidget::item:alternate { background:%8; }")
-                                      .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
-                                      .arg(ui::fonts::DATA_FAMILY)
-                                      .arg(ui::fonts::SMALL)
-                                      .arg(ui::colors::BG_RAISED())
-                                      .arg(ui::colors::TEXT_SECONDARY())
-                                      .arg(ui::colors::ROW_ALT()));
+    metrics_table_->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                "font-family:%4; font-size:%5px; border:none; }"
+                "QTableWidget::item { padding:3px 8px; }"
+                "QHeaderView::section { background:%6; color:%7; font-weight:700;"
+                "padding:4px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                "QTableWidget::item:alternate { background:%8; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL)
+            .arg(ui::colors::BG_RAISED())
+            .arg(ui::colors::TEXT_SECONDARY())
+            .arg(ui::colors::ROW_ALT()));
     result_tabs_->addTab(metrics_table_, tr("METRICS"));
 
     // TRADES tab
@@ -448,8 +440,7 @@ QWidget* BacktestingScreen::build_right_panel() {
     symbols_edit_->setPlaceholderText("SPY,AAPL,MSFT");
     symbols_edit_->setStyleSheet(input_style);
     mkt_layout->addWidget(symbols_edit_);
-    connect(symbols_edit_, &QLineEdit::editingFinished, this,
-            [this]() { publish_first_symbol_to_group(); });
+    connect(symbols_edit_, &QLineEdit::editingFinished, this, [this]() { publish_first_symbol_to_group(); });
 
     auto* dates = new QGridLayout;
     dates->setSpacing(8);
@@ -810,37 +801,47 @@ QWidget* BacktestingScreen::build_right_panel() {
         auto make_int_row = [&](const QString& text, QSpinBox*& spin, int mn, int mx, int dv) -> QWidget* {
             auto* row = new QWidget(page);
             auto* rl = new QVBoxLayout(row);
-            rl->setContentsMargins(0, 0, 0, 0); rl->setSpacing(4);
-            auto* lab = new QLabel(text, row); lab->setStyleSheet(label_style);
+            rl->setContentsMargins(0, 0, 0, 0);
+            rl->setSpacing(4);
+            auto* lab = new QLabel(text, row);
+            lab->setStyleSheet(label_style);
             rl->addWidget(lab);
             spin = new QSpinBox(row);
-            spin->setRange(mn, mx); spin->setValue(dv); spin->setStyleSheet(input_style);
+            spin->setRange(mn, mx);
+            spin->setValue(dv);
+            spin->setStyleSheet(input_style);
             rl->addWidget(spin);
             return row;
         };
-        auto make_dbl_row = [&](const QString& text, QDoubleSpinBox*& spin,
-                                double mn, double mx, double dv, int decimals = 2) -> QWidget* {
+        auto make_dbl_row = [&](const QString& text, QDoubleSpinBox*& spin, double mn, double mx, double dv,
+                                int decimals = 2) -> QWidget* {
             auto* row = new QWidget(page);
             auto* rl = new QVBoxLayout(row);
-            rl->setContentsMargins(0, 0, 0, 0); rl->setSpacing(4);
-            auto* lab = new QLabel(text, row); lab->setStyleSheet(label_style);
+            rl->setContentsMargins(0, 0, 0, 0);
+            rl->setSpacing(4);
+            auto* lab = new QLabel(text, row);
+            lab->setStyleSheet(label_style);
             rl->addWidget(lab);
             spin = new QDoubleSpinBox(row);
-            spin->setRange(mn, mx); spin->setValue(dv);
-            spin->setDecimals(decimals); spin->setStyleSheet(input_style);
+            spin->setRange(mn, mx);
+            spin->setValue(dv);
+            spin->setDecimals(decimals);
+            spin->setStyleSheet(input_style);
             rl->addWidget(spin);
             return row;
         };
-        auto make_combo_row = [&](const QString& text, QComboBox*& combo,
-                                  const QStringList& items) -> QWidget* {
+        auto make_combo_row = [&](const QString& text, QComboBox*& combo, const QStringList& items) -> QWidget* {
             auto* row = new QWidget(page);
             auto* rl = new QVBoxLayout(row);
-            rl->setContentsMargins(0, 0, 0, 0); rl->setSpacing(4);
-            auto* lab = new QLabel(text, row); lab->setStyleSheet(label_style);
+            rl->setContentsMargins(0, 0, 0, 0);
+            rl->setSpacing(4);
+            auto* lab = new QLabel(text, row);
+            lab->setStyleSheet(label_style);
             rl->addWidget(lab);
             combo = new QComboBox(row);
             combo->setStyleSheet(combo_style);
-            for (const auto& it : items) combo->addItem(it);
+            for (const auto& it : items)
+                combo->addItem(it);
             rl->addWidget(combo);
             return row;
         };
@@ -849,15 +850,15 @@ QWidget* BacktestingScreen::build_right_panel() {
         // Combo items ("ma"/"ema" etc.) are engine keys — not translated.
         is_fast_period_row_ = make_int_row(tr("FAST PERIOD"), is_fast_period_spin_, 2, 200, 10);
         is_slow_period_row_ = make_int_row(tr("SLOW PERIOD"), is_slow_period_spin_, 2, 500, 20);
-        is_ma_type_row_     = make_combo_row(tr("MA TYPE"), is_ma_type_combo_, {"ma", "ema"});
+        is_ma_type_row_ = make_combo_row(tr("MA TYPE"), is_ma_type_combo_, {"ma", "ema"});
         pl->addWidget(is_fast_period_row_);
         pl->addWidget(is_slow_period_row_);
         pl->addWidget(is_ma_type_row_);
 
         // ── threshold_signals: period + lower + upper ──
         is_period_row_ = make_int_row(tr("PERIOD"), is_period_spin_, 2, 200, 14);
-        is_lower_row_  = make_dbl_row(tr("LOWER THRESHOLD"), is_lower_spin_, -200, 200, 30);
-        is_upper_row_  = make_dbl_row(tr("UPPER THRESHOLD"), is_upper_spin_, -200, 200, 70);
+        is_lower_row_ = make_dbl_row(tr("LOWER THRESHOLD"), is_lower_spin_, -200, 200, 30);
+        is_upper_row_ = make_dbl_row(tr("UPPER THRESHOLD"), is_upper_spin_, -200, 200, 70);
         pl->addWidget(is_period_row_);
         pl->addWidget(is_lower_row_);
         pl->addWidget(is_upper_row_);
@@ -868,17 +869,16 @@ QWidget* BacktestingScreen::build_right_panel() {
 
         // ── mean_reversion_signals: period + z_entry + z_exit ──
         is_z_entry_row_ = make_dbl_row(tr("Z ENTRY (sigma)"), is_z_entry_spin_, 0.1, 5.0, 2.0, 2);
-        is_z_exit_row_  = make_dbl_row(tr("Z EXIT (sigma)"),  is_z_exit_spin_,  0.0, 5.0, 0.0, 2);
+        is_z_exit_row_ = make_dbl_row(tr("Z EXIT (sigma)"), is_z_exit_spin_, 0.0, 5.0, 0.0, 2);
         pl->addWidget(is_z_entry_row_);
         pl->addWidget(is_z_exit_row_);
 
         // ── signal_filter: filter_indicator + filter_period + filter_threshold + filter_type ──
-        is_filter_indicator_row_ = make_combo_row(tr("FILTER INDICATOR"), is_filter_indicator_combo_,
-                                                   {"adx", "atr", "mstd", "zscore", "rsi"});
-        is_filter_period_row_    = make_int_row(tr("FILTER PERIOD"), is_filter_period_spin_, 2, 200, 14);
-        is_filter_threshold_row_ = make_dbl_row(tr("FILTER THRESHOLD"), is_filter_threshold_spin_,
-                                                 -100, 100, 25, 3);
-        is_filter_type_row_      = make_combo_row(tr("FILTER TYPE"), is_filter_type_combo_, {"above", "below"});
+        is_filter_indicator_row_ =
+            make_combo_row(tr("FILTER INDICATOR"), is_filter_indicator_combo_, {"adx", "atr", "mstd", "zscore", "rsi"});
+        is_filter_period_row_ = make_int_row(tr("FILTER PERIOD"), is_filter_period_spin_, 2, 200, 14);
+        is_filter_threshold_row_ = make_dbl_row(tr("FILTER THRESHOLD"), is_filter_threshold_spin_, -100, 100, 25, 3);
+        is_filter_type_row_ = make_combo_row(tr("FILTER TYPE"), is_filter_type_combo_, {"above", "below"});
         pl->addWidget(is_filter_indicator_row_);
         pl->addWidget(is_filter_period_row_);
         pl->addWidget(is_filter_threshold_row_);
@@ -886,11 +886,11 @@ QWidget* BacktestingScreen::build_right_panel() {
 
         auto update_is_rows = [this]() {
             const QString m = ind_signal_mode_combo_->currentText();
-            const bool is_cross  = (m == "crossover_signals" || m == "crossover");
+            const bool is_cross = (m == "crossover_signals" || m == "crossover");
             const bool is_thresh = (m == "threshold_signals" || m == "threshold");
-            const bool is_break  = (m == "breakout_signals"  || m == "breakout");
-            const bool is_mr     = (m == "mean_reversion_signals" || m == "mean_reversion");
-            const bool is_filt   = (m == "signal_filter" || m == "filter");
+            const bool is_break = (m == "breakout_signals" || m == "breakout");
+            const bool is_mr = (m == "mean_reversion_signals" || m == "mean_reversion");
+            const bool is_filt = (m == "signal_filter" || m == "filter");
             is_fast_period_row_->setVisible(is_cross);
             is_slow_period_row_->setVisible(is_cross);
             is_ma_type_row_->setVisible(is_cross);
@@ -1001,8 +1001,7 @@ QWidget* BacktestingScreen::build_right_panel() {
         auto update_label_rows = [this]() {
             const QString lt = labels_type_combo_->currentText();
             labels_horizon_row_->setVisible(lt == "FIXLB");
-            labels_window_row_->setVisible(lt == "MEANLB" || lt == "LEXLB"
-                                            || lt == "TRENDLB" || lt == "BOLB");
+            labels_window_row_->setVisible(lt == "MEANLB" || lt == "LEXLB" || lt == "TRENDLB" || lt == "BOLB");
             labels_threshold_row_->setVisible(lt == "FIXLB" || lt == "MEANLB" || lt == "TRENDLB");
             labels_alpha_row_->setVisible(lt == "BOLB");
         };
@@ -1034,8 +1033,8 @@ QWidget* BacktestingScreen::build_right_panel() {
         pl->addWidget(splitter_type_combo_);
 
         // Helper to build a labeled spinbox row inside its own QWidget container.
-        auto make_row = [&](const QString& label_text, QSpinBox*& spin_out,
-                            int min_v, int max_v, int default_v) -> QWidget* {
+        auto make_row = [&](const QString& label_text, QSpinBox*& spin_out, int min_v, int max_v,
+                            int default_v) -> QWidget* {
             auto* row = new QWidget(page);
             auto* rl = new QVBoxLayout(row);
             rl->setContentsMargins(0, 0, 0, 0);
@@ -1083,9 +1082,9 @@ QWidget* BacktestingScreen::build_right_panel() {
         // Toggle row visibility based on the chosen splitter.
         auto update_split_rows = [this]() {
             const QString st = splitter_type_combo_->currentText();
-            const bool is_rolling   = (st == "RollingSplitter");
+            const bool is_rolling = (st == "RollingSplitter");
             const bool is_expanding = (st == "ExpandingSplitter");
-            const bool is_purged    = (st == "PurgedKFoldSplitter" || st == "PurgedKFold");
+            const bool is_purged = (st == "PurgedKFoldSplitter" || st == "PurgedKFold");
             splitter_window_row_->setVisible(is_rolling);
             splitter_min_row_->setVisible(is_expanding);
             splitter_test_row_->setVisible(is_rolling || is_expanding);
@@ -1147,9 +1146,8 @@ QWidget* BacktestingScreen::build_right_panel() {
         mr->addWidget(ml);
         returns_metric_combo_ = new QComboBox(returns_metric_row_);
         returns_metric_combo_->setStyleSheet(combo_style);
-        for (const auto& m : {"sharpe", "sortino", "calmar", "omega",
-                              "info_ratio", "downside_risk",
-                              "total", "annualized", "volatility"})
+        for (const auto& m : {"sharpe", "sortino", "calmar", "omega", "info_ratio", "downside_risk", "total",
+                              "annualized", "volatility"})
             returns_metric_combo_->addItem(m);
         mr->addWidget(returns_metric_combo_);
         pl->addWidget(returns_metric_row_);
@@ -1208,33 +1206,41 @@ QWidget* BacktestingScreen::build_right_panel() {
         auto make_int_row = [&](const QString& text, QSpinBox*& spin, int mn, int mx, int dv) -> QWidget* {
             auto* row = new QWidget(page);
             auto* rl = new QVBoxLayout(row);
-            rl->setContentsMargins(0, 0, 0, 0); rl->setSpacing(4);
-            auto* lab = new QLabel(text, row); lab->setStyleSheet(label_style);
+            rl->setContentsMargins(0, 0, 0, 0);
+            rl->setSpacing(4);
+            auto* lab = new QLabel(text, row);
+            lab->setStyleSheet(label_style);
             rl->addWidget(lab);
             spin = new QSpinBox(row);
-            spin->setRange(mn, mx); spin->setValue(dv); spin->setStyleSheet(input_style);
+            spin->setRange(mn, mx);
+            spin->setValue(dv);
+            spin->setStyleSheet(input_style);
             rl->addWidget(spin);
             return row;
         };
         auto make_prob_row = [&](const QString& text, QDoubleSpinBox*& spin, double dv) -> QWidget* {
             auto* row = new QWidget(page);
             auto* rl = new QVBoxLayout(row);
-            rl->setContentsMargins(0, 0, 0, 0); rl->setSpacing(4);
-            auto* lab = new QLabel(text, row); lab->setStyleSheet(label_style);
+            rl->setContentsMargins(0, 0, 0, 0);
+            rl->setSpacing(4);
+            auto* lab = new QLabel(text, row);
+            lab->setStyleSheet(label_style);
             rl->addWidget(lab);
             spin = new QDoubleSpinBox(row);
-            spin->setRange(0.001, 1.0); spin->setValue(dv);
-            spin->setDecimals(3); spin->setSingleStep(0.01);
+            spin->setRange(0.001, 1.0);
+            spin->setValue(dv);
+            spin->setDecimals(3);
+            spin->setSingleStep(0.01);
             spin->setStyleSheet(input_style);
             rl->addWidget(spin);
             return row;
         };
 
-        signal_count_row_      = make_int_row(tr("COUNT (n)"),       signal_count_spin_,     1, 1000, 10);
-        signal_entry_prob_row_ = make_prob_row(tr("ENTRY PROB"),     signal_entry_prob_spin_, 0.05);
-        signal_exit_prob_row_  = make_prob_row(tr("EXIT PROB"),      signal_exit_prob_spin_,  0.10);
-        signal_min_hold_row_   = make_int_row(tr("MIN HOLD (bars)"), signal_min_hold_spin_,   1, 500, 5);
-        signal_max_hold_row_   = make_int_row(tr("MAX HOLD (bars)"), signal_max_hold_spin_,   1, 500, 20);
+        signal_count_row_ = make_int_row(tr("COUNT (n)"), signal_count_spin_, 1, 1000, 10);
+        signal_entry_prob_row_ = make_prob_row(tr("ENTRY PROB"), signal_entry_prob_spin_, 0.05);
+        signal_exit_prob_row_ = make_prob_row(tr("EXIT PROB"), signal_exit_prob_spin_, 0.10);
+        signal_min_hold_row_ = make_int_row(tr("MIN HOLD (bars)"), signal_min_hold_spin_, 1, 500, 5);
+        signal_max_hold_row_ = make_int_row(tr("MAX HOLD (bars)"), signal_max_hold_spin_, 1, 500, 20);
 
         pl->addWidget(signal_count_row_);
         pl->addWidget(signal_entry_prob_row_);
@@ -1244,11 +1250,11 @@ QWidget* BacktestingScreen::build_right_panel() {
 
         auto update_signal_rows = [this]() {
             const QString g = signal_gen_combo_->currentText();
-            const bool is_rand    = (g == "RAND");
-            const bool is_randx   = (g == "RANDX");
-            const bool is_randnx  = (g == "RANDNX");
-            const bool is_rprob   = (g == "RPROB");
-            const bool is_rprobx  = (g == "RPROBX");
+            const bool is_rand = (g == "RAND");
+            const bool is_randx = (g == "RANDX");
+            const bool is_randnx = (g == "RANDNX");
+            const bool is_rprob = (g == "RPROB");
+            const bool is_rprobx = (g == "RPROBX");
             signal_count_row_->setVisible(is_rand || is_randx || is_randnx);
             signal_entry_prob_row_->setVisible(is_rprob || is_rprobx);
             signal_exit_prob_row_->setVisible(is_rprobx);

@@ -19,8 +19,8 @@
 #include <QPen>
 #include <QTableWidget>
 #include <QTableWidgetItem>
-#include <QValueAxis>
 #include <QVBoxLayout>
+#include <QValueAxis>
 
 #include <algorithm>
 #include <cmath>
@@ -101,22 +101,33 @@ void BacktestReportPanel::retranslateUi() {
     kpi_title("expectancy", tr("EXPECTANCY"));
     kpi_title("avg_bars", tr("AVG BARS HELD"));
 
-    if (equity_chart_) equity_chart_->setTitle(tr("Equity Curve"));
-    if (equity_series_) equity_series_->setName(tr("Strategy"));
-    if (benchmark_series_) benchmark_series_->setName(tr("Buy & Hold"));
-    if (dd_chart_) dd_chart_->setTitle(tr("Drawdown %"));
-    if (heatmap_title_) heatmap_title_->setText(tr("MONTHLY RETURNS %"));
+    if (equity_chart_)
+        equity_chart_->setTitle(tr("Equity Curve"));
+    if (equity_series_)
+        equity_series_->setName(tr("Strategy"));
+    if (benchmark_series_)
+        benchmark_series_->setName(tr("Buy & Hold"));
+    if (dd_chart_)
+        dd_chart_->setTitle(tr("Drawdown %"));
+    if (heatmap_title_)
+        heatmap_title_->setText(tr("MONTHLY RETURNS %"));
 
     if (trades_) {
-        const QStringList headers = {tr("#"),     tr("Entry"), tr("Exit"), tr("Entry %1").arg(cur::symbol()),
-                                     tr("Exit %1").arg(cur::symbol()), tr("Qty"),   tr("P&L"),  tr("P&L %"),
-                                     tr("Bars"),   tr("Reason")};
+        const QStringList headers = {tr("#"),
+                                     tr("Entry"),
+                                     tr("Exit"),
+                                     tr("Entry %1").arg(cur::symbol()),
+                                     tr("Exit %1").arg(cur::symbol()),
+                                     tr("Qty"),
+                                     tr("P&L"),
+                                     tr("P&L %"),
+                                     tr("Bars"),
+                                     tr("Reason")};
         trades_->setHorizontalHeaderLabels(headers);
     }
 }
 
-void BacktestReportPanel::add_kpi(QGridLayout* grid, int row, int col,
-                                  const QString& key, const QString& title) {
+void BacktestReportPanel::add_kpi(QGridLayout* grid, int row, int col, const QString& key, const QString& title) {
     auto* card = new QWidget(this);
     card->setObjectName(QStringLiteral("kpiCard"));
     auto* l = new QVBoxLayout(card);
@@ -245,8 +256,7 @@ void BacktestReportPanel::populate_heatmap(const QJsonObject& payload) {
             by_year[y][m] = v.toObject().value("return").toDouble();
     }
 
-    static const char* mlabels[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    static const char* mlabels[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
     for (int m = 0; m < 12; ++m) {
         auto* h = new QLabel(QString::fromLatin1(mlabels[m]));
         h->setAlignment(Qt::AlignCenter);
@@ -269,9 +279,8 @@ void BacktestReportPanel::populate_heatmap(const QJsonObject& payload) {
                 cell->setText(QString::number(r, 'f', 1));
                 QColor c(r >= 0 ? "#16A34A" : "#DC2626");
                 c.setAlphaF(std::min(0.85, 0.15 + std::abs(r) / 20.0));
-                cell->setStyleSheet(
-                    QStringLiteral("background:%1;color:#E5E7EB;font-size:8px;border-radius:2px;")
-                        .arg(c.name(QColor::HexArgb)));
+                cell->setStyleSheet(QStringLiteral("background:%1;color:#E5E7EB;font-size:8px;border-radius:2px;")
+                                        .arg(c.name(QColor::HexArgb)));
             } else {
                 cell->setStyleSheet(QStringLiteral("background:#161616;border-radius:2px;"));
             }
@@ -283,9 +292,16 @@ void BacktestReportPanel::populate_heatmap(const QJsonObject& payload) {
 QWidget* BacktestReportPanel::build_trades() {
     trades_ = new QTableWidget(this);
     trades_->setObjectName(QStringLiteral("backtestTradeTable"));
-    const QStringList headers = {tr("#"),     tr("Entry"), tr("Exit"), tr("Entry %1").arg(cur::symbol()),
-                                 tr("Exit %1").arg(cur::symbol()), tr("Qty"),   tr("P&L"),  tr("P&L %"),
-                                 tr("Bars"),   tr("Reason")};
+    const QStringList headers = {tr("#"),
+                                 tr("Entry"),
+                                 tr("Exit"),
+                                 tr("Entry %1").arg(cur::symbol()),
+                                 tr("Exit %1").arg(cur::symbol()),
+                                 tr("Qty"),
+                                 tr("P&L"),
+                                 tr("P&L %"),
+                                 tr("Bars"),
+                                 tr("Reason")};
     trades_->setColumnCount(headers.size());
     trades_->setHorizontalHeaderLabels(headers);
     trades_->verticalHeader()->setVisible(false);
@@ -303,8 +319,7 @@ void BacktestReportPanel::set_result(const QJsonObject& payload) {
     auto d = [&](const char* k) { return payload.value(QLatin1String(k)).toDouble(); };
 
     const double tr_pct = d("total_return");
-    kpi_val_["total_return"]->setText(QStringLiteral("%1%2%")
-                                          .arg(tr_pct >= 0 ? "+" : "").arg(tr_pct, 0, 'f', 2));
+    kpi_val_["total_return"]->setText(QStringLiteral("%1%2%").arg(tr_pct >= 0 ? "+" : "").arg(tr_pct, 0, 'f', 2));
     kpi_val_["total_return"]->setStyleSheet(QStringLiteral("color:%1;").arg(tr_pct >= 0 ? kPos : kNeg));
     kpi_sub_["total_return"]->setText(tr("Final %1%2").arg(cur::symbol()).arg(d("final_value"), 0, 'f', 0));
 
@@ -331,9 +346,8 @@ void BacktestReportPanel::set_result(const QJsonObject& payload) {
     kpi_sub_["profit_factor"]->setText(pf >= 1.5 ? tr("Strong") : pf >= 1.0 ? tr("Profitable") : tr("Losing"));
 
     kpi_val_["trades"]->setText(QString::number(payload.value("total_trades").toInt()));
-    kpi_sub_["trades"]->setText(tr("%1W / %2L")
-                                    .arg(payload.value("winning_trades").toInt())
-                                    .arg(payload.value("losing_trades").toInt()));
+    kpi_sub_["trades"]->setText(
+        tr("%1W / %2L").arg(payload.value("winning_trades").toInt()).arg(payload.value("losing_trades").toInt()));
 
     const double exp = d("expectancy");
     kpi_val_["expectancy"]->setText(QStringLiteral("%1%2").arg(exp >= 0 ? "+" : "").arg(exp, 0, 'f', 2));
@@ -388,8 +402,7 @@ void BacktestReportPanel::set_result(const QJsonObject& payload) {
         const double pnl_pct = t.value("pnl_pct").toDouble();
         auto cell = [&](int col, const QString& text, bool color_pnl = false) {
             auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col >= 3 ? Qt::AlignRight | Qt::AlignVCenter
-                                            : Qt::AlignLeft | Qt::AlignVCenter);
+            item->setTextAlignment(col >= 3 ? Qt::AlignRight | Qt::AlignVCenter : Qt::AlignLeft | Qt::AlignVCenter);
             if (color_pnl)
                 item->setForeground(QColor(pnl >= 0 ? kPos : kNeg));
             trades_->setItem(i, col, item);

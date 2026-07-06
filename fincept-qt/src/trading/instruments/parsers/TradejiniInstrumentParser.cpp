@@ -22,9 +22,9 @@ const QString kMarker = QStringLiteral("#GRP:");
 
 // Stable fallback group list (used if the store index fetch fails). "Spot" is
 // intentionally excluded.
-const QStringList kFallbackGroups = {"Securities",     "FutureContracts", "NSEOptions",       "BSEOptions",
-                                     "CurrencyFuture", "CurrencyOptions", "CommodityFuture",  "CommodityOptions",
-                                     "Index"};
+const QStringList kFallbackGroups = {"Securities",      "FutureContracts",  "NSEOptions",
+                                     "BSEOptions",      "CurrencyFuture",   "CurrencyOptions",
+                                     "CommodityFuture", "CommodityOptions", "Index"};
 
 QByteArray download_tradejini(const BrokerCredentials&) {
     // Step 1: fetch the group list (public; no auth needed for the scrip store).

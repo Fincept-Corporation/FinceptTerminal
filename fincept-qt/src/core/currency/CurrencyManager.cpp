@@ -13,11 +13,11 @@ CurrencyManager& CurrencyManager::instance() {
 QVector<CurrencyInfo> CurrencyManager::available() {
     return {
         {"USD", "$", "US Dollar"},
-        {"EUR", QString::fromUtf8("\xe2\x82\xac"), "Euro"},          // €
-        {"GBP", QString::fromUtf8("\xc2\xa3"), "British Pound"},     // £
-        {"JPY", QString::fromUtf8("\xc2\xa5"), "Japanese Yen"},      // ¥
-        {"INR", QString::fromUtf8("\xe2\x82\xb9"), "Indian Rupee"},  // ₹
-        {"CNY", QString::fromUtf8("\xc2\xa5"), "Chinese Yuan"},      // ¥
+        {"EUR", QString::fromUtf8("\xe2\x82\xac"), "Euro"},         // €
+        {"GBP", QString::fromUtf8("\xc2\xa3"), "British Pound"},    // £
+        {"JPY", QString::fromUtf8("\xc2\xa5"), "Japanese Yen"},     // ¥
+        {"INR", QString::fromUtf8("\xe2\x82\xb9"), "Indian Rupee"}, // ₹
+        {"CNY", QString::fromUtf8("\xc2\xa5"), "Chinese Yuan"},     // ¥
         {"CHF", "Fr", "Swiss Franc"},
         {"CAD", "$", "Canadian Dollar"},
         {"AUD", "$", "Australian Dollar"},

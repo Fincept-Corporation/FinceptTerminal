@@ -655,8 +655,8 @@ ApiResponse<QVector<BrokerCandle>> ShoonyaBroker::get_history(const BrokerCreden
 
         auto resp = http.post_raw(QString("%1/EODChartData").arg(BASE), make_body(jdata, creds.access_token),
                                   {{"Content-Type", "application/x-www-form-urlencoded"}});
-        const bool eod_ok = resp.success && !resp.raw_body.isEmpty() &&
-                            QJsonDocument::fromJson(resp.raw_body.toUtf8()).isArray();
+        const bool eod_ok =
+            resp.success && !resp.raw_body.isEmpty() && QJsonDocument::fromJson(resp.raw_body.toUtf8()).isArray();
 
         if (eod_ok) {
             for (const QJsonValue& v : QJsonDocument::fromJson(resp.raw_body.toUtf8()).array()) {
@@ -682,7 +682,8 @@ ApiResponse<QVector<BrokerCandle>> ShoonyaBroker::get_history(const BrokerCreden
             auto tp_resp = http.post_raw(QString("%1/TPSeries").arg(BASE), make_body(tp, creds.access_token),
                                          {{"Content-Type", "application/x-www-form-urlencoded"}});
             if (!tp_resp.success)
-                return {false, std::nullopt, checked_error(tp_resp, "get_history failed (EOD + TPSeries fallback)"), ts};
+                return {false, std::nullopt, checked_error(tp_resp, "get_history failed (EOD + TPSeries fallback)"),
+                        ts};
             QJsonDocument tp_doc = QJsonDocument::fromJson(tp_resp.raw_body.toUtf8());
             if (!tp_doc.isArray())
                 return {false, std::nullopt, "get_history: invalid TPSeries fallback response", ts};
@@ -698,7 +699,8 @@ ApiResponse<QVector<BrokerCandle>> ShoonyaBroker::get_history(const BrokerCreden
                 candles.append(c);
             }
         } else {
-            return {false, std::nullopt, checked_error(resp, "get_history failed (EOD unavailable; provide token for fallback)"), ts};
+            return {false, std::nullopt,
+                    checked_error(resp, "get_history failed (EOD unavailable; provide token for fallback)"), ts};
         }
     } else {
         // TPSeries — needs numeric token

@@ -45,8 +45,7 @@ int total_connections_for_provider(const QVector<DataSource>& rows, const QStrin
 int enabled_connections_for_provider(const QVector<DataSource>& rows, const QString& connector_id);
 
 // Non-editable QTableWidgetItem with foreground colour and alignment.
-QTableWidgetItem* make_item(const QString& text,
-                            const QColor& color = {},
+QTableWidgetItem* make_item(const QString& text, const QColor& color = {},
                             Qt::Alignment alignment = Qt::AlignLeft | Qt::AlignVCenter);
 
 } // namespace fincept::screens::datasources

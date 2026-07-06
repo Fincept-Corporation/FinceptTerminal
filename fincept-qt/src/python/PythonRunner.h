@@ -35,8 +35,7 @@ class PythonRunner : public QObject {
     /// Run a script asynchronously. Callback invoked on Qt event loop.
     /// Requests are queued if max concurrency is reached.
     /// Optional `on_line` delivers each complete stdout/stderr line as it arrives.
-    void run(const QString& script, const QStringList& args, Callback cb,
-             StreamCallback on_line = {});
+    void run(const QString& script, const QStringList& args, Callback cb, StreamCallback on_line = {});
 
     /// Run arbitrary Python code (for notebook/colab cells).
     /// Creates a temp file, executes it, returns stdout/stderr.
@@ -94,10 +93,10 @@ class PythonRunner : public QObject {
     struct ProcessBuffers {
         QByteArray stdout_buf;
         QByteArray stderr_buf;
-        int stdout_streamed = 0;  // offset into stdout_buf already streamed
+        int stdout_streamed = 0; // offset into stdout_buf already streamed
         int stderr_streamed = 0;
         StreamCallback on_line;
-        qint64 start_ms = 0;  // spawn timestamp for duration diagnostics
+        qint64 start_ms = 0; // spawn timestamp for duration diagnostics
     };
     QHash<QProcess*, ProcessBuffers> proc_buffers_;
 };

@@ -4,10 +4,9 @@
 //
 // Part of the partial-class split of PortfolioService.cpp.
 
-#include "services/portfolio/PortfolioService.h"
-
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/portfolio/PortfolioService.h"
 #include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"

@@ -140,8 +140,9 @@ void NewsFeedCloudAdapter::push_toggle(const OutboxRow& row, PushDone done) {
         done(nf_retry(QStringLiteral("awaiting_create")));
         return;
     }
-    CloudClient::instance().put(nf_path(*remote) + QStringLiteral("/toggle"), QJsonObject(),
-                                [done](CloudResponse r) { done(nf_result(r)); }, this);
+    CloudClient::instance().put(
+        nf_path(*remote) + QStringLiteral("/toggle"), QJsonObject(), [done](CloudResponse r) { done(nf_result(r)); },
+        this);
 }
 
 int NewsFeedCloudAdapter::local_count() const {

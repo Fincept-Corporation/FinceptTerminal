@@ -1,5 +1,7 @@
 #include "screens/dashboard/DashboardScreen.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/dashboard/canvas/AddWidgetDialog.h"
 #include "screens/dashboard/canvas/DashboardTemplates.h"
 #include "screens/dashboard/canvas/TemplatePicker.h"
@@ -11,9 +13,6 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 #include "ui/widgets/NotifToast.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QDataStream>
 #include <QEvent>
@@ -80,8 +79,7 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
                                         "QScrollBar::handle:vertical{background:%2;border-radius:3px;min-height:20px;}"
                                         "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
                                     .arg(ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
-    scroll_area_->viewport()->setStyleSheet(
-        QString("background:%1;").arg(ui::colors::BG_BASE()));
+    scroll_area_->viewport()->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     // Sync canvas width to scroll viewport via event filter
     scroll_area_->viewport()->installEventFilter(this);
@@ -114,7 +112,6 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     save_timer_->setInterval(800);
     connect(save_timer_, &QTimer::timeout, this, &DashboardScreen::save_layout);
 
-
     // ── Canvas signals → toolbar/statusbar ──
     connect(canvas_, &DashboardCanvas::widget_count_changed, toolbar_, &DashboardToolBar::set_widget_count);
     connect(canvas_, &DashboardCanvas::widget_count_changed, status_bar_, &DashboardStatusBar::set_widget_count);
@@ -137,7 +134,8 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
         auto* dlg = new TemplatePicker(this);
         connect(dlg, &TemplatePicker::template_selected, this, [this](const QString& tid) {
             // Clear saved state so fresh template is used
-            (void)QtConcurrent::run([]() { fincept::SettingsRepository::instance().remove("dashboard_canvas_layout"); });
+            (void)QtConcurrent::run(
+                []() { fincept::SettingsRepository::instance().remove("dashboard_canvas_layout"); });
             canvas_->apply_template(tid);
         });
         dlg->exec();
@@ -265,7 +263,6 @@ void DashboardScreen::on_refresh_clicked() {
     }
 }
 
-
 void DashboardScreen::rebuild_ticker_from_cache() {
     if (!ticker_bar_)
         return;
@@ -322,7 +319,6 @@ void DashboardScreen::hub_unsubscribe_ticker() {
     datahub::DataHub::instance().unsubscribe(this);
     hub_active_ = false;
 }
-
 
 // ── Event filter: sync canvas width to scroll viewport ────────────────────────
 

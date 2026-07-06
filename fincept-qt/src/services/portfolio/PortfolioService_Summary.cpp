@@ -6,10 +6,9 @@
 //
 // Part of the partial-class split of PortfolioService.cpp.
 
-#include "services/portfolio/PortfolioService.h"
-
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/portfolio/PortfolioService.h"
 #include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -91,21 +90,20 @@ void PortfolioService::build_summary(const QString& portfolio_id, const QVector<
         symbols.append(a.symbol);
 
     QPointer<PortfolioService> self = this;
-    MarketDataService::instance().fetch_quotes(symbols, [self, portfolio_id, assets,
-                                                         portfolio](bool ok, QVector<QuoteData> quotes) {
-        if (!self)
-            return;
-        QHash<QString, QuoteData> quote_map;
-        if (ok) {
-            for (const auto& q : quotes)
-                quote_map[q.symbol] = q;
-        }
-        self->finalize_summary(portfolio_id, assets, portfolio, quote_map);
-    });
+    MarketDataService::instance().fetch_quotes(
+        symbols, [self, portfolio_id, assets, portfolio](bool ok, QVector<QuoteData> quotes) {
+            if (!self)
+                return;
+            QHash<QString, QuoteData> quote_map;
+            if (ok) {
+                for (const auto& q : quotes)
+                    quote_map[q.symbol] = q;
+            }
+            self->finalize_summary(portfolio_id, assets, portfolio, quote_map);
+        });
 }
 
-bool PortfolioService::try_broker_quotes(const QString& portfolio_id,
-                                         const QVector<portfolio::PortfolioAsset>& assets,
+bool PortfolioService::try_broker_quotes(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                                          const portfolio::Portfolio& portfolio) {
     if (portfolio.broker_account_id.isEmpty())
         return false; // unlinked portfolio — yfinance owns it.
@@ -114,25 +112,22 @@ bool PortfolioService::try_broker_quotes(const QString& portfolio_id,
     auto& acct_mgr = trading::AccountManager::instance();
     const auto account = acct_mgr.get_account(portfolio.broker_account_id);
     if (account.account_id.isEmpty() || account.broker_id.isEmpty()) {
-        LOG_WARN("PortfolioSvc",
-                 QString("broker_account_id %1 not found — falling back to yfinance for %2")
-                     .arg(portfolio.broker_account_id, portfolio_id));
+        LOG_WARN("PortfolioSvc", QString("broker_account_id %1 not found — falling back to yfinance for %2")
+                                     .arg(portfolio.broker_account_id, portfolio_id));
         return false;
     }
 
     auto* broker = trading::BrokerRegistry::instance().get(account.broker_id);
     if (!broker) {
-        LOG_WARN("PortfolioSvc",
-                 QString("broker '%1' not registered — falling back to yfinance for %2")
-                     .arg(account.broker_id, portfolio_id));
+        LOG_WARN("PortfolioSvc", QString("broker '%1' not registered — falling back to yfinance for %2")
+                                     .arg(account.broker_id, portfolio_id));
         return false;
     }
 
     const auto creds = acct_mgr.load_credentials(portfolio.broker_account_id);
     if (creds.access_token.isEmpty()) {
-        LOG_WARN("PortfolioSvc",
-                 QString("broker account %1 has no access_token — falling back to yfinance for %2")
-                     .arg(portfolio.broker_account_id, portfolio_id));
+        LOG_WARN("PortfolioSvc", QString("broker account %1 has no access_token — falling back to yfinance for %2")
+                                     .arg(portfolio.broker_account_id, portfolio_id));
         return false;
     }
 
@@ -172,67 +167,69 @@ bool PortfolioService::try_broker_quotes(const QString& portfolio_id,
         // Hop back to the UI thread (the one that owns *self) before touching
         // any shared state — finalize_summary writes to the cache mutex and
         // emits a signal that drives UI updates.
-        QMetaObject::invokeMethod(self, [self, portfolio_id, assets, portfolio, resp, key_to_yf]() {
-            if (!self)
-                return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, portfolio_id, assets, portfolio, resp, key_to_yf]() {
+                if (!self)
+                    return;
 
-            QHash<QString, QuoteData> quote_map;
-            if (resp.success && resp.data.has_value()) {
-                for (const auto& bq : resp.data.value()) {
-                    // bq.symbol is the EXCHANGE:SYMBOL key (Zerodha echoes the
-                    // request key in its response). Translate back to the
-                    // canonical yfinance key the rest of the pipeline uses.
-                    const QString yf_key = key_to_yf.value(bq.symbol);
-                    if (yf_key.isEmpty())
-                        continue; // unknown key — broker returned a row we didn't ask for, skip.
+                QHash<QString, QuoteData> quote_map;
+                if (resp.success && resp.data.has_value()) {
+                    for (const auto& bq : resp.data.value()) {
+                        // bq.symbol is the EXCHANGE:SYMBOL key (Zerodha echoes the
+                        // request key in its response). Translate back to the
+                        // canonical yfinance key the rest of the pipeline uses.
+                        const QString yf_key = key_to_yf.value(bq.symbol);
+                        if (yf_key.isEmpty())
+                            continue; // unknown key — broker returned a row we didn't ask for, skip.
 
-                    QuoteData q;
-                    q.symbol = yf_key;
-                    q.name = yf_key; // brokers don't return a friendly name on /quote.
-                    q.price = bq.ltp;
-                    q.change = bq.change;
-                    q.change_pct = bq.change_pct;
-                    q.high = bq.high;
-                    q.low = bq.low;
-                    q.volume = bq.volume;
-                    quote_map.insert(yf_key, q);
+                        QuoteData q;
+                        q.symbol = yf_key;
+                        q.name = yf_key; // brokers don't return a friendly name on /quote.
+                        q.price = bq.ltp;
+                        q.change = bq.change;
+                        q.change_pct = bq.change_pct;
+                        q.high = bq.high;
+                        q.low = bq.low;
+                        q.volume = bq.volume;
+                        quote_map.insert(yf_key, q);
+                    }
+                    LOG_INFO("PortfolioSvc", QString("Broker quotes: %1 of %2 for portfolio %3")
+                                                 .arg(quote_map.size())
+                                                 .arg(key_to_yf.size())
+                                                 .arg(portfolio_id));
+                } else {
+                    // Broker call failed — log and fall back to yfinance for
+                    // _this_ refresh. The portfolio stays linked; next refresh
+                    // will retry the broker.
+                    LOG_WARN("PortfolioSvc", QString("broker get_quotes failed for %1: %2 — falling back to yfinance")
+                                                 .arg(portfolio_id, resp.error.left(200)));
+                    QStringList symbols;
+                    symbols.reserve(assets.size());
+                    for (const auto& a : assets)
+                        symbols.append(a.symbol);
+                    MarketDataService::instance().fetch_quotes(
+                        symbols, [self, portfolio_id, assets, portfolio](bool ok, QVector<QuoteData> quotes) {
+                            if (!self)
+                                return;
+                            QHash<QString, QuoteData> qm;
+                            if (ok)
+                                for (const auto& q : quotes)
+                                    qm.insert(q.symbol, q);
+                            self->finalize_summary(portfolio_id, assets, portfolio, qm);
+                        });
+                    return;
                 }
-                LOG_INFO("PortfolioSvc",
-                         QString("Broker quotes: %1 of %2 for portfolio %3")
-                             .arg(quote_map.size()).arg(key_to_yf.size()).arg(portfolio_id));
-            } else {
-                // Broker call failed — log and fall back to yfinance for
-                // _this_ refresh. The portfolio stays linked; next refresh
-                // will retry the broker.
-                LOG_WARN("PortfolioSvc",
-                         QString("broker get_quotes failed for %1: %2 — falling back to yfinance")
-                             .arg(portfolio_id, resp.error.left(200)));
-                QStringList symbols;
-                symbols.reserve(assets.size());
-                for (const auto& a : assets)
-                    symbols.append(a.symbol);
-                MarketDataService::instance().fetch_quotes(symbols, [self, portfolio_id, assets,
-                                                                     portfolio](bool ok, QVector<QuoteData> quotes) {
-                    if (!self)
-                        return;
-                    QHash<QString, QuoteData> qm;
-                    if (ok)
-                        for (const auto& q : quotes)
-                            qm.insert(q.symbol, q);
-                    self->finalize_summary(portfolio_id, assets, portfolio, qm);
-                });
-                return;
-            }
 
-            self->finalize_summary(portfolio_id, assets, portfolio, quote_map);
-        }, Qt::QueuedConnection);
+                self->finalize_summary(portfolio_id, assets, portfolio, quote_map);
+            },
+            Qt::QueuedConnection);
     });
 
     return true; // broker path was taken
 }
 
-void PortfolioService::finalize_summary(const QString& portfolio_id,
-                                        const QVector<portfolio::PortfolioAsset>& assets,
+void PortfolioService::finalize_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                                         const portfolio::Portfolio& portfolio,
                                         const QHash<QString, QuoteData>& quote_map) {
     portfolio::PortfolioSummary summary;
@@ -252,9 +249,7 @@ void PortfolioService::finalize_summary(const QString& portfolio_id,
         h.cost_basis = asset.quantity * asset.avg_buy_price;
         // Prefer stored sector; fall back to resolver cache (which may
         // populate async — see sector_resolved handler in constructor).
-        h.sector = asset.sector.isEmpty()
-                       ? SectorResolver::instance().sector_for(asset.symbol)
-                       : asset.sector;
+        h.sector = asset.sector.isEmpty() ? SectorResolver::instance().sector_for(asset.symbol) : asset.sector;
 
         auto it = quote_map.find(asset.symbol);
         if (it != quote_map.end()) {
@@ -309,9 +304,9 @@ void PortfolioService::finalize_summary(const QString& portfolio_id,
 
     // Save snapshot for performance history
     QString today = QDate::currentDate().toString(Qt::ISODate);
-    PortfolioRepository::instance().save_snapshot(portfolio_id, summary.total_market_value,
-                                                  summary.total_cost_basis, summary.total_unrealized_pnl,
-                                                  summary.total_unrealized_pnl_percent, today);
+    PortfolioRepository::instance().save_snapshot(portfolio_id, summary.total_market_value, summary.total_cost_basis,
+                                                  summary.total_unrealized_pnl, summary.total_unrealized_pnl_percent,
+                                                  today);
 
     emit summary_loaded(summary);
 }

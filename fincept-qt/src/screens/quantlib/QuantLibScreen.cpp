@@ -219,9 +219,9 @@ QWidget* QuantLibScreen::create_sidebar() {
 
     sidebar_title_ = new QLabel(tr("MODULES"));
     sidebar_title_->setStyleSheet(QString("color: %1; font-weight: 700; "
-                                 "letter-spacing: 0.5px; background: transparent; "
-                                 "padding: 8px 12px; border-bottom: 1px solid %2;")
-                             .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
+                                          "letter-spacing: 0.5px; background: transparent; "
+                                          "padding: 8px 12px; border-bottom: 1px solid %2;")
+                                      .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
     vl->addWidget(sidebar_title_);
 
     module_tree_ = new QTreeWidget;
@@ -332,11 +332,11 @@ QWidget* QuantLibScreen::create_center_panel() {
     };
 
     add_helper(tr("BS Price"), "{\"spot\":100,\"strike\":105,\"risk_free_rate\":0.05,\"volatility\":0.2,\"time_to_"
-                           "maturity\":1.0,\"option_type\":\"call\"}");
+                               "maturity\":1.0,\"option_type\":\"call\"}");
     add_helper(tr("GBM Sim"), "{\"S0\":100,\"mu\":0.05,\"sigma\":0.2,\"T\":1.0,\"n_steps\":52,\"n_paths\":5}");
     add_helper(tr("VaR"), "{\"portfolio_value\":1000000,\"volatility\":0.02,\"confidence\":0.99,\"horizon\":1}");
     add_helper(tr("Heston"), "{\"spot\":100,\"strike\":105,\"r\":0.05,\"T\":1.0,\"v0\":0.04,\"kappa\":1.5,"
-                         "\"theta\":0.04,\"sigma_v\":0.3,\"rho\":-0.7,\"option_type\":\"call\"}");
+                             "\"theta\":0.04,\"sigma_v\":0.3,\"rho\":-0.7,\"option_type\":\"call\"}");
     helpers->addStretch(1);
     ebl->addLayout(helpers);
 
@@ -445,15 +445,24 @@ void QuantLibScreen::changeEvent(QEvent* event) {
 void QuantLibScreen::retranslateUi() {
     // Fixed chrome. Module/panel/endpoint names are API-catalog data and are
     // intentionally not translated.
-    if (header_title_)         header_title_->setText(tr("QUANTLIB SUITE"));
-    if (header_sub_)           header_sub_->setText(tr("18 MODULES | 590+ QUANTITATIVE ENDPOINTS"));
-    if (header_badge_)         header_badge_->setText(tr("API POWERED"));
-    if (sidebar_title_)        sidebar_title_->setText(tr("MODULES"));
-    if (endpoint_panel_title_) endpoint_panel_title_->setText(tr("ENDPOINT"));
-    if (json_body_label_)      json_body_label_->setText(tr("REQUEST BODY (JSON)"));
-    if (results_title_)        results_title_->setText(tr("RESULTS"));
-    if (status_left_)          status_left_->setText(tr("QUANTLIB SUITE"));
-    if (exec_btn_ && !loading_) exec_btn_->setText(tr("EXECUTE COMPUTATION"));
+    if (header_title_)
+        header_title_->setText(tr("QUANTLIB SUITE"));
+    if (header_sub_)
+        header_sub_->setText(tr("18 MODULES | 590+ QUANTITATIVE ENDPOINTS"));
+    if (header_badge_)
+        header_badge_->setText(tr("API POWERED"));
+    if (sidebar_title_)
+        sidebar_title_->setText(tr("MODULES"));
+    if (endpoint_panel_title_)
+        endpoint_panel_title_->setText(tr("ENDPOINT"));
+    if (json_body_label_)
+        json_body_label_->setText(tr("REQUEST BODY (JSON)"));
+    if (results_title_)
+        results_title_->setText(tr("RESULTS"));
+    if (status_left_)
+        status_left_->setText(tr("QUANTLIB SUITE"));
+    if (exec_btn_ && !loading_)
+        exec_btn_->setText(tr("EXECUTE COMPUTATION"));
 
     // Status module prefix (module name itself is data)
     if (status_module_ && active_module_ >= 0 && active_module_ < modules_.size())

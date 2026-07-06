@@ -71,11 +71,11 @@ class SetupScreen : public QWidget {
     // ── State enums for runtime-translatable dynamic text ───────────────────
     enum class SubtitleState { Ready, AlreadyConfigured, Finishing };
     enum class BeginBtnState { Begin, SettingUp, Retry, Launch, Continue, AlreadyComplete };
-    enum class StatusState   { Idle, InProgress, AllDone, AnyDone, Failed, Timeout, Custom };
+    enum class StatusState { Idle, InProgress, AllDone, AnyDone, Failed, Timeout, Custom };
 
     SubtitleState subtitle_state_ = SubtitleState::Ready;
     BeginBtnState begin_btn_state_ = BeginBtnState::Begin;
-    StatusState   status_state_    = StatusState::Idle;
+    StatusState status_state_ = StatusState::Idle;
     /// Detail string baked into the current status — e.g. the python error
     /// surfaced for StatusState::Failed, or a raw progress message used for
     /// StatusState::Custom. Stored verbatim and re-rendered with the active
@@ -84,7 +84,7 @@ class SetupScreen : public QWidget {
 
     QPushButton* begin_btn_ = nullptr;
     QPushButton* skip_btn_ = nullptr;
-    QLabel* title_lbl_ = nullptr;       // FINCEPT TERMINAL — brand, not translated
+    QLabel* title_lbl_ = nullptr; // FINCEPT TERMINAL — brand, not translated
     QLabel* status_label_ = nullptr;
     QLabel* subtitle_lbl_ = nullptr;
     QLabel* intro_lbl_ = nullptr;

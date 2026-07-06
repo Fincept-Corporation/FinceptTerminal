@@ -27,7 +27,7 @@ constexpr quint8 DATA_TYPE = 6;
 constexpr quint8 SUBSCRIBE_TYPE = 4;
 constexpr quint8 UNSUBSCRIBE_TYPE = 5;
 
-constexpr quint8 RESP_SNAP = 83; // 'S'
+constexpr quint8 RESP_SNAP = 83;   // 'S'
 constexpr quint8 RESP_UPDATE = 85; // 'U'
 
 // HSI's "trash"/invalid long value — fields carrying it are ignored.
@@ -36,21 +36,21 @@ constexpr qint64 TRASH_VAL = -2147483648LL;
 // SCRIP feed field indices (SCRIP_MAPPING in the py source).
 constexpr int SC_VOLUME = 4;
 constexpr int SC_LTP = 5;
-constexpr int SC_BP = 9;   // best bid price
-constexpr int SC_SP = 10;  // best ask price
-constexpr int SC_BQ = 11;  // best bid qty
-constexpr int SC_BS = 12;  // best ask qty
-constexpr int SC_LOW = 14; // "lo"
-constexpr int SC_HIGH = 15; // "h"
-constexpr int SC_OPEN = 20; // "op"
+constexpr int SC_BP = 9;     // best bid price
+constexpr int SC_SP = 10;    // best ask price
+constexpr int SC_BQ = 11;    // best bid qty
+constexpr int SC_BS = 12;    // best ask qty
+constexpr int SC_LOW = 14;   // "lo"
+constexpr int SC_HIGH = 15;  // "h"
+constexpr int SC_OPEN = 20;  // "op"
 constexpr int SC_CLOSE = 21; // "c" (prev close)
 constexpr int SC_OI = 22;
 constexpr int SC_MULT = 23;
 constexpr int SC_PREC = 24;
 
 // INDEX feed field indices (INDEX_MAPPING).
-constexpr int IX_LTP = 2;    // "iv"
-constexpr int IX_CLOSE = 3;  // "ic"
+constexpr int IX_LTP = 2;   // "iv"
+constexpr int IX_CLOSE = 3; // "ic"
 constexpr int IX_HIGH = 5;
 constexpr int IX_LOW = 6;
 constexpr int IX_OPEN = 7;
@@ -58,10 +58,10 @@ constexpr int IX_MULT = 8;
 constexpr int IX_PREC = 9;
 
 // DEPTH feed field indices (DEPTH_MAPPING). bp/bp1..bp4 bids, sp/sp1..sp4 asks.
-constexpr int DP_BP0 = 2;  // bp, bp1, bp2, bp3, bp4 → 2..6
-constexpr int DP_SP0 = 7;  // sp, sp1, sp2, sp3, sp4 → 7..11
-constexpr int DP_BQ0 = 12; // bq, bq1..bq4 → 12..16
-constexpr int DP_BS0 = 17; // bs(ask qty l0), bs1..bs4 → 17..21
+constexpr int DP_BP0 = 2;   // bp, bp1, bp2, bp3, bp4 → 2..6
+constexpr int DP_SP0 = 7;   // sp, sp1, sp2, sp3, sp4 → 7..11
+constexpr int DP_BQ0 = 12;  // bq, bq1..bq4 → 12..16
+constexpr int DP_BS0 = 17;  // bs(ask qty l0), bs1..bs4 → 17..21
 constexpr int DP_BNO0 = 22; // bid orders bno1..bno5 → 22..26
 constexpr int DP_SNO0 = 27; // ask orders sno1..sno5 → 27..31
 constexpr int DP_MULT = 32;
@@ -69,18 +69,22 @@ constexpr int DP_PREC = 33;
 
 // Shared string field indices (STRING_INDEX).
 [[maybe_unused]] constexpr int STR_NAME = 51;
-constexpr int STR_SYMBOL = 52; // token ("tk")
-constexpr int STR_EXCHG = 53;  // exchange ("e")
+constexpr int STR_SYMBOL = 52;  // token ("tk")
+constexpr int STR_EXCHG = 53;   // exchange ("e")
 constexpr int STR_TSYMBOL = 54; // trading symbol ("ts")
 
 // Big-endian readers over a const uchar*.
-quint16 be16(const uchar* p) { return quint16((quint16(p[0]) << 8) | p[1]); }
+quint16 be16(const uchar* p) {
+    return quint16((quint16(p[0]) << 8) | p[1]);
+}
 quint32 be32(const uchar* p) {
     return (quint32(p[0]) << 24) | (quint32(p[1]) << 16) | (quint32(p[2]) << 8) | p[3];
 }
 
 // Append helpers for binary frame construction (big-endian).
-void put8(QByteArray& b, quint8 v) { b.append(char(v)); }
+void put8(QByteArray& b, quint8 v) {
+    b.append(char(v));
+}
 void put16(QByteArray& b, quint16 v) {
     b.append(char((v >> 8) & 0xFF));
     b.append(char(v & 0xFF));
@@ -97,11 +101,13 @@ void put32(QByteArray& b, quint32 v) {
 // Construction
 // ─────────────────────────────────────────────────────────────────────────────
 
-KotakWebSocket::KotakWebSocket(const QString& auth_token, const QString& sid,
-                               const QString& hs_server_id, const QString& access_token,
-                               QObject* parent)
-    : BrokerWebSocketBase(parent), auth_token_(auth_token), sid_(sid),
-      hs_server_id_(hs_server_id), access_token_(access_token) {
+KotakWebSocket::KotakWebSocket(const QString& auth_token, const QString& sid, const QString& hs_server_id,
+                               const QString& access_token, QObject* parent)
+    : BrokerWebSocketBase(parent),
+      auth_token_(auth_token),
+      sid_(sid),
+      hs_server_id_(hs_server_id),
+      access_token_(access_token) {
     ws_ = new WebSocketClient(this);
     connect(ws_, &WebSocketClient::connected, this, &KotakWebSocket::on_connected);
     connect(ws_, &WebSocketClient::disconnected, this, &KotakWebSocket::on_disconnected);
@@ -233,8 +239,8 @@ QByteArray KotakWebSocket::build_connection_request(const QString& jwt, const QS
     return frame;
 }
 
-QByteArray KotakWebSocket::build_subs_request(const QString& scrips_amp, int subscribe_type,
-                                              const QString& prefix, int channel_num) {
+QByteArray KotakWebSocket::build_subs_request(const QString& scrips_amp, int subscribe_type, const QString& prefix,
+                                              int channel_num) {
     // getScripByteArray: prefix every "<exch>|<token>" scrip with "<prefix>|",
     // then [count:2] then per scrip [len:1][chars].
     QStringList scrips = scrips_amp.split('&', Qt::SkipEmptyParts);
@@ -303,9 +309,8 @@ void KotakWebSocket::send_subscribe(const QVector<qint64>& tokens, bool subscrib
         ws_->send_binary(build_subs_request(joined, type, QStringLiteral("sf"), 1));
         ws_->send_binary(build_subs_request(joined, type, QStringLiteral("dp"), 1));
     }
-    LOG_INFO(TAG_KOTAK_WS, QString("%1 %2 scrips")
-                               .arg(subscribe ? "Subscribed" : "Unsubscribed")
-                               .arg(scrip_list.size()));
+    LOG_INFO(TAG_KOTAK_WS,
+             QString("%1 %2 scrips").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(scrip_list.size()));
 }
 
 void KotakWebSocket::resubscribe_all() {
@@ -434,15 +439,23 @@ void KotakWebSocket::parse_data(const QByteArray& data) {
         qint64 topic_id = 0;
 
         if (resp == RESP_SNAP) {
-            if (!avail(4)) { pos = sub_start + sub_len; continue; }
+            if (!avail(4)) {
+                pos = sub_start + sub_len;
+                continue;
+            }
             topic_id = be32(e + pos);
             pos += 4;
-            if (!avail(1)) { pos = sub_start + sub_len; continue; }
+            if (!avail(1)) {
+                pos = sub_start + sub_len;
+                continue;
+            }
             const int name_len = e[pos];
             pos += 1;
-            if (!avail(name_len)) { pos = sub_start + sub_len; continue; }
-            const QString topic_name =
-                QString::fromUtf8(reinterpret_cast<const char*>(e + pos), name_len);
+            if (!avail(name_len)) {
+                pos = sub_start + sub_len;
+                continue;
+            }
+            const QString topic_name = QString::fromUtf8(reinterpret_cast<const char*>(e + pos), name_len);
             pos += name_len;
 
             // topic_name is "<feed>|<exch>|<token>" — feed is the prefix.
@@ -457,11 +470,17 @@ void KotakWebSocket::parse_data(const QByteArray& data) {
             rec = &tr;
 
             // Long field block: fcount1 × (4-byte value), index = field id.
-            if (!avail(1)) { pos = sub_start + sub_len; continue; }
+            if (!avail(1)) {
+                pos = sub_start + sub_len;
+                continue;
+            }
             int fcount = e[pos];
             pos += 1;
             for (int k = 0; k < fcount; ++k) {
-                if (!avail(4)) { pos = sub_start + sub_len; break; }
+                if (!avail(4)) {
+                    pos = sub_start + sub_len;
+                    break;
+                }
                 const qint64 v = qint64(qint32(be32(e + pos)));
                 pos += 4;
                 if (v != TRASH_VAL)
@@ -482,14 +501,15 @@ void KotakWebSocket::parse_data(const QByteArray& data) {
                 int scount = e[pos];
                 pos += 1;
                 for (int k = 0; k < scount; ++k) {
-                    if (!avail(2)) break;
+                    if (!avail(2))
+                        break;
                     const int fid = e[pos];
                     pos += 1;
                     const int dlen = e[pos];
                     pos += 1;
-                    if (!avail(dlen)) break;
-                    const QString sval =
-                        QString::fromUtf8(reinterpret_cast<const char*>(e + pos), dlen);
+                    if (!avail(dlen))
+                        break;
+                    const QString sval = QString::fromUtf8(reinterpret_cast<const char*>(e + pos), dlen);
                     pos += dlen;
                     if (fid == STR_SYMBOL)
                         tr.token = sval;
@@ -500,7 +520,10 @@ void KotakWebSocket::parse_data(const QByteArray& data) {
                 }
             }
         } else if (resp == RESP_UPDATE) {
-            if (!avail(4)) { pos = sub_start + sub_len; continue; }
+            if (!avail(4)) {
+                pos = sub_start + sub_len;
+                continue;
+            }
             topic_id = be32(e + pos);
             pos += 4;
             auto it = topics_.find(topic_id);
@@ -510,11 +533,15 @@ void KotakWebSocket::parse_data(const QByteArray& data) {
                 continue;
             }
             rec = &it.value();
-            if (!avail(1)) { pos = sub_start + sub_len; continue; }
+            if (!avail(1)) {
+                pos = sub_start + sub_len;
+                continue;
+            }
             int fcount = e[pos];
             pos += 1;
             for (int k = 0; k < fcount; ++k) {
-                if (!avail(4)) break;
+                if (!avail(4))
+                    break;
                 const qint64 v = qint64(qint32(be32(e + pos)));
                 pos += 4;
                 if (v != TRASH_VAL)
@@ -547,9 +574,7 @@ void KotakWebSocket::parse_data(const QByteArray& data) {
             return it == rec->fields.constEnd() ? 0 : it.value();
         };
 
-        const QString sym = !rec->tsymbol.isEmpty() ? rec->tsymbol
-                            : !rec->token.isEmpty()  ? rec->token
-                                                     : key;
+        const QString sym = !rec->tsymbol.isEmpty() ? rec->tsymbol : !rec->token.isEmpty() ? rec->token : key;
 
         if (rec->feed_type == "dp") {
             MarketDepth depth;

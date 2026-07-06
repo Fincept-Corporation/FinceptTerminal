@@ -62,28 +62,25 @@ std::vector<ToolDef> get_dbnomics_tools() {
         t.description = "List all DBnomics data providers (code + name). e.g. BLS, IMF, ECB, OECD.";
         t.category = "dbnomics";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             auto* svc = &services::DBnomicsService::instance();
-            AsyncDispatch::callback_to_promise(
-                svc, std::move(ctx), promise,
-                [svc](auto resolve) {
-                    auto* holder = new QObject(svc);
-                    QObject::connect(svc, &services::DBnomicsService::providers_loaded, holder,
-                                      [resolve, holder](QVector<services::DbnProvider> ps) {
-                                          QJsonArray arr;
-                                          for (const auto& p : ps)
-                                              arr.append(QJsonObject{{"code", p.code}, {"name", p.name}});
-                                          resolve(ToolResult::ok_data(arr));
-                                          holder->deleteLater();
-                                      });
-                    QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
-                                      [resolve, holder](QString, QString msg) {
-                                          resolve(ToolResult::fail(msg));
-                                          holder->deleteLater();
-                                      });
-                    svc->fetch_providers();
-                });
+            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc](auto resolve) {
+                auto* holder = new QObject(svc);
+                QObject::connect(svc, &services::DBnomicsService::providers_loaded, holder,
+                                 [resolve, holder](QVector<services::DbnProvider> ps) {
+                                     QJsonArray arr;
+                                     for (const auto& p : ps)
+                                         arr.append(QJsonObject{{"code", p.code}, {"name", p.name}});
+                                     resolve(ToolResult::ok_data(arr));
+                                     holder->deleteLater();
+                                 });
+                QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
+                                 [resolve, holder](QString, QString msg) {
+                                     resolve(ToolResult::fail(msg));
+                                     holder->deleteLater();
+                                 });
+                svc->fetch_providers();
+            });
         };
         tools.push_back(std::move(t));
     }
@@ -96,37 +93,38 @@ std::vector<ToolDef> get_dbnomics_tools() {
         t.category = "dbnomics";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("provider_code", "Provider code (e.g. BLS, IMF, ECB)").required().length(1, 32)
-            .integer("offset", "Pagination offset").default_int(0).min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("provider_code", "Provider code (e.g. BLS, IMF, ECB)")
+                             .required()
+                             .length(1, 32)
+                             .integer("offset", "Pagination offset")
+                             .default_int(0)
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString prov = args["provider_code"].toString();
             const int offset = args["offset"].toInt(0);
             auto* svc = &services::DBnomicsService::instance();
-            AsyncDispatch::callback_to_promise(
-                svc, std::move(ctx), promise,
-                [svc, prov, offset](auto resolve) {
-                    auto* holder = new QObject(svc);
-                    QObject::connect(svc, &services::DBnomicsService::datasets_loaded, holder,
-                                      [resolve, holder](QVector<services::DbnDataset> ds,
-                                                        services::DbnPagination page, bool /*append*/) {
-                                          QJsonArray arr;
-                                          for (const auto& d : ds)
-                                              arr.append(QJsonObject{{"code", d.code}, {"name", d.name}});
-                                          resolve(ToolResult::ok_data(QJsonObject{
-                                              {"datasets", arr},
-                                              {"pagination", pagination_to_json(page)},
-                                          }));
-                                          holder->deleteLater();
-                                      });
-                    QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
-                                      [resolve, holder](QString, QString msg) {
-                                          resolve(ToolResult::fail(msg));
-                                          holder->deleteLater();
-                                      });
-                    svc->fetch_datasets(prov, offset);
-                });
+            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, prov, offset](auto resolve) {
+                auto* holder = new QObject(svc);
+                QObject::connect(
+                    svc, &services::DBnomicsService::datasets_loaded, holder,
+                    [resolve, holder](QVector<services::DbnDataset> ds, services::DbnPagination page, bool /*append*/) {
+                        QJsonArray arr;
+                        for (const auto& d : ds)
+                            arr.append(QJsonObject{{"code", d.code}, {"name", d.name}});
+                        resolve(ToolResult::ok_data(QJsonObject{
+                            {"datasets", arr},
+                            {"pagination", pagination_to_json(page)},
+                        }));
+                        holder->deleteLater();
+                    });
+                QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
+                                 [resolve, holder](QString, QString msg) {
+                                     resolve(ToolResult::fail(msg));
+                                     holder->deleteLater();
+                                 });
+                svc->fetch_datasets(prov, offset);
+            });
         };
         tools.push_back(std::move(t));
     }
@@ -139,41 +137,46 @@ std::vector<ToolDef> get_dbnomics_tools() {
         t.category = "dbnomics";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("provider_code", "Provider code").required().length(1, 32)
-            .string("dataset_code", "Dataset code").required().length(1, 64)
-            .string("query", "Optional filter (text search within dataset)").default_str("").length(0, 256)
-            .integer("offset", "Pagination offset").default_int(0).min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("provider_code", "Provider code")
+                             .required()
+                             .length(1, 32)
+                             .string("dataset_code", "Dataset code")
+                             .required()
+                             .length(1, 64)
+                             .string("query", "Optional filter (text search within dataset)")
+                             .default_str("")
+                             .length(0, 256)
+                             .integer("offset", "Pagination offset")
+                             .default_int(0)
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString prov = args["provider_code"].toString();
             const QString ds = args["dataset_code"].toString();
             const QString q = args["query"].toString();
             const int offset = args["offset"].toInt(0);
             auto* svc = &services::DBnomicsService::instance();
-            AsyncDispatch::callback_to_promise(
-                svc, std::move(ctx), promise,
-                [svc, prov, ds, q, offset](auto resolve) {
-                    auto* holder = new QObject(svc);
-                    QObject::connect(svc, &services::DBnomicsService::series_loaded, holder,
-                                      [resolve, holder](QVector<services::DbnSeriesInfo> ss,
-                                                        services::DbnPagination page, bool /*append*/) {
-                                          QJsonArray arr;
-                                          for (const auto& s : ss)
-                                              arr.append(QJsonObject{{"code", s.code}, {"name", s.name}});
-                                          resolve(ToolResult::ok_data(QJsonObject{
-                                              {"series", arr},
-                                              {"pagination", pagination_to_json(page)},
-                                          }));
-                                          holder->deleteLater();
-                                      });
-                    QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
-                                      [resolve, holder](QString, QString msg) {
-                                          resolve(ToolResult::fail(msg));
-                                          holder->deleteLater();
-                                      });
-                    svc->fetch_series(prov, ds, q, offset);
-                });
+            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, prov, ds, q, offset](auto resolve) {
+                auto* holder = new QObject(svc);
+                QObject::connect(svc, &services::DBnomicsService::series_loaded, holder,
+                                 [resolve, holder](QVector<services::DbnSeriesInfo> ss, services::DbnPagination page,
+                                                   bool /*append*/) {
+                                     QJsonArray arr;
+                                     for (const auto& s : ss)
+                                         arr.append(QJsonObject{{"code", s.code}, {"name", s.name}});
+                                     resolve(ToolResult::ok_data(QJsonObject{
+                                         {"series", arr},
+                                         {"pagination", pagination_to_json(page)},
+                                     }));
+                                     holder->deleteLater();
+                                 });
+                QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
+                                 [resolve, holder](QString, QString msg) {
+                                     resolve(ToolResult::fail(msg));
+                                     holder->deleteLater();
+                                 });
+                svc->fetch_series(prov, ds, q, offset);
+            });
         };
         tools.push_back(std::move(t));
     }
@@ -186,40 +189,44 @@ std::vector<ToolDef> get_dbnomics_tools() {
         t.category = "dbnomics";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("provider_code", "Provider code (e.g. BLS)").required().length(1, 32)
-            .string("dataset_code", "Dataset code (e.g. ln)").required().length(1, 64)
-            .string("series_code", "Series code (e.g. LNS14000000)").required().length(1, 128)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("provider_code", "Provider code (e.g. BLS)")
+                             .required()
+                             .length(1, 32)
+                             .string("dataset_code", "Dataset code (e.g. ln)")
+                             .required()
+                             .length(1, 64)
+                             .string("series_code", "Series code (e.g. LNS14000000)")
+                             .required()
+                             .length(1, 128)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString prov = args["provider_code"].toString();
             const QString ds = args["dataset_code"].toString();
             const QString sc = args["series_code"].toString();
             const QString series_id = prov + "/" + ds + "/" + sc;
             auto* svc = &services::DBnomicsService::instance();
             AsyncDispatch::callback_to_promise(
-                svc, std::move(ctx), promise,
-                [svc, prov, ds, sc, series_id](auto resolve) {
+                svc, std::move(ctx), promise, [svc, prov, ds, sc, series_id](auto resolve) {
                     auto* holder = new QObject(svc);
                     QObject::connect(svc, &services::DBnomicsService::observations_loaded, holder,
-                                      [series_id, resolve, holder](services::DbnDataPoint dp) {
-                                          // Filter by the series we requested — observations_loaded
-                                          // is broadcast.
-                                          if (dp.series_id != series_id)
-                                              return;
-                                          resolve(ToolResult::ok_data(QJsonObject{
-                                              {"series_id", dp.series_id},
-                                              {"series_name", dp.series_name},
-                                              {"observations", observations_to_json(dp.observations)},
-                                              {"count", static_cast<int>(dp.observations.size())},
-                                          }));
-                                          holder->deleteLater();
-                                      });
+                                     [series_id, resolve, holder](services::DbnDataPoint dp) {
+                                         // Filter by the series we requested — observations_loaded
+                                         // is broadcast.
+                                         if (dp.series_id != series_id)
+                                             return;
+                                         resolve(ToolResult::ok_data(QJsonObject{
+                                             {"series_id", dp.series_id},
+                                             {"series_name", dp.series_name},
+                                             {"observations", observations_to_json(dp.observations)},
+                                             {"count", static_cast<int>(dp.observations.size())},
+                                         }));
+                                         holder->deleteLater();
+                                     });
                     QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
-                                      [resolve, holder](QString, QString msg) {
-                                          resolve(ToolResult::fail(msg));
-                                          holder->deleteLater();
-                                      });
+                                     [resolve, holder](QString, QString msg) {
+                                         resolve(ToolResult::fail(msg));
+                                         holder->deleteLater();
+                                     });
                     svc->fetch_observations(prov, ds, sc);
                 });
         };
@@ -234,44 +241,45 @@ std::vector<ToolDef> get_dbnomics_tools() {
         t.category = "dbnomics";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("query", "Search query (e.g. 'unemployment')").required().length(1, 256)
-            .integer("offset", "Pagination offset").default_int(0).min(0)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("query", "Search query (e.g. 'unemployment')")
+                             .required()
+                             .length(1, 256)
+                             .integer("offset", "Pagination offset")
+                             .default_int(0)
+                             .min(0)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString q = args["query"].toString();
             const int offset = args["offset"].toInt(0);
             auto* svc = &services::DBnomicsService::instance();
-            AsyncDispatch::callback_to_promise(
-                svc, std::move(ctx), promise,
-                [svc, q, offset](auto resolve) {
-                    auto* holder = new QObject(svc);
-                    QObject::connect(svc, &services::DBnomicsService::search_results_loaded, holder,
-                                      [resolve, holder](QVector<services::DbnSearchResult> rs,
-                                                        services::DbnPagination page, bool /*append*/) {
-                                          QJsonArray arr;
-                                          for (const auto& r : rs) {
-                                              arr.append(QJsonObject{
-                                                  {"provider_code", r.provider_code},
-                                                  {"provider_name", r.provider_name},
-                                                  {"dataset_code", r.dataset_code},
-                                                  {"dataset_name", r.dataset_name},
-                                                  {"nb_series", r.nb_series},
-                                              });
-                                          }
-                                          resolve(ToolResult::ok_data(QJsonObject{
-                                              {"results", arr},
-                                              {"pagination", pagination_to_json(page)},
-                                          }));
-                                          holder->deleteLater();
-                                      });
-                    QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
-                                      [resolve, holder](QString, QString msg) {
-                                          resolve(ToolResult::fail(msg));
-                                          holder->deleteLater();
-                                      });
-                    svc->global_search(q, offset);
-                });
+            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, q, offset](auto resolve) {
+                auto* holder = new QObject(svc);
+                QObject::connect(svc, &services::DBnomicsService::search_results_loaded, holder,
+                                 [resolve, holder](QVector<services::DbnSearchResult> rs, services::DbnPagination page,
+                                                   bool /*append*/) {
+                                     QJsonArray arr;
+                                     for (const auto& r : rs) {
+                                         arr.append(QJsonObject{
+                                             {"provider_code", r.provider_code},
+                                             {"provider_name", r.provider_name},
+                                             {"dataset_code", r.dataset_code},
+                                             {"dataset_name", r.dataset_name},
+                                             {"nb_series", r.nb_series},
+                                         });
+                                     }
+                                     resolve(ToolResult::ok_data(QJsonObject{
+                                         {"results", arr},
+                                         {"pagination", pagination_to_json(page)},
+                                     }));
+                                     holder->deleteLater();
+                                 });
+                QObject::connect(svc, &services::DBnomicsService::error_occurred, holder,
+                                 [resolve, holder](QString, QString msg) {
+                                     resolve(ToolResult::fail(msg));
+                                     holder->deleteLater();
+                                 });
+                svc->global_search(q, offset);
+            });
         };
         tools.push_back(std::move(t));
     }

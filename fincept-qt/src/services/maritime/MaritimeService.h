@@ -1,17 +1,14 @@
 // src/services/maritime/MaritimeService.h
 #pragma once
+#include "datahub/Producer.h"
 #include "services/maritime/MaritimeTypes.h"
 
 #include <QObject>
 
-#    include "datahub/Producer.h"
-
 namespace fincept::services::maritime {
 
 /// Singleton service for Maritime Intelligence — HTTP calls to api.fincept.in/marine/
-class MaritimeService : public QObject
-    , public fincept::datahub::Producer
-{
+class MaritimeService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static MaritimeService& instance();

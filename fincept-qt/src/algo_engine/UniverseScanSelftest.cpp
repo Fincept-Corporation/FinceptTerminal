@@ -83,8 +83,7 @@ int run_universe_scan_selftest() {
         check(!r.triggered, "CLOSE>100 (at 99) does NOT trigger");
     }
 
-    std::printf("universe-scan selftest: %s\n",
-                failures == 0 ? "PASS" : "FAILED");
+    std::printf("universe-scan selftest: %s\n", failures == 0 ? "PASS" : "FAILED");
     return failures == 0 ? 0 : 1;
 }
 

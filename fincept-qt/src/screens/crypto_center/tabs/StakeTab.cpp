@@ -62,15 +62,11 @@ void StakeTab::build_ui() {
 
 void StakeTab::apply_theme() {
     using namespace ui::colors;
-    const QString ss = QStringLiteral(
-        "QWidget#stakeTab { background:%1; }"
-        "QScrollArea#stakeTabScroll { background:%1; border:none; }"
-        "QWidget#stakeTabContent { background:%1; }"
-        "QFrame#stakeTabPanelHost { background:%2; border:1px solid %3; }"
-    )
-        .arg(BG_BASE(),
-             BG_SURFACE(),
-             BORDER_DIM());
+    const QString ss = QStringLiteral("QWidget#stakeTab { background:%1; }"
+                                      "QScrollArea#stakeTabScroll { background:%1; border:none; }"
+                                      "QWidget#stakeTabContent { background:%1; }"
+                                      "QFrame#stakeTabPanelHost { background:%2; border:1px solid %3; }")
+                           .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM());
     setStyleSheet(ss);
 }
 

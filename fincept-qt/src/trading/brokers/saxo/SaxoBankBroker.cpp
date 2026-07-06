@@ -3,9 +3,9 @@
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QDateTime>
-#include <QTimeZone>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTimeZone>
 #include <QUrlQuery>
 
 #include <algorithm>
@@ -593,8 +593,8 @@ ApiResponse<QVector<BrokerCandle>> SaxoBankBroker::get_history(const BrokerCrede
 
     // Fx*/Cfd* instruments report Ask/Bid OHLC (use mid); Stock/Etf/Bond/Future report plain
     // OHLC + Volume. Decide off the AssetType, falling back to the open==0.0 heuristic for "Stock".
-    const bool ask_bid_asset = asset_type.startsWith("Fx", Qt::CaseInsensitive) ||
-                               asset_type.startsWith("Cfd", Qt::CaseInsensitive);
+    const bool ask_bid_asset =
+        asset_type.startsWith("Fx", Qt::CaseInsensitive) || asset_type.startsWith("Cfd", Qt::CaseInsensitive);
 
     auto& http = BrokerHttp::instance();
 
@@ -610,9 +610,8 @@ ApiResponse<QVector<BrokerCandle>> SaxoBankBroker::get_history(const BrokerCrede
 
         QString url = QString("%1/chart/v1/charts?Uic=%2&AssetType=%3&Horizon=%4&Count=%5"
                               "&Mode=UpTo&Time=%6")
-                          .arg(BASE_LIVE, uic, QString(QUrl::toPercentEncoding(asset_type)),
-                               QString::number(horizon), QString::number(page_count),
-                               QString(QUrl::toPercentEncoding(time_str)));
+                          .arg(BASE_LIVE, uic, QString(QUrl::toPercentEncoding(asset_type)), QString::number(horizon),
+                               QString::number(page_count), QString(QUrl::toPercentEncoding(time_str)));
 
         auto resp = http.get(url, auth_headers(creds));
         if (!resp.success) {

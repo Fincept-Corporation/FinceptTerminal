@@ -64,9 +64,9 @@ class FeeDiscountPanel : public QWidget {
     QString current_pubkey_;
     QString balance_topic_;
     QString discount_topic_;
-    double  fncpt_held_ = 0.0;
+    double fncpt_held_ = 0.0;
     fincept::wallet::FncptDiscount latest_;
-    bool    have_discount_ = false;
+    bool have_discount_ = false;
 };
 
 } // namespace fincept::screens::panels

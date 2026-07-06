@@ -32,13 +32,16 @@ constexpr const char* kHeliusKeyName = "solana.helius_api_key";
 constexpr int kFetchLimit = 50;
 
 QString format_token_amount(double v, int max_dp = 4) {
-    if (v <= 0.0) return QStringLiteral("0");
-    if (v < 0.0001) return QString::number(v, 'g', 4);
+    if (v <= 0.0)
+        return QStringLiteral("0");
+    if (v < 0.0001)
+        return QString::number(v, 'g', 4);
     return QString::number(v, 'f', max_dp);
 }
 
 QString resolve_symbol(const QString& mint) {
-    if (mint.isEmpty()) return QString();
+    if (mint.isEmpty())
+        return QString();
     if (auto m = TokenMetadataService::instance().lookup(mint)) {
         return m->symbol;
     }
@@ -59,9 +62,9 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
     ParsedActivity out;
     out.signature = tx.value(QStringLiteral("signature")).toString();
 
-    const auto ts_sec = static_cast<qint64>(
-        tx.value(QStringLiteral("timestamp")).toDouble());
-    if (ts_sec > 0) out.ts_ms = ts_sec * 1000;
+    const auto ts_sec = static_cast<qint64>(tx.value(QStringLiteral("timestamp")).toDouble());
+    if (ts_sec > 0)
+        out.ts_ms = ts_sec * 1000;
 
     const bool failed = tx.value(QStringLiteral("transactionError")).isObject();
     out.status = failed ? QStringLiteral("failed") : QStringLiteral("confirmed");
@@ -78,8 +81,7 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
         const auto native_in = swap.value(QStringLiteral("nativeInput")).toObject();
         if (!native_in.isEmpty()) {
             in_sym = QStringLiteral("SOL");
-            const auto lamports = native_in.value(QStringLiteral("amount"))
-                                      .toString().toLongLong();
+            const auto lamports = native_in.value(QStringLiteral("amount")).toString().toLongLong();
             in_amt = format_token_amount(lamports / 1e9, 4);
         } else {
             const auto token_in = swap.value(QStringLiteral("tokenInputs")).toArray();
@@ -88,17 +90,16 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
                 in_sym = resolve_symbol(first.value(QStringLiteral("mint")).toString());
                 const auto raw = first.value(QStringLiteral("rawTokenAmount")).toObject();
                 bool ok = false;
-                const auto qty = raw.value(QStringLiteral("tokenAmount"))
-                                     .toString().toLongLong(&ok);
+                const auto qty = raw.value(QStringLiteral("tokenAmount")).toString().toLongLong(&ok);
                 const int dp = raw.value(QStringLiteral("decimals")).toInt();
-                if (ok) in_amt = format_token_amount(qty / std::pow(10.0, dp), 4);
+                if (ok)
+                    in_amt = format_token_amount(qty / std::pow(10.0, dp), 4);
             }
         }
         const auto native_out = swap.value(QStringLiteral("nativeOutput")).toObject();
         if (!native_out.isEmpty()) {
             out_sym = QStringLiteral("SOL");
-            const auto lamports = native_out.value(QStringLiteral("amount"))
-                                      .toString().toLongLong();
+            const auto lamports = native_out.value(QStringLiteral("amount")).toString().toLongLong();
             out_amt = format_token_amount(lamports / 1e9, 4);
         } else {
             const auto token_out = swap.value(QStringLiteral("tokenOutputs")).toArray();
@@ -107,10 +108,10 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
                 out_sym = resolve_symbol(first.value(QStringLiteral("mint")).toString());
                 const auto raw = first.value(QStringLiteral("rawTokenAmount")).toObject();
                 bool ok = false;
-                const auto qty = raw.value(QStringLiteral("tokenAmount"))
-                                     .toString().toLongLong(&ok);
+                const auto qty = raw.value(QStringLiteral("tokenAmount")).toString().toLongLong(&ok);
                 const int dp = raw.value(QStringLiteral("decimals")).toInt();
-                if (ok) out_amt = format_token_amount(qty / std::pow(10.0, dp), 2);
+                if (ok)
+                    out_amt = format_token_amount(qty / std::pow(10.0, dp), 2);
             }
         }
         out.asset = QStringLiteral("%1 → %2").arg(in_sym, out_sym);
@@ -119,8 +120,7 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
     }
 
     // Token transfers — narrow to ones involving the owner.
-    const auto token_transfers =
-        tx.value(QStringLiteral("tokenTransfers")).toArray();
+    const auto token_transfers = tx.value(QStringLiteral("tokenTransfers")).toArray();
     for (const auto& v : token_transfers) {
         const auto t = v.toObject();
         const auto from = t.value(QStringLiteral("fromUserAccount")).toString();
@@ -145,14 +145,12 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
     }
 
     // Native SOL transfers.
-    const auto native_transfers =
-        tx.value(QStringLiteral("nativeTransfers")).toArray();
+    const auto native_transfers = tx.value(QStringLiteral("nativeTransfers")).toArray();
     for (const auto& v : native_transfers) {
         const auto t = v.toObject();
         const auto from = t.value(QStringLiteral("fromUserAccount")).toString();
         const auto to = t.value(QStringLiteral("toUserAccount")).toString();
-        const auto lamports = static_cast<qint64>(
-            t.value(QStringLiteral("amount")).toDouble());
+        const auto lamports = static_cast<qint64>(t.value(QStringLiteral("amount")).toDouble());
         if (to == owner) {
             out.kind = ParsedActivity::Kind::Receive;
             out.asset = QStringLiteral("SOL");
@@ -194,16 +192,12 @@ QString WalletActivityProducer::pubkey_from_topic(const QString& topic) {
 }
 
 void WalletActivityProducer::refresh(const QStringList& topics) {
-    auto helius_key_res = SecureStorage::instance().retrieve(
-        QString::fromLatin1(api::kHeliusKeyName));
-    const QString helius_key = (helius_key_res.is_ok())
-                                   ? helius_key_res.value()
-                                   : QString();
+    auto helius_key_res = SecureStorage::instance().retrieve(QString::fromLatin1(api::kHeliusKeyName));
+    const QString helius_key = (helius_key_res.is_ok()) ? helius_key_res.value() : QString();
     for (const auto& topic : topics) {
         const auto pubkey = pubkey_from_topic(topic);
         if (pubkey.isEmpty()) {
-            fincept::datahub::DataHub::instance().publish_error(
-                topic, QStringLiteral("invalid topic"));
+            fincept::datahub::DataHub::instance().publish_error(topic, QStringLiteral("invalid topic"));
             continue;
         }
         if (!helius_key.isEmpty()) {
@@ -214,11 +208,9 @@ void WalletActivityProducer::refresh(const QStringList& topics) {
     }
 }
 
-void WalletActivityProducer::refresh_via_helius(const QString& topic,
-                                                const QString& pubkey,
+void WalletActivityProducer::refresh_via_helius(const QString& topic, const QString& pubkey,
                                                 const QString& helius_key) {
-    QUrl url(QStringLiteral("https://api.helius.xyz/v0/addresses/%1/transactions")
-                 .arg(pubkey));
+    QUrl url(QStringLiteral("https://api.helius.xyz/v0/addresses/%1/transactions").arg(pubkey));
     QUrlQuery q;
     q.addQueryItem(QStringLiteral("limit"), QString::number(api::kFetchLimit));
     q.addQueryItem(QStringLiteral("api-key"), helius_key);
@@ -226,20 +218,18 @@ void WalletActivityProducer::refresh_via_helius(const QString& topic,
 
     QNetworkRequest req(url);
     req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     auto* reply = nam_->get(req);
 
     QPointer<WalletActivityProducer> self = this;
-    connect(reply, &QNetworkReply::finished, this,
-            [self, reply, topic, pubkey]() {
+    connect(reply, &QNetworkReply::finished, this, [self, reply, topic, pubkey]() {
         reply->deleteLater();
-        if (!self) return;
+        if (!self)
+            return;
         auto& hub = fincept::datahub::DataHub::instance();
         if (reply->error() != QNetworkReply::NoError) {
             const auto err = reply->errorString();
-            LOG_WARN("WalletActivity",
-                     "Helius fetch failed: " + err);
+            LOG_WARN("WalletActivity", "Helius fetch failed: " + err);
             hub.publish_error(topic, err);
             return;
         }
@@ -259,14 +249,13 @@ void WalletActivityProducer::refresh_via_helius(const QString& topic,
     });
 }
 
-void WalletActivityProducer::refresh_via_rpc(const QString& topic,
-                                             const QString& pubkey) {
+void WalletActivityProducer::refresh_via_rpc(const QString& topic, const QString& pubkey) {
     rpc_->reload_endpoint();
     QPointer<WalletActivityProducer> self = this;
     rpc_->get_signatures_for_address(
-        pubkey, api::kFetchLimit, QString(),
-        [self, topic](Result<std::vector<SolanaRpcClient::SignatureRow>> r) {
-            if (!self) return;
+        pubkey, api::kFetchLimit, QString(), [self, topic](Result<std::vector<SolanaRpcClient::SignatureRow>> r) {
+            if (!self)
+                return;
             auto& hub = fincept::datahub::DataHub::instance();
             if (r.is_err()) {
                 hub.publish_error(topic, QString::fromStdString(r.error()));
@@ -279,8 +268,7 @@ void WalletActivityProducer::refresh_via_rpc(const QString& topic,
                 a.signature = row.signature;
                 a.ts_ms = row.block_time > 0 ? row.block_time * 1000 : 0;
                 a.kind = ParsedActivity::Kind::Other;
-                a.status = row.err.isEmpty() ? QStringLiteral("confirmed")
-                                             : QStringLiteral("failed");
+                a.status = row.err.isEmpty() ? QStringLiteral("confirmed") : QStringLiteral("failed");
                 out.append(std::move(a));
             }
             hub.publish(topic, QVariant::fromValue(out));

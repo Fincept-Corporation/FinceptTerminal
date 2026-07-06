@@ -79,8 +79,8 @@ QWidget* FeedCardView::build_card(const FeedItem& it) {
 
     const QString rel = relative_time(it.sort_ts);
     const QString when = rel.isEmpty() ? it.time : rel; // fall back to the absolute string
-    auto* meta = new QLabel(when.isEmpty() ? QString("● %1").arg(it.source)
-                                           : QString("● %1 · %2").arg(it.source, when));
+    auto* meta =
+        new QLabel(when.isEmpty() ? QString("● %1").arg(it.source) : QString("● %1 · %2").arg(it.source, when));
     meta->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;").arg(colors::TEXT_TERTIARY()));
     if (!it.time.isEmpty())
         meta->setToolTip(it.time); // absolute parsed timestamp on hover

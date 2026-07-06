@@ -39,9 +39,8 @@ Result<void> SyncOutbox::record(const QString& entity, const QString& local_id, 
     if (!CloudSyncSettings::should_sync(entity))
         return Result<void>::ok(); // sync disabled or domain excluded
 
-    auto r = Database::instance().execute(
-        "INSERT INTO sync_outbox(entity, local_id, op, payload) VALUES(?, ?, ?, ?)",
-        {entity, local_id, op, payload});
+    auto r = Database::instance().execute("INSERT INTO sync_outbox(entity, local_id, op, payload) VALUES(?, ?, ?, ?)",
+                                          {entity, local_id, op, payload});
     if (r.is_err()) {
         LOG_ERROR("CloudSync", QString("outbox record failed: %1").arg(QString::fromStdString(r.error())));
         return Result<void>::err(r.error());
@@ -66,8 +65,7 @@ Result<void> SyncOutbox::record_unique(const QString& entity, const QString& loc
 
 Result<QVector<OutboxRow>> SyncOutbox::pending_all(int limit) {
     auto r = Database::instance().execute(
-        "SELECT id, entity, local_id, op, payload, attempts FROM sync_outbox ORDER BY id ASC LIMIT ?",
-        {limit});
+        "SELECT id, entity, local_id, op, payload, attempts FROM sync_outbox ORDER BY id ASC LIMIT ?", {limit});
     if (r.is_err())
         return Result<QVector<OutboxRow>>::err(r.error());
 
@@ -103,8 +101,8 @@ Result<void> SyncOutbox::mark_done(qint64 id) {
 }
 
 Result<void> SyncOutbox::bump_attempt(qint64 id, const QString& error) {
-    auto r = Database::instance().execute(
-        "UPDATE sync_outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?", {error, id});
+    auto r = Database::instance().execute("UPDATE sync_outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?",
+                                          {error, id});
     if (r.is_err())
         return Result<void>::err(r.error());
     return Result<void>::ok();

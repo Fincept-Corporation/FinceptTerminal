@@ -30,15 +30,13 @@ bool OnboardingTour::has_been_seen() {
 void OnboardingTour::mark_seen() {
     auto r = SettingsRepository::instance().set(kSeenKey, "true");
     if (r.is_err())
-        LOG_WARN(kTourTag, QString("Failed to set %1: %2")
-                              .arg(kSeenKey, QString::fromStdString(r.error())));
+        LOG_WARN(kTourTag, QString("Failed to set %1: %2").arg(kSeenKey, QString::fromStdString(r.error())));
 }
 
 void OnboardingTour::reset_seen() {
     auto r = SettingsRepository::instance().set(kSeenKey, "false");
     if (r.is_err())
-        LOG_WARN(kTourTag, QString("Failed to reset %1: %2")
-                              .arg(kSeenKey, QString::fromStdString(r.error())));
+        LOG_WARN(kTourTag, QString("Failed to reset %1: %2").arg(kSeenKey, QString::fromStdString(r.error())));
 }
 
 void OnboardingTour::show_for(QWidget* parent) {
@@ -113,8 +111,7 @@ void OnboardingTour::build_ui() {
     connect(btn_next_, &QPushButton::clicked, this, &OnboardingTour::on_next);
 }
 
-QWidget* OnboardingTour::build_step(const QString& title, const QString& body,
-                                    const QString& tip) {
+QWidget* OnboardingTour::build_step(const QString& title, const QString& body, const QString& tip) {
     auto* w = new QWidget;
     auto* l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
@@ -163,50 +160,44 @@ void OnboardingTour::retranslateUi() {
     // Step text, indexed by step order. Guarded so partial construction is safe.
     if (step_labels_.size() > 0 && step_labels_[0].title) {
         step_labels_[0].title->setText(tr("Command bar (Ctrl+\\)"));
-        step_labels_[0].body->setText(
-            tr("Type a function code or verb to do anything in the terminal — "
-               "e.g. \"AAPL\", \"layout switch \\\"Morning\\\"\", or "
-               "\"link panel red\". Press Ctrl+K for a fuzzy palette of every "
-               "action."));
-        step_labels_[0].tip->setText(
-            tr("Tip: type \"?\" to list available actions for whatever you "
-               "type next."));
+        step_labels_[0].body->setText(tr("Type a function code or verb to do anything in the terminal — "
+                                         "e.g. \"AAPL\", \"layout switch \\\"Morning\\\"\", or "
+                                         "\"link panel red\". Press Ctrl+K for a fuzzy palette of every "
+                                         "action."));
+        step_labels_[0].tip->setText(tr("Tip: type \"?\" to list available actions for whatever you "
+                                        "type next."));
     }
     if (step_labels_.size() > 1 && step_labels_[1].title) {
         step_labels_[1].title->setText(tr("Link panels with a colour"));
-        step_labels_[1].body->setText(
-            tr("Click the coloured dot in any panel header to add it to a link "
-               "group. Panels in the same group share their selected symbol "
-               "across windows — pick AAPL in a watchlist and your charts, "
-               "research, and trading panels all switch."));
-        step_labels_[1].tip->setText(
-            tr("Tip: groups are shared across windows, not just the active "
-               "one."));
+        step_labels_[1].body->setText(tr("Click the coloured dot in any panel header to add it to a link "
+                                         "group. Panels in the same group share their selected symbol "
+                                         "across windows — pick AAPL in a watchlist and your charts, "
+                                         "research, and trading panels all switch."));
+        step_labels_[1].tip->setText(tr("Tip: groups are shared across windows, not just the active "
+                                        "one."));
     }
     if (step_labels_.size() > 2 && step_labels_[2].title) {
         step_labels_[2].title->setText(tr("Tear off panels into new windows"));
-        step_labels_[2].body->setText(
-            tr("Right-click a panel tab → \"Tear off into new window\" to spawn "
-               "a fresh frame on the next monitor. Or drag a panel to another "
-               "frame's tab bar to move it. Each frame keeps its own dock "
-               "layout — save the whole arrangement as a named layout when "
-               "you've got it the way you like."));
-        step_labels_[2].tip->setText(
-            tr("Tip: Ctrl+Shift+N opens a fresh window on your next "
-               "monitor."));
+        step_labels_[2].body->setText(tr("Right-click a panel tab → \"Tear off into new window\" to spawn "
+                                         "a fresh frame on the next monitor. Or drag a panel to another "
+                                         "frame's tab bar to move it. Each frame keeps its own dock "
+                                         "layout — save the whole arrangement as a named layout when "
+                                         "you've got it the way you like."));
+        step_labels_[2].tip->setText(tr("Tip: Ctrl+Shift+N opens a fresh window on your next "
+                                        "monitor."));
     }
     if (step_labels_.size() > 3 && step_labels_[3].title) {
         step_labels_[3].title->setText(tr("Settings & shortcuts"));
-        step_labels_[3].body->setText(
-            tr("Open Settings (gear icon) to tune theme, hotkeys, telemetry "
-               "opt-in, and broker credentials. Hotkeys are rebindable — "
-               "every action in the registry can be assigned a key."));
-        step_labels_[3].tip->setText(
-            tr("Tip: F11 toggles fullscreen on the focused window."));
+        step_labels_[3].body->setText(tr("Open Settings (gear icon) to tune theme, hotkeys, telemetry "
+                                         "opt-in, and broker credentials. Hotkeys are rebindable — "
+                                         "every action in the registry can be assigned a key."));
+        step_labels_[3].tip->setText(tr("Tip: F11 toggles fullscreen on the focused window."));
     }
 
-    if (btn_skip_) btn_skip_->setText(tr("Skip"));
-    if (btn_back_) btn_back_->setText(tr("Back"));
+    if (btn_skip_)
+        btn_skip_->setText(tr("Skip"));
+    if (btn_back_)
+        btn_back_->setText(tr("Back"));
     // btn_next_ text is managed by update_buttons() (depends on current step).
     update_buttons();
 }

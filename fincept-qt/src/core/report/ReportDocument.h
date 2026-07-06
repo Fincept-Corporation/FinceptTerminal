@@ -64,23 +64,28 @@ namespace themes {
 
 inline ReportTheme light_professional() {
     return {"Light Professional",
-            "#1a1a1a", "#d97706", "#ffffff", "#333333", "#f0f0f0",
-            "#1a1a1a", "#f5f5f5", "#f9f9f9", "#666666", "#cccccc"};
+            "#1a1a1a",
+            "#d97706",
+            "#ffffff",
+            "#333333",
+            "#f0f0f0",
+            "#1a1a1a",
+            "#f5f5f5",
+            "#f9f9f9",
+            "#666666",
+            "#cccccc"};
 }
 inline ReportTheme dark_corporate() {
-    return {"Dark Corporate",
-            "#e5e5e5", "#d97706", "#1e1e1e", "#cccccc", "#2a2a2a",
-            "#e5e5e5", "#111111", "#1a1a1a", "#808080", "#444444"};
+    return {"Dark Corporate", "#e5e5e5", "#d97706", "#1e1e1e", "#cccccc", "#2a2a2a",
+            "#e5e5e5",        "#111111", "#1a1a1a", "#808080", "#444444"};
 }
 inline ReportTheme fincept_terminal() {
-    return {"Fincept Terminal",
-            "#ff8c00", "#ff8c00", "#0a0a0a", "#d4d4d4", "#1a0a00",
-            "#ff8c00", "#050505", "#0f0f0f", "#888888", "#333300"};
+    return {"Fincept Terminal", "#ff8c00", "#ff8c00", "#0a0a0a", "#d4d4d4", "#1a0a00",
+            "#ff8c00",          "#050505", "#0f0f0f", "#888888", "#333300"};
 }
 inline ReportTheme midnight_blue() {
-    return {"Midnight Blue",
-            "#e2e8f0", "#3b82f6", "#0f172a", "#cbd5e1", "#1e3a5f",
-            "#e2e8f0", "#0d1b2e", "#132033", "#64748b", "#1e3a5f"};
+    return {"Midnight Blue", "#e2e8f0", "#3b82f6", "#0f172a", "#cbd5e1", "#1e3a5f",
+            "#e2e8f0",       "#0d1b2e", "#132033", "#64748b", "#1e3a5f"};
 }
 
 // Resolve a theme name (case-sensitive, matches the .name field). Returns
@@ -156,9 +161,7 @@ struct ReportDocument {
         return root;
     }
 
-    QString to_json() const {
-        return QString::fromUtf8(QJsonDocument(to_json_obj()).toJson(QJsonDocument::Indented));
-    }
+    QString to_json() const { return QString::fromUtf8(QJsonDocument(to_json_obj()).toJson(QJsonDocument::Indented)); }
 
     static Result<ReportDocument> from_json(const QString& json) {
         QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());

@@ -31,11 +31,16 @@ void NewsCommandBar::changeEvent(QEvent* event) {
 
 void NewsCommandBar::retranslateUi() {
     // Command row — fixed-label buttons / inputs.
-    if (drawer_btn_)    drawer_btn_->setText(tr("INTEL"));
-    if (drawer_btn_)    drawer_btn_->setToolTip(tr("Toggle intelligence drawer"));
-    if (search_input_)  search_input_->setPlaceholderText(tr("Search..."));
-    if (sources_btn_)   sources_btn_->setToolTip(tr("Manage RSS feed sources"));
-    if (summarize_btn_) summarize_btn_->setToolTip(tr("AI Brief — summarize headlines"));
+    if (drawer_btn_)
+        drawer_btn_->setText(tr("INTEL"));
+    if (drawer_btn_)
+        drawer_btn_->setToolTip(tr("Toggle intelligence drawer"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search..."));
+    if (sources_btn_)
+        sources_btn_->setToolTip(tr("Manage RSS feed sources"));
+    if (summarize_btn_)
+        summarize_btn_->setToolTip(tr("AI Brief — summarize headlines"));
     // Pills (category/time/sort/view) and combo entries carry logical code
     // values used in filter logic — intentionally not retranslated.
 
@@ -52,11 +57,16 @@ void NewsCommandBar::retranslateUi() {
     }
 
     // Intel strip — fixed captions.
-    if (intel_feeds_lbl_)    intel_feeds_lbl_->setText(tr("FEEDS"));
-    if (intel_articles_lbl_) intel_articles_lbl_->setText(tr("ARTS"));
-    if (intel_clusters_lbl_) intel_clusters_lbl_->setText(tr("CLST"));
-    if (intel_sources_lbl_)  intel_sources_lbl_->setText(tr("SRCS"));
-    if (sentiment_caption_)  sentiment_caption_->setText(tr("SENT"));
+    if (intel_feeds_lbl_)
+        intel_feeds_lbl_->setText(tr("FEEDS"));
+    if (intel_articles_lbl_)
+        intel_articles_lbl_->setText(tr("ARTS"));
+    if (intel_clusters_lbl_)
+        intel_clusters_lbl_->setText(tr("CLST"));
+    if (intel_sources_lbl_)
+        intel_sources_lbl_->setText(tr("SRCS"));
+    if (sentiment_caption_)
+        sentiment_caption_->setText(tr("SENT"));
 
     // Dynamic count labels (alerts / unseen / monitors / live badge) reflect
     // runtime counts and refresh on the next data update — not re-applied here.
@@ -370,9 +380,8 @@ void NewsCommandBar::build_intel_row(QVBoxLayout* root) {
     live_badge_->setFixedHeight(20);
     live_badge_->setCursor(Qt::PointingHandCursor);
     live_badge_->setToolTip(tr("Live feed status — click to toggle WebSocket connection"));
-    live_badge_->setStyleSheet(
-        "color:#94a3b8; background:transparent; border:1px solid #94a3b8;"
-        " padding:0 6px; font-weight:700; font-size:10px;");
+    live_badge_->setStyleSheet("color:#94a3b8; background:transparent; border:1px solid #94a3b8;"
+                               " padding:0 6px; font-weight:700; font-size:10px;");
     hl->addWidget(live_badge_);
     connect(live_badge_, &QPushButton::clicked, this, &NewsCommandBar::live_toggle_clicked);
 
@@ -534,14 +543,12 @@ void NewsCommandBar::set_live_state(bool connected) {
         return;
     if (connected) {
         live_badge_->setText(tr("● LIVE"));
-        live_badge_->setStyleSheet(
-            "color:#16a34a; background:transparent; border:1px solid #16a34a;"
-            " padding:0 6px; font-weight:700; font-size:10px;");
+        live_badge_->setStyleSheet("color:#16a34a; background:transparent; border:1px solid #16a34a;"
+                                   " padding:0 6px; font-weight:700; font-size:10px;");
     } else {
         live_badge_->setText(tr("OFFLINE"));
-        live_badge_->setStyleSheet(
-            "color:#94a3b8; background:transparent; border:1px solid #94a3b8;"
-            " padding:0 6px; font-weight:700; font-size:10px;");
+        live_badge_->setStyleSheet("color:#94a3b8; background:transparent; border:1px solid #94a3b8;"
+                                   " padding:0 6px; font-weight:700; font-size:10px;");
     }
 }
 

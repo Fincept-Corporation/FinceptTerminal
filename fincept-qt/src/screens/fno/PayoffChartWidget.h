@@ -37,8 +37,7 @@ class PayoffChartWidget : public QChartView {
 
     /// Replace the curve. `current_spot` drives the amber vertical marker;
     /// `breakevens` drive the dotted vertical markers and tooltip context.
-    void set_payoff(const QVector<fincept::services::options::PayoffPoint>& curve,
-                    double current_spot,
+    void set_payoff(const QVector<fincept::services::options::PayoffPoint>& curve, double current_spot,
                     const QVector<double>& breakevens);
 
     /// Toggle the dashed target-day curve on/off.
@@ -62,9 +61,9 @@ class PayoffChartWidget : public QChartView {
     QLineSeries* expiry_series_ = nullptr;
     QLineSeries* target_series_ = nullptr;
     // Profit / loss tinting — bounded by clamped curves over a flat zero baseline.
-    QLineSeries* profit_curve_ = nullptr;     // max(0, expiry)
-    QLineSeries* loss_curve_ = nullptr;       // min(0, expiry)
-    QLineSeries* zero_baseline_ = nullptr;    // constant 0 over [spot_min, spot_max]
+    QLineSeries* profit_curve_ = nullptr;  // max(0, expiry)
+    QLineSeries* loss_curve_ = nullptr;    // min(0, expiry)
+    QLineSeries* zero_baseline_ = nullptr; // constant 0 over [spot_min, spot_max]
     QAreaSeries* profit_area_ = nullptr;
     QAreaSeries* loss_area_ = nullptr;
     QValueAxis* axis_x_ = nullptr;

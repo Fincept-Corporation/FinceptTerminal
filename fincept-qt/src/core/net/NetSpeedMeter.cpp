@@ -9,25 +9,25 @@
 // The project defines WIN32_LEAN_AND_MEAN globally, which strips winsock from
 // <windows.h>. Pull the pieces we need explicitly in the right order so
 // MIB_IF_ROW2 / GetIfTable2 (declared in netioapi.h) compile cleanly.
-#  ifndef _WINSOCKAPI_
-#    define _WINSOCKAPI_ // prevent windows.h from including winsock1
-#  endif
-#  include <winsock2.h>
-#  include <ws2tcpip.h>
-#  include <windows.h>
-#  include <iphlpapi.h>
-#  include <netioapi.h>
-#  pragma comment(lib, "iphlpapi.lib")
+#    ifndef _WINSOCKAPI_
+#        define _WINSOCKAPI_ // prevent windows.h from including winsock1
+#    endif
+#    include <iphlpapi.h>
+#    include <netioapi.h>
+#    include <windows.h>
+#    include <winsock2.h>
+#    include <ws2tcpip.h>
+#    pragma comment(lib, "iphlpapi.lib")
 #elif defined(Q_OS_MACOS)
-#  include <ifaddrs.h>
-#  include <net/if.h>
-#  include <net/if_dl.h>
-#  include <sys/socket.h>
-#  include <string.h>
+#    include <ifaddrs.h>
+#    include <net/if.h>
+#    include <net/if_dl.h>
+#    include <string.h>
+#    include <sys/socket.h>
 #elif defined(Q_OS_LINUX)
-#  include <QFile>
-#  include <QRegularExpression>
-#  include <QTextStream>
+#    include <QFile>
+#    include <QRegularExpression>
+#    include <QTextStream>
 #endif
 
 namespace fincept::net {
@@ -86,7 +86,7 @@ void NetSpeedMeter::sample() {
     const quint64 dtx = (tx >= prev_tx_) ? (tx - prev_tx_) : 0;
 
     last_down_bps_ = static_cast<qint64>((drx * 1000ULL) / static_cast<quint64>(dt_ms));
-    last_up_bps_   = static_cast<qint64>((dtx * 1000ULL) / static_cast<quint64>(dt_ms));
+    last_up_bps_ = static_cast<qint64>((dtx * 1000ULL) / static_cast<quint64>(dt_ms));
 
     prev_rx_ = rx;
     prev_tx_ = tx;
@@ -96,13 +96,17 @@ void NetSpeedMeter::sample() {
 }
 
 QString NetSpeedMeter::format_bps(qint64 bps) {
-    if (bps < 0) bps = 0;
+    if (bps < 0)
+        bps = 0;
     constexpr qint64 KB = 1024;
     constexpr qint64 MB = 1024 * 1024;
     constexpr qint64 GB = 1024LL * 1024LL * 1024LL;
-    if (bps >= GB) return QString::number(static_cast<double>(bps) / GB, 'f', 2) + " GB/s";
-    if (bps >= MB) return QString::number(static_cast<double>(bps) / MB, 'f', 2) + " MB/s";
-    if (bps >= KB) return QString::number(static_cast<double>(bps) / KB, 'f', 1) + " KB/s";
+    if (bps >= GB)
+        return QString::number(static_cast<double>(bps) / GB, 'f', 2) + " GB/s";
+    if (bps >= MB)
+        return QString::number(static_cast<double>(bps) / MB, 'f', 2) + " MB/s";
+    if (bps >= KB)
+        return QString::number(static_cast<double>(bps) / KB, 'f', 1) + " KB/s";
     return QString::number(bps) + " B/s";
 }
 
@@ -115,7 +119,8 @@ QString NetSpeedMeter::format_bps(qint64 bps) {
 bool NetSpeedMeter::read_counters(quint64& rx_bytes, quint64& tx_bytes) const {
     PMIB_IF_TABLE2 table = nullptr;
     if (GetIfTable2(&table) != NO_ERROR || !table) {
-        if (table) FreeMibTable(table);
+        if (table)
+            FreeMibTable(table);
         return false;
     }
 
@@ -123,8 +128,7 @@ bool NetSpeedMeter::read_counters(quint64& rx_bytes, quint64& tx_bytes) const {
     for (ULONG i = 0; i < table->NumEntries; ++i) {
         const MIB_IF_ROW2& row = table->Table[i];
         // Skip loopback and tunnel pseudo-interfaces.
-        if (row.Type == IF_TYPE_SOFTWARE_LOOPBACK ||
-            row.Type == IF_TYPE_TUNNEL)
+        if (row.Type == IF_TYPE_SOFTWARE_LOOPBACK || row.Type == IF_TYPE_TUNNEL)
             continue;
         // Only count connected / operational interfaces — idle adapters still
         // report 0 deltas, but this avoids counting disabled virtual adapters.
@@ -192,8 +196,7 @@ bool NetSpeedMeter::read_counters(quint64& rx_bytes, quint64& tx_bytes) const {
         if (iface == QLatin1String("lo"))
             continue;
 
-        const QStringList cols = line.mid(colon + 1).split(QRegularExpression("\\s+"),
-                                                           Qt::SkipEmptyParts);
+        const QStringList cols = line.mid(colon + 1).split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
         // Layout: rx_bytes, rx_packets, ..., tx_bytes at index 8, ...
         if (cols.size() < 9)
             continue;

@@ -638,7 +638,8 @@ QVariantMap ForumScreen::save_state() const {
         {"category_color", active_category_color_},
         {"detail_uuid", current_detail_uuid_},
     };
-    if (thread_) state["reply_draft"] = thread_->reply_draft();
+    if (thread_)
+        state["reply_draft"] = thread_->reply_draft();
     return state;
 }
 

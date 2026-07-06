@@ -5,14 +5,15 @@
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
+#include "mcp/tools/AgenticMemoryTools.h"
 #include "mcp/tools/AgentsTools.h"
 #include "mcp/tools/AiChatTools.h"
 #include "mcp/tools/AltInvestmentsTools.h"
 #include "mcp/tools/CryptoTradingTools.h"
+#include "mcp/tools/DBnomicsTools.h"
 #include "mcp/tools/DashboardTools.h"
 #include "mcp/tools/DataHubTools.h"
 #include "mcp/tools/DataSourcesTools.h"
-#include "mcp/tools/DBnomicsTools.h"
 #include "mcp/tools/EdgarTools.h"
 #include "mcp/tools/EquityResearchTools.h"
 #include "mcp/tools/ExcelTools.h"
@@ -27,7 +28,6 @@
 #include "mcp/tools/MetaTools.h"
 #include "mcp/tools/NavigationTools.h"
 #include "mcp/tools/NewsTools.h"
-#include "mcp/tools/AgenticMemoryTools.h"
 #include "mcp/tools/NotesTools.h"
 #include "mcp/tools/PaperTradingTools.h"
 #include "mcp/tools/PortfolioTools.h"
@@ -59,7 +59,10 @@ static constexpr int kSchemaSizeWarnBytes = 2048;
 
 static void audit_tool_schema_sizes() {
     const auto tools = McpProvider::instance().list_all_tools();
-    struct Offender { QString name; int bytes; };
+    struct Offender {
+        QString name;
+        int bytes;
+    };
     QVector<Offender> over_budget;
     int total_bytes = 0;
     for (const auto& t : tools) {
@@ -71,15 +74,17 @@ static void audit_tool_schema_sizes() {
     std::sort(over_budget.begin(), over_budget.end(),
               [](const Offender& a, const Offender& b) { return a.bytes > b.bytes; });
 
-    LOG_INFO(TAG, QString("Tool schema audit: %1 tools, %2 KB total schema bytes")
-                      .arg(tools.size()).arg(total_bytes / 1024));
+    LOG_INFO(
+        TAG,
+        QString("Tool schema audit: %1 tools, %2 KB total schema bytes").arg(tools.size()).arg(total_bytes / 1024));
     if (over_budget.isEmpty())
         return;
 
     LOG_WARN(TAG, QString("Tool schema audit: %1 tools exceed %2 B budget — every "
                           "byte multiplies across every LLM turn. Consider trimming "
                           "enums / descriptions / nested objects.")
-                      .arg(over_budget.size()).arg(kSchemaSizeWarnBytes));
+                      .arg(over_budget.size())
+                      .arg(kSchemaSizeWarnBytes));
     for (const auto& o : over_budget)
         LOG_WARN(TAG, QString("  %1 — %2 B").arg(o.name).arg(o.bytes));
 }

@@ -50,15 +50,11 @@ void MarketsTab::build_ui() {
 
 void MarketsTab::apply_theme() {
     using namespace ui::colors;
-    const QString ss = QStringLiteral(
-        "QWidget#marketsTab { background:%1; }"
-        "QScrollArea#marketsTabScroll { background:%1; border:none; }"
-        "QWidget#marketsTabContent { background:%1; }"
-        "QFrame#marketsTabPanelHost { background:%2; border:1px solid %3; }"
-    )
-        .arg(BG_BASE(),
-             BG_SURFACE(),
-             BORDER_DIM());
+    const QString ss = QStringLiteral("QWidget#marketsTab { background:%1; }"
+                                      "QScrollArea#marketsTabScroll { background:%1; border:none; }"
+                                      "QWidget#marketsTabContent { background:%1; }"
+                                      "QFrame#marketsTabPanelHost { background:%2; border:1px solid %3; }")
+                           .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM());
     setStyleSheet(ss);
 }
 

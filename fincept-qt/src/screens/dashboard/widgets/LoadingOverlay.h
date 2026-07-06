@@ -88,9 +88,9 @@ class LoadingOverlay : public QWidget {
     bool error_mode_ = false;
     QString error_text_;
 
-    qreal shimmer_phase_ = 0.0;        ///< 0..1 — drives the sweeping highlight
-    qreal displayed_progress_ = 0.0;   ///< 0..1 — eased toward loaded_/expected_
-    qreal fade_opacity_ = 0.0;         ///< 0..1 — applied directly via QPainter::setOpacity
+    qreal shimmer_phase_ = 0.0;      ///< 0..1 — drives the sweeping highlight
+    qreal displayed_progress_ = 0.0; ///< 0..1 — eased toward loaded_/expected_
+    qreal fade_opacity_ = 0.0;       ///< 0..1 — applied directly via QPainter::setOpacity
 
     QPropertyAnimation* shimmer_anim_ = nullptr;
     QPropertyAnimation* progress_anim_ = nullptr;

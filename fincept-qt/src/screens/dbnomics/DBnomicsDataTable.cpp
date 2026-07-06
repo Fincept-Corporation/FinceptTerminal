@@ -27,12 +27,12 @@ void DBnomicsDataTable::build_ui() {
     // ── Section header (always visible) ──────────────────────────────────────
     header_label_ = new QLabel(tr("OBSERVATION DATA"), this);
     header_label_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: 700; "
-                                        "font-family: 'Consolas','Courier New',monospace; "
-                                        "padding: 6px 12px; background: %2; "
-                                        "border-bottom: 1px solid %3;")
-                                    .arg(ui::colors::AMBER())
-                                    .arg(ui::colors::BG_RAISED())
-                                    .arg(ui::colors::BORDER_DIM()));
+                                         "font-family: 'Consolas','Courier New',monospace; "
+                                         "padding: 6px 12px; background: %2; "
+                                         "border-bottom: 1px solid %3;")
+                                     .arg(ui::colors::AMBER())
+                                     .arg(ui::colors::BG_RAISED())
+                                     .arg(ui::colors::BORDER_DIM()));
     root->addWidget(header_label_);
 
     stack_ = new QStackedWidget(this);
@@ -83,7 +83,7 @@ void DBnomicsDataTable::build_ui() {
                               .arg(ui::colors::BG_RAISED())      // %5
                               .arg(ui::colors::TEXT_SECONDARY()) // %6
                               .arg(ui::colors::BG_SURFACE()));   // %7 alternate row
-    stack_->addWidget(table_);                                 // index 1
+    stack_->addWidget(table_);                                   // index 1
 
     stack_->setCurrentIndex(1);
     root->addWidget(stack_);
@@ -107,10 +107,12 @@ void DBnomicsDataTable::changeEvent(QEvent* event) {
 }
 
 void DBnomicsDataTable::retranslateUi() {
-    if (header_label_) header_label_->setText(tr("OBSERVATION DATA"));
+    if (header_label_)
+        header_label_->setText(tr("OBSERVATION DATA"));
     // The table headers / cells are rebuilt by set_data(); only the empty-state
     // placeholder needs an explicit re-apply here.
-    if (showing_placeholder_) clear();
+    if (showing_placeholder_)
+        clear();
 }
 
 void DBnomicsDataTable::set_loading(bool on) {

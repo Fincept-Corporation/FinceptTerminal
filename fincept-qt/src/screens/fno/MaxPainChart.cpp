@@ -25,7 +25,7 @@ QColor with_alpha(const QString& hex, int alpha) {
     return c;
 }
 
-}  // namespace
+} // namespace
 
 MaxPainChart::MaxPainChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
@@ -143,9 +143,12 @@ void MaxPainChart::changeEvent(QEvent* event) {
 }
 
 void MaxPainChart::retranslateUi() {
-    if (chart_) chart_->setTitle(tr("Max Pain Profile"));
-    if (others_set_) others_set_->setLabel(tr("Pain"));
-    if (min_set_) min_set_->setLabel(tr("Max Pain"));
+    if (chart_)
+        chart_->setTitle(tr("Max Pain Profile"));
+    if (others_set_)
+        others_set_->setLabel(tr("Pain"));
+    if (min_set_)
+        min_set_->setLabel(tr("Max Pain"));
 }
 
 } // namespace fincept::screens::fno

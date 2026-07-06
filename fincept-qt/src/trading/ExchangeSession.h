@@ -50,9 +50,7 @@ struct SessionPublisher {
 class ExchangeSession : public QObject {
     Q_OBJECT
   public:
-    explicit ExchangeSession(const QString& exchange_id,
-                             SessionPublisher publisher,
-                             QObject* parent = nullptr);
+    explicit ExchangeSession(const QString& exchange_id, SessionPublisher publisher, QObject* parent = nullptr);
     ~ExchangeSession() override;
 
     QString exchange_id() const { return exchange_id_; }
@@ -151,15 +149,15 @@ class ExchangeSession : public QObject {
 
     QProcess* ws_process_ = nullptr;
     std::atomic<bool> ws_connected_{false};
-    bool ws_should_run_ = false;   // true between a successful start_ws() and stop_ws()
-    int ws_restart_attempts_ = 0;  // consecutive auto-restarts; reset after a healthy run
-    QElapsedTimer ws_uptime_;      // since the current ws_process_ was spawned
+    bool ws_should_run_ = false;  // true between a successful start_ws() and stop_ws()
+    int ws_restart_attempts_ = 0; // consecutive auto-restarts; reset after a healthy run
+    QElapsedTimer ws_uptime_;     // since the current ws_process_ was spawned
     QString ws_primary_symbol_;
     QStringList ws_all_symbols_;
-    QHash<QString, QString> ws_symbol_map_;  // exchange_symbol → requested_symbol
+    QHash<QString, QString> ws_symbol_map_; // exchange_symbol → requested_symbol
 
     QHash<QString, TickerData> price_cache_;
-    QHash<QString, QSet<QString>> watched_;   // symbol → set of portfolio_ids
+    QHash<QString, QSet<QString>> watched_; // symbol → set of portfolio_ids
 
     mutable QMutex mutex_;
 };

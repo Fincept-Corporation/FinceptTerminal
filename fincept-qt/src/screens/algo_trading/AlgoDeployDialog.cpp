@@ -26,8 +26,8 @@ AlgoDeployDialog::AlgoDeployDialog(const QString& strategy_id, const QString& st
                           "QLineEdit, QComboBox, QDoubleSpinBox { background: %4; color: %2;"
                           " border: 1px solid %5; padding: 4px 8px; font-size: 11px; }"
                           "QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus { border-color: %6; }")
-                      .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::TEXT_SECONDARY(),
-                           colors::BG_BASE(), colors::BORDER_DIM(), colors::CYAN()));
+                      .arg(colors::BG_SURFACE(), colors::TEXT_PRIMARY(), colors::TEXT_SECONDARY(), colors::BG_BASE(),
+                           colors::BORDER_DIM(), colors::CYAN()));
     build_ui();
 }
 
@@ -48,10 +48,10 @@ void AlgoDeployDialog::set_symbol(const QString& symbol) {
 }
 
 void AlgoDeployDialog::set_fno_context(const QString& instrument_type, const QString& underlying,
-                                        const QString& expiry_rule) {
+                                       const QString& expiry_rule) {
     fno_instrument_type_ = instrument_type;
-    fno_underlying_      = underlying;
-    fno_expiry_rule_     = expiry_rule;
+    fno_underlying_ = underlying;
+    fno_expiry_rule_ = expiry_rule;
 
     if (instrument_type == QLatin1String("equity"))
         return;
@@ -79,11 +79,11 @@ void AlgoDeployDialog::set_fno_context(const QString& instrument_type, const QSt
 
     // Default product type to NRML/Margin if available (case-insensitive search).
     if (product_type_combo_) {
-        int nrml_idx = product_type_combo_->findText(QStringLiteral("NRML"),
-                                                      Qt::MatchFixedString | Qt::MatchCaseSensitive);
+        int nrml_idx =
+            product_type_combo_->findText(QStringLiteral("NRML"), Qt::MatchFixedString | Qt::MatchCaseSensitive);
         if (nrml_idx < 0)
-            nrml_idx = product_type_combo_->findText(QStringLiteral("Margin"),
-                                                      Qt::MatchFixedString | Qt::MatchCaseSensitive);
+            nrml_idx =
+                product_type_combo_->findText(QStringLiteral("Margin"), Qt::MatchFixedString | Qt::MatchCaseSensitive);
         if (nrml_idx >= 0)
             product_type_combo_->setCurrentIndex(nrml_idx);
     }
@@ -101,8 +101,8 @@ void AlgoDeployDialog::build_ui() {
     root->addWidget(title_label_);
 
     auto* id_label = new QLabel(strategy_id_, this);
-    id_label->setStyleSheet(QString("color: %1; font-size: 9px; font-family: %2;")
-                                .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY()));
+    id_label->setStyleSheet(
+        QString("color: %1; font-size: 9px; font-family: %2;").arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY()));
     root->addWidget(id_label);
 
     auto* form = new QFormLayout;
@@ -131,7 +131,8 @@ void AlgoDeployDialog::build_ui() {
 
     account_label_ = new QLabel(tr("Account:"), this);
     account_combo_ = new QComboBox(this);
-    connect(account_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AlgoDeployDialog::on_account_changed);
+    connect(account_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &AlgoDeployDialog::on_account_changed);
     form->addRow(account_label_, account_combo_);
 
     exchange_label_ = new QLabel(tr("Exchange:"), this);
@@ -269,7 +270,8 @@ void AlgoDeployDialog::on_ok() {
         }
         auto creds = AccountManager::instance().load_credentials(account_id);
         if (creds.access_token.isEmpty()) {
-            QMessageBox::warning(this, tr("Validation"), tr("Account credentials expired. Re-authenticate in Equity Trading."));
+            QMessageBox::warning(this, tr("Validation"),
+                                 tr("Account credentials expired. Re-authenticate in Equity Trading."));
             return;
         }
     }
@@ -301,16 +303,15 @@ void AlgoDeployDialog::on_ok() {
         int pt_index = product_type_combo_->currentData().toInt();
         result_.product_type = product_type_str(static_cast<trading::ProductType>(pt_index));
     }
-    result_.backend = backend_to_string(mode == "live" ? TradingBackend::EquityBroker
-                                                       : TradingBackend::Paper);
+    result_.backend = backend_to_string(mode == "live" ? TradingBackend::EquityBroker : TradingBackend::Paper);
 
     // F&O override: set instrument_type/underlying/resolved_expiry and clear symbol.
     // Concrete legs and expiry are resolved at entry-time by the runner (P3).
     // The equity branch (is_fno == false) is unaffected.
     if (is_fno) {
-        result_.instrument_type  = fno_instrument_type_;
-        result_.underlying       = fno_underlying_;
-        result_.resolved_expiry  = fno_expiry_rule_; // expiry RULE; concrete expiry resolved at entry (P3)
+        result_.instrument_type = fno_instrument_type_;
+        result_.underlying = fno_underlying_;
+        result_.resolved_expiry = fno_expiry_rule_; // expiry RULE; concrete expiry resolved at entry (P3)
         // Multi-leg F&O has no single symbol; concrete legs are resolved at entry by the runner (P3).
         result_.symbol.clear();
     }
@@ -326,18 +327,30 @@ void AlgoDeployDialog::changeEvent(QEvent* event) {
 
 void AlgoDeployDialog::retranslateUi() {
     setWindowTitle(tr("Deploy Strategy"));
-    if (title_label_)        title_label_->setText(tr("DEPLOY: %1").arg(strategy_name_));
-    if (symbol_edit_)        symbol_edit_->setPlaceholderText(tr("e.g. RELIANCE"));
-    if (symbol_label_)       symbol_label_->setText(tr("Symbol:"));
-    if (mode_label_)         mode_label_->setText(tr("Mode:"));
-    if (side_label_)         side_label_->setText(tr("Entry Side:"));
-    if (account_label_)      account_label_->setText(tr("Account:"));
-    if (exchange_label_)     exchange_label_->setText(tr("Exchange:"));
-    if (product_type_label_) product_type_label_->setText(tr("Product Type:"));
-    if (timeframe_label_)    timeframe_label_->setText(tr("Timeframe:"));
-    if (quantity_label_)     quantity_label_->setText(tr("Quantity:"));
-    if (max_order_label_)    max_order_label_->setText(tr("Max Order Value:"));
-    if (max_loss_label_)     max_loss_label_->setText(tr("Max Daily Loss:"));
+    if (title_label_)
+        title_label_->setText(tr("DEPLOY: %1").arg(strategy_name_));
+    if (symbol_edit_)
+        symbol_edit_->setPlaceholderText(tr("e.g. RELIANCE"));
+    if (symbol_label_)
+        symbol_label_->setText(tr("Symbol:"));
+    if (mode_label_)
+        mode_label_->setText(tr("Mode:"));
+    if (side_label_)
+        side_label_->setText(tr("Entry Side:"));
+    if (account_label_)
+        account_label_->setText(tr("Account:"));
+    if (exchange_label_)
+        exchange_label_->setText(tr("Exchange:"));
+    if (product_type_label_)
+        product_type_label_->setText(tr("Product Type:"));
+    if (timeframe_label_)
+        timeframe_label_->setText(tr("Timeframe:"));
+    if (quantity_label_)
+        quantity_label_->setText(tr("Quantity:"));
+    if (max_order_label_)
+        max_order_label_->setText(tr("Max Order Value:"));
+    if (max_loss_label_)
+        max_loss_label_->setText(tr("Max Daily Loss:"));
 
     // Combo visible labels (userData keys unchanged).
     if (mode_combo_ && mode_combo_->count() >= 2) {
@@ -348,8 +361,10 @@ void AlgoDeployDialog::retranslateUi() {
         side_combo_->setItemText(0, tr("BUY"));
         side_combo_->setItemText(1, tr("SELL"));
     }
-    if (max_order_spin_) max_order_spin_->setSpecialValueText(tr("No limit"));
-    if (max_loss_spin_)  max_loss_spin_->setSpecialValueText(tr("No limit"));
+    if (max_order_spin_)
+        max_order_spin_->setSpecialValueText(tr("No limit"));
+    if (max_loss_spin_)
+        max_loss_spin_->setSpecialValueText(tr("No limit"));
     if (buttons_)
         buttons_->button(QDialogButtonBox::Ok)->setText(tr("DEPLOY"));
     // account_combo_ "No connected accounts" placeholder is rebuilt by populate_accounts().

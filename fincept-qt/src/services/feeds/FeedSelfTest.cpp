@@ -67,9 +67,8 @@ int run_feed_selftest() {
         check("csv: 2 rows", items.size() == 2);
         check("csv: field price", !items.isEmpty() && items[0].fields.value("price") == "200");
     }
-    const QByteArray custom_xml =
-        "<data><record><headline>H1</headline><url>http://m/1</url><sym>ABC</sym></record>"
-        "<record><headline>H2</headline><url>http://m/2</url><sym>XYZ</sym></record></data>";
+    const QByteArray custom_xml = "<data><record><headline>H1</headline><url>http://m/1</url><sym>ABC</sym></record>"
+                                  "<record><headline>H2</headline><url>http://m/2</url><sym>XYZ</sym></record></data>";
 
     { // Manual XML mapping (role-based field list)
         FeedSubscription s;

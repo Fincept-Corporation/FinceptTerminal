@@ -48,7 +48,7 @@ QString fmt_signed_pct(double v) {
     return (v > 0 ? "+" : "") + QString::number(v, 'f', 2) + "%";
 }
 
-}  // namespace
+} // namespace
 
 OptionChainModel::OptionChainModel(QObject* parent) : QAbstractTableModel(parent) {}
 
@@ -105,17 +105,28 @@ QVariant OptionChainModel::data(const QModelIndex& index, int role) const {
         return {};
 
     switch (col) {
-        case ColCeOi:        return fmt_int_compact(r.ce_quote.oi);
-        case ColCeOiChange:  return fmt_signed_pct(r.ce_quote.oi_change_pct);
-        case ColCeVolume:    return fmt_int_compact(qint64(r.ce_quote.volume));
-        case ColCeIv:        return fmt_pct(r.ce_iv * 100.0);
-        case ColCeLtp:       return fmt_price(r.ce_quote.ltp);
-        case ColStrike:      return QString::number(r.strike, 'f', r.strike < 100 ? 2 : 0);
-        case ColPeLtp:       return fmt_price(r.pe_quote.ltp);
-        case ColPeIv:        return fmt_pct(r.pe_iv * 100.0);
-        case ColPeVolume:    return fmt_int_compact(qint64(r.pe_quote.volume));
-        case ColPeOiChange:  return fmt_signed_pct(r.pe_quote.oi_change_pct);
-        case ColPeOi:        return fmt_int_compact(r.pe_quote.oi);
+        case ColCeOi:
+            return fmt_int_compact(r.ce_quote.oi);
+        case ColCeOiChange:
+            return fmt_signed_pct(r.ce_quote.oi_change_pct);
+        case ColCeVolume:
+            return fmt_int_compact(qint64(r.ce_quote.volume));
+        case ColCeIv:
+            return fmt_pct(r.ce_iv * 100.0);
+        case ColCeLtp:
+            return fmt_price(r.ce_quote.ltp);
+        case ColStrike:
+            return QString::number(r.strike, 'f', r.strike < 100 ? 2 : 0);
+        case ColPeLtp:
+            return fmt_price(r.pe_quote.ltp);
+        case ColPeIv:
+            return fmt_pct(r.pe_iv * 100.0);
+        case ColPeVolume:
+            return fmt_int_compact(qint64(r.pe_quote.volume));
+        case ColPeOiChange:
+            return fmt_signed_pct(r.pe_quote.oi_change_pct);
+        case ColPeOi:
+            return fmt_int_compact(r.pe_quote.oi);
     }
     return {};
 }
@@ -126,9 +137,8 @@ QVariant OptionChainModel::headerData(int section, Qt::Orientation orient, int r
     // tr() per-call so the live header row reflects the current language.
     // The owning QHeaderView re-polls headerData on QEvent::LanguageChange.
     const QString headers[ColCount] = {
-        tr("OI"),   tr("Chg OI"), tr("Volume"), tr("IV"),   tr("LTP"),
-        tr("Strike"),
-        tr("LTP"),  tr("IV"),     tr("Volume"), tr("Chg OI"), tr("OI"),
+        tr("OI"),  tr("Chg OI"), tr("Volume"), tr("IV"),     tr("LTP"), tr("Strike"),
+        tr("LTP"), tr("IV"),     tr("Volume"), tr("Chg OI"), tr("OI"),
     };
     if (section < 0 || section >= ColCount)
         return {};
@@ -170,16 +180,14 @@ void OptionChainModel::update_leg_quote(qint64 token, const BrokerQuote& q) {
             // Recompute bounds only when the touched OI could shift the max.
             if (q.oi >= max_ce_oi_)
                 recompute_oi_bounds();
-            emit dataChanged(index(i, ColCeOi), index(i, ColCeLtp),
-                             {Qt::DisplayRole, Qt::ForegroundRole, CeOiBarRole});
+            emit dataChanged(index(i, ColCeOi), index(i, ColCeLtp), {Qt::DisplayRole, Qt::ForegroundRole, CeOiBarRole});
             return;
         }
         if (r.pe_token == token) {
             r.pe_quote = q;
             if (q.oi >= max_pe_oi_)
                 recompute_oi_bounds();
-            emit dataChanged(index(i, ColPeLtp), index(i, ColPeOi),
-                             {Qt::DisplayRole, Qt::ForegroundRole, PeOiBarRole});
+            emit dataChanged(index(i, ColPeLtp), index(i, ColPeOi), {Qt::DisplayRole, Qt::ForegroundRole, PeOiBarRole});
             return;
         }
     }

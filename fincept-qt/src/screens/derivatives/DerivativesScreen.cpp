@@ -259,8 +259,8 @@ QWidget* DerivativesScreen::create_bonds_panel() {
     bl->addWidget(create_two_col(create_input_row(tr("ISSUE DATE"), bond_issue_date_),
                                  create_input_row(tr("SETTLEMENT DATE"), bond_settle_date_)));
     bl->addWidget(create_input_row(tr("MATURITY DATE"), bond_maturity_date_));
-    bl->addWidget(
-        create_two_col(create_input_row(tr("COUPON RATE (%)"), bond_coupon_), create_input_row(tr("YTM (%)"), bond_ytm_)));
+    bl->addWidget(create_two_col(create_input_row(tr("COUPON RATE (%)"), bond_coupon_),
+                                 create_input_row(tr("YTM (%)"), bond_ytm_)));
     bl->addWidget(create_input_row(tr("PAYMENT FREQUENCY"), bond_freq_));
 
     auto* calc_btn = create_calc_button(tr("CALCULATE BOND PRICE"));
@@ -361,8 +361,8 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     opt_div_ = create_spin(2.0, 0, 100, 2, "%");
     opt_type_ = create_combo({"Call", "Put"});
 
-    bbl->addWidget(
-        create_two_col(create_input_row(tr("SPOT PRICE"), opt_spot_), create_input_row(tr("STRIKE PRICE"), opt_strike_)));
+    bbl->addWidget(create_two_col(create_input_row(tr("SPOT PRICE"), opt_spot_),
+                                  create_input_row(tr("STRIKE PRICE"), opt_strike_)));
     bbl->addWidget(create_two_col(create_input_row(tr("TIME TO EXPIRY (years)"), opt_time_),
                                   create_input_row(tr("VOLATILITY (%)"), opt_vol_)));
     bbl->addWidget(create_two_col(create_input_row(tr("RISK-FREE RATE (%)"), opt_rate_),
@@ -417,8 +417,8 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
     ivbl->addWidget(create_input_row(tr("MARKET OPTION PRICE"), opt_market_price_));
     ivbl->addWidget(create_two_col(create_input_row(tr("TIME TO EXPIRY (years)"), iv_time),
                                    create_input_row(tr("RISK-FREE RATE (%)"), iv_rate)));
-    ivbl->addWidget(
-        create_two_col(create_input_row(tr("DIVIDEND YIELD (%)"), iv_div), create_input_row(tr("OPTION TYPE"), iv_type)));
+    ivbl->addWidget(create_two_col(create_input_row(tr("DIVIDEND YIELD (%)"), iv_div),
+                                   create_input_row(tr("OPTION TYPE"), iv_type)));
 
     auto* iv_btn = create_calc_button(tr("CALCULATE IMPLIED VOL"));
     connect(iv_btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate_secondary);
@@ -469,8 +469,8 @@ QWidget* DerivativesScreen::create_fx_options_panel() {
     fx_type_ = create_combo({"Call", "Put"});
     fx_notional_ = create_spin(1000000, 0, 1e12, 0);
 
-    bl->addWidget(
-        create_two_col(create_input_row(tr("SPOT FX RATE"), fx_spot_), create_input_row(tr("STRIKE FX RATE"), fx_strike_)));
+    bl->addWidget(create_two_col(create_input_row(tr("SPOT FX RATE"), fx_spot_),
+                                 create_input_row(tr("STRIKE FX RATE"), fx_strike_)));
     bl->addWidget(create_three_col(create_input_row(tr("VOLATILITY (%)"), fx_vol_),
                                    create_input_row(tr("DOMESTIC RATE (%)"), fx_dom_rate_),
                                    create_input_row(tr("FOREIGN RATE (%)"), fx_for_rate_)));
@@ -715,9 +715,12 @@ void DerivativesScreen::changeEvent(QEvent* event) {
 
 void DerivativesScreen::retranslateUi() {
     // Header
-    if (header_title_)  header_title_->setText(tr("DERIVATIVES PRICING"));
-    if (header_sub_)    header_sub_->setText(tr("PROFESSIONAL VALUATION ENGINE"));
-    if (header_badge_)  header_badge_->setText(tr("PYTHON ACTIVE"));
+    if (header_title_)
+        header_title_->setText(tr("DERIVATIVES PRICING"));
+    if (header_sub_)
+        header_sub_->setText(tr("PROFESSIONAL VALUATION ENGINE"));
+    if (header_badge_)
+        header_badge_->setText(tr("PYTHON ACTIVE"));
 
     // Instrument selector + status line (same source strings)
     const QStringList names = {tr("BONDS"), tr("EQUITY OPTIONS"), tr("FX OPTIONS"), tr("IR SWAPS"), tr("CREDIT")};
@@ -727,9 +730,12 @@ void DerivativesScreen::retranslateUi() {
         status_instrument_->setText(tr("INSTRUMENT: %1").arg(names[active_instrument_]));
 
     // Status bar + results header
-    if (status_left_)    status_left_->setText(tr("DERIVATIVES"));
-    if (status_engine_)  status_engine_->setText(tr("PYTHON ENGINE"));
-    if (results_title_)  results_title_->setText(tr("RESULTS"));
+    if (status_left_)
+        status_left_->setText(tr("DERIVATIVES"));
+    if (status_engine_)
+        status_engine_->setText(tr("PYTHON ENGINE"));
+    if (results_title_)
+        results_title_->setText(tr("RESULTS"));
     // Panel titles / input labels are re-applied when the panel is rebuilt;
     // their tr() source strings are extracted at construction.
 }
@@ -939,9 +945,8 @@ void DerivativesScreen::run_pricing(const QString& command, const QStringList& a
             const QJsonObject obj = r.data;
 
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                10 * 60, "derivatives");
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 10 * 60,
+                "derivatives");
 
             self->display_results(obj);
         });
@@ -1037,7 +1042,8 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
     }
     // YTM result
     else if (result.contains("ytm") && !result.contains("clean_price")) {
-        vl->addWidget(make_card(tr("YIELD TO MATURITY"), QString::number(result["ytm"].toDouble(), 'f', 6) + "%", true));
+        vl->addWidget(
+            make_card(tr("YIELD TO MATURITY"), QString::number(result["ytm"].toDouble(), 'f', 6) + "%", true));
     }
     // Option results (price + greeks)
     else if (result.contains("price") && result.contains("greeks")) {
@@ -1064,7 +1070,8 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
     else if (result.contains("price") && result.contains("notional")) {
         vl->addWidget(make_card(tr("OPTION PRICE"), QString::number(result["price"].toDouble(), 'f', 4), true));
         if (result.contains("price_per_unit")) {
-            vl->addWidget(make_card(tr("PRICE PER UNIT"), QString::number(result["price_per_unit"].toDouble(), 'f', 6)));
+            vl->addWidget(
+                make_card(tr("PRICE PER UNIT"), QString::number(result["price_per_unit"].toDouble(), 'f', 6)));
         }
         if (result.contains("greeks")) {
             auto greeks = result["greeks"].toObject();
@@ -1090,27 +1097,30 @@ void DerivativesScreen::display_results(const QJsonObject& result) {
         rl->setSpacing(8);
         rl->addWidget(make_card(tr("FIXED LEG PV"), QString::number(result["fixed_leg_pv"].toDouble(), 'f', 2)));
         rl->addWidget(make_card(tr("FLOATING LEG PV"), QString::number(result["floating_leg_pv"].toDouble(), 'f', 2)));
-        rl->addWidget(make_card(tr("PAR SWAP RATE"), QString::number(result["par_swap_rate"].toDouble(), 'f', 4) + "%"));
+        rl->addWidget(
+            make_card(tr("PAR SWAP RATE"), QString::number(result["par_swap_rate"].toDouble(), 'f', 4) + "%"));
         vl->addWidget(row);
     }
     // CDS results
     else if (result.contains("upfront_value")) {
-        vl->addWidget(make_card(tr("UPFRONT VALUE"), QString::number(result["upfront_value"].toDouble(), 'f', 2), true));
+        vl->addWidget(
+            make_card(tr("UPFRONT VALUE"), QString::number(result["upfront_value"].toDouble(), 'f', 2), true));
 
         auto* row1 = new QWidget(this);
         auto* r1l = new QHBoxLayout(row1);
         r1l->setContentsMargins(0, 0, 0, 0);
         r1l->setSpacing(8);
         r1l->addWidget(make_card(tr("PREMIUM LEG PV"), QString::number(result["premium_leg_pv"].toDouble(), 'f', 2)));
-        r1l->addWidget(make_card(tr("PROTECTION LEG PV"), QString::number(result["protection_leg_pv"].toDouble(), 'f', 2)));
+        r1l->addWidget(
+            make_card(tr("PROTECTION LEG PV"), QString::number(result["protection_leg_pv"].toDouble(), 'f', 2)));
         vl->addWidget(row1);
 
         auto* row2 = new QWidget(this);
         auto* r2l = new QHBoxLayout(row2);
         r2l->setContentsMargins(0, 0, 0, 0);
         r2l->setSpacing(8);
-        r2l->addWidget(
-            make_card(tr("BREAKEVEN SPREAD"), QString::number(result["breakeven_spread_bps"].toDouble(), 'f', 2) + " bps"));
+        r2l->addWidget(make_card(tr("BREAKEVEN SPREAD"),
+                                 QString::number(result["breakeven_spread_bps"].toDouble(), 'f', 2) + " bps"));
         r2l->addWidget(make_card(tr("HAZARD RATE"), QString::number(result["hazard_rate"].toDouble(), 'f', 4) + "%"));
         r2l->addWidget(
             make_card(tr("SURVIVAL PROB"), QString::number(result["survival_probability"].toDouble(), 'f', 2) + "%"));

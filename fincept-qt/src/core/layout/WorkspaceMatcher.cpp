@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 
 #include <QString>
+
 #include <cstdlib>
 
 namespace fincept::layout {
@@ -39,9 +40,9 @@ const WorkspaceVariant* WorkspaceMatcher::match(const Workspace& workspace,
         }
     }
     if (best) {
-        LOG_INFO("WorkspaceMatcher",
-                 QString("No exact topology match — falling back to '%1' (delta=%2)")
-                     .arg(best->topology.value).arg(best_delta));
+        LOG_INFO("WorkspaceMatcher", QString("No exact topology match — falling back to '%1' (delta=%2)")
+                                         .arg(best->topology.value)
+                                         .arg(best_delta));
     }
     return best;
 }

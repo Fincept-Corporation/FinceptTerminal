@@ -69,8 +69,8 @@ class ClapDetectorService : public QObject {
     void parse_line(const QByteArray& line);
 
     QPointer<QProcess> process_;
-    QByteArray         stdout_buffer_;
-    std::atomic<bool>  active_{false};
+    QByteArray stdout_buffer_;
+    std::atomic<bool> active_{false};
 };
 
 } // namespace fincept::services

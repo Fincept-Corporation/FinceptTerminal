@@ -86,32 +86,50 @@ void DBnomicsSelectionPanel::changeEvent(QEvent* event) {
 
 void DBnomicsSelectionPanel::retranslateUi() {
     // Section headers
-    if (search_section_lbl_)     search_section_lbl_->setText(tr("GLOBAL SEARCH"));
-    if (provider_section_lbl_)   provider_section_lbl_->setText(tr("PROVIDERS"));
-    if (dataset_section_lbl_)    dataset_section_lbl_->setText(tr("DATASETS"));
-    if (series_section_lbl_)     series_section_lbl_->setText(tr("SERIES"));
-    if (comparison_section_lbl_) comparison_section_lbl_->setText(tr("COMPARISON SLOTS"));
+    if (search_section_lbl_)
+        search_section_lbl_->setText(tr("GLOBAL SEARCH"));
+    if (provider_section_lbl_)
+        provider_section_lbl_->setText(tr("PROVIDERS"));
+    if (dataset_section_lbl_)
+        dataset_section_lbl_->setText(tr("DATASETS"));
+    if (series_section_lbl_)
+        series_section_lbl_->setText(tr("SERIES"));
+    if (comparison_section_lbl_)
+        comparison_section_lbl_->setText(tr("COMPARISON SLOTS"));
 
     // Inputs
-    if (global_search_input_)  global_search_input_->setPlaceholderText(tr("Search providers, datasets..."));
-    if (provider_filter_input_) provider_filter_input_->setPlaceholderText(tr("Filter providers..."));
-    if (series_search_input_)  series_search_input_->setPlaceholderText(tr("Search series..."));
+    if (global_search_input_)
+        global_search_input_->setPlaceholderText(tr("Search providers, datasets..."));
+    if (provider_filter_input_)
+        provider_filter_input_->setPlaceholderText(tr("Filter providers..."));
+    if (series_search_input_)
+        series_search_input_->setPlaceholderText(tr("Search series..."));
 
     // Action buttons
-    if (add_single_btn_)       add_single_btn_->setText(tr("ADD TO SINGLE VIEW"));
-    if (clear_all_btn_)        clear_all_btn_->setText(tr("CLEAR ALL"));
-    if (add_slot_btn_)         add_slot_btn_->setText(tr("+ ADD SLOT"));
+    if (add_single_btn_)
+        add_single_btn_->setText(tr("ADD TO SINGLE VIEW"));
+    if (clear_all_btn_)
+        clear_all_btn_->setText(tr("CLEAR ALL"));
+    if (add_slot_btn_)
+        add_slot_btn_->setText(tr("+ ADD SLOT"));
 
     // Load-more buttons (created via shared helper, cached individually)
-    if (search_load_more_btn_)  search_load_more_btn_->setText(tr("LOAD MORE"));
-    if (dataset_load_more_btn_) dataset_load_more_btn_->setText(tr("LOAD MORE"));
-    if (series_load_more_btn_)  series_load_more_btn_->setText(tr("LOAD MORE"));
+    if (search_load_more_btn_)
+        search_load_more_btn_->setText(tr("LOAD MORE"));
+    if (dataset_load_more_btn_)
+        dataset_load_more_btn_->setText(tr("LOAD MORE"));
+    if (series_load_more_btn_)
+        series_load_more_btn_->setText(tr("LOAD MORE"));
 
     // Idle spinner text (visible only while loading; refreshed by tick_anim).
-    if (prov_spin_ && !prov_loading_)     prov_spin_->setText(tr("%1  LOADING PROVIDERS...").arg(QStringLiteral("⣾")));
-    if (ds_spin_ && !ds_loading_)         ds_spin_->setText(tr("%1  LOADING DATASETS...").arg(QStringLiteral("⣾")));
-    if (series_spin_ && !series_loading_) series_spin_->setText(tr("%1  LOADING SERIES...").arg(QStringLiteral("⣾")));
-    if (search_spin_ && !search_loading_) search_spin_->setText(tr("%1  SEARCHING...").arg(QStringLiteral("⣾")));
+    if (prov_spin_ && !prov_loading_)
+        prov_spin_->setText(tr("%1  LOADING PROVIDERS...").arg(QStringLiteral("⣾")));
+    if (ds_spin_ && !ds_loading_)
+        ds_spin_->setText(tr("%1  LOADING DATASETS...").arg(QStringLiteral("⣾")));
+    if (series_spin_ && !series_loading_)
+        series_spin_->setText(tr("%1  LOADING SERIES...").arg(QStringLiteral("⣾")));
+    if (search_spin_ && !search_loading_)
+        search_spin_->setText(tr("%1  SEARCHING...").arg(QStringLiteral("⣾")));
 
     // Dynamic comparison-slot rows: SLOT label numbers follow layout order;
     // the add-series button text is fixed. Both are tagged by object name.
@@ -843,13 +861,16 @@ QString DBnomicsSelectionPanel::series_search_text() const {
     return series_search_input_ ? series_search_input_->text() : QString();
 }
 void DBnomicsSelectionPanel::set_global_search_text(const QString& t) {
-    if (global_search_input_) global_search_input_->setText(t);
+    if (global_search_input_)
+        global_search_input_->setText(t);
 }
 void DBnomicsSelectionPanel::set_provider_filter_text(const QString& t) {
-    if (provider_filter_input_) provider_filter_input_->setText(t);
+    if (provider_filter_input_)
+        provider_filter_input_->setText(t);
 }
 void DBnomicsSelectionPanel::set_series_search_text(const QString& t) {
-    if (series_search_input_) series_search_input_->setText(t);
+    if (series_search_input_)
+        series_search_input_->setText(t);
 }
 
 } // namespace fincept::screens

@@ -5,11 +5,10 @@
 //
 // Part of the partial-class split of ReportBuilderScreen.cpp.
 
-#include "screens/report_builder/ReportBuilderScreen.h"
-
 #include "core/session/ScreenStateManager.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/report_builder/ReportBuilderScreen.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/markets/MarketDataService.h"
 #include "services/report_builder/ReportBuilderService.h"
@@ -23,6 +22,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -37,7 +37,6 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QShowEvent>
-#include <QHideEvent>
 #include <QTextDocument>
 #include <QTextFrame>
 #include <QVBoxLayout>
@@ -47,8 +46,12 @@ namespace fincept::screens {
 namespace rep = ::fincept::report;
 using Service = ::fincept::services::ReportBuilderService;
 
-void ReportBuilderScreen::on_toggle_left() { apply_left_collapsed(!left_collapsed_, /*animate=*/true); }
-void ReportBuilderScreen::on_toggle_right() { apply_right_collapsed(!right_collapsed_, /*animate=*/true); }
+void ReportBuilderScreen::on_toggle_left() {
+    apply_left_collapsed(!left_collapsed_, /*animate=*/true);
+}
+void ReportBuilderScreen::on_toggle_right() {
+    apply_right_collapsed(!right_collapsed_, /*animate=*/true);
+}
 
 void ReportBuilderScreen::apply_left_collapsed(bool collapsed, bool animate) {
     left_collapsed_ = collapsed;

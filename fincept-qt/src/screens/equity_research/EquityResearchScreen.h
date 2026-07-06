@@ -67,24 +67,24 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     // AND the current symbol is tradable via those (Indian) brokers (.NS/.BO).
     void update_trade_buttons();
 
-    QLabel* title_label_  = nullptr;
+    QLabel* title_label_ = nullptr;
     QLabel* symbol_label_ = nullptr;
     QPushButton* buy_btn_ = nullptr;
     QPushButton* sell_btn_ = nullptr;
     QLabel* hint_label_ = nullptr;
 
-    QLabel* sym_label_    = nullptr;
-    QLabel* price_label_  = nullptr;
+    QLabel* sym_label_ = nullptr;
+    QLabel* price_label_ = nullptr;
     QLabel* change_label_ = nullptr;
-    QLabel* vol_label_    = nullptr;
-    QLabel* hl_label_     = nullptr;
+    QLabel* vol_label_ = nullptr;
+    QLabel* hl_label_ = nullptr;
     QLabel* mktcap_label_ = nullptr;
-    QLabel* rec_label_    = nullptr;
+    QLabel* rec_label_ = nullptr;
 
-    QTabWidget*          tab_widget_     = nullptr;
-    EquityOverviewTab*   overview_tab_   = nullptr;
+    QTabWidget* tab_widget_ = nullptr;
+    EquityOverviewTab* overview_tab_ = nullptr;
     EquityFinancialsTab* financials_tab_ = nullptr;
-    EquityAnalysisTab*   analysis_tab_   = nullptr;
+    EquityAnalysisTab* analysis_tab_ = nullptr;
     EquityTechnicalsTab* technicals_tab_ = nullptr;
     EquityPeersTab* peers_tab_ = nullptr;
     EquityNewsTab* news_tab_ = nullptr;

@@ -31,7 +31,8 @@ FeedPanel::FeedPanel(QWidget* parent) : QWidget(parent) {
     auto* bl = new QHBoxLayout(bar);
     bl->setContentsMargins(6, 0, 6, 0);
     auto* heading = new QLabel(tr("FEEDS"));
-    heading->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;").arg(fincept::ui::colors::TEXT_TERTIARY()));
+    heading->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;").arg(fincept::ui::colors::TEXT_TERTIARY()));
     bl->addWidget(heading);
     bl->addStretch();
     auto* add = new QPushButton(tr("+ Add Feed"));

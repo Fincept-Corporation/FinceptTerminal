@@ -21,7 +21,9 @@ namespace fincept::screens {
 using namespace fincept::services::algo;
 
 namespace {
-QString uMono() { return QString("font-family: %1;").arg(fincept::ui::fonts::DATA_FAMILY); }
+QString uMono() {
+    return QString("font-family: %1;").arg(fincept::ui::fonts::DATA_FAMILY);
+}
 QString uLabel() {
     return QString("color: %1; font-size: %2px; font-weight: 700; letter-spacing: 0.5px; %3"
                    " background: transparent; border: none;")
@@ -34,8 +36,7 @@ QString uCombo() {
                    " font-size: %4px; %5 }"
                    "QComboBox QAbstractItemView { background: %1; color: %2; border: 1px solid %3;"
                    " selection-background-color: %6; %5 }")
-        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
-             fincept::ui::colors::BORDER_DIM())
+        .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
         .arg(fincept::ui::fonts::SMALL)
         .arg(uMono())
         .arg(fincept::ui::colors::BG_HOVER());
@@ -45,10 +46,10 @@ QString uCombo() {
 UniverseScannerPanel::UniverseScannerPanel(QWidget* parent) : QWidget(parent) {
     build_ui();
 
-    connect(&AlgoTradingService::instance(), &AlgoTradingService::strategies_loaded,
-            this, &UniverseScannerPanel::on_strategies_loaded);
-    connect(&fincept::algo::ScanMonitor::instance(), &fincept::algo::ScanMonitor::realtime_match,
-            this, &UniverseScannerPanel::on_match);
+    connect(&AlgoTradingService::instance(), &AlgoTradingService::strategies_loaded, this,
+            &UniverseScannerPanel::on_strategies_loaded);
+    connect(&fincept::algo::ScanMonitor::instance(), &fincept::algo::ScanMonitor::realtime_match, this,
+            &UniverseScannerPanel::on_match);
 
     // Purge orphaned realtime watches left over from a prior session. ScanMonitor
     // intentionally skips mode=='realtime' watches at launch (they are started on
@@ -99,8 +100,8 @@ void UniverseScannerPanel::build_ui() {
     universe_combo_->addItem(tr("NIFTY 50"), "NIFTY50");
     universe_combo_->addItem(tr("Custom symbols"), "CUSTOM");
     vl->addWidget(universe_combo_);
-    connect(universe_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &UniverseScannerPanel::on_universe_changed);
+    connect(universe_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &UniverseScannerPanel::on_universe_changed);
 
     // Custom symbols (hidden unless Custom)
     symbols_label_ = new QLabel(tr("CUSTOM SYMBOLS"), content);
@@ -120,8 +121,7 @@ void UniverseScannerPanel::build_ui() {
     account_combo_->setStyleSheet(uCombo());
     account_combo_->setFixedHeight(30);
     for (const auto& acct : fincept::trading::AccountManager::instance().list_accounts())
-        account_combo_->addItem(QString("%1 (%2)").arg(acct.display_name, acct.broker_id),
-                                acct.account_id);
+        account_combo_->addItem(QString("%1 (%2)").arg(acct.display_name, acct.broker_id), acct.account_id);
     vl->addWidget(account_combo_);
 
     // Sweep + cooldown row
@@ -191,18 +191,17 @@ void UniverseScannerPanel::build_ui() {
     matches_table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     matches_table_->verticalHeader()->setVisible(false);
     matches_table_->setMinimumHeight(200);
-    matches_table_->setStyleSheet(
-        QString("QTableWidget { background: %1; border: 1px solid %2; gridline-color: %2;"
-                " font-size: %3px; font-family: %4; color: %5; }"
-                "QHeaderView::section { background: %6; color: %7; font-size: %3px;"
-                " font-weight: 700; font-family: %4; padding: 4px 8px; border: none;"
-                " border-bottom: 1px solid %2; }")
-            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_DIM())
-            .arg(fincept::ui::fonts::SMALL)
-            .arg(fincept::ui::fonts::DATA_FAMILY)
-            .arg(fincept::ui::colors::TEXT_PRIMARY())
-            .arg(fincept::ui::colors::BG_RAISED())
-            .arg(fincept::ui::colors::TEXT_TERTIARY()));
+    matches_table_->setStyleSheet(QString("QTableWidget { background: %1; border: 1px solid %2; gridline-color: %2;"
+                                          " font-size: %3px; font-family: %4; color: %5; }"
+                                          "QHeaderView::section { background: %6; color: %7; font-size: %3px;"
+                                          " font-weight: 700; font-family: %4; padding: 4px 8px; border: none;"
+                                          " border-bottom: 1px solid %2; }")
+                                      .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::BORDER_DIM())
+                                      .arg(fincept::ui::fonts::SMALL)
+                                      .arg(fincept::ui::fonts::DATA_FAMILY)
+                                      .arg(fincept::ui::colors::TEXT_PRIMARY())
+                                      .arg(fincept::ui::colors::BG_RAISED())
+                                      .arg(fincept::ui::colors::TEXT_TERTIARY()));
     vl->addWidget(matches_table_);
     vl->addStretch();
 
@@ -266,14 +265,12 @@ void UniverseScannerPanel::on_start_stop() {
         return;
     }
     if (strat.entry_conditions.isEmpty()) {
-        set_status(tr("The selected strategy has no entry conditions."),
-                   fincept::ui::colors::NEGATIVE());
+        set_status(tr("The selected strategy has no entry conditions."), fincept::ui::colors::NEGATIVE());
         return;
     }
     const QString account_id = account_combo_->currentData().toString();
     if (account_id.isEmpty()) {
-        set_status(tr("Select a connected broker account (live feed required)."),
-                   fincept::ui::colors::NEGATIVE());
+        set_status(tr("Select a connected broker account (live feed required)."), fincept::ui::colors::NEGATIVE());
         return;
     }
 
@@ -302,8 +299,7 @@ void UniverseScannerPanel::on_start_stop() {
     w.active = true;
 
     if (universe == "CUSTOM" && w.symbols.isEmpty()) {
-        set_status(tr("Enter custom symbols or pick a universe."),
-                   fincept::ui::colors::NEGATIVE());
+        set_status(tr("Enter custom symbols or pick a universe."), fincept::ui::colors::NEGATIVE());
         return;
     }
 
@@ -319,12 +315,11 @@ void UniverseScannerPanel::on_start_stop() {
 
     running_ = true;
     start_btn_->setText(tr("STOP SCAN"));
-    set_status(tr("Scanning live — warming history, matches will appear below."),
-               "#A78BFA");
+    set_status(tr("Scanning live — warming history, matches will appear below."), "#A78BFA");
 }
 
-void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symbol,
-                                    double price, const QString& detail) {
+void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symbol, double price,
+                                    const QString& detail) {
     if (watch_id != watch_id_ || watch_id_.isEmpty())
         return;
 
@@ -349,8 +344,7 @@ void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symb
     matches_table_->setItem(row, 1, sig_item);
 
     matches_table_->setItem(row, 2,
-                            new QTableWidgetItem(price > 0 ? QString::number(price, 'f', 2)
-                                                           : QStringLiteral("—")));
+                            new QTableWidgetItem(price > 0 ? QString::number(price, 'f', 2) : QStringLiteral("—")));
     matches_table_->setItem(row, 3, new QTableWidgetItem(detail));
 
     auto* deploy_btn = new QPushButton(tr("DEPLOY"), matches_table_);
@@ -358,8 +352,7 @@ void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symb
     deploy_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1;"
                                       " border: 1px solid %2; font-size: %3px; %4 padding: 2px 8px; }"
                                       "QPushButton:hover { color: %5; border-color: %5; }")
-                                  .arg(fincept::ui::colors::TEXT_SECONDARY(),
-                                       fincept::ui::colors::BORDER_DIM())
+                                  .arg(fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM())
                                   .arg(fincept::ui::fonts::TINY)
                                   .arg(uMono())
                                   .arg(fincept::ui::colors::POSITIVE()));
@@ -372,8 +365,7 @@ void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symb
 void UniverseScannerPanel::deploy_symbol(const QString& symbol) {
     AlgoStrategy strat;
     if (!current_strategy(&strat)) {
-        set_status(tr("Strategy no longer selected — cannot deploy."),
-                   fincept::ui::colors::NEGATIVE());
+        set_status(tr("Strategy no longer selected — cannot deploy."), fincept::ui::colors::NEGATIVE());
         return;
     }
     auto* dlg = new AlgoDeployDialog(strat, this);

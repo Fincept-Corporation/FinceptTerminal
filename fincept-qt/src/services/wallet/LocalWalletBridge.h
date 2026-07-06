@@ -56,12 +56,10 @@ class LocalWalletBridge : public QObject {
 
   private:
     void on_new_connection();
-    void handle_request(QTcpSocket* socket, const QByteArray& request_line,
-                        const QByteArray& body, const QByteArray& path,
-                        const QByteArray& method);
+    void handle_request(QTcpSocket* socket, const QByteArray& request_line, const QByteArray& body,
+                        const QByteArray& path, const QByteArray& method);
     QByteArray render_connect_page() const;
-    void write_response(QTcpSocket* socket, int status, const QByteArray& content_type,
-                        const QByteArray& body);
+    void write_response(QTcpSocket* socket, int status, const QByteArray& content_type, const QByteArray& body);
 
     QTcpServer* server_ = nullptr;
     QByteArray nonce_hex_;

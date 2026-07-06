@@ -180,12 +180,11 @@ void SectorResolver::resolve_async(const QString& symbol) {
         // Try 2: TSX suffix fallback for bare Canadian tickers.
         if (looks_like_canadian_bare(symbol)) {
             QString tsx_symbol = symbol + ".TO";
-            MarketDataService::instance().fetch_info(
-                tsx_symbol, [self, symbol, finish](bool ok2, InfoData info2) {
-                    if (!self)
-                        return;
-                    finish(ok2 ? info2.sector : QString{}, info2.industry, {});
-                });
+            MarketDataService::instance().fetch_info(tsx_symbol, [self, symbol, finish](bool ok2, InfoData info2) {
+                if (!self)
+                    return;
+                finish(ok2 ? info2.sector : QString{}, info2.industry, {});
+            });
             return;
         }
         finish({}, info.industry, {});

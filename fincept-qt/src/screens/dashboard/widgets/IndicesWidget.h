@@ -13,8 +13,7 @@ inline QuoteTableWidget* create_indices_widget(QWidget* parent = nullptr) {
         {"^HSI", "HANG SENG"}, {"000001.SS", "SHANGHAI"}, {"^BSESN", "SENSEX"}, {"^NSEI", "NIFTY 50"},
     };
     const QString title = QCoreApplication::translate("fincept::screens::widgets::QuoteTableWidget", "GLOBAL INDICES");
-    return new QuoteTableWidget(title, services::MarketDataService::indices_symbols(), labels, 2, {},
-                                parent);
+    return new QuoteTableWidget(title, services::MarketDataService::indices_symbols(), labels, 2, {}, parent);
 }
 
 } // namespace fincept::screens::widgets

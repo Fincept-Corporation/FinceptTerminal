@@ -92,11 +92,11 @@ class PortfolioCommandBar : public QWidget {
     QVector<QPushButton*> detail_btns_;
 
     // Containers for show/hide
-    QWidget* row1_ = nullptr;            // selector + refresh/interval/overflow
-    QWidget* row2_ = nullptr;            // BUY/SELL/DIV | detail tabs | AI/AGENT
-    QWidget* trade_cluster_ = nullptr;   // BUY/SELL/DIV
-    QWidget* tabs_container_ = nullptr;  // 9 detail view pills
-    QWidget* tools_cluster_ = nullptr;   // AI/AGENT
+    QWidget* row1_ = nullptr;           // selector + refresh/interval/overflow
+    QWidget* row2_ = nullptr;           // BUY/SELL/DIV | detail tabs | AI/AGENT
+    QWidget* trade_cluster_ = nullptr;  // BUY/SELL/DIV
+    QWidget* tabs_container_ = nullptr; // 9 detail view pills
+    QWidget* tools_cluster_ = nullptr;  // AI/AGENT
 
     // State
     QVector<portfolio::Portfolio> portfolios_;

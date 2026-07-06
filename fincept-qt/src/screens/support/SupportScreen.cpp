@@ -8,6 +8,7 @@
 #include "screens/support/SupportScreen.h"
 
 #include "auth/UserApi.h"
+#include "screens/support/SupportScreen_internal.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
@@ -23,7 +24,6 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
-#include "screens/support/SupportScreen_internal.h"
 
 namespace fincept::screens {
 
@@ -222,38 +222,47 @@ void SupportScreen::changeEvent(QEvent* event) {
 
 void SupportScreen::retranslateUi() {
     // ── Top bar ───────────────────────────────────────────────────────────────
-    if (title_lbl_)      title_lbl_->setText(tr("Support"));
-    if (breadcrumb_lbl_) breadcrumb_lbl_->setText(tr("Tickets"));
-    if (status_lbl_)     status_lbl_->setText(tr("Ready"));
-    if (refresh_btn_)    refresh_btn_->setToolTip(tr("Refresh tickets"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("Support"));
+    if (breadcrumb_lbl_)
+        breadcrumb_lbl_->setText(tr("Tickets"));
+    if (status_lbl_)
+        status_lbl_->setText(tr("Ready"));
+    if (refresh_btn_)
+        refresh_btn_->setToolTip(tr("Refresh tickets"));
 
     // ── Sidebar header ────────────────────────────────────────────────────────
-    if (new_ticket_btn_) new_ticket_btn_->setText(tr("＋  New Ticket"));
-    if (search_input_)   search_input_->setPlaceholderText(tr("Search tickets…"));
+    if (new_ticket_btn_)
+        new_ticket_btn_->setText(tr("＋  New Ticket"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search tickets…"));
 
     // Filter combo — preserve current row across the rebuild.
     if (filter_combo_) {
         const int idx = filter_combo_->currentIndex();
         filter_combo_->blockSignals(true);
         filter_combo_->clear();
-        filter_combo_->addItems({tr("All Tickets"), tr("Open"), tr("In Progress"),
-                                 tr("Pending"), tr("Resolved"), tr("Closed")});
+        filter_combo_->addItems(
+            {tr("All Tickets"), tr("Open"), tr("In Progress"), tr("Pending"), tr("Resolved"), tr("Closed")});
         if (idx >= 0 && idx < filter_combo_->count())
             filter_combo_->setCurrentIndex(idx);
         filter_combo_->blockSignals(false);
     }
 
-    if (stat_total_caption_)     stat_total_caption_->setText(tr("Total"));
-    if (stat_open_caption_)      stat_open_caption_->setText(tr("Open"));
-    if (stat_resolved_caption_)  stat_resolved_caption_->setText(tr("Done"));
+    if (stat_total_caption_)
+        stat_total_caption_->setText(tr("Total"));
+    if (stat_open_caption_)
+        stat_open_caption_->setText(tr("Open"));
+    if (stat_resolved_caption_)
+        stat_resolved_caption_->setText(tr("Done"));
 
     // ── Content pages: rebuild from build_*() so every label/button/placeholder
     //     picks up the new language. Snapshot form text first so a language
     //     switch mid-compose doesn't discard user input. ──────────────────────
     if (content_stack_) {
         const QString saved_subject = subject_input_ ? subject_input_->text() : QString();
-        const QString saved_desc    = desc_input_    ? desc_input_->toPlainText() : QString();
-        const QString saved_reply   = msg_input_     ? msg_input_->toPlainText() : QString();
+        const QString saved_desc = desc_input_ ? desc_input_->toPlainText() : QString();
+        const QString saved_reply = msg_input_ ? msg_input_->toPlainText() : QString();
         const int saved_view = content_stack_->currentIndex();
         const int saved_ticket = selected_ticket_id_;
 
@@ -293,9 +302,12 @@ void SupportScreen::retranslateUi() {
         content_stack_->setCurrentIndex(saved_view);
 
         // Restore form text the user was composing.
-        if (subject_input_ && !saved_subject.isEmpty()) subject_input_->setText(saved_subject);
-        if (desc_input_ && !saved_desc.isEmpty())       desc_input_->setPlainText(saved_desc);
-        if (msg_input_ && !saved_reply.isEmpty())       msg_input_->setPlainText(saved_reply);
+        if (subject_input_ && !saved_subject.isEmpty())
+            subject_input_->setText(saved_subject);
+        if (desc_input_ && !saved_desc.isEmpty())
+            desc_input_->setPlainText(saved_desc);
+        if (msg_input_ && !saved_reply.isEmpty())
+            msg_input_->setPlainText(saved_reply);
 
         // Reload tickets so sidebar row text + the currently-shown detail
         // re-render with new translations. selected_ticket_id_ is preserved.

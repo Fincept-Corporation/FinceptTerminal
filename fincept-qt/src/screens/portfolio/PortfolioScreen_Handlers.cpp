@@ -8,8 +8,6 @@
 //
 // Part of the partial-class split of PortfolioScreen.cpp.
 
-#include "screens/portfolio/PortfolioScreen.h"
-
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
@@ -23,6 +21,7 @@
 #include "screens/portfolio/PortfolioOrderPanel.h"
 #include "screens/portfolio/PortfolioPanelHeader.h"
 #include "screens/portfolio/PortfolioPerfChart.h"
+#include "screens/portfolio/PortfolioScreen.h"
 #include "screens/portfolio/PortfolioSectorPanel.h"
 #include "screens/portfolio/PortfolioStatsRibbon.h"
 #include "screens/portfolio/PortfolioStatusBar.h"
@@ -147,8 +146,7 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     // compute_metrics() regresses against SPY regardless of currency.
     {
         auto& svc = services::PortfolioService::instance();
-        const QString bench = services::PortfolioService::default_benchmark_for_currency(
-            summary.portfolio.currency);
+        const QString bench = services::PortfolioService::default_benchmark_for_currency(summary.portfolio.currency);
         svc.fetch_benchmark_history(bench, "1y");
         if (bench != QStringLiteral("SPY"))
             svc.fetch_benchmark_history("SPY", "1y");
@@ -266,7 +264,6 @@ void PortfolioScreen::request_refresh() {
 
 // ── Phase 3: Main view construction ──────────────────────────────────────────
 
-
 void PortfolioScreen::on_symbol_selected(const QString& symbol) {
     selected_symbol_ = symbol;
     if (heatmap_)
@@ -279,8 +276,7 @@ void PortfolioScreen::on_symbol_selected(const QString& symbol) {
     // Publish to the linked group so other panels (Equity Research, Watchlist
     // …) follow the selection. Only when actually linked.
     if (link_group_ != SymbolGroup::None && !symbol.isEmpty()) {
-        SymbolContext::instance().set_group_symbol(
-            link_group_, SymbolRef::equity(symbol), this);
+        SymbolContext::instance().set_group_symbol(link_group_, SymbolRef::equity(symbol), this);
     }
 }
 
@@ -337,7 +333,6 @@ void PortfolioScreen::animate_order_panel_in() {
     order_panel_anim_->setEndValue(QRect(width() - panel_w, top, panel_w, h));
     order_panel_anim_->start();
 }
-
 
 void PortfolioScreen::load_demo_portfolio() {
     auto& svc = services::PortfolioService::instance();

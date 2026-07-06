@@ -6,8 +6,11 @@
 // allMids also returns builder-deployed "#NNNN" assets — we filter to the
 // requested coin list. Pure parsers are static for selftest fixtures.
 #include "services/alpha_arena/ArenaMarketDataIface.h"
+
 #include <QJsonDocument>
-namespace fincept::trading::hyperliquid { class HyperliquidClient; }
+namespace fincept::trading::hyperliquid {
+class HyperliquidClient;
+}
 
 namespace fincept::arena {
 
@@ -17,11 +20,9 @@ class ArenaMarketData : public IArenaMarketData {
     explicit ArenaMarketData(QObject* parent = nullptr);
     /// allMids + metaAndAssetCtxs + per-coin 1h candleSnapshot (last 60 bars),
     /// merged into one MarketSnapshot with indicators applied.
-    void fetch_snapshot(const QStringList& coins,
-                        std::function<void(Result<MarketSnapshot>)> cb) override;
+    void fetch_snapshot(const QStringList& coins, std::function<void(Result<MarketSnapshot>)> cb) override;
     /// Single {"type":"allMids"} call → coin→mid (live-marks loop between rounds).
-    void fetch_mids(const QStringList& coins,
-                    std::function<void(Result<QHash<QString, double>>)> cb) override;
+    void fetch_mids(const QStringList& coins, std::function<void(Result<QHash<QString, double>>)> cb) override;
 
     // Pure parsers (selftest-covered):
     static QHash<QString, double> parse_all_mids(const QJsonDocument& doc, const QStringList& coins);

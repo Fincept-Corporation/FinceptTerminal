@@ -21,7 +21,7 @@ class ProviderCatalog {
     static QString display_name(const QString& provider_id);
     static QStringList fallback_models(const QString& provider);
     static QString default_base_url(const QString& provider);
-    static bool requires_api_key(const QString& provider);   // false: ollama, fincept
+    static bool requires_api_key(const QString& provider);     // false: ollama, fincept
     static bool is_openai_compatible(const QString& provider); // everything except anthropic/gemini/fincept
     /// Brand color used for arena agent identity (hex, e.g. "#10A37F").
     static QString brand_color(const QString& provider);

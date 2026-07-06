@@ -70,16 +70,14 @@ void CloudClient::finish(QNetworkReply* reply, Callback cb, const QObject* conte
         }
 
         if (!out.ok && out.error.isEmpty()) {
-            out.error = reply->error() != QNetworkReply::NoError
-                            ? QStringLiteral("network_error")
-                            : QStringLiteral("http_%1").arg(status);
+            out.error = reply->error() != QNetworkReply::NoError ? QStringLiteral("network_error")
+                                                                 : QStringLiteral("http_%1").arg(status);
         }
 
         if (!out.ok) {
             QUrl sanitized = reply->url();
             sanitized.setQuery(QString{}); // keep tokens/queries out of logs
-            LOG_WARN("CloudSync",
-                     QString("HTTP %1 %2 — %3").arg(status).arg(sanitized.toString()).arg(out.error));
+            LOG_WARN("CloudSync", QString("HTTP %1 %2 — %3").arg(status).arg(sanitized.toString()).arg(out.error));
         }
         cb(out);
     });

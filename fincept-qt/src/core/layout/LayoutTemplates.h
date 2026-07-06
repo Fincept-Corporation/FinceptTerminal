@@ -19,9 +19,9 @@ namespace fincept::layout {
 class LayoutTemplates {
   public:
     struct Persona {
-        QString id;            ///< Stable id ("equity_trader", ...). Used by make().
-        QString display_name;  ///< Card title in the picker.
-        QString description;   ///< 1-line marketing blurb under the title.
+        QString id;           ///< Stable id ("equity_trader", ...). Used by make().
+        QString display_name; ///< Card title in the picker.
+        QString description;  ///< 1-line marketing blurb under the title.
     };
 
     /// Returns the v1 persona list. Order matters — used by the picker grid.

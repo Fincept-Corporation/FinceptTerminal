@@ -5,11 +5,10 @@
 //
 // Part of the partial-class split of ReportBuilderScreen.cpp.
 
-#include "screens/report_builder/ReportBuilderScreen.h"
-
 #include "core/session/ScreenStateManager.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/report_builder/ReportBuilderScreen.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/markets/MarketDataService.h"
 #include "services/report_builder/ReportBuilderService.h"
@@ -24,6 +23,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -38,7 +38,6 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QShowEvent>
-#include <QHideEvent>
 #include <QTextDocument>
 #include <QTextFrame>
 #include <QVBoxLayout>
@@ -54,15 +53,14 @@ void ReportBuilderScreen::show_recent_dialog() {
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle(tr("Recent Reports"));
     dlg->setMinimumWidth(500);
-    dlg->setStyleSheet(
-        QString("QDialog { background: %1; color: %2; }"
-                "QListWidget { background: %3; color: %2; border: 1px solid %4; }"
-                "QListWidget::item { padding: 6px; }"
-                "QListWidget::item:selected { background: %5; }"
-                "QPushButton { background: %3; color: %2; border: 1px solid %4; padding: 6px 16px; }"
-                "QPushButton:hover { background: %5; }")
-            .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER(),
-                 ui::colors::BG_RAISED()));
+    dlg->setStyleSheet(QString("QDialog { background: %1; color: %2; }"
+                               "QListWidget { background: %3; color: %2; border: 1px solid %4; }"
+                               "QListWidget::item { padding: 6px; }"
+                               "QListWidget::item:selected { background: %5; }"
+                               "QPushButton { background: %3; color: %2; border: 1px solid %4; padding: 6px 16px; }"
+                               "QPushButton:hover { background: %5; }")
+                           .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER(),
+                                ui::colors::BG_RAISED()));
 
     auto* vl = new QVBoxLayout(dlg);
     auto* lbl = new QLabel(tr("Select a report to open:"));
@@ -85,9 +83,9 @@ void ReportBuilderScreen::show_recent_dialog() {
         if (row >= 0 && row < recent.size()) {
             auto r = Service::instance().load_from(recent[row]);
             if (r.is_err())
-                QMessageBox::warning(this, tr("Open Report"),
-                                     tr("Could not open file:\n%1\n\n%2")
-                                         .arg(recent[row], QString::fromStdString(r.error())));
+                QMessageBox::warning(
+                    this, tr("Open Report"),
+                    tr("Could not open file:\n%1\n\n%2").arg(recent[row], QString::fromStdString(r.error())));
         }
         dlg->accept();
     };
@@ -310,14 +308,13 @@ void ReportBuilderScreen::show_metadata_dialog() {
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle(tr("Report Metadata"));
     dlg->setMinimumWidth(420);
-    dlg->setStyleSheet(
-        QString("QDialog { background: %1; color: %2; }"
-                "QLineEdit { background: %3; color: %2; border: 1px solid %4; padding: 4px; }"
-                "QLabel { background: transparent; color: %2; }"
-                "QPushButton { background: %3; color: %2; border: 1px solid %4; padding: 6px 16px; }"
-                "QPushButton:hover { background: %5; }")
-            .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER(),
-                 ui::colors::BG_RAISED()));
+    dlg->setStyleSheet(QString("QDialog { background: %1; color: %2; }"
+                               "QLineEdit { background: %3; color: %2; border: 1px solid %4; padding: 4px; }"
+                               "QLabel { background: transparent; color: %2; }"
+                               "QPushButton { background: %3; color: %2; border: 1px solid %4; padding: 6px 16px; }"
+                               "QPushButton:hover { background: %5; }")
+                           .arg(ui::colors::DARK(), ui::colors::WHITE(), ui::colors::PANEL(), ui::colors::BORDER(),
+                                ui::colors::BG_RAISED()));
 
     auto* vl = new QVBoxLayout(dlg);
     auto* form = new QFormLayout;
@@ -406,8 +403,9 @@ void ReportBuilderScreen::show_metadata_dialog() {
 // ── File operations ──────────────────────────────────────────────────────────
 
 void ReportBuilderScreen::on_new() {
-    auto answer = QMessageBox::question(this, tr("New Report"), tr("Create a new report? Unsaved changes will be lost."),
-                                        QMessageBox::Yes | QMessageBox::No);
+    auto answer =
+        QMessageBox::question(this, tr("New Report"), tr("Create a new report? Unsaved changes will be lost."),
+                              QMessageBox::Yes | QMessageBox::No);
     if (answer != QMessageBox::Yes)
         return;
     Service::instance().clear_document();
@@ -473,8 +471,8 @@ void ReportBuilderScreen::export_pdf_to(const QString& path) {
     printer.setPageMargins(QMarginsF(15, 20, 15, 20), QPageLayout::Millimeter);
 
     bool has_header = !m.header_left.isEmpty() || !m.header_center.isEmpty() || !m.header_right.isEmpty();
-    bool has_footer = !m.footer_left.isEmpty() || !m.footer_center.isEmpty() || !m.footer_right.isEmpty() ||
-                      m.show_page_numbers;
+    bool has_footer =
+        !m.footer_left.isEmpty() || !m.footer_center.isEmpty() || !m.footer_right.isEmpty() || m.show_page_numbers;
 
     if (!has_header && !has_footer) {
         canvas_->text_edit()->document()->print(&printer);
@@ -536,8 +534,7 @@ void ReportBuilderScreen::export_pdf_to(const QString& path) {
             painter.save();
             double content_top = has_header ? 20 : 0;
             double content_bottom = has_footer ? page_rect.height() - 20 : page_rect.height();
-            painter.setClipRect(
-                QRectF(page_rect.left(), content_top, page_rect.width(), content_bottom - content_top));
+            painter.setClipRect(QRectF(page_rect.left(), content_top, page_rect.width(), content_bottom - content_top));
             painter.translate(0, -(page - 1) * page_rect.height() + content_top);
             doc->drawContents(&painter);
             painter.restore();

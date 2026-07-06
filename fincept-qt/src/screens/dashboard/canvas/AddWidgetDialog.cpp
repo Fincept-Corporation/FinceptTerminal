@@ -38,21 +38,21 @@ QString AddWidgetDialog::icon_for_widget(const QString& type_id) {
     static const QMap<QString, QString> icons = {
         {"indices", QString(QChar(0x25B2))}, // ▲
         {"forex", "$"},
-        {"crypto", QString(QChar(0x0E3F))},            // ฿
-        {"commodities", QString(QChar(0x2666))},       // ♦
-        {"sector_heatmap", QString(QChar(0x2593))},    // ▓
-        {"top_movers", QString(QChar(0x21C5))},        // ⇅
-        {"sentiment", QString(QChar(0x2665))},         // ♥
-        {"news", QString(QChar(0x25A0))},              // ■
-        {"stock_quote", QString(QChar(0x24C8))},       // Ⓢ
-        {"screener", QString(QChar(0x2318))},          // ⌘
-        {"econ_calendar", QString(QChar(0x25CB))},     // ○
-        {"watchlist", QString(QChar(0x2606))},         // ☆
-        {"performance", QString(QChar(0x2191))},       // ↑
-        {"portfolio_summary", QString(QChar(0x25A3))}, // ▣
-        {"risk_metrics", QString(QChar(0x26A0))},      // ⚠
-        {"quick_trade", QString(QChar(0x26A1))},       // ⚡
-        {"video_player", QString(QChar(0x25B6))},      // ▶
+        {"crypto", QString(QChar(0x0E3F))},             // ฿
+        {"commodities", QString(QChar(0x2666))},        // ♦
+        {"sector_heatmap", QString(QChar(0x2593))},     // ▓
+        {"top_movers", QString(QChar(0x21C5))},         // ⇅
+        {"sentiment", QString(QChar(0x2665))},          // ♥
+        {"news", QString(QChar(0x25A0))},               // ■
+        {"stock_quote", QString(QChar(0x24C8))},        // Ⓢ
+        {"screener", QString(QChar(0x2318))},           // ⌘
+        {"econ_calendar", QString(QChar(0x25CB))},      // ○
+        {"watchlist", QString(QChar(0x2606))},          // ☆
+        {"performance", QString(QChar(0x2191))},        // ↑
+        {"portfolio_summary", QString(QChar(0x25A3))},  // ▣
+        {"risk_metrics", QString(QChar(0x26A0))},       // ⚠
+        {"quick_trade", QString(QChar(0x26A1))},        // ⚡
+        {"video_player", QString(QChar(0x25B6))},       // ▶
         {"geopolitics_events", QString(QChar(0x2691))}, // ⚑
         {"maritime_vessels", QString(QChar(0x2693))},   // ⚓
         {"notes", QString(QChar(0x270E))},              // ✎
@@ -259,11 +259,16 @@ void AddWidgetDialog::changeEvent(QEvent* event) {
 
 void AddWidgetDialog::retranslateUi() {
     setWindowTitle(tr("Add Widget"));
-    if (title_label_)    title_label_->setText(tr("ADD WIDGET"));
-    if (subtitle_label_) subtitle_label_->setText(tr("%1 AVAILABLE").arg(WidgetRegistry::instance().all().size()));
-    if (search_bar_)     search_bar_->setPlaceholderText(tr("Search widgets..."));
-    if (cancel_btn_)     cancel_btn_->setText(tr("CANCEL"));
-    if (add_btn_)        add_btn_->setText(tr("ADD WIDGET"));
+    if (title_label_)
+        title_label_->setText(tr("ADD WIDGET"));
+    if (subtitle_label_)
+        subtitle_label_->setText(tr("%1 AVAILABLE").arg(WidgetRegistry::instance().all().size()));
+    if (search_bar_)
+        search_bar_->setPlaceholderText(tr("Search widgets..."));
+    if (cancel_btn_)
+        cancel_btn_->setText(tr("CANCEL"));
+    if (add_btn_)
+        add_btn_->setText(tr("ADD WIDGET"));
     for (int i = 0; i < cat_buttons_.size() && i < cat_source_keys_.size(); ++i) {
         const QString& key = cat_source_keys_[i];
         const QString label = (key == QLatin1String("All")) ? tr("All") : WidgetRegistry::category_tr(key);
@@ -299,14 +304,11 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
         // translated display values so the search box works in any language.
         const QString name_tr = WidgetRegistry::display_name_tr(meta);
         const QString desc_tr = WidgetRegistry::description_tr(meta);
-        const QString cat_tr  = WidgetRegistry::category_tr(meta.category);
-        if (!filter.isEmpty() &&
-            !meta.display_name.contains(filter, Qt::CaseInsensitive) &&
+        const QString cat_tr = WidgetRegistry::category_tr(meta.category);
+        if (!filter.isEmpty() && !meta.display_name.contains(filter, Qt::CaseInsensitive) &&
             !meta.description.contains(filter, Qt::CaseInsensitive) &&
-            !meta.category.contains(filter, Qt::CaseInsensitive) &&
-            !name_tr.contains(filter, Qt::CaseInsensitive) &&
-            !desc_tr.contains(filter, Qt::CaseInsensitive) &&
-            !cat_tr.contains(filter, Qt::CaseInsensitive))
+            !meta.category.contains(filter, Qt::CaseInsensitive) && !name_tr.contains(filter, Qt::CaseInsensitive) &&
+            !desc_tr.contains(filter, Qt::CaseInsensitive) && !cat_tr.contains(filter, Qt::CaseInsensitive))
             continue;
 
         QString accent = accent_for_category(meta.category);

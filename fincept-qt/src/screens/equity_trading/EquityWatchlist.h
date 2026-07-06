@@ -47,9 +47,9 @@ class EquityWatchlist : public QWidget {
 
   signals:
     void symbol_selected(const QString& symbol);
-    void symbol_added(const QString& symbol);    // user added a symbol
-    void symbol_removed(const QString& symbol);  // user removed a row from the active list
-    void watchlist_selected(const QString& id);  // user picked another list in the combo
+    void symbol_added(const QString& symbol);   // user added a symbol
+    void symbol_removed(const QString& symbol); // user removed a row from the active list
+    void watchlist_selected(const QString& id); // user picked another list in the combo
     void watchlist_create_requested(const QString& name);
     void watchlist_rename_requested(const QString& id, const QString& name);
     void watchlist_delete_requested(const QString& id);
@@ -70,7 +70,7 @@ class EquityWatchlist : public QWidget {
     void rebuild_table();
     void retranslateUi();
 
-    QComboBox* wl_combo_ = nullptr;     // named-watchlist switcher
+    QComboBox* wl_combo_ = nullptr;      // named-watchlist switcher
     QToolButton* wl_menu_btn_ = nullptr; // New / Rename / Delete menu
     QLineEdit* filter_edit_ = nullptr;
     QLineEdit* add_edit_ = nullptr; // symbol add input

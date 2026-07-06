@@ -47,21 +47,15 @@ ActionPredicate require_unlocked_frame() {
     // A focused frame in the locked state still receives events but actions
     // should be inert. The lock-on-minimise flow and PIN gate set
     // `WindowFrame::is_locked() == true` while the lock overlay is visible.
-    return [](const CommandContext& ctx) {
-        return ctx.focused_frame && !ctx.focused_frame->is_locked();
-    };
+    return [](const CommandContext& ctx) { return ctx.focused_frame && !ctx.focused_frame->is_locked(); };
 }
 
 ActionPredicate require_more_than_one_window() {
-    return [](const CommandContext&) {
-        return WindowRegistry::instance().frame_count() > 1;
-    };
+    return [](const CommandContext&) { return WindowRegistry::instance().frame_count() > 1; };
 }
 
 ActionPredicate require_more_than_one_monitor() {
-    return [](const CommandContext&) {
-        return QGuiApplication::screens().size() > 1;
-    };
+    return [](const CommandContext&) { return QGuiApplication::screens().size() > 1; };
 }
 
 // ── Handler helpers ──────────────────────────────────────────────────────────
@@ -109,8 +103,7 @@ Result<void> handler_screenshot(const CommandContext& ctx) {
     QPixmap px = scr->grabWindow(ctx.focused_frame->winId());
     const QString path = QFileDialog::getSaveFileName(
         ctx.focused_frame, "Save Screenshot",
-        QDir::homePath() + "/fincept_" +
-            QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".png",
+        QDir::homePath() + "/fincept_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".png",
         "PNG Images (*.png)");
     if (!path.isEmpty()) {
         px.save(path, "PNG");
@@ -167,14 +160,15 @@ Result<void> handler_layout_save(const CommandContext& ctx) {
             has_prev = true;
         }
     }
-    layout::Workspace w =
-        layout::WorkspaceShell::capture(name, "user", has_prev ? &prev : nullptr);
+    layout::Workspace w = layout::WorkspaceShell::capture(name, "user", has_prev ? &prev : nullptr);
 
     auto r = LayoutCatalog::instance().save_workspace(w);
-    if (r.is_err()) return Result<void>::err(r.error());
-    LOG_INFO("BuiltinActions",
-             QString("layout.save: '%1' saved as %2 (%3 frames, %4 variants)")
-                 .arg(name, r.value().to_string()).arg(w.frames.size()).arg(w.variants.size()));
+    if (r.is_err())
+        return Result<void>::err(r.error());
+    LOG_INFO("BuiltinActions", QString("layout.save: '%1' saved as %2 (%3 frames, %4 variants)")
+                                   .arg(name, r.value().to_string())
+                                   .arg(w.frames.size())
+                                   .arg(w.variants.size()));
     return Result<void>::ok();
 }
 
@@ -193,13 +187,15 @@ Result<void> handler_layout_switch(const CommandContext& ctx) {
         return Result<void>::err(("No layout named " + name_or_id).toStdString());
 
     auto r = LayoutCatalog::instance().load_workspace(id);
-    if (r.is_err()) return Result<void>::err(r.error());
+    if (r.is_err())
+        return Result<void>::err(r.error());
 
     // Phase 6 final: actually apply the workspace to live frames.
     const int applied = layout::WorkspaceShell::apply(r.value());
-    LOG_INFO("BuiltinActions",
-             QString("layout.switch: '%1' applied (%2/%3 frames restored)")
-                 .arg(r.value().name).arg(applied).arg(r.value().frames.size()));
+    LOG_INFO("BuiltinActions", QString("layout.switch: '%1' applied (%2/%3 frames restored)")
+                                   .arg(r.value().name)
+                                   .arg(applied)
+                                   .arg(r.value().frames.size()));
     return Result<void>::ok();
 }
 
@@ -207,12 +203,14 @@ Result<void> handler_layout_new(const CommandContext& ctx) {
     // "New" = save the current state under a fresh name, blank Workspace.
     layout::Workspace w;
     w.name = ctx.args.value(QStringLiteral("name")).toString().trimmed();
-    if (w.name.isEmpty()) w.name = QStringLiteral("New Layout");
+    if (w.name.isEmpty())
+        w.name = QStringLiteral("New Layout");
     w.kind = "user";
     w.created_at_unix = QDateTime::currentSecsSinceEpoch();
     w.updated_at_unix = w.created_at_unix;
     auto r = LayoutCatalog::instance().save_workspace(w);
-    if (r.is_err()) return Result<void>::err(r.error());
+    if (r.is_err())
+        return Result<void>::err(r.error());
     return Result<void>::ok();
 }
 
@@ -225,7 +223,8 @@ Result<void> handler_layout_export(const CommandContext& ctx) {
     if (id.is_null())
         return Result<void>::err(("No layout named " + name).toStdString());
     auto r = LayoutCatalog::instance().export_to(id, path);
-    if (r.is_err()) return Result<void>::err(r.error());
+    if (r.is_err())
+        return Result<void>::err(r.error());
     LOG_INFO("BuiltinActions", QString("layout.export: '%1' → %2").arg(name, path));
     return Result<void>::ok();
 }
@@ -235,7 +234,8 @@ Result<void> handler_layout_import(const CommandContext& ctx) {
     if (path.isEmpty())
         return Result<void>::err("layout.import needs 'path' argument");
     auto r = LayoutCatalog::instance().import_from(path);
-    if (r.is_err()) return Result<void>::err(r.error());
+    if (r.is_err())
+        return Result<void>::err(r.error());
     LOG_INFO("BuiltinActions", QString("layout.import: %1 → uuid %2").arg(path, r.value().to_string()));
     return Result<void>::ok();
 }
@@ -280,11 +280,14 @@ Result<void> handler_debug_stress(const CommandContext& ctx) {
     // mirror the design doc 9.10 example: `debug stress 4 16 256`.
     bool ok = false;
     int n = ctx.args.value(QStringLiteral("n")).toInt(&ok);
-    if (!ok || n <= 0) n = 4;
+    if (!ok || n <= 0)
+        n = 4;
     int m = ctx.args.value(QStringLiteral("m")).toInt(&ok);
-    if (!ok || m <= 0) m = 16;
+    if (!ok || m <= 0)
+        m = 16;
     int k = ctx.args.value(QStringLiteral("k")).toInt(&ok);
-    if (!ok || k <= 0) k = 256;
+    if (!ok || k <= 0)
+        k = 256;
 
     if (debug_tools::StressLoad::instance().is_running())
         debug_tools::StressLoad::instance().stop();
@@ -318,9 +321,8 @@ Result<void> handler_tear_off(const CommandContext& ctx) {
     const QString id = focused_panel_id_(ctx.focused_frame);
     if (id.isEmpty())
         return Result<void>::err("No focused panel to tear off");
-    return router->tear_off_to_new_frame(id)
-        ? Result<void>::ok()
-        : Result<void>::err("tear_off_to_new_frame returned false");
+    return router->tear_off_to_new_frame(id) ? Result<void>::ok()
+                                             : Result<void>::err("tear_off_to_new_frame returned false");
 }
 
 // ── Phase 7 polish: link.* actions ──────────────────────────────────────────
@@ -350,7 +352,8 @@ SymbolGroup parse_group_arg_(const QVariant& v) {
     // unrecognised input — predicate-checked at call time.
     if (v.typeId() == QMetaType::Int) {
         const int i = v.toInt();
-        if (i <= 0 || i > 10) return SymbolGroup::None;
+        if (i <= 0 || i > 10)
+            return SymbolGroup::None;
         return symbol_group_from_char(QChar('A' + (i - 1)));
     }
     const QString s = v.toString().trimmed();
@@ -439,8 +442,8 @@ Result<void> handler_move_to_frame(const CommandContext& ctx) {
         return Result<void>::err("Target frame has no dock router");
 
     return router->move_panel_to_frame(id, target_frame->dock_router())
-        ? Result<void>::ok()
-        : Result<void>::err("move_panel_to_frame returned false");
+               ? Result<void>::ok()
+               : Result<void>::err("move_panel_to_frame returned false");
 }
 
 Result<void> handler_focus_window_n(int n, const CommandContext&) {
@@ -907,11 +910,9 @@ void register_builtins() {
     // MoveWindowToMonitor1..9 — same pattern.
     {
         const KeyAction move_keys[9] = {
-            KeyAction::MoveWindowToMonitor1, KeyAction::MoveWindowToMonitor2,
-            KeyAction::MoveWindowToMonitor3, KeyAction::MoveWindowToMonitor4,
-            KeyAction::MoveWindowToMonitor5, KeyAction::MoveWindowToMonitor6,
-            KeyAction::MoveWindowToMonitor7, KeyAction::MoveWindowToMonitor8,
-            KeyAction::MoveWindowToMonitor9,
+            KeyAction::MoveWindowToMonitor1, KeyAction::MoveWindowToMonitor2, KeyAction::MoveWindowToMonitor3,
+            KeyAction::MoveWindowToMonitor4, KeyAction::MoveWindowToMonitor5, KeyAction::MoveWindowToMonitor6,
+            KeyAction::MoveWindowToMonitor7, KeyAction::MoveWindowToMonitor8, KeyAction::MoveWindowToMonitor9,
         };
         for (int i = 0; i < 9; ++i) {
             register_one(ActionDef{
@@ -953,8 +954,7 @@ void register_builtins() {
         {},
     });
 
-    LOG_INFO(kBuiltinTag, QString("Registered %1 builtin actions")
-                              .arg(ActionRegistry::instance().size()));
+    LOG_INFO(kBuiltinTag, QString("Registered %1 builtin actions").arg(ActionRegistry::instance().size()));
 }
 
 QString action_id_for(KeyAction a) {
@@ -963,37 +963,68 @@ QString action_id_for(KeyAction a) {
     // empty — those bind directly inside their owning screens, not via
     // the global ActionRegistry.
     switch (a) {
-        case KeyAction::Refresh:               return QStringLiteral("panel.refresh");
-        case KeyAction::ToggleChat:            return QStringLiteral("frame.toggle_chat_mode");
-        case KeyAction::FocusMode:             return QStringLiteral("frame.toggle_focus_mode");
-        case KeyAction::Fullscreen:            return QStringLiteral("frame.toggle_fullscreen");
-        case KeyAction::Screenshot:            return QStringLiteral("frame.screenshot");
-        case KeyAction::LockNow:               return QStringLiteral("terminal.lock_now");
-        case KeyAction::ToggleAlwaysOnTop:     return QStringLiteral("frame.toggle_always_on_top");
-        case KeyAction::BrowseComponents:      return QStringLiteral("frame.browse_components");
-        case KeyAction::CyclePanelsForward:    return QStringLiteral("panel.cycle_forward");
-        case KeyAction::CyclePanelsBack:       return QStringLiteral("panel.cycle_back");
-        case KeyAction::CycleWindowsForward:   return QStringLiteral("window.cycle_forward");
-        case KeyAction::CycleWindowsBack:      return QStringLiteral("window.cycle_back");
-        case KeyAction::NewWindowNextMonitor:  return QStringLiteral("window.new_on_next_monitor");
-        case KeyAction::FocusWindow1:          return QStringLiteral("window.focus_1");
-        case KeyAction::FocusWindow2:          return QStringLiteral("window.focus_2");
-        case KeyAction::FocusWindow3:          return QStringLiteral("window.focus_3");
-        case KeyAction::FocusWindow4:          return QStringLiteral("window.focus_4");
-        case KeyAction::FocusWindow5:          return QStringLiteral("window.focus_5");
-        case KeyAction::FocusWindow6:          return QStringLiteral("window.focus_6");
-        case KeyAction::FocusWindow7:          return QStringLiteral("window.focus_7");
-        case KeyAction::FocusWindow8:          return QStringLiteral("window.focus_8");
-        case KeyAction::FocusWindow9:          return QStringLiteral("window.focus_9");
-        case KeyAction::MoveWindowToMonitor1:  return QStringLiteral("window.move_to_monitor_1");
-        case KeyAction::MoveWindowToMonitor2:  return QStringLiteral("window.move_to_monitor_2");
-        case KeyAction::MoveWindowToMonitor3:  return QStringLiteral("window.move_to_monitor_3");
-        case KeyAction::MoveWindowToMonitor4:  return QStringLiteral("window.move_to_monitor_4");
-        case KeyAction::MoveWindowToMonitor5:  return QStringLiteral("window.move_to_monitor_5");
-        case KeyAction::MoveWindowToMonitor6:  return QStringLiteral("window.move_to_monitor_6");
-        case KeyAction::MoveWindowToMonitor7:  return QStringLiteral("window.move_to_monitor_7");
-        case KeyAction::MoveWindowToMonitor8:  return QStringLiteral("window.move_to_monitor_8");
-        case KeyAction::MoveWindowToMonitor9:  return QStringLiteral("window.move_to_monitor_9");
+        case KeyAction::Refresh:
+            return QStringLiteral("panel.refresh");
+        case KeyAction::ToggleChat:
+            return QStringLiteral("frame.toggle_chat_mode");
+        case KeyAction::FocusMode:
+            return QStringLiteral("frame.toggle_focus_mode");
+        case KeyAction::Fullscreen:
+            return QStringLiteral("frame.toggle_fullscreen");
+        case KeyAction::Screenshot:
+            return QStringLiteral("frame.screenshot");
+        case KeyAction::LockNow:
+            return QStringLiteral("terminal.lock_now");
+        case KeyAction::ToggleAlwaysOnTop:
+            return QStringLiteral("frame.toggle_always_on_top");
+        case KeyAction::BrowseComponents:
+            return QStringLiteral("frame.browse_components");
+        case KeyAction::CyclePanelsForward:
+            return QStringLiteral("panel.cycle_forward");
+        case KeyAction::CyclePanelsBack:
+            return QStringLiteral("panel.cycle_back");
+        case KeyAction::CycleWindowsForward:
+            return QStringLiteral("window.cycle_forward");
+        case KeyAction::CycleWindowsBack:
+            return QStringLiteral("window.cycle_back");
+        case KeyAction::NewWindowNextMonitor:
+            return QStringLiteral("window.new_on_next_monitor");
+        case KeyAction::FocusWindow1:
+            return QStringLiteral("window.focus_1");
+        case KeyAction::FocusWindow2:
+            return QStringLiteral("window.focus_2");
+        case KeyAction::FocusWindow3:
+            return QStringLiteral("window.focus_3");
+        case KeyAction::FocusWindow4:
+            return QStringLiteral("window.focus_4");
+        case KeyAction::FocusWindow5:
+            return QStringLiteral("window.focus_5");
+        case KeyAction::FocusWindow6:
+            return QStringLiteral("window.focus_6");
+        case KeyAction::FocusWindow7:
+            return QStringLiteral("window.focus_7");
+        case KeyAction::FocusWindow8:
+            return QStringLiteral("window.focus_8");
+        case KeyAction::FocusWindow9:
+            return QStringLiteral("window.focus_9");
+        case KeyAction::MoveWindowToMonitor1:
+            return QStringLiteral("window.move_to_monitor_1");
+        case KeyAction::MoveWindowToMonitor2:
+            return QStringLiteral("window.move_to_monitor_2");
+        case KeyAction::MoveWindowToMonitor3:
+            return QStringLiteral("window.move_to_monitor_3");
+        case KeyAction::MoveWindowToMonitor4:
+            return QStringLiteral("window.move_to_monitor_4");
+        case KeyAction::MoveWindowToMonitor5:
+            return QStringLiteral("window.move_to_monitor_5");
+        case KeyAction::MoveWindowToMonitor6:
+            return QStringLiteral("window.move_to_monitor_6");
+        case KeyAction::MoveWindowToMonitor7:
+            return QStringLiteral("window.move_to_monitor_7");
+        case KeyAction::MoveWindowToMonitor8:
+            return QStringLiteral("window.move_to_monitor_8");
+        case KeyAction::MoveWindowToMonitor9:
+            return QStringLiteral("window.move_to_monitor_9");
         // Per-screen actions — not in ActionRegistry yet.
         case KeyAction::NavNext:
         case KeyAction::NavPrev:

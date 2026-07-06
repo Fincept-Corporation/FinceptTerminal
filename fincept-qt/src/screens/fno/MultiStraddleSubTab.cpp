@@ -36,24 +36,29 @@ namespace {
 
 struct TypeDef {
     const char* label;
-    int wing_offset;       // 0 = straddle, ±N = strangle wings
+    int wing_offset; // 0 = straddle, ±N = strangle wings
 };
 
 constexpr TypeDef kTypeDefs[] = {
-    {"Straddle (ATM)",  0},
-    {"Strangle ±1",     1},
-    {"Strangle ±2",     2},
-    {"Strangle ±3",     3},
+    {"Straddle (ATM)", 0},
+    {"Strangle ±1", 1},
+    {"Strangle ±2", 2},
+    {"Strangle ±3", 3},
 };
 
 /// Translated label for the straddle/strangle type combo at index i (0..3).
 QString type_label_text(int i) {
     switch (i) {
-        case 0: return QCoreApplication::translate("MultiStraddleSubTab", "Straddle (ATM)");
-        case 1: return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±1");
-        case 2: return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±2");
-        case 3: return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±3");
-        default: return {};
+        case 0:
+            return QCoreApplication::translate("MultiStraddleSubTab", "Straddle (ATM)");
+        case 1:
+            return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±1");
+        case 2:
+            return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±2");
+        case 3:
+            return QCoreApplication::translate("MultiStraddleSubTab", "Strangle ±3");
+        default:
+            return {};
     }
 }
 
@@ -70,40 +75,38 @@ QString strike_label(const OptionChainRow& row) {
     return (secs / 60) * 60;
 }
 
-}  // namespace
+} // namespace
 
 MultiStraddleSubTab::MultiStraddleSubTab(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoMultiStraddleTab");
-    setStyleSheet(
-        QString("#fnoMultiStraddleTab { background:%1; }"
-                "#fnoMSHeader { background:%2; border-bottom:1px solid %3; }"
-                "#fnoMSLabel { color:%4; font-size:9px; font-weight:700; "
-                "                 letter-spacing:0.4px; background:transparent; }"
-                "#fnoMSAdd { background:%5; color:%2; border:none; padding:5px 14px; "
-                "             font-size:10px; font-weight:700; letter-spacing:0.4px; }"
-                "#fnoMSAdd:hover { background:%6; color:%2; }"
-                "#fnoMSAdd:disabled { background:%3; color:%4; }"
-                "QComboBox { background:%2; color:%6; border:1px solid %3; padding:3px 8px; "
-                "             font-size:11px; min-width:90px; }"
-                "QComboBox:hover { border-color:%5; }"
-                "QComboBox::drop-down { border:none; width:18px; }"
-                "QComboBox QAbstractItemView { background:%1; color:%6; border:1px solid %3; "
-                "                              selection-background-color:%5; }"
-                "QListWidget { background:%1; color:%6; border:1px solid %3; }"
-                "QListWidget::item { padding:5px 8px; border-bottom:1px solid %3; }"
-                "QListWidget::item:selected { background:%7; color:%6; }")
-            .arg(colors::BG_BASE(),         // %1
-                 colors::BG_RAISED(),       // %2
-                 colors::BORDER_DIM(),      // %3
-                 colors::TEXT_SECONDARY(),  // %4
-                 colors::AMBER(),           // %5
-                 colors::TEXT_PRIMARY(),    // %6
-                 colors::BG_HOVER()));      // %7
+    setStyleSheet(QString("#fnoMultiStraddleTab { background:%1; }"
+                          "#fnoMSHeader { background:%2; border-bottom:1px solid %3; }"
+                          "#fnoMSLabel { color:%4; font-size:9px; font-weight:700; "
+                          "                 letter-spacing:0.4px; background:transparent; }"
+                          "#fnoMSAdd { background:%5; color:%2; border:none; padding:5px 14px; "
+                          "             font-size:10px; font-weight:700; letter-spacing:0.4px; }"
+                          "#fnoMSAdd:hover { background:%6; color:%2; }"
+                          "#fnoMSAdd:disabled { background:%3; color:%4; }"
+                          "QComboBox { background:%2; color:%6; border:1px solid %3; padding:3px 8px; "
+                          "             font-size:11px; min-width:90px; }"
+                          "QComboBox:hover { border-color:%5; }"
+                          "QComboBox::drop-down { border:none; width:18px; }"
+                          "QComboBox QAbstractItemView { background:%1; color:%6; border:1px solid %3; "
+                          "                              selection-background-color:%5; }"
+                          "QListWidget { background:%1; color:%6; border:1px solid %3; }"
+                          "QListWidget::item { padding:5px 8px; border-bottom:1px solid %3; }"
+                          "QListWidget::item:selected { background:%7; color:%6; }")
+                      .arg(colors::BG_BASE(),        // %1
+                           colors::BG_RAISED(),      // %2
+                           colors::BORDER_DIM(),     // %3
+                           colors::TEXT_SECONDARY(), // %4
+                           colors::AMBER(),          // %5
+                           colors::TEXT_PRIMARY(),   // %6
+                           colors::BG_HOVER()));     // %7
 
     setup_ui();
     connect(add_btn_, &QPushButton::clicked, this, &MultiStraddleSubTab::on_add_clicked);
-    connect(selection_list_, &QListWidget::itemDoubleClicked, this,
-            &MultiStraddleSubTab::on_selection_double_clicked);
+    connect(selection_list_, &QListWidget::itemDoubleClicked, this, &MultiStraddleSubTab::on_selection_double_clicked);
 }
 
 MultiStraddleSubTab::~MultiStraddleSubTab() {
@@ -162,8 +165,8 @@ void MultiStraddleSubTab::setup_ui() {
     root->addWidget(split, 1);
 
     connect(&fincept::services::options::OptionChainService::instance(),
-            &fincept::services::options::OptionChainService::chain_published,
-            this, [this](const fincept::services::options::OptionChain& chain) {
+            &fincept::services::options::OptionChainService::chain_published, this,
+            [this](const fincept::services::options::OptionChain& chain) {
                 on_chain_published(QVariant::fromValue(chain));
             });
     chain_subscribed_ = true;
@@ -173,7 +176,9 @@ void MultiStraddleSubTab::setup_ui() {
         on_chain_published(QVariant::fromValue(cached));
 }
 
-QVariantMap MultiStraddleSubTab::save_state() const { return {}; }
+QVariantMap MultiStraddleSubTab::save_state() const {
+    return {};
+}
 void MultiStraddleSubTab::restore_state(const QVariantMap& /*state*/) {}
 
 void MultiStraddleSubTab::showEvent(QShowEvent* e) {
@@ -182,11 +187,11 @@ void MultiStraddleSubTab::showEvent(QShowEvent* e) {
         return;
     auto& hub = fincept::datahub::DataHub::instance();
     QPointer<MultiStraddleSubTab> self = this;
-    hub.subscribe_pattern(this, QStringLiteral("option:chain:*"),
-                          [self](const QString& /*topic*/, const QVariant& v) {
-                              if (!self) return;
-                              self->on_chain_published(v);
-                          });
+    hub.subscribe_pattern(this, QStringLiteral("option:chain:*"), [self](const QString& /*topic*/, const QVariant& v) {
+        if (!self)
+            return;
+        self->on_chain_published(v);
+    });
     chain_subscribed_ = true;
 }
 
@@ -201,10 +206,14 @@ void MultiStraddleSubTab::changeEvent(QEvent* event) {
 }
 
 void MultiStraddleSubTab::retranslateUi() {
-    if (type_label_)   type_label_->setText(tr("Type").toUpper());
-    if (anchor_label_) anchor_label_->setText(tr("Anchor").toUpper());
-    if (add_btn_)      add_btn_->setText(tr("ADD"));
-    if (selection_list_) selection_list_->setToolTip(tr("Double-click an entry to remove it."));
+    if (type_label_)
+        type_label_->setText(tr("Type").toUpper());
+    if (anchor_label_)
+        anchor_label_->setText(tr("Anchor").toUpper());
+    if (add_btn_)
+        add_btn_->setText(tr("ADD"));
+    if (selection_list_)
+        selection_list_->setToolTip(tr("Double-click an entry to remove it."));
 
     // Re-translate the fixed type combo items, preserving the selection.
     if (type_combo_) {
@@ -267,8 +276,7 @@ void MultiStraddleSubTab::on_add_clicked() {
 
     const int ce_idx = anchor_idx + wing;
     const int pe_idx = anchor_idx - wing;
-    if (ce_idx < 0 || ce_idx >= last_chain_.rows.size() || pe_idx < 0
-        || pe_idx >= last_chain_.rows.size()) {
+    if (ce_idx < 0 || ce_idx >= last_chain_.rows.size() || pe_idx < 0 || pe_idx >= last_chain_.rows.size()) {
         LOG_WARN("FnoMultiStraddle", "Selected wings fall outside the chain — pick a closer anchor or smaller wing.");
         return;
     }
@@ -290,8 +298,7 @@ void MultiStraddleSubTab::on_add_clicked() {
     }
     // Avoid duplicates — same (ce, pe, broker) is already in the list.
     for (const auto& existing : selections_) {
-        if (existing.broker == sel.broker && existing.ce_token == sel.ce_token
-            && existing.pe_token == sel.pe_token)
+        if (existing.broker == sel.broker && existing.ce_token == sel.ce_token && existing.pe_token == sel.pe_token)
             return;
     }
     selections_.append(sel);
@@ -329,13 +336,14 @@ void MultiStraddleSubTab::subscribe_token(const QString& broker, qint64 token) {
         return;
     const int n = ++token_refcount_[token];
     if (n > 1)
-        return;  // already subscribed via another selection
+        return; // already subscribed via another selection
     const QString topic = OISnapshotter::history_topic(broker, token, QStringLiteral("1d"));
     topic_for_token_.insert(token, topic);
     QPointer<MultiStraddleSubTab> self = this;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.subscribe(this, topic, [self, token](const QVariant& v) {
-        if (!self) return;
+        if (!self)
+            return;
         self->on_oi_history(token, v);
     });
     hub.request(topic, /*force*/ true);

@@ -66,10 +66,10 @@ class PortfolioBlotter : public QWidget {
 
     // Pagination footer widgets
     QWidget* footer_ = nullptr;
-    QLabel* footer_status_ = nullptr;        // "Showing 1-10 of 47"
+    QLabel* footer_status_ = nullptr; // "Showing 1-10 of 47"
     QPushButton* btn_first_ = nullptr;
     QPushButton* btn_prev_ = nullptr;
-    QLabel* footer_page_label_ = nullptr;    // "Page 1 of 5"
+    QLabel* footer_page_label_ = nullptr; // "Page 1 of 5"
     QPushButton* btn_next_ = nullptr;
     QPushButton* btn_last_ = nullptr;
     QComboBox* page_size_combo_ = nullptr;

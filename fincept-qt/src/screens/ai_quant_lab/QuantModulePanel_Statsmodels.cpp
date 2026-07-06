@@ -7,7 +7,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
@@ -60,19 +59,21 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Same LOAD SAMPLE helper shape as functime
-    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
-                                  const QString& tip, bool walk = false) -> QPushButton* {
+    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed, const QString& tip,
+                                 bool walk = false) -> QPushButton* {
         auto* btn = new QPushButton(tr("LOAD SAMPLE"), parent);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
         btn->setToolTip(tip);
-        btn->setStyleSheet(QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
-                                   "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
-                                   "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
-                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
+        btn->setStyleSheet(
+            QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
+                    "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
+                    "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
+                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
         QPointer<QLineEdit> guard(edit);
         connect(btn, &QPushButton::clicked, this, [guard, seed, walk]() {
-            if (guard) guard->setText(walk ? sample_random_walk(seed) : sample_series(seed));
+            if (guard)
+                guard->setText(walk ? sample_random_walk(seed) : sample_series(seed));
         });
         return btn;
     };
@@ -88,16 +89,15 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     ols_y->setStyleSheet(input_ss());
     text_inputs_["sm_ols_y"] = ols_y;
     oll->addWidget(build_input_row(tr("y (Dependent)"), ols_y, ols));
-    oll->addWidget(add_sample_btn(ols_y, ols, 71,
-                                   tr("100-pt synthetic series (level ~50)")));
+    oll->addWidget(add_sample_btn(ols_y, ols, 71, tr("100-pt synthetic series (level ~50)")));
 
     auto* ols_x = new QLineEdit(ols);
-    ols_x->setPlaceholderText(tr("Regressor x (single column, same length as y). For multi-feature use the JSON 2D form."));
+    ols_x->setPlaceholderText(
+        tr("Regressor x (single column, same length as y). For multi-feature use the JSON 2D form."));
     ols_x->setStyleSheet(input_ss());
     text_inputs_["sm_ols_x"] = ols_x;
     oll->addWidget(build_input_row(tr("x (Regressor)"), ols_x, ols));
-    oll->addWidget(add_sample_btn(ols_x, ols, 72,
-                                   tr("100-pt synthetic regressor")));
+    oll->addWidget(add_sample_btn(ols_x, ols, 72, tr("100-pt synthetic regressor")));
 
     auto* ols_const = new QComboBox(ols);
     ols_const->addItems({"true", "false"});
@@ -122,8 +122,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
             return;
         }
         if (y.size() != x.size()) {
-            display_error(tr("y (%1) and x (%2) must have the same length.")
-                              .arg(y.size()).arg(x.size()));
+            display_error(tr("y (%1) and x (%2) must have the same length.").arg(y.size()).arg(x.size()));
             return;
         }
         show_loading(tr("Fitting OLS on %1 obs...").arg(y.size()));
@@ -148,8 +147,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     ar_vals->setStyleSheet(input_ss());
     text_inputs_["sm_ar_values"] = ar_vals;
     arl->addWidget(build_input_row(tr("Series Values"), ar_vals, ar));
-    arl->addWidget(add_sample_btn(ar_vals, ar, 81,
-                                   tr("200-pt synthetic series with seasonality")));
+    arl->addWidget(add_sample_btn(ar_vals, ar, 81, tr("200-pt synthetic series with seasonality")));
 
     auto* ar_p = new QSpinBox(ar);
     ar_p->setRange(0, 10);
@@ -195,7 +193,11 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
         const int d = int_inputs_["sm_ar_d"]->value();
         const int q = int_inputs_["sm_ar_q"]->value();
         show_loading(tr("Fitting ARIMA(%1,%2,%3) on %4 obs and projecting %5 steps...")
-                         .arg(p).arg(d).arg(q).arg(vals.size()).arg(int_inputs_["sm_ar_horizon"]->value()));
+                         .arg(p)
+                         .arg(d)
+                         .arg(q)
+                         .arg(vals.size())
+                         .arg(int_inputs_["sm_ar_horizon"]->value()));
         QJsonObject params;
         params["values"] = vals;
         params["p"] = p;
@@ -219,8 +221,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     st_vals->setStyleSheet(input_ss());
     text_inputs_["sm_st_values"] = st_vals;
     stl->addWidget(build_input_row(tr("Series Values"), st_vals, st));
-    stl->addWidget(add_sample_btn(st_vals, st, 91,
-                                   tr("150-pt random walk with drift"), true));
+    stl->addWidget(add_sample_btn(st_vals, st, 91, tr("150-pt random walk with drift"), true));
 
     auto* st_d = new QSpinBox(st);
     st_d->setRange(0, 3);
@@ -231,7 +232,8 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
 
     auto* st_adf = new QComboBox(st);
     st_adf->addItems({"c", "ct", "ctt", "n"});
-    st_adf->setToolTip(tr("c = constant, ct = constant + trend, ctt = constant + trend + quadratic trend, n = no constant"));
+    st_adf->setToolTip(
+        tr("c = constant, ct = constant + trend, ctt = constant + trend + quadratic trend, n = no constant"));
     st_adf->setStyleSheet(combo_ss());
     combo_inputs_["sm_st_adf_reg"] = st_adf;
     stl->addWidget(build_input_row(tr("ADF Regression Type"), st_adf, st));
@@ -278,8 +280,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     ap_vals->setStyleSheet(input_ss());
     text_inputs_["sm_ap_values"] = ap_vals;
     apl->addWidget(build_input_row(tr("Series Values"), ap_vals, ap));
-    apl->addWidget(add_sample_btn(ap_vals, ap, 101,
-                                   tr("200-pt synthetic series with seasonality")));
+    apl->addWidget(add_sample_btn(ap_vals, ap, 101, tr("200-pt synthetic series with seasonality")));
 
     auto* ap_lags = new QSpinBox(ap);
     ap_lags->setRange(2, 100);
@@ -321,16 +322,14 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     gc_y->setStyleSheet(input_ss());
     text_inputs_["sm_gc_y"] = gc_y;
     gcl->addWidget(build_input_row(tr("y (Effect)"), gc_y, gc));
-    gcl->addWidget(add_sample_btn(gc_y, gc, 111,
-                                   tr("200-pt synthetic effect series")));
+    gcl->addWidget(add_sample_btn(gc_y, gc, 111, tr("200-pt synthetic effect series")));
 
     auto* gc_x = new QLineEdit(gc);
     gc_x->setPlaceholderText(tr("Potential cause series x (same length as y)"));
     gc_x->setStyleSheet(input_ss());
     text_inputs_["sm_gc_x"] = gc_x;
     gcl->addWidget(build_input_row(tr("x (Potential Cause)"), gc_x, gc));
-    gcl->addWidget(add_sample_btn(gc_x, gc, 112,
-                                   tr("200-pt synthetic candidate cause")));
+    gcl->addWidget(add_sample_btn(gc_x, gc, 112, tr("200-pt synthetic candidate cause")));
 
     auto* gc_lag = new QSpinBox(gc);
     gc_lag->setRange(1, 20);
@@ -340,8 +339,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     gcl->addWidget(build_input_row(tr("Max Lag to Test"), gc_lag, gc));
 
     auto* gc_hint = new QLabel(
-        tr("H₀: x does NOT Granger-cause y. p < 0.05 ⇒ x carries predictive information about y at that lag."),
-        gc);
+        tr("H₀: x does NOT Granger-cause y. p < 0.05 ⇒ x carries predictive information about y at that lag."), gc);
     gc_hint->setWordWrap(true);
     gc_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     gcl->addWidget(gc_hint);
@@ -363,12 +361,10 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
             return;
         }
         if (y.size() != x.size()) {
-            display_error(tr("y (%1) and x (%2) must have the same length.")
-                              .arg(y.size()).arg(x.size()));
+            display_error(tr("y (%1) and x (%2) must have the same length.").arg(y.size()).arg(x.size()));
             return;
         }
-        show_loading(tr("Testing Granger causality up to lag %1...")
-                         .arg(int_inputs_["sm_gc_max_lag"]->value()));
+        show_loading(tr("Testing Granger causality up to lag %1...").arg(int_inputs_["sm_gc_max_lag"]->value()));
         QJsonObject params;
         params["y"] = y;
         params["x"] = x;
@@ -390,8 +386,7 @@ QWidget* QuantModulePanel::build_statsmodels_panel() {
     de_vals->setStyleSheet(input_ss());
     text_inputs_["sm_de_values"] = de_vals;
     del->addWidget(build_input_row(tr("Values"), de_vals, de));
-    del->addWidget(add_sample_btn(de_vals, de, 121,
-                                   tr("200-pt synthetic series")));
+    del->addWidget(add_sample_btn(de_vals, de, 121, tr("200-pt synthetic series")));
 
     auto* de_run = make_run_button(tr("DESCRIBE + TEST NORMALITY"), de);
     connect(de_run, &QPushButton::clicked, this, [this]() {
@@ -435,8 +430,8 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         const QString err = payload.value("error").toString(tr("Unknown error"));
         const QString kind = payload.value("error_kind").toString();
         const QString prefix = kind == "validation" ? tr("Input error: ")
-                              : kind == "runtime"    ? tr("Computation failed: ")
-                                                     : QString();
+                               : kind == "runtime"  ? tr("Computation failed: ")
+                                                    : QString();
         display_error(prefix + err);
         return;
     }
@@ -461,19 +456,19 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
             bool_card(tr("STATSMODELS"), d.value("statsmodels").toBool()),
             bool_card(tr("SCIPY"), d.value("scipy").toBool()),
             gs_make_card(tr("BACKEND"), d.value("backend").toString().toUpper(), this),
-            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()),
-                         this, ui::colors::INFO()),
+            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()), this,
+                         ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(deps, this));
         const auto ops = d.value("ops_available").toArray();
         QStringList names;
-        for (const auto& v : ops) names << v.toString();
+        for (const auto& v : ops)
+            names << v.toString();
         auto* lbl = new QLabel(tr("Operations: %1").arg(names.join(", ")));
         lbl->setWordWrap(true);
         lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(lbl);
         status_label_->setText(tr("Statsmodels backend ready"));
         return;
@@ -494,15 +489,14 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
                                    .arg(d.value("has_constant").toBool() ? tr("  +  CONSTANT") : QString()));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> fit = {
             gs_make_card(tr("R²"), gs_fmt_num(r2, 4), this,
-                         r2 >= 0.7 ? ui::colors::POSITIVE()
-                                  : r2 >= 0.3 ? ui::colors::WARNING()
-                                              : ui::colors::NEGATIVE()),
+                         r2 >= 0.7   ? ui::colors::POSITIVE()
+                         : r2 >= 0.3 ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
             gs_make_card(tr("ADJ R²"), gs_fmt_num(adj, 4), this),
             gs_make_card(tr("F STATISTIC"), gs_fmt_num(f_stat, 2), this),
             gs_make_card(tr("F p-VALUE"), gs_fmt_num(f_p, 4), this,
@@ -518,15 +512,13 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         };
         results_layout_->addWidget(gs_card_row(ic, this));
 
-        const QString dw_col = (dw >= 1.5 && dw <= 2.5) ? ui::colors::POSITIVE()
-                                                         : ui::colors::WARNING();
+        const QString dw_col = (dw >= 1.5 && dw <= 2.5) ? ui::colors::POSITIVE() : ui::colors::WARNING();
         QList<QWidget*> diag = {
             gs_make_card(tr("DURBIN-WATSON"), gs_fmt_num(dw, 3), this, dw_col),
             gs_make_card(tr("AUTOCORR."), d.value("dw_interpretation").toString().toUpper(), this, dw_col),
             gs_make_card(tr("BREUSCH-PAGAN p"), gs_fmt_num(bp_p, 4), this),
             gs_make_card(tr("HOMOSCEDASTIC"), d.value("homoscedastic_5pct").toBool() ? tr("YES") : tr("NO"), this,
-                         d.value("homoscedastic_5pct").toBool() ? ui::colors::POSITIVE()
-                                                                  : ui::colors::WARNING()),
+                         d.value("homoscedastic_5pct").toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(diag, this));
 
@@ -534,7 +526,8 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         const QJsonArray coefs = d.value("coefficients").toArray();
         if (!coefs.isEmpty()) {
             auto* table = new QTableWidget(coefs.size(), 7, this);
-            table->setHorizontalHeaderLabels({tr("Term"), tr("Estimate"), tr("Std. Error"), tr("t"), tr("p"), tr("95% CI Lower"), tr("95% CI Upper")});
+            table->setHorizontalHeaderLabels({tr("Term"), tr("Estimate"), tr("Std. Error"), tr("t"), tr("p"),
+                                              tr("95% CI Lower"), tr("95% CI Upper")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -551,14 +544,15 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
                 auto add_num = [&](int col, double v, int dec, const QString& col_color = {}) {
                     auto* it = new QTableWidgetItem(QString::number(v, 'f', dec));
                     it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    if (!col_color.isEmpty()) it->setForeground(QColor(col_color));
+                    if (!col_color.isEmpty())
+                        it->setForeground(QColor(col_color));
                     table->setItem(i, col, it);
                 };
                 add_num(2, c.value("std_error").toDouble(), 4);
                 add_num(3, c.value("t_stat").toDouble(), 3);
                 const double pv = c.value("p_value").toDouble();
-                add_num(4, pv, 4, c.value("significant_5pct").toBool() ? ui::colors::POSITIVE()
-                                                                        : ui::colors::TEXT_TERTIARY());
+                add_num(4, pv, 4,
+                        c.value("significant_5pct").toBool() ? ui::colors::POSITIVE() : ui::colors::TEXT_TERTIARY());
                 add_num(5, c.value("ci_lower").toDouble(), 4);
                 add_num(6, c.value("ci_upper").toDouble(), 4);
                 table->setRowHeight(i, 24);
@@ -567,8 +561,10 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         }
 
         status_label_->setText(tr("R²=%1  Adj=%2  F=%3 (p=%4)")
-                                   .arg(r2, 0, 'f', 4).arg(adj, 0, 'f', 4)
-                                   .arg(f_stat, 0, 'f', 2).arg(f_p, 0, 'g', 3));
+                                   .arg(r2, 0, 'f', 4)
+                                   .arg(adj, 0, 'f', 4)
+                                   .arg(f_stat, 0, 'f', 2)
+                                   .arg(f_p, 0, 'g', 3));
         return;
     }
 
@@ -589,12 +585,14 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         const double last_fc = d.value("last_forecast").toDouble();
 
         auto* hdr = new QLabel(tr("ARIMA(%1,%2,%3)  |  HORIZON %4 STEPS  |  %5 OBS")
-                                   .arg(p).arg(d_ord).arg(q).arg(horizon)
+                                   .arg(p)
+                                   .arg(d_ord)
+                                   .arg(q)
+                                   .arg(horizon)
                                    .arg(d.value("n_observations").toInt()));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> fit = {
@@ -602,9 +600,9 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
             gs_make_card(tr("BIC"), gs_fmt_num(bic, 2), this),
             gs_make_card(tr("HQIC"), gs_fmt_num(d.value("hqic").toDouble(), 2), this),
             gs_make_card(tr("IN-SAMPLE R²"), gs_fmt_num(r2, 4), this,
-                         r2 >= 0.7 ? ui::colors::POSITIVE()
-                                  : r2 >= 0.3 ? ui::colors::WARNING()
-                                              : ui::colors::NEGATIVE()),
+                         r2 >= 0.7   ? ui::colors::POSITIVE()
+                         : r2 >= 0.3 ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
         };
         results_layout_->addWidget(gs_card_row(fit, this));
 
@@ -621,12 +619,9 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         const double horizon_drift = last_fc - last_actual;
         QList<QWidget*> proj = {
             gs_make_card(tr("LAST ACTUAL"), gs_fmt_num(last_actual, 4), this),
-            gs_make_card(tr("FIRST FORECAST"), gs_fmt_num(first_fc, 4), this,
-                         gs_pos_neg_color(first_fc - last_actual)),
-            gs_make_card(tr("LAST FORECAST"), gs_fmt_num(last_fc, 4), this,
-                         gs_pos_neg_color(horizon_drift)),
-            gs_make_card(tr("HORIZON Δ"), gs_fmt_num(horizon_drift, 4), this,
-                         gs_pos_neg_color(horizon_drift)),
+            gs_make_card(tr("FIRST FORECAST"), gs_fmt_num(first_fc, 4), this, gs_pos_neg_color(first_fc - last_actual)),
+            gs_make_card(tr("LAST FORECAST"), gs_fmt_num(last_fc, 4), this, gs_pos_neg_color(horizon_drift)),
+            gs_make_card(tr("HORIZON Δ"), gs_fmt_num(horizon_drift, 4), this, gs_pos_neg_color(horizon_drift)),
         };
         results_layout_->addWidget(gs_card_row(proj, this));
 
@@ -661,8 +656,12 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         }
 
         status_label_->setText(tr("ARIMA(%1,%2,%3) — AIC=%4  R²=%5  LB(10) p=%6")
-                                   .arg(p).arg(d_ord).arg(q)
-                                   .arg(aic, 0, 'f', 1).arg(r2, 0, 'f', 3).arg(lb_p, 0, 'f', 3));
+                                   .arg(p)
+                                   .arg(d_ord)
+                                   .arg(q)
+                                   .arg(aic, 0, 'f', 1)
+                                   .arg(r2, 0, 'f', 3)
+                                   .arg(lb_p, 0, 'f', 3));
         return;
     }
 
@@ -671,8 +670,7 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         const QString verdict = d.value("verdict").toString();
         const int d_ord = d.value("differencing_order").toInt();
 
-        auto* hdr = new QLabel(tr("VERDICT:  %1   |   DIFFERENCING d = %2")
-                                   .arg(verdict).arg(d_ord));
+        auto* hdr = new QLabel(tr("VERDICT:  %1   |   DIFFERENCING d = %2").arg(verdict).arg(d_ord));
         const bool stationary = verdict.contains("STATIONARY") && !verdict.contains("NON-");
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
@@ -691,12 +689,10 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         QList<QWidget*> adf_row = {
             gs_make_card(tr("STATISTIC"), gs_fmt_num(adf.value("statistic").toDouble(), 4), this),
             gs_make_card(tr("p-VALUE"), gs_fmt_num(adf.value("p_value").toDouble(), 4), this,
-                         adf.value("stationary_5pct").toBool() ? ui::colors::POSITIVE()
-                                                                : ui::colors::WARNING()),
-            gs_make_card(tr("VERDICT @ 5%"), adf.value("stationary_5pct").toBool() ? tr("STATIONARY")
-                                                                                  : tr("NON-STATIONARY"),
-                         this, adf.value("stationary_5pct").toBool() ? ui::colors::POSITIVE()
-                                                                       : ui::colors::NEGATIVE()),
+                         adf.value("stationary_5pct").toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+            gs_make_card(tr("VERDICT @ 5%"),
+                         adf.value("stationary_5pct").toBool() ? tr("STATIONARY") : tr("NON-STATIONARY"), this,
+                         adf.value("stationary_5pct").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
             gs_make_card(tr("LAGS USED"), QString::number(adf.value("lags_used").toInt()), this),
         };
         results_layout_->addWidget(gs_card_row(adf_row, this));
@@ -716,12 +712,10 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         QList<QWidget*> kp_row = {
             gs_make_card(tr("STATISTIC"), gs_fmt_num(kp.value("statistic").toDouble(), 4), this),
             gs_make_card(tr("p-VALUE"), gs_fmt_num(kp.value("p_value").toDouble(), 4), this,
-                         kp.value("stationary_5pct").toBool() ? ui::colors::POSITIVE()
-                                                               : ui::colors::WARNING()),
-            gs_make_card(tr("VERDICT @ 5%"), kp.value("stationary_5pct").toBool() ? tr("STATIONARY")
-                                                                                : tr("NON-STATIONARY"),
-                         this, kp.value("stationary_5pct").toBool() ? ui::colors::POSITIVE()
-                                                                      : ui::colors::NEGATIVE()),
+                         kp.value("stationary_5pct").toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+            gs_make_card(tr("VERDICT @ 5%"),
+                         kp.value("stationary_5pct").toBool() ? tr("STATIONARY") : tr("NON-STATIONARY"), this,
+                         kp.value("stationary_5pct").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
             gs_make_card(tr("LAGS USED"), QString::number(kp.value("lags_used").toInt()), this),
         };
         results_layout_->addWidget(gs_card_row(kp_row, this));
@@ -745,7 +739,9 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
 
         auto* hdr = new QLabel(tr("LAGS %1  |  SIGNIFICANCE BAND ±%2  |  SUGGESTED ARIMA(p=%3, q=%4)")
                                    .arg(d.value("nlags").toInt())
-                                   .arg(band, 0, 'f', 4).arg(p_sug).arg(q_sug));
+                                   .arg(band, 0, 'f', 4)
+                                   .arg(p_sug)
+                                   .arg(q_sug));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
@@ -775,14 +771,14 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
                 table->setItem(i, 0, new QTableWidgetItem(QString::number(o.value("lag").toInt())));
                 auto* a = new QTableWidgetItem(QString::number(o.value("acf").toDouble(), 'f', 4));
                 a->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                a->setForeground(QColor(o.value("acf_significant").toBool() ? ui::colors::POSITIVE()
-                                                                              : ui::colors::TEXT_PRIMARY()));
+                a->setForeground(
+                    QColor(o.value("acf_significant").toBool() ? ui::colors::POSITIVE() : ui::colors::TEXT_PRIMARY()));
                 table->setItem(i, 1, a);
                 table->setItem(i, 2, new QTableWidgetItem(o.value("acf_significant").toBool() ? "✓" : "—"));
                 auto* p = new QTableWidgetItem(QString::number(o.value("pacf").toDouble(), 'f', 4));
                 p->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                p->setForeground(QColor(o.value("pacf_significant").toBool() ? ui::colors::POSITIVE()
-                                                                                : ui::colors::TEXT_PRIMARY()));
+                p->setForeground(
+                    QColor(o.value("pacf_significant").toBool() ? ui::colors::POSITIVE() : ui::colors::TEXT_PRIMARY()));
                 table->setItem(i, 3, p);
                 table->setItem(i, 4, new QTableWidgetItem(o.value("pacf_significant").toBool() ? "✓" : "—"));
                 table->setRowHeight(i, 22);
@@ -809,7 +805,8 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         results_layout_->addWidget(hdr);
 
         QStringList causal_strs;
-        for (const auto& v : causal_lags) causal_strs << QString::number(v.toInt());
+        for (const auto& v : causal_lags)
+            causal_strs << QString::number(v.toInt());
 
         QList<QWidget*> sum = {
             gs_make_card(tr("ANY CAUSAL LAG"), any_causal ? tr("YES") : tr("NO"), this,
@@ -824,7 +821,8 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         const QJsonArray tests = d.value("tests").toArray();
         if (!tests.isEmpty()) {
             auto* table = new QTableWidget(tests.size(), 6, this);
-            table->setHorizontalHeaderLabels({tr("Lag"), tr("F-stat"), tr("F p-value"), tr("χ² stat"), tr("χ² p-value"), tr("x ⇒ y @ 5%")});
+            table->setHorizontalHeaderLabels(
+                {tr("Lag"), tr("F-stat"), tr("F p-value"), tr("χ² stat"), tr("χ² p-value"), tr("x ⇒ y @ 5%")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->setSelectionMode(QAbstractItemView::NoSelection);
@@ -913,21 +911,19 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         QList<QWidget*> norm = {
             gs_make_card(tr("JARQUE-BERA STAT"), gs_fmt_num(d.value("jarque_bera_stat").toDouble(), 3), this),
             gs_make_card(tr("JARQUE-BERA p"), gs_fmt_num(d.value("jarque_bera_p").toDouble(), 4), this,
-                         jb_normal.isBool()
-                             ? (jb_normal.toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING())
-                             : ui::colors::TEXT_PRIMARY()),
+                         jb_normal.isBool() ? (jb_normal.toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING())
+                                            : ui::colors::TEXT_PRIMARY()),
             gs_make_card(tr("SHAPIRO-WILK p"), gs_fmt_num(d.value("shapiro_wilk_p").toDouble(), 4), this,
-                         sw_normal.isBool()
-                             ? (sw_normal.toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING())
-                             : ui::colors::TEXT_PRIMARY()),
+                         sw_normal.isBool() ? (sw_normal.toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING())
+                                            : ui::colors::TEXT_PRIMARY()),
             gs_make_card(tr("NORMAL (BOTH)"),
-                         (jb_normal.isBool() && sw_normal.isBool() &&
-                              jb_normal.toBool() && sw_normal.toBool())
-                             ? tr("YES") : tr("NO"),
+                         (jb_normal.isBool() && sw_normal.isBool() && jb_normal.toBool() && sw_normal.toBool())
+                             ? tr("YES")
+                             : tr("NO"),
                          this,
-                         (jb_normal.isBool() && sw_normal.isBool() &&
-                              jb_normal.toBool() && sw_normal.toBool())
-                             ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+                         (jb_normal.isBool() && sw_normal.isBool() && jb_normal.toBool() && sw_normal.toBool())
+                             ? ui::colors::POSITIVE()
+                             : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(norm, this));
 

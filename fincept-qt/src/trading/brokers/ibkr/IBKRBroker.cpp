@@ -173,9 +173,13 @@ TokenExchangeResponse IBKRBroker::exchange_token(const QString& api_key, const Q
     QJsonObject obj = doc.object();
     bool authenticated = obj.value("authenticated").toBool();
     if (!authenticated) {
-        return {false, "", "", "",
+        return {false,
+                "",
+                "",
+                "",
                 "Gateway is running but not authenticated. "
-                "Please log in via the gateway browser interface first.", ""};
+                "Please log in via the gateway browser interface first.",
+                ""};
     }
 
     // Store gateway URL as "access_token" — it's the only credential we need at runtime
@@ -639,15 +643,14 @@ ApiResponse<QVector<BrokerCandle>> IBKRBroker::get_history(const BrokerCredentia
     // oldest bar is still newer than from_date, walk backward by re-anchoring startTime
     // just before the oldest bar until we reach from_date / run out of data / hit the cap.
     // Only engage when both dates are valid (otherwise keep single-request behavior).
-    constexpr int kFullPage = 1000;       // page size at/above which more data may exist
-    constexpr int kMaxIterations = 30;    // safety cap on extra requests
+    constexpr int kFullPage = 1000;    // page size at/above which more data may exist
+    constexpr int kMaxIterations = 30; // safety cap on extra requests
 
     QDate from_d = QDate::fromString(from_date, "yyyy-MM-dd");
     QDate to_d = QDate::fromString(to_date, "yyyy-MM-dd");
     if (from_d.isValid() && to_d.isValid()) {
         // from_date lower bound in epoch milliseconds (start-of-day UTC) to match bar timestamps.
-        const int64_t from_ms =
-            QDateTime(from_d, QTime(0, 0, 0), QTimeZone::UTC).toMSecsSinceEpoch();
+        const int64_t from_ms = QDateTime(from_d, QTime(0, 0, 0), QTimeZone::UTC).toMSecsSinceEpoch();
 
         auto oldest_ms = [](const QVector<BrokerCandle>& page) -> int64_t {
             int64_t m = std::numeric_limits<int64_t>::max();
@@ -679,11 +682,10 @@ ApiResponse<QVector<BrokerCandle>> IBKRBroker::get_history(const BrokerCredentia
         // Merge: sort ascending, dedupe identical timestamps, drop bars older than from_date.
         std::sort(candles.begin(), candles.end(),
                   [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
-        candles.erase(std::unique(candles.begin(), candles.end(),
-                                  [](const BrokerCandle& a, const BrokerCandle& b) {
-                                      return a.timestamp == b.timestamp;
-                                  }),
-                      candles.end());
+        candles.erase(
+            std::unique(candles.begin(), candles.end(),
+                        [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
+            candles.end());
         candles.erase(std::remove_if(candles.begin(), candles.end(),
                                      [from_ms](const BrokerCandle& c) { return c.timestamp < from_ms; }),
                       candles.end());

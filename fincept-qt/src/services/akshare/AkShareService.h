@@ -18,7 +18,7 @@ namespace fincept::services::akshare {
 
 struct EndpointsResult {
     bool success = false;
-    QJsonObject data;  // raw script JSON
+    QJsonObject data; // raw script JSON
     QString error;
 };
 
@@ -40,8 +40,7 @@ class AkShareService : public QObject {
     void fetch_endpoints(const QString& script, EndpointsCallback cb);
 
     /// Runs `<script> <endpoint> [extra_args...]`.
-    void query(const QString& script, const QString& endpoint,
-               const QStringList& extra_args, QueryCallback cb);
+    void query(const QString& script, const QString& endpoint, const QStringList& extra_args, QueryCallback cb);
 
   private:
     AkShareService() = default;

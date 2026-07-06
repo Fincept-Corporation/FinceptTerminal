@@ -131,9 +131,7 @@ QString PaytmBroker::checked_error(const BrokerHttpResponse& resp, const QString
 // ---------- Auth headers ----------
 
 QMap<QString, QString> PaytmBroker::auth_headers(const BrokerCredentials& creds) const {
-    return {{"x-jwt-token", creds.access_token},
-            {"Content-Type", "application/json"},
-            {"Accept", "application/json"}};
+    return {{"x-jwt-token", creds.access_token}, {"Content-Type", "application/json"}, {"Accept", "application/json"}};
 }
 
 // ---------- exchange_token ----------
@@ -152,8 +150,8 @@ TokenExchangeResponse PaytmBroker::exchange_token(const QString& api_key, const 
     payload["request_token"] = auth_code.trimmed();
 
     auto& http = BrokerHttp::instance();
-    auto resp = http.post_json(QString("%1/accounts/v2/gettoken").arg(BASE), payload,
-                               {{"Content-Type", "application/json"}});
+    auto resp =
+        http.post_json(QString("%1/accounts/v2/gettoken").arg(BASE), payload, {{"Content-Type", "application/json"}});
 
     if (!resp.success && resp.status_code == 0)
         return {false, "", "", "", "Login failed: " + resp.error, ""};
@@ -258,7 +256,7 @@ ApiResponse<QJsonObject> PaytmBroker::modify_order(const BrokerCredentials& cred
     payload["segment"] = src.value("segment");
     payload["security_id"] = src.value("security_id");
     payload["quantity"] = mods.contains("quantity") ? QString::number(mods.value("quantity").toInt())
-                                                     : src.value("quantity").toVariant().toString();
+                                                    : src.value("quantity").toVariant().toString();
     payload["price"] = mods.contains("price") ? QString::number(mods.value("price").toDouble(), 'f', 2)
                                               : src.value("price").toVariant().toString();
     payload["trigger_price"] = mods.contains("triggerPrice")
@@ -439,7 +437,8 @@ ApiResponse<QVector<BrokerPosition>> PaytmBroker::get_positions(const BrokerCred
         pos.quantity = net_qty;
         pos.avg_price = pm_first(o, "buy_avg", "cost_price").toVariant().toDouble();
         pos.ltp = pm_first(o, "last_traded_price", "ltp").toVariant().toDouble();
-        pos.pnl = o.value("realised_profit").toVariant().toDouble() + o.value("unrealised_profit").toVariant().toDouble();
+        pos.pnl =
+            o.value("realised_profit").toVariant().toDouble() + o.value("unrealised_profit").toVariant().toDouble();
         pos.side = net_qty > 0 ? "LONG" : "SHORT";
         positions.append(pos);
     }
@@ -545,8 +544,7 @@ ApiResponse<QVector<BrokerQuote>> PaytmBroker::get_quotes(const BrokerCredential
         prefs.append(QString("%1:%2:%3").arg(exchange, token, segment));
     }
     if (prefs.isEmpty())
-        return {false, std::nullopt,
-                "Paytm quotes require EXCHANGE:TOKEN format (numeric security_id)", ts};
+        return {false, std::nullopt, "Paytm quotes require EXCHANGE:TOKEN format (numeric security_id)", ts};
 
     QString pref_param = QUrl::toPercentEncoding(prefs.join(",")); // batch in one request
     QString url = QString("%1/data/v1/price/live?mode=FULL&pref=%2").arg(BASE, pref_param);
@@ -600,8 +598,8 @@ ApiResponse<QVector<BrokerQuote>> PaytmBroker::get_quotes(const BrokerCredential
 // the numeric security_id used by get_quotes — this endpoint keys on symbol.
 
 ApiResponse<QVector<BrokerCandle>> PaytmBroker::get_history(const BrokerCredentials& creds, const QString& symbol,
-                                                           const QString& resolution, const QString& from_date,
-                                                           const QString& to_date) {
+                                                            const QString& resolution, const QString& from_date,
+                                                            const QString& to_date) {
     int64_t ts = now_ts();
 
     QString exchange = "NSE";
@@ -685,9 +683,10 @@ ApiResponse<QVector<BrokerCandle>> PaytmBroker::get_history(const BrokerCredenti
             c.volume = row[5].toVariant().toDouble();
         } else if (v.isObject()) {
             const QJsonObject o = v.toObject();
-            QJsonValue tv = o.contains("time") ? o.value("time")
+            QJsonValue tv = o.contains("time")        ? o.value("time")
                             : o.contains("timestamp") ? o.value("timestamp")
-                            : o.contains("date") ? o.value("date") : o.value("dateTime");
+                            : o.contains("date")      ? o.value("date")
+                                                      : o.value("dateTime");
             c.timestamp = pm_history_epoch_ms(tv);
             c.open = pm_first(o, "open", "o").toVariant().toDouble();
             c.high = pm_first(o, "high", "h").toVariant().toDouble();
@@ -706,8 +705,8 @@ ApiResponse<QVector<BrokerCandle>> PaytmBroker::get_history(const BrokerCredenti
     // Fail soft: if the undocumented contract didn't yield candles, return
     // empty-success with a hint rather than erroring, so charts show "no data".
     if (candles.isEmpty())
-        return {true, candles,
-                "Paytm history returned no parseable candles (undocumented endpoint — verify contract)", ts};
+        return {true, candles, "Paytm history returned no parseable candles (undocumented endpoint — verify contract)",
+                ts};
     return {true, candles, "", ts};
 }
 

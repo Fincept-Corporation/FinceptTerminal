@@ -95,8 +95,8 @@ class McpService {
     QHash<QByteArray, std::vector<UnifiedTool>> filtered_tools_cache_;
     QHash<QByteArray, QJsonArray> openai_format_cache_;
 
-    void refresh_cache();             // requires mutex_ held
-    bool is_cache_valid() const;      // requires mutex_ held
+    void refresh_cache();        // requires mutex_ held
+    bool is_cache_valid() const; // requires mutex_ held
 
     // Snapshot the unfiltered cached tool list (refreshing if stale). Caller
     // must hold mutex_. Splitting this out lets get_all_tools(filter) and

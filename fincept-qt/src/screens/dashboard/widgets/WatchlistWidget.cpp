@@ -1,9 +1,8 @@
 #include "screens/dashboard/widgets/WatchlistWidget.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QLabel>
 
@@ -56,7 +55,6 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
 
     apply_styles();
     set_loading(true);
-
 }
 
 void WatchlistWidget::apply_styles() {
@@ -98,9 +96,8 @@ void WatchlistWidget::refresh_data() {
     topics.reserve(symbols_.size());
     for (const auto& sym : symbols_)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
+    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
 }
-
 
 void WatchlistWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
@@ -146,7 +143,6 @@ void WatchlistWidget::render_from_cache() {
     }
 }
 
-
 void WatchlistWidget::populate(const QVector<services::QuoteData>& quotes) {
     table_->clear_data();
 
@@ -163,9 +159,12 @@ void WatchlistWidget::populate(const QVector<services::QuoteData>& quotes) {
 void WatchlistWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("WATCHLIST"));
-    if (symbols_label_) symbols_label_->setText(tr("SYMBOLS:"));
-    if (go_btn_)        go_btn_->setText(tr("GO"));
-    if (table_)         table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
+    if (symbols_label_)
+        symbols_label_->setText(tr("SYMBOLS:"));
+    if (go_btn_)
+        go_btn_->setText(tr("GO"));
+    if (table_)
+        table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
 }
 
 } // namespace fincept::screens::widgets

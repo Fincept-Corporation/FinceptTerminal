@@ -40,10 +40,8 @@ EquityChartPanel::EquityChartPanel(QWidget* parent) : QWidget(parent) {
         build_kline_ui();
         // Right-click chart trading — enable the menu and forward its actions up.
         kline_->set_trading_menu_enabled(true);
-        connect(kline_, &fincept::ui::KLineChartWidget::buy_requested, this,
-                &EquityChartPanel::buy_requested);
-        connect(kline_, &fincept::ui::KLineChartWidget::sell_requested, this,
-                &EquityChartPanel::sell_requested);
+        connect(kline_, &fincept::ui::KLineChartWidget::buy_requested, this, &EquityChartPanel::buy_requested);
+        connect(kline_, &fincept::ui::KLineChartWidget::sell_requested, this, &EquityChartPanel::sell_requested);
         connect(kline_, &fincept::ui::KLineChartWidget::add_to_watchlist_requested, this,
                 &EquityChartPanel::add_to_watchlist_requested);
     } else {
@@ -75,17 +73,15 @@ void EquityChartPanel::build_kline_ui() {
     h->setContentsMargins(8, 4, 8, 4);
     h->setSpacing(4);
 
-    const QString inactive =
-        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                "border-radius:2px;padding:2px 9px;font-size:11px;font-weight:700;"
-                "font-family:'Consolas',monospace;}"
-                "QPushButton:hover{border-color:%3;color:%4;}")
-            .arg(fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM(),
-                 fincept::ui::colors::AMBER(), fincept::ui::colors::TEXT_PRIMARY());
-    const QString active =
-        QString("QPushButton{background:%1;color:%2;border:1px solid %1;border-radius:2px;"
-                "padding:2px 9px;font-size:11px;font-weight:700;font-family:'Consolas',monospace;}")
-            .arg(fincept::ui::colors::AMBER(), fincept::ui::colors::BG_BASE());
+    const QString inactive = QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                                     "border-radius:2px;padding:2px 9px;font-size:11px;font-weight:700;"
+                                     "font-family:'Consolas',monospace;}"
+                                     "QPushButton:hover{border-color:%3;color:%4;}")
+                                 .arg(fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM(),
+                                      fincept::ui::colors::AMBER(), fincept::ui::colors::TEXT_PRIMARY());
+    const QString active = QString("QPushButton{background:%1;color:%2;border:1px solid %1;border-radius:2px;"
+                                   "padding:2px 9px;font-size:11px;font-weight:700;font-family:'Consolas',monospace;}")
+                               .arg(fincept::ui::colors::AMBER(), fincept::ui::colors::BG_BASE());
 
     for (int i = 0; i < 6; ++i) {
         auto* b = new QPushButton(QString::fromLatin1(kTfLabels[i]), bar);
@@ -109,9 +105,8 @@ void EquityChartPanel::set_active_tf(int idx) {
     for (int i = 0; i < 6; ++i) {
         if (!tf_buttons_[i])
             continue;
-        tf_buttons_[i]->setStyleSheet(
-            (i == idx) ? tf_buttons_[i]->property("tfActiveStyle").toString()
-                       : tf_buttons_[i]->property("tfInactiveStyle").toString());
+        tf_buttons_[i]->setStyleSheet((i == idx) ? tf_buttons_[i]->property("tfActiveStyle").toString()
+                                                 : tf_buttons_[i]->property("tfInactiveStyle").toString());
     }
     if (changed) {
         have_bar_ = false; // fresh history will arrive for the new timeframe
@@ -238,8 +233,8 @@ void EquityChartPanel::build_position_card() {
     pos_card_->setStyleSheet(QString("QFrame#chartPosCard{background:%1;border:1px solid %2;"
                                      "border-radius:4px;}")
                                  .arg(c::BG_RAISED(), c::BORDER_MED()));
-    pos_card_->setCursor(Qt::OpenHandCursor);  // hint: draggable
-    pos_card_->installEventFilter(this);       // drag-to-move (see eventFilter)
+    pos_card_->setCursor(Qt::OpenHandCursor); // hint: draggable
+    pos_card_->installEventFilter(this);      // drag-to-move (see eventFilter)
     auto* l = new QVBoxLayout(pos_card_);
     l->setContentsMargins(10, 7, 10, 8);
     l->setSpacing(4);
@@ -265,9 +260,8 @@ void EquityChartPanel::build_position_card() {
             .arg(c::NEGATIVE())
             .arg(f::TINY)
             .arg(f::DATA_FAMILY()));
-    connect(pos_exit_btn_, &QPushButton::clicked, this, [this]() {
-        emit exit_position_requested(pos_symbol_, pos_exchange_, pos_product_, pos_side_, pos_qty_);
-    });
+    connect(pos_exit_btn_, &QPushButton::clicked, this,
+            [this]() { emit exit_position_requested(pos_symbol_, pos_exchange_, pos_product_, pos_side_, pos_qty_); });
 
     // Labels pass mouse events through to the card so a drag started on the text
     // still moves the card; only the EXIT button stays interactive.
@@ -311,9 +305,9 @@ bool EquityChartPanel::eventFilter(QObject* obj, QEvent* ev) {
     return QWidget::eventFilter(obj, ev);
 }
 
-void EquityChartPanel::set_position(const QString& symbol, const QString& side, double qty,
-                                    double entry_price, const QString& exchange,
-                                    const QString& product_type, const QString& currency_code) {
+void EquityChartPanel::set_position(const QString& symbol, const QString& side, double qty, double entry_price,
+                                    const QString& exchange, const QString& product_type,
+                                    const QString& currency_code) {
     // On a symbol change the cached last-price is for the old symbol — reset it so
     // the card shows entry-based 0 P&L until the new symbol's first quote arrives.
     if (symbol != pos_symbol_)
@@ -393,8 +387,7 @@ void EquityChartPanel::refresh_position_card() {
     const double basis = pos_entry_ * pos_qty_;
     const double pct = basis != 0.0 ? (pnl / basis) * 100.0 : 0.0;
 
-    const QString pnl_txt =
-        (pnl >= 0 ? QStringLiteral("+") : QString()) + cur::money(pnl, false, pos_currency_);
+    const QString pnl_txt = (pnl >= 0 ? QStringLiteral("+") : QString()) + cur::money(pnl, false, pos_currency_);
     const QString pct_txt = QStringLiteral("%1%2%").arg(pct >= 0 ? "+" : "").arg(pct, 0, 'f', 2);
     pos_pnl_lbl_->setText(pnl_txt + QStringLiteral("   ") + pct_txt);
 
@@ -416,8 +409,7 @@ void EquityChartPanel::draw_position_line() {
     if (!has_position_)
         return;
     const bool is_long = (pos_side_ != QLatin1String("short"));
-    const QString hex = is_long ? QString(fincept::ui::colors::POSITIVE())
-                                : QString(fincept::ui::colors::NEGATIVE());
+    const QString hex = is_long ? QString(fincept::ui::colors::POSITIVE()) : QString(fincept::ui::colors::NEGATIVE());
     const QString label = QString::number(pos_entry_, 'f', 2);
     if (kline_)
         kline_->set_position_line(pos_entry_, label, hex);

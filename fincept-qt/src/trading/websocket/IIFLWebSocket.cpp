@@ -53,11 +53,10 @@ void IIFLWebSocket::open() {
     sio_connected_ = false;
     // Engine.IO v4 over WebSocket. token + userID authenticate the feed; XTS
     // publishes JSON in FULL broadcast mode.
-    const QString url =
-        QString("wss://ttblaze.iifl.com/apimarketdata/socket.io/"
-                "?EIO=4&transport=websocket&token=%1&userID=%2&publishFormat=JSON&broadcastMode=Full")
-            .arg(QString::fromUtf8(QUrl::toPercentEncoding(market_token_)),
-                 QString::fromUtf8(QUrl::toPercentEncoding(user_id_)));
+    const QString url = QString("wss://ttblaze.iifl.com/apimarketdata/socket.io/"
+                                "?EIO=4&transport=websocket&token=%1&userID=%2&publishFormat=JSON&broadcastMode=Full")
+                            .arg(QString::fromUtf8(QUrl::toPercentEncoding(market_token_)),
+                                 QString::fromUtf8(QUrl::toPercentEncoding(user_id_)));
     LOG_INFO(TAG_IIFL_WS, "Connecting to IIFL XTS Socket.IO");
     ws_->connect_to(url);
     start_health_check();
@@ -147,24 +146,20 @@ void IIFLWebSocket::http_subscription(const QVector<qint64>& tokens, bool subscr
         req.setRawHeader("Authorization", market_token_.toUtf8());
 
         const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-        QNetworkReply* reply = subscribe ? nam_->post(req, payload)
-                                         : nam_->sendCustomRequest(req, "PUT", payload);
+        QNetworkReply* reply = subscribe ? nam_->post(req, payload) : nam_->sendCustomRequest(req, "PUT", payload);
 
         // `this` as context: Qt auto-disconnects on destruction (safe — see P8).
         connect(reply, &QNetworkReply::finished, this, [reply, subscribe, code]() {
-            const int status =
-                reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             if (reply->error() != QNetworkReply::NoError || status != 200) {
-                LOG_WARN(TAG_IIFL_WS,
-                         QString("%1 (code %2) failed: HTTP %3 %4")
-                             .arg(subscribe ? "Subscribe" : "Unsubscribe")
-                             .arg(code)
-                             .arg(status)
-                             .arg(reply->errorString()));
+                LOG_WARN(TAG_IIFL_WS, QString("%1 (code %2) failed: HTTP %3 %4")
+                                          .arg(subscribe ? "Subscribe" : "Unsubscribe")
+                                          .arg(code)
+                                          .arg(status)
+                                          .arg(reply->errorString()));
             } else {
-                LOG_INFO(TAG_IIFL_WS, QString("%1 ok (xtsCode %2)")
-                                          .arg(subscribe ? "Subscribed" : "Unsubscribed")
-                                          .arg(code));
+                LOG_INFO(TAG_IIFL_WS,
+                         QString("%1 ok (xtsCode %2)").arg(subscribe ? "Subscribed" : "Unsubscribed").arg(code));
             }
             reply->deleteLater();
         });
@@ -296,10 +291,9 @@ void IIFLWebSocket::handle_market_data(const QString& event, const QJsonValue& d
 
     const int segment = obj.value("ExchangeSegment").toInt();
     const qint64 instrument_id = qint64(obj.value("ExchangeInstrumentID").toDouble());
-    const int message_code =
-        obj.contains("MessageCode")
-            ? obj.value("MessageCode").toInt()
-            : event.section('-', 0, 0).toInt(); // fall back to the event prefix
+    const int message_code = obj.contains("MessageCode")
+                                 ? obj.value("MessageCode").toInt()
+                                 : event.section('-', 0, 0).toInt(); // fall back to the event prefix
 
     const QString key = QString::number(instrument_id);
 

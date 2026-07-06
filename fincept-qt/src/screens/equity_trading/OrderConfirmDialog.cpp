@@ -17,17 +17,21 @@ using trading::UnifiedOrder;
 namespace {
 QString type_str(OrderType t) {
     switch (t) {
-        case OrderType::Market: return QStringLiteral("MARKET");
-        case OrderType::Limit: return QStringLiteral("LIMIT");
-        case OrderType::StopLoss: return QStringLiteral("SL-M");
-        case OrderType::StopLossLimit: return QStringLiteral("SL");
+        case OrderType::Market:
+            return QStringLiteral("MARKET");
+        case OrderType::Limit:
+            return QStringLiteral("LIMIT");
+        case OrderType::StopLoss:
+            return QStringLiteral("SL-M");
+        case OrderType::StopLossLimit:
+            return QStringLiteral("SL");
     }
     return QStringLiteral("MARKET");
 }
 } // namespace
 
-OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& order,
-                                       const QString& account_label, double ref_price)
+OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& order, const QString& account_label,
+                                       double ref_price)
     : QDialog(parent) {
     setWindowTitle(tr("Confirm Order"));
     setModal(true);
@@ -53,8 +57,8 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
         auto* kl = new QLabel(k);
         kl->setStyleSheet(QString("color:%1;").arg(ui::colors::TEXT_SECONDARY()));
         auto* vl = new QLabel(v);
-        vl->setStyleSheet(QString("color:%1;font-weight:700;")
-                              .arg(color.isEmpty() ? ui::colors::TEXT_PRIMARY() : color));
+        vl->setStyleSheet(
+            QString("color:%1;font-weight:700;").arg(color.isEmpty() ? ui::colors::TEXT_PRIMARY() : color));
         grid->addWidget(kl, r, 0);
         grid->addWidget(vl, r, 1);
         ++r;
@@ -89,8 +93,8 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
     connect(send, &QPushButton::clicked, this, &QDialog::accept);
 }
 
-bool OrderConfirmDialog::confirm(QWidget* parent, const UnifiedOrder& order,
-                                 const QString& account_label, double ref_price) {
+bool OrderConfirmDialog::confirm(QWidget* parent, const UnifiedOrder& order, const QString& account_label,
+                                 double ref_price) {
     OrderConfirmDialog dlg(parent, order, account_label, ref_price);
     return dlg.exec() == QDialog::Accepted;
 }

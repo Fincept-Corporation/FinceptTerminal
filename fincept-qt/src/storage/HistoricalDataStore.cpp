@@ -12,8 +12,8 @@
 #include <QSqlQuery>
 #include <QTextStream>
 #include <QTimeZone>
-#include <QtConcurrent>
 #include <QVariantList>
+#include <QtConcurrent>
 
 #include <algorithm>
 
@@ -21,7 +21,9 @@ namespace fincept::storage {
 
 namespace {
 
-Database& db() { return Database::instance(); }
+Database& db() {
+    return Database::instance();
+}
 
 // Map a SELECT row (timestamp_ms, open, high, low, close, volume, oi) to a candle.
 trading::BrokerCandle map_candle(QSqlQuery& q) {
@@ -40,7 +42,7 @@ trading::BrokerCandle map_candle(QSqlQuery& q) {
 // fixed bucket width in ms for time-aligned targets (4h/8h). Calendar targets
 // (1w/1mo) bucket by date boundaries instead — see bucket_key_*.
 struct ResamplePlan {
-    QString base_interval;     // "1h" or "1d"
+    QString base_interval;      // "1h" or "1d"
     qint64 fixed_bucket_ms = 0; // >0 for 4h/8h; 0 = calendar bucketing
     bool calendar_week = false;
     bool calendar_month = false;
@@ -99,8 +101,7 @@ HistoricalDataStore& HistoricalDataStore::instance() {
 
 // ── OHLCV storage ──────────────────────────────────────────────────────────────
 
-bool HistoricalDataStore::store_candles(const QString& symbol, const QString& exchange,
-                                        const QString& interval,
+bool HistoricalDataStore::store_candles(const QString& symbol, const QString& exchange, const QString& interval,
                                         const QVector<trading::BrokerCandle>& candles) {
     if (candles.isEmpty())
         return true;
@@ -110,17 +111,16 @@ bool HistoricalDataStore::store_candles(const QString& symbol, const QString& ex
     if (!in_tx)
         LOG_WARN("Historify", "transaction begin failed; storing without batch transaction");
 
-    const QString sql = QStringLiteral(
-        "INSERT OR REPLACE INTO market_data "
-        "(symbol, exchange, interval, timestamp_ms, open, high, low, close, volume, oi) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    const QString sql = QStringLiteral("INSERT OR REPLACE INTO market_data "
+                                       "(symbol, exchange, interval, timestamp_ms, open, high, low, close, volume, oi) "
+                                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     const QString sym = symbol.toUpper();
     const QString exc = exchange.toUpper();
 
     for (const auto& c : candles) {
-        auto r = db().execute(sql, {sym, exc, interval, static_cast<qint64>(c.timestamp), c.open, c.high,
-                                    c.low, c.close, c.volume, c.oi});
+        auto r = db().execute(sql, {sym, exc, interval, static_cast<qint64>(c.timestamp), c.open, c.high, c.low,
+                                    c.close, c.volume, c.oi});
         if (r.is_err()) {
             LOG_ERROR("Historify", QString("store_candles failed for %1:%2:%3 — %4")
                                        .arg(sym, exc, interval, QString::fromStdString(r.error())));
@@ -137,19 +137,15 @@ bool HistoricalDataStore::store_candles(const QString& symbol, const QString& ex
             return false;
         }
     }
-    LOG_INFO("Historify", QString("Stored %1 candles for %2:%3:%4")
-                              .arg(candles.size())
-                              .arg(sym, exc, interval));
+    LOG_INFO("Historify", QString("Stored %1 candles for %2:%3:%4").arg(candles.size()).arg(sym, exc, interval));
     return true;
 }
 
-QVector<trading::BrokerCandle> HistoricalDataStore::get_candles(const QString& symbol,
-                                                                const QString& exchange,
+QVector<trading::BrokerCandle> HistoricalDataStore::get_candles(const QString& symbol, const QString& exchange,
                                                                 const QString& interval, qint64 from_ms,
                                                                 qint64 to_ms) const {
-    QString sql = QStringLiteral(
-        "SELECT timestamp_ms, open, high, low, close, volume, oi FROM market_data "
-        "WHERE symbol = ? AND exchange = ? AND interval = ?");
+    QString sql = QStringLiteral("SELECT timestamp_ms, open, high, low, close, volume, oi FROM market_data "
+                                 "WHERE symbol = ? AND exchange = ? AND interval = ?");
     QVariantList params{symbol.toUpper(), exchange.toUpper(), interval};
 
     if (from_ms > 0) {
@@ -174,10 +170,9 @@ QVector<trading::BrokerCandle> HistoricalDataStore::get_candles(const QString& s
     return out;
 }
 
-QVector<trading::BrokerCandle> HistoricalDataStore::get_resampled(const QString& symbol,
-                                                                  const QString& exchange,
-                                                                  const QString& target_interval,
-                                                                  qint64 from_ms, qint64 to_ms) const {
+QVector<trading::BrokerCandle> HistoricalDataStore::get_resampled(const QString& symbol, const QString& exchange,
+                                                                  const QString& target_interval, qint64 from_ms,
+                                                                  qint64 to_ms) const {
     auto plan = plan_for(target_interval);
     if (!plan) {
         LOG_WARN("Historify", QString("get_resampled: unsupported target interval '%1'").arg(target_interval));
@@ -231,11 +226,9 @@ QVector<trading::BrokerCandle> HistoricalDataStore::get_resampled(const QString&
 
 // ── Watchlist ───────────────────────────────────────────────────────────────────
 
-bool HistoricalDataStore::add_to_watchlist(const QString& symbol, const QString& exchange,
-                                           const QString& interval) {
-    auto r = db().execute(
-        "INSERT OR IGNORE INTO historify_watchlist (symbol, exchange, interval) VALUES (?, ?, ?)",
-        {symbol.toUpper(), exchange.toUpper(), interval});
+bool HistoricalDataStore::add_to_watchlist(const QString& symbol, const QString& exchange, const QString& interval) {
+    auto r = db().execute("INSERT OR IGNORE INTO historify_watchlist (symbol, exchange, interval) VALUES (?, ?, ?)",
+                          {symbol.toUpper(), exchange.toUpper(), interval});
     if (r.is_err()) {
         LOG_ERROR("Historify", QString("add_to_watchlist failed — %1").arg(QString::fromStdString(r.error())));
         return false;
@@ -245,12 +238,10 @@ bool HistoricalDataStore::add_to_watchlist(const QString& symbol, const QString&
 
 bool HistoricalDataStore::remove_from_watchlist(const QString& symbol, const QString& exchange,
                                                 const QString& interval) {
-    auto r = db().execute(
-        "DELETE FROM historify_watchlist WHERE symbol = ? AND exchange = ? AND interval = ?",
-        {symbol.toUpper(), exchange.toUpper(), interval});
+    auto r = db().execute("DELETE FROM historify_watchlist WHERE symbol = ? AND exchange = ? AND interval = ?",
+                          {symbol.toUpper(), exchange.toUpper(), interval});
     if (r.is_err()) {
-        LOG_ERROR("Historify",
-                  QString("remove_from_watchlist failed — %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR("Historify", QString("remove_from_watchlist failed — %1").arg(QString::fromStdString(r.error())));
         return false;
     }
     return true;
@@ -279,9 +270,8 @@ QVector<HistoricalDataStore::WatchEntry> HistoricalDataStore::watchlist() const 
 
 QVector<HistoricalDataStore::CatalogEntry> HistoricalDataStore::catalog() const {
     QVector<CatalogEntry> out;
-    auto r = db().execute(
-        "SELECT symbol, exchange, interval, MIN(timestamp_ms), MAX(timestamp_ms), COUNT(*) "
-        "FROM market_data GROUP BY symbol, exchange, interval ORDER BY symbol, exchange, interval");
+    auto r = db().execute("SELECT symbol, exchange, interval, MIN(timestamp_ms), MAX(timestamp_ms), COUNT(*) "
+                          "FROM market_data GROUP BY symbol, exchange, interval ORDER BY symbol, exchange, interval");
     if (r.is_err()) {
         LOG_ERROR("Historify", QString("catalog failed — %1").arg(QString::fromStdString(r.error())));
         return out;
@@ -302,9 +292,8 @@ QVector<HistoricalDataStore::CatalogEntry> HistoricalDataStore::catalog() const 
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-bool HistoricalDataStore::export_csv(const QString& symbol, const QString& exchange,
-                                     const QString& interval, const QString& file_path, qint64 from_ms,
-                                     qint64 to_ms) const {
+bool HistoricalDataStore::export_csv(const QString& symbol, const QString& exchange, const QString& interval,
+                                     const QString& file_path, qint64 from_ms, qint64 to_ms) const {
     const QVector<trading::BrokerCandle> candles = get_candles(symbol, exchange, interval, from_ms, to_ms);
 
     QFile f(file_path);
@@ -315,17 +304,16 @@ bool HistoricalDataStore::export_csv(const QString& symbol, const QString& excha
     QTextStream ts(&f);
     ts << "timestamp,open,high,low,close,volume,oi\n";
     for (const auto& c : candles) {
-        ts << static_cast<qint64>(c.timestamp) << ',' << c.open << ',' << c.high << ',' << c.low << ','
-           << c.close << ',' << c.volume << ',' << c.oi << '\n';
+        ts << static_cast<qint64>(c.timestamp) << ',' << c.open << ',' << c.high << ',' << c.low << ',' << c.close
+           << ',' << c.volume << ',' << c.oi << '\n';
     }
     f.close();
     LOG_INFO("Historify", QString("Exported %1 rows to %2").arg(candles.size()).arg(file_path));
     return true;
 }
 
-bool HistoricalDataStore::export_parquet(const QString& symbol, const QString& exchange,
-                                         const QString& interval, const QString& file_path,
-                                         qint64 from_ms, qint64 to_ms) const {
+bool HistoricalDataStore::export_parquet(const QString& symbol, const QString& exchange, const QString& interval,
+                                         const QString& file_path, qint64 from_ms, qint64 to_ms) const {
     // TODO(parquet): no Arrow/Parquet library is vendored. Downgrade to CSV and
     // warn so the caller still gets data. Replace with a real Parquet writer
     // once Arrow/Parquet is added to the build.
@@ -335,8 +323,7 @@ bool HistoricalDataStore::export_parquet(const QString& symbol, const QString& e
 
 // ── Auto-download hook ──────────────────────────────────────────────────────────
 
-bool HistoricalDataStore::refresh_now(const QString& symbol, const QString& exchange,
-                                      const QString& interval,
+bool HistoricalDataStore::refresh_now(const QString& symbol, const QString& exchange, const QString& interval,
                                       const QVector<trading::BrokerCandle>& candles) {
     // Documented entry point for a future scheduler / broker-fetch service to
     // push fetched candles. Currently just persists them.
@@ -365,9 +352,9 @@ int HistoricalDataStore::refresh_watchlist() {
         break;
     }
     if (account_id.isEmpty()) {
-        LOG_INFO("Historify",
-                 QString("refresh_watchlist: %1 entries pending, but no connected broker — skipping")
-                     .arg(entries.size()));
+        LOG_INFO(
+            "Historify",
+            QString("refresh_watchlist: %1 entries pending, but no connected broker — skipping").arg(entries.size()));
         return 0;
     }
 

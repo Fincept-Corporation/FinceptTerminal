@@ -147,8 +147,9 @@ void AgentConfigCloudAdapter::push_activate(const OutboxRow& row, PushDone done)
         done(ac_retry(QStringLiteral("awaiting_create")));
         return;
     }
-    CloudClient::instance().put(ac_path(*remote) + QStringLiteral("/activate"), QJsonObject(),
-                                [done](CloudResponse r) { done(ac_result(r)); }, this);
+    CloudClient::instance().put(
+        ac_path(*remote) + QStringLiteral("/activate"), QJsonObject(), [done](CloudResponse r) { done(ac_result(r)); },
+        this);
 }
 
 int AgentConfigCloudAdapter::local_count() const {

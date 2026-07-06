@@ -8,12 +8,12 @@
 //   - CommandBar_Assets.cpp       — /stock-style asset search mode
 // Shared constants (kMaxResults) live in CommandBar_internal.h.
 #include "ui/navigation/CommandBar.h"
-#include "ui/navigation/CommandBar_internal.h"
 
 #include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/session/ScreenStateManager.h"
 #include "network/http/HttpClient.h"
+#include "ui/navigation/CommandBar_internal.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -102,7 +102,12 @@ void CommandBar::build_commands() {
          {"mkts", "markets", "market", "live"},
          "F2",
          {"markets", "stocks", "quotes", "prices"}},
-        {"news", tr("News"), "Financial news feed", {"news", "headlines", "feed"}, "F3", {"news", "headlines", "articles"}},
+        {"news",
+         tr("News"),
+         "Financial news feed",
+         {"news", "headlines", "feed"},
+         "F3",
+         {"news", "headlines", "articles"}},
         {"portfolio",
          tr("Portfolio"),
          "Portfolio management",
@@ -127,7 +132,12 @@ void CommandBar::build_commands() {
          {"trade", "trading", "crypto", "kraken"},
          "F9",
          {"trading", "crypto", "exchange"}},
-        {"ai_chat", tr("AI Chat"), "AI assistant", {"ai", "chat", "assistant", "bot"}, "F10", {"ai", "chat", "assistant"}},
+        {"ai_chat",
+         tr("AI Chat"),
+         "AI assistant",
+         {"ai", "chat", "assistant", "bot"},
+         "F10",
+         {"ai", "chat", "assistant"}},
         {"notes", tr("Notes"), "Notes and reports", {"notes", "note"}, "F11", {"notes", "reports", "documents"}},
         {"profile",
          tr("Profile"),
@@ -235,7 +245,12 @@ void CommandBar::build_commands() {
          {"aks", "akshare", "chinese"},
          "",
          {"akshare", "chinese", "china"}},
-        {"asia_markets", tr("Asia Markets"), "Asian market data", {"asia", "apac", "asian"}, "", {"asia", "asian", "apac"}},
+        {"asia_markets",
+         tr("Asia Markets"),
+         "Asian market data",
+         {"asia", "apac", "asian"},
+         "",
+         {"asia", "asian", "apac"}},
         // Geopolitics
         {"geopolitics",
          tr("Geopolitics"),
@@ -644,11 +659,11 @@ bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
     // default bindings here; user rebindings via Settings → Keybindings
     // currently can't fire either (same orphan-QAction issue), so the
     // default bindings are the de-facto contract.
-    const bool is_down   = (key == Qt::Key_Down)   && mods == Qt::NoModifier;
-    const bool is_up     = (key == Qt::Key_Up)     && mods == Qt::NoModifier;
-    const bool is_tab    = (key == Qt::Key_Tab)    && mods == Qt::NoModifier;
-    const bool is_btab   = (key == Qt::Key_Backtab); // Shift+Tab arrives as Backtab
-    const bool is_esc    = (key == Qt::Key_Escape) && mods == Qt::NoModifier;
+    const bool is_down = (key == Qt::Key_Down) && mods == Qt::NoModifier;
+    const bool is_up = (key == Qt::Key_Up) && mods == Qt::NoModifier;
+    const bool is_tab = (key == Qt::Key_Tab) && mods == Qt::NoModifier;
+    const bool is_btab = (key == Qt::Key_Backtab); // Shift+Tab arrives as Backtab
+    const bool is_esc = (key == Qt::Key_Escape) && mods == Qt::NoModifier;
 
     if (!is_down && !is_up && !is_tab && !is_btab && !is_esc)
         return QWidget::eventFilter(obj, event);
@@ -672,17 +687,21 @@ bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
             act->trigger();
     };
 
-    if (is_down)        trigger(KeyAction::NavNext);
-    else if (is_up)     trigger(KeyAction::NavPrev);
-    else if (is_btab)   trigger(KeyAction::NavPrev);
-    else if (is_tab)    trigger(KeyAction::NavAccept);
-    else if (is_esc)    trigger(KeyAction::NavEscape);
+    if (is_down)
+        trigger(KeyAction::NavNext);
+    else if (is_up)
+        trigger(KeyAction::NavPrev);
+    else if (is_btab)
+        trigger(KeyAction::NavPrev);
+    else if (is_tab)
+        trigger(KeyAction::NavAccept);
+    else if (is_esc)
+        trigger(KeyAction::NavEscape);
 
     return true; // consume — keep Tab from walking focus, etc.
 }
 
 // ── slots ────────────────────────────────────────────────────────────────────
-
 
 void CommandBar::execute_index(int index) {
     auto* item = list_->item(index);
@@ -716,6 +735,5 @@ void CommandBar::update_position() {
     dropdown_->move(global_pos);
     dropdown_->resize(w, h);
 }
-
 
 } // namespace fincept::ui

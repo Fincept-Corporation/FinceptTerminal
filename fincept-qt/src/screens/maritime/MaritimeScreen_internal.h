@@ -32,12 +32,12 @@ inline QString table_ss() {
                    "QHeaderView::section { background:%9; color:%10; font-weight:700;"
                    "padding:5px 8px; border:none; border-bottom:1px solid %11;"
                    "font-family:%4; font-size:%5px; letter-spacing:0.5px; }")
-        .arg(C(fincept::ui::colors::BG_BASE), C(fincept::ui::colors::TEXT_PRIMARY),
-             C(fincept::ui::colors::BG_RAISED), F(fincept::ui::fonts::DATA_FAMILY))
+        .arg(C(fincept::ui::colors::BG_BASE), C(fincept::ui::colors::TEXT_PRIMARY), C(fincept::ui::colors::BG_RAISED),
+             F(fincept::ui::fonts::DATA_FAMILY))
         .arg(fincept::ui::fonts::SMALL)
-        .arg(C(fincept::ui::colors::BG_HOVER), C(fincept::ui::colors::AMBER),
-             C(fincept::ui::colors::ROW_ALT), C(fincept::ui::colors::BG_RAISED),
-             C(fincept::ui::colors::TEXT_SECONDARY), C(fincept::ui::colors::BORDER_MED));
+        .arg(C(fincept::ui::colors::BG_HOVER), C(fincept::ui::colors::AMBER), C(fincept::ui::colors::ROW_ALT),
+             C(fincept::ui::colors::BG_RAISED), C(fincept::ui::colors::TEXT_SECONDARY),
+             C(fincept::ui::colors::BORDER_MED));
 }
 
 inline QString combo_ss() {
@@ -85,8 +85,7 @@ inline QString btn_outline_ss() {
                    "QPushButton:checked { background:%5; color:%6; border-color:%6; }")
         .arg(C(fincept::ui::colors::TEXT_SECONDARY), F(fincept::ui::fonts::DATA_FAMILY))
         .arg(fincept::ui::fonts::SMALL)
-        .arg(C(fincept::ui::colors::BORDER_BRIGHT), C(fincept::ui::colors::BG_HOVER),
-             C(fincept::ui::colors::AMBER));
+        .arg(C(fincept::ui::colors::BORDER_BRIGHT), C(fincept::ui::colors::BG_HOVER), C(fincept::ui::colors::AMBER));
 }
 
 inline QString toolbar_btn_ss() {
@@ -104,8 +103,7 @@ inline QString toolbar_btn_ss() {
 inline QString section_label_ss() {
     return QString("color:%1; font-size:12px; font-weight:700; font-family:%2;"
                    "letter-spacing:1px; padding-bottom:4px; border-bottom:1px solid %3;")
-        .arg(C(fincept::ui::colors::AMBER), F(fincept::ui::fonts::DATA_FAMILY),
-             C(fincept::ui::colors::BORDER_DIM));
+        .arg(C(fincept::ui::colors::AMBER), F(fincept::ui::fonts::DATA_FAMILY), C(fincept::ui::colors::BORDER_DIM));
 }
 
 inline QString tiny_label_ss() {

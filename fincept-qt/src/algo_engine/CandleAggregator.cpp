@@ -5,13 +5,12 @@
 
 namespace fincept::algo {
 
-CandleAggregator::CandleAggregator(const QString& symbol, Timeframe tf,
-                                   int buffer_size, QObject* parent)
-    : QObject(parent)
-    , symbol_(symbol)
-    , timeframe_(tf)
-    , period_ms_(static_cast<int64_t>(timeframe_seconds(tf)) * 1000)
-    , max_buffer_(buffer_size) {}
+CandleAggregator::CandleAggregator(const QString& symbol, Timeframe tf, int buffer_size, QObject* parent)
+    : QObject(parent),
+      symbol_(symbol),
+      timeframe_(tf),
+      period_ms_(static_cast<int64_t>(timeframe_seconds(tf)) * 1000),
+      max_buffer_(buffer_size) {}
 
 void CandleAggregator::on_tick(double price, double volume, int64_t timestamp_ms) {
     QMutexLocker lock(&mutex_);
@@ -36,13 +35,14 @@ void CandleAggregator::on_tick(double price, double volume, int64_t timestamp_ms
     }
 
     current_.close = price;
-    if (price > current_.high) current_.high = price;
-    if (price < current_.low) current_.low = price;
+    if (price > current_.high)
+        current_.high = price;
+    if (price < current_.low)
+        current_.low = price;
     current_.volume += volume;
 }
 
-void CandleAggregator::close_current_and_open_new(int64_t tick_time,
-                                                   double price, double volume) {
+void CandleAggregator::close_current_and_open_new(int64_t tick_time, double price, double volume) {
     current_.is_closed = true;
     OhlcvCandle closed = current_;
 

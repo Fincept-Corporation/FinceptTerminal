@@ -60,7 +60,7 @@ class HyperliquidClient : public QObject {
   signals:
     /// Emitted on every parsed WS message. Consumers filter by `channel`.
     void ws_message(QJsonObject msg);
-    void ws_state_changed(int state);   // QAbstractSocket::SocketState (int for portability)
+    void ws_state_changed(int state); // QAbstractSocket::SocketState (int for portability)
 
   private:
     QString rest_base() const;

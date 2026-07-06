@@ -1,13 +1,12 @@
 #include "screens/markets/MarketPanel.h"
-#include <cmath>
-#include "core/events/EventBus.h"
-#include "services/backtesting/BacktestingService.h"
-#include "ui/theme/Theme.h"
-#include "ui/theme/ThemeManager.h"
-#include "ui/formatting/NumberFormat.h"
 
+#include "core/events/EventBus.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "services/backtesting/BacktestingService.h"
+#include "ui/formatting/NumberFormat.h"
+#include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -19,14 +18,15 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 
+#include <cmath>
+
 namespace fincept::screens {
 
-MarketPanel::MarketPanel(const MarketPanelConfig& config, QWidget* parent)
-    : QWidget(parent), config_(config) {
+MarketPanel::MarketPanel(const MarketPanelConfig& config, QWidget* parent) : QWidget(parent), config_(config) {
     if (config_.column_order.isEmpty())
         config_.column_order = default_market_columns();
     setMinimumWidth(180);
-    setMinimumHeight(kHeaderH + kColHeaderH + kRowH * 4);  // always room for at least 4 rows
+    setMinimumHeight(kHeaderH + kColHeaderH + kRowH * 4); // always room for at least 4 rows
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
     build_ui();
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
@@ -62,16 +62,16 @@ void MarketPanel::build_ui() {
         return b;
     };
 
-    cols_btn_   = make_hdr_btn(tr("[COLS]"));
-    edit_btn_   = make_hdr_btn(tr("[EDIT]"));
+    cols_btn_ = make_hdr_btn(tr("[COLS]"));
+    edit_btn_ = make_hdr_btn(tr("[EDIT]"));
     delete_btn_ = make_hdr_btn(tr("[DEL]"));
 
     hhl->addWidget(cols_btn_);
     hhl->addWidget(edit_btn_);
     hhl->addWidget(delete_btn_);
 
-    connect(cols_btn_,   &QPushButton::clicked, this, &MarketPanel::open_cols_dropdown);
-    connect(edit_btn_,   &QPushButton::clicked, this, [this]() { emit edit_requested(config_.id); });
+    connect(cols_btn_, &QPushButton::clicked, this, &MarketPanel::open_cols_dropdown);
+    connect(edit_btn_, &QPushButton::clicked, this, [this]() { emit edit_requested(config_.id); });
     connect(delete_btn_, &QPushButton::clicked, this, [this]() { emit delete_requested(config_.id); });
 
     vl->addWidget(header_);
@@ -100,12 +100,11 @@ void MarketPanel::build_ui() {
     // causing the first panel in each column to grab disproportionate space.
     table_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
     setup_table_columns();
-    
-    table_->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(table_, &QTableWidget::customContextMenuRequested,
-            this, &MarketPanel::show_row_context_menu);
 
-    table_->setVisible(false);  // hidden until first data arrives
+    table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table_, &QTableWidget::customContextMenuRequested, this, &MarketPanel::show_row_context_menu);
+
+    table_->setVisible(false); // hidden until first data arrives
     bl->addWidget(table_);
 
     // Error state (hidden by default)
@@ -114,7 +113,7 @@ void MarketPanel::build_ui() {
     el->setAlignment(Qt::AlignCenter);
     error_label_ = new QLabel;
     error_label_->setAlignment(Qt::AlignCenter);
-    error_label_->setWordWrap(true);  // narrow panels — wrap the failure message
+    error_label_->setWordWrap(true); // narrow panels — wrap the failure message
     retry_btn_ = new QPushButton(tr("[RETRY]"));
     retry_btn_->setCursor(Qt::PointingHandCursor);
     retry_btn_->setFlat(true);
@@ -145,19 +144,31 @@ QString MarketPanel::column_label(const QString& code) const {
     // and in the populate() switch) to its user-facing, translatable header
     // label. SYMBOL is the locked first column and renders the human-readable
     // name, so it is labelled "NAME".
-    if (code == "SYMBOL") return tr("NAME");
-    if (code == "LAST")   return tr("LAST");
-    if (code == "CHG")    return tr("CHG");
-    if (code == "CHG%")   return tr("CHG%");
-    if (code == "HIGH")   return tr("HIGH");
-    if (code == "LOW")    return tr("LOW");
-    if (code == "VOL")    return tr("VOL");
-    if (code == "BID")    return tr("BID");
-    if (code == "ASK")    return tr("ASK");
-    if (code == "OPEN")   return tr("OPEN");
-    if (code == "TICKER") return tr("TICKER");
-    if (code == "NAME")   return tr("NAME");
-    return code;  // unknown code — show raw (data fallback)
+    if (code == "SYMBOL")
+        return tr("NAME");
+    if (code == "LAST")
+        return tr("LAST");
+    if (code == "CHG")
+        return tr("CHG");
+    if (code == "CHG%")
+        return tr("CHG%");
+    if (code == "HIGH")
+        return tr("HIGH");
+    if (code == "LOW")
+        return tr("LOW");
+    if (code == "VOL")
+        return tr("VOL");
+    if (code == "BID")
+        return tr("BID");
+    if (code == "ASK")
+        return tr("ASK");
+    if (code == "OPEN")
+        return tr("OPEN");
+    if (code == "TICKER")
+        return tr("TICKER");
+    if (code == "NAME")
+        return tr("NAME");
+    return code; // unknown code — show raw (data fallback)
 }
 
 void MarketPanel::setup_table_columns() {
@@ -172,8 +183,7 @@ void MarketPanel::setup_table_columns() {
         const QString label = column_label(c);
         auto* hdr = new QTableWidgetItem(label);
         bool is_text = (c == "SYMBOL" || c == "NAME" || c == "TICKER");
-        hdr->setTextAlignment(is_text ? (Qt::AlignLeft | Qt::AlignVCenter)
-                                      : (Qt::AlignRight | Qt::AlignVCenter));
+        hdr->setTextAlignment(is_text ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
         table_->setHorizontalHeaderItem(i, hdr);
     }
 
@@ -202,8 +212,8 @@ void MarketPanel::open_cols_dropdown() {
                 "QMenu::item{padding:4px 16px;}"
                 "QMenu::item:selected{background:%4;}"
                 "QMenu::indicator{width:12px;height:12px;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(),
-                 ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::BG_HOVER()));
 
     // NAME is now the locked first column (renders the friendly name), so the
     // optional set offers TICKER instead for users who also want the raw symbol.
@@ -231,7 +241,8 @@ void MarketPanel::open_cols_dropdown() {
                 }
             }
             setup_table_columns();
-            if (has_data_) populate(cached_quotes_);
+            if (has_data_)
+                populate(cached_quotes_);
             emit config_changed(config_);
         });
     }
@@ -246,7 +257,8 @@ void MarketPanel::update_config(const MarketPanelConfig& cfg) {
         config_.column_order = default_market_columns();
     title_label_->setText(cfg.title.toUpper());
     setup_table_columns();
-    if (has_data_) populate(cached_quotes_);
+    if (has_data_)
+        populate(cached_quotes_);
 }
 
 // ---------------------------------------------------------------------------
@@ -262,7 +274,6 @@ void MarketPanel::refresh() {
 
     hub_resubscribe();
 }
-
 
 void MarketPanel::rebuild_from_cache() {
     cached_quotes_.clear();
@@ -295,20 +306,19 @@ void MarketPanel::hub_resubscribe() {
     // instead of "^GSPC" / "GC=F". Cached after first resolution, so this is a
     // no-op fast path on subsequent refreshes. Re-render when names arrive.
     QPointer<MarketPanel> self = this;
-    services::MarketDataService::instance().resolve_names(
-        config_.symbols, [self](const QHash<QString, QString>& m) {
-            if (!self || m.isEmpty())
-                return;
-            bool changed = false;
-            for (auto it = m.constBegin(); it != m.constEnd(); ++it) {
-                if (self->names_.value(it.key()) != it.value()) {
-                    self->names_.insert(it.key(), it.value());
-                    changed = true;
-                }
+    services::MarketDataService::instance().resolve_names(config_.symbols, [self](const QHash<QString, QString>& m) {
+        if (!self || m.isEmpty())
+            return;
+        bool changed = false;
+        for (auto it = m.constBegin(); it != m.constEnd(); ++it) {
+            if (self->names_.value(it.key()) != it.value()) {
+                self->names_.insert(it.key(), it.value());
+                changed = true;
             }
-            if (changed && self->has_data_)
-                self->populate(self->cached_quotes_);
-        });
+        }
+        if (changed && self->has_data_)
+            self->populate(self->cached_quotes_);
+    });
 
     // Fresh subscribe if never active or symbol set was reconfigured.
     // Cheaper to always re-wire since MarketsScreen rarely calls refresh()
@@ -349,9 +359,8 @@ void MarketPanel::hub_resubscribe() {
             }
             if (!has_data_ && pending_initial_.isEmpty()) {
                 fetch_failed_ = true;
-                show_error(err.trimmed().isEmpty()
-                               ? tr("Failed to load market data")
-                               : tr("Load failed: %1").arg(err.trimmed()));
+                show_error(err.trimmed().isEmpty() ? tr("Failed to load market data")
+                                                   : tr("Load failed: %1").arg(err.trimmed()));
             }
         });
     }
@@ -372,7 +381,6 @@ void MarketPanel::hub_unsubscribe_all() {
     pending_initial_.clear();
 }
 
-
 void MarketPanel::show_loading() {
     loading_frame_ = 0;
     loading_widget_->setVisible(true);
@@ -388,9 +396,7 @@ void MarketPanel::hide_loading() {
 
 void MarketPanel::tick_loading_anim() {
     // Braille spinner: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
-    static const char* const kFrames[] = {
-        "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
-    };
+    static const char* const kFrames[] = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"};
     constexpr int kCount = 10;
     loading_frame_ = (loading_frame_ + 1) % kCount;
     loading_label_->setText(tr("  %1  LOADING").arg(QString::fromUtf8(kFrames[loading_frame_])));
@@ -401,31 +407,33 @@ void MarketPanel::show_data() {
     table_->setVisible(true);
     // Defer populate until after the splitter has performed layout so body_->height() is valid
     QPointer<MarketPanel> self = this;
-    QMetaObject::invokeMethod(this, [self]() {
-        if (self) self->populate(self->cached_quotes_);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [self]() {
+            if (self)
+                self->populate(self->cached_quotes_);
+        },
+        Qt::QueuedConnection);
 }
 
 void MarketPanel::show_error(const QString& msg) {
-    hide_loading();  // stop the spinner + hide the LOADING overlay
+    hide_loading(); // stop the spinner + hide the LOADING overlay
     table_->setVisible(false);
     error_widget_->setVisible(true);
     error_label_->setText(msg);
 }
 
 void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
-    const int body_h  = body_->height();
+    const int body_h = body_->height();
     // Use actual visible rows if laid out, otherwise show all quotes (resizeEvent will trim)
-    const int visible = (body_h > kColHeaderH + kRowH)
-                            ? (body_h - kColHeaderH) / kRowH
-                            : quotes.size();
-    const int count   = qMin(quotes.size(), qMax(visible, 0));
+    const int visible = (body_h > kColHeaderH + kRowH) ? (body_h - kColHeaderH) / kRowH : quotes.size();
+    const int count = qMin(quotes.size(), qMax(visible, 0));
     table_->setRowCount(count);
 
     for (int row = 0; row < count; ++row) {
-        const auto& q  = quotes[row];
-        bool pos          = q.change >= 0;
-        const QString cc  = pos ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+        const auto& q = quotes[row];
+        bool pos = q.change >= 0;
+        const QString cc = pos ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
         const QString arr = pos ? QString::fromUtf8("\xe2\x96\xb2") : QString::fromUtf8("\xe2\x96\xbc");
         int prec = q.price > 1.0 ? 2 : 4;
 
@@ -455,30 +463,42 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             const QString& col = cols[ci];
             if (col == "SYMBOL") {
                 auto* item = mk(disp, ui::colors::TEXT_PRIMARY(), Qt::AlignLeft | Qt::AlignVCenter);
-                item->setData(Qt::UserRole, q.symbol);  // raw ticker, for copy / backtest
+                item->setData(Qt::UserRole, q.symbol); // raw ticker, for copy / backtest
                 // Full name + ticker on hover, so a name too long for the column
                 // (e.g. "State Street SPDR S&P 500 ETF Trust") is still readable.
-                item->setToolTip(disp == q.symbol ? q.symbol
-                                                  : QString("%1  (%2)").arg(disp, q.symbol));
+                item->setToolTip(disp == q.symbol ? q.symbol : QString("%1  (%2)").arg(disp, q.symbol));
                 table_->setItem(row, ci, item);
-            }
-            else if (col == "NAME")   table_->setItem(row, ci, mk(disp,     ui::colors::TEXT_DIM(),     Qt::AlignLeft | Qt::AlignVCenter));
-            else if (col == "TICKER") table_->setItem(row, ci, mk(q.symbol, ui::colors::TEXT_DIM(),     Qt::AlignLeft | Qt::AlignVCenter));
-            else if (col == "LAST")   table_->setItem(row, ci, mk(cur + QString::number(q.price, 'f', prec), ui::colors::AMBER()));
-            else if (col == "CHG")    table_->setItem(row, ci, mk(QString("%1 %2").arg(arr).arg(std::abs(q.change),     0, 'f', 2), cc));
-            else if (col == "CHG%")   table_->setItem(row, ci, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
-            else if (col == "HIGH")   table_->setItem(row, ci, mk(cur + QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
-            else if (col == "LOW")    table_->setItem(row, ci, mk(cur + QString::number(q.low,  'f', 2), ui::colors::TEXT_SECONDARY()));
-            else if (col == "VOL")    table_->setItem(row, ci, mk(fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)), ui::colors::TEXT_DIM()));
-            else if (col == "BID")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
-            else if (col == "ASK")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
-            else if (col == "OPEN")   table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
+            } else if (col == "NAME")
+                table_->setItem(row, ci, mk(disp, ui::colors::TEXT_DIM(), Qt::AlignLeft | Qt::AlignVCenter));
+            else if (col == "TICKER")
+                table_->setItem(row, ci, mk(q.symbol, ui::colors::TEXT_DIM(), Qt::AlignLeft | Qt::AlignVCenter));
+            else if (col == "LAST")
+                table_->setItem(row, ci, mk(cur + QString::number(q.price, 'f', prec), ui::colors::AMBER()));
+            else if (col == "CHG")
+                table_->setItem(row, ci, mk(QString("%1 %2").arg(arr).arg(std::abs(q.change), 0, 'f', 2), cc));
+            else if (col == "CHG%")
+                table_->setItem(row, ci, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
+            else if (col == "HIGH")
+                table_->setItem(row, ci, mk(cur + QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
+            else if (col == "LOW")
+                table_->setItem(row, ci, mk(cur + QString::number(q.low, 'f', 2), ui::colors::TEXT_SECONDARY()));
+            else if (col == "VOL")
+                table_->setItem(row, ci,
+                                mk(fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)),
+                                   ui::colors::TEXT_DIM()));
+            else if (col == "BID")
+                table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
+            else if (col == "ASK")
+                table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
+            else if (col == "OPEN")
+                table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
         }
     }
 }
 
 void MarketPanel::update_visible_rows() {
-    if (!table_ || !body_) return;
+    if (!table_ || !body_)
+        return;
     const int visible = (body_->height() - kColHeaderH) / kRowH;
     table_->setRowCount(qMax(visible, 0));
 }
@@ -488,7 +508,7 @@ void MarketPanel::update_visible_rows() {
 // ---------------------------------------------------------------------------
 
 QSize MarketPanel::sizeHint() const {
-    return QSize(180, 138);  // kHeaderH + kColHeaderH + kRowH*4
+    return QSize(180, 138); // kHeaderH + kColHeaderH + kRowH*4
 }
 
 QSize MarketPanel::minimumSizeHint() const {
@@ -512,80 +532,91 @@ void MarketPanel::resizeEvent(QResizeEvent* event) {
 // ---------------------------------------------------------------------------
 
 void MarketPanel::refresh_theme() {
-    const QString ff   = ui::fonts::DATA_FAMILY;
-    const int    fdata = ui::fonts::font_px(-2);   // table cell font size (base-2, e.g. 12px at base 14)
-    const int    fhdr  = ui::fonts::font_px(-2);   // column header font size
-    const int    fbtn  = ui::fonts::font_px(-3);   // button font size (base-3, e.g. 11px)
-    const int    ftitle = ui::fonts::font_px(-1);  // panel title font size (base-1, e.g. 13px)
+    const QString ff = ui::fonts::DATA_FAMILY;
+    const int fdata = ui::fonts::font_px(-2);  // table cell font size (base-2, e.g. 12px at base 14)
+    const int fhdr = ui::fonts::font_px(-2);   // column header font size
+    const int fbtn = ui::fonts::font_px(-3);   // button font size (base-3, e.g. 11px)
+    const int ftitle = ui::fonts::font_px(-1); // panel title font size (base-1, e.g. 13px)
 
     setStyleSheet(
-        QString("background:%1;border:1px solid %2;")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        QString("background:%1;border:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     if (header_) {
         header_->setStyleSheet(
-            QString("background:%1;border-bottom:1px solid %2;")
-                .arg(ui::colors::BG_RAISED(), ui::colors::AMBER()));
+            QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::AMBER()));
     }
 
-    const QString btn_ss =
-        QString("QPushButton{background:transparent;color:%1;border:none;"
-                "font-size:%2px;font-family:'%3';padding:0 4px;}"
-                "QPushButton:hover{color:%4;}")
-            .arg(ui::colors::TEXT_DIM()).arg(fbtn).arg(ff).arg(ui::colors::TEXT_PRIMARY());
-    if (cols_btn_)   cols_btn_->setStyleSheet(btn_ss);
-    if (edit_btn_)   edit_btn_->setStyleSheet(btn_ss);
-    if (delete_btn_) delete_btn_->setStyleSheet(btn_ss);
+    const QString btn_ss = QString("QPushButton{background:transparent;color:%1;border:none;"
+                                   "font-size:%2px;font-family:'%3';padding:0 4px;}"
+                                   "QPushButton:hover{color:%4;}")
+                               .arg(ui::colors::TEXT_DIM())
+                               .arg(fbtn)
+                               .arg(ff)
+                               .arg(ui::colors::TEXT_PRIMARY());
+    if (cols_btn_)
+        cols_btn_->setStyleSheet(btn_ss);
+    if (edit_btn_)
+        edit_btn_->setStyleSheet(btn_ss);
+    if (delete_btn_)
+        delete_btn_->setStyleSheet(btn_ss);
 
     if (title_label_)
         title_label_->setStyleSheet(
             QString("color:%1;font-size:%2px;font-weight:700;font-family:'%3';background:transparent;")
-                .arg(ui::colors::TEXT_PRIMARY()).arg(ftitle).arg(ff));
+                .arg(ui::colors::TEXT_PRIMARY())
+                .arg(ftitle)
+                .arg(ff));
 
     if (error_label_)
-        error_label_->setStyleSheet(
-            QString("color:%1;font-size:%2px;font-family:'%3';background:transparent;")
-                .arg(ui::colors::NEGATIVE()).arg(fdata).arg(ff));
+        error_label_->setStyleSheet(QString("color:%1;font-size:%2px;font-family:'%3';background:transparent;")
+                                        .arg(ui::colors::NEGATIVE())
+                                        .arg(fdata)
+                                        .arg(ff));
 
     if (loading_label_)
         loading_label_->setStyleSheet(
             QString("color:%1;font-size:%2px;font-family:'%3';background:transparent;letter-spacing:2px;")
-                .arg(ui::colors::TEXT_DIM()).arg(fdata).arg(ff));
+                .arg(ui::colors::TEXT_DIM())
+                .arg(fdata)
+                .arg(ff));
 
     if (loading_widget_)
-        loading_widget_->setStyleSheet(
-            QString("background:%1;").arg(ui::colors::BG_BASE()));
+        loading_widget_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
 
     if (retry_btn_)
-        retry_btn_->setStyleSheet(
-            QString("QPushButton{background:transparent;color:%1;border:none;"
-                    "font-size:%2px;font-family:'%3';padding:0 4px;}"
-                    "QPushButton:hover{color:%4;}")
-                .arg(ui::colors::TEXT_DIM()).arg(fbtn).arg(ff).arg(ui::colors::TEXT_PRIMARY()));
+        retry_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
+                                          "font-size:%2px;font-family:'%3';padding:0 4px;}"
+                                          "QPushButton:hover{color:%4;}")
+                                      .arg(ui::colors::TEXT_DIM())
+                                      .arg(fbtn)
+                                      .arg(ff)
+                                      .arg(ui::colors::TEXT_PRIMARY()));
 
     if (table_) {
-        table_->setStyleSheet(
-            QString("QTableWidget{background:%1;alternate-background-color:%2;border:none;"
-                    "font-size:%6px;font-family:'%7';}"
-                    "QTableWidget::item{padding:0 4px;}"
-                    "QTableWidget::item:selected{background:transparent;}"
-                    "QHeaderView::section{background:%3;color:%4;border:none;"
-                    "border-bottom:1px solid %5;font-size:%6px;font-weight:600;"
-                    "font-family:'%7';padding:0 4px;}")
-                .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BG_BASE(),
-                     ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM())
-                .arg(fhdr).arg(ff));
+        table_->setStyleSheet(QString("QTableWidget{background:%1;alternate-background-color:%2;border:none;"
+                                      "font-size:%6px;font-family:'%7';}"
+                                      "QTableWidget::item{padding:0 4px;}"
+                                      "QTableWidget::item:selected{background:transparent;}"
+                                      "QHeaderView::section{background:%3;color:%4;border:none;"
+                                      "border-bottom:1px solid %5;font-size:%6px;font-weight:600;"
+                                      "font-family:'%7';padding:0 4px;}")
+                                  .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BG_BASE(),
+                                       ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM())
+                                  .arg(fhdr)
+                                  .arg(ff));
     }
 }
 
 void MarketPanel::show_row_context_menu(const QPoint& pos) {
     auto* it = table_->itemAt(pos);
-    if (!it) return;
+    if (!it)
+        return;
 
     // Column 0 now shows the friendly name; the raw ticker lives in UserRole.
     auto ticker_at = [this](int row) -> QString {
         auto* sym_item = table_->item(row, 0);
-        if (!sym_item) return QString();
+        if (!sym_item)
+            return QString();
         const QString t = sym_item->data(Qt::UserRole).toString();
         return t.isEmpty() ? sym_item->text() : t;
     };
@@ -600,7 +631,8 @@ void MarketPanel::show_row_context_menu(const QPoint& pos) {
     QAction* backtest_act = menu.addAction(tr("Backtest This Symbol"));
     connect(backtest_act, &QAction::triggered, this, [it, ticker_at]() {
         const QString t = ticker_at(it->row());
-        if (t.isEmpty()) return;
+        if (t.isEmpty())
+            return;
         QJsonObject config;
         QJsonArray symbols;
         symbols.append(t);
@@ -622,22 +654,26 @@ void MarketPanel::changeEvent(QEvent* event) {
 }
 
 void MarketPanel::retranslateUi() {
-    if (cols_btn_)   cols_btn_->setText(tr("[COLS]"));
-    if (edit_btn_)   edit_btn_->setText(tr("[EDIT]"));
-    if (delete_btn_) delete_btn_->setText(tr("[DEL]"));
-    if (retry_btn_)  retry_btn_->setText(tr("[RETRY]"));
+    if (cols_btn_)
+        cols_btn_->setText(tr("[COLS]"));
+    if (edit_btn_)
+        edit_btn_->setText(tr("[EDIT]"));
+    if (delete_btn_)
+        delete_btn_->setText(tr("[DEL]"));
+    if (retry_btn_)
+        retry_btn_->setText(tr("[RETRY]"));
 
     // Loading spinner — keep the current animation frame, refresh the word.
-    static const char* const kFrames[] = {
-        "\xe2\xa0\x8b", "\xe2\xa0\x99", "\xe2\xa0\xb9", "\xe2\xa0\xb8", "\xe2\xa0\xbc",
-        "\xe2\xa0\xb4", "\xe2\xa0\xa6", "\xe2\xa0\xa7", "\xe2\xa0\x87", "\xe2\xa0\x8f"
-    };
+    static const char* const kFrames[] = {"\xe2\xa0\x8b", "\xe2\xa0\x99", "\xe2\xa0\xb9", "\xe2\xa0\xb8",
+                                          "\xe2\xa0\xbc", "\xe2\xa0\xb4", "\xe2\xa0\xa6", "\xe2\xa0\xa7",
+                                          "\xe2\xa0\x87", "\xe2\xa0\x8f"};
     if (loading_label_)
         loading_label_->setText(tr("  %1  LOADING").arg(QString::fromUtf8(kFrames[loading_frame_ % 10])));
 
     // Table column headers — re-derived from the translated column labels.
     setup_table_columns();
-    if (has_data_) populate(cached_quotes_);
+    if (has_data_)
+        populate(cached_quotes_);
 }
 
 } // namespace fincept::screens

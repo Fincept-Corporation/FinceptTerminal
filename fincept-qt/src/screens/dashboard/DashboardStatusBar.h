@@ -52,9 +52,9 @@ class DashboardStatusBar : public QWidget {
     QLabel* layout_caption_lbl_ = nullptr;
     QLabel* feeds_caption_lbl_ = nullptr;
     QLabel* ready_lbl_ = nullptr;
-    int     layout_count_ = 0;
-    bool    feeds_connected_ = true;
-    int     last_latency_ms_ = -2; // -2 = uninitialised, -1 = error
+    int layout_count_ = 0;
+    bool feeds_connected_ = true;
+    int last_latency_ms_ = -2; // -2 = uninitialised, -1 = error
 
     PendingOrdersBadge* pending_badge_ = nullptr;
     fincept::ui::NotifBell* notif_bell_ = nullptr;

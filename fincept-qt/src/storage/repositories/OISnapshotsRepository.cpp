@@ -34,9 +34,8 @@ Result<void> OISnapshotsRepository::upsert_batch(qint64 token, const QVector<OIS
         LOG_WARN("OISnapshotsRepo", "transaction begin failed; using individual statements");
     }
 
-    const QString sql = QStringLiteral(
-        "INSERT OR REPLACE INTO oi_snapshots (token, ts_minute, oi, ltp, vol, iv) "
-        "VALUES (?, ?, ?, ?, ?, ?)");
+    const QString sql = QStringLiteral("INSERT OR REPLACE INTO oi_snapshots (token, ts_minute, oi, ltp, vol, iv) "
+                                       "VALUES (?, ?, ?, ?, ?, ?)");
 
     for (const auto& s : samples) {
         auto r = db().execute(sql, {token, s.ts_minute, s.oi, s.ltp, s.vol, s.iv});
@@ -55,24 +54,20 @@ Result<void> OISnapshotsRepository::upsert_batch(qint64 token, const QVector<OIS
 }
 
 Result<QVector<OISample>> OISnapshotsRepository::get_recent(qint64 token, int limit) {
-    return query_list(
-        "SELECT ts_minute, oi, ltp, vol, iv FROM oi_snapshots "
-        "WHERE token = ? ORDER BY ts_minute DESC LIMIT ?",
-        {token, limit}, &OISnapshotsRepository::map_row);
+    return query_list("SELECT ts_minute, oi, ltp, vol, iv FROM oi_snapshots "
+                      "WHERE token = ? ORDER BY ts_minute DESC LIMIT ?",
+                      {token, limit}, &OISnapshotsRepository::map_row);
 }
 
-Result<QVector<OISample>> OISnapshotsRepository::get_window(qint64 token, qint64 since_minute,
-                                                            qint64 until_minute) {
+Result<QVector<OISample>> OISnapshotsRepository::get_window(qint64 token, qint64 since_minute, qint64 until_minute) {
     if (until_minute <= 0) {
-        return query_list(
-            "SELECT ts_minute, oi, ltp, vol, iv FROM oi_snapshots "
-            "WHERE token = ? AND ts_minute >= ? ORDER BY ts_minute ASC",
-            {token, since_minute}, &OISnapshotsRepository::map_row);
+        return query_list("SELECT ts_minute, oi, ltp, vol, iv FROM oi_snapshots "
+                          "WHERE token = ? AND ts_minute >= ? ORDER BY ts_minute ASC",
+                          {token, since_minute}, &OISnapshotsRepository::map_row);
     }
-    return query_list(
-        "SELECT ts_minute, oi, ltp, vol, iv FROM oi_snapshots "
-        "WHERE token = ? AND ts_minute >= ? AND ts_minute <= ? ORDER BY ts_minute ASC",
-        {token, since_minute, until_minute}, &OISnapshotsRepository::map_row);
+    return query_list("SELECT ts_minute, oi, ltp, vol, iv FROM oi_snapshots "
+                      "WHERE token = ? AND ts_minute >= ? AND ts_minute <= ? ORDER BY ts_minute ASC",
+                      {token, since_minute, until_minute}, &OISnapshotsRepository::map_row);
 }
 
 Result<int> OISnapshotsRepository::delete_older_than(qint64 minute_floor) {

@@ -135,10 +135,10 @@ std::vector<ToolDef> get_settings_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("provider", "Provider id (openai, anthropic, ollama, groq, google, fincept)")
-                .required()
-                .enums({"openai", "anthropic", "ollama", "groq", "google", "fincept"})
-            .build();
+                             .string("provider", "Provider id (openai, anthropic, ollama, groq, google, fincept)")
+                             .required()
+                             .enums({"openai", "anthropic", "ollama", "groq", "google", "fincept"})
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString provider = args["provider"].toString();
             if (provider.isEmpty())

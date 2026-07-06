@@ -6,8 +6,7 @@
 //
 // Part of the partial-class split of PortfolioScreen.cpp.
 
-#include "screens/portfolio/PortfolioScreen.h"
-
+#include "core/events/EventBus.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
@@ -21,11 +20,11 @@
 #include "screens/portfolio/PortfolioOrderPanel.h"
 #include "screens/portfolio/PortfolioPanelHeader.h"
 #include "screens/portfolio/PortfolioPerfChart.h"
+#include "screens/portfolio/PortfolioScreen.h"
 #include "screens/portfolio/PortfolioSectorPanel.h"
 #include "screens/portfolio/PortfolioStatsRibbon.h"
 #include "screens/portfolio/PortfolioStatusBar.h"
 #include "screens/portfolio/PortfolioTxnPanel.h"
-#include "core/events/EventBus.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/portfolio/PortfolioService.h"
@@ -194,9 +193,7 @@ void PortfolioScreen::build_ui() {
     insights_scrim_->hide();
 
     insights_panel_ = new PortfolioInsightsPanel(this);
-    connect(insights_panel_, &PortfolioInsightsPanel::close_requested, this, [this]() {
-        insights_scrim_->hide();
-    });
+    connect(insights_panel_, &PortfolioInsightsPanel::close_requested, this, [this]() { insights_scrim_->hide(); });
 
     // Wire export/import/AI/Agent signals from CommandBar
     connect(command_bar_, &PortfolioCommandBar::export_csv_requested, this, [this]() {
@@ -211,7 +208,8 @@ void PortfolioScreen::build_ui() {
     connect(command_bar_, &PortfolioCommandBar::export_json_requested, this, [this]() {
         if (selected_id_.isEmpty())
             return;
-        QString path = QFileDialog::getSaveFileName(this, tr("Export JSON"), "portfolio.json", tr("JSON Files (*.json)"));
+        QString path =
+            QFileDialog::getSaveFileName(this, tr("Export JSON"), "portfolio.json", tr("JSON Files (*.json)"));
         if (!path.isEmpty()) {
             services::PortfolioService::instance().export_json(selected_id_, path);
             services::FileManagerService::instance().import_file(path, "portfolio");
@@ -247,21 +245,21 @@ void PortfolioScreen::build_ui() {
     connect(&services::PortfolioService::instance(), &services::PortfolioService::import_complete, this,
             [this](portfolio::ImportResult result) {
                 if (result.portfolio_id.isEmpty()) {
-                    QString detail = result.errors.isEmpty()
-                                         ? tr("Import failed with no details.")
-                                         : result.errors.join("\n");
-                    QMessageBox::warning(this, tr("Portfolio Import Failed"),
-                                         tr("Could not import the portfolio.\n\n") + detail +
-                                             tr("\n\nExpected format:\n"
-                                                "{\n"
-                                                "  \"portfolio_name\": \"My Portfolio\",\n"
-                                                "  \"currency\": \"USD\",\n"
-                                                "  \"owner\": \"...\",\n"
-                                                "  \"transactions\": [\n"
-                                                "    {\"date\": \"YYYY-MM-DD\", \"symbol\": \"AAPL\", \"type\": \"BUY\",\n"
-                                                "     \"quantity\": 10, \"price\": 150.0}\n"
-                                                "  ]\n"
-                                                "}"));
+                    QString detail =
+                        result.errors.isEmpty() ? tr("Import failed with no details.") : result.errors.join("\n");
+                    QMessageBox::warning(
+                        this, tr("Portfolio Import Failed"),
+                        tr("Could not import the portfolio.\n\n") + detail +
+                            tr("\n\nExpected format:\n"
+                               "{\n"
+                               "  \"portfolio_name\": \"My Portfolio\",\n"
+                               "  \"currency\": \"USD\",\n"
+                               "  \"owner\": \"...\",\n"
+                               "  \"transactions\": [\n"
+                               "    {\"date\": \"YYYY-MM-DD\", \"symbol\": \"AAPL\", \"type\": \"BUY\",\n"
+                               "     \"quantity\": 10, \"price\": 150.0}\n"
+                               "  ]\n"
+                               "}"));
                     return;
                 }
                 on_portfolio_selected(result.portfolio_id);
@@ -275,20 +273,19 @@ void PortfolioScreen::build_ui() {
 // they can be retranslated on QEvent::LanguageChange without reconstructing the
 // card.
 static QPushButton* make_cta_card(const QString& glyph, const QString& title, const QString& subtitle,
-                                  const QString& accent_hex, QWidget* parent,
-                                  QLabel** out_title = nullptr, QLabel** out_subtitle = nullptr) {
+                                  const QString& accent_hex, QWidget* parent, QLabel** out_title = nullptr,
+                                  QLabel** out_subtitle = nullptr) {
     auto* btn = new QPushButton(parent);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setFixedSize(220, 140);
     btn->setObjectName("pfCtaCard");
     btn->setProperty("accent", accent_hex);
     // Square corners — DESIGN_SYSTEM rule 9.1 forbids border-radius.
-    btn->setStyleSheet(
-        QString("QPushButton#pfCtaCard { background:%1; color:%2; border:1px solid %3;"
-                "  text-align:left; padding:16px; }"
-                "QPushButton#pfCtaCard:hover { border-color:%4; background:%5; }")
-            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), accent_hex,
-                 ui::colors::BG_HOVER()));
+    btn->setStyleSheet(QString("QPushButton#pfCtaCard { background:%1; color:%2; border:1px solid %3;"
+                               "  text-align:left; padding:16px; }"
+                               "QPushButton#pfCtaCard:hover { border-color:%4; background:%5; }")
+                           .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                accent_hex, ui::colors::BG_HOVER()));
 
     auto* v = new QVBoxLayout(btn);
     v->setContentsMargins(0, 0, 0, 0);
@@ -306,14 +303,16 @@ static QPushButton* make_cta_card(const QString& glyph, const QString& title, co
                              " background:transparent; border:none;")
                          .arg(ui::colors::TEXT_PRIMARY()));
     v->addWidget(h);
-    if (out_title) *out_title = h;
+    if (out_title)
+        *out_title = h;
 
     auto* p = new QLabel(subtitle);
     p->setWordWrap(true);
     p->setStyleSheet(QString("color:%1; font-size:11px; line-height:1.4; background:transparent; border:none;")
                          .arg(ui::colors::TEXT_TERTIARY()));
     v->addWidget(p);
-    if (out_subtitle) *out_subtitle = p;
+    if (out_subtitle)
+        *out_subtitle = p;
 
     v->addStretch(1);
 
@@ -357,7 +356,8 @@ QWidget* PortfolioScreen::build_empty_state() {
 
     empty_sub_label_ = new QLabel(tr("Create, import, or explore a sample portfolio to get started."));
     empty_sub_label_->setAlignment(Qt::AlignCenter);
-    empty_sub_label_->setStyleSheet(QString("color:%1; font-size:12px; letter-spacing:0.2px;").arg(ui::colors::TEXT_SECONDARY()));
+    empty_sub_label_->setStyleSheet(
+        QString("color:%1; font-size:12px; letter-spacing:0.2px;").arg(ui::colors::TEXT_SECONDARY()));
     layout->addWidget(empty_sub_label_);
 
     layout->addSpacing(24);
@@ -367,25 +367,25 @@ QWidget* PortfolioScreen::build_empty_state() {
     card_row->setAlignment(Qt::AlignCenter);
     card_row->setSpacing(14);
 
-    auto* create_card = make_cta_card("\u25A2", tr("CREATE NEW"),
-                                      tr("Start a fresh portfolio. Name it, pick a currency, "
-                                         "and add holdings one at a time."),
-                                      ui::colors::AMBER(), content,
-                                      &empty_create_card_.title, &empty_create_card_.subtitle);
+    auto* create_card =
+        make_cta_card("\u25A2", tr("CREATE NEW"),
+                      tr("Start a fresh portfolio. Name it, pick a currency, "
+                         "and add holdings one at a time."),
+                      ui::colors::AMBER(), content, &empty_create_card_.title, &empty_create_card_.subtitle);
     connect(create_card, &QPushButton::clicked, this, &PortfolioScreen::on_create_requested);
 
-    auto* import_card = make_cta_card("\u2913", tr("IMPORT JSON"),
-                                      tr("Load an existing portfolio from an exported JSON file. "
-                                         "Merge into an existing portfolio or create a new one."),
-                                      ui::colors::CYAN(), content,
-                                      &empty_import_card_.title, &empty_import_card_.subtitle);
+    auto* import_card =
+        make_cta_card("\u2913", tr("IMPORT JSON"),
+                      tr("Load an existing portfolio from an exported JSON file. "
+                         "Merge into an existing portfolio or create a new one."),
+                      ui::colors::CYAN(), content, &empty_import_card_.title, &empty_import_card_.subtitle);
     connect(import_card, &QPushButton::clicked, command_bar_, &PortfolioCommandBar::import_requested);
 
-    auto* demo_card = make_cta_card("\u25B6", tr("LOAD DEMO"),
-                                    tr("Preview the workspace with a sample diversified portfolio "
-                                       "of 12 major equities."),
-                                    ui::colors::POSITIVE(), content,
-                                    &empty_demo_card_.title, &empty_demo_card_.subtitle);
+    auto* demo_card =
+        make_cta_card("\u25B6", tr("LOAD DEMO"),
+                      tr("Preview the workspace with a sample diversified portfolio "
+                         "of 12 major equities."),
+                      ui::colors::POSITIVE(), content, &empty_demo_card_.title, &empty_demo_card_.subtitle);
     connect(demo_card, &QPushButton::clicked, this, [this]() { load_demo_portfolio(); });
 
     card_row->addWidget(create_card);
@@ -469,7 +469,6 @@ QWidget* PortfolioScreen::build_loading_state() {
     return w;
 }
 
-
 void PortfolioScreen::update_content_state() {
     bool has_portfolios = !portfolios_.isEmpty();
     bool has_selection = !selected_id_.isEmpty();
@@ -512,7 +511,6 @@ void PortfolioScreen::update_content_state() {
 
 // ── Lifecycle (P3) ───────────────────────────────────────────────────────────
 
-
 QWidget* PortfolioScreen::build_main_view() {
     auto* w = new QWidget(this);
     w->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
@@ -538,12 +536,11 @@ QWidget* PortfolioScreen::build_main_view() {
     // Trigger backfill when the user clicks a period that needs more history
     // than we have cached. PortfolioService re-emits history_backfilled when
     // done, which routes back through the chart via load_snapshots.
-    connect(perf_chart_, &PortfolioPerfChart::backfill_period_requested, this,
-            [this](const QString& period) {
-                if (selected_id_.isEmpty())
-                    return;
-                services::PortfolioService::instance().backfill_history(selected_id_, period);
-            });
+    connect(perf_chart_, &PortfolioPerfChart::backfill_period_requested, this, [this](const QString& period) {
+        if (selected_id_.isEmpty())
+            return;
+        services::PortfolioService::instance().backfill_history(selected_id_, period);
+    });
 
     sector_panel_ = new PortfolioSectorPanel;
     connect(sector_panel_, &PortfolioSectorPanel::sector_selected, this, [this](const QString& sector) {
@@ -608,10 +605,9 @@ QWidget* PortfolioScreen::build_main_view() {
     filter_wrap->setFixedHeight(22);
     filter_wrap->setMinimumWidth(200);
     filter_wrap->setObjectName("pfFilterWrap");
-    filter_wrap->setStyleSheet(
-        QString("#pfFilterWrap { background:%1; border:1px solid %2; }"
-                "#pfFilterWrap:focus-within { border-color:%3; }")
-            .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+    filter_wrap->setStyleSheet(QString("#pfFilterWrap { background:%1; border:1px solid %2; }"
+                                       "#pfFilterWrap:focus-within { border-color:%3; }")
+                                   .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     auto* filter_hl = new QHBoxLayout(filter_wrap);
     filter_hl->setContentsMargins(8, 0, 8, 0);
     filter_hl->setSpacing(6);
@@ -623,11 +619,11 @@ QWidget* PortfolioScreen::build_main_view() {
 
     positions_filter_edit_ = new QLineEdit;
     positions_filter_edit_->setPlaceholderText(tr("Filter positions…"));
-    positions_filter_edit_->setStyleSheet(QString("QLineEdit { background:transparent; color:%1; border:none;"
-                                                  "  font-size:11px; font-family:%2; }"
-                                                  "QLineEdit:focus { color:%3; }")
-                                              .arg(ui::colors::TEXT_SECONDARY(), ui::fonts::DATA_FAMILY,
-                                                   ui::colors::TEXT_PRIMARY()));
+    positions_filter_edit_->setStyleSheet(
+        QString("QLineEdit { background:transparent; color:%1; border:none;"
+                "  font-size:11px; font-family:%2; }"
+                "QLineEdit:focus { color:%3; }")
+            .arg(ui::colors::TEXT_SECONDARY(), ui::fonts::DATA_FAMILY, ui::colors::TEXT_PRIMARY()));
     filter_hl->addWidget(positions_filter_edit_, 1);
 
     header_hl->addWidget(filter_wrap);

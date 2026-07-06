@@ -5,10 +5,9 @@
 //
 // Part of the partial-class split of SupportScreen.cpp.
 
+#include "auth/UserApi.h"
 #include "screens/support/SupportScreen.h"
 #include "screens/support/SupportScreen_internal.h"
-
-#include "auth/UserApi.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
@@ -253,16 +252,14 @@ QWidget* SupportScreen::build_create_page() {
         };
 
         make_combo_field(tr("Category"), category_combo_,
-                         {{tr("Technical"),       "technical"},
-                          {tr("Billing"),         "billing"},
+                         {{tr("Technical"), "technical"},
+                          {tr("Billing"), "billing"},
                           {tr("Feature Request"), "feature_request"},
-                          {tr("Bug Report"),      "bug_report"},
-                          {tr("Account"),         "account"},
-                          {tr("Other"),           "other"}});
+                          {tr("Bug Report"), "bug_report"},
+                          {tr("Account"), "account"},
+                          {tr("Other"), "other"}});
         make_combo_field(tr("Priority"), priority_combo_,
-                         {{tr("Low"),    "low"},
-                          {tr("Medium"), "medium"},
-                          {tr("High"),   "high"}},
+                         {{tr("Low"), "low"}, {tr("Medium"), "medium"}, {tr("High"), "high"}},
                          /*def=*/1);
 
         cl->addWidget(row_w);

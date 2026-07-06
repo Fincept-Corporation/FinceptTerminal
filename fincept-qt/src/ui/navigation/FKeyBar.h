@@ -32,12 +32,12 @@ class TabBar : public QWidget {
   private:
     struct TabDef {
         QString id;
-        QString source_label;  // English source key (used for tr() lookup)
+        QString source_label; // English source key (used for tr() lookup)
     };
 
     QHBoxLayout* tab_layout_ = nullptr;
     QVector<QPushButton*> tab_buttons_;
-    QVector<TabDef>       tab_defs_;
+    QVector<TabDef> tab_defs_;
     QString active_id_ = "dashboard";
 
     void add_tab(const TabDef& def);

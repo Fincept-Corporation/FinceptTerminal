@@ -13,8 +13,7 @@ namespace fincept::services::algo {
 // expressed in the same condition schema the Builder and ConditionEvaluator use.
 inline QVector<AlgoStrategy> algo_library_strategies() {
     // value-comparison leaf: <indicator>.<field> <op> <constant>
-    auto cv = [](const QString& ind, const QJsonObject& p, const QString& field,
-                 const QString& op, double value) {
+    auto cv = [](const QString& ind, const QJsonObject& p, const QString& field, const QString& op, double value) {
         QJsonObject c;
         c["indicator"] = ind;
         c["params"] = p;
@@ -47,8 +46,8 @@ inline QVector<AlgoStrategy> algo_library_strategies() {
         return c;
     };
     auto mk = [](const QString& id, const QString& name, const QString& category, const QString& tf,
-                 const QString& entry_logic, const QString& exit_logic, double sl, double tp,
-                 const QJsonArray& entry, const QJsonArray& exit) {
+                 const QString& entry_logic, const QString& exit_logic, double sl, double tp, const QJsonArray& entry,
+                 const QJsonArray& exit) {
         AlgoStrategy s;
         s.id = id;
         s.name = name;
@@ -85,10 +84,10 @@ inline QVector<AlgoStrategy> algo_library_strategies() {
             {cv("ADX", {{"period", 14}}, "value", "<", 20),
              ci("EMA", {{"period", 9}}, "value", "crosses_below", "EMA", {{"period", 21}}, "value")});
     v << mk("LIB-ICHIMOKU", "Ichimoku Cloud Break", "Trend Following", "1d", "AND", "AND", 4, 12,
-            {ci("CLOSE", {}, "value", "crosses_above", "ICHIMOKU",
-                {{"tenkan", 9}, {"kijun", 26}, {"senkou", 52}}, "senkou_a")},
-            {ci("CLOSE", {}, "value", "crosses_below", "ICHIMOKU",
-                {{"tenkan", 9}, {"kijun", 26}, {"senkou", 52}}, "kijun_sen")});
+            {ci("CLOSE", {}, "value", "crosses_above", "ICHIMOKU", {{"tenkan", 9}, {"kijun", 26}, {"senkou", 52}},
+                "senkou_a")},
+            {ci("CLOSE", {}, "value", "crosses_below", "ICHIMOKU", {{"tenkan", 9}, {"kijun", 26}, {"senkou", 52}},
+                "kijun_sen")});
     // Breakout vs the PRIOR bar's 20-bar channel (compare_offset=1); comparing
     // against the current bar's band is impossible since close is inside it.
     v << mk("LIB-DONCHIAN-BREAK", "Donchian Breakout", "Trend Following", "1h", "AND", "AND", 3, 9,
@@ -97,8 +96,7 @@ inline QVector<AlgoStrategy> algo_library_strategies() {
 
     // ── Momentum ─────────────────────────────────────────────────────────────
     v << mk("LIB-RSI-REVERSAL", "RSI Reversal", "Momentum", "1h", "AND", "AND", 3, 8,
-            {cv("RSI", {{"period", 14}}, "value", "<", 30)},
-            {cv("RSI", {{"period", 14}}, "value", ">", 60)});
+            {cv("RSI", {{"period", 14}}, "value", "<", 30)}, {cv("RSI", {{"period", 14}}, "value", ">", 60)});
     v << mk("LIB-RSI-BREAKOUT", "RSI Momentum Breakout", "Momentum", "15m", "AND", "AND", 2, 6,
             {cv("RSI", {{"period", 14}}, "value", "crosses_above", 60)},
             {cv("RSI", {{"period", 14}}, "value", "crosses_below", 40)});
@@ -135,15 +133,13 @@ inline QVector<AlgoStrategy> algo_library_strategies() {
 
     // ── Volume ───────────────────────────────────────────────────────────────
     v << mk("LIB-OBV-TREND", "OBV Trend Confirm", "Volume", "1d", "AND", "OR", 4, 12,
-            {cv("OBV", {}, "value", "rising", 0),
-             ci("CLOSE", {}, "value", ">", "EMA", {{"period", 21}}, "value")},
+            {cv("OBV", {}, "value", "rising", 0), ci("CLOSE", {}, "value", ">", "EMA", {{"period", 21}}, "value")},
             {cv("OBV", {}, "value", "falling", 0)});
     v << mk("LIB-CMF", "Chaikin Money Flow", "Volume", "1d", "AND", "AND", 4, 10,
             {cv("CMF", {{"period", 20}}, "value", "crosses_above", 0)},
             {cv("CMF", {{"period", 20}}, "value", "crosses_below", 0)});
     v << mk("LIB-MFI", "Money Flow Index", "Volume", "1h", "AND", "AND", 3, 8,
-            {cv("MFI", {{"period", 14}}, "value", "<", 20)},
-            {cv("MFI", {{"period", 14}}, "value", ">", 80)});
+            {cv("MFI", {{"period", 14}}, "value", "<", 20)}, {cv("MFI", {{"period", 14}}, "value", ">", 80)});
 
     // ── Multi-Indicator combos ───────────────────────────────────────────────
     v << mk("LIB-RSI-MACD", "RSI + MACD Confluence", "Multi-Indicator", "15m", "AND", "OR", 3, 9,
@@ -178,16 +174,14 @@ inline QVector<AlgoStrategy> algo_library_strategies() {
             {ci("CLOSE", {}, "value", "<", "EMA", {{"period", 20}}, "value")});
     // Buy any RSI dip under 45, take profit on the bounce past 55 (or TP/SL first).
     v << mk("LIB-SIMPLE-RSI-DIP", "Simple RSI Dip", "Simple", "15m", "AND", "AND", 1.5, 1.5,
-            {cv("RSI", {{"period", 14}}, "value", "<", 45)},
-            {cv("RSI", {{"period", 14}}, "value", ">", 55)});
+            {cv("RSI", {{"period", 14}}, "value", "<", 45)}, {cv("RSI", {{"period", 14}}, "value", ">", 55)});
     // Fast scalp: above the 9 EMA, grab ~0.8% then out (mirrors a tight fixed-target plan).
     v << mk("LIB-SIMPLE-SCALP", "Quick EMA Scalp", "Simple", "5m", "AND", "AND", 0.5, 0.8,
             {ci("CLOSE", {}, "value", ">", "EMA", {{"period", 9}}, "value")},
             {ci("CLOSE", {}, "value", "<", "EMA", {{"period", 9}}, "value")});
     // Intraday long bias: trade only while price is above the session VWAP.
     v << mk("LIB-SIMPLE-VWAP", "Price Above VWAP", "Simple", "5m", "AND", "AND", 1, 1,
-            {ci("CLOSE", {}, "value", ">", "VWAP", {}, "value")},
-            {ci("CLOSE", {}, "value", "<", "VWAP", {}, "value")});
+            {ci("CLOSE", {}, "value", ">", "VWAP", {}, "value")}, {ci("CLOSE", {}, "value", "<", "VWAP", {}, "value")});
     // Momentum on: MACD histogram positive; off when it turns negative.
     v << mk("LIB-SIMPLE-MACD-HIST", "MACD Histogram Bull", "Simple", "15m", "AND", "AND", 1.5, 2,
             {cv("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "histogram", ">", 0)},

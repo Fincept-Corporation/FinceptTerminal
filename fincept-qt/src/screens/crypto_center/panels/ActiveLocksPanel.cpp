@@ -29,41 +29,50 @@ namespace fincept::screens::panels {
 namespace {
 
 QString font_stack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 double atomic_to_ui(const QString& raw, int decimals) {
-    if (raw.isEmpty()) return 0.0;
+    if (raw.isEmpty())
+        return 0.0;
     bool ok = false;
     const auto u = raw.toULongLong(&ok);
-    if (!ok) return 0.0;
+    if (!ok)
+        return 0.0;
     return static_cast<double>(u) / std::pow(10.0, std::max(0, decimals));
 }
 
 QString format_token(double v, int dp = 2) {
-    if (v <= 0.0) return QStringLiteral("0");
+    if (v <= 0.0)
+        return QStringLiteral("0");
     return QLocale::system().toString(v, 'f', dp);
 }
 
 QString format_usdc(double v) {
-    if (v <= 0.0) return QStringLiteral("$0");
+    if (v <= 0.0)
+        return QStringLiteral("$0");
     return QStringLiteral("$%1").arg(QLocale::system().toString(v, 'f', 0));
 }
 
 QString format_unlock_date(qint64 ts_ms) {
-    if (ts_ms <= 0) return QStringLiteral("—");
+    if (ts_ms <= 0)
+        return QStringLiteral("—");
     return QDateTime::fromMSecsSinceEpoch(ts_ms).toString(QStringLiteral("yyyy-MM-dd"));
 }
 
 QString format_duration(qint64 secs) {
     constexpr qint64 kMonth = 30LL * 24 * 60 * 60;
-    constexpr qint64 kYear  = 365LL * 24 * 60 * 60;
-    if (secs >= kYear * 4)  return QStringLiteral("4 yr");
-    if (secs >= kYear * 2)  return QStringLiteral("2 yr");
-    if (secs >= kYear)      return QStringLiteral("1 yr");
-    if (secs >= kMonth * 6) return QStringLiteral("6 mo");
-    if (secs >= kMonth * 3) return QStringLiteral("3 mo");
+    constexpr qint64 kYear = 365LL * 24 * 60 * 60;
+    if (secs >= kYear * 4)
+        return QStringLiteral("4 yr");
+    if (secs >= kYear * 2)
+        return QStringLiteral("2 yr");
+    if (secs >= kYear)
+        return QStringLiteral("1 yr");
+    if (secs >= kMonth * 6)
+        return QStringLiteral("6 mo");
+    if (secs >= kMonth * 3)
+        return QStringLiteral("3 mo");
     // Off-grid (custom duration via on-chain extend) — show approx months.
     return QStringLiteral("%1 mo").arg(secs / kMonth);
 }
@@ -80,14 +89,12 @@ ActiveLocksPanel::ActiveLocksPanel(QWidget* parent) : QWidget(parent) {
     apply_theme();
 
     auto& svc = fincept::wallet::WalletService::instance();
-    connect(&svc, &fincept::wallet::WalletService::wallet_connected, this,
-            &ActiveLocksPanel::on_wallet_connected);
+    connect(&svc, &fincept::wallet::WalletService::wallet_connected, this, &ActiveLocksPanel::on_wallet_connected);
     connect(&svc, &fincept::wallet::WalletService::wallet_disconnected, this,
             &ActiveLocksPanel::on_wallet_disconnected);
 
     auto& hub = fincept::datahub::DataHub::instance();
-    connect(&hub, &fincept::datahub::DataHub::topic_error, this,
-            &ActiveLocksPanel::on_topic_error);
+    connect(&hub, &fincept::datahub::DataHub::topic_error, this, &ActiveLocksPanel::on_topic_error);
 
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
@@ -147,12 +154,10 @@ void ActiveLocksPanel::build_ui() {
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setShowGrid(false);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(table_, &QTableWidget::customContextMenuRequested, this,
-            &ActiveLocksPanel::on_row_context_menu);
+    connect(table_, &QTableWidget::customContextMenuRequested, this, &ActiveLocksPanel::on_row_context_menu);
     bl->addWidget(table_, 1);
 
-    empty_state_ = new QLabel(
-        tr("No active locks. Lock $FNCPT above to start earning yield."), body);
+    empty_state_ = new QLabel(tr("No active locks. Lock $FNCPT above to start earning yield."), body);
     empty_state_->setObjectName(QStringLiteral("activeLocksEmpty"));
     empty_state_->setAlignment(Qt::AlignCenter);
     empty_state_->setMinimumHeight(120);
@@ -181,61 +186,58 @@ void ActiveLocksPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral(
-        "QWidget#activeLocksPanel { background:%1; }"
-        "QWidget#activeLocksHead { background:%2; border-bottom:1px solid %3; }"
-        "QLabel#activeLocksTitle { color:%4; font-family:%5; font-size:11px;"
-        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-        "QLabel#activeLocksHeadCaption { color:%6; font-family:%5; font-size:10px;"
-        "  font-weight:600; letter-spacing:0.8px; background:transparent; }"
-        "QLabel#activeLocksPill { color:%7; background:%8; border:1px solid %3;"
-        "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
-        "  padding:2px 8px; }"
-        "QLabel#activeLocksPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-        "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
-        "  letter-spacing:1.2px; padding:2px 8px; }"
-        "QWidget#activeLocksBody { background:%1; }"
-        "QTableWidget#activeLocksTable { background:%1; color:%7; gridline-color:%3;"
-        "  border:none; selection-background-color:%10; selection-color:%7;"
-        "  font-family:%5; font-size:11px; }"
-        "QTableWidget#activeLocksTable::item { padding:6px 10px; border-bottom:1px solid %3; }"
-        "QHeaderView::section { background:%8; color:%6; padding:6px 10px;"
-        "  border:none; border-bottom:1px solid %3; font-family:%5;"
-        "  font-size:9px; font-weight:700; letter-spacing:1.4px; }"
-        "QLabel#activeLocksEmpty { color:%6; font-family:%5; font-size:11px;"
-        "  background:transparent; }"
-        "QFrame#activeLocksErrorStrip { background:rgba(220,38,38,0.10);"
-        "  border:1px solid %9; }"
-        "QLabel#activeLocksErrorIcon { color:%9; font-family:%5; font-size:13px;"
-        "  font-weight:700; background:transparent; }"
-        "QLabel#activeLocksErrorText { color:%9; font-family:%5; font-size:11px;"
-        "  background:transparent; }"
-    )
-        .arg(BG_BASE(),         // %1
-             BG_SURFACE(),      // %2
-             BORDER_DIM(),      // %3
-             AMBER(),           // %4
-             font,              // %5
-             TEXT_TERTIARY(),   // %6
-             TEXT_PRIMARY(),    // %7
-             BG_RAISED(),       // %8
-             NEGATIVE())        // %9
-        .arg(BG_HOVER(),                       // %10
-             BORDER_BRIGHT(),                  // %11
-             QStringLiteral("#78350f"));       // %12 darker amber
+    const QString ss =
+        QStringLiteral("QWidget#activeLocksPanel { background:%1; }"
+                       "QWidget#activeLocksHead { background:%2; border-bottom:1px solid %3; }"
+                       "QLabel#activeLocksTitle { color:%4; font-family:%5; font-size:11px;"
+                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
+                       "QLabel#activeLocksHeadCaption { color:%6; font-family:%5; font-size:10px;"
+                       "  font-weight:600; letter-spacing:0.8px; background:transparent; }"
+                       "QLabel#activeLocksPill { color:%7; background:%8; border:1px solid %3;"
+                       "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
+                       "  padding:2px 8px; }"
+                       "QLabel#activeLocksPillDemo { color:%4; background:rgba(217,119,6,0.10);"
+                       "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
+                       "  letter-spacing:1.2px; padding:2px 8px; }"
+                       "QWidget#activeLocksBody { background:%1; }"
+                       "QTableWidget#activeLocksTable { background:%1; color:%7; gridline-color:%3;"
+                       "  border:none; selection-background-color:%10; selection-color:%7;"
+                       "  font-family:%5; font-size:11px; }"
+                       "QTableWidget#activeLocksTable::item { padding:6px 10px; border-bottom:1px solid %3; }"
+                       "QHeaderView::section { background:%8; color:%6; padding:6px 10px;"
+                       "  border:none; border-bottom:1px solid %3; font-family:%5;"
+                       "  font-size:9px; font-weight:700; letter-spacing:1.4px; }"
+                       "QLabel#activeLocksEmpty { color:%6; font-family:%5; font-size:11px;"
+                       "  background:transparent; }"
+                       "QFrame#activeLocksErrorStrip { background:rgba(220,38,38,0.10);"
+                       "  border:1px solid %9; }"
+                       "QLabel#activeLocksErrorIcon { color:%9; font-family:%5; font-size:13px;"
+                       "  font-weight:700; background:transparent; }"
+                       "QLabel#activeLocksErrorText { color:%9; font-family:%5; font-size:11px;"
+                       "  background:transparent; }")
+            .arg(BG_BASE(),                  // %1
+                 BG_SURFACE(),               // %2
+                 BORDER_DIM(),               // %3
+                 AMBER(),                    // %4
+                 font,                       // %5
+                 TEXT_TERTIARY(),            // %6
+                 TEXT_PRIMARY(),             // %7
+                 BG_RAISED(),                // %8
+                 NEGATIVE())                 // %9
+            .arg(BG_HOVER(),                 // %10
+                 BORDER_BRIGHT(),            // %11
+                 QStringLiteral("#78350f")); // %12 darker amber
     setStyleSheet(ss);
 }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-void ActiveLocksPanel::on_wallet_connected(const QString& pubkey,
-                                            const QString& /*label*/) {
+void ActiveLocksPanel::on_wallet_connected(const QString& pubkey, const QString& /*label*/) {
     current_pubkey_ = pubkey;
     if (isVisible() && current_topic_.isEmpty()) {
         current_topic_ = QStringLiteral("wallet:locks:%1").arg(pubkey);
         auto& hub = fincept::datahub::DataHub::instance();
-        hub.subscribe(this, current_topic_,
-                      [this](const QVariant& v) { on_locks_update(v); });
+        hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_locks_update(v); });
         hub.request(current_topic_, /*force=*/false);
     }
 }
@@ -253,8 +255,7 @@ void ActiveLocksPanel::showEvent(QShowEvent* e) {
     if (!current_pubkey_.isEmpty() && current_topic_.isEmpty()) {
         current_topic_ = QStringLiteral("wallet:locks:%1").arg(current_pubkey_);
         auto& hub = fincept::datahub::DataHub::instance();
-        hub.subscribe(this, current_topic_,
-                      [this](const QVariant& v) { on_locks_update(v); });
+        hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_locks_update(v); });
         hub.request(current_topic_, /*force=*/false);
     }
 }
@@ -272,7 +273,8 @@ void ActiveLocksPanel::changeEvent(QEvent* event) {
 }
 
 void ActiveLocksPanel::retranslateUi() {
-    if (title_) title_->setText(tr("ACTIVE LOCKS"));
+    if (title_)
+        title_->setText(tr("ACTIVE LOCKS"));
     if (table_) {
         table_->setHorizontalHeaderLabels({
             tr("LOCKED"),
@@ -283,8 +285,7 @@ void ActiveLocksPanel::retranslateUi() {
         });
     }
     if (empty_state_)
-        empty_state_->setText(
-            tr("No active locks. Lock $FNCPT above to start earning yield."));
+        empty_state_->setText(tr("No active locks. Lock $FNCPT above to start earning yield."));
     // Re-render summary + TOTAL row + LIVE/DEMO pill in the new locale.
     rebuild_table();
 }
@@ -292,13 +293,15 @@ void ActiveLocksPanel::retranslateUi() {
 // ── Updates ────────────────────────────────────────────────────────────────
 
 void ActiveLocksPanel::on_locks_update(const QVariant& v) {
-    if (!v.canConvert<QVector<fincept::wallet::LockPosition>>()) return;
+    if (!v.canConvert<QVector<fincept::wallet::LockPosition>>())
+        return;
     latest_ = v.value<QVector<fincept::wallet::LockPosition>>();
     rebuild_table();
 }
 
 void ActiveLocksPanel::on_topic_error(const QString& topic, const QString& error) {
-    if (topic != current_topic_) return;
+    if (topic != current_topic_)
+        return;
     show_error_strip(tr("Locks feed error: %1").arg(error));
 }
 
@@ -327,8 +330,7 @@ void ActiveLocksPanel::rebuild_table() {
         total_weight_ui += weight_ui;
         total_yield_ui += p.lifetime_yield_usdc;
 
-        auto* locked = new QTableWidgetItem(
-            QStringLiteral("%1 $FNCPT").arg(format_token(amount_ui, 0)));
+        auto* locked = new QTableWidgetItem(QStringLiteral("%1 $FNCPT").arg(format_token(amount_ui, 0)));
         locked->setData(Qt::UserRole, p.position_id);
         table_->setItem(i, 0, locked);
         table_->setItem(i, 1, new QTableWidgetItem(format_duration(p.duration_secs)));
@@ -348,18 +350,20 @@ void ActiveLocksPanel::rebuild_table() {
     table_->setItem(total_row, 4, new QTableWidgetItem(format_usdc(total_yield_ui)));
 
     summary_label_->setText(QStringLiteral("%1 position%2 · %3 veFNCPT")
-        .arg(latest_.size())
-        .arg(latest_.size() == 1 ? QString() : QStringLiteral("s"))
-        .arg(format_token(total_weight_ui, 1)));
+                                .arg(latest_.size())
+                                .arg(latest_.size() == 1 ? QString() : QStringLiteral("s"))
+                                .arg(format_token(total_weight_ui, 1)));
     update_demo_chip(any_mock);
     clear_error_strip();
 }
 
 void ActiveLocksPanel::on_row_context_menu(const QPoint& pos) {
     auto* item = table_->itemAt(pos);
-    if (!item) return;
+    if (!item)
+        return;
     const int row = item->row();
-    if (row < 0 || row >= latest_.size()) return; // ignore TOTAL row
+    if (row < 0 || row >= latest_.size())
+        return; // ignore TOTAL row
     const auto& p = latest_[row];
 
     QMenu menu(this);
@@ -367,8 +371,7 @@ void ActiveLocksPanel::on_row_context_menu(const QPoint& pos) {
     auto* withdraw = menu.addAction(tr("Withdraw"));
     withdraw->setEnabled(position_is_expired(p));
     if (!withdraw->isEnabled()) {
-        withdraw->setToolTip(tr("Available after %1")
-                                 .arg(format_unlock_date(p.unlock_ts)));
+        withdraw->setToolTip(tr("Available after %1").arg(format_unlock_date(p.unlock_ts)));
     }
 
     // Mock-mode disable + tooltip for both. Real-mode lock txs come in
@@ -381,7 +384,8 @@ void ActiveLocksPanel::on_row_context_menu(const QPoint& pos) {
     }
 
     QAction* chosen = menu.exec(table_->viewport()->mapToGlobal(pos));
-    if (!chosen) return;
+    if (!chosen)
+        return;
     if (chosen == extend) {
         show_error_strip(tr("Extend flow lands with the Anchor program."));
     } else if (chosen == withdraw) {
@@ -390,7 +394,8 @@ void ActiveLocksPanel::on_row_context_menu(const QPoint& pos) {
 }
 
 void ActiveLocksPanel::show_error_strip(const QString& msg) {
-    if (!error_strip_) return;
+    if (!error_strip_)
+        return;
     error_text_->setText(msg);
     error_strip_->show();
 }

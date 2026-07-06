@@ -7,13 +7,12 @@
 //
 // Part of the partial-class split of CommandBar.cpp.
 
-#include "ui/navigation/CommandBar.h"
-#include "ui/navigation/CommandBar_internal.h"
-
 #include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/session/ScreenStateManager.h"
 #include "network/http/HttpClient.h"
+#include "ui/navigation/CommandBar.h"
+#include "ui/navigation/CommandBar_internal.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -81,7 +80,6 @@ void CommandBar::show_slash_suggestions(const QString& partial) {
         hide_dropdown();
     }
 }
-
 
 void CommandBar::show_dock_verb_suggestions(const QString& primary_id) {
     // Show add / replace / remove as clickable suggestions after "<screen> "

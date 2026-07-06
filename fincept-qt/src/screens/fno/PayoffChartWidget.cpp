@@ -32,7 +32,7 @@ QColor with_alpha(const QString& hex, int alpha) {
     return c;
 }
 
-}  // namespace
+} // namespace
 
 PayoffChartWidget::PayoffChartWidget(QWidget* parent) : QChartView(parent) {
     setMouseTracking(true);
@@ -99,9 +99,8 @@ PayoffChartWidget::PayoffChartWidget(QWidget* parent) : QChartView(parent) {
     axis_y_->setLinePen(axis_pen);
     chart_->addAxis(axis_x_, Qt::AlignBottom);
     chart_->addAxis(axis_y_, Qt::AlignLeft);
-    for (auto* s :
-         {static_cast<QAbstractSeries*>(profit_area_), static_cast<QAbstractSeries*>(loss_area_),
-          static_cast<QAbstractSeries*>(target_series_), static_cast<QAbstractSeries*>(expiry_series_)}) {
+    for (auto* s : {static_cast<QAbstractSeries*>(profit_area_), static_cast<QAbstractSeries*>(loss_area_),
+                    static_cast<QAbstractSeries*>(target_series_), static_cast<QAbstractSeries*>(expiry_series_)}) {
         s->attachAxis(axis_x_);
         s->attachAxis(axis_y_);
     }
@@ -191,8 +190,7 @@ void PayoffChartWidget::rebuild_spot_marker(double current_spot, double y_min, d
     spot_marker_->setVisible(true);
 }
 
-void PayoffChartWidget::rebuild_breakeven_markers(const QVector<double>& breakevens, double y_min,
-                                                  double y_max) {
+void PayoffChartWidget::rebuild_breakeven_markers(const QVector<double>& breakevens, double y_min, double y_max) {
     for (auto* m : breakeven_markers_)
         delete m;
     breakeven_markers_.clear();

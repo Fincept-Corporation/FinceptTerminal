@@ -5,30 +5,29 @@
 //
 // Part of the partial-class split of AltInvestmentsScreen.cpp.
 
-#include "screens/alt_investments/AltInvestmentsScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/alt_investments/AltInvestmentsScreen.h"
 #include "services/python_cli/PythonCliService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLabel>
+#include <QLineEdit>
 #include <QPointer>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QShowEvent>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QVBoxLayout>
-#include <QLabel>
-#include <QComboBox>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QSpinBox>
-#include <QDoubleSpinBox>
 
 namespace fincept::screens {
 

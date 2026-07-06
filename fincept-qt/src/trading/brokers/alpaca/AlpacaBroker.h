@@ -99,9 +99,8 @@ class AlpacaBroker : public IBroker {
     // --- Bulk Operations (native Alpaca endpoints) ---
     ApiResponse<CancelAllResult> cancel_all_orders(const BrokerCredentials& creds) override;
     ApiResponse<CloseAllResult> close_all_positions(const BrokerCredentials& creds) override;
-    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
-        const BrokerCredentials& creds,
-        const QVector<QPair<QString, QString>>& symbols) override;
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const BrokerCredentials& creds,
+                                                       const QVector<QPair<QString, QString>>& symbols) override;
 
     // --- Margin Calculator --- Alpaca has no per-order margin API → fallback estimator.
     ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;

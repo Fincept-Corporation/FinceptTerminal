@@ -1048,9 +1048,8 @@ ApiResponse<CloseAllResult> AlpacaBroker::close_all_positions(const BrokerCreden
 // GET /v2/stocks/snapshots?symbols=SYM1,SYM2 — batch multi-quotes via snapshots.
 // Alpaca's data endpoint supports up to 100 symbols per request.
 // Uses data_url() (not trading_url) for market data.
-ApiResponse<QVector<BrokerQuote>> AlpacaBroker::get_multi_quotes(
-    const BrokerCredentials& creds,
-    const QVector<QPair<QString, QString>>& symbols) {
+ApiResponse<QVector<BrokerQuote>> AlpacaBroker::get_multi_quotes(const BrokerCredentials& creds,
+                                                                 const QVector<QPair<QString, QString>>& symbols) {
     if (symbols.isEmpty())
         return {false, std::nullopt, "No symbols", now_ts()};
 

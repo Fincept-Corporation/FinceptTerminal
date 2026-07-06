@@ -32,16 +32,13 @@ inline const QStringList US_WATCHLIST = {
 // Full NIFTY 50 constituents (NSE) — seeded as the default watchlist for Indian
 // brokers (profile region == "IN"). Plain symbols; each broker's resolver maps them.
 inline const QStringList NIFTY50_WATCHLIST = {
-    "ADANIENT",   "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",
-    "BAJAJ-AUTO", "BAJAJFINSV", "BAJFINANCE", "BEL",        "BHARTIARTL",
-    "CIPLA",      "COALINDIA",  "DIVISLAB",   "DRREDDY",    "EICHERMOT",
-    "GRASIM",     "HCLTECH",    "HDFCBANK",   "HDFCLIFE",   "HEROMOTOCO",
-    "HINDALCO",   "HINDUNILVR", "ICICIBANK",  "INDUSINDBK", "INFY",
-    "ITC",        "JIOFIN",     "JSWSTEEL",   "KOTAKBANK",  "LT",
-    "M&M",        "MARUTI",     "NESTLEIND",  "NTPC",       "ONGC",
-    "POWERGRID",  "RELIANCE",   "SBILIFE",    "SBIN",       "SHRIRAMFIN",
-    "SUNPHARMA",  "TATACONSUM", "TATASTEEL",  "TCS",
-    "TECHM",      "TITAN",      "TRENT",      "ULTRACEMCO", "WIPRO",
+    "ADANIENT",   "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK",   "BAJAJ-AUTO", "BAJAJFINSV",
+    "BAJFINANCE", "BEL",        "BHARTIARTL", "CIPLA",      "COALINDIA",  "DIVISLAB",   "DRREDDY",
+    "EICHERMOT",  "GRASIM",     "HCLTECH",    "HDFCBANK",   "HDFCLIFE",   "HEROMOTOCO", "HINDALCO",
+    "HINDUNILVR", "ICICIBANK",  "INDUSINDBK", "INFY",       "ITC",        "JIOFIN",     "JSWSTEEL",
+    "KOTAKBANK",  "LT",         "M&M",        "MARUTI",     "NESTLEIND",  "NTPC",       "ONGC",
+    "POWERGRID",  "RELIANCE",   "SBILIFE",    "SBIN",       "SHRIRAMFIN", "SUNPHARMA",  "TATACONSUM",
+    "TATASTEEL",  "TCS",        "TECHM",      "TITAN",      "TRENT",      "ULTRACEMCO", "WIPRO",
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -138,7 +135,8 @@ inline QString currency_symbol(const QString& currency) {
     return "$";
 }
 
-// \u2500\u2500 Funds / Stats view-models \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// \u2500\u2500 Funds / Stats view-models
+// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // The bottom-panel Funds and Stats tabs render from these view-models, so the
 // panel is decoupled from the data source: live mode fills them from BrokerFunds
 // (the subset it knows), paper mode fills the full set from the paper engine.
@@ -161,12 +159,12 @@ struct EquityFundsView {
 struct EquityStatsView {
     QString currency = QStringLiteral("\u20B9");
 
-    double net_pnl = 0.0;        // realized + unrealized
-    double today_pnl = 0.0;      // realized today
+    double net_pnl = 0.0;   // realized + unrealized
+    double today_pnl = 0.0; // realized today
     double realized_pnl = 0.0;
     double unrealized_pnl = 0.0;
-    double return_pct = 0.0;     // net_pnl / opening_balance * 100
-    double win_rate = 0.0;       // 0..1
+    double return_pct = 0.0; // net_pnl / opening_balance * 100
+    double win_rate = 0.0;   // 0..1
     long long total_trades = 0;
     long long winning_trades = 0;
     long long losing_trades = 0;

@@ -20,8 +20,8 @@ PayoffStripWidget::PayoffStripWidget(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoPayoffStrip");
 }
 
-void PayoffStripWidget::set_payoff(const QVector<fincept::services::options::PayoffPoint>& curve,
-                                   double spot, const QVector<double>& breakevens) {
+void PayoffStripWidget::set_payoff(const QVector<fincept::services::options::PayoffPoint>& curve, double spot,
+                                   const QVector<double>& breakevens) {
     curve_ = curve;
     spot_ = spot;
     breakevens_ = breakevens;
@@ -60,7 +60,8 @@ void PayoffStripWidget::rebuild_pixmap() {
     cached_ = QPixmap(sz);
     cached_.fill(QColor(colors::BG_BASE()));
 
-    if (curve_.size() < 2) return;
+    if (curve_.size() < 2)
+        return;
 
     QPainter p(&cached_);
     p.setRenderHint(QPainter::Antialiasing, false);
@@ -71,7 +72,8 @@ void PayoffStripWidget::rebuild_pixmap() {
     double spot_min = curve_.first().spot;
     double spot_max = curve_.last().spot;
     double spot_range = spot_max - spot_min;
-    if (spot_range < 1e-6) spot_range = 1.0;
+    if (spot_range < 1e-6)
+        spot_range = 1.0;
 
     double y_min = std::numeric_limits<double>::max();
     double y_max = std::numeric_limits<double>::lowest();
@@ -90,12 +92,8 @@ void PayoffStripWidget::rebuild_pixmap() {
     y_max += y_pad;
     double y_range = y_max - y_min;
 
-    auto to_x = [&](double spot) -> double {
-        return (spot - spot_min) / spot_range * w;
-    };
-    auto to_y = [&](double pnl) -> double {
-        return h - ((pnl - y_min) / y_range * h);
-    };
+    auto to_x = [&](double spot) -> double { return (spot - spot_min) / spot_range * w; };
+    auto to_y = [&](double pnl) -> double { return h - ((pnl - y_min) / y_range * h); };
 
     double zero_y = to_y(0);
 
@@ -118,9 +116,7 @@ void PayoffStripWidget::rebuild_pixmap() {
         // Fill above zero (profit)
         if (curve_[i].pnl_expiry > 0 || curve_[i + 1].pnl_expiry > 0) {
             QPolygonF poly;
-            poly << QPointF(x1, std::min(y1, zero_y))
-                 << QPointF(x2, std::min(y2, zero_y))
-                 << QPointF(x2, zero_y)
+            poly << QPointF(x1, std::min(y1, zero_y)) << QPointF(x2, std::min(y2, zero_y)) << QPointF(x2, zero_y)
                  << QPointF(x1, zero_y);
             p.setPen(Qt::NoPen);
             p.setBrush(profit_color);
@@ -129,9 +125,7 @@ void PayoffStripWidget::rebuild_pixmap() {
         // Fill below zero (loss)
         if (curve_[i].pnl_expiry < 0 || curve_[i + 1].pnl_expiry < 0) {
             QPolygonF poly;
-            poly << QPointF(x1, std::max(y1, zero_y))
-                 << QPointF(x2, std::max(y2, zero_y))
-                 << QPointF(x2, zero_y)
+            poly << QPointF(x1, std::max(y1, zero_y)) << QPointF(x2, std::max(y2, zero_y)) << QPointF(x2, zero_y)
                  << QPointF(x1, zero_y);
             p.setPen(Qt::NoPen);
             p.setBrush(loss_color);
@@ -168,7 +162,8 @@ void PayoffStripWidget::rebuild_pixmap() {
     p.setFont(small_font);
     int be_drawn = 0;
     for (double be : breakevens_) {
-        if (be_drawn >= 4) break;
+        if (be_drawn >= 4)
+            break;
         if (be < spot_min || be > spot_max)
             continue;
         double bx = to_x(be);
@@ -184,8 +179,7 @@ void PayoffStripWidget::rebuild_pixmap() {
     for (int i = 0; i <= 4; ++i) {
         double spot_val = spot_min + spot_range * i / 4.0;
         double lx = to_x(spot_val);
-        p.drawText(QRectF(lx - 25, h - 12, 50, 12), Qt::AlignCenter,
-                   QString::number(spot_val, 'f', 0));
+        p.drawText(QRectF(lx - 25, h - 12, 50, 12), Qt::AlignCenter, QString::number(spot_val, 'f', 0));
     }
 }
 

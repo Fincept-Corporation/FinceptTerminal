@@ -11,8 +11,7 @@
 namespace fincept::ui {
 
 VwapLayer::VwapLayer(bool show_bands, QObject* parent)
-    : SeriesLayer("vwap", "VWAP", QColor("#2563eb"), 2, parent),
-      show_bands_(show_bands) {}
+    : SeriesLayer("vwap", "VWAP", QColor("#2563eb"), 2, parent), show_bands_(show_bands) {}
 
 void VwapLayer::compute(const QVector<CandleData>& candles) {
     QVector<double> highs, lows, closes, volumes;
@@ -88,8 +87,8 @@ void VwapLayer::detach_band(QLineSeries*& s, QChart* chart) {
     s = nullptr;
 }
 
-void VwapLayer::update_band(QLineSeries* s, const QVector<int64_t>& ts,
-                            const QVector<double>& base, const QVector<double>& dev, double mult) {
+void VwapLayer::update_band(QLineSeries* s, const QVector<int64_t>& ts, const QVector<double>& base,
+                            const QVector<double>& dev, double mult) {
     if (!s)
         return;
     QList<QPointF> pts;

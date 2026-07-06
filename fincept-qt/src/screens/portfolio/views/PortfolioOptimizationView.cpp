@@ -13,7 +13,6 @@ using fincept::services::PortfolioAnalyticsService;
 
 #define QT_CHARTS_USE_NAMESPACE
 #include <QChart>
-#include <QTabBar>
 #include <QDate>
 #include <QEvent>
 #include <QHBoxLayout>
@@ -25,6 +24,7 @@ using fincept::services::PortfolioAnalyticsService;
 #include <QPieSeries>
 #include <QPointer>
 #include <QScatterSeries>
+#include <QTabBar>
 #include <QVBoxLayout>
 #include <QValueAxis>
 
@@ -116,7 +116,8 @@ QWidget* PortfolioOptimizationView::build_optimize_tab() {
 
     auto add_combo = [&](const QString& label, QLabel*& label_slot, const QStringList& items) -> QComboBox* {
         label_slot = new QLabel(label);
-        label_slot->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY()));
+        label_slot->setStyleSheet(
+            QString("color:%1; font-size:9px; font-weight:700;").arg(ui::colors::TEXT_TERTIARY()));
         config->addWidget(label_slot);
         auto* cb = new QComboBox;
         cb->addItems(items);
@@ -136,8 +137,7 @@ QWidget* PortfolioOptimizationView::build_optimize_tab() {
     method_cb_ = add_combo(tr("METHOD:"), method_field_label_,
                            {"Max Sharpe", "Min Volatility", "Risk Parity", "Max Return", "Equal Weight", "HRP",
                             "Target Return", "B-L Model"});
-    returns_cb_ = add_combo(tr("RETURNS:"), returns_field_label_,
-                            {"Mean Historical", "EMA", "CAPM", "James-Stein"});
+    returns_cb_ = add_combo(tr("RETURNS:"), returns_field_label_, {"Mean Historical", "EMA", "CAPM", "James-Stein"});
     risk_model_cb_ = add_combo(tr("RISK MODEL:"), risk_model_field_label_,
                                {"Sample Covariance", "Ledoit-Wolf", "Semicovariance", "Exponential"});
 
@@ -163,7 +163,8 @@ QWidget* PortfolioOptimizationView::build_optimize_tab() {
 
     result_table_ = new QTableWidget;
     result_table_->setColumnCount(5);
-    result_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("CURRENT WT%"), tr("OPTIMAL WT%"), tr("CHANGE"), tr("ACTION")});
+    result_table_->setHorizontalHeaderLabels(
+        {tr("SYMBOL"), tr("CURRENT WT%"), tr("OPTIMAL WT%"), tr("CHANGE"), tr("ACTION")});
     style_table(result_table_);
     layout->addWidget(result_table_, 1);
 
@@ -182,7 +183,8 @@ QWidget* PortfolioOptimizationView::build_frontier_tab() {
 
     frontier_stack_ = new QStackedWidget;
 
-    frontier_placeholder_ = make_placeholder(tr("Run optimization on the OPTIMIZE tab to generate the efficient frontier."));
+    frontier_placeholder_ =
+        make_placeholder(tr("Run optimization on the OPTIMIZE tab to generate the efficient frontier."));
     frontier_stack_->addWidget(frontier_placeholder_);
 
     // Chart page
@@ -249,7 +251,8 @@ QWidget* PortfolioOptimizationView::build_strategies_tab() {
 
     strategies_table_ = new QTableWidget;
     strategies_table_->setColumnCount(5);
-    strategies_table_->setHorizontalHeaderLabels({tr("STRATEGY"), tr("EXP. RETURN"), tr("VOLATILITY"), tr("SHARPE"), tr("DESCRIPTION")});
+    strategies_table_->setHorizontalHeaderLabels(
+        {tr("STRATEGY"), tr("EXP. RETURN"), tr("VOLATILITY"), tr("SHARPE"), tr("DESCRIPTION")});
     style_table(strategies_table_);
     strategies_stack_->addWidget(strategies_table_);
 
@@ -303,7 +306,8 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
                                    "historical performance, or open the full Backtesting terminal."));
     backtest_body_->setAlignment(Qt::AlignCenter);
     backtest_body_->setWordWrap(true);
-    backtest_body_->setStyleSheet(QString("color:%1; font-size:11px; padding:8px 20px;").arg(ui::colors::TEXT_TERTIARY()));
+    backtest_body_->setStyleSheet(
+        QString("color:%1; font-size:11px; padding:8px 20px;").arg(ui::colors::TEXT_TERTIARY()));
     bl->addWidget(backtest_body_);
 
     auto btn_style = QString("QPushButton { background:%1; color:%2; border:1px solid %3; padding:8px 20px;"
@@ -316,7 +320,8 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
                          .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_DIM());
 
     auto run_inline_backtest = [this](const QJsonArray& symbols, const QJsonArray& weights) {
-        if (symbols.isEmpty()) return;
+        if (symbols.isEmpty())
+            return;
         backtest_status_label_->setText("RUNNING...");
         backtest_status_label_->setStyleSheet(
             QString("color:%1; font-size:11px; font-weight:700; padding:4px;").arg(ui::colors::WARNING()));
@@ -344,7 +349,8 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
     bl->addWidget(backtest_current_btn_, 0, Qt::AlignCenter);
 
     connect(backtest_current_btn_, &QPushButton::clicked, this, [this, run_inline_backtest]() {
-        if (summary_.holdings.isEmpty()) return;
+        if (summary_.holdings.isEmpty())
+            return;
         QJsonArray symbols, weights;
         for (const auto& h : summary_.holdings) {
             symbols.append(h.symbol);
@@ -361,12 +367,14 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
     bl->addWidget(backtest_optimal_btn_, 0, Qt::AlignCenter);
 
     connect(backtest_optimal_btn_, &QPushButton::clicked, this, [this, run_inline_backtest]() {
-        if (!result_table_ || result_table_->rowCount() == 0) return;
+        if (!result_table_ || result_table_->rowCount() == 0)
+            return;
         QJsonArray symbols, weights;
         for (int r = 0; r < result_table_->rowCount(); ++r) {
             auto* sym_item = result_table_->item(r, 0);
             auto* wt_item = result_table_->item(r, 2);
-            if (!sym_item || !wt_item) continue;
+            if (!sym_item || !wt_item)
+                continue;
             symbols.append(sym_item->text());
             QString wt_str = wt_item->text();
             wt_str.remove('%').remove(' ');
@@ -380,7 +388,8 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
     open_terminal_btn->setStyleSheet(btn_style);
     bl->addWidget(open_terminal_btn, 0, Qt::AlignCenter);
     connect(open_terminal_btn, &QPushButton::clicked, this, [this]() {
-        if (summary_.holdings.isEmpty()) return;
+        if (summary_.holdings.isEmpty())
+            return;
         QJsonArray symbols, weights;
         for (const auto& h : summary_.holdings) {
             symbols.append(h.symbol);
@@ -416,11 +425,12 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
     backtest_metrics_table_->horizontalHeader()->setStretchLastSection(true);
     backtest_metrics_table_->verticalHeader()->setVisible(false);
     backtest_metrics_table_->setStyleSheet(
-        QString("QTableWidget { background:%1; color:%2; gridline-color:%3; font-family:%4; font-size:%5px; border:none; }"
-                "QTableWidget::item { padding:3px 8px; }"
-                "QHeaderView::section { background:%6; color:%7; font-weight:700; padding:4px 8px;"
-                "  border:1px solid %3; font-family:%4; font-size:%5px; }"
-                "QTableWidget::item:alternate { background:%8; }")
+        QString(
+            "QTableWidget { background:%1; color:%2; gridline-color:%3; font-family:%4; font-size:%5px; border:none; }"
+            "QTableWidget::item { padding:3px 8px; }"
+            "QHeaderView::section { background:%6; color:%7; font-weight:700; padding:4px 8px;"
+            "  border:1px solid %3; font-family:%4; font-size:%5px; }"
+            "QTableWidget::item:alternate { background:%8; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::fonts::SMALL)
@@ -431,53 +441,53 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
     back_btn->setCursor(Qt::PointingHandCursor);
     back_btn->setStyleSheet(btn_style);
     rl->addWidget(back_btn, 0, Qt::AlignCenter);
-    connect(back_btn, &QPushButton::clicked, this, [this]() {
-        backtest_stack_->setCurrentIndex(0);
-    });
+    connect(back_btn, &QPushButton::clicked, this, [this]() { backtest_stack_->setCurrentIndex(0); });
 
     backtest_stack_->addWidget(results_page);
     backtest_stack_->setCurrentIndex(0);
 
     // Connect BacktestingService results for inline display
     auto& svc = fincept::services::backtest::BacktestingService::instance();
-    connect(&svc, &fincept::services::backtest::BacktestingService::result_ready, this,
-            [this](const QString& /*provider*/, const QString& command, const QJsonObject& data) {
-                if (command != "backtest" || backtest_stack_->currentIndex() != 1)
-                    return;
-                backtest_status_label_->setText("BUY & HOLD BACKTEST RESULTS");
-                backtest_status_label_->setStyleSheet(
-                    QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
+    connect(
+        &svc, &fincept::services::backtest::BacktestingService::result_ready, this,
+        [this](const QString& /*provider*/, const QString& command, const QJsonObject& data) {
+            if (command != "backtest" || backtest_stack_->currentIndex() != 1)
+                return;
+            backtest_status_label_->setText("BUY & HOLD BACKTEST RESULTS");
+            backtest_status_label_->setStyleSheet(
+                QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::POSITIVE()));
 
-                auto perf = data.value("performance").toObject();
-                QStringList keys = {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio",
-                                    "maxDrawdown", "winRate", "profitFactor", "calmarRatio",
-                                    "volatility", "totalTrades"};
-                backtest_metrics_table_->setRowCount(keys.size());
-                for (int r = 0; r < keys.size(); ++r) {
-                    auto key = keys[r];
-                    auto* name_item = new QTableWidgetItem(key.toUpper());
-                    backtest_metrics_table_->setItem(r, 0, name_item);
-                    auto val = perf.value(key);
-                    QString display;
-                    if (val.isDouble()) {
-                        double v = val.toDouble();
-                        if (key.contains("Return") || key.contains("Drawdown") || key.contains("Rate") || key.contains("Volatility"))
-                            display = QString("%1%").arg(v * 100.0, 0, 'f', 2);
-                        else
-                            display = QString::number(v, 'f', 4);
-                    } else {
-                        display = val.toVariant().toString();
-                    }
-                    auto* val_item = new QTableWidgetItem(display);
-                    val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    backtest_metrics_table_->setItem(r, 1, val_item);
+            auto perf = data.value("performance").toObject();
+            QStringList keys = {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio", "maxDrawdown",
+                                "winRate",     "profitFactor",     "calmarRatio", "volatility",   "totalTrades"};
+            backtest_metrics_table_->setRowCount(keys.size());
+            for (int r = 0; r < keys.size(); ++r) {
+                auto key = keys[r];
+                auto* name_item = new QTableWidgetItem(key.toUpper());
+                backtest_metrics_table_->setItem(r, 0, name_item);
+                auto val = perf.value(key);
+                QString display;
+                if (val.isDouble()) {
+                    double v = val.toDouble();
+                    if (key.contains("Return") || key.contains("Drawdown") || key.contains("Rate") ||
+                        key.contains("Volatility"))
+                        display = QString("%1%").arg(v * 100.0, 0, 'f', 2);
+                    else
+                        display = QString::number(v, 'f', 4);
+                } else {
+                    display = val.toVariant().toString();
                 }
-                backtest_metrics_table_->resizeColumnsToContents();
-            });
+                auto* val_item = new QTableWidgetItem(display);
+                val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                backtest_metrics_table_->setItem(r, 1, val_item);
+            }
+            backtest_metrics_table_->resizeColumnsToContents();
+        });
 
     connect(&svc, &fincept::services::backtest::BacktestingService::error_occurred, this,
             [this](const QString& /*ctx*/, const QString& message) {
-                if (backtest_stack_->currentIndex() != 1) return;
+                if (backtest_stack_->currentIndex() != 1)
+                    return;
                 backtest_status_label_->setText("ERROR: " + message);
                 backtest_status_label_->setStyleSheet(
                     QString("color:%1; font-size:11px; font-weight:700; padding:4px;").arg(ui::colors::NEGATIVE()));
@@ -498,8 +508,9 @@ QWidget* PortfolioOptimizationView::build_risk_tab() {
     layout->addWidget(risk_title_);
 
     risk_stack_ = new QStackedWidget;
-    risk_body_ = make_placeholder(tr("Marginal risk contribution decomposes total portfolio volatility across holdings.\n"
-                                     "Run optimization on the OPTIMIZE tab to compute it from the covariance matrix."));
+    risk_body_ =
+        make_placeholder(tr("Marginal risk contribution decomposes total portfolio volatility across holdings.\n"
+                            "Run optimization on the OPTIMIZE tab to compute it from the covariance matrix."));
     risk_stack_->addWidget(risk_body_);
 
     risk_table_ = new QTableWidget;
@@ -530,8 +541,7 @@ QWidget* PortfolioOptimizationView::build_stress_tab() {
 
     stress_table_ = new QTableWidget;
     stress_table_->setColumnCount(4);
-    stress_table_->setHorizontalHeaderLabels(
-        {tr("SCENARIO"), tr("DESCRIPTION"), tr("IMPACT"), tr("EST. LOSS")});
+    stress_table_->setHorizontalHeaderLabels({tr("SCENARIO"), tr("DESCRIPTION"), tr("IMPACT"), tr("EST. LOSS")});
     style_table(stress_table_);
     stress_stack_->addWidget(stress_table_);
 
@@ -562,8 +572,7 @@ QWidget* PortfolioOptimizationView::build_black_litterman_tab() {
 
     bl_table_ = new QTableWidget;
     bl_table_->setColumnCount(4);
-    bl_table_->setHorizontalHeaderLabels(
-        {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
+    bl_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
     style_table(bl_table_);
     bl_stack_->addWidget(bl_table_);
 
@@ -589,20 +598,33 @@ void PortfolioOptimizationView::changeEvent(QEvent* event) {
 
 void PortfolioOptimizationView::retranslateUi() {
     if (tabs_) {
-        if (optimize_tab_index_ >= 0)   tabs_->setTabText(optimize_tab_index_, tr("OPTIMIZE"));
-        if (frontier_tab_index_ >= 0)   tabs_->setTabText(frontier_tab_index_, tr("FRONTIER"));
-        if (allocation_tab_index_ >= 0) tabs_->setTabText(allocation_tab_index_, tr("ALLOCATION"));
-        if (strategies_tab_index_ >= 0) tabs_->setTabText(strategies_tab_index_, tr("STRATEGIES"));
-        if (compare_tab_index_ >= 0)    tabs_->setTabText(compare_tab_index_, tr("COMPARE"));
-        if (backtest_tab_index_ >= 0)   tabs_->setTabText(backtest_tab_index_, tr("BACKTEST"));
-        if (risk_tab_index_ >= 0)       tabs_->setTabText(risk_tab_index_, tr("RISK"));
-        if (stress_tab_index_ >= 0)     tabs_->setTabText(stress_tab_index_, tr("STRESS"));
-        if (bl_tab_index_ >= 0)         tabs_->setTabText(bl_tab_index_, tr("B-L MODEL"));
+        if (optimize_tab_index_ >= 0)
+            tabs_->setTabText(optimize_tab_index_, tr("OPTIMIZE"));
+        if (frontier_tab_index_ >= 0)
+            tabs_->setTabText(frontier_tab_index_, tr("FRONTIER"));
+        if (allocation_tab_index_ >= 0)
+            tabs_->setTabText(allocation_tab_index_, tr("ALLOCATION"));
+        if (strategies_tab_index_ >= 0)
+            tabs_->setTabText(strategies_tab_index_, tr("STRATEGIES"));
+        if (compare_tab_index_ >= 0)
+            tabs_->setTabText(compare_tab_index_, tr("COMPARE"));
+        if (backtest_tab_index_ >= 0)
+            tabs_->setTabText(backtest_tab_index_, tr("BACKTEST"));
+        if (risk_tab_index_ >= 0)
+            tabs_->setTabText(risk_tab_index_, tr("RISK"));
+        if (stress_tab_index_ >= 0)
+            tabs_->setTabText(stress_tab_index_, tr("STRESS"));
+        if (bl_tab_index_ >= 0)
+            tabs_->setTabText(bl_tab_index_, tr("B-L MODEL"));
     }
-    if (method_field_label_)     method_field_label_->setText(tr("METHOD:"));
-    if (returns_field_label_)    returns_field_label_->setText(tr("RETURNS:"));
-    if (risk_model_field_label_) risk_model_field_label_->setText(tr("RISK MODEL:"));
-    if (run_btn_)                run_btn_->setText(tr("▶ RUN OPTIMIZATION"));
+    if (method_field_label_)
+        method_field_label_->setText(tr("METHOD:"));
+    if (returns_field_label_)
+        returns_field_label_->setText(tr("RETURNS:"));
+    if (risk_model_field_label_)
+        risk_model_field_label_->setText(tr("RISK MODEL:"));
+    if (run_btn_)
+        run_btn_->setText(tr("▶ RUN OPTIMIZATION"));
 
     if (result_table_)
         result_table_->setHorizontalHeaderLabels(
@@ -613,35 +635,41 @@ void PortfolioOptimizationView::retranslateUi() {
         strategies_table_->setHorizontalHeaderLabels(
             {tr("STRATEGY"), tr("EXP. RETURN"), tr("VOLATILITY"), tr("SHARPE"), tr("DESCRIPTION")});
 
-    if (frontier_title_)        frontier_title_->setText(tr("EFFICIENT FRONTIER"));
+    if (frontier_title_)
+        frontier_title_->setText(tr("EFFICIENT FRONTIER"));
     if (frontier_placeholder_)
         frontier_placeholder_->setText(tr("Run optimization on the OPTIMIZE tab to generate the efficient frontier."));
-    if (strategies_title_)      strategies_title_->setText(tr("STRATEGY COMPARISON  (populated after optimization)"));
+    if (strategies_title_)
+        strategies_title_->setText(tr("STRATEGY COMPARISON  (populated after optimization)"));
     if (strategies_placeholder_)
         strategies_placeholder_->setText(tr("Run optimization on the OPTIMIZE tab.\n"
                                             "All 5 strategies will be compared automatically."));
-    if (compare_title_)         compare_title_->setText(tr("WEIGHT COMPARISON  (all methods, per symbol)"));
+    if (compare_title_)
+        compare_title_->setText(tr("WEIGHT COMPARISON  (all methods, per symbol)"));
     if (compare_placeholder_)
         compare_placeholder_->setText(tr("Run optimization on the OPTIMIZE tab to populate this comparison."));
-    if (backtest_title_)        backtest_title_->setText(tr("BACKTEST RESULTS"));
+    if (backtest_title_)
+        backtest_title_->setText(tr("BACKTEST RESULTS"));
     if (backtest_body_)
         backtest_body_->setText(tr("Run an optimization first, then backtest the optimal weights\n"
                                    "against historical data to evaluate out-of-sample performance."));
-    if (risk_title_)            risk_title_->setText(tr("RISK DECOMPOSITION"));
+    if (risk_title_)
+        risk_title_->setText(tr("RISK DECOMPOSITION"));
     if (risk_body_)
         risk_body_->setText(tr("Marginal risk contribution decomposes total portfolio volatility across holdings.\n"
                                "Run optimization on the OPTIMIZE tab to compute it from the covariance matrix."));
     if (risk_table_)
         risk_table_->setHorizontalHeaderLabels(
             {tr("SYMBOL"), tr("WEIGHT"), tr("ASSET VOL"), tr("MARGINAL RISK"), tr("RISK CONTRIB")});
-    if (stress_title_)          stress_title_->setText(tr("STRESS SCENARIOS"));
+    if (stress_title_)
+        stress_title_->setText(tr("STRESS SCENARIOS"));
     if (stress_body_)
         stress_body_->setText(tr("Applies historical crisis shocks to your current asset-class exposure.\n"
                                  "Select a portfolio to see estimated impact per scenario."));
     if (stress_table_)
-        stress_table_->setHorizontalHeaderLabels(
-            {tr("SCENARIO"), tr("DESCRIPTION"), tr("IMPACT"), tr("EST. LOSS")});
-    if (bl_title_)              bl_title_->setText(tr("BLACK-LITTERMAN MODEL"));
+        stress_table_->setHorizontalHeaderLabels({tr("SCENARIO"), tr("DESCRIPTION"), tr("IMPACT"), tr("EST. LOSS")});
+    if (bl_title_)
+        bl_title_->setText(tr("BLACK-LITTERMAN MODEL"));
     if (bl_body_)
         bl_body_->setText(tr("Market-implied equilibrium returns (π = δ·Σ·w_market) shown below. "
                              "Select 'B-L Model' as the METHOD on the OPTIMIZE tab to also compute B-L weights."));
@@ -712,7 +740,8 @@ void PortfolioOptimizationView::run_optimization() {
                                                      .arg(ret * 100.0, 0, 'f', 1)
                                                      .arg(vol * 100.0, 0, 'f', 1)
                                                      .arg(sharpe, 0, 'f', 2));
-                    self->status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
+                    self->status_label_->setStyleSheet(
+                        QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
                     self->result_table_->setRowCount(static_cast<int>(self->summary_.holdings.size()));
                     for (int r = 0; r < static_cast<int>(self->summary_.holdings.size()); ++r) {
                         const auto& h = self->summary_.holdings[r];
@@ -754,95 +783,85 @@ void PortfolioOptimizationView::run_optimization() {
 
     QPointer<PortfolioOptimizationView> self = this;
 
-    PortfolioAnalyticsService::instance().optimize_weights(
-        args_str, [self, cache_key](const AnalyticsResult& r) {
-            if (!self)
-                return;
-            QMetaObject::invokeMethod(
-                self,
-                [self, r, cache_key]() {
-                    if (!self)
-                        return;
-                    self->running_ = false;
-                    self->run_btn_->setEnabled(true);
+    PortfolioAnalyticsService::instance().optimize_weights(args_str, [self, cache_key](const AnalyticsResult& r) {
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, r, cache_key]() {
+                if (!self)
+                    return;
+                self->running_ = false;
+                self->run_btn_->setEnabled(true);
 
-                    if (!r.success) {
-                        self->status_label_->setText(
-                            QString("Optimization: %1").arg(r.error));
-                        self->status_label_->setStyleSheet(
-                            QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
-                        return;
-                    }
-
-                    const auto root = r.data;
-                    const auto opt_weights = root["weights"].toObject();
-                    const double ret = root["expected_annual_return"].toDouble();
-                    const double vol = root["annual_volatility"].toDouble();
-                    const double sharpe = root["sharpe_ratio"].toDouble();
-
-                    // ── Status label ──────────────────────────────────────────
-                    self->status_label_->setText(
-                        QString("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4")
-                            .arg(self->method_cb_->currentText())
-                            .arg(ret * 100.0, 0, 'f', 1)
-                            .arg(vol * 100.0, 0, 'f', 1)
-                            .arg(sharpe, 0, 'f', 2));
+                if (!r.success) {
+                    self->status_label_->setText(QString("Optimization: %1").arg(r.error));
                     self->status_label_->setStyleSheet(
-                        QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
+                        QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
+                    return;
+                }
 
-                    // ── OPTIMIZE results table ────────────────────────────────
-                    self->result_table_->setRowCount(
-                        static_cast<int>(self->summary_.holdings.size()));
-                    for (int row = 0; row < static_cast<int>(self->summary_.holdings.size()); ++row) {
-                        const auto& h = self->summary_.holdings[row];
-                        const double cw = h.weight;
-                        const double ow = opt_weights.value(h.symbol).toDouble(cw / 100.0) * 100.0;
-                        const double ch = ow - cw;
+                const auto root = r.data;
+                const auto opt_weights = root["weights"].toObject();
+                const double ret = root["expected_annual_return"].toDouble();
+                const double vol = root["annual_volatility"].toDouble();
+                const double sharpe = root["sharpe_ratio"].toDouble();
 
-                        self->result_table_->setRowHeight(row, 28);
+                // ── Status label ──────────────────────────────────────────
+                self->status_label_->setText(QString("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4")
+                                                 .arg(self->method_cb_->currentText())
+                                                 .arg(ret * 100.0, 0, 'f', 1)
+                                                 .arg(vol * 100.0, 0, 'f', 1)
+                                                 .arg(sharpe, 0, 'f', 2));
+                self->status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
 
-                        auto set = [&](int col, const QString& text,
-                                       const char* color = nullptr) {
-                            auto* item = new QTableWidgetItem(text);
-                            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter)
-                                                            : (Qt::AlignRight | Qt::AlignVCenter));
-                            if (color)
-                                item->setForeground(QColor(color));
-                            self->result_table_->setItem(row, col, item);
-                        };
+                // ── OPTIMIZE results table ────────────────────────────────
+                self->result_table_->setRowCount(static_cast<int>(self->summary_.holdings.size()));
+                for (int row = 0; row < static_cast<int>(self->summary_.holdings.size()); ++row) {
+                    const auto& h = self->summary_.holdings[row];
+                    const double cw = h.weight;
+                    const double ow = opt_weights.value(h.symbol).toDouble(cw / 100.0) * 100.0;
+                    const double ch = ow - cw;
 
-                        set(0, h.symbol, ui::colors::CYAN);
-                        set(1, QString("%1%").arg(cw, 0, 'f', 1));
-                        set(2, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
-                        set(3, QString("%1%2%").arg(ch >= 0.0 ? "+" : "").arg(ch, 0, 'f', 1),
-                            ch >= 0.0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+                    self->result_table_->setRowHeight(row, 28);
 
-                        const QString action = std::abs(ch) < 0.5 ? "HOLD"
-                                               : ch > 0.0        ? "INCREASE"
-                                                                 : "DECREASE";
-                        const char* ac = action == "HOLD"       ? ui::colors::TEXT_TERTIARY
-                                         : action == "INCREASE" ? ui::colors::POSITIVE
-                                                                : ui::colors::NEGATIVE;
-                        set(4, action, ac);
-                    }
+                    auto set = [&](int col, const QString& text, const char* color = nullptr) {
+                        auto* item = new QTableWidgetItem(text);
+                        item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter)
+                                                        : (Qt::AlignRight | Qt::AlignVCenter));
+                        if (color)
+                            item->setForeground(QColor(color));
+                        self->result_table_->setItem(row, col, item);
+                    };
 
-                    // ── Frontier, Strategies, Compare, Risk, B-L ──────────────
-                    self->update_frontier(root["frontier"].toArray());
-                    self->update_strategies(root["comparison"].toObject());
-                    self->update_compare(root["comparison"].toObject());
-                    self->update_risk(root);
-                    self->update_black_litterman(root);
-                    if (self->backtest_optimal_btn_)
-                        self->backtest_optimal_btn_->setEnabled(true);
+                    set(0, h.symbol, ui::colors::CYAN);
+                    set(1, QString("%1%").arg(cw, 0, 'f', 1));
+                    set(2, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
+                    set(3, QString("%1%2%").arg(ch >= 0.0 ? "+" : "").arg(ch, 0, 'f', 1),
+                        ch >= 0.0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
 
-                    fincept::CacheManager::instance().put(
-                        cache_key,
-                        QVariant(QString::fromUtf8(
-                            QJsonDocument(root).toJson(QJsonDocument::Compact))),
-                        10 * 60, "portfolio_opt");
-                },
-                Qt::QueuedConnection);
-        });
+                    const QString action = std::abs(ch) < 0.5 ? "HOLD" : ch > 0.0 ? "INCREASE" : "DECREASE";
+                    const char* ac = action == "HOLD"       ? ui::colors::TEXT_TERTIARY
+                                     : action == "INCREASE" ? ui::colors::POSITIVE
+                                                            : ui::colors::NEGATIVE;
+                    set(4, action, ac);
+                }
+
+                // ── Frontier, Strategies, Compare, Risk, B-L ──────────────
+                self->update_frontier(root["frontier"].toArray());
+                self->update_strategies(root["comparison"].toObject());
+                self->update_compare(root["comparison"].toObject());
+                self->update_risk(root);
+                self->update_black_litterman(root);
+                if (self->backtest_optimal_btn_)
+                    self->backtest_optimal_btn_->setEnabled(true);
+
+                fincept::CacheManager::instance().put(
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact))), 10 * 60,
+                    "portfolio_opt");
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 // ── Allocation donut ──────────────────────────────────────────────────────────
@@ -1154,8 +1173,8 @@ void PortfolioOptimizationView::update_stress() {
         const bool is_crypto = s.endsWith("-USD") || s.endsWith("-USDT") || s.endsWith("USDT");
         const bool is_bond = s == "TLT" || s == "AGG" || s == "BND" || s == "IEF" || s == "SHY" || s == "LQD" ||
                              s == "HYG" || s.contains("TREAS") || s.contains("BOND");
-        const bool is_comm = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" || s == "DBC" ||
-                             s.contains("GOLD") || s.contains("OIL");
+        const bool is_comm = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" || s == "DBC" || s.contains("GOLD") ||
+                             s.contains("OIL");
         if (is_crypto)
             crypto_wt += wt;
         else if (is_bond)

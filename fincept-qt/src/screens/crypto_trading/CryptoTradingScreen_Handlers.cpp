@@ -5,8 +5,6 @@
 //
 // Part of the partial-class split of CryptoTradingScreen.cpp.
 
-#include "screens/crypto_trading/CryptoTradingScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
@@ -16,6 +14,7 @@
 #include "screens/crypto_trading/CryptoOrderBook.h"
 #include "screens/crypto_trading/CryptoOrderEntry.h"
 #include "screens/crypto_trading/CryptoTickerBar.h"
+#include "screens/crypto_trading/CryptoTradingScreen.h"
 #include "screens/crypto_trading/CryptoWatchlist.h"
 #include "trading/ExchangeService.h"
 #include "trading/ExchangeSession.h"
@@ -27,10 +26,10 @@
 
 #include <QCompleter>
 #include <QDateTime>
-#include <QMessageBox>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QMessageBox>
 #include <QPointer>
 #include <QSplitter>
 #include <QStringListModel>
@@ -47,7 +46,6 @@ using namespace fincept::trading;
 using namespace fincept::screens::crypto;
 
 static const QString TAG = "CryptoTrading";
-
 
 void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     if (exchange == exchange_id_)
@@ -77,7 +75,7 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     has_pending_primary_ = false;
     pending_candles_.clear();
     pending_trades_.clear();
-    last_ws_state_ = -1;  // re-evaluate feed mode after new stream connects
+    last_ws_state_ = -1; // re-evaluate feed mode after new stream connects
 
     // Reset fetch guards — a prior in-flight fetch from the old exchange must
     // not suppress the first fetch against the new exchange.
@@ -209,18 +207,18 @@ void CryptoTradingScreen::on_mode_toggled() {
 
 void CryptoTradingScreen::on_api_clicked() {
     auto* dlg = new CryptoCredentials(exchange_id_, this);
-    connect(dlg, &CryptoCredentials::credentials_saved, this,
-            [this](const QString& key, const QString& secret, const QString& pw, const QString& wallet,
-                   const QString& pk) {
-                ExchangeCredentials creds;
-                creds.api_key = key;
-                creds.secret = secret;
-                creds.password = pw;
-                creds.wallet_address = wallet;
-                creds.private_key = pk;
-                ExchangeService::instance().set_credentials(creds);
-                LOG_INFO(TAG, "Credentials saved for " + exchange_id_);
-            });
+    connect(
+        dlg, &CryptoCredentials::credentials_saved, this,
+        [this](const QString& key, const QString& secret, const QString& pw, const QString& wallet, const QString& pk) {
+            ExchangeCredentials creds;
+            creds.api_key = key;
+            creds.secret = secret;
+            creds.password = pw;
+            creds.wallet_address = wallet;
+            creds.private_key = pk;
+            ExchangeService::instance().set_credentials(creds);
+            LOG_INFO(TAG, "Credentials saved for " + exchange_id_);
+        });
     dlg->exec();
     dlg->deleteLater();
 }
@@ -229,7 +227,12 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
                                              double stop_price, double sl, double tp) {
     LOG_INFO(TAG, QString("Order submit: mode=%1 %2 %3 qty=%4 px=%5 stop=%6 sl=%7 tp=%8 sym=%9")
                       .arg(trading_mode_ == TradingMode::Paper ? "PAPER" : "LIVE", side, order_type)
-                      .arg(qty).arg(price).arg(stop_price).arg(sl).arg(tp).arg(selected_symbol_));
+                      .arg(qty)
+                      .arg(price)
+                      .arg(stop_price)
+                      .arg(sl)
+                      .arg(tp)
+                      .arg(selected_symbol_));
     try {
         if (trading_mode_ == TradingMode::Paper) {
             auto ticker = ExchangeService::instance().get_cached_price(selected_symbol_);
@@ -271,14 +274,13 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             // A live order is real money with no undo, and single orders previously
             // had NO confirmation — one click or a held Ctrl+Enter fired real funds.
             // Gate it behind an explicit confirm (close-all/cancel-all already do).
-            const QString px_txt =
-                order_type == "market" ? tr("market price") : QString::number(price, 'f', 8);
+            const QString px_txt = order_type == "market" ? tr("market price") : QString::number(price, 'f', 8);
             const QString confirm_msg = tr("Place a LIVE %1 %2 order with real funds?\n\n%3   qty %4   @ %5")
                                             .arg(side.toUpper(), order_type.toUpper(), selected_symbol_)
                                             .arg(qty)
                                             .arg(px_txt);
-            if (QMessageBox::question(this, tr("Confirm Live Order"), confirm_msg,
-                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+            if (QMessageBox::question(this, tr("Confirm Live Order"), confirm_msg, QMessageBox::Yes | QMessageBox::No,
+                                      QMessageBox::No) != QMessageBox::Yes)
                 return;
 
             // In-flight guard: place_exchange_order is dispatched to a worker and
@@ -343,7 +345,8 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
 }
 
 void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
-    LOG_INFO(TAG, QString("Cancel order: %1 (%2)").arg(order_id, trading_mode_ == TradingMode::Paper ? "paper" : "live"));
+    LOG_INFO(TAG,
+             QString("Cancel order: %1 (%2)").arg(order_id, trading_mode_ == TradingMode::Paper ? "paper" : "live"));
     if (trading_mode_ == TradingMode::Paper) {
         try {
             pt_cancel_order(order_id);
@@ -456,7 +459,13 @@ void CryptoTradingScreen::on_close_all_positions() {
                     continue;
                 auto ticker = ExchangeService::instance().get_cached_price(p.symbol);
                 const double fill = ticker.last > 0 ? ticker.last : p.current_price;
-                const QString side = p.quantity > 0 ? "sell" : "buy";
+                // Paper positions store quantity as a positive magnitude with
+                // side="long"/"short" (shorts are +qty), so derive the close
+                // direction from side, not the sign — else a short is doubled
+                // instead of covered. (Matches UnifiedTrading::close_all_positions.)
+                const QString pdir = QString(p.side).toLower();
+                const bool is_short = pdir == "short" || pdir == "sell" || p.quantity < 0;
+                const QString side = is_short ? "buy" : "sell";
                 auto order = pt_place_order(portfolio_id_, p.symbol, side, "market", std::abs(p.quantity),
                                             std::optional<double>(fill), std::nullopt);
                 pt_fill_order(order.id, fill);
@@ -482,8 +491,8 @@ void CryptoTradingScreen::on_close_all_positions() {
             if (sym.isEmpty() || contracts == 0)
                 continue;
             const bool is_long = p.value("side").toString() == QLatin1String("long") || contracts > 0;
-            ExchangeService::instance().place_exchange_order(sym, is_long ? "sell" : "buy", "market",
-                                                             std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
+            ExchangeService::instance().place_exchange_order(
+                sym, is_long ? "sell" : "buy", "market", std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
             ++closed;
         }
         QMetaObject::invokeMethod(
@@ -510,7 +519,13 @@ void CryptoTradingScreen::on_close_position(const QString& symbol) {
                     continue;
                 auto ticker = ExchangeService::instance().get_cached_price(symbol);
                 const double fill = ticker.last > 0 ? ticker.last : p.current_price;
-                const QString side = p.quantity > 0 ? "sell" : "buy";
+                // Paper positions store quantity as a positive magnitude with
+                // side="long"/"short" (shorts are +qty), so derive the close
+                // direction from side, not the sign — else a short is doubled
+                // instead of covered. (Matches UnifiedTrading::close_all_positions.)
+                const QString pdir = QString(p.side).toLower();
+                const bool is_short = pdir == "short" || pdir == "sell" || p.quantity < 0;
+                const QString side = is_short ? "buy" : "sell";
                 auto order = pt_place_order(portfolio_id_, symbol, side, "market", std::abs(p.quantity),
                                             std::optional<double>(fill), std::nullopt);
                 pt_fill_order(order.id, fill);
@@ -537,8 +552,8 @@ void CryptoTradingScreen::on_close_position(const QString& symbol) {
             if (contracts == 0)
                 continue;
             const bool is_long = p.value("side").toString() == QLatin1String("long") || contracts > 0;
-            ExchangeService::instance().place_exchange_order(sym, is_long ? "sell" : "buy", "market",
-                                                             std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
+            ExchangeService::instance().place_exchange_order(
+                sym, is_long ? "sell" : "buy", "market", std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
         }
         QMetaObject::invokeMethod(
             self,

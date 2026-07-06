@@ -41,7 +41,7 @@ class MarketPanel : public QWidget {
     void refresh_finished();
     void edit_requested(const QString& panel_id);
     void delete_requested(const QString& panel_id);
-    void config_changed(const MarketPanelConfig& cfg);  // emitted when columns change
+    void config_changed(const MarketPanelConfig& cfg); // emitted when columns change
 
   protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -72,40 +72,40 @@ class MarketPanel : public QWidget {
     void hub_unsubscribe_all();
     void rebuild_from_cache();
 
-    MarketPanelConfig              config_;
-    QVector<services::QuoteData>   cached_quotes_;  // all fetched data; display subset shown
-    bool has_data_    = false;
+    MarketPanelConfig config_;
+    QVector<services::QuoteData> cached_quotes_; // all fetched data; display subset shown
+    bool has_data_ = false;
     bool fetch_failed_ = false;
 
     QHash<QString, services::QuoteData> row_cache_;
-    QHash<QString, QString> names_;  // symbol → human-readable display name (yfinance, cached)
-    QSet<QString> pending_initial_;  // symbols awaiting first delivery for refresh_finished
+    QHash<QString, QString> names_; // symbol → human-readable display name (yfinance, cached)
+    QSet<QString> pending_initial_; // symbols awaiting first delivery for refresh_finished
     bool refresh_inflight_ = false;
     bool hub_active_ = false;
 
     // Header widgets (28px)
-    QWidget*     header_      = nullptr;
-    QLabel*      title_label_ = nullptr;
-    QPushButton* cols_btn_    = nullptr;
-    QPushButton* edit_btn_    = nullptr;
-    QPushButton* delete_btn_  = nullptr;
+    QWidget* header_ = nullptr;
+    QLabel* title_label_ = nullptr;
+    QPushButton* cols_btn_ = nullptr;
+    QPushButton* edit_btn_ = nullptr;
+    QPushButton* delete_btn_ = nullptr;
 
     // Body: data table or error state
-    QWidget*      body_           = nullptr;
-    QTableWidget* table_          = nullptr;
-    QWidget*      error_widget_   = nullptr;
-    QLabel*       error_label_    = nullptr;
-    QPushButton*  retry_btn_      = nullptr;
+    QWidget* body_ = nullptr;
+    QTableWidget* table_ = nullptr;
+    QWidget* error_widget_ = nullptr;
+    QLabel* error_label_ = nullptr;
+    QPushButton* retry_btn_ = nullptr;
 
     // Loading overlay (shown until first data arrives)
-    QWidget*      loading_widget_ = nullptr;
-    QLabel*       loading_label_  = nullptr;
-    QTimer*       loading_timer_  = nullptr;
-    int           loading_frame_  = 0;
+    QWidget* loading_widget_ = nullptr;
+    QLabel* loading_label_ = nullptr;
+    QTimer* loading_timer_ = nullptr;
+    int loading_frame_ = 0;
 
-    static constexpr int kHeaderH    = 28;
+    static constexpr int kHeaderH = 28;
     static constexpr int kColHeaderH = 22;
-    static constexpr int kRowH       = 22;
+    static constexpr int kRowH = 22;
 };
 
 } // namespace fincept::screens

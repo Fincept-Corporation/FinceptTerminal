@@ -77,8 +77,7 @@ void PolymarketPriceWidget::build_rows() {
     if (entries_.isEmpty()) {
         auto* hint = new QLabel(tr("No markets configured — click gear to add"));
         hint->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;padding:4px 0;")
-                .arg(ui::colors::TEXT_TERTIARY()));
+            QString("color:%1;font-size:10px;background:transparent;padding:4px 0;").arg(ui::colors::TEXT_TERTIARY()));
         vl->addWidget(hint);
         vl->addStretch(1);
         return;
@@ -148,8 +147,7 @@ void PolymarketPriceWidget::on_price(const QString& asset_id, double price) {
         col = ui::colors::POSITIVE();
     else if (pct <= 35)
         col = ui::colors::NEGATIVE();
-    it->pct->setStyleSheet(
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(col.name()));
+    it->pct->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(col.name()));
     set_loading(false);
 }
 
@@ -198,11 +196,9 @@ void PolymarketPriceWidget::on_theme_changed() {
 
 void PolymarketPriceWidget::apply_styles() {
     const QString label_css =
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;")
-            .arg(ui::colors::TEXT_PRIMARY());
+        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
     const QString pct_css =
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-            .arg(ui::colors::TEXT_TERTIARY());
+        QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
     for (auto it = rows_.begin(); it != rows_.end(); ++it) {
         if (it->label)
             it->label->setStyleSheet(label_css);

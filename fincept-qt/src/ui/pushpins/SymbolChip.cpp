@@ -59,9 +59,7 @@ void SymbolChip::contextMenuEvent(QContextMenuEvent* e) {
     QMenu menu(this);
 
     auto* copy = menu.addAction("Copy Ticker");
-    connect(copy, &QAction::triggered, this, [this]() {
-        QApplication::clipboard()->setText(ref_.symbol);
-    });
+    connect(copy, &QAction::triggered, this, [this]() { QApplication::clipboard()->setText(ref_.symbol); });
 
     auto* remove = menu.addAction("Remove Pin");
     connect(remove, &QAction::triggered, this, [this]() {
@@ -72,9 +70,8 @@ void SymbolChip::contextMenuEvent(QContextMenuEvent* e) {
     menu.addSeparator();
     auto& registry = SymbolGroupRegistry::instance();
     for (SymbolGroup g : registry.enabled_groups()) {
-        auto* act = menu.addAction(QStringLiteral("Broadcast to %1  (%2)")
-                                       .arg(registry.name(g))
-                                       .arg(symbol_group_letter(g)));
+        auto* act =
+            menu.addAction(QStringLiteral("Broadcast to %1  (%2)").arg(registry.name(g)).arg(symbol_group_letter(g)));
         connect(act, &QAction::triggered, this, [this, g]() { broadcast_to_group(g); });
     }
     menu.exec(e->globalPos());

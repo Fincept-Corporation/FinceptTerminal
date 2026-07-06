@@ -21,9 +21,7 @@ namespace fincept::screens::datasources {
 /// @param edit_id    if non-empty AND duplicate==false, edits that connection
 /// @param duplicate  if true, prefills from edit_id but creates a new ID on save
 /// @return saved connection id, or empty string on cancel / failure
-QString show_connection_config_dialog(QWidget* parent,
-                                      const ConnectorConfig& config,
-                                      const QString& edit_id = {},
+QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& config, const QString& edit_id = {},
                                       bool duplicate = false);
 
 } // namespace fincept::screens::datasources

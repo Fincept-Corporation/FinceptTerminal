@@ -39,7 +39,6 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
-
 namespace fincept::screens {
 
 using namespace fincept::trading;
@@ -184,15 +183,14 @@ void CryptoTradingScreen::setup_ui() {
     // the symbol, not merely pastes it into the box.
     if (auto* popup = completer->popup()) {
         popup->setObjectName("cryptoSymbolCompleterPopup");
-        popup->setStyleSheet(
-            QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
-                    " font-family:%4; font-size:%5px; }"
-                    "QListView::item { padding:4px 8px; border:none; }"
-                    "QListView::item:selected { background:%6; color:%2; }")
-                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
-                     fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
-                .arg(fincept::ui::fonts::SMALL)
-                .arg(fincept::ui::colors::BG_HOVER()));
+        popup->setStyleSheet(QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
+                                     " font-family:%4; font-size:%5px; }"
+                                     "QListView::item { padding:4px 8px; border:none; }"
+                                     "QListView::item:selected { background:%6; color:%2; }")
+                                 .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+                                      fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
+                                 .arg(fincept::ui::fonts::SMALL)
+                                 .arg(fincept::ui::colors::BG_HOVER()));
     }
     connect(completer, QOverload<const QString&>::of(&QCompleter::activated), this,
             [this](const QString& choice) { on_symbol_selected(choice.trimmed().toUpper()); });
@@ -313,12 +311,11 @@ void CryptoTradingScreen::setup_ui() {
             [this](const QString&) { on_cancel_all_orders(); });
     connect(bottom_panel_, &CryptoBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
-    connect(chart_, &CryptoChart::timeframe_changed, this,
-            [this](const QString& tf) {
-                ExchangeService::instance().set_ws_timeframe(tf);
-                hub_subscribe_topics();  // re-point the OHLC subscription to the new tf
-                async_fetch_candles(selected_symbol_, tf);
-            });
+    connect(chart_, &CryptoChart::timeframe_changed, this, [this](const QString& tf) {
+        ExchangeService::instance().set_ws_timeframe(tf);
+        hub_subscribe_topics(); // re-point the OHLC subscription to the new tf
+        async_fetch_candles(selected_symbol_, tf);
+    });
 }
 
 // ============================================================================
@@ -428,7 +425,8 @@ void CryptoTradingScreen::changeEvent(QEvent* event) {
 }
 
 void CryptoTradingScreen::retranslateUi() {
-    if (api_btn_) api_btn_->setText(tr("API"));
+    if (api_btn_)
+        api_btn_->setText(tr("API"));
 
     // Mode button reflects the live trading mode.
     if (mode_btn_)
@@ -437,11 +435,13 @@ void CryptoTradingScreen::retranslateUi() {
     // WS status pill — re-apply the word matching the current state. -1 (unknown)
     // maps to the connecting placeholder.
     if (ws_status_) {
-        if (last_ws_status_label_state_ == 1)      ws_status_->setText(tr("LIVE"));
-        else if (last_ws_status_label_state_ == 0) ws_status_->setText(tr("OFFLINE"));
-        else                                       ws_status_->setText(tr("CONNECTING"));
-        ws_status_->setToolTip(
-            tr("WebSocket feed status — green=live, amber=connecting, red=offline (REST polling)"));
+        if (last_ws_status_label_state_ == 1)
+            ws_status_->setText(tr("LIVE"));
+        else if (last_ws_status_label_state_ == 0)
+            ws_status_->setText(tr("OFFLINE"));
+        else
+            ws_status_->setText(tr("CONNECTING"));
+        ws_status_->setToolTip(tr("WebSocket feed status — green=live, amber=connecting, red=offline (REST polling)"));
     }
 
     // Transport hint — all exchanges stream via ws_stream.py (ccxt.pro).
@@ -490,24 +490,22 @@ void CryptoTradingScreen::hub_subscribe_topics() {
     if (!ticker_syms.contains(selected_symbol_))
         ticker_syms << selected_symbol_;
     for (const QString& sym : ticker_syms) {
-        hub.subscribe<fincept::trading::TickerData>(
-            ws_subscription_owner_,
-            QStringLiteral("ws:") + ex + QStringLiteral(":ticker:") + sym,
-            [self](const fincept::trading::TickerData& t) {
-                if (!self || t.symbol.isEmpty())
-                    return;
-                self->pending_tickers_[t.symbol] = t;
-                if (t.symbol == self->selected_symbol_) {
-                    self->pending_primary_ticker_ = t;
-                    self->has_pending_primary_ = true;
-                }
-            });
+        hub.subscribe<fincept::trading::TickerData>(ws_subscription_owner_,
+                                                    QStringLiteral("ws:") + ex + QStringLiteral(":ticker:") + sym,
+                                                    [self](const fincept::trading::TickerData& t) {
+                                                        if (!self || t.symbol.isEmpty())
+                                                            return;
+                                                        self->pending_tickers_[t.symbol] = t;
+                                                        if (t.symbol == self->selected_symbol_) {
+                                                            self->pending_primary_ticker_ = t;
+                                                            self->has_pending_primary_ = true;
+                                                        }
+                                                    });
     }
 
     // Orderbook — selected symbol only.
     hub.subscribe<fincept::trading::OrderBookData>(
-        ws_subscription_owner_,
-        QStringLiteral("ws:") + ex + QStringLiteral(":orderbook:") + selected_symbol_,
+        ws_subscription_owner_, QStringLiteral("ws:") + ex + QStringLiteral(":orderbook:") + selected_symbol_,
         [self](const fincept::trading::OrderBookData& ob) {
             if (!self || ob.symbol != self->selected_symbol_)
                 return;
@@ -517,8 +515,7 @@ void CryptoTradingScreen::hub_subscribe_topics() {
 
     // Trades — selected symbol only.
     hub.subscribe<fincept::trading::TradeData>(
-        ws_subscription_owner_,
-        QStringLiteral("ws:") + ex + QStringLiteral(":trades:") + selected_symbol_,
+        ws_subscription_owner_, QStringLiteral("ws:") + ex + QStringLiteral(":trades:") + selected_symbol_,
         [self](const fincept::trading::TradeData& td) {
             if (!self || td.symbol != self->selected_symbol_)
                 return;
@@ -531,15 +528,14 @@ void CryptoTradingScreen::hub_subscribe_topics() {
 
     // OHLC — selected symbol at the chart's current timeframe.
     const QString interval = chart_ ? chart_->current_timeframe() : QStringLiteral("1m");
-    hub.subscribe<fincept::trading::Candle>(
-        ws_subscription_owner_,
-        QStringLiteral("ws:") + ex + QStringLiteral(":ohlc:") + selected_symbol_ +
-            QLatin1Char(':') + interval,
-        [self](const fincept::trading::Candle& c) {
-            if (!self)
-                return;
-            self->pending_candles_.append(c);
-        });
+    hub.subscribe<fincept::trading::Candle>(ws_subscription_owner_,
+                                            QStringLiteral("ws:") + ex + QStringLiteral(":ohlc:") + selected_symbol_ +
+                                                QLatin1Char(':') + interval,
+                                            [self](const fincept::trading::Candle& c) {
+                                                if (!self)
+                                                    return;
+                                                self->pending_candles_.append(c);
+                                            });
 
     LOG_INFO(TAG, QString("Hub WS subscriptions active (%1 / %2)").arg(ex, selected_symbol_));
 }
@@ -612,7 +608,8 @@ void CryptoTradingScreen::load_portfolio() {
             if (existing) {
                 portfolio = *existing;
             } else {
-                portfolio = pt_create_portfolio("Crypto Paper", DEFAULT_PAPER_BALANCE, "USD", 1.0, "cross", 0.001, exch);
+                portfolio =
+                    pt_create_portfolio("Crypto Paper", DEFAULT_PAPER_BALANCE, "USD", 1.0, "cross", 0.001, exch);
             }
         } catch (const std::exception& e) {
             LOG_ERROR("CryptoTradingScreen", QString("load_portfolio failed: %1").arg(e.what()));
@@ -640,7 +637,6 @@ void CryptoTradingScreen::load_portfolio() {
 // ============================================================================
 // Async Fetchers
 // ============================================================================
-
 
 QVariantMap CryptoTradingScreen::save_state() const {
     return {

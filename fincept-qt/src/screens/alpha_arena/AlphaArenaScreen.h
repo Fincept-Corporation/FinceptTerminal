@@ -13,12 +13,18 @@
 #include <QVector>
 #include <QWidget>
 
-class QComboBox; class QLabel; class QPushButton; class QSpinBox; class QStackedWidget;
+class QComboBox;
+class QLabel;
+class QPushButton;
+class QSpinBox;
+class QStackedWidget;
 class QTimer;
 
 namespace fincept::screens::alpha_arena {
 
-class ArenaPanelGrid; class EquityCurveWidget; class LeaderboardCards;
+class ArenaPanelGrid;
+class EquityCurveWidget;
+class LeaderboardCards;
 
 class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
@@ -37,19 +43,19 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
 
   private:
     QWidget* build_header();
-    QWidget* build_ticker_strip();       // mids ticker + cadence editor
+    QWidget* build_ticker_strip(); // mids ticker + cadence editor
     QWidget* build_empty_state();
     QWidget* build_dashboard();
     void connect_engine();
     void disconnect_engine();
-    void reload_competitions();          // switcher combo
+    void reload_competitions(); // switcher combo
     void show_competition(const QString& id);
-    void refresh_dashboard();            // chart + board + panels (full, per round)
-    void update_ticker();                // mids ticker (every marks tick)
-    void rebuild_board_light();          // board from cached agents + live account_view
+    void refresh_dashboard();   // chart + board + panels (full, per round)
+    void update_ticker();       // mids ticker (every marks tick)
+    void rebuild_board_light(); // board from cached agents + live account_view
     void on_new_competition();
     void update_badges(const QString& status);
-    void maybe_offer_crash_recovery();   // Resume-or-End prompt (signal + showEvent)
+    void maybe_offer_crash_recovery(); // Resume-or-End prompt (signal + showEvent)
 
     QString competition_id_;
     QVector<QMetaObject::Connection> conns_;
@@ -57,7 +63,7 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     // Light-refresh caches (filled by refresh_dashboard; used on marks ticks).
     QVector<fincept::arena::AgentRow> agents_cache_;
     QHash<QString, qint64> tokens_cache_;
-    QHash<QString, double> last_mids_;   // previously displayed mids (ticker arrows)
+    QHash<QString, double> last_mids_; // previously displayed mids (ticker arrows)
     double cap_ = 0;
     // Header
     QLabel* venue_badge_ = nullptr;
@@ -72,7 +78,7 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QPushButton* kill_btn_ = nullptr;
     QComboBox* switcher_ = nullptr;
     // Body
-    QStackedWidget* body_ = nullptr;     // 0 = empty state, 1 = dashboard
+    QStackedWidget* body_ = nullptr; // 0 = empty state, 1 = dashboard
     EquityCurveWidget* chart_ = nullptr;
     LeaderboardCards* cards_ = nullptr;
     ArenaPanelGrid* grid_ = nullptr;

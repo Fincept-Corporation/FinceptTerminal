@@ -18,8 +18,10 @@ void PivotLayer::compute(const QVector<CandleData>& candles) {
             continue;
         if (c.timestamp >= last_ts)
             break;
-        if (c.high > day_high) day_high = c.high;
-        if (c.low < day_low) day_low = c.low;
+        if (c.high > day_high)
+            day_high = c.high;
+        if (c.low < day_low)
+            day_low = c.low;
         day_close = c.close;
     }
 

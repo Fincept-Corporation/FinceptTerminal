@@ -23,8 +23,7 @@ bool is_short_side(const QString& side) {
 
 } // namespace
 
-QVector<SourceItem> to_source_items(const QVector<BrokerHolding>& holdings,
-                                    const QVector<BrokerPosition>& positions) {
+QVector<SourceItem> to_source_items(const QVector<BrokerHolding>& holdings, const QVector<BrokerPosition>& positions) {
     QVector<SourceItem> out;
     out.reserve(holdings.size() + positions.size());
     for (const auto& h : holdings) {
@@ -77,13 +76,9 @@ QVector<SourceItem> paper_source_items(const QString& portfolio_id) {
     return out;
 }
 
-ReplicationPlan build_plan(const QVector<SourceItem>& items,
-                           const ReplicationOptions& opts,
-                           double target_available,
-                           const QString& source_account_id,
-                           const QString& target_account_id,
-                           const QString& target_paper_portfolio_id,
-                           const SymbolResolver& resolve) {
+ReplicationPlan build_plan(const QVector<SourceItem>& items, const ReplicationOptions& opts, double target_available,
+                           const QString& source_account_id, const QString& target_account_id,
+                           const QString& target_paper_portfolio_id, const SymbolResolver& resolve) {
     ReplicationPlan plan;
     plan.source_account_id = source_account_id;
     plan.target_account_id = target_account_id;
@@ -136,10 +131,8 @@ ReplicationPlan build_plan(const QVector<SourceItem>& items,
     return plan;
 }
 
-SymbolResolver make_instrument_resolver(const QString& source_broker_id,
-                                        const QString& target_broker_id) {
-    return [source_broker_id, target_broker_id](const QString& src_symbol,
-                                                const QString& exchange) -> ResolveResult {
+SymbolResolver make_instrument_resolver(const QString& source_broker_id, const QString& target_broker_id) {
+    return [source_broker_id, target_broker_id](const QString& src_symbol, const QString& exchange) -> ResolveResult {
         auto& svc = InstrumentService::instance();
         // 1) source brsymbol → canonical normalized symbol (fallback: as-is)
         QString norm = src_symbol;
@@ -181,8 +174,8 @@ ReplicationResult execute_plan(const ReplicationPlan& plan) {
             std::optional<double> price_opt;
             if (po.est_price > 0)
                 price_opt = po.est_price; // market reference price for margin calc
-            auto ord = pt_place_order(plan.target_paper_portfolio_id, po.norm_symbol, po.side,
-                                      QStringLiteral("market"), po.quantity, price_opt, std::nullopt,
+            auto ord = pt_place_order(plan.target_paper_portfolio_id, po.norm_symbol, po.side, QStringLiteral("market"),
+                                      po.quantity, price_opt, std::nullopt,
                                       /*reduce_only=*/false, po.exchange, po.product);
             pt_fill_order(ord.id, po.est_price);
             already_held.insert(po.norm_symbol.toUpper()); // a later same-symbol leg must not net against this

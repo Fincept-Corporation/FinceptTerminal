@@ -28,9 +28,7 @@ class SurfaceLineWidget;
 class SurfaceControlPanel;
 class SurfaceDataInspector;
 
-class SurfaceAnalyticsScreen : public QWidget,
-                               public fincept::screens::IStatefulScreen,
-                               public fincept::IGroupLinked {
+class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefulScreen, public fincept::IGroupLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
@@ -104,8 +102,8 @@ class SurfaceAnalyticsScreen : public QWidget,
     QPushButton* btn_3d_ = nullptr;
     QPushButton* btn_table_ = nullptr;
     QPushButton* btn_line_ = nullptr;
-    QPushButton* import_btn_ = nullptr;   // fixed-label, cached for retranslateUi
-    QPushButton* refresh_btn_ = nullptr;  // fixed-label, cached for retranslateUi
+    QPushButton* import_btn_ = nullptr;  // fixed-label, cached for retranslateUi
+    QPushButton* refresh_btn_ = nullptr; // fixed-label, cached for retranslateUi
 
     // Main panels
     SurfaceControlPanel* control_panel_ = nullptr;

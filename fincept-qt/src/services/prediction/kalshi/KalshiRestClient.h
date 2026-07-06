@@ -41,20 +41,14 @@ class KalshiRestClient : public QObject {
     // ── Public endpoints ─────────────────────────────────────────────────
 
     /// GET /markets — paginated; pass empty cursor on first call.
-    void fetch_markets(const QString& status = QStringLiteral("open"),
-                       const QString& event_ticker = QString(),
-                       const QString& series_ticker = QString(),
-                       const QString& tickers = QString(),
-                       int limit = 100,
+    void fetch_markets(const QString& status = QStringLiteral("open"), const QString& event_ticker = QString(),
+                       const QString& series_ticker = QString(), const QString& tickers = QString(), int limit = 100,
                        const QString& cursor = QString());
     /// GET /markets/{ticker} — single market detail.
     void fetch_market(const QString& ticker);
     /// GET /events — paginated; event_list with optional status filter.
-    void fetch_events(const QString& status = QStringLiteral("open"),
-                      const QString& series_ticker = QString(),
-                      bool with_nested_markets = true,
-                      int limit = 100,
-                      const QString& cursor = QString());
+    void fetch_events(const QString& status = QStringLiteral("open"), const QString& series_ticker = QString(),
+                      bool with_nested_markets = true, int limit = 100, const QString& cursor = QString());
     /// GET /events/{event_ticker} — single event + nested markets.
     void fetch_event(const QString& event_ticker);
     /// GET /series — used as Kalshi's "tag/category" list.
@@ -62,11 +56,10 @@ class KalshiRestClient : public QObject {
     /// GET /markets/{ticker}/orderbook — depth 0 = all levels.
     void fetch_order_book(const QString& ticker, int depth = 20);
     /// GET /markets/{ticker}/candlesticks — period_interval in minutes (1, 60, 1440).
-    void fetch_candlesticks(const QString& series_ticker, const QString& ticker,
-                            int period_interval_min, qint64 start_ts, qint64 end_ts);
+    void fetch_candlesticks(const QString& series_ticker, const QString& ticker, int period_interval_min,
+                            qint64 start_ts, qint64 end_ts);
     /// GET /markets/{ticker}/trades — recent trades on a single market.
-    void fetch_market_trades(const QString& ticker, int limit = 100,
-                             const QString& cursor = QString());
+    void fetch_market_trades(const QString& ticker, int limit = 100, const QString& cursor = QString());
 
     // ── Exchange metadata ────────────────────────────────────────────────
 
@@ -86,22 +79,17 @@ class KalshiRestClient : public QObject {
 
     /// GET /markets/candlesticks — batched across tickers. Returns a map
     /// of ticker → PriceHistory.
-    void fetch_batch_candlesticks(const QStringList& tickers, int period_interval_min,
-                                  qint64 start_ts, qint64 end_ts);
+    void fetch_batch_candlesticks(const QStringList& tickers, int period_interval_min, qint64 start_ts, qint64 end_ts);
 
     // ── Historical data (public slice) ───────────────────────────────────
 
     /// GET /historical/markets — archived markets, paginated.
-    void fetch_historical_markets(const QString& series_ticker = QString(),
-                                  int limit = 100,
+    void fetch_historical_markets(const QString& series_ticker = QString(), int limit = 100,
                                   const QString& cursor = QString());
     /// GET /historical/markets/{ticker}/candlesticks — archived candles.
-    void fetch_historical_candlesticks(const QString& ticker, int period_interval_min,
-                                       qint64 start_ts, qint64 end_ts);
+    void fetch_historical_candlesticks(const QString& ticker, int period_interval_min, qint64 start_ts, qint64 end_ts);
     /// GET /historical/trades — archived trade tape.
-    void fetch_historical_trades(const QString& ticker = QString(),
-                                 int limit = 100,
-                                 const QString& cursor = QString());
+    void fetch_historical_trades(const QString& ticker = QString(), int limit = 100, const QString& cursor = QString());
 
     // ── Search / filter metadata ─────────────────────────────────────────
 
@@ -120,10 +108,8 @@ class KalshiRestClient : public QObject {
     void event_detail_ready(const fincept::services::prediction::PredictionEvent& event);
     void tags_ready(const QStringList& series_tickers);
     void order_book_ready(const fincept::services::prediction::PredictionOrderBook& yes_book,
-                          const fincept::services::prediction::PredictionOrderBook& no_book,
-                          const QString& ticker);
-    void price_history_ready(const fincept::services::prediction::PriceHistory& yes_history,
-                             const QString& ticker);
+                          const fincept::services::prediction::PredictionOrderBook& no_book, const QString& ticker);
+    void price_history_ready(const fincept::services::prediction::PriceHistory& yes_history, const QString& ticker);
     void trades_ready(const QVector<fincept::services::prediction::PredictionTrade>& trades);
 
     // Exchange / series / search metadata — raw JSON pass-through since
@@ -136,18 +122,15 @@ class KalshiRestClient : public QObject {
     void search_filters_ready(const QJsonObject& filters);
 
     // Batch candlesticks: map of ticker → history.
-    void batch_candlesticks_ready(
-        const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
+    void batch_candlesticks_ready(const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
 
     // Historical (matches the live counterparts).
-    void historical_markets_ready(
-        const QVector<fincept::services::prediction::PredictionMarket>& markets,
-        const QString& next_cursor);
-    void historical_candlesticks_ready(
-        const fincept::services::prediction::PriceHistory& history, const QString& ticker);
-    void historical_trades_ready(
-        const QVector<fincept::services::prediction::PredictionTrade>& trades,
-        const QString& next_cursor);
+    void historical_markets_ready(const QVector<fincept::services::prediction::PredictionMarket>& markets,
+                                  const QString& next_cursor);
+    void historical_candlesticks_ready(const fincept::services::prediction::PriceHistory& history,
+                                       const QString& ticker);
+    void historical_trades_ready(const QVector<fincept::services::prediction::PredictionTrade>& trades,
+                                 const QString& next_cursor);
 
     void request_error(const QString& context, const QString& message);
 

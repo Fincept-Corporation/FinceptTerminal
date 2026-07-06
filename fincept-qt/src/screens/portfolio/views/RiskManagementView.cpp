@@ -4,10 +4,10 @@
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
-#include <QTabBar>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QTabBar>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -133,7 +133,8 @@ void RiskManagementView::build_ui() {
                                           "  border-bottom:2px solid %6; padding:4px 8px; font-size:9px;"
                                           "  font-weight:700; letter-spacing:0.5px; }")
                                       .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                                           ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
+                                           ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(),
+                                           ui::colors::AMBER()));
     contrib_layout->addWidget(contrib_table_, 1);
     contrib_tab_index_ = tabs_->addTab(contrib_w, tr("RISK CONTRIBUTION"));
 
@@ -157,13 +158,19 @@ void RiskManagementView::changeEvent(QEvent* event) {
 
 void RiskManagementView::retranslateUi() {
     if (tabs_) {
-        if (overview_tab_index_ >= 0) tabs_->setTabText(overview_tab_index_, tr("RISK OVERVIEW"));
-        if (stress_tab_index_ >= 0)   tabs_->setTabText(stress_tab_index_, tr("STRESS TEST"));
-        if (contrib_tab_index_ >= 0)  tabs_->setTabText(contrib_tab_index_, tr("RISK CONTRIBUTION"));
+        if (overview_tab_index_ >= 0)
+            tabs_->setTabText(overview_tab_index_, tr("RISK OVERVIEW"));
+        if (stress_tab_index_ >= 0)
+            tabs_->setTabText(stress_tab_index_, tr("STRESS TEST"));
+        if (contrib_tab_index_ >= 0)
+            tabs_->setTabText(contrib_tab_index_, tr("RISK CONTRIBUTION"));
     }
-    if (stress_title_)  stress_title_->setText(tr("PORTFOLIO STRESS TESTING"));
-    if (stress_note_)   stress_note_->setText(tr("Estimated impact of historical and hypothetical market scenarios"));
-    if (contrib_title_) contrib_title_->setText(tr("RISK CONTRIBUTION BY HOLDING"));
+    if (stress_title_)
+        stress_title_->setText(tr("PORTFOLIO STRESS TESTING"));
+    if (stress_note_)
+        stress_note_->setText(tr("Estimated impact of historical and hypothetical market scenarios"));
+    if (contrib_title_)
+        contrib_title_->setText(tr("RISK CONTRIBUTION BY HOLDING"));
 
     if (stress_table_)
         stress_table_->setHorizontalHeaderLabels(
@@ -250,8 +257,8 @@ void RiskManagementView::update_overview() {
         cl->setSpacing(2);
 
         auto* lbl = new QLabel(label);
-        lbl->setStyleSheet(
-            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
+        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
+                               .arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(lbl);
 
         auto* val = new QLabel(value);

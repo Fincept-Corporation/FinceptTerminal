@@ -1,9 +1,8 @@
 #include "screens/dashboard/widgets/StockQuoteWidget.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QFrame>
 
@@ -85,7 +84,6 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     apply_styles();
     set_loading(true);
-
 }
 
 void StockQuoteWidget::apply_styles() {
@@ -137,7 +135,6 @@ void StockQuoteWidget::refresh_data() {
     datahub::DataHub::instance().request(QStringLiteral("market:quote:") + symbol_);
 }
 
-
 void StockQuoteWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
@@ -155,7 +152,6 @@ void StockQuoteWidget::hub_unsubscribe_all() {
     datahub::DataHub::instance().unsubscribe(this);
     hub_active_ = false;
 }
-
 
 void StockQuoteWidget::populate(const services::QuoteData& q) {
     price_label_->setText(QString("$%1").arg(q.price, 0, 'f', 2));

@@ -37,38 +37,36 @@ Result<void> apply_v048(QSqlDatabase& db) {
         return r;
 
     // 2. Recreate with the widened uniqueness key (instrument_token, exchange, broker_id).
-    r = sql(db,
-            "CREATE TABLE instruments ("
-            "  id               INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "  instrument_token INTEGER NOT NULL,"
-            "  exchange_token   INTEGER NOT NULL DEFAULT 0,"
-            "  symbol           TEXT    NOT NULL,"
-            "  brsymbol         TEXT    NOT NULL,"
-            "  name             TEXT    NOT NULL DEFAULT '',"
-            "  exchange         TEXT    NOT NULL,"
-            "  brexchange       TEXT    NOT NULL DEFAULT '',"
-            "  expiry           TEXT    NOT NULL DEFAULT '',"
-            "  strike           REAL    NOT NULL DEFAULT 0,"
-            "  lot_size         INTEGER NOT NULL DEFAULT 1,"
-            "  instrument_type  TEXT    NOT NULL DEFAULT 'EQ',"
-            "  tick_size        REAL    NOT NULL DEFAULT 0.05,"
-            "  broker_id        TEXT    NOT NULL,"
-            "  updated_at       TEXT    DEFAULT (datetime('now')),"
-            "  broker_token     TEXT    NOT NULL DEFAULT '',"
-            "  UNIQUE(instrument_token, exchange, broker_id)"
-            ")");
+    r = sql(db, "CREATE TABLE instruments ("
+                "  id               INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  instrument_token INTEGER NOT NULL,"
+                "  exchange_token   INTEGER NOT NULL DEFAULT 0,"
+                "  symbol           TEXT    NOT NULL,"
+                "  brsymbol         TEXT    NOT NULL,"
+                "  name             TEXT    NOT NULL DEFAULT '',"
+                "  exchange         TEXT    NOT NULL,"
+                "  brexchange       TEXT    NOT NULL DEFAULT '',"
+                "  expiry           TEXT    NOT NULL DEFAULT '',"
+                "  strike           REAL    NOT NULL DEFAULT 0,"
+                "  lot_size         INTEGER NOT NULL DEFAULT 1,"
+                "  instrument_type  TEXT    NOT NULL DEFAULT 'EQ',"
+                "  tick_size        REAL    NOT NULL DEFAULT 0.05,"
+                "  broker_id        TEXT    NOT NULL,"
+                "  updated_at       TEXT    DEFAULT (datetime('now')),"
+                "  broker_token     TEXT    NOT NULL DEFAULT '',"
+                "  UNIQUE(instrument_token, exchange, broker_id)"
+                ")");
     if (r.is_err())
         return r;
 
     // 3. Copy every broker EXCEPT dhan (whose old rows are collision-corrupted —
     //    let it re-download a fresh, complete master under the new key).
-    r = sql(db,
-            "INSERT OR IGNORE INTO instruments "
-            "(instrument_token, exchange_token, symbol, brsymbol, name, exchange, brexchange, "
-            " expiry, strike, lot_size, instrument_type, tick_size, broker_id, updated_at, broker_token) "
-            "SELECT instrument_token, exchange_token, symbol, brsymbol, name, exchange, brexchange, "
-            " expiry, strike, lot_size, instrument_type, tick_size, broker_id, updated_at, broker_token "
-            "FROM instruments_old_v048 WHERE broker_id <> 'dhan'");
+    r = sql(db, "INSERT OR IGNORE INTO instruments "
+                "(instrument_token, exchange_token, symbol, brsymbol, name, exchange, brexchange, "
+                " expiry, strike, lot_size, instrument_type, tick_size, broker_id, updated_at, broker_token) "
+                "SELECT instrument_token, exchange_token, symbol, brsymbol, name, exchange, brexchange, "
+                " expiry, strike, lot_size, instrument_type, tick_size, broker_id, updated_at, broker_token "
+                "FROM instruments_old_v048 WHERE broker_id <> 'dhan'");
     if (r.is_err())
         return r;
 

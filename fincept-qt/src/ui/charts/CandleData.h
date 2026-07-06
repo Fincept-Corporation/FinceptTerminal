@@ -3,6 +3,7 @@
 #include "trading/TradingTypes.h"
 
 #include <QVector>
+
 #include <algorithm>
 
 namespace fincept::ui {
@@ -15,9 +16,7 @@ struct CandleData {
     double close = 0.0;
     double volume = 0.0;
 
-    static CandleData from(const trading::Candle& c) {
-        return {c.timestamp, c.open, c.high, c.low, c.close, c.volume};
-    }
+    static CandleData from(const trading::Candle& c) { return {c.timestamp, c.open, c.high, c.low, c.close, c.volume}; }
 
     static CandleData from(const trading::BrokerCandle& c) {
         return {c.timestamp, c.open, c.high, c.low, c.close, c.volume};

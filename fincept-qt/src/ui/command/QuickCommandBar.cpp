@@ -18,17 +18,16 @@ namespace fincept::ui {
 QuickCommandBar::QuickCommandBar(QWidget* parent) : QFrame(parent) {
     setObjectName("QuickCommandBar");
     setFrameShape(QFrame::NoFrame);
-    setStyleSheet(
-        "QFrame#QuickCommandBar {"
-        "  background: #0f172a;"
-        "  border-top: 1px solid #374151;"
-        "}"
-        "QLineEdit {"
-        "  background: #111827; color: #e5e7eb;"
-        "  border: 1px solid #374151; padding: 4px 8px;"
-        "  font-family: 'Consolas', monospace;"
-        "}"
-        "QLabel { color: #9ca3af; }");
+    setStyleSheet("QFrame#QuickCommandBar {"
+                  "  background: #0f172a;"
+                  "  border-top: 1px solid #374151;"
+                  "}"
+                  "QLineEdit {"
+                  "  background: #111827; color: #e5e7eb;"
+                  "  border: 1px solid #374151; padding: 4px 8px;"
+                  "  font-family: 'Consolas', monospace;"
+                  "}"
+                  "QLabel { color: #9ca3af; }");
     setFixedHeight(28);
 
     auto* hl = new QHBoxLayout(this);
@@ -83,10 +82,10 @@ void QuickCommandBar::surface() {
 }
 
 void QuickCommandBar::show_hint(const QString& text, bool is_error) {
-    if (!hint_) return;
+    if (!hint_)
+        return;
     hint_->setText(text);
-    hint_->setStyleSheet(is_error ? "color: #dc2626; font-size: 10px;"
-                                  : "color: #9ca3af; font-size: 10px;");
+    hint_->setStyleSheet(is_error ? "color: #dc2626; font-size: 10px;" : "color: #9ca3af; font-size: 10px;");
 }
 
 void QuickCommandBar::on_submit() {
@@ -129,10 +128,8 @@ void QuickCommandBar::on_submit() {
             auto r = ActionRegistry::instance().invoke(parsed.action_id, ctx);
             if (r.is_err()) {
                 show_hint(QString::fromStdString(r.error()), true);
-                ToastService::instance().post(
-                    ToastService::Severity::Warning,
-                    QString::fromStdString(r.error()),
-                    "command_bar");
+                ToastService::instance().post(ToastService::Severity::Warning, QString::fromStdString(r.error()),
+                                              "command_bar");
             } else {
                 show_hint(QString("✓ %1").arg(parsed.action_id), false);
                 input_->clear();

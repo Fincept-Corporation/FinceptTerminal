@@ -3,13 +3,13 @@
 // Wraps PythonRunner, caches results, emits result_ready.
 #pragma once
 
+#include "datahub/Producer.h"
+
 #include <QHash>
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QStringList>
-
-#    include "datahub/Producer.h"
 
 namespace fincept::services {
 
@@ -26,9 +26,7 @@ struct EconomicsResult {
 /// tuple. Panels can migrate to `hub.subscribe("econ:fred:gdp_quarterly",
 /// ...)` and the service fans out dual — hub publish + legacy signal —
 /// so migration is incremental.
-class EconomicsService : public QObject
-    , public fincept::datahub::Producer
-{
+class EconomicsService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static EconomicsService& instance();
@@ -58,7 +56,7 @@ class EconomicsService : public QObject
     /// re-execute it. Otherwise no-op — scheduler-driven refresh without
     /// a prior execute() call is a no-op since we don't know the script.
     void refresh(const QStringList& topics) override;
-    int max_requests_per_sec() const override;  // 2 — Python spawn pacing
+    int max_requests_per_sec() const override; // 2 — Python spawn pacing
 
   signals:
     void result_ready(const QString& request_id, const fincept::services::EconomicsResult& result);
@@ -81,7 +79,7 @@ class EconomicsService : public QObject
         QStringList args;
         QString request_id;
     };
-    QHash<QString, DispatchRecord> dispatch_records_;  // topic -> last dispatch
+    QHash<QString, DispatchRecord> dispatch_records_; // topic -> last dispatch
     bool hub_registered_ = false;
 };
 

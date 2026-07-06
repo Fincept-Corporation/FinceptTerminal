@@ -5,8 +5,7 @@
 
 namespace fincept::ui {
 
-SupportResistanceLayer::SupportResistanceLayer(QObject* parent)
-    : HorizontalLineLayer("sr_auto", "Auto S/R", parent) {}
+SupportResistanceLayer::SupportResistanceLayer(QObject* parent) : HorizontalLineLayer("sr_auto", "Auto S/R", parent) {}
 
 void SupportResistanceLayer::compute(const QVector<CandleData>& candles) {
     const auto clusters = find_clusters(candles);
@@ -15,9 +14,7 @@ void SupportResistanceLayer::compute(const QVector<CandleData>& candles) {
     for (const auto& c : clusters) {
         HorizontalLevel level;
         level.price = c.price;
-        level.label = QStringLiteral("S/R %1 (%2x)")
-                          .arg(c.price, 0, 'f', 2)
-                          .arg(c.touches);
+        level.label = QStringLiteral("S/R %1 (%2x)").arg(c.price, 0, 'f', 2).arg(c.touches);
         level.color = QColor("#808080");
         level.style = Qt::DashLine;
         levels.append(level);
@@ -25,8 +22,8 @@ void SupportResistanceLayer::compute(const QVector<CandleData>& candles) {
     set_levels(levels);
 }
 
-QVector<SupportResistanceLayer::Cluster>
-SupportResistanceLayer::find_clusters(const QVector<CandleData>& candles, double tolerance_pct) {
+QVector<SupportResistanceLayer::Cluster> SupportResistanceLayer::find_clusters(const QVector<CandleData>& candles,
+                                                                               double tolerance_pct) {
     if (candles.size() < 5)
         return {};
 
@@ -59,8 +56,7 @@ SupportResistanceLayer::find_clusters(const QVector<CandleData>& candles, double
         i = j;
     }
 
-    std::sort(clusters.begin(), clusters.end(),
-              [](const Cluster& a, const Cluster& b) { return a.weight > b.weight; });
+    std::sort(clusters.begin(), clusters.end(), [](const Cluster& a, const Cluster& b) { return a.weight > b.weight; });
 
     const int max_levels = 6;
     if (clusters.size() > max_levels)

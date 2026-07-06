@@ -70,8 +70,7 @@ class ScreenStateManager : public QObject {
     /// the row in `screen_state` by `instance_uuid`. Falls back to the
     /// screen_key path if no UUID-keyed row exists yet — handy during the
     /// migration window so existing screens don't lose their state.
-    void restore_by_uuid(screens::IStatefulScreen* screen,
-                         const QString& instance_uuid,
+    void restore_by_uuid(screens::IStatefulScreen* screen, const QString& instance_uuid,
                          bool fallback_to_screen_key = true);
 
     /// Save now (async) under the given instance UUID. The screen's
@@ -109,13 +108,10 @@ class ScreenStateManager : public QObject {
 
     /// Phase 4b: UUID-keyed async write. Stores under instance_uuid
     /// (primary lookup) while also recording screen_key for diagnostics.
-    static void write_async_by_uuid(const QString& instance_uuid,
-                                    const QString& screen_key,
-                                    const QVariantMap& state,
-                                    int version,
-                                    const QString& session_id);
+    static void write_async_by_uuid(const QString& instance_uuid, const QString& screen_key, const QVariantMap& state,
+                                    int version, const QString& session_id);
 
-    QHash<QString, screens::IStatefulScreen*> pending_saves_; // key → screen ptr
+    QHash<QString, screens::IStatefulScreen*> pending_saves_;      // key → screen ptr
     QHash<QString, screens::IStatefulScreen*> pending_uuid_saves_; // instance_uuid → screen ptr
     QTimer* debounce_timer_ = nullptr;
     QString session_id_;

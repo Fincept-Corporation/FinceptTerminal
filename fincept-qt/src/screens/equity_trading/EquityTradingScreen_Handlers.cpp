@@ -6,8 +6,6 @@
 //
 // Part of the partial-class split of EquityTradingScreen.cpp.
 
-#include "screens/equity_trading/EquityTradingScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
@@ -19,6 +17,7 @@
 #include "screens/equity_trading/EquityOrderBook.h"
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
+#include "screens/equity_trading/EquityTradingScreen.h"
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "screens/equity_trading/OrderConfirmDialog.h"
 #include "services/portfolio/PortfolioService.h"
@@ -56,17 +55,16 @@
 #include <QMouseEvent>
 #include <QPointer>
 #include <QPushButton>
-#include <QSpinBox>
 #include <QRadioButton>
 #include <QScrollBar>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QStringListModel>
 #include <QTableWidget>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 #include <memory>
-
-#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens {
 
@@ -74,7 +72,6 @@ using namespace fincept::trading;
 using namespace fincept::screens::equity;
 
 static const QString TAG = "EquityTrading";
-
 
 void EquityTradingScreen::on_account_changed(const QString& account_id) {
     if (account_id == focused_account_id_)
@@ -224,8 +221,7 @@ void EquityTradingScreen::switch_symbol(const QString& symbol) {
     // News, Derivatives, SurfaceAnalytics) follow. `this` as source suppresses
     // the echo back into this screen.
     if (link_group_ != SymbolGroup::None) {
-        SymbolContext::instance().set_group_symbol(
-            link_group_, SymbolRef::equity(symbol, selected_exchange_), this);
+        SymbolContext::instance().set_group_symbol(link_group_, SymbolRef::equity(symbol, selected_exchange_), this);
     }
 
     auto* stream = DataStreamManager::instance().stream_for(focused_account_id_);
@@ -452,8 +448,8 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         // looked like blank-product CNC) and MIS could never be told apart.
         const QString product = product_to_broker_str(order.product_type);
         try {
-            auto pt_order = pt_place_order(portfolio_id, order.symbol, side, type, order.quantity, price_opt,
-                                           stop_opt, /*reduce_only=*/false, order.exchange, product);
+            auto pt_order = pt_place_order(portfolio_id, order.symbol, side, type, order.quantity, price_opt, stop_opt,
+                                           /*reduce_only=*/false, order.exchange, product);
 
             if (order.order_type == OrderType::Market) {
                 double fill_price = current_price_ > 0 ? current_price_ : (order.price > 0 ? order.price : 0.0);
@@ -497,8 +493,7 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         // via ActionCenter and surface in the status-bar popover.)
         if (ActionCenter::instance().should_queue(acct_id, "placeorder")) {
             const auto acct_meta = AccountManager::instance().get_account(acct_id);
-            const QString acct_label =
-                acct_meta.display_name.isEmpty() ? acct_id : acct_meta.display_name;
+            const QString acct_label = acct_meta.display_name.isEmpty() ? acct_id : acct_meta.display_name;
             if (!OrderConfirmDialog::confirm(this, order, acct_label, current_price_)) {
                 order_entry_->show_order_status(tr("Order cancelled"), false);
                 return;
@@ -532,8 +527,7 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
 // Inline multi-broker submit (BROKERS selector in the order panel). One explicit
 // confirmation listing every target account + its mode, then the same per-account
 // Semi-Auto gating and background broadcast the ALL dialog uses.
-void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& order,
-                                                 const QStringList& account_ids) {
+void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& order, const QStringList& account_ids) {
     if (account_ids.isEmpty())
         return;
 
@@ -551,16 +545,14 @@ void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& or
     }
 
     const QString side = order.side == trading::OrderSide::Buy ? tr("BUY") : tr("SELL");
-    const QString px = order.order_type == trading::OrderType::Market
-                           ? tr("MARKET")
-                           : QString::number(order.price, 'f', 2);
-    const auto ret = QMessageBox::question(
-        this, tr("Multi-Broker Order"),
-        tr("%1 %2 × %3 @ %4 on %5 account(s):\n\n%6")
-            .arg(side, QString::number(order.quantity), order.symbol, px)
-            .arg(lines.size())
-            .arg(lines.join("\n")),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    const QString px =
+        order.order_type == trading::OrderType::Market ? tr("MARKET") : QString::number(order.price, 'f', 2);
+    const auto ret = QMessageBox::question(this, tr("Multi-Broker Order"),
+                                           tr("%1 %2 × %3 @ %4 on %5 account(s):\n\n%6")
+                                               .arg(side, QString::number(order.quantity), order.symbol, px)
+                                               .arg(lines.size())
+                                               .arg(lines.join("\n")),
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (ret != QMessageBox::Yes)
         return;
 
@@ -570,8 +562,8 @@ void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& or
     int queued = 0;
     for (const QString& acct : account_ids) {
         if (ActionCenter::instance().should_queue(acct, "placeorder")) {
-            const QString pid = ActionCenter::instance().queue_order(
-                acct, "placeorder", ActionCenter::serialize_unified_order(order));
+            const QString pid =
+                ActionCenter::instance().queue_order(acct, "placeorder", ActionCenter::serialize_unified_order(order));
             if (!pid.isEmpty())
                 ++queued;
         } else {
@@ -737,8 +729,13 @@ void EquityTradingScreen::async_modify_order(const QString& order_id, double qty
         if (!self)
             return;
         QJsonObject mods;
-        if (qty > 0)
+        if (qty > 0) {
             mods["qty"] = qty;
+            // Brokers read one key or the other — Dhan/Kotak modify_order reads
+            // "quantity" (was getting nothing → transmitted qty 0, corrupting a
+            // resting SL); send both so every broker's modify sees the new qty.
+            mods["quantity"] = qty;
+        }
         if (price > 0)
             mods["price"] = price;
         auto result = UnifiedTrading::instance().modify_order(acct_id, order_id, mods);
@@ -806,9 +803,8 @@ void EquityTradingScreen::refresh_paper_panels() {
                 // Sign P&L by side: a short position gains when price falls. Using the
                 // long formula unconditionally inverted short-side P&L and corrupted
                 // holdings_value/total_equity.
-                h.pnl = (p.side.compare("short", Qt::CaseInsensitive) == 0)
-                            ? (h.invested_value - h.current_value)
-                            : (h.current_value - h.invested_value);
+                h.pnl = (p.side.compare("short", Qt::CaseInsensitive) == 0) ? (h.invested_value - h.current_value)
+                                                                            : (h.current_value - h.invested_value);
                 h.pnl_pct = h.invested_value > 0.0 ? (h.pnl / h.invested_value) * 100.0 : 0.0;
                 holdings.push_back(h);
                 holdings_value += h.current_value;
@@ -874,20 +870,19 @@ void EquityTradingScreen::refresh_paper_panels() {
         // [TEMP DEBUG] Capture the paper accounting so we can see exactly where an
         // import/replicate inflates the total. balance should DROP by purchase cost
         // and holdings_value should rise by ~the same → total_equity ≈ opening.
-        LOG_INFO("statsdbg",
-                 QString("[paper-stats] acct=%1 opening=%2 balance=%3 used_margin=%4 holdings_value=%5 "
-                         "mis_unreal=%6 total_equity=%7 #pos=%8 #holdings=%9 realized=%10 unreal=%11")
-                     .arg(account.paper_portfolio_id)
-                     .arg(portfolio.initial_balance, 0, 'f', 2)
-                     .arg(portfolio.balance, 0, 'f', 2)
-                     .arg(used_margin, 0, 'f', 2)
-                     .arg(holdings_value, 0, 'f', 2)
-                     .arg(mis_unrealized, 0, 'f', 2)
-                     .arg(fv.total_equity, 0, 'f', 2)
-                     .arg(intraday.size())
-                     .arg(holdings.size())
-                     .arg(sv.realized_pnl, 0, 'f', 2)
-                     .arg(unrealized, 0, 'f', 2));
+        LOG_INFO("statsdbg", QString("[paper-stats] acct=%1 opening=%2 balance=%3 used_margin=%4 holdings_value=%5 "
+                                     "mis_unreal=%6 total_equity=%7 #pos=%8 #holdings=%9 realized=%10 unreal=%11")
+                                 .arg(account.paper_portfolio_id)
+                                 .arg(portfolio.initial_balance, 0, 'f', 2)
+                                 .arg(portfolio.balance, 0, 'f', 2)
+                                 .arg(used_margin, 0, 'f', 2)
+                                 .arg(holdings_value, 0, 'f', 2)
+                                 .arg(mis_unrealized, 0, 'f', 2)
+                                 .arg(fv.total_equity, 0, 'f', 2)
+                                 .arg(intraday.size())
+                                 .arg(holdings.size())
+                                 .arg(sv.realized_pnl, 0, 'f', 2)
+                                 .arg(unrealized, 0, 'f', 2));
 
         // Held symbols get live WebSocket prices even if not in the active list.
         update_position_symbols(pos_syms);
@@ -985,8 +980,8 @@ void EquityTradingScreen::on_trade_symbol_requested(const QString& symbol, const
     open_order_ticket_for(symbol, QString(), product, is_buy, qty);
 }
 
-void EquityTradingScreen::open_order_ticket_for(const QString& symbol, const QString& exchange,
-                                                const QString& product, bool is_buy, double qty) {
+void EquityTradingScreen::open_order_ticket_for(const QString& symbol, const QString& exchange, const QString& product,
+                                                bool is_buy, double qty) {
     if (focused_account_id_.isEmpty()) {
         order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
         return;
@@ -1141,17 +1136,14 @@ void EquityTradingScreen::open_external_order_ticket(const QString& symbol, cons
 }
 
 void EquityTradingScreen::on_chart_exit_position(const QString& symbol, const QString& exchange,
-                                                 const QString& product_type, const QString& side,
-                                                 double qty) {
+                                                 const QString& product_type, const QString& side, double qty) {
     if (focused_account_id_.isEmpty()) {
         order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
         return;
     }
-    const QString side_disp =
-        side.compare("short", Qt::CaseInsensitive) == 0 ? tr("SHORT") : tr("LONG");
+    const QString side_disp = side.compare("short", Qt::CaseInsensitive) == 0 ? tr("SHORT") : tr("LONG");
     const auto reply = QMessageBox::question(
-        this, tr("Exit Position"),
-        tr("Exit %1 %2 %3 at market?").arg(side_disp).arg(qty, 0, 'f', 0).arg(symbol),
+        this, tr("Exit Position"), tr("Exit %1 %2 %3 at market?").arg(side_disp).arg(qty, 0, 'f', 0).arg(symbol),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
@@ -1161,16 +1153,14 @@ void EquityTradingScreen::on_chart_exit_position(const QString& symbol, const QS
     (void)QtConcurrent::run([self, acct_id, symbol, exchange, product_type]() {
         if (!self)
             return;
-        auto result =
-            UnifiedTrading::instance().close_position(acct_id, symbol, exchange, product_type);
+        auto result = UnifiedTrading::instance().close_position(acct_id, symbol, exchange, product_type);
         QMetaObject::invokeMethod(
             self,
             [self, result, symbol]() {
                 if (!self)
                     return;
                 self->order_entry_->show_order_status(
-                    result.success ? self->tr("Exit order placed: %1").arg(symbol) : result.error,
-                    result.success);
+                    result.success ? self->tr("Exit order placed: %1").arg(symbol) : result.error, result.success);
                 self->refresh_paper_panels(); // paper refreshes here; live flows via the hub
             },
             Qt::QueuedConnection);
@@ -1302,8 +1292,7 @@ void EquityTradingScreen::on_square_off_all_holdings(const QVector<trading::Brok
             return;
         int ok = 0, fail = 0;
         for (const auto& t : targets) {
-            auto r = UnifiedTrading::instance().close_position(acct_id, t.symbol, t.exchange,
-                                                               QStringLiteral("CNC"));
+            auto r = UnifiedTrading::instance().close_position(acct_id, t.symbol, t.exchange, QStringLiteral("CNC"));
             LOG_INFO("sqoff", QString("[screen] close_position sym='%1' exch='%2' -> success=%3 err='%4'")
                                   .arg(t.symbol, t.exchange,
                                        r.success ? QStringLiteral("true") : QStringLiteral("false"), r.error));
@@ -1330,9 +1319,8 @@ void EquityTradingScreen::on_square_off_holding(const QString& symbol, const QSt
         order_entry_->show_order_status(tr("No account selected — add one via ACCOUNTS"), false);
         return;
     }
-    const auto reply =
-        QMessageBox::question(this, tr("Square Off Holding"), tr("Square off %1 at market?").arg(symbol),
-                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    const auto reply = QMessageBox::question(this, tr("Square Off Holding"), tr("Square off %1 at market?").arg(symbol),
+                                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (reply != QMessageBox::Yes)
         return;
 
@@ -1342,16 +1330,16 @@ void EquityTradingScreen::on_square_off_holding(const QString& symbol, const QSt
         if (!self)
             return;
         auto r = UnifiedTrading::instance().close_position(acct_id, symbol, exchange, QStringLiteral("CNC"));
-        LOG_INFO("sqoff", QString("[screen] per-row close_position sym='%1' exch='%2' -> success=%3 err='%4'")
-                              .arg(symbol, exchange, r.success ? QStringLiteral("true") : QStringLiteral("false"),
-                                   r.error));
+        LOG_INFO("sqoff",
+                 QString("[screen] per-row close_position sym='%1' exch='%2' -> success=%3 err='%4'")
+                     .arg(symbol, exchange, r.success ? QStringLiteral("true") : QStringLiteral("false"), r.error));
         QMetaObject::invokeMethod(
             self,
             [self, r, symbol]() {
                 if (!self)
                     return;
-                self->order_entry_->show_order_status(
-                    r.success ? self->tr("Squared off %1").arg(symbol) : r.error, r.success);
+                self->order_entry_->show_order_status(r.success ? self->tr("Squared off %1").arg(symbol) : r.error,
+                                                      r.success);
                 self->refresh_paper_panels();
             },
             Qt::QueuedConnection);
@@ -1373,38 +1361,36 @@ void EquityTradingScreen::on_strategy_submitted(const trading::BasketOrderReques
     // with no per-leg prompt, so queue it for approval in the status-bar popover
     // rather than confirming inline. Auto mode falls straight through.
     if (ActionCenter::instance().should_queue(acct_id, "basketorder")) {
-        const QString pending_id = ActionCenter::instance().queue_order(
-            acct_id, "basketorder", ActionCenter::serialize_basket_order(basket));
-        order_entry_->show_order_status(
-            pending_id.isEmpty()
-                ? tr("Failed to queue strategy")
-                : tr("Strategy queued for approval (%1 legs)").arg(basket.orders.size()),
-            !pending_id.isEmpty());
+        const QString pending_id =
+            ActionCenter::instance().queue_order(acct_id, "basketorder", ActionCenter::serialize_basket_order(basket));
+        order_entry_->show_order_status(pending_id.isEmpty()
+                                            ? tr("Failed to queue strategy")
+                                            : tr("Strategy queued for approval (%1 legs)").arg(basket.orders.size()),
+                                        !pending_id.isEmpty());
         return;
     }
 
     QPointer<EquityTradingScreen> self = this;
     // place_basket_orders runs async on its own worker and delivers the result
     // back on the caller's thread; marshal to the UI thread defensively.
-    UnifiedTrading::instance().place_basket_orders(
-        acct_id, basket, [self](const trading::BasketOrderResult& result) {
-            if (!self)
-                return;
-            QMetaObject::invokeMethod(
-                self,
-                [self, result]() {
-                    if (!self)
-                        return;
-                    self->order_entry_->show_order_status(
-                        self->tr("Strategy: %1/%2 legs placed%3")
-                            .arg(result.successful)
-                            .arg(result.total)
-                            .arg(result.failed > 0 ? self->tr(", %1 failed").arg(result.failed) : QString()),
-                        result.failed == 0);
-                    self->refresh_paper_panels();
-                },
-                Qt::QueuedConnection);
-        });
+    UnifiedTrading::instance().place_basket_orders(acct_id, basket, [self](const trading::BasketOrderResult& result) {
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, result]() {
+                if (!self)
+                    return;
+                self->order_entry_->show_order_status(
+                    self->tr("Strategy: %1/%2 legs placed%3")
+                        .arg(result.successful)
+                        .arg(result.total)
+                        .arg(result.failed > 0 ? self->tr(", %1 failed").arg(result.failed) : QString()),
+                    result.failed == 0);
+                self->refresh_paper_panels();
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 // ============================================================================

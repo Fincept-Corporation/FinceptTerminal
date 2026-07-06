@@ -38,10 +38,8 @@ void AlgoTradingService::save_strategy(const AlgoStrategy& strategy) {
 
     const QString entry_json =
         QString::fromUtf8(QJsonDocument(strategy.entry_conditions).toJson(QJsonDocument::Compact));
-    const QString exit_json =
-        QString::fromUtf8(QJsonDocument(strategy.exit_conditions).toJson(QJsonDocument::Compact));
-    const QString legs_json =
-        QString::fromUtf8(QJsonDocument(strategy.legs).toJson(QJsonDocument::Compact));
+    const QString exit_json = QString::fromUtf8(QJsonDocument(strategy.exit_conditions).toJson(QJsonDocument::Compact));
+    const QString legs_json = QString::fromUtf8(QJsonDocument(strategy.legs).toJson(QJsonDocument::Compact));
 
     // is_active=1 in the UPDATE branch so re-saving a soft-deleted strategy revives it.
     auto r = fincept::Database::instance().execute(
@@ -58,8 +56,8 @@ void AlgoTradingService::save_strategy(const AlgoStrategy& strategy) {
         "  trailing_stop=excluded.trailing_stop, instrument_type=excluded.instrument_type, "
         "  legs_json=excluded.legs_json, is_active=1, updated_at=CURRENT_TIMESTAMP",
         {resolved_id, strategy.name, strategy.description, strategy.timeframe, entry_json, exit_json,
-         strategy.entry_logic, strategy.exit_logic, strategy.stop_loss, strategy.take_profit,
-         strategy.trailing_stop, strategy.instrument_type, legs_json});
+         strategy.entry_logic, strategy.exit_logic, strategy.stop_loss, strategy.take_profit, strategy.trailing_stop,
+         strategy.instrument_type, legs_json});
 
     if (r.is_err()) {
         LOG_ERROR("AlgoTrading", QString("save_strategy failed: %1").arg(QString::fromStdString(r.error())));
@@ -76,27 +74,28 @@ static QVector<AlgoStrategy> load_dsl_strategies_from_db() {
         "SELECT id, name, description, timeframe, entry_conditions, exit_conditions, "
         "entry_logic, exit_logic, stop_loss, take_profit, trailing_stop, "
         "created_at, updated_at, instrument_type, legs_json "
-        "FROM algo_strategies WHERE is_active = 1 ORDER BY created_at DESC", {});
+        "FROM algo_strategies WHERE is_active = 1 ORDER BY created_at DESC",
+        {});
     if (q.is_err())
         return result;
     auto& query = q.value();
     while (query.next()) {
         AlgoStrategy s;
-        s.id               = query.value(0).toString();
-        s.name             = query.value(1).toString();
-        s.description      = query.value(2).toString();
-        s.timeframe        = query.value(3).toString();
+        s.id = query.value(0).toString();
+        s.name = query.value(1).toString();
+        s.description = query.value(2).toString();
+        s.timeframe = query.value(3).toString();
         s.entry_conditions = QJsonDocument::fromJson(query.value(4).toString().toUtf8()).array();
-        s.exit_conditions  = QJsonDocument::fromJson(query.value(5).toString().toUtf8()).array();
-        s.entry_logic      = query.value(6).isNull() ? QStringLiteral("AND") : query.value(6).toString();
-        s.exit_logic       = query.value(7).isNull() ? QStringLiteral("AND") : query.value(7).toString();
-        s.stop_loss        = query.value(8).toDouble();
-        s.take_profit      = query.value(9).toDouble();
-        s.trailing_stop    = query.value(10).toDouble();
-        s.created_at       = query.value(11).toString();
-        s.updated_at       = query.value(12).toString();
-        s.instrument_type  = query.value(13).isNull() ? QStringLiteral("equity") : query.value(13).toString();
-        s.legs             = QJsonDocument::fromJson(query.value(14).toString().toUtf8()).array();
+        s.exit_conditions = QJsonDocument::fromJson(query.value(5).toString().toUtf8()).array();
+        s.entry_logic = query.value(6).isNull() ? QStringLiteral("AND") : query.value(6).toString();
+        s.exit_logic = query.value(7).isNull() ? QStringLiteral("AND") : query.value(7).toString();
+        s.stop_loss = query.value(8).toDouble();
+        s.take_profit = query.value(9).toDouble();
+        s.trailing_stop = query.value(10).toDouble();
+        s.created_at = query.value(11).toString();
+        s.updated_at = query.value(12).toString();
+        s.instrument_type = query.value(13).isNull() ? QStringLiteral("equity") : query.value(13).toString();
+        s.legs = QJsonDocument::fromJson(query.value(14).toString().toUtf8()).array();
         result.append(s);
     }
     return result;
@@ -119,13 +118,10 @@ void AlgoTradingService::seed_library() {
     const bool force = stored < kLibraryVersion;
 
     for (const auto& s : algo_library_strategies()) {
-        const QString entry_json =
-            QString::fromUtf8(QJsonDocument(s.entry_conditions).toJson(QJsonDocument::Compact));
-        const QString exit_json =
-            QString::fromUtf8(QJsonDocument(s.exit_conditions).toJson(QJsonDocument::Compact));
-        const QVariantList args = {s.id,        s.name,        s.description,  s.timeframe,
-                                   entry_json,  exit_json,     s.entry_logic,  s.exit_logic,
-                                   s.stop_loss, s.take_profit, s.trailing_stop};
+        const QString entry_json = QString::fromUtf8(QJsonDocument(s.entry_conditions).toJson(QJsonDocument::Compact));
+        const QString exit_json = QString::fromUtf8(QJsonDocument(s.exit_conditions).toJson(QJsonDocument::Compact));
+        const QVariantList args = {s.id,          s.name,       s.description, s.timeframe,   entry_json,     exit_json,
+                                   s.entry_logic, s.exit_logic, s.stop_loss,   s.take_profit, s.trailing_stop};
         if (force) {
             // Refresh definition in place; do NOT touch is_active (keeps deletions).
             fincept::Database::instance().execute(
@@ -188,8 +184,8 @@ void AlgoTradingService::delete_strategy(const QString& id) {
 // Use fincept::algo::AlgoEngine::instance() for all deployment operations.
 
 // ── Backtesting (native C++ engine) ────────────────────────────────────────────
-void AlgoTradingService::run_backtest(const AlgoStrategy& strategy, const QString& symbol,
-                                      const QString& start_date, const QString& end_date, double capital) {
+void AlgoTradingService::run_backtest(const AlgoStrategy& strategy, const QString& symbol, const QString& start_date,
+                                      const QString& end_date, double capital) {
     // Derive the historical window from the date range (fallback: 1 year).
     int lookback_days = 365;
     const QDate d1 = QDate::fromString(start_date, "yyyy-MM-dd");
@@ -223,22 +219,20 @@ void AlgoTradingService::run_backtest(const AlgoStrategy& strategy, const QStrin
     const double size_pct = strategy.position_size_pct > 0 ? strategy.position_size_pct : 100.0;
     const QString timeframe = strategy.timeframe.isEmpty() ? QStringLiteral("1d") : strategy.timeframe;
 
-    LOG_INFO("AlgoTrading",
-             QString("Backtest %1 [%2] %3 — source=%4")
-                 .arg(symbol, timeframe, strategy.name,
-                      broker_id.isEmpty() ? "yahoo" : broker_id));
+    LOG_INFO("AlgoTrading", QString("Backtest %1 [%2] %3 — source=%4")
+                                .arg(symbol, timeframe, strategy.name, broker_id.isEmpty() ? "yahoo" : broker_id));
 
     // Singleton — `this` outlives any async work, so capture directly.
     fincept::algo::CandleDataFetcher::instance().fetch(
         symbol, timeframe, lookback_days, source, broker_id, account_id,
-        [this, entry, exit, entry_logic, exit_logic, sl, tp, trail, size_pct, capital, timeframe, symbol](
-            bool ok, const QVector<fincept::algo::OhlcvCandle>& candles, const QString& err) {
+        [this, entry, exit, entry_logic, exit_logic, sl, tp, trail, size_pct, capital, timeframe,
+         symbol](bool ok, const QVector<fincept::algo::OhlcvCandle>& candles, const QString& err) {
             if (!ok || candles.isEmpty()) {
                 emit error_occurred("backtest", err.isEmpty() ? QStringLiteral("No data") : err);
                 return;
             }
-            const QJsonObject result = fincept::algo::BacktestEngine::run(
-                candles, entry, entry_logic, exit, exit_logic, sl, tp, trail, capital, timeframe, size_pct);
+            const QJsonObject result = fincept::algo::BacktestEngine::run(candles, entry, entry_logic, exit, exit_logic,
+                                                                          sl, tp, trail, capital, timeframe, size_pct);
             if (!result.value("success").toBool(false)) {
                 emit error_occurred("backtest", result.value("error").toString(QStringLiteral("Backtest failed")));
                 return;

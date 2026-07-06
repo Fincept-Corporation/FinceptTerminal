@@ -291,7 +291,7 @@ void LoadingOverlay::paintEvent(QPaintEvent* /*e*/) {
     const int bar_h = 8;
     const int row_gap = 10;
     const int center_y = r.center().y();
-    const int progress_block_h = 56;  // text + progress bar reserved
+    const int progress_block_h = 56; // text + progress bar reserved
     const int top = std::max(r.top() + 12, center_y - progress_block_h / 2 - bar_h * 3 - row_gap * 2);
 
     struct SkelRow {

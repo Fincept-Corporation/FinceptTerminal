@@ -38,8 +38,8 @@ class CloudSyncEngine : public QObject {
     // ── User actions (Settings UI) ──
     void set_master_enabled(bool on);
     void set_domain_excluded(const QString& entity, bool excluded);
-    void refresh_all();                                           // manual Refresh
-    void request_pull(const QString& entity, bool force = false); // screen-entry / manual
+    void refresh_all();                                                  // manual Refresh
+    void request_pull(const QString& entity, bool force = false);        // screen-entry / manual
     void resolve_first_enable(const QString& entity, bool upload_merge); // answer first_enable_conflict
 
     Status status(const QString& entity) const;

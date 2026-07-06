@@ -3,14 +3,13 @@
 // Backtesting panel — Qlib-style strategy backtester with rich result display
 // (KPI cards, equity curve chart, execution cost strip, JSON export). Extracted
 // from QuantModulePanel.cpp to keep that file maintainable.
+#include "core/currency/Currency.h"
+#include "core/events/EventBus.h"
+#include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
-#include "core/currency/Currency.h"
-#include "core/events/EventBus.h"
-#include "core/logging/Logger.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/file_manager/FileManagerService.h"
@@ -46,8 +45,8 @@
 #include <QSpinBox>
 #include <QString>
 #include <QStringList>
-#include <QValueAxis>
 #include <QVBoxLayout>
+#include <QValueAxis>
 #include <QWidget>
 
 #include <algorithm>
@@ -135,21 +134,22 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     vl->addWidget(run);
 
     auto* open_terminal = make_run_button(tr("OPEN IN BACKTESTING TERMINAL"), w);
-    open_terminal->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                "padding:8px 16px; font-size:11px; font-weight:700; }"
-                "QPushButton:hover { background:%1; color:%3; }")
-            .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
+    open_terminal->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                         "padding:8px 16px; font-size:11px; font-weight:700; }"
+                                         "QPushButton:hover { background:%1; color:%3; }")
+                                     .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
     connect(open_terminal, &QPushButton::clicked, this, [this]() {
         auto* instruments_edit = text_inputs_.value("bt_instruments");
-        if (!instruments_edit || instruments_edit->text().trimmed().isEmpty()) return;
+        if (!instruments_edit || instruments_edit->text().trimmed().isEmpty())
+            return;
         QJsonArray symbols;
         for (const auto& s : instruments_edit->text().split(',', Qt::SkipEmptyParts))
             symbols.append(s.trimmed());
         QJsonObject config;
         config["symbols"] = symbols;
         auto* capital_spin = double_inputs_.value("bt_capital");
-        if (capital_spin) config["initialCapital"] = capital_spin->value();
+        if (capital_spin)
+            config["initialCapital"] = capital_spin->value();
         fincept::services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
         fincept::EventBus::instance().publish("nav.switch_screen", {{"screen_id", QString("backtesting")}});
     });
@@ -176,8 +176,8 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     }
 
     const QJsonObject metrics = payload["metrics"].toObject();
-    const QJsonArray  curve   = payload["equity_curve"].toArray();
-    const QJsonObject costs   = payload["execution_cost_estimate"].toObject();
+    const QJsonArray curve = payload["equity_curve"].toArray();
+    const QJsonObject costs = payload["execution_cost_estimate"].toObject();
     const QStringList tickers = [&]() {
         QStringList t;
         for (const auto& v : payload["tickers"].toArray())
@@ -185,24 +185,24 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         return t;
     }();
 
-    const QString strategy   = payload["strategy"].toString();
+    const QString strategy = payload["strategy"].toString();
     const QString start_date = payload["start_date"].toString();
-    const QString end_date   = payload["end_date"].toString();
+    const QString end_date = payload["end_date"].toString();
 
-    const QColor  accent      = module_.color;
-    const QString accent_hex  = accent.name();
-    const QString green_hex   = ui::colors::POSITIVE();
-    const QString red_hex     = ui::colors::NEGATIVE();
-    const QString text_p      = ui::colors::TEXT_PRIMARY();
-    const QString text_s      = ui::colors::TEXT_SECONDARY();
-    const QString text_t      = ui::colors::TEXT_TERTIARY();
-    const QString bg_surface  = ui::colors::BG_SURFACE();
-    const QString bg_raised   = ui::colors::BG_RAISED();
-    const QString border_dim  = ui::colors::BORDER_DIM();
-    const QString border_med  = ui::colors::BORDER_MED();
-    const QString font_data   = ui::fonts::DATA_FAMILY;
-    const int     fs_sm       = ui::fonts::SMALL;
-    const int     fs_lg       = ui::fonts::HEADER;
+    const QColor accent = module_.color;
+    const QString accent_hex = accent.name();
+    const QString green_hex = ui::colors::POSITIVE();
+    const QString red_hex = ui::colors::NEGATIVE();
+    const QString text_p = ui::colors::TEXT_PRIMARY();
+    const QString text_s = ui::colors::TEXT_SECONDARY();
+    const QString text_t = ui::colors::TEXT_TERTIARY();
+    const QString bg_surface = ui::colors::BG_SURFACE();
+    const QString bg_raised = ui::colors::BG_RAISED();
+    const QString border_dim = ui::colors::BORDER_DIM();
+    const QString border_med = ui::colors::BORDER_MED();
+    const QString font_data = ui::fonts::DATA_FAMILY;
+    const int fs_sm = ui::fonts::SMALL;
+    const int fs_lg = ui::fonts::HEADER;
 
     // ── 1. Header bar ──────────────────────────────────────────────────────
     auto* header_w = new QWidget;
@@ -211,30 +211,30 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     header_h->setSpacing(8);
 
     auto* title_lbl = new QLabel(tr("BACKTEST RESULTS"));
-    title_lbl->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3; font-weight:800; letter-spacing:2px;")
-            .arg(accent_hex).arg(fs_lg).arg(font_data));
+    title_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:800; letter-spacing:2px;")
+                                 .arg(accent_hex)
+                                 .arg(fs_lg)
+                                 .arg(font_data));
     header_h->addWidget(title_lbl);
 
     header_h->addSpacing(16);
 
     auto make_chip = [&](const QString& text, const QString& fg, const QString& bg_hex) -> QLabel* {
         auto* c = new QLabel(text);
-        c->setStyleSheet(
-            QString("color:%1; background:%2; border-radius:3px; padding:2px 8px;"
-                    "font-size:%3px; font-family:%4; font-weight:600;")
-                .arg(fg, bg_hex).arg(fs_sm).arg(font_data));
+        c->setStyleSheet(QString("color:%1; background:%2; border-radius:3px; padding:2px 8px;"
+                                 "font-size:%3px; font-family:%4; font-weight:600;")
+                             .arg(fg, bg_hex)
+                             .arg(fs_sm)
+                             .arg(font_data));
         return c;
     };
 
     QString strat_display = strategy;
     strat_display.replace('_', ' ');
     strat_display = strat_display.toUpper();
-    header_h->addWidget(make_chip(strat_display, accent_hex,
-                                  QColor(accent).darker(300).name() + "55"));
+    header_h->addWidget(make_chip(strat_display, accent_hex, QColor(accent).darker(300).name() + "55"));
 
-    header_h->addWidget(make_chip(start_date + "  →  " + end_date,
-                                  text_s, bg_raised));
+    header_h->addWidget(make_chip(start_date + "  →  " + end_date, text_s, bg_raised));
 
     for (const auto& t : tickers)
         header_h->addWidget(make_chip(t, text_p, bg_raised));
@@ -247,35 +247,38 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         QString label;
         QString value;
         QString sub;
-        bool    positive = true;
-        bool    neutral  = false;
+        bool positive = true;
+        bool neutral = false;
     };
 
-    double total_ret  = metrics["total_return_pct"].toDouble();
-    double ann_ret    = metrics["annualised_return"].toDouble();
-    double ann_vol    = metrics["annualised_vol"].toDouble();
-    double sharpe     = metrics["sharpe_ratio"].toDouble();
-    double max_dd     = metrics["max_drawdown_pct"].toDouble();
-    double calmar     = metrics["calmar_ratio"].toDouble();
-    double win_rate   = metrics["win_rate_pct"].toDouble();
-    double final_val  = metrics["final_value"].toDouble();
-    double init_cap   = metrics["initial_capital"].toDouble();
-    int    t_days     = metrics["trading_days"].toInt();
+    double total_ret = metrics["total_return_pct"].toDouble();
+    double ann_ret = metrics["annualised_return"].toDouble();
+    double ann_vol = metrics["annualised_vol"].toDouble();
+    double sharpe = metrics["sharpe_ratio"].toDouble();
+    double max_dd = metrics["max_drawdown_pct"].toDouble();
+    double calmar = metrics["calmar_ratio"].toDouble();
+    double win_rate = metrics["win_rate_pct"].toDouble();
+    double final_val = metrics["final_value"].toDouble();
+    double init_cap = metrics["initial_capital"].toDouble();
+    int t_days = metrics["trading_days"].toInt();
 
     auto fmt_pct = [](double v) { return QString("%1%2%").arg(v >= 0 ? "+" : "").arg(v, 0, 'f', 2); };
     auto fmt_usd = [](double v) -> QString { return cur::money(v, /*compact=*/true); };
 
     QList<KpiCard> kpis = {
-        {tr("TOTAL RETURN"),   fmt_pct(total_ret),  tr("%1 final").arg(fmt_usd(final_val)),  total_ret >= 0, false},
-        {tr("ANN. RETURN"),    fmt_pct(ann_ret),     tr("Vol: %1%").arg(ann_vol, 0, 'f', 1), ann_ret >= 0, false},
-        {tr("SHARPE RATIO"),   QString::number(sharpe, 'f', 3),
-                           sharpe >= 1 ? tr("Excellent") : sharpe >= 0.5 ? tr("Good") : tr("Weak"), sharpe >= 0.5, false},
-        {tr("MAX DRAWDOWN"),   fmt_pct(max_dd),      tr("Calmar: %1").arg(calmar, 0, 'f', 3), false, false},
-        {tr("WIN RATE"),       QString("%1%").arg(win_rate, 0, 'f', 1), tr("%1 days").arg(t_days), win_rate >= 50, false},
-        {tr("CAPITAL"),        fmt_usd(init_cap),    tr("Initial capital"),  true, true},
+        {tr("TOTAL RETURN"), fmt_pct(total_ret), tr("%1 final").arg(fmt_usd(final_val)), total_ret >= 0, false},
+        {tr("ANN. RETURN"), fmt_pct(ann_ret), tr("Vol: %1%").arg(ann_vol, 0, 'f', 1), ann_ret >= 0, false},
+        {tr("SHARPE RATIO"), QString::number(sharpe, 'f', 3),
+         sharpe >= 1     ? tr("Excellent")
+         : sharpe >= 0.5 ? tr("Good")
+                         : tr("Weak"),
+         sharpe >= 0.5, false},
+        {tr("MAX DRAWDOWN"), fmt_pct(max_dd), tr("Calmar: %1").arg(calmar, 0, 'f', 3), false, false},
+        {tr("WIN RATE"), QString("%1%").arg(win_rate, 0, 'f', 1), tr("%1 days").arg(t_days), win_rate >= 50, false},
+        {tr("CAPITAL"), fmt_usd(init_cap), tr("Initial capital"), true, true},
     };
 
-    auto* cards_w  = new QWidget;
+    auto* cards_w = new QWidget;
     auto* cards_gl = new QGridLayout(cards_w);
     cards_gl->setContentsMargins(0, 0, 0, 0);
     cards_gl->setSpacing(8);
@@ -284,29 +287,29 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         const auto& k = kpis[i];
         auto* card = new QWidget;
         card->setObjectName("btKpiCard");
-        card->setStyleSheet(
-            QString("#btKpiCard { background:%1; border:1px solid %2; border-radius:4px; }")
-                .arg(bg_surface, border_dim));
+        card->setStyleSheet(QString("#btKpiCard { background:%1; border:1px solid %2; border-radius:4px; }")
+                                .arg(bg_surface, border_dim));
 
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(12, 10, 12, 10);
         cl->setSpacing(2);
 
         auto* lbl = new QLabel(k.label);
-        lbl->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; font-weight:600; letter-spacing:1px;")
-                .arg(text_t).arg(fs_sm - 1).arg(font_data));
+        lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:600; letter-spacing:1px;")
+                               .arg(text_t)
+                               .arg(fs_sm - 1)
+                               .arg(font_data));
 
         QString val_color = k.neutral ? text_s : (k.positive ? green_hex : red_hex);
         auto* val = new QLabel(k.value);
-        val->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; font-weight:800;")
-                .arg(val_color).arg(fs_lg + 2).arg(font_data));
+        val->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:800;")
+                               .arg(val_color)
+                               .arg(fs_lg + 2)
+                               .arg(font_data));
 
         auto* sub = new QLabel(k.sub);
         sub->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3;")
-                .arg(text_t).arg(fs_sm - 1).arg(font_data));
+            QString("color:%1; font-size:%2px; font-family:%3;").arg(text_t).arg(fs_sm - 1).arg(font_data));
 
         cl->addWidget(lbl);
         cl->addWidget(val);
@@ -318,10 +321,10 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
 
     // ── 3. Equity curve chart ─────────────────────────────────────────────
     if (!curve.isEmpty()) {
-        auto* port_series  = new QLineSeries;
-        auto* bm_series    = new QLineSeries;
-        auto* port_upper   = new QLineSeries;  // for area fill
-        auto* port_base    = new QLineSeries;  // baseline for area
+        auto* port_series = new QLineSeries;
+        auto* bm_series = new QLineSeries;
+        auto* port_upper = new QLineSeries; // for area fill
+        auto* port_base = new QLineSeries;  // baseline for area
 
         port_series->setName(tr("Portfolio"));
         bm_series->setName(tr("Benchmark"));
@@ -401,15 +404,15 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         chart_view->setRenderHint(QPainter::Antialiasing);
         chart_view->setFixedHeight(280);
         chart_view->setStyleSheet(
-            QString("background:%1; border:1px solid %2; border-radius:4px;")
-                .arg(bg_surface, border_dim));
+            QString("background:%1; border:1px solid %2; border-radius:4px;").arg(bg_surface, border_dim));
 
         // Chart title label above
         auto* chart_title = new QLabel(tr("EQUITY CURVE"));
-        chart_title->setStyleSheet(
-            QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;"
-                    "letter-spacing:1px; padding:8px 0 2px 0;")
-                .arg(text_s).arg(fs_sm).arg(font_data));
+        chart_title->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;"
+                                           "letter-spacing:1px; padding:8px 0 2px 0;")
+                                       .arg(text_s)
+                                       .arg(fs_sm)
+                                       .arg(font_data));
         results_layout_->addWidget(chart_title);
         results_layout_->addWidget(chart_view);
     }
@@ -417,8 +420,7 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     // ── 4. Execution cost strip ────────────────────────────────────────────
     auto* cost_w = new QWidget;
     cost_w->setStyleSheet(
-        QString("background:%1; border:1px solid %2; border-radius:4px;")
-            .arg(bg_surface, border_dim));
+        QString("background:%1; border:1px solid %2; border-radius:4px;").arg(bg_surface, border_dim));
     auto* cost_h = new QHBoxLayout(cost_w);
     cost_h->setContentsMargins(16, 8, 16, 8);
     cost_h->setSpacing(24);
@@ -429,20 +431,22 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         l->setContentsMargins(0, 0, 0, 0);
         l->setSpacing(6);
         auto* k = new QLabel(lbl);
-        k->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                             .arg(text_t).arg(fs_sm).arg(font_data));
+        k->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;").arg(text_t).arg(fs_sm).arg(font_data));
         auto* v = new QLabel(val);
         v->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700;")
-                             .arg(text_s).arg(fs_sm).arg(font_data));
+                             .arg(text_s)
+                             .arg(fs_sm)
+                             .arg(font_data));
         l->addWidget(k);
         l->addWidget(v);
         cost_h->addWidget(w);
     };
 
     auto* cost_hdr = new QLabel(tr("EXECUTION COSTS"));
-    cost_hdr->setStyleSheet(
-        QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
-            .arg(text_t).arg(fs_sm - 1).arg(font_data));
+    cost_hdr->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; font-weight:700; letter-spacing:1px;")
+                                .arg(text_t)
+                                .arg(fs_sm - 1)
+                                .arg(font_data));
     cost_h->addWidget(cost_hdr);
     cost_h->addWidget([&]() {
         auto* sep = new QFrame;
@@ -451,10 +455,8 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
         return sep;
     }());
 
-    add_cost_item(tr("Commission"),
-                  tr("%1 bps").arg(costs["commission_bps"].toDouble(), 0, 'f', 2));
-    add_cost_item(tr("Expected Slippage"),
-                  tr("%1 bps").arg(costs["expected_slippage_bps"].toDouble(), 0, 'f', 2));
+    add_cost_item(tr("Commission"), tr("%1 bps").arg(costs["commission_bps"].toDouble(), 0, 'f', 2));
+    add_cost_item(tr("Expected Slippage"), tr("%1 bps").arg(costs["expected_slippage_bps"].toDouble(), 0, 'f', 2));
     cost_h->addStretch();
     results_layout_->addWidget(cost_w);
 
@@ -462,39 +464,37 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
     auto* export_btn = new QPushButton(tr("EXPORT JSON"));
     export_btn->setCursor(Qt::PointingHandCursor);
     export_btn->setFixedHeight(28);
-    export_btn->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                "font-size:%3px; font-family:%4; padding:0 14px; border-radius:3px; }"
-                "QPushButton:hover { background:rgba(255,255,255,0.05); }")
-            .arg(accent_hex, border_dim).arg(fs_sm).arg(font_data));
+    export_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                      "font-size:%3px; font-family:%4; padding:0 14px; border-radius:3px; }"
+                                      "QPushButton:hover { background:rgba(255,255,255,0.05); }")
+                                  .arg(accent_hex, border_dim)
+                                  .arg(fs_sm)
+                                  .arg(font_data));
 
     QString json_str = QJsonDocument(payload).toJson(QJsonDocument::Indented);
     connect(export_btn, &QPushButton::clicked, this, [this, json_str]() {
         QString safe = module_.label;
         safe.replace(QRegularExpression("[^a-zA-Z0-9_\\-]"), "_");
         QString fname = safe + "_" + QString::number(QDateTime::currentMSecsSinceEpoch()) + ".json";
-        QString dest  = services::FileManagerService::instance().storage_dir() + "/" + fname;
+        QString dest = services::FileManagerService::instance().storage_dir() + "/" + fname;
         QFile f(dest);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
             f.write(json_str.toUtf8());
             f.close();
             services::FileManagerService::instance().register_file(
-                fname, module_.label + "_backtest.json", QFileInfo(dest).size(),
-                "application/json", "ai_quant_lab");
+                fname, module_.label + "_backtest.json", QFileInfo(dest).size(), "application/json", "ai_quant_lab");
             LOG_INFO("AIQuantLab", "Backtest exported: " + fname);
         }
     });
 
     auto* export_row = new QWidget;
-    auto* export_hl  = new QHBoxLayout(export_row);
+    auto* export_hl = new QHBoxLayout(export_row);
     export_hl->setContentsMargins(0, 4, 0, 0);
     export_hl->addStretch();
     export_hl->addWidget(export_btn);
     results_layout_->addWidget(export_row);
 
-    status_label_->setText(tr("Done — %1% return  |  Sharpe %2")
-                               .arg(total_ret, 0, 'f', 2)
-                               .arg(sharpe, 0, 'f', 3));
+    status_label_->setText(tr("Done — %1% return  |  Sharpe %2").arg(total_ret, 0, 'f', 2).arg(sharpe, 0, 'f', 3));
 }
 
 } // namespace fincept::screens

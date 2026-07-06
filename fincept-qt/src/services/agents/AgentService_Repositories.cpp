@@ -6,20 +6,18 @@
 //
 // Part of the partial-class split of AgentService.cpp.
 
-#include "services/agents/AgentService.h"
-
-#include "services/llm/LlmService.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/TopicPolicy.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpTypes.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "python/PythonRunner.h"
+#include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
-
-#include "datahub/DataHub.h"
-#include "datahub/TopicPolicy.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -34,8 +32,8 @@
 
 namespace fincept::services {
 
-void AgentService::store_memory(const QString& content, const QString& memory_type,
-                                const QJsonObject& metadata, const QString& agent_id) {
+void AgentService::store_memory(const QString& content, const QString& memory_type, const QJsonObject& metadata,
+                                const QString& agent_id) {
     QJsonObject params;
     params["content"] = content;
     params["memory_type"] = memory_type;
@@ -248,6 +246,5 @@ void AgentService::get_trade_decisions(const QString& competition_id, const QStr
 }
 
 // ── LRU Response Cache ───────────────────────────────────────────────────────
-
 
 } // namespace fincept::services

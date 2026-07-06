@@ -63,13 +63,13 @@ struct InfrastructureItem {
 
 struct ArticleSentimentResult {
     QString id;
-    QString label; // "BULLISH" | "BEARISH" | "NEUTRAL"
-    double score = 0.0; // -1..1
+    QString label;           // "BULLISH" | "BEARISH" | "NEUTRAL"
+    double score = 0.0;      // -1..1
     double confidence = 0.0; // 0..1
 };
 
 struct NewsSentimentResult {
-    QString engine; // "vader" | "lexicon"
+    QString engine;             // "vader" | "lexicon"
     double overall_score = 0.0; // -1..1
     int bullish = 0;
     int bearish = 0;

@@ -24,7 +24,10 @@ class QGraphicsEllipseItem;
 class QGraphicsSimpleTextItem;
 class QLabel;
 
-namespace fincept::ui { class IndicatorPicker; class HorizontalLineLayer; }
+namespace fincept::ui {
+class IndicatorPicker;
+class HorizontalLineLayer;
+} // namespace fincept::ui
 
 namespace fincept::screens::equity {
 
@@ -32,7 +35,7 @@ class HoverEquityChartView;
 
 class EquityChart : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit EquityChart(QWidget* parent = nullptr);
 
     void set_candles(const QVector<trading::BrokerCandle>& candles);
@@ -48,16 +51,16 @@ public:
     QString current_timeframe() const;
     fincept::ui::ChartOverlayManager* overlay_manager() const { return overlay_mgr_; }
 
-signals:
+  signals:
     void timeframe_changed(const QString& tf);
     void buy_requested(double price);
     void sell_requested(double price);
     void add_to_watchlist_requested();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     void retranslateUi();
     // Pop the right-click trading menu (Buy/Sell @ price + watchlist) at the
     // given screen position; `price` is the y-axis value under the cursor.
@@ -109,10 +112,10 @@ private:
     // Synthetic sequential timestamps — eliminates QDateTimeAxis gaps for
     // non-trading hours. Each visible candle gets evenly-spaced synthetic
     // timestamps; real timestamps are looked up from candles_ by index.
-    int64_t synth_base_ts_ = 0;   // synthetic timestamp of first visible candle
-    int64_t synth_slot_ms_ = 0;   // slot width in ms
-    int display_start_ = 0;       // index into candles_ of first visible candle
-    int display_count_ = 0;       // number of visible candles
+    int64_t synth_base_ts_ = 0; // synthetic timestamp of first visible candle
+    int64_t synth_slot_ms_ = 0; // slot width in ms
+    int display_start_ = 0;     // index into candles_ of first visible candle
+    int display_count_ = 0;     // number of visible candles
     int64_t synth_ts_for(int candle_index) const;
     int candle_index_from_synth(int64_t synth_ts) const;
     const trading::BrokerCandle* candle_near_synth(int64_t synth_ts) const;

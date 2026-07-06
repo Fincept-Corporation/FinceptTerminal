@@ -1,8 +1,10 @@
 #include "services/alpha_arena/ArenaLlmClient.h"
+
 #include "auth/AuthManager.h"
 #include "core/config/AppConfig.h"
 #include "services/llm/ModelCatalog.h"
 #include "services/llm/ProviderCatalog.h"
+
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -33,18 +35,19 @@ QByteArray ArenaLlmClient::build_body(const ArenaLlmRequest& req) {
         body["messages"] = QJsonArray{QJsonObject{{"role", "user"}, {"content", req.user_prompt}}};
     } else if (p == "gemini" || p == "google") {
         body["systemInstruction"] = QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", req.system_prompt}}}}};
-        body["contents"] = QJsonArray{QJsonObject{{"role", "user"},
-                              {"parts", QJsonArray{QJsonObject{{"text", req.user_prompt}}}}}};
+        body["contents"] =
+            QJsonArray{QJsonObject{{"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", req.user_prompt}}}}}};
         body["generationConfig"] = QJsonObject{{"maxOutputTokens", max_tokens}};
-    } else {   // OpenAI-compatible family + fincept (/research/chat takes OpenAI messages)
-        body["messages"] = QJsonArray{
-            QJsonObject{{"role", "system"}, {"content", req.system_prompt}},
-            QJsonObject{{"role", "user"}, {"content", req.user_prompt}}};
+    } else { // OpenAI-compatible family + fincept (/research/chat takes OpenAI messages)
+        body["messages"] = QJsonArray{QJsonObject{{"role", "system"}, {"content", req.system_prompt}},
+                                      QJsonObject{{"role", "user"}, {"content", req.user_prompt}}};
         if (p != "fincept" || (req.model_id != "fincept-llm" && !req.model_id.isEmpty()))
             body["model"] = req.model_id;
         if (p != "fincept") {
-            if (p == "openai" || p == "xai") body["max_completion_tokens"] = max_tokens;
-            else body["max_tokens"] = max_tokens;
+            if (p == "openai" || p == "xai")
+                body["max_completion_tokens"] = max_tokens;
+            else
+                body["max_tokens"] = max_tokens;
         }
     }
     return QJsonDocument(body).toJson(QJsonDocument::Compact);
@@ -54,11 +57,15 @@ ArenaLlmResult ArenaLlmClient::parse_response(const QString& provider, const QBy
     ArenaLlmResult r;
     const QString p = provider.toLower();
     const QJsonObject o = QJsonDocument::fromJson(body).object();
-    if (o.isEmpty()) { r.error = "non-JSON response"; return r; }
+    if (o.isEmpty()) {
+        r.error = "non-JSON response";
+        return r;
+    }
     if (o.contains("error")) {
         const auto e = o.value("error");
         r.error = e.isObject() ? e.toObject().value("message").toString() : e.toString();
-        if (r.error.isEmpty()) r.error = "provider error";
+        if (r.error.isEmpty())
+            r.error = "provider error";
         return r;
     }
     if (p == "anthropic") {
@@ -80,7 +87,7 @@ ArenaLlmResult ArenaLlmClient::parse_response(const QString& provider, const QBy
         const auto choices = o.value("choices").toArray();
         if (!choices.isEmpty())
             r.content = choices[0].toObject().value("message").toObject().value("content").toString();
-        if (r.content.isEmpty())   // fincept /research/chat tolerant fallbacks
+        if (r.content.isEmpty()) // fincept /research/chat tolerant fallbacks
             r.content = o.value("content").toString();
         if (r.content.isEmpty())
             r.content = o.value("response").toString();
@@ -88,7 +95,10 @@ ArenaLlmResult ArenaLlmClient::parse_response(const QString& provider, const QBy
         r.prompt_tokens = u.value("prompt_tokens").toInt();
         r.completion_tokens = u.value("completion_tokens").toInt();
     }
-    if (r.content.isEmpty()) { r.error = "empty completion"; return r; }
+    if (r.content.isEmpty()) {
+        r.error = "empty completion";
+        return r;
+    }
     r.success = true;
     return r;
 }
@@ -98,7 +108,12 @@ void ArenaLlmClient::complete(const ArenaLlmRequest& req, std::function<void(Are
     QString url = ProviderCatalog::chat_endpoint(p, req.base_url, req.model_id);
     if (p == "fincept")
         url = fincept::AppConfig::instance().api_base_url() + "/research/chat";
-    if (url.isEmpty()) { ArenaLlmResult r; r.error = "no endpoint for provider " + p; cb(r); return; }
+    if (url.isEmpty()) {
+        ArenaLlmResult r;
+        r.error = "no endpoint for provider " + p;
+        cb(r);
+        return;
+    }
 
     QNetworkRequest nr{QUrl(url)};
     nr.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -108,9 +123,11 @@ void ArenaLlmClient::complete(const ArenaLlmRequest& req, std::function<void(Are
     } else if (p == "gemini" || p == "google") {
         nr.setRawHeader("x-goog-api-key", req.api_key.toUtf8());
     } else if (p == "fincept") {
-        if (!req.api_key.isEmpty()) nr.setRawHeader("X-API-Key", req.api_key.toUtf8());
+        if (!req.api_key.isEmpty())
+            nr.setRawHeader("X-API-Key", req.api_key.toUtf8());
         const auto& sess = fincept::auth::AuthManager::instance().session();
-        if (!sess.session_token.isEmpty()) nr.setRawHeader("X-Session-Token", sess.session_token.toUtf8());
+        if (!sess.session_token.isEmpty())
+            nr.setRawHeader("X-Session-Token", sess.session_token.toUtf8());
         nr.setRawHeader("User-Agent", "FinceptTerminal/4.0");
     } else if (!req.api_key.isEmpty()) {
         nr.setRawHeader("Authorization", ("Bearer " + req.api_key).toUtf8());
@@ -129,8 +146,16 @@ void ArenaLlmClient::complete(const ArenaLlmRequest& req, std::function<void(Are
         ArenaLlmResult r;
         r.latency_ms = QDateTime::currentMSecsSinceEpoch() - t0;
         const QByteArray body = reply->readAll();
-        if (reply->error() == QNetworkReply::OperationCanceledError) { r.error = "timeout"; cb(r); return; }
-        if (reply->error() != QNetworkReply::NoError && body.isEmpty()) { r.error = reply->errorString(); cb(r); return; }
+        if (reply->error() == QNetworkReply::OperationCanceledError) {
+            r.error = "timeout";
+            cb(r);
+            return;
+        }
+        if (reply->error() != QNetworkReply::NoError && body.isEmpty()) {
+            r.error = reply->errorString();
+            cb(r);
+            return;
+        }
         // Provider errors often arrive as HTTP 4xx with a JSON body — parse it.
         ArenaLlmResult parsed = parse_response(provider, body);
         parsed.latency_ms = r.latency_ms;

@@ -80,8 +80,9 @@ class McpServersScreen : public QWidget, public IStatefulScreen {
     QStackedWidget* view_stack_ = nullptr;
 
     // Marketplace
-    QLabel* cat_header_lbl_ = nullptr;    // "CATEGORY" sidebar header
-    QListWidget* mkt_cat_list_ = nullptr; // category sidebar (display text re-set in retranslateUi, API key in UserRole)
+    QLabel* cat_header_lbl_ = nullptr; // "CATEGORY" sidebar header
+    QListWidget* mkt_cat_list_ =
+        nullptr; // category sidebar (display text re-set in retranslateUi, API key in UserRole)
     QWidget* mkt_cards_widget_ = nullptr;
     QVBoxLayout* mkt_cards_layout_ = nullptr;
 

@@ -14,9 +14,8 @@ namespace {
 /// returns empty and the key reduces to the legacy "symbol_groups/<letter>/<field>".
 QString settings_key_for_active_profile(SymbolGroup g, const char* field) {
     const QString profile_group = ProfileManager::instance().settings_group();
-    const QString tail = QStringLiteral("symbol_groups/%1/%2")
-                             .arg(symbol_group_letter(g))
-                             .arg(QString::fromLatin1(field));
+    const QString tail =
+        QStringLiteral("symbol_groups/%1/%2").arg(symbol_group_letter(g)).arg(QString::fromLatin1(field));
     if (profile_group.isEmpty())
         return tail;
     return profile_group + QStringLiteral("/") + tail;
@@ -45,7 +44,7 @@ void SymbolGroupRegistry::reload() {
         const auto bit = before.constFind(g);
         const auto ait = slots_.constFind(g);
         const bool was = bit != before.constEnd();
-        const bool is  = ait != slots_.constEnd();
+        const bool is = ait != slots_.constEnd();
         if (!was || !is) {
             emit group_metadata_changed(g);
             continue;
@@ -65,17 +64,28 @@ QColor SymbolGroupRegistry::default_color(SymbolGroup g) {
     // Keep the original A..F palette for backwards compatibility, then add
     // four new defaults. All chosen for readability against dark backgrounds.
     switch (g) {
-        case SymbolGroup::A: return QColor("#d97706"); // amber
-        case SymbolGroup::B: return QColor("#0891b2"); // cyan
-        case SymbolGroup::C: return QColor("#c026d3"); // magenta
-        case SymbolGroup::D: return QColor("#16a34a"); // green
-        case SymbolGroup::E: return QColor("#7c3aed"); // purple
-        case SymbolGroup::F: return QColor("#dc2626"); // red
-        case SymbolGroup::G: return QColor("#eab308"); // yellow
-        case SymbolGroup::H: return QColor("#ea580c"); // orange
-        case SymbolGroup::I: return QColor("#0d9488"); // teal
-        case SymbolGroup::J: return QColor("#db2777"); // pink
-        case SymbolGroup::None: return QColor("#4b5563");
+        case SymbolGroup::A:
+            return QColor("#d97706"); // amber
+        case SymbolGroup::B:
+            return QColor("#0891b2"); // cyan
+        case SymbolGroup::C:
+            return QColor("#c026d3"); // magenta
+        case SymbolGroup::D:
+            return QColor("#16a34a"); // green
+        case SymbolGroup::E:
+            return QColor("#7c3aed"); // purple
+        case SymbolGroup::F:
+            return QColor("#dc2626"); // red
+        case SymbolGroup::G:
+            return QColor("#eab308"); // yellow
+        case SymbolGroup::H:
+            return QColor("#ea580c"); // orange
+        case SymbolGroup::I:
+            return QColor("#0d9488"); // teal
+        case SymbolGroup::J:
+            return QColor("#db2777"); // pink
+        case SymbolGroup::None:
+            return QColor("#4b5563");
     }
     return QColor("#4b5563");
 }
@@ -100,9 +110,10 @@ void SymbolGroupRegistry::load() {
     QSettings s;
     for (SymbolGroup g : all_symbol_groups()) {
         Slot slot;
-        slot.name    = s.value(settings_key_for_active_profile(g, "name"), default_name(g)).toString();
-        const QString color_str = s.value(settings_key_for_active_profile(g, "color"), default_color(g).name()).toString();
-        slot.color   = QColor(color_str);
+        slot.name = s.value(settings_key_for_active_profile(g, "name"), default_name(g)).toString();
+        const QString color_str =
+            s.value(settings_key_for_active_profile(g, "color"), default_color(g).name()).toString();
+        slot.color = QColor(color_str);
         if (!slot.color.isValid())
             slot.color = default_color(g);
         slot.enabled = s.value(settings_key_for_active_profile(g, "enabled"), default_enabled(g)).toBool();
@@ -186,8 +197,8 @@ void SymbolGroupRegistry::reset_to_default(SymbolGroup g) {
     if (g == SymbolGroup::None)
         return;
     auto& slot = slots_[g];
-    slot.name    = default_name(g);
-    slot.color   = default_color(g);
+    slot.name = default_name(g);
+    slot.color = default_color(g);
     slot.enabled = default_enabled(g);
     save_slot(g);
     emit group_metadata_changed(g);

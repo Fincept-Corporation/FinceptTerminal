@@ -36,9 +36,12 @@ QString fmt_int_compact(qint64 v) {
     if (v == 0)
         return QStringLiteral("—");
     const double a = std::abs(double(v));
-    if (a >= 1e7) return QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    if (a >= 1e5) return QString::number(v / 1.0e5, 'f', 2) + "L";
-    if (a >= 1e3) return QString::number(v / 1.0e3, 'f', 1) + "k";
+    if (a >= 1e7)
+        return QString::number(v / 1.0e7, 'f', 2) + "Cr";
+    if (a >= 1e5)
+        return QString::number(v / 1.0e5, 'f', 2) + "L";
+    if (a >= 1e3)
+        return QString::number(v / 1.0e3, 'f', 1) + "k";
     return QLocale(QLocale::English).toString(v);
 }
 
@@ -55,12 +58,14 @@ QString fmt_signed_pct(double v) {
 }
 
 QColor color_for_pct(double v) {
-    if (v > kEps)  return QColor(colors::POSITIVE());
-    if (v < -kEps) return QColor(colors::NEGATIVE());
+    if (v > kEps)
+        return QColor(colors::POSITIVE());
+    if (v < -kEps)
+        return QColor(colors::NEGATIVE());
     return QColor(colors::TEXT_SECONDARY());
 }
 
-}  // namespace
+} // namespace
 
 // ── Model ──────────────────────────────────────────────────────────────────
 
@@ -91,8 +96,10 @@ QVariant ScreenedChainModel::data(const QModelIndex& index, int role) const {
     }
     if (role == Qt::ForegroundRole) {
         switch (col) {
-            case ColCeChg: return color_for_pct(r.ce_quote.change_pct);
-            case ColPeChg: return color_for_pct(r.pe_quote.change_pct);
+            case ColCeChg:
+                return color_for_pct(r.ce_quote.change_pct);
+            case ColPeChg:
+                return color_for_pct(r.pe_quote.change_pct);
         }
         if (col == ColStrike && r.is_atm)
             return QColor(colors::AMBER());
@@ -101,13 +108,20 @@ QVariant ScreenedChainModel::data(const QModelIndex& index, int role) const {
         return {};
 
     switch (col) {
-        case ColStrike: return QString::number(r.strike, 'f', r.strike < 100 ? 2 : 0);
-        case ColCeIv:   return fmt_pct(r.ce_iv * 100.0);
-        case ColCeOi:   return fmt_int_compact(r.ce_quote.oi);
-        case ColCeChg:  return fmt_signed_pct(r.ce_quote.change_pct);
-        case ColPeChg:  return fmt_signed_pct(r.pe_quote.change_pct);
-        case ColPeOi:   return fmt_int_compact(r.pe_quote.oi);
-        case ColPeIv:   return fmt_pct(r.pe_iv * 100.0);
+        case ColStrike:
+            return QString::number(r.strike, 'f', r.strike < 100 ? 2 : 0);
+        case ColCeIv:
+            return fmt_pct(r.ce_iv * 100.0);
+        case ColCeOi:
+            return fmt_int_compact(r.ce_quote.oi);
+        case ColCeChg:
+            return fmt_signed_pct(r.ce_quote.change_pct);
+        case ColPeChg:
+            return fmt_signed_pct(r.pe_quote.change_pct);
+        case ColPeOi:
+            return fmt_int_compact(r.pe_quote.oi);
+        case ColPeIv:
+            return fmt_pct(r.pe_iv * 100.0);
     }
     return {};
 }
@@ -134,25 +148,24 @@ void ScreenedChainModel::set_rows(const QVector<OptionChainRow>& rows) {
 
 ScreenerSubTab::ScreenerSubTab(QWidget* parent) : QWidget(parent) {
     setObjectName("fnoScreenerTab");
-    setStyleSheet(
-        QString("#fnoScreenerTab { background:%1; }"
-                "#fnoScreenerHeader { background:%2; border-bottom:1px solid %3; }"
-                "#fnoScreenerLabel { color:%4; font-size:9px; font-weight:700; "
-                "                     letter-spacing:0.4px; background:transparent; }"
-                "#fnoScreenerCount { color:%4; font-size:10px; background:transparent; padding:6px 12px; }"
-                "QDoubleSpinBox, QSpinBox { background:%2; color:%5; border:1px solid %3; "
-                "                            padding:2px 4px; font-size:11px; min-width:70px; }"
-                "QTableView { background:%1; color:%5; border:1px solid %3; "
-                "              gridline-color:%3; selection-background-color:%6; }"
-                "QHeaderView::section { background:%2; color:%4; border:none; "
-                "                       border-bottom:1px solid %3; padding:5px 8px; "
-                "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }")
-            .arg(colors::BG_BASE(),         // %1
-                 colors::BG_RAISED(),       // %2
-                 colors::BORDER_DIM(),      // %3
-                 colors::TEXT_SECONDARY(),  // %4
-                 colors::TEXT_PRIMARY(),    // %5
-                 colors::BG_HOVER()));      // %6
+    setStyleSheet(QString("#fnoScreenerTab { background:%1; }"
+                          "#fnoScreenerHeader { background:%2; border-bottom:1px solid %3; }"
+                          "#fnoScreenerLabel { color:%4; font-size:9px; font-weight:700; "
+                          "                     letter-spacing:0.4px; background:transparent; }"
+                          "#fnoScreenerCount { color:%4; font-size:10px; background:transparent; padding:6px 12px; }"
+                          "QDoubleSpinBox, QSpinBox { background:%2; color:%5; border:1px solid %3; "
+                          "                            padding:2px 4px; font-size:11px; min-width:70px; }"
+                          "QTableView { background:%1; color:%5; border:1px solid %3; "
+                          "              gridline-color:%3; selection-background-color:%6; }"
+                          "QHeaderView::section { background:%2; color:%4; border:none; "
+                          "                       border-bottom:1px solid %3; padding:5px 8px; "
+                          "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }")
+                      .arg(colors::BG_BASE(),        // %1
+                           colors::BG_RAISED(),      // %2
+                           colors::BORDER_DIM(),     // %3
+                           colors::TEXT_SECONDARY(), // %4
+                           colors::TEXT_PRIMARY(),   // %5
+                           colors::BG_HOVER()));     // %6
 
     setup_ui();
     connect(iv_min_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &ScreenerSubTab::on_filter_changed);
@@ -243,8 +256,8 @@ void ScreenerSubTab::setup_ui() {
     root->addWidget(count_label_);
 
     connect(&fincept::services::options::OptionChainService::instance(),
-            &fincept::services::options::OptionChainService::chain_published,
-            this, [this](const fincept::services::options::OptionChain& chain) {
+            &fincept::services::options::OptionChainService::chain_published, this,
+            [this](const fincept::services::options::OptionChain& chain) {
                 on_chain_published(QVariant::fromValue(chain));
             });
     subscribed_ = true;
@@ -265,11 +278,16 @@ QVariantMap ScreenerSubTab::save_state() const {
 }
 
 void ScreenerSubTab::restore_state(const QVariantMap& state) {
-    if (state.contains("iv_min"))  iv_min_->setValue(state.value("iv_min").toDouble());
-    if (state.contains("iv_max"))  iv_max_->setValue(state.value("iv_max").toDouble());
-    if (state.contains("distance")) distance_->setValue(state.value("distance").toInt());
-    if (state.contains("ce_oi"))   ce_oi_min_->setValue(state.value("ce_oi").toInt());
-    if (state.contains("pe_oi"))   pe_oi_min_->setValue(state.value("pe_oi").toInt());
+    if (state.contains("iv_min"))
+        iv_min_->setValue(state.value("iv_min").toDouble());
+    if (state.contains("iv_max"))
+        iv_max_->setValue(state.value("iv_max").toDouble());
+    if (state.contains("distance"))
+        distance_->setValue(state.value("distance").toInt());
+    if (state.contains("ce_oi"))
+        ce_oi_min_->setValue(state.value("ce_oi").toInt());
+    if (state.contains("pe_oi"))
+        pe_oi_min_->setValue(state.value("pe_oi").toInt());
 }
 
 void ScreenerSubTab::showEvent(QShowEvent* e) {
@@ -277,12 +295,12 @@ void ScreenerSubTab::showEvent(QShowEvent* e) {
     if (subscribed_)
         return;
     QPointer<ScreenerSubTab> self = this;
-    fincept::datahub::DataHub::instance().subscribe_pattern(
-        this, QStringLiteral("option:chain:*"),
-        [self](const QString& /*topic*/, const QVariant& v) {
-            if (!self) return;
-            self->on_chain_published(v);
-        });
+    fincept::datahub::DataHub::instance().subscribe_pattern(this, QStringLiteral("option:chain:*"),
+                                                            [self](const QString& /*topic*/, const QVariant& v) {
+                                                                if (!self)
+                                                                    return;
+                                                                self->on_chain_published(v);
+                                                            });
     subscribed_ = true;
 }
 
@@ -304,11 +322,16 @@ void ScreenerSubTab::changeEvent(QEvent* event) {
 }
 
 void ScreenerSubTab::retranslateUi() {
-    if (iv_min_label_)   iv_min_label_->setText(tr("IV Min").toUpper());
-    if (iv_max_label_)   iv_max_label_->setText(tr("IV Max").toUpper());
-    if (distance_label_) distance_label_->setText(tr("± Strikes").toUpper());
-    if (ce_oi_label_)    ce_oi_label_->setText(tr("CE OI ≥").toUpper());
-    if (pe_oi_label_)    pe_oi_label_->setText(tr("PE OI ≥").toUpper());
+    if (iv_min_label_)
+        iv_min_label_->setText(tr("IV Min").toUpper());
+    if (iv_max_label_)
+        iv_max_label_->setText(tr("IV Max").toUpper());
+    if (distance_label_)
+        distance_label_->setText(tr("± Strikes").toUpper());
+    if (ce_oi_label_)
+        ce_oi_label_->setText(tr("CE OI ≥").toUpper());
+    if (pe_oi_label_)
+        pe_oi_label_->setText(tr("PE OI ≥").toUpper());
     // Refresh the count label string in the new language.
     apply_filters();
 }
@@ -325,7 +348,10 @@ void ScreenerSubTab::apply_filters() {
     }
     int atm = 0;
     for (int i = 0; i < last_chain_.rows.size(); ++i)
-        if (last_chain_.rows[i].is_atm) { atm = i; break; }
+        if (last_chain_.rows[i].is_atm) {
+            atm = i;
+            break;
+        }
 
     const double iv_lo = iv_min_->value() / 100.0;
     const double iv_hi = iv_max_->value() / 100.0;
@@ -353,9 +379,7 @@ void ScreenerSubTab::apply_filters() {
         filtered.append(r);
     }
     model_->set_rows(filtered);
-    count_label_->setText(tr("%1 of %2 strikes match")
-                              .arg(filtered.size())
-                              .arg(last_chain_.rows.size()));
+    count_label_->setText(tr("%1 of %2 strikes match").arg(filtered.size()).arg(last_chain_.rows.size()));
 }
 
 } // namespace fincept::screens::fno

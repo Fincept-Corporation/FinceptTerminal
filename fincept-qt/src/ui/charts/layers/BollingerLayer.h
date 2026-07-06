@@ -8,7 +8,7 @@ namespace fincept::ui {
 
 class BollingerLayer : public SeriesLayer {
     Q_OBJECT
-public:
+  public:
     explicit BollingerLayer(int period = 20, double num_std = 2.0, QObject* parent = nullptr);
 
     void compute(const QVector<CandleData>& candles) override;
@@ -18,7 +18,7 @@ public:
     int period() const { return period_; }
     double num_std() const { return num_std_; }
 
-private:
+  private:
     int period_;
     double num_std_;
     QLineSeries* upper_ = nullptr;

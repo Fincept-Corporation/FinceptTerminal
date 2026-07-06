@@ -32,7 +32,7 @@ QColor with_alpha(const QString& hex, int alpha) {
     return c;
 }
 
-}  // namespace
+} // namespace
 
 FiiDiiChart::FiiDiiChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
@@ -116,7 +116,8 @@ void FiiDiiChart::changeEvent(QEvent* event) {
 }
 
 void FiiDiiChart::retranslateUi() {
-    if (chart_) chart_->setTitle(tr("Daily Net Flows (₹ Cr)"));
+    if (chart_)
+        chart_->setTitle(tr("Daily Net Flows (₹ Cr)"));
 }
 
 } // namespace fincept::screens::fno

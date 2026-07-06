@@ -31,13 +31,13 @@ class CredentialsSection : public QWidget {
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
 
-    QHash<QString, QLineEdit*>   cred_fields_; // key → password field
-    QHash<QString, QLabel*>      cred_status_; // key → status label
+    QHash<QString, QLineEdit*> cred_fields_;      // key → password field
+    QHash<QString, QLabel*> cred_status_;         // key → status label
     QHash<QString, QPushButton*> cred_save_btns_; // key → Save button
 
     // Static text widgets cached for retranslateUi.
     QLabel* title_ = nullptr;
-    QLabel* info_  = nullptr;
+    QLabel* info_ = nullptr;
 };
 
 } // namespace fincept::screens

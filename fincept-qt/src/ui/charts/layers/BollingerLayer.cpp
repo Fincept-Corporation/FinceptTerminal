@@ -11,9 +11,9 @@ namespace fincept::ui {
 
 BollingerLayer::BollingerLayer(int period, double num_std, QObject* parent)
     : SeriesLayer(QStringLiteral("bb_%1_%2").arg(period).arg(num_std, 0, 'f', 1),
-                  QStringLiteral("BB (%1, %2)").arg(period).arg(num_std, 0, 'f', 1),
-                  QColor("#ca8a04"), 1, parent),
-      period_(period), num_std_(num_std) {}
+                  QStringLiteral("BB (%1, %2)").arg(period).arg(num_std, 0, 'f', 1), QColor("#ca8a04"), 1, parent),
+      period_(period),
+      num_std_(num_std) {}
 
 void BollingerLayer::compute(const QVector<CandleData>& candles) {
     QVector<double> closes;

@@ -38,8 +38,8 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
 
   private:
     QStackedWidget* sections_ = nullptr;
-    QWidget*        nav_      = nullptr;
-    QLabel*         nav_title_ = nullptr;
+    QWidget* nav_ = nullptr;
+    QLabel* nav_title_ = nullptr;
 
     void refresh_theme();
     void retranslateUi();
@@ -56,10 +56,13 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
 
     /// Nav button → source key map used to retranslate button labels and
     /// scope headers without rebuilding the nav.
-    struct NavButton { QPushButton* btn; QString source_key; };
+    struct NavButton {
+        QPushButton* btn;
+        QString source_key;
+    };
     QList<NavButton> nav_buttons_;
-    QList<QLabel*>   scope_headers_;  // entries align with scope_header_keys_
-    QList<QString>   scope_header_keys_;
+    QList<QLabel*> scope_headers_; // entries align with scope_header_keys_
+    QList<QString> scope_header_keys_;
 
     /// Factories for each section index. Used by the language-change rebuild
     /// path so we can recreate widgets without hardcoding the type list twice.

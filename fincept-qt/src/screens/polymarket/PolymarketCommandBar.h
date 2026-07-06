@@ -34,7 +34,10 @@ class PolymarketCommandBar : public QWidget {
     void set_loading(bool loading);
     void set_ws_status(bool connected);
     void set_market_count(int count);
-    void set_search_text(const QString& text) { if (search_input_) search_input_->setText(text); }
+    void set_search_text(const QString& text) {
+        if (search_input_)
+            search_input_->setText(text);
+    }
     QString search_text() const { return search_input_ ? search_input_->text() : QString(); }
 
     /// Populate the exchange dropdown. `ids` are adapter ids from
@@ -64,7 +67,7 @@ class PolymarketCommandBar : public QWidget {
     void build_ui();
     void rebuild_view_pills();
     void apply_accent();
-    void rebuild_categories();  // called when presentation or tag set changes
+    void rebuild_categories(); // called when presentation or tag set changes
     void retranslateUi();
 
     QComboBox* exchange_combo_ = nullptr;
@@ -72,7 +75,7 @@ class PolymarketCommandBar : public QWidget {
     QWidget* view_pills_container_ = nullptr;
     QList<QPushButton*> view_btns_;
     QWidget* category_container_ = nullptr;
-    QComboBox* category_combo_ = nullptr;  // used in CategoryMode::ComboBox
+    QComboBox* category_combo_ = nullptr; // used in CategoryMode::ComboBox
     QLineEdit* search_input_ = nullptr;
     QComboBox* sort_combo_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;

@@ -41,8 +41,7 @@ class ThemeManager : public QObject {
     /// on KDE Plasma 6 + Qt6 + Wayland where back-to-back global restyles
     /// during a QComboBox event chain can crash the process. See GitHub issue
     /// #247 for the original repro.
-    void apply_typography_and_density(const QString& family, int size_px,
-                                      const QString& density);
+    void apply_typography_and_density(const QString& family, int size_px, const QString& density);
 
     /// Read access to the currently active token set.
     /// Custom painters call: QColor(ThemeManager::instance().tokens().accent)

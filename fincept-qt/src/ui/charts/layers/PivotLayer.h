@@ -7,7 +7,7 @@ namespace fincept::ui {
 
 class PivotLayer : public HorizontalLineLayer {
     Q_OBJECT
-public:
+  public:
     explicit PivotLayer(PivotType type = PivotType::Standard, QObject* parent = nullptr);
 
     void compute(const QVector<CandleData>& candles) override;
@@ -15,7 +15,7 @@ public:
     PivotType pivot_type() const { return type_; }
     void set_pivot_type(PivotType t);
 
-private:
+  private:
     PivotType type_;
 };
 

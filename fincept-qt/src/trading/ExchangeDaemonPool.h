@@ -58,11 +58,8 @@ class ExchangeDaemonPool : public QObject {
     /// `exchange` is the ccxt id (e.g. "kraken"). `credentials`, if set, are
     /// sent to the daemon once per `(exchange, credentials-fingerprint)`
     /// pair — passing the same creds on later calls is free.
-    QJsonObject call(const QString& exchange,
-                     const QString& method,
-                     const QJsonObject& args,
-                     const ExchangeCredentials& credentials = {},
-                     int timeout_ms = 15000);
+    QJsonObject call(const QString& exchange, const QString& method, const QJsonObject& args,
+                     const ExchangeCredentials& credentials = {}, int timeout_ms = 15000);
 
     /// Drop cached credential-sent state for a given exchange — use this
     /// after an API-key rotation so the next `call()` re-sends creds.
@@ -89,10 +86,10 @@ class ExchangeDaemonPool : public QObject {
     std::atomic<bool> ready_{false};
     std::atomic<int> next_req_id_{0};
 
-    QMutex mutex_;                               // guards responses_ + creds_sent_
-    QWaitCondition response_ready_;              // signalled when any response arrives
-    QHash<QString, QJsonObject> responses_;      // id -> full response obj
-    QHash<QString, QString> creds_sent_;         // exchange_id -> fingerprint of last-sent creds
+    QMutex mutex_;                          // guards responses_ + creds_sent_
+    QWaitCondition response_ready_;         // signalled when any response arrives
+    QHash<QString, QJsonObject> responses_; // id -> full response obj
+    QHash<QString, QString> creds_sent_;    // exchange_id -> fingerprint of last-sent creds
 };
 
 } // namespace fincept::trading

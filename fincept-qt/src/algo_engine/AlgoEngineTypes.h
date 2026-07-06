@@ -29,40 +29,64 @@ enum class Timeframe { M1, M3, M5, M15, M30, H1, H4, D1 };
 
 inline int timeframe_seconds(Timeframe tf) {
     switch (tf) {
-    case Timeframe::M1:  return 60;
-    case Timeframe::M3:  return 180;
-    case Timeframe::M5:  return 300;
-    case Timeframe::M15: return 900;
-    case Timeframe::M30: return 1800;
-    case Timeframe::H1:  return 3600;
-    case Timeframe::H4:  return 14400;
-    case Timeframe::D1:  return 86400;
+        case Timeframe::M1:
+            return 60;
+        case Timeframe::M3:
+            return 180;
+        case Timeframe::M5:
+            return 300;
+        case Timeframe::M15:
+            return 900;
+        case Timeframe::M30:
+            return 1800;
+        case Timeframe::H1:
+            return 3600;
+        case Timeframe::H4:
+            return 14400;
+        case Timeframe::D1:
+            return 86400;
     }
     return 60;
 }
 
 inline Timeframe timeframe_from_string(const QString& s) {
-    if (s == "1m")  return Timeframe::M1;
-    if (s == "3m")  return Timeframe::M3;
-    if (s == "5m")  return Timeframe::M5;
-    if (s == "15m") return Timeframe::M15;
-    if (s == "30m") return Timeframe::M30;
-    if (s == "1h")  return Timeframe::H1;
-    if (s == "4h")  return Timeframe::H4;
-    if (s == "1d")  return Timeframe::D1;
+    if (s == "1m")
+        return Timeframe::M1;
+    if (s == "3m")
+        return Timeframe::M3;
+    if (s == "5m")
+        return Timeframe::M5;
+    if (s == "15m")
+        return Timeframe::M15;
+    if (s == "30m")
+        return Timeframe::M30;
+    if (s == "1h")
+        return Timeframe::H1;
+    if (s == "4h")
+        return Timeframe::H4;
+    if (s == "1d")
+        return Timeframe::D1;
     return Timeframe::M5;
 }
 
 inline QString timeframe_to_string(Timeframe tf) {
     switch (tf) {
-    case Timeframe::M1:  return QStringLiteral("1m");
-    case Timeframe::M3:  return QStringLiteral("3m");
-    case Timeframe::M5:  return QStringLiteral("5m");
-    case Timeframe::M15: return QStringLiteral("15m");
-    case Timeframe::M30: return QStringLiteral("30m");
-    case Timeframe::H1:  return QStringLiteral("1h");
-    case Timeframe::H4:  return QStringLiteral("4h");
-    case Timeframe::D1:  return QStringLiteral("1d");
+        case Timeframe::M1:
+            return QStringLiteral("1m");
+        case Timeframe::M3:
+            return QStringLiteral("3m");
+        case Timeframe::M5:
+            return QStringLiteral("5m");
+        case Timeframe::M15:
+            return QStringLiteral("15m");
+        case Timeframe::M30:
+            return QStringLiteral("30m");
+        case Timeframe::H1:
+            return QStringLiteral("1h");
+        case Timeframe::H4:
+            return QStringLiteral("4h");
+        case Timeframe::D1:
+            return QStringLiteral("1d");
     }
     return QStringLiteral("5m");
 }
@@ -100,9 +124,12 @@ enum class PositionSide { None, Long, Short };
 
 inline QString position_side_to_string(PositionSide s) {
     switch (s) {
-    case PositionSide::Long:  return QStringLiteral("LONG");
-    case PositionSide::Short: return QStringLiteral("SHORT");
-    default: return QStringLiteral("NONE");
+        case PositionSide::Long:
+            return QStringLiteral("LONG");
+        case PositionSide::Short:
+            return QStringLiteral("SHORT");
+        default:
+            return QStringLiteral("NONE");
     }
 }
 
@@ -118,15 +145,15 @@ struct AlgoPosition {
 
 // One leg of an open multi-leg F&O basket position (P3).
 struct AlgoLegPosition {
-    QString symbol;            // broker-native option symbol
-    qint64  instrument_token = 0;
-    bool    is_call = true;
-    double  strike = 0;
-    int     side_sign = 1;     // +1 long/BUY, -1 short/SELL
-    double  quantity = 0;      // contracts (lots × lot_size)
-    double  entry_price = 0;   // premium per contract at entry
-    double  current_price = 0; // live mark
-    double  unrealized_pnl = 0;
+    QString symbol; // broker-native option symbol
+    qint64 instrument_token = 0;
+    bool is_call = true;
+    double strike = 0;
+    int side_sign = 1;        // +1 long/BUY, -1 short/SELL
+    double quantity = 0;      // contracts (lots × lot_size)
+    double entry_price = 0;   // premium per contract at entry
+    double current_price = 0; // live mark
+    double unrealized_pnl = 0;
 };
 
 // ── Risk ────────────────────────────────────────────────────────────────────
@@ -157,7 +184,7 @@ struct AlgoTradeRecord {
     // broker-native contract; leg_index is its position in the basket. Empty/-1 for
     // the single-symbol equity path.
     QString leg_symbol;
-    int     leg_index = -1;
+    int leg_index = -1;
 };
 
 // ── Metrics ─────────────────────────────────────────────────────────────────
@@ -183,11 +210,11 @@ struct AlgoMetrics {
 // One leg of a multi-leg F&O order. Empty AlgoOrderSignal.legs means the
 // single-symbol equity path (symbol/quantity/side fields) is used instead.
 struct AlgoOrderLeg {
-    QString symbol;             // broker-native option/future symbol
-    qint64  instrument_token = 0;
-    QString side;               // BUY | SELL
-    double  quantity = 0;
-    double  price = 0;          // limit price; 0 = market
+    QString symbol; // broker-native option/future symbol
+    qint64 instrument_token = 0;
+    QString side; // BUY | SELL
+    double quantity = 0;
+    double price = 0; // limit price; 0 = market
 };
 
 struct AlgoOrderSignal {
@@ -202,7 +229,7 @@ struct AlgoOrderSignal {
     double price = 0;
     double trigger_price = 0;
     QString reason;
-    QString mode = "paper"; // paper | live — paper simulates the fill, live routes to the broker
+    QString mode = "paper";     // paper | live — paper simulates the fill, live routes to the broker
     QString paper_portfolio_id; // PtPortfolio id for the paper basket path (stamped by the runner)
     QVector<AlgoOrderLeg> legs; // multi-leg F&O orders; empty = single-symbol equity path
 };

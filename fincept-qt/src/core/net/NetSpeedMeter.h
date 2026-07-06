@@ -18,6 +18,7 @@
 
 #include <QObject>
 #include <QTimer>
+
 #include <cstdint>
 
 namespace fincept::net {

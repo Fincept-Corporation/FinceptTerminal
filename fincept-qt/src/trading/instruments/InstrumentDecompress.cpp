@@ -2,9 +2,8 @@
 
 #include "core/logging/Logger.h"
 
-#include <zlib.h>
-
 #include <cstring>
+#include <zlib.h>
 
 namespace fincept::trading::decompress {
 

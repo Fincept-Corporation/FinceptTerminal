@@ -1,18 +1,15 @@
 // src/services/ma_analytics/MAAnalyticsService.h
 #pragma once
+#include "datahub/Producer.h"
 #include "services/ma_analytics/MAAnalyticsTypes.h"
 
 #include <QObject>
-
-#    include "datahub/Producer.h"
 
 namespace fincept::services::ma {
 
 /// Singleton service for all M&A Analytics Python backend calls.
 /// Each method is async — results delivered via signals.
-class MAAnalyticsService : public QObject
-    , public fincept::datahub::Producer
-{
+class MAAnalyticsService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static MAAnalyticsService& instance();
@@ -106,7 +103,7 @@ class MAAnalyticsService : public QObject
     void fit_ols(const QJsonObject& params);
     void descriptive_statistics(const QJsonObject& params);
     void perform_pca(const QJsonObject& params);
-    
+
     // FFN Analytics
     void calculate_ffn_performance(const QJsonObject& params);
     void calculate_ffn_drawdowns(const QJsonObject& params);
@@ -181,9 +178,7 @@ class MAAnalyticsService : public QObject
     void gluonts_seasonal_naive(const QJsonObject& params);
 
     // Fixed Income Analytics
-    void run_fixed_income_command(
-        const QString& command,
-        const QJsonObject& params);
+    void run_fixed_income_command(const QString& command, const QJsonObject& params);
 
     // skfolio Analytics (portfolio optimization / risk). Contexts are skfolio_-
     // prefixed because several commands (efficient_frontier, risk_metrics,
@@ -202,12 +197,12 @@ class MAAnalyticsService : public QObject
     void skfolio_generate_report(const QJsonObject& params);
 
     // Options Analytics (each script: command + JSON params → JSON; single op).
-    void options_gamma_exposure(const QJsonObject& params);   // gex_calculator.py
-    void options_iv_smile(const QJsonObject& params);         // iv_smile.py
-    void options_iv_surface(const QJsonObject& params);       // iv_surface.py
-    void options_open_interest(const QJsonObject& params);    // oi_tracker.py
-    void options_straddle_sim(const QJsonObject& params);     // straddle_simulator.py
-    void options_strategy_payoff(const QJsonObject& params);  // strategy_chart.py
+    void options_gamma_exposure(const QJsonObject& params);  // gex_calculator.py
+    void options_iv_smile(const QJsonObject& params);        // iv_smile.py
+    void options_iv_surface(const QJsonObject& params);      // iv_surface.py
+    void options_open_interest(const QJsonObject& params);   // oi_tracker.py
+    void options_straddle_sim(const QJsonObject& params);    // straddle_simulator.py
+    void options_strategy_payoff(const QJsonObject& params); // strategy_chart.py
 
     // Corporate-Finance Valuation Summary (valuation_summary.py)
     void valuation_comprehensive(const QJsonObject& params);
@@ -217,12 +212,12 @@ class MAAnalyticsService : public QObject
     // Portfolio Management (CFA suite). Each script dispatches on `command`; the
     // result context is per-script-prefixed because command names repeat across
     // scripts (e.g. comprehensive_analysis appears in 3 of them).
-    void run_active_management(const QString& command, const QJsonObject& params);      // am_
-    void run_economics_markets(const QString& command, const QJsonObject& params);      // em_
-    void run_portfolio_management(const QString& command, const QJsonObject& params);   // pmg_
-    void run_portfolio_planning(const QString& command, const QJsonObject& params);     // ppl_
-    void run_risk_management(const QString& command, const QJsonObject& params);        // rmg_
-    void run_portfolio_analytics(const QString& command, const QJsonObject& params);    // pan_
+    void run_active_management(const QString& command, const QJsonObject& params);    // am_
+    void run_economics_markets(const QString& command, const QJsonObject& params);    // em_
+    void run_portfolio_management(const QString& command, const QJsonObject& params); // pmg_
+    void run_portfolio_planning(const QString& command, const QJsonObject& params);   // ppl_
+    void run_risk_management(const QString& command, const QJsonObject& params);      // rmg_
+    void run_portfolio_analytics(const QString& command, const QJsonObject& params);  // pan_
 
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
@@ -230,6 +225,26 @@ class MAAnalyticsService : public QObject
     void benchmark_deal_premium(const QJsonObject& params);
     void analyze_payment_structures(const QJsonObject& params);
     void analyze_industry_deals(const QJsonObject& params);
+
+    // ── Technical Analysis / Economics / Deal Scanner (multi-arg CLIs via Qt shim) ──
+    void business_cycle(const QJsonObject& params);                                    // business_cycle.py
+    void equity_risk_premium(const QJsonObject& params);                               // equity_risk_premium.py
+    void momentum_indicator(const QString& indicator_type, const QJsonObject& params); // momentum_indicators.py
+    void run_deal_scanner(const QString& command, const QJsonObject& params);          // deal_scanner.py
+    void sec_dcf_inputs(const QJsonObject& params);                                    // sec_data_adapter.py
+
+    // ── Backtesting bridges — run a registered Fincept strategy (FCT-…) via provider ──
+    void run_backtest(const QString& provider, const QString& strategy_id, const QJsonObject& params);
+
+    // ── VisionQuant (candlestick-pattern intelligence: CNN autoencoder + FAISS) ──
+    void run_vision_engine(const QString& command, const QJsonObject& params); // engine.py: status|search|encode
+    void run_vision_scorer(const QString& command, const QJsonObject& params); // scorer.py: *_score
+    void run_vision_backtest(const QJsonObject& params);                       // backtester.py: backtest
+    void run_vision_index(const QString& command, const QJsonObject& params);  // setup_index.py: build|status
+
+    // ── Data connectors — keyless *_data.py CLIs (positional: command + args) ──
+    // Array-safe variant of run_python (wraps a top-level JSON array as {data:[…]}).
+    void run_data_connector(const QString& script, const QStringList& args, const QString& context);
 
   signals:
     // Generic result signal — module panels connect to this filtered by context

@@ -31,11 +31,10 @@ namespace {
 // Common timezone abbreviations -> fixed UTC offset (RFC822 style).
 const QHash<QString, QString>& zone_offsets() {
     static const QHash<QString, QString> z = {
-        {"GMT", "+0000"}, {"UTC", "+0000"}, {"UT", "+0000"},   {"Z", "+0000"},   {"EST", "-0500"},
-        {"EDT", "-0400"}, {"CST", "-0600"}, {"CDT", "-0500"},  {"MST", "-0700"}, {"MDT", "-0600"},
-        {"PST", "-0800"}, {"PDT", "-0700"}, {"IST", "+0530"},  {"CET", "+0100"}, {"CEST", "+0200"},
-        {"BST", "+0100"}, {"JST", "+0900"}, {"AEST", "+1000"}, {"AEDT", "+1100"},{"SGT", "+0800"},
-        {"HKT", "+0800"}, {"NZST", "+1200"},
+        {"GMT", "+0000"},  {"UTC", "+0000"}, {"UT", "+0000"},   {"Z", "+0000"},    {"EST", "-0500"}, {"EDT", "-0400"},
+        {"CST", "-0600"},  {"CDT", "-0500"}, {"MST", "-0700"},  {"MDT", "-0600"},  {"PST", "-0800"}, {"PDT", "-0700"},
+        {"IST", "+0530"},  {"CET", "+0100"}, {"CEST", "+0200"}, {"BST", "+0100"},  {"JST", "+0900"}, {"AEST", "+1000"},
+        {"AEDT", "+1100"}, {"SGT", "+0800"}, {"HKT", "+0800"},  {"NZST", "+1200"},
     };
     return z;
 }
@@ -44,20 +43,45 @@ const QHash<QString, QString>& zone_offsets() {
 // regardless of the user's system locale.
 const QStringList& fallback_formats() {
     static const QStringList f = {
-        "ddd, dd MMM yyyy HH:mm:ss", "ddd, d MMM yyyy HH:mm:ss", "dd MMM yyyy HH:mm:ss",
-        "d MMM yyyy HH:mm:ss",       "ddd, dd MMM yyyy HH:mm",   "dd MMM yyyy HH:mm",
+        "ddd, dd MMM yyyy HH:mm:ss",
+        "ddd, d MMM yyyy HH:mm:ss",
+        "dd MMM yyyy HH:mm:ss",
+        "d MMM yyyy HH:mm:ss",
+        "ddd, dd MMM yyyy HH:mm",
+        "dd MMM yyyy HH:mm",
         // Text-month with dash / slash / dot separators (e.g. "05-Jun-2026 14:35:36").
-        "dd-MMM-yyyy HH:mm:ss",      "d-MMM-yyyy HH:mm:ss",      "dd-MMM-yyyy HH:mm",
-        "dd-MMM-yyyy",               "dd/MMM/yyyy HH:mm:ss",     "dd/MMM/yyyy HH:mm",
-        "dd/MMM/yyyy",               "dd.MMM.yyyy HH:mm:ss",     "dd.MMM.yyyy",
-        "MMM-dd-yyyy HH:mm:ss",      "MMM dd yyyy HH:mm:ss",
-        "yyyy-MM-dd HH:mm:ss",       "yyyy-MM-dd'T'HH:mm:ss",    "yyyy-MM-dd HH:mm",
-        "yyyy/MM/dd HH:mm:ss",       "yyyy/MM/dd HH:mm",         "MM/dd/yyyy HH:mm:ss",
-        "MM/dd/yyyy hh:mm AP",       "MM/dd/yyyy",               "dd-MM-yyyy HH:mm:ss",
-        "dd-MM-yyyy HH:mm",          "dd-MM-yyyy",               "dd.MM.yyyy HH:mm:ss",
-        "dd.MM.yyyy",                "MMMM d, yyyy h:mm AP",      "MMMM d, yyyy",
-        "MMM d, yyyy",               "ddd MMM d HH:mm:ss yyyy",  "yyyyMMddHHmmss",
-        "yyyyMMdd",                  "yyyy-MM-dd",               "dd MMM yyyy",
+        "dd-MMM-yyyy HH:mm:ss",
+        "d-MMM-yyyy HH:mm:ss",
+        "dd-MMM-yyyy HH:mm",
+        "dd-MMM-yyyy",
+        "dd/MMM/yyyy HH:mm:ss",
+        "dd/MMM/yyyy HH:mm",
+        "dd/MMM/yyyy",
+        "dd.MMM.yyyy HH:mm:ss",
+        "dd.MMM.yyyy",
+        "MMM-dd-yyyy HH:mm:ss",
+        "MMM dd yyyy HH:mm:ss",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy/MM/dd HH:mm:ss",
+        "yyyy/MM/dd HH:mm",
+        "MM/dd/yyyy HH:mm:ss",
+        "MM/dd/yyyy hh:mm AP",
+        "MM/dd/yyyy",
+        "dd-MM-yyyy HH:mm:ss",
+        "dd-MM-yyyy HH:mm",
+        "dd-MM-yyyy",
+        "dd.MM.yyyy HH:mm:ss",
+        "dd.MM.yyyy",
+        "MMMM d, yyyy h:mm AP",
+        "MMMM d, yyyy",
+        "MMM d, yyyy",
+        "ddd MMM d HH:mm:ss yyyy",
+        "yyyyMMddHHmmss",
+        "yyyyMMdd",
+        "yyyy-MM-dd",
+        "dd MMM yyyy",
     };
     return f;
 }
@@ -120,7 +144,8 @@ qint64 parse_feed_datetime(const QString& text_in, QString& display, const QStri
         static const QRegularExpression tzRe("\\s+([A-Za-z]{2,5})$");
         const auto m = tzRe.match(text);
         if (m.hasMatch() && zone_offsets().contains(m.captured(1).toUpper())) {
-            const QString repl = text.left(m.capturedStart(0)).trimmed() + " " + zone_offsets().value(m.captured(1).toUpper());
+            const QString repl =
+                text.left(m.capturedStart(0)).trimmed() + " " + zone_offsets().value(m.captured(1).toUpper());
             dt = QDateTime::fromString(repl, Qt::RFC2822Date);
             if (dt.isValid())
                 return finish(dt);
@@ -131,7 +156,7 @@ qint64 parse_feed_datetime(const QString& text_in, QString& display, const QStri
     QString core = text;
     core.remove(QRegularExpression("\\s*\\([^)]*\\)\\s*$"));            // "(UTC)"
     core.remove(QRegularExpression("\\s*(Z|[+-]\\d{2}:?\\d{2})\\s*$")); // trailing offset / Z
-    {                                                                  // trailing known zone abbrev (not AM/PM)
+    {                                                                   // trailing known zone abbrev (not AM/PM)
         static const QRegularExpression zr("\\s+([A-Za-z]{2,5})$");
         const auto m = zr.match(core);
         if (m.hasMatch() && zone_offsets().contains(m.captured(1).toUpper()))

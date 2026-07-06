@@ -55,7 +55,7 @@ modules:
       # Main repository
       - type: git
         url: https://github.com/Fincept-Corporation/FinceptTerminal.git
-        tag: v4.1.0
+        tag: v4.2.0
       # Vendored FetchContent dependencies (no network during build)
       - type: git
         url: https://github.com/QtExcel/QXlsx.git

@@ -161,12 +161,13 @@ QWidget* PrivacyScreen::build_page() {
             info_card(tr("SECURITY"),
                       tr("Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity")),
             0, 1);
-        grid->addWidget(info_card(tr("COMMUNICATION"),
-                                  tr("Send service updates, security alerts, support responses, and optional marketing")),
-                        1, 0);
         grid->addWidget(
-            info_card(tr("IMPROVEMENT"), tr("Analyze usage to improve features, fix bugs, and develop new capabilities")), 1,
-            1);
+            info_card(tr("COMMUNICATION"),
+                      tr("Send service updates, security alerts, support responses, and optional marketing")),
+            1, 0);
+        grid->addWidget(info_card(tr("IMPROVEMENT"),
+                                  tr("Analyze usage to improve features, fix bugs, and develop new capabilities")),
+                        1, 1);
         pvl->addLayout(grid);
     }
 

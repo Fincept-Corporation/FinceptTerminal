@@ -28,7 +28,8 @@ inline bool parse_doubles(const QString& text, QJsonArray& out, QString* bad_tok
     for (const QString& p : parts) {
         const double v = p.toDouble(&ok);
         if (!ok) {
-            if (bad_token) *bad_token = p;
+            if (bad_token)
+                *bad_token = p;
             return false;
         }
         out.append(v);
@@ -38,8 +39,7 @@ inline bool parse_doubles(const QString& text, QJsonArray& out, QString* bad_tok
 
 // Generate a small synthetic returns sample so the user can try the panel
 // without typing 252 numbers. Produces ~1y of plausible daily returns.
-inline QString sample_returns(unsigned seed = 1, int n = 252, double mu = 0.0005,
-                              double sigma = 0.012) {
+inline QString sample_returns(unsigned seed = 1, int n = 252, double mu = 0.0005, double sigma = 0.012) {
     quint32 state = seed ? seed : 1u;
     auto rand01 = [&]() -> double {
         state = state * 1664525u + 1013904223u;
@@ -59,9 +59,8 @@ inline QString sample_returns(unsigned seed = 1, int n = 252, double mu = 0.0005
 
 // Synthetic time series sample with trend + seasonality + noise.
 // Useful for the LOAD SAMPLE buttons on the Functime / Statsmodels / Gluonts panels.
-inline QString sample_series(unsigned seed = 1, int n = 200, double base = 50.0,
-                             double trend_per_step = 0.05, double season_amp = 5.0,
-                             int season_period = 30, double noise_sigma = 1.5) {
+inline QString sample_series(unsigned seed = 1, int n = 200, double base = 50.0, double trend_per_step = 0.05,
+                             double season_amp = 5.0, int season_period = 30, double noise_sigma = 1.5) {
     quint32 state = seed ? seed : 1u;
     auto rand01 = [&]() -> double {
         state = state * 1664525u + 1013904223u;
@@ -83,8 +82,7 @@ inline QString sample_series(unsigned seed = 1, int n = 200, double base = 50.0,
 }
 
 // Trending random walk — useful for stationarity testing where d=1 should win.
-inline QString sample_random_walk(unsigned seed = 1, int n = 150, double drift = 0.05,
-                                  double sigma = 1.0) {
+inline QString sample_random_walk(unsigned seed = 1, int n = 150, double drift = 0.05, double sigma = 1.0) {
     quint32 state = seed ? seed : 1u;
     auto rand01 = [&]() -> double {
         state = state * 1664525u + 1013904223u;

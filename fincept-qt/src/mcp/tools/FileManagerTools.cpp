@@ -100,7 +100,7 @@ std::vector<ToolDef> get_file_manager_tools() {
         t.description = "Delete a managed file by its ID. This removes it from the File Manager "
                         "and deletes the stored copy from disk.";
         t.category = "file_manager";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "File ID to delete"}}}};
         t.input_schema.required = {"id"};
@@ -266,23 +266,28 @@ std::vector<ToolDef> get_file_manager_tools() {
         t.is_destructive = true;
         t.input_schema.properties = QJsonObject{
             {"source_path", QJsonObject{{"type", "string"}, {"description", "Absolute path to the source file"}}},
-            {"source_screen", QJsonObject{{"type", "string"},
-                                          {"description", "Optional tag identifying which screen owns this file"}}}};
+            {"source_screen",
+             QJsonObject{{"type", "string"}, {"description", "Optional tag identifying which screen owns this file"}}}};
         t.input_schema.required = {"source_path"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString src = args["source_path"].toString().trimmed();
             const QString screen = args["source_screen"].toString().trimmed();
-            if (src.isEmpty()) return ToolResult::fail("Missing 'source_path'");
+            if (src.isEmpty())
+                return ToolResult::fail("Missing 'source_path'");
             QFileInfo fi(src);
-            if (!fi.exists() || !fi.isFile()) return ToolResult::fail("File not found at source_path");
+            if (!fi.exists() || !fi.isFile())
+                return ToolResult::fail("File not found at source_path");
             const QString id = services::FileManagerService::instance().import_file(src, screen);
-            if (id.isEmpty()) return ToolResult::fail("Import failed");
+            if (id.isEmpty())
+                return ToolResult::fail("Import failed");
             auto f = services::FileManagerService::instance().find_by_id(id);
             return ToolResult::ok("File imported", QJsonObject{
-                {"id", id}, {"original_name", f.original_name},
-                {"size", f.size}, {"mime_type", f.mime_type},
-                {"source_screen", f.source_screen},
-            });
+                                                       {"id", id},
+                                                       {"original_name", f.original_name},
+                                                       {"size", f.size},
+                                                       {"mime_type", f.mime_type},
+                                                       {"source_screen", f.source_screen},
+                                                   });
         };
         tools.push_back(std::move(t));
     }
@@ -291,21 +296,24 @@ std::vector<ToolDef> get_file_manager_tools() {
     {
         ToolDef t;
         t.name = "write_managed_text_file";
-        t.description = "Create a new managed text file with the given content (LLM-generated artifacts: reports, CSVs, code). "
-                        "Pass an optional 'extension' to suggest the mime type (e.g. 'csv', 'md', 'json', 'py'). Returns the new file id.";
+        t.description =
+            "Create a new managed text file with the given content (LLM-generated artifacts: reports, CSVs, code). "
+            "Pass an optional 'extension' to suggest the mime type (e.g. 'csv', 'md', 'json', 'py'). Returns the new "
+            "file id.";
         t.category = "file_manager";
         t.is_destructive = true;
         t.input_schema.properties = QJsonObject{
             {"name", QJsonObject{{"type", "string"}, {"description", "Display name for the file (e.g. 'report.md')"}}},
             {"content", QJsonObject{{"type", "string"}, {"description", "UTF-8 text content to write"}}},
-            {"source_screen", QJsonObject{{"type", "string"},
-                                          {"description", "Optional source screen tag (e.g. 'report_builder')"}}}};
+            {"source_screen",
+             QJsonObject{{"type", "string"}, {"description", "Optional source screen tag (e.g. 'report_builder')"}}}};
         t.input_schema.required = {"name", "content"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString name = args["name"].toString().trimmed();
             const QString content = args["content"].toString();
             const QString screen = args["source_screen"].toString().trimmed();
-            if (name.isEmpty()) return ToolResult::fail("Missing 'name'");
+            if (name.isEmpty())
+                return ToolResult::fail("Missing 'name'");
 
             auto& svc = services::FileManagerService::instance();
             // Stage the content in a temp file inside storage_dir, then import.
@@ -313,9 +321,8 @@ std::vector<ToolDef> get_file_manager_tools() {
             if (!dir.exists() && !QDir().mkpath(dir.absolutePath()))
                 return ToolResult::fail("Cannot create storage dir");
 
-            const QString tmp_path = dir.filePath(QStringLiteral(".incoming_%1_%2")
-                                                       .arg(QDateTime::currentMSecsSinceEpoch())
-                                                       .arg(name));
+            const QString tmp_path =
+                dir.filePath(QStringLiteral(".incoming_%1_%2").arg(QDateTime::currentMSecsSinceEpoch()).arg(name));
             QFile f(tmp_path);
             if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
                 return ToolResult::fail("Cannot open temp file for writing");
@@ -334,13 +341,16 @@ std::vector<ToolDef> get_file_manager_tools() {
 
             const QString id = svc.import_file(staged, screen);
             QFile::remove(staged); // import_file copies; clean up staging
-            if (id.isEmpty()) return ToolResult::fail("Import failed");
+            if (id.isEmpty())
+                return ToolResult::fail("Import failed");
             auto rec = svc.find_by_id(id);
             return ToolResult::ok("File created", QJsonObject{
-                {"id", id}, {"name", rec.original_name},
-                {"size", rec.size}, {"mime_type", rec.mime_type},
-                {"source_screen", rec.source_screen},
-            });
+                                                      {"id", id},
+                                                      {"name", rec.original_name},
+                                                      {"size", rec.size},
+                                                      {"mime_type", rec.mime_type},
+                                                      {"source_screen", rec.source_screen},
+                                                  });
         };
         tools.push_back(std::move(t));
     }
@@ -349,7 +359,8 @@ std::vector<ToolDef> get_file_manager_tools() {
     {
         ToolDef t;
         t.name = "register_external_file";
-        t.description = "Register a file already living inside the File Manager storage dir (advanced — most callers want import_file_into_manager).";
+        t.description = "Register a file already living inside the File Manager storage dir (advanced — most callers "
+                        "want import_file_into_manager).";
         t.category = "file_manager";
         t.is_destructive = true;
         t.input_schema.properties = QJsonObject{
@@ -368,7 +379,8 @@ std::vector<ToolDef> get_file_manager_tools() {
             if (sn.isEmpty() || on.isEmpty() || mt.isEmpty())
                 return ToolResult::fail("Missing required fields");
             const QString id = services::FileManagerService::instance().register_file(sn, on, sz, mt, screen);
-            if (id.isEmpty()) return ToolResult::fail("Register failed");
+            if (id.isEmpty())
+                return ToolResult::fail("Register failed");
             return ToolResult::ok("File registered", QJsonObject{{"id", id}});
         };
         tools.push_back(std::move(t));
@@ -381,26 +393,30 @@ std::vector<ToolDef> get_file_manager_tools() {
         t.description = "Copy a managed file from internal storage to an external path on disk.";
         t.category = "file_manager";
         t.is_destructive = true;
-        t.input_schema.properties = QJsonObject{
-            {"id", QJsonObject{{"type", "string"}, {"description", "Managed file id"}}},
-            {"destination_path", QJsonObject{{"type", "string"},
-                                             {"description", "Absolute output path. Parent must exist."}}}};
+        t.input_schema.properties =
+            QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Managed file id"}}},
+                        {"destination_path",
+                         QJsonObject{{"type", "string"}, {"description", "Absolute output path. Parent must exist."}}}};
         t.input_schema.required = {"id", "destination_path"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString().trimmed();
             const QString dest = args["destination_path"].toString().trimmed();
-            if (id.isEmpty() || dest.isEmpty()) return ToolResult::fail("Missing 'id' or 'destination_path'");
+            if (id.isEmpty() || dest.isEmpty())
+                return ToolResult::fail("Missing 'id' or 'destination_path'");
 
             auto& svc = services::FileManagerService::instance();
             auto f = svc.find_by_id(id);
-            if (f.id.isEmpty()) return ToolResult::fail("File not found: " + id);
+            if (f.id.isEmpty())
+                return ToolResult::fail("File not found: " + id);
             const QString src = svc.full_path(f.name);
             QFile::remove(dest);
-            if (!QFile::copy(src, dest)) return ToolResult::fail("Copy failed");
+            if (!QFile::copy(src, dest))
+                return ToolResult::fail("Copy failed");
             return ToolResult::ok("File downloaded", QJsonObject{
-                {"id", id}, {"destination_path", dest},
-                {"size", f.size},
-            });
+                                                         {"id", id},
+                                                         {"destination_path", dest},
+                                                         {"size", f.size},
+                                                     });
         };
         tools.push_back(std::move(t));
     }
@@ -412,29 +428,33 @@ std::vector<ToolDef> get_file_manager_tools() {
         t.description = "Delete multiple managed files in one call. Returns counts of deleted and failed ids.";
         t.category = "file_manager";
         t.is_destructive = true;
-        t.input_schema.properties = QJsonObject{
-            {"ids", QJsonObject{{"type", "array"},
-                                {"items", QJsonObject{{"type", "string"}}},
-                                {"description", "Array of managed file ids to delete"}}}};
+        t.input_schema.properties =
+            QJsonObject{{"ids", QJsonObject{{"type", "array"},
+                                            {"items", QJsonObject{{"type", "string"}}},
+                                            {"description", "Array of managed file ids to delete"}}}};
         t.input_schema.required = {"ids"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QJsonArray ids = args["ids"].toArray();
-            if (ids.isEmpty()) return ToolResult::fail("'ids' is empty");
+            if (ids.isEmpty())
+                return ToolResult::fail("'ids' is empty");
             auto& svc = services::FileManagerService::instance();
             QJsonArray deleted, failed;
             for (const auto& v : ids) {
                 const QString id = v.toString().trimmed();
-                if (id.isEmpty()) continue;
-                if (svc.remove_file(id)) deleted.append(id);
-                else failed.append(id);
+                if (id.isEmpty())
+                    continue;
+                if (svc.remove_file(id))
+                    deleted.append(id);
+                else
+                    failed.append(id);
             }
             return ToolResult::ok(QString("Deleted %1 of %2 files").arg(deleted.size()).arg(ids.size()),
-                                   QJsonObject{
-                                       {"deleted_count", deleted.size()},
-                                       {"failed_count", failed.size()},
-                                       {"deleted_ids", deleted},
-                                       {"failed_ids", failed},
-                                   });
+                                  QJsonObject{
+                                      {"deleted_count", deleted.size()},
+                                      {"failed_count", failed.size()},
+                                      {"deleted_ids", deleted},
+                                      {"failed_ids", failed},
+                                  });
         };
         tools.push_back(std::move(t));
     }
@@ -443,7 +463,8 @@ std::vector<ToolDef> get_file_manager_tools() {
     {
         ToolDef t;
         t.name = "get_file_manager_stats";
-        t.description = "Get File Manager runtime stats — total file count, total bytes used, 500 MB quota usage percentage, and counts grouped by mime/source_screen.";
+        t.description = "Get File Manager runtime stats — total file count, total bytes used, 500 MB quota usage "
+                        "percentage, and counts grouped by mime/source_screen.";
         t.category = "file_manager";
         t.handler = [](const QJsonObject&) -> ToolResult {
             auto& svc = services::FileManagerService::instance();
@@ -455,22 +476,24 @@ std::vector<ToolDef> get_file_manager_tools() {
                 const QJsonObject o = v.toObject();
                 total_bytes += static_cast<qint64>(o["size"].toDouble());
                 const QString mime = o["type"].toString();
-                if (!mime.isEmpty()) by_mime[mime]++;
+                if (!mime.isEmpty())
+                    by_mime[mime]++;
                 const QString s = o["sourceScreen"].toString();
-                if (!s.isEmpty()) by_screen[s]++;
+                if (!s.isEmpty())
+                    by_screen[s]++;
             }
             constexpr qint64 kQuotaBytes = 500LL * 1024 * 1024;
             QJsonObject mime_obj;
-            for (auto it = by_mime.constBegin(); it != by_mime.constEnd(); ++it) mime_obj[it.key()] = it.value();
+            for (auto it = by_mime.constBegin(); it != by_mime.constEnd(); ++it)
+                mime_obj[it.key()] = it.value();
             QJsonObject screen_obj;
-            for (auto it = by_screen.constBegin(); it != by_screen.constEnd(); ++it) screen_obj[it.key()] = it.value();
+            for (auto it = by_screen.constBegin(); it != by_screen.constEnd(); ++it)
+                screen_obj[it.key()] = it.value();
             return ToolResult::ok_data(QJsonObject{
                 {"file_count", all.size()},
                 {"total_bytes", total_bytes},
                 {"quota_bytes", static_cast<qint64>(kQuotaBytes)},
-                {"quota_used_pct", kQuotaBytes > 0
-                                       ? (double)total_bytes / (double)kQuotaBytes * 100.0
-                                       : 0.0},
+                {"quota_used_pct", kQuotaBytes > 0 ? (double)total_bytes / (double)kQuotaBytes * 100.0 : 0.0},
                 {"by_mime", mime_obj},
                 {"by_source_screen", screen_obj},
             });
@@ -482,21 +505,25 @@ std::vector<ToolDef> get_file_manager_tools() {
     {
         ToolDef t;
         t.name = "get_managed_file_path";
-        t.description = "Get the full disk path for a managed file id. Useful for tools (e.g. Python scripts) that need to read raw bytes.";
+        t.description = "Get the full disk path for a managed file id. Useful for tools (e.g. Python scripts) that "
+                        "need to read raw bytes.";
         t.category = "file_manager";
-        t.input_schema.properties = QJsonObject{
-            {"id", QJsonObject{{"type", "string"}, {"description", "Managed file id"}}}};
+        t.input_schema.properties =
+            QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Managed file id"}}}};
         t.input_schema.required = {"id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString().trimmed();
-            if (id.isEmpty()) return ToolResult::fail("Missing 'id'");
+            if (id.isEmpty())
+                return ToolResult::fail("Missing 'id'");
             auto& svc = services::FileManagerService::instance();
             auto f = svc.find_by_id(id);
-            if (f.id.isEmpty()) return ToolResult::fail("File not found: " + id);
+            if (f.id.isEmpty())
+                return ToolResult::fail("File not found: " + id);
             const QString full = svc.full_path(f.name);
             QFileInfo fi(full);
             return ToolResult::ok_data(QJsonObject{
-                {"id", id}, {"full_path", full},
+                {"id", id},
+                {"full_path", full},
                 {"exists_on_disk", fi.exists()},
             });
         };

@@ -17,7 +17,7 @@ namespace fincept::core::market {
 // matching the existing DataStreamManager token-expiry convention.
 inline bool nse_fo_market_open() {
     const QDateTime ist = QDateTime::currentDateTimeUtc().addSecs((5 * 3600) + (30 * 60));
-    const int dow = ist.date().dayOfWeek();  // 1=Mon … 7=Sun
+    const int dow = ist.date().dayOfWeek(); // 1=Mon … 7=Sun
     if (dow == 6 || dow == 7)
         return false;
     const QTime t = ist.time();

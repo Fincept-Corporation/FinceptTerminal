@@ -21,12 +21,9 @@ PendingOrdersBadge::PendingOrdersBadge(QWidget* parent) : QLabel(parent) {
                       .arg(ui::colors::AMBER()));
 
     auto& ac = ActionCenter::instance();
-    connect(&ac, &ActionCenter::pending_order_created, this,
-            [this](const PendingOrder&) { refresh_count(); });
-    connect(&ac, &ActionCenter::order_approved, this,
-            [this](const QString&, const QString&) { refresh_count(); });
-    connect(&ac, &ActionCenter::order_rejected, this,
-            [this](const QString&, const QString&) { refresh_count(); });
+    connect(&ac, &ActionCenter::pending_order_created, this, [this](const PendingOrder&) { refresh_count(); });
+    connect(&ac, &ActionCenter::order_approved, this, [this](const QString&, const QString&) { refresh_count(); });
+    connect(&ac, &ActionCenter::order_rejected, this, [this](const QString&, const QString&) { refresh_count(); });
     connect(&ac, &ActionCenter::stats_updated, this, [this](const QString&) { refresh_count(); });
 
     refresh_count();

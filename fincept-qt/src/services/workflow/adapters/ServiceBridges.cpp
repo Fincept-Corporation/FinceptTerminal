@@ -22,14 +22,14 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QPageSize>
-#include <QPainter>
-#include <QPrinter>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPageSize>
+#include <QPainter>
 #include <QPointer>
+#include <QPrinter>
 #include <QRegularExpression>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -179,9 +179,10 @@ void wire_trading_bridges(NodeRegistry& registry) {
             QString validity = params.value("validity").toString("DAY");
             bool paper = (mode == "paper");
 
-            AuditLogger::instance().log(AuditAction::OrderPlaced, {}, {}, symbol,
-                                        QString("[%1] %2 %3 %4 x%5 via %6").arg(mode.toUpper(), product_str, side, symbol).arg(qty).arg(broker),
-                                        params, paper);
+            AuditLogger::instance().log(
+                AuditAction::OrderPlaced, {}, {}, symbol,
+                QString("[%1] %2 %3 %4 x%5 via %6").arg(mode.toUpper(), product_str, side, symbol).arg(qty).arg(broker),
+                params, paper);
 
             if (paper) {
                 try {
@@ -208,97 +209,106 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            (void)QtConcurrent::run([cb, symbol, exchange, side, product_str, order_type_str, qty, price, validity, broker]() {
-                QString account_id = find_account_for_broker(broker);
-                if (account_id.isEmpty()) {
-                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
-                    return;
-                }
+            (void)QtConcurrent::run(
+                [cb, symbol, exchange, side, product_str, order_type_str, qty, price, validity, broker]() {
+                    QString account_id = find_account_for_broker(broker);
+                    if (account_id.isEmpty()) {
+                        cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                        return;
+                    }
 
-                UnifiedOrder order;
-                order.symbol = symbol;
-                order.exchange = exchange;
-                order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
-                if (order_type_str == "limit") order.order_type = OrderType::Limit;
-                else if (order_type_str == "stop") order.order_type = OrderType::StopLoss;
-                else if (order_type_str == "stop_limit") order.order_type = OrderType::StopLossLimit;
-                else order.order_type = OrderType::Market;
-                order.quantity = qty;
-                order.price = price;
-                order.validity = validity;
-                if (product_str == "intraday") order.product_type = ProductType::Intraday;
-                else if (product_str == "margin") order.product_type = ProductType::Margin;
-                else if (product_str == "mtf") order.product_type = ProductType::MTF;
-                else order.product_type = ProductType::Delivery;
+                    UnifiedOrder order;
+                    order.symbol = symbol;
+                    order.exchange = exchange;
+                    order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
+                    if (order_type_str == "limit")
+                        order.order_type = OrderType::Limit;
+                    else if (order_type_str == "stop")
+                        order.order_type = OrderType::StopLoss;
+                    else if (order_type_str == "stop_limit")
+                        order.order_type = OrderType::StopLossLimit;
+                    else
+                        order.order_type = OrderType::Market;
+                    order.quantity = qty;
+                    order.price = price;
+                    order.validity = validity;
+                    if (product_str == "intraday")
+                        order.product_type = ProductType::Intraday;
+                    else if (product_str == "margin")
+                        order.product_type = ProductType::Margin;
+                    else if (product_str == "mtf")
+                        order.product_type = ProductType::MTF;
+                    else
+                        order.product_type = ProductType::Delivery;
 
-                if (gate_or_queue(account_id, order, cb))
-                    return;
+                    if (gate_or_queue(account_id, order, cb))
+                        return;
 
-                auto response = UnifiedTrading::instance().place_order(account_id, order);
+                    auto response = UnifiedTrading::instance().place_order(account_id, order);
 
-                if (!response.success) {
-                    QString friendly = response.message;
-                    if (friendly.contains("Margin Shortfall", Qt::CaseInsensitive))
-                        friendly += "\n→ Insufficient margin. Add funds or reduce order size.";
-                    else if (friendly.contains("No Holdings uploaded", Qt::CaseInsensitive))
-                        friendly += "\n→ Authorize TPIN via your broker app, then retry.";
-                    cb(false, {}, friendly);
-                    return;
-                }
+                    if (!response.success) {
+                        QString friendly = response.message;
+                        if (friendly.contains("Margin Shortfall", Qt::CaseInsensitive))
+                            friendly += "\n→ Insufficient margin. Add funds or reduce order size.";
+                        else if (friendly.contains("No Holdings uploaded", Qt::CaseInsensitive))
+                            friendly += "\n→ Authorize TPIN via your broker app, then retry.";
+                        cb(false, {}, friendly);
+                        return;
+                    }
 
-                // Poll order status to catch async rejections (TPIN, risk checks)
-                QThread::msleep(2000);
+                    // Poll order status to catch async rejections (TPIN, risk checks)
+                    QThread::msleep(2000);
 
-                auto creds = AccountManager::instance().load_credentials(account_id);
-                auto* ibk = AccountManager::instance().broker_for(account_id);
-                QString final_status = "submitted";
-                QString reject_reason;
+                    auto creds = AccountManager::instance().load_credentials(account_id);
+                    auto* ibk = AccountManager::instance().broker_for(account_id);
+                    QString final_status = "submitted";
+                    QString reject_reason;
 
-                if (ibk) {
-                    auto orders_result = ibk->get_orders(creds);
-                    if (orders_result.success) {
-                        for (const auto& o : orders_result.data.value()) {
-                            if (o.order_id == response.order_id) {
-                                final_status = o.status.toLower();
-                                if (final_status == "rejected" || final_status == "cancelled") {
-                                    reject_reason = o.message;
+                    if (ibk) {
+                        auto orders_result = ibk->get_orders(creds);
+                        if (orders_result.success) {
+                            for (const auto& o : orders_result.data.value()) {
+                                if (o.order_id == response.order_id) {
+                                    final_status = o.status.toLower();
+                                    if (final_status == "rejected" || final_status == "cancelled") {
+                                        reject_reason = o.message;
+                                    }
+                                    break;
                                 }
-                                break;
                             }
                         }
                     }
-                }
 
-                QJsonObject out;
-                out["order_id"] = response.order_id;
-                out["symbol"] = symbol;
-                out["exchange"] = exchange;
-                out["side"] = side;
-                out["product_type"] = product_str;
-                out["quantity"] = qty;
-                out["broker"] = broker;
-                out["status"] = final_status;
-                out["mode"] = "live";
+                    QJsonObject out;
+                    out["order_id"] = response.order_id;
+                    out["symbol"] = symbol;
+                    out["exchange"] = exchange;
+                    out["side"] = side;
+                    out["product_type"] = product_str;
+                    out["quantity"] = qty;
+                    out["broker"] = broker;
+                    out["status"] = final_status;
+                    out["mode"] = "live";
 
-                if (final_status == "rejected" || final_status == "cancelled") {
-                    QString friendly = reject_reason;
-                    if (reject_reason.contains("Margin Shortfall", Qt::CaseInsensitive))
-                        friendly += "\n→ Insufficient margin. Add funds or reduce order size.";
-                    else if (reject_reason.contains("No Holdings uploaded", Qt::CaseInsensitive) ||
-                             reject_reason.contains("TPIN", Qt::CaseInsensitive))
-                        friendly += "\n→ Authorize TPIN in your broker app to sell from holdings.";
-                    else if (reject_reason.contains("market", Qt::CaseInsensitive) &&
-                             reject_reason.contains("close", Qt::CaseInsensitive))
-                        friendly += "\n→ Market is closed. Retry during trading hours or enable AMO.";
-                    else if (reject_reason.contains("RMS", Qt::CaseInsensitive) ||
-                             reject_reason.contains("RISK", Qt::CaseInsensitive))
-                        friendly += "\n→ Broker risk check failed. Verify your account limits.";
-                    out["error"] = friendly;
-                    cb(false, out, friendly);
-                } else {
-                    cb(true, out, {});
-                }
-            });
+                    if (final_status == "rejected" || final_status == "cancelled") {
+                        QString friendly = reject_reason;
+                        if (reject_reason.contains("Margin Shortfall", Qt::CaseInsensitive))
+                            friendly += "\n→ Insufficient margin. Add funds or reduce order size.";
+                        else if (reject_reason.contains("No Holdings uploaded", Qt::CaseInsensitive) ||
+                                 reject_reason.contains("TPIN", Qt::CaseInsensitive))
+                            friendly += "\n→ Authorize TPIN in your broker app to sell from holdings.";
+                        else if (reject_reason.contains("market", Qt::CaseInsensitive) &&
+                                 reject_reason.contains("close", Qt::CaseInsensitive))
+                            friendly += "\n→ Market is closed. Retry during trading hours or enable AMO.";
+                        else if (reject_reason.contains("RMS", Qt::CaseInsensitive) ||
+                                 reject_reason.contains("RISK", Qt::CaseInsensitive))
+                            friendly += "\n→ Broker risk check failed. Verify your account limits.";
+                        out["error"] = friendly;
+                        cb(false, out, friendly);
+                    } else {
+                        cb(true, out, {});
+                    }
+                });
         };
     }
 
@@ -370,8 +380,10 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 out["order_id"] = order_id;
                 out["status"] = "modified";
                 out["mode"] = "paper";
-                if (new_qty > 0) out["new_quantity"] = new_qty;
-                if (new_price > 0) out["new_price"] = new_price;
+                if (new_qty > 0)
+                    out["new_quantity"] = new_qty;
+                if (new_price > 0)
+                    out["new_price"] = new_price;
                 cb(true, out, {});
                 return;
             }
@@ -384,8 +396,10 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 }
 
                 QJsonObject mods;
-                if (new_qty > 0) mods["quantity"] = new_qty;
-                if (new_price > 0) mods["price"] = new_price;
+                if (new_qty > 0)
+                    mods["quantity"] = new_qty;
+                if (new_price > 0)
+                    mods["price"] = new_price;
 
                 auto response = UnifiedTrading::instance().modify_order(account_id, order_id, mods);
                 QJsonObject out;
@@ -422,8 +436,10 @@ void wire_trading_bridges(NodeRegistry& registry) {
                     obj["filled_qty"] = o.filled_qty;
                     obj["status"] = o.status;
                     obj["mode"] = "paper";
-                    if (o.price) obj["price"] = *o.price;
-                    if (o.avg_price) obj["avg_price"] = *o.avg_price;
+                    if (o.price)
+                        obj["price"] = *o.price;
+                    if (o.avg_price)
+                        obj["avg_price"] = *o.avg_price;
                     arr.append(obj);
                 }
                 cb(true, arr, {});
@@ -677,60 +693,64 @@ void wire_trading_bridges(NodeRegistry& registry) {
             }
 
             (void)QtConcurrent::run([cb, symbol, exchange, product_str, qty, broker]() {
-                        QString account_id = find_account_for_broker(broker);
-                        if (account_id.isEmpty()) {
-                            cb(false, {}, QString("No account configured for broker: %1").arg(broker));
-                            return;
-                        }
+                QString account_id = find_account_for_broker(broker);
+                if (account_id.isEmpty()) {
+                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                    return;
+                }
 
-                        auto creds = AccountManager::instance().load_credentials(account_id);
-                        auto* ibk = AccountManager::instance().broker_for(account_id);
-                        if (!ibk) {
-                            cb(false, {}, "Broker not found in registry");
-                            return;
-                        }
+                auto creds = AccountManager::instance().load_credentials(account_id);
+                auto* ibk = AccountManager::instance().broker_for(account_id);
+                if (!ibk) {
+                    cb(false, {}, "Broker not found in registry");
+                    return;
+                }
 
-                        // Get positions to find current quantity if qty==0
-                        double close_qty = qty;
-                        if (close_qty <= 0) {
-                            auto pos_result = ibk->get_positions(creds);
-                            if (pos_result.success) {
-                                for (const auto& p : pos_result.data.value()) {
-                                    if (p.symbol.contains(symbol, Qt::CaseInsensitive) && p.quantity > 0) {
-                                        close_qty = p.quantity;
-                                        break;
-                                    }
-                                }
+                // Get positions to find current quantity if qty==0
+                double close_qty = qty;
+                if (close_qty <= 0) {
+                    auto pos_result = ibk->get_positions(creds);
+                    if (pos_result.success) {
+                        for (const auto& p : pos_result.data.value()) {
+                            if (p.symbol.contains(symbol, Qt::CaseInsensitive) && p.quantity > 0) {
+                                close_qty = p.quantity;
+                                break;
                             }
                         }
-                        if (close_qty <= 0) {
-                            cb(false, {}, QString("No open position found for %1").arg(symbol));
-                            return;
-                        }
+                    }
+                }
+                if (close_qty <= 0) {
+                    cb(false, {}, QString("No open position found for %1").arg(symbol));
+                    return;
+                }
 
-                        UnifiedOrder order;
-                        order.symbol = symbol;
-                        order.exchange = exchange;
-                        order.side = OrderSide::Sell;
-                        order.order_type = OrderType::Market;
-                        order.quantity = close_qty;
-                        order.validity = "DAY";
-                        if (product_str == "intraday") order.product_type = ProductType::Intraday;
-                        else if (product_str == "margin") order.product_type = ProductType::Margin;
-                        else order.product_type = ProductType::Delivery;
+                UnifiedOrder order;
+                order.symbol = symbol;
+                order.exchange = exchange;
+                order.side = OrderSide::Sell;
+                order.order_type = OrderType::Market;
+                order.quantity = close_qty;
+                order.validity = "DAY";
+                if (product_str == "intraday")
+                    order.product_type = ProductType::Intraday;
+                else if (product_str == "margin")
+                    order.product_type = ProductType::Margin;
+                else
+                    order.product_type = ProductType::Delivery;
 
-                        // Risk-reducing op — always immediate, never gated for
-                        // approval (see ActionCenter::immediate_ops).
-                        auto response = UnifiedTrading::instance().place_order(account_id, order);
-                        QJsonObject out;
-                        out["symbol"] = symbol;
-                        out["quantity_closed"] = close_qty;
-                        out["order_id"] = response.order_id;
-                        out["broker"] = broker;
-                        out["status"] = response.success ? "closed" : "failed";
-                        if (!response.success) out["error"] = response.message;
-                        cb(response.success, out, response.success ? QString{} : response.message);
-                    });
+                // Risk-reducing op — always immediate, never gated for
+                // approval (see ActionCenter::immediate_ops).
+                auto response = UnifiedTrading::instance().place_order(account_id, order);
+                QJsonObject out;
+                out["symbol"] = symbol;
+                out["quantity_closed"] = close_qty;
+                out["order_id"] = response.order_id;
+                out["broker"] = broker;
+                out["status"] = response.success ? "closed" : "failed";
+                if (!response.success)
+                    out["error"] = response.message;
+                cb(response.success, out, response.success ? QString{} : response.message);
+            });
         };
     }
 
@@ -748,9 +768,18 @@ void wire_trading_bridges(NodeRegistry& registry) {
             double sl = params.value("stop_loss").toDouble(0);
             double tp = params.value("take_profit").toDouble(0);
 
-            if (symbol.isEmpty()) { cb(false, {}, "Symbol is required"); return; }
-            if (sl <= 0) { cb(false, {}, "Stop loss is required for bracket orders"); return; }
-            if (tp <= 0) { cb(false, {}, "Take profit is required for bracket orders"); return; }
+            if (symbol.isEmpty()) {
+                cb(false, {}, "Symbol is required");
+                return;
+            }
+            if (sl <= 0) {
+                cb(false, {}, "Stop loss is required for bracket orders");
+                return;
+            }
+            if (tp <= 0) {
+                cb(false, {}, "Take profit is required for bracket orders");
+                return;
+            }
 
             if (mode == "paper") {
                 QJsonObject out;
@@ -799,7 +828,8 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 out["take_profit"] = tp;
                 out["broker"] = broker;
                 out["status"] = response.success ? "submitted" : "failed";
-                if (!response.success) out["error"] = response.message;
+                if (!response.success)
+                    out["error"] = response.message;
                 cb(response.success, out, response.success ? QString{} : response.message);
             });
         };
@@ -819,7 +849,10 @@ void wire_trading_bridges(NodeRegistry& registry) {
             double trail_value = params.value("trail_value").toDouble(5.0);
             double qty = params.value("quantity").toDouble(0);
 
-            if (symbol.isEmpty()) { cb(false, {}, "Symbol is required"); return; }
+            if (symbol.isEmpty()) {
+                cb(false, {}, "Symbol is required");
+                return;
+            }
 
             if (mode == "paper") {
                 QJsonObject out;
@@ -848,9 +881,12 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 order.quantity = qty;
                 order.stop_price = trail_value;
                 order.validity = "DAY";
-                if (product_str == "intraday") order.product_type = ProductType::Intraday;
-                else if (product_str == "margin") order.product_type = ProductType::Margin;
-                else order.product_type = ProductType::Delivery;
+                if (product_str == "intraday")
+                    order.product_type = ProductType::Intraday;
+                else if (product_str == "margin")
+                    order.product_type = ProductType::Margin;
+                else
+                    order.product_type = ProductType::Delivery;
 
                 // Protective stop — risk-reducing, always immediate, never gated
                 // for approval (see ActionCenter::immediate_ops).
@@ -862,7 +898,8 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 out["trail_value"] = trail_value;
                 out["broker"] = broker;
                 out["status"] = response.success ? "active" : "failed";
-                if (!response.success) out["error"] = response.message;
+                if (!response.success)
+                    out["error"] = response.message;
                 cb(response.success, out, response.success ? QString{} : response.message);
             });
         };
@@ -883,8 +920,12 @@ void wire_trading_bridges(NodeRegistry& registry) {
             int tranches = static_cast<int>(params.value("tranches").toDouble(4));
             int interval_sec = static_cast<int>(params.value("interval_sec").toDouble(60));
 
-            if (symbol.isEmpty()) { cb(false, {}, "Symbol is required"); return; }
-            if (tranches < 1) tranches = 1;
+            if (symbol.isEmpty()) {
+                cb(false, {}, "Symbol is required");
+                return;
+            }
+            if (tranches < 1)
+                tranches = 1;
 
             double per_tranche = std::floor(total_qty / tranches);
             double remainder = total_qty - (per_tranche * tranches);
@@ -912,69 +953,78 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            (void)QtConcurrent::run([cb, symbol, exchange, product_str, side, per_tranche, remainder, tranches, interval_sec, broker]() {
-                QString account_id = find_account_for_broker(broker);
-                if (account_id.isEmpty()) {
-                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
-                    return;
-                }
-
-                // Semi-Auto gate (headless entry): scale-in adds to a position,
-                // so queue the full size for one-shot approval rather than placing
-                // individual tranches. Auto mode falls through to the loop below.
-                {
-                    UnifiedOrder gate_order;
-                    gate_order.symbol = symbol;
-                    gate_order.exchange = exchange;
-                    gate_order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
-                    gate_order.order_type = OrderType::Market;
-                    gate_order.quantity = per_tranche * tranches + remainder;
-                    gate_order.validity = "DAY";
-                    if (product_str == "intraday") gate_order.product_type = ProductType::Intraday;
-                    else if (product_str == "margin") gate_order.product_type = ProductType::Margin;
-                    else gate_order.product_type = ProductType::Delivery;
-                    if (gate_or_queue(account_id, gate_order, cb))
+            (void)QtConcurrent::run(
+                [cb, symbol, exchange, product_str, side, per_tranche, remainder, tranches, interval_sec, broker]() {
+                    QString account_id = find_account_for_broker(broker);
+                    if (account_id.isEmpty()) {
+                        cb(false, {}, QString("No account configured for broker: %1").arg(broker));
                         return;
-                }
+                    }
 
-                QJsonArray results;
-                for (int i = 0; i < tranches; ++i) {
-                    if (i > 0)
-                        QThread::sleep(interval_sec);
+                    // Semi-Auto gate (headless entry): scale-in adds to a position,
+                    // so queue the full size for one-shot approval rather than placing
+                    // individual tranches. Auto mode falls through to the loop below.
+                    {
+                        UnifiedOrder gate_order;
+                        gate_order.symbol = symbol;
+                        gate_order.exchange = exchange;
+                        gate_order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
+                        gate_order.order_type = OrderType::Market;
+                        gate_order.quantity = per_tranche * tranches + remainder;
+                        gate_order.validity = "DAY";
+                        if (product_str == "intraday")
+                            gate_order.product_type = ProductType::Intraday;
+                        else if (product_str == "margin")
+                            gate_order.product_type = ProductType::Margin;
+                        else
+                            gate_order.product_type = ProductType::Delivery;
+                        if (gate_or_queue(account_id, gate_order, cb))
+                            return;
+                    }
 
-                    double q = per_tranche + (i == tranches - 1 ? remainder : 0);
-                    UnifiedOrder order;
-                    order.symbol = symbol;
-                    order.exchange = exchange;
-                    order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
-                    order.order_type = OrderType::Market;
-                    order.quantity = q;
-                    order.validity = "DAY";
-                    if (product_str == "intraday") order.product_type = ProductType::Intraday;
-                    else if (product_str == "margin") order.product_type = ProductType::Margin;
-                    else order.product_type = ProductType::Delivery;
+                    QJsonArray results;
+                    for (int i = 0; i < tranches; ++i) {
+                        if (i > 0)
+                            QThread::sleep(interval_sec);
 
-                    auto response = UnifiedTrading::instance().place_order(account_id, order);
-                    QJsonObject r;
-                    r["tranche"] = i + 1;
-                    r["quantity"] = q;
-                    r["order_id"] = response.order_id;
-                    r["status"] = response.success ? "filled" : "failed";
-                    if (!response.success) r["error"] = response.message;
-                    results.append(r);
+                        double q = per_tranche + (i == tranches - 1 ? remainder : 0);
+                        UnifiedOrder order;
+                        order.symbol = symbol;
+                        order.exchange = exchange;
+                        order.side = (side == "sell") ? OrderSide::Sell : OrderSide::Buy;
+                        order.order_type = OrderType::Market;
+                        order.quantity = q;
+                        order.validity = "DAY";
+                        if (product_str == "intraday")
+                            order.product_type = ProductType::Intraday;
+                        else if (product_str == "margin")
+                            order.product_type = ProductType::Margin;
+                        else
+                            order.product_type = ProductType::Delivery;
 
-                    if (!response.success) break;
-                }
+                        auto response = UnifiedTrading::instance().place_order(account_id, order);
+                        QJsonObject r;
+                        r["tranche"] = i + 1;
+                        r["quantity"] = q;
+                        r["order_id"] = response.order_id;
+                        r["status"] = response.success ? "filled" : "failed";
+                        if (!response.success)
+                            r["error"] = response.message;
+                        results.append(r);
 
-                QJsonObject out;
-                out["symbol"] = symbol;
-                out["side"] = side;
-                out["total_quantity"] = per_tranche * tranches + remainder;
-                out["tranches_executed"] = results.size();
-                out["orders"] = results;
-                out["broker"] = broker;
-                cb(true, out, {});
-            });
+                        if (!response.success)
+                            break;
+                    }
+
+                    QJsonObject out;
+                    out["symbol"] = symbol;
+                    out["side"] = side;
+                    out["total_quantity"] = per_tranche * tranches + remainder;
+                    out["tranches_executed"] = results.size();
+                    out["orders"] = results;
+                    out["broker"] = broker;
+                    cb(true, out, {});
+                });
         };
     }
 
@@ -1108,41 +1158,41 @@ void wire_trading_bridges(NodeRegistry& registry) {
                 return;
             }
 
-            (void)QtConcurrent::run([cb, account_id_param, broker, symbol, exchange, position_size, order_type_str,
-                                     price, product]() {
-                QString account_id = resolve_account_id(account_id_param, broker);
-                if (account_id.isEmpty()) {
-                    cb(false, {}, QString("No account configured for broker: %1").arg(broker));
-                    return;
-                }
+            (void)QtConcurrent::run(
+                [cb, account_id_param, broker, symbol, exchange, position_size, order_type_str, price, product]() {
+                    QString account_id = resolve_account_id(account_id_param, broker);
+                    if (account_id.isEmpty()) {
+                        cb(false, {}, QString("No account configured for broker: %1").arg(broker));
+                        return;
+                    }
 
-                SmartOrder so;
-                so.symbol = symbol;
-                so.exchange = exchange;
-                so.position_size = position_size;
-                so.action = position_size >= 0 ? OrderSide::Buy : OrderSide::Sell;
-                so.order_type = (order_type_str == "limit") ? OrderType::Limit : OrderType::Market;
-                so.price = price;
-                so.product_type = parse_product(product);
+                    SmartOrder so;
+                    so.symbol = symbol;
+                    so.exchange = exchange;
+                    so.position_size = position_size;
+                    so.action = position_size >= 0 ? OrderSide::Buy : OrderSide::Sell;
+                    so.order_type = (order_type_str == "limit") ? OrderType::Limit : OrderType::Market;
+                    so.price = price;
+                    so.product_type = parse_product(product);
 
-                auto resp = UnifiedTrading::instance().place_smart_order(account_id, so);
-                if (!resp.success || !resp.data.has_value()) {
-                    cb(false, {}, resp.error.isEmpty() ? "Smart order failed" : resp.error);
-                    return;
-                }
+                    auto resp = UnifiedTrading::instance().place_smart_order(account_id, so);
+                    if (!resp.success || !resp.data.has_value()) {
+                        cb(false, {}, resp.error.isEmpty() ? "Smart order failed" : resp.error);
+                        return;
+                    }
 
-                const SmartOrderResult& r = resp.data.value();
-                QJsonObject out;
-                out["symbol"] = symbol;
-                out["exchange"] = exchange;
-                out["order_id"] = r.order_id;
-                out["action_taken"] = r.action_taken;
-                out["executed_action"] = QString(order_side_str(r.executed_action));
-                out["executed_quantity"] = r.executed_quantity;
-                out["message"] = r.message;
-                out["broker"] = broker;
-                cb(true, out, {});
-            });
+                    const SmartOrderResult& r = resp.data.value();
+                    QJsonObject out;
+                    out["symbol"] = symbol;
+                    out["exchange"] = exchange;
+                    out["order_id"] = r.order_id;
+                    out["action_taken"] = r.action_taken;
+                    out["executed_action"] = QString(order_side_str(r.executed_action));
+                    out["executed_quantity"] = r.executed_quantity;
+                    out["message"] = r.message;
+                    out["broker"] = broker;
+                    cb(true, out, {});
+                });
         };
     }
 
@@ -1938,13 +1988,12 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 if (reply->error() != QNetworkReply::NoError) {
                     if (state->retries_left > 0) {
                         state->retries_left--;
-                        QTimer::singleShot(1000 * (3 - state->retries_left), [state]() {
-                            execute_request(state);
-                        });
+                        QTimer::singleShot(1000 * (3 - state->retries_left), [state]() { execute_request(state); });
                         return;
                     }
-                    state->cb(false, {},
-                              QString("HTTP %1 failed (%2): %3").arg(state->method).arg(status).arg(reply->errorString()));
+                    state->cb(
+                        false, {},
+                        QString("HTTP %1 failed (%2): %3").arg(state->method).arg(status).arg(reply->errorString()));
                     return;
                 }
 
@@ -2120,8 +2169,8 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 for (auto it = obj.begin(); it != obj.end(); ++it) {
                     if (y + line_h > page_h - margin)
                         new_page();
-                    QString val = it.value().isString() ? it.value().toString()
-                                                        : QString::number(it.value().toDouble(), 'f', 4);
+                    QString val =
+                        it.value().isString() ? it.value().toString() : QString::number(it.value().toDouble(), 'f', 4);
                     painter.drawText(margin, y, it.key() + ": " + val);
                     y += line_h;
                 }
@@ -2163,9 +2212,9 @@ static void wire_utility_bridges(NodeRegistry& registry) {
             }
 
             QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-            QString data_json = QString::fromUtf8(
-                data.isObject() ? QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)
-                                : QJsonDocument(data.toArray()).toJson(QJsonDocument::Compact));
+            QString data_json =
+                QString::fromUtf8(data.isObject() ? QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)
+                                                  : QJsonDocument(data.toArray()).toJson(QJsonDocument::Compact));
 
             QString code = QString(R"PY(
 import json, os, sys
@@ -2276,12 +2325,12 @@ plt.close()
 
 print(json.dumps({"path": path, "chart_type": chart_type, "size": os.path.getsize(path)}))
 )PY")
-                                        .arg(data_json.replace("\\", "\\\\").replace("'", "\\'"))
-                                        .arg(chart_type)
-                                        .arg(title.replace("'", "\\'"))
-                                        .arg(width)
-                                        .arg(height)
-                                        .arg(path.replace("\\", "/").replace("'", "\\'"));
+                               .arg(data_json.replace("\\", "\\\\").replace("'", "\\'"))
+                               .arg(chart_type)
+                               .arg(title.replace("'", "\\'"))
+                               .arg(width)
+                               .arg(height)
+                               .arg(path.replace("\\", "/").replace("'", "\\'"));
 
             PythonRunner::instance().run_code(code, [cb, path, chart_type](const PythonResult& res) {
                 if (!res.success) {

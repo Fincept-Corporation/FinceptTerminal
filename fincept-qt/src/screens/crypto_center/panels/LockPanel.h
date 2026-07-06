@@ -85,15 +85,15 @@ class LockPanel : public QWidget {
     Duration current_duration() const;
 
     // UI
-    QLabel* head_title_ = nullptr;       // "STAKE / LOCK"
-    QLabel* head_subtitle_ = nullptr;    // "veFNCPT — locked $FNCPT earns USDC yield"
-    QLabel* amount_caption_ = nullptr;   // "AMOUNT"
-    QLabel* token_caption_ = nullptr;    // "TOKEN"
-    QLabel* token_chip_ = nullptr;       // "$FNCPT"
-    QLabel* duration_caption_ = nullptr; // "DURATION"
-    QLabel* weight_caption_ = nullptr;   // "WEIGHT"
-    QLabel* est_yield_caption_ = nullptr;// "EST. YIELD"
-    QLabel* tier_caption_ = nullptr;     // "TIER"
+    QLabel* head_title_ = nullptr;        // "STAKE / LOCK"
+    QLabel* head_subtitle_ = nullptr;     // "veFNCPT — locked $FNCPT earns USDC yield"
+    QLabel* amount_caption_ = nullptr;    // "AMOUNT"
+    QLabel* token_caption_ = nullptr;     // "TOKEN"
+    QLabel* token_chip_ = nullptr;        // "$FNCPT"
+    QLabel* duration_caption_ = nullptr;  // "DURATION"
+    QLabel* weight_caption_ = nullptr;    // "WEIGHT"
+    QLabel* est_yield_caption_ = nullptr; // "EST. YIELD"
+    QLabel* tier_caption_ = nullptr;      // "TIER"
     QLineEdit* amount_input_ = nullptr;
     QLabel* available_label_ = nullptr;
     QPushButton* max_button_ = nullptr;
@@ -119,12 +119,11 @@ class LockPanel : public QWidget {
     QString current_vefncpt_topic_;
     QString current_tier_topic_;
     double fncpt_balance_ui_ = 0.0;
-    int    fncpt_decimals_ = 6;
+    int fncpt_decimals_ = 6;
     double fncpt_usd_price_ = 0.0;
     double weekly_revenue_usd_ = 0.0;
     quint64 current_user_weight_raw_ = 0;
-    fincept::wallet::TierStatus::Tier current_tier_ =
-        fincept::wallet::TierStatus::Tier::Free;
+    fincept::wallet::TierStatus::Tier current_tier_ = fincept::wallet::TierStatus::Tier::Free;
 
     bool busy_ = false;
 };

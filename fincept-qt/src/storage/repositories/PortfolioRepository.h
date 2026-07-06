@@ -16,8 +16,7 @@ class PortfolioRepository : public BaseRepository<portfolio::Portfolio> {
     /// quotes can be sourced from the broker instead of yfinance. Empty for
     /// manually-created / JSON-imported portfolios. See migration v022.
     Result<QString> create_portfolio(const QString& name, const QString& owner, const QString& currency,
-                                     const QString& description = {},
-                                     const QString& broker_account_id = {});
+                                     const QString& description = {}, const QString& broker_account_id = {});
     Result<void> update_portfolio(const QString& id, const QString& name, const QString& owner, const QString& currency,
                                   const QString& description = {});
     Result<void> delete_portfolio(const QString& id);
@@ -29,8 +28,8 @@ class PortfolioRepository : public BaseRepository<portfolio::Portfolio> {
     /// canonical `symbol` arg stays in yfinance-format ("RELIANCE.NS")
     /// regardless — every downstream consumer treats it as such.
     Result<qint64> add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
-                             const QString& date = {}, const QString& sector = {},
-                             const QString& broker_symbol = {}, const QString& exchange = {});
+                             const QString& date = {}, const QString& sector = {}, const QString& broker_symbol = {},
+                             const QString& exchange = {});
     Result<void> update_asset(const QString& portfolio_id, const QString& symbol, double qty, double avg_price);
     Result<void> set_asset_sector(const QString& portfolio_id, const QString& symbol, const QString& sector);
     Result<void> remove_asset(const QString& portfolio_id, const QString& symbol);

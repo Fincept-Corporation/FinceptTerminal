@@ -64,11 +64,9 @@ static const QStringList kCategoryLabels = {
 
 } // anonymous namespace
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor & lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
-
 
 DataSourcesScreen::DataSourcesScreen(QWidget* parent) : QWidget(parent) {
     register_all_connectors();
@@ -116,7 +114,6 @@ bool DataSourcesScreen::eventFilter(QObject* obj, QEvent* event) {
 // setup_ui — assembles the complete screen
 // ─────────────────────────────────────────────────────────────────────────────
 
-
 void DataSourcesScreen::refresh_connections() {
     const auto result = DataSourceRepository::instance().list_all();
     connections_cache_ = result.is_ok() ? result.value() : QVector<DataSource>{};
@@ -143,57 +140,93 @@ void DataSourcesScreen::changeEvent(QEvent* event) {
 
 void DataSourcesScreen::retranslateUi() {
     // Header
-    if (header_title_)    header_title_->setText(tr("DATA SOURCES"));
-    if (header_subtitle_) header_subtitle_->setText(tr("%1 CONNECTORS").arg(ConnectorRegistry::instance().count()));
-    if (search_edit_)     search_edit_->setPlaceholderText(tr("search connectors..."));
-    if (import_btn_)      import_btn_->setText(tr("IMPORT"));
-    if (export_btn_)      export_btn_->setText(tr("EXPORT"));
-    if (tpl_btn_)         tpl_btn_->setText(tr("TEMPLATE"));
+    if (header_title_)
+        header_title_->setText(tr("DATA SOURCES"));
+    if (header_subtitle_)
+        header_subtitle_->setText(tr("%1 CONNECTORS").arg(ConnectorRegistry::instance().count()));
+    if (search_edit_)
+        search_edit_->setPlaceholderText(tr("search connectors..."));
+    if (import_btn_)
+        import_btn_->setText(tr("IMPORT"));
+    if (export_btn_)
+        export_btn_->setText(tr("EXPORT"));
+    if (tpl_btn_)
+        tpl_btn_->setText(tr("TEMPLATE"));
 
     // Stats strip labels
-    if (universe_stat_label_)   universe_stat_label_->setText(tr("UNIVERSE"));
-    if (configured_stat_label_) configured_stat_label_->setText(tr("CONFIGURED"));
-    if (active_stat_label_)     active_stat_label_->setText(tr("ACTIVE"));
-    if (auth_stat_label_)       auth_stat_label_->setText(tr("AUTH REQ"));
+    if (universe_stat_label_)
+        universe_stat_label_->setText(tr("UNIVERSE"));
+    if (configured_stat_label_)
+        configured_stat_label_->setText(tr("CONFIGURED"));
+    if (active_stat_label_)
+        active_stat_label_->setText(tr("ACTIVE"));
+    if (auth_stat_label_)
+        auth_stat_label_->setText(tr("AUTH REQ"));
 
     // Tabs
-    if (browse_tab_) browse_tab_->setText(tr("BROWSE"));
-    if (conns_tab_)  conns_tab_->setText(tr("CONNECTIONS"));
+    if (browse_tab_)
+        browse_tab_->setText(tr("BROWSE"));
+    if (conns_tab_)
+        conns_tab_->setText(tr("CONNECTIONS"));
 
     // Sidebar
-    if (category_hdr_title_) category_hdr_title_->setText(tr("CATEGORY"));
-    if (provider_hdr_title_) provider_hdr_title_->setText(tr("TOP PROVIDERS"));
+    if (category_hdr_title_)
+        category_hdr_title_->setText(tr("CATEGORY"));
+    if (provider_hdr_title_)
+        provider_hdr_title_->setText(tr("TOP PROVIDERS"));
 
     // Connector panel + table headers
-    if (connector_panel_title_) connector_panel_title_->setText(tr("CONNECTORS"));
+    if (connector_panel_title_)
+        connector_panel_title_->setText(tr("CONNECTORS"));
     if (connector_table_)
         connector_table_->setHorizontalHeaderLabels(
             {"", tr("CONNECTOR"), tr("CATEGORY"), tr("AUTH"), tr("TYPE"), tr("ACTIVE"), tr("TOTAL")});
 
     // Inspector
-    if (inspector_hdr_title_)       inspector_hdr_title_->setText(tr("INSPECTOR"));
-    if (detail_category_label_)     detail_category_label_->setText(tr("CATEGORY"));
-    if (detail_transport_label_)    detail_transport_label_->setText(tr("TYPE"));
-    if (detail_auth_label_)         detail_auth_label_->setText(tr("AUTH"));
-    if (detail_test_label_)         detail_test_label_->setText(tr("TESTABLE"));
-    if (detail_fields_label_)       detail_fields_label_->setText(tr("FIELDS"));
-    if (detail_configured_label_)   detail_configured_label_->setText(tr("CONFIGURED"));
-    if (detail_enabled_label_)      detail_enabled_label_->setText(tr("ACTIVE"));
-    if (detail_last_status_label_)  detail_last_status_label_->setText(tr("LAST STATUS"));
-    if (config_fields_label_)       config_fields_label_->setText(tr("CONFIG FIELDS"));
-    if (detail_saved_conns_label_)  detail_saved_conns_label_->setText(tr("SAVED CONNECTIONS"));
-    if (field_table_)               field_table_->setHorizontalHeaderLabels({tr("FIELD"), tr("TYPE"), tr("REQ")});
-    if (new_connection_btn_)        new_connection_btn_->setText(tr("+ ADD CONNECTION"));
-    if (edit_connection_btn_)       edit_connection_btn_->setText(tr("EDIT"));
-    if (test_connection_btn_)       test_connection_btn_->setText(tr("TEST"));
+    if (inspector_hdr_title_)
+        inspector_hdr_title_->setText(tr("INSPECTOR"));
+    if (detail_category_label_)
+        detail_category_label_->setText(tr("CATEGORY"));
+    if (detail_transport_label_)
+        detail_transport_label_->setText(tr("TYPE"));
+    if (detail_auth_label_)
+        detail_auth_label_->setText(tr("AUTH"));
+    if (detail_test_label_)
+        detail_test_label_->setText(tr("TESTABLE"));
+    if (detail_fields_label_)
+        detail_fields_label_->setText(tr("FIELDS"));
+    if (detail_configured_label_)
+        detail_configured_label_->setText(tr("CONFIGURED"));
+    if (detail_enabled_label_)
+        detail_enabled_label_->setText(tr("ACTIVE"));
+    if (detail_last_status_label_)
+        detail_last_status_label_->setText(tr("LAST STATUS"));
+    if (config_fields_label_)
+        config_fields_label_->setText(tr("CONFIG FIELDS"));
+    if (detail_saved_conns_label_)
+        detail_saved_conns_label_->setText(tr("SAVED CONNECTIONS"));
+    if (field_table_)
+        field_table_->setHorizontalHeaderLabels({tr("FIELD"), tr("TYPE"), tr("REQ")});
+    if (new_connection_btn_)
+        new_connection_btn_->setText(tr("+ ADD CONNECTION"));
+    if (edit_connection_btn_)
+        edit_connection_btn_->setText(tr("EDIT"));
+    if (test_connection_btn_)
+        test_connection_btn_->setText(tr("TEST"));
 
     // Connections page
-    if (conns_page_title_) conns_page_title_->setText(tr("SAVED CONNECTIONS"));
-    if (conns_add_btn_)    conns_add_btn_->setText(tr("+ ADD"));
-    if (conn_search_edit_) conn_search_edit_->setPlaceholderText(tr("filter connections..."));
-    if (bulk_enable_btn_)  bulk_enable_btn_->setText(tr("ENABLE ALL"));
-    if (bulk_disable_btn_) bulk_disable_btn_->setText(tr("DISABLE ALL"));
-    if (bulk_delete_btn_)  bulk_delete_btn_->setText(tr("DELETE SEL"));
+    if (conns_page_title_)
+        conns_page_title_->setText(tr("SAVED CONNECTIONS"));
+    if (conns_add_btn_)
+        conns_add_btn_->setText(tr("+ ADD"));
+    if (conn_search_edit_)
+        conn_search_edit_->setPlaceholderText(tr("filter connections..."));
+    if (bulk_enable_btn_)
+        bulk_enable_btn_->setText(tr("ENABLE ALL"));
+    if (bulk_disable_btn_)
+        bulk_disable_btn_->setText(tr("DISABLE ALL"));
+    if (bulk_delete_btn_)
+        bulk_delete_btn_->setText(tr("DELETE SEL"));
     if (connections_table_)
         connections_table_->setHorizontalHeaderLabels(
             {"", tr("NAME"), tr("PROVIDER"), tr("CATEGORY"), tr("TYPE"), tr("STATUS"), tr("TAGS"), tr("UPDATED")});
@@ -214,8 +247,10 @@ QVariantMap DataSourcesScreen::save_state() const {
         {"connector_id", selected_connector_id_},
         {"category", static_cast<int>(active_category_)},
     };
-    if (search_edit_) state["search"] = search_edit_->text();
-    if (conn_search_edit_) state["conn_search"] = conn_search_edit_->text();
+    if (search_edit_)
+        state["search"] = search_edit_->text();
+    if (conn_search_edit_)
+        state["conn_search"] = conn_search_edit_->text();
     return state;
 }
 

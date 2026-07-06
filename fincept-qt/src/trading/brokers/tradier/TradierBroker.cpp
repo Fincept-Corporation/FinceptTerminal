@@ -3,10 +3,10 @@
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QDateTime>
-#include <QTimeZone>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QTimeZone>
 #include <QUrlQuery>
 
 #include <algorithm>
@@ -560,8 +560,8 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
                         resolution == "5m" || resolution == "15m");
 
     // Reject unsupported intraday resolutions — Tradier only offers 1min/5min/15min bars
-    if (resolution == "30" || resolution == "60" || resolution == "240" || resolution == "30m" ||
-        resolution == "60m" || resolution == "240m" || resolution == "1h" || resolution == "4h") {
+    if (resolution == "30" || resolution == "60" || resolution == "240" || resolution == "30m" || resolution == "60m" ||
+        resolution == "240m" || resolution == "1h" || resolution == "4h") {
         return {false, std::nullopt,
                 "Tradier does not support " + resolution +
                     "-minute bars; supported intraday intervals are 1min/5min/15min only",
@@ -646,8 +646,7 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
 
         // If either date is unparseable, fall back to a single request over the
         // raw range (preserves original behavior for unexpected inputs).
-        bool fits_one_window =
-            !startDate.isValid() || !endDate.isValid() || startDate.daysTo(endDate) < cap_days;
+        bool fits_one_window = !startDate.isValid() || !endDate.isValid() || startDate.daysTo(endDate) < cap_days;
 
         if (fits_one_window) {
             // Single request — identical to the original single-window path.
@@ -690,11 +689,10 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
             // shared boundary bar could appear in two requests).
             std::sort(candles.begin(), candles.end(),
                       [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
-            candles.erase(std::unique(candles.begin(), candles.end(),
-                                      [](const BrokerCandle& a, const BrokerCandle& b) {
-                                          return a.timestamp == b.timestamp;
-                                      }),
-                          candles.end());
+            candles.erase(
+                std::unique(candles.begin(), candles.end(),
+                            [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
+                candles.end());
         }
 
     } else {
@@ -732,9 +730,10 @@ ApiResponse<QVector<BrokerCandle>> TradierBroker::get_history(const BrokerCreden
             BrokerCandle c;
             // date is "YYYY-MM-DD" string — convert to epoch ms
             QDate d = QDate::fromString(o.value("date").toString(), "yyyy-MM-dd");
-            c.timestamp = d.isValid()
-                              ? static_cast<int64_t>(QDateTime(d, QTime(0, 0, 0), QTimeZone::UTC).toSecsSinceEpoch()) * 1000LL
-                              : 0LL;
+            c.timestamp =
+                d.isValid()
+                    ? static_cast<int64_t>(QDateTime(d, QTime(0, 0, 0), QTimeZone::UTC).toSecsSinceEpoch()) * 1000LL
+                    : 0LL;
             c.open = o.value("open").toDouble();
             c.high = o.value("high").toDouble();
             c.low = o.value("low").toDouble();

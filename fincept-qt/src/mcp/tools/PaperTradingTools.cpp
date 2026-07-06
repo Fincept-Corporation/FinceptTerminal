@@ -124,16 +124,25 @@ std::vector<ToolDef> get_paper_trading_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-            .string("portfolio_id", "Portfolio ID").required()
-            .string("symbol", "Trading symbol (e.g. BTC/USDT)").required().length(1, 32)
-            .string("side", "Order side").required().enums({"buy", "sell"})
-            .string("order_type", "Order type").default_str("market")
-                .enums({"market", "limit", "stop", "stop_limit"})
-            .number("quantity", "Order quantity (must be > 0)").required().min(0.0)
-            .number("price", "Limit price (required for limit/stop_limit orders)")
-            .number("stop_price", "Stop trigger price (required for stop/stop_limit)")
-            .boolean("reduce_only", "Only reduce existing position").default_bool(false)
-            .build();
+                             .string("portfolio_id", "Portfolio ID")
+                             .required()
+                             .string("symbol", "Trading symbol (e.g. BTC/USDT)")
+                             .required()
+                             .length(1, 32)
+                             .string("side", "Order side")
+                             .required()
+                             .enums({"buy", "sell"})
+                             .string("order_type", "Order type")
+                             .default_str("market")
+                             .enums({"market", "limit", "stop", "stop_limit"})
+                             .number("quantity", "Order quantity (must be > 0)")
+                             .required()
+                             .min(0.0)
+                             .number("price", "Limit price (required for limit/stop_limit orders)")
+                             .number("stop_price", "Stop trigger price (required for stop/stop_limit)")
+                             .boolean("reduce_only", "Only reduce existing position")
+                             .default_bool(false)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString portfolio_id = args["portfolio_id"].toString();
             QString symbol = args["symbol"].toString();
@@ -177,7 +186,7 @@ std::vector<ToolDef> get_paper_trading_tools() {
         t.name = "pt_cancel_order";
         t.description = "Cancel a pending paper trading order.";
         t.category = "paper-trading";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"order_id", QJsonObject{{"type", "string"}, {"description", "Order ID to cancel"}}}};
         t.input_schema.required = {"order_id"};

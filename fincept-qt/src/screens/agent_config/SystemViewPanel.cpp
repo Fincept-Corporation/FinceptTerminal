@@ -37,8 +37,8 @@ static QWidget* make_section_card(const QString& title, QVBoxLayout** content_la
                                   QPushButton** action_btn = nullptr, const QString& action_text = {},
                                   QLabel** title_out = nullptr) {
     auto* card = new QFrame;
-    card->setStyleSheet(
-        QString("QFrame { background:%1;border:1px solid %2; }").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    card->setStyleSheet(QString("QFrame { background:%1;border:1px solid %2; }")
+                            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
 
     auto* vl = new QVBoxLayout(card);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -185,8 +185,8 @@ QWidget* SystemViewPanel::build_stats_row() {
 }
 
 QWidget* SystemViewPanel::build_llm_section() {
-    auto* card = make_section_card(tr("CONFIGURED LLM PROVIDERS"), &llm_list_layout_, &llm_section_refresh_, tr("REFRESH"),
-                                   &llm_section_title_);
+    auto* card = make_section_card(tr("CONFIGURED LLM PROVIDERS"), &llm_list_layout_, &llm_section_refresh_,
+                                   tr("REFRESH"), &llm_section_title_);
     if (llm_section_refresh_) {
         connect(llm_section_refresh_, &QPushButton::clicked, this, [this]() {
             // Clear and reload LLM list
@@ -463,24 +463,36 @@ void SystemViewPanel::changeEvent(QEvent* event) {
 
 void SystemViewPanel::retranslateUi() {
     // Header.
-    if (header_title_)      header_title_->setText(tr("SYSTEM CAPABILITIES"));
-    if (header_refresh_btn_) header_refresh_btn_->setText(tr("REFRESH"));
+    if (header_title_)
+        header_title_->setText(tr("SYSTEM CAPABILITIES"));
+    if (header_refresh_btn_)
+        header_refresh_btn_->setText(tr("REFRESH"));
 
     // Stat card captions (values hold live data — not re-applied here).
-    if (agents_caption_) agents_caption_->setText(tr("AGENTS"));
-    if (tools_caption_)  tools_caption_->setText(tr("TOOLS"));
-    if (llms_caption_)   llms_caption_->setText(tr("LLMS"));
-    if (cache_caption_)  cache_caption_->setText(tr("CACHED"));
+    if (agents_caption_)
+        agents_caption_->setText(tr("AGENTS"));
+    if (tools_caption_)
+        tools_caption_->setText(tr("TOOLS"));
+    if (llms_caption_)
+        llms_caption_->setText(tr("LLMS"));
+    if (cache_caption_)
+        cache_caption_->setText(tr("CACHED"));
 
     // Section card titles + the LLM section refresh action.
-    if (llm_section_title_)   llm_section_title_->setText(tr("CONFIGURED LLM PROVIDERS"));
-    if (llm_section_refresh_) llm_section_refresh_->setText(tr("REFRESH"));
-    if (tools_section_title_) tools_section_title_->setText(tr("AVAILABLE TOOLS"));
-    if (sysinfo_section_title_) sysinfo_section_title_->setText(tr("SYSTEM INFO"));
+    if (llm_section_title_)
+        llm_section_title_->setText(tr("CONFIGURED LLM PROVIDERS"));
+    if (llm_section_refresh_)
+        llm_section_refresh_->setText(tr("REFRESH"));
+    if (tools_section_title_)
+        tools_section_title_->setText(tr("AVAILABLE TOOLS"));
+    if (sysinfo_section_title_)
+        sysinfo_section_title_->setText(tr("SYSTEM INFO"));
 
     // System info field titles (values hold live data — not re-applied here).
-    if (version_title_)   version_title_->setText(tr("VERSION"));
-    if (framework_title_) framework_title_->setText(tr("FRAMEWORK"));
+    if (version_title_)
+        version_title_->setText(tr("VERSION"));
+    if (framework_title_)
+        framework_title_->setText(tr("FRAMEWORK"));
 }
 
 } // namespace fincept::screens

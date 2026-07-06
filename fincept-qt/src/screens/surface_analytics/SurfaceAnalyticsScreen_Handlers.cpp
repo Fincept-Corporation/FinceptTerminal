@@ -6,9 +6,8 @@
 //
 // Part of the partial-class split of SurfaceAnalyticsScreen.cpp.
 
-#include "SurfaceAnalyticsScreen.h"
-
 #include "Surface3DWidget.h"
+#include "SurfaceAnalyticsScreen.h"
 #include "SurfaceCapabilities.h"
 #include "SurfaceControlPanel.h"
 #include "SurfaceCsvImporter.h"
@@ -32,8 +31,8 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStringList>
-#include <QVariant>
 #include <QVBoxLayout>
+#include <QVariant>
 
 namespace fincept::surface {
 
@@ -147,14 +146,41 @@ void SurfaceAnalyticsScreen::on_fetch_requested() {
 
     DatabentoFetchParams p;
     static const char* CT_NAMES[] = {
-        "Volatility", "DeltaSurface", "GammaSurface", "VegaSurface", "ThetaSurface",
-        "SkewSurface", "LocalVolSurface", "YieldCurve", "SwaptionVol", "CapFloorVol",
-        "BondSpread", "OISBasis", "RealYield", "ForwardRate", "FXVol",
-        "FXForwardPoints", "CrossCurrencyBasis", "CDSSpread", "CreditTransition",
-        "RecoveryRate", "CommodityForward", "CommodityVol", "CrackSpread",
-        "ContangoBackwardation", "Correlation", "PCA", "VaR", "StressTestPnL",
-        "FactorExposure", "LiquidityHeatmap", "Drawdown", "BetaSurface",
-        "ImpliedDividend", "InflationExpectations", "MonetaryPolicyPath",
+        "Volatility",
+        "DeltaSurface",
+        "GammaSurface",
+        "VegaSurface",
+        "ThetaSurface",
+        "SkewSurface",
+        "LocalVolSurface",
+        "YieldCurve",
+        "SwaptionVol",
+        "CapFloorVol",
+        "BondSpread",
+        "OISBasis",
+        "RealYield",
+        "ForwardRate",
+        "FXVol",
+        "FXForwardPoints",
+        "CrossCurrencyBasis",
+        "CDSSpread",
+        "CreditTransition",
+        "RecoveryRate",
+        "CommodityForward",
+        "CommodityVol",
+        "CrackSpread",
+        "ContangoBackwardation",
+        "Correlation",
+        "PCA",
+        "VaR",
+        "StressTestPnL",
+        "FactorExposure",
+        "LiquidityHeatmap",
+        "Drawdown",
+        "BetaSurface",
+        "ImpliedDividend",
+        "InflationExpectations",
+        "MonetaryPolicyPath",
     };
     int idx = (int)active_chart_;
     if (idx >= 0 && idx < (int)(sizeof(CT_NAMES) / sizeof(CT_NAMES[0])))
@@ -173,8 +199,7 @@ void SurfaceAnalyticsScreen::on_fetch_requested() {
     p.spot_override = spot_for(p.symbol);
 
     if (data_inspector_)
-        data_inspector_->set_status(
-            tr("Fetching %1 …").arg(QString::fromUtf8(chart_type_name(active_chart_))), true);
+        data_inspector_->set_status(tr("Fetching %1 …").arg(QString::fromUtf8(chart_type_name(active_chart_))), true);
     svc.fetch_with_params(p);
 }
 

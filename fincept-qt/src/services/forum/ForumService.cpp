@@ -14,9 +14,9 @@
 #include <QUrl>
 #include <QUrlQuery>
 
-static constexpr int kCategoriesTtlSec  = 5 * 60;
-static constexpr int kStatsTtlSec       = 2 * 60;
-static constexpr int kTrendingTtlSec    = 2 * 60;
+static constexpr int kCategoriesTtlSec = 5 * 60;
+static constexpr int kStatsTtlSec = 2 * 60;
+static constexpr int kTrendingTtlSec = 2 * 60;
 static constexpr int kTransferTimeoutMs = 10000; // 10s per API request
 
 namespace fincept::services {
@@ -402,4 +402,3 @@ void ForumService::update_profile(const QString& display_name, const QString& bi
 }
 
 } // namespace fincept::services
-

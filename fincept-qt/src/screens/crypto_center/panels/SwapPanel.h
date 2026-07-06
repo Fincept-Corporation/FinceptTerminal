@@ -120,15 +120,15 @@ class SwapPanel : public QWidget {
     QLabel* status_label_ = nullptr;
 
     // Fixed UI captions / chrome (cached for retranslateUi)
-    QLabel* head_title_ = nullptr;          // "SWAP"
-    QLabel* head_status_ = nullptr;         // "via PumpPortal · pool=auto"
-    QLabel* pay_caption_ = nullptr;         // "YOU PAY"
-    QLabel* from_caption_ = nullptr;        // "FROM"
-    QLabel* receive_caption_ = nullptr;     // "YOU RECEIVE (EST.)"
-    QLabel* to_caption_ = nullptr;          // "TO"
-    QLabel* route_caption_ = nullptr;       // "ROUTE"
-    QLabel* impact_caption_ = nullptr;      // "PRICE IMPACT"
-    QLabel* slippage_caption_ = nullptr;    // "MAX SLIPPAGE"
+    QLabel* head_title_ = nullptr;       // "SWAP"
+    QLabel* head_status_ = nullptr;      // "via PumpPortal · pool=auto"
+    QLabel* pay_caption_ = nullptr;      // "YOU PAY"
+    QLabel* from_caption_ = nullptr;     // "FROM"
+    QLabel* receive_caption_ = nullptr;  // "YOU RECEIVE (EST.)"
+    QLabel* to_caption_ = nullptr;       // "TO"
+    QLabel* route_caption_ = nullptr;    // "ROUTE"
+    QLabel* impact_caption_ = nullptr;   // "PRICE IMPACT"
+    QLabel* slippage_caption_ = nullptr; // "MAX SLIPPAGE"
 
     // Debounce for estimate recompute on every keystroke.
     QTimer* debounce_timer_ = nullptr;
@@ -143,9 +143,9 @@ class SwapPanel : public QWidget {
     /// switched to a specific mint that may not be present in the combo yet.
     /// Cleared once applied.
     QString pending_from_mint_;
-    QHash<QString, double> price_usd_;     ///< mint → USD per 1 token
-    QHash<QString, double> price_sol_;     ///< mint → SOL per 1 token
-    QHash<QString, QString> price_topic_;  ///< mint → topic (for unsubscribe)
+    QHash<QString, double> price_usd_;    ///< mint → USD per 1 token
+    QHash<QString, double> price_sol_;    ///< mint → SOL per 1 token
+    QHash<QString, QString> price_topic_; ///< mint → topic (for unsubscribe)
     bool busy_ = false;
 };
 

@@ -54,12 +54,8 @@ QByteArray download_kotak(const BrokerCredentials& creds) {
         http_get_blocking(base_url + "/script-details/1.0/masterscrip/file-paths", {{"Authorization", token}}, 30000);
     if (paths_resp.isEmpty())
         return {};
-    const QJsonArray files = QJsonDocument::fromJson(paths_resp)
-                                 .object()
-                                 .value("data")
-                                 .toObject()
-                                 .value("filesPaths")
-                                 .toArray();
+    const QJsonArray files =
+        QJsonDocument::fromJson(paths_resp).object().value("data").toObject().value("filesPaths").toArray();
 
     QByteArray combined;
     for (const QJsonValue& fv : files) {
@@ -147,7 +143,7 @@ QVector<Instrument> parse_kotak(const QByteArray& payload) {
 
         // F&O segments.
         const QString opt = csv::field(row, idx, "pOptionType").toUpper();
-        InstrumentType t = (opt == "CE") ? InstrumentType::CE
+        InstrumentType t = (opt == "CE")   ? InstrumentType::CE
                            : (opt == "PE") ? InstrumentType::PE
                                            : InstrumentType::FUT; // XX
         inst.instrument_type = t;
@@ -155,9 +151,7 @@ QVector<Instrument> parse_kotak(const QByteArray& payload) {
         inst.strike = csv::field(row, idx, "dStrikePrice").toDouble() / 100.0;
         inst.brexchange = csv::field(row, idx, "pExchSeg");
 
-        QString canon_exch = (seg == "NSE_FO") ? "NFO" : (seg == "BSE_FO") ? "BFO"
-                                                     : (seg == "CDE_FO")   ? "CDS"
-                                                                           : "MCX";
+        QString canon_exch = (seg == "NSE_FO") ? "NFO" : (seg == "BSE_FO") ? "BFO" : (seg == "CDE_FO") ? "CDS" : "MCX";
         inst.exchange = norm::normalise_exchange(canon_exch, t);
 
         // Expiry: unix seconds; NSE_FO & CDE_FO carry a +315513000 epoch offset.

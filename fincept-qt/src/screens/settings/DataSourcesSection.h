@@ -26,7 +26,7 @@ class DataSourcesSection : public QWidget {
     QWidget* build_content();
 
     QVBoxLayout* host_layout_ = nullptr; // wraps the swappable content widget
-    QWidget*     content_     = nullptr;
+    QWidget* content_ = nullptr;
 };
 
 } // namespace fincept::screens

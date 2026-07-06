@@ -110,10 +110,9 @@ void PortfolioHeatmap::build_ui() {
     layout->addWidget(movers_sep);
 
     movers_header_ = new QLabel(tr("TOP MOVERS"));
-    movers_header_->setStyleSheet(
-        QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;"
-                "  padding-top:4px;")
-            .arg(ui::colors::TEXT_TERTIARY()));
+    movers_header_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;"
+                                          "  padding-top:4px;")
+                                      .arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(movers_header_);
 
     top_gainer_ = new QLabel;
@@ -282,11 +281,16 @@ void PortfolioHeatmap::changeEvent(QEvent* event) {
 }
 
 void PortfolioHeatmap::retranslateUi() {
-    if (title_label_)    title_label_->setText(tr("HOLDINGS"));
-    if (pnl_btn_)        pnl_btn_->setText(tr("PNL"));
-    if (weight_btn_)     weight_btn_->setText(tr("WT"));
-    if (day_btn_)        day_btn_->setText(tr("DAY"));
-    if (movers_header_)  movers_header_->setText(tr("TOP MOVERS"));
+    if (title_label_)
+        title_label_->setText(tr("HOLDINGS"));
+    if (pnl_btn_)
+        pnl_btn_->setText(tr("PNL"));
+    if (weight_btn_)
+        weight_btn_->setText(tr("WT"));
+    if (day_btn_)
+        day_btn_->setText(tr("DAY"));
+    if (movers_header_)
+        movers_header_->setText(tr("TOP MOVERS"));
     // Block text is "SYMBOL\n+x.xx%" — pure data, no tr() needed.
     // top_gainer_/top_loser_ contents likewise are formatted from data; no
     // change on language switch.

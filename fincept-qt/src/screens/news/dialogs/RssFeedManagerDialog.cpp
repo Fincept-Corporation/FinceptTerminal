@@ -26,9 +26,8 @@ constexpr int kColCategory = 5;
 constexpr int kColRegion = 6;
 constexpr int kColTier = 7;
 
-constexpr const char* kBrowserUserAgent =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+constexpr const char* kBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 } // anonymous namespace
 
@@ -49,17 +48,19 @@ void RssFeedManagerDialog::changeEvent(QEvent* event) {
 void RssFeedManagerDialog::retranslateUi() {
     setWindowTitle(tr("RSS Feed Sources"));
     if (header_label_)
-        header_label_->setText(
-            tr("Manage the RSS feeds the News screen pulls from. Built-in feeds (DEF) "
-               "can be disabled or edited; user-added feeds (USR) can be removed."));
+        header_label_->setText(tr("Manage the RSS feeds the News screen pulls from. Built-in feeds (DEF) "
+                                  "can be disabled or edited; user-added feeds (USR) can be removed."));
     if (table_)
         table_->setHorizontalHeaderLabels(
-            {tr("On"), tr("Type"), tr("Source"), tr("Name"), tr("URL"),
-             tr("Category"), tr("Region"), tr("Tier")});
-    if (add_btn_)   add_btn_->setText(tr("Add Feed"));
-    if (edit_btn_)  edit_btn_->setText(tr("Edit"));
-    if (test_btn_)  test_btn_->setText(tr("Test URL"));
-    if (close_btn_) close_btn_->setText(tr("Close"));
+            {tr("On"), tr("Type"), tr("Source"), tr("Name"), tr("URL"), tr("Category"), tr("Region"), tr("Tier")});
+    if (add_btn_)
+        add_btn_->setText(tr("Add Feed"));
+    if (edit_btn_)
+        edit_btn_->setText(tr("Edit"));
+    if (test_btn_)
+        test_btn_->setText(tr("Test URL"));
+    if (close_btn_)
+        close_btn_->setText(tr("Close"));
     // toggle_btn_ / delete_btn_ labels + the status label are selection- and
     // count-dependent; re-derive them so the new language is reflected.
     on_selection_changed();
@@ -70,10 +71,9 @@ void RssFeedManagerDialog::build_ui() {
     root->setContentsMargins(14, 14, 14, 12);
     root->setSpacing(10);
 
-    header_label_ = new QLabel(
-        tr("Manage the RSS feeds the News screen pulls from. Built-in feeds (DEF) "
-           "can be disabled or edited; user-added feeds (USR) can be removed."),
-        this);
+    header_label_ = new QLabel(tr("Manage the RSS feeds the News screen pulls from. Built-in feeds (DEF) "
+                                  "can be disabled or edited; user-added feeds (USR) can be removed."),
+                               this);
     header_label_->setObjectName("rssFeedManagerHeader");
     header_label_->setWordWrap(true);
     root->addWidget(header_label_);
@@ -82,8 +82,7 @@ void RssFeedManagerDialog::build_ui() {
     table_->setObjectName("rssFeedManagerTable");
     table_->setColumnCount(8);
     table_->setHorizontalHeaderLabels(
-        {tr("On"), tr("Type"), tr("Source"), tr("Name"), tr("URL"),
-         tr("Category"), tr("Region"), tr("Tier")});
+        {tr("On"), tr("Type"), tr("Source"), tr("Name"), tr("URL"), tr("Category"), tr("Region"), tr("Tier")});
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -130,10 +129,8 @@ void RssFeedManagerDialog::build_ui() {
     connect(delete_btn_, &QPushButton::clicked, this, &RssFeedManagerDialog::on_delete_or_reset);
     connect(test_btn_, &QPushButton::clicked, this, &RssFeedManagerDialog::on_test_url);
     connect(close_btn_, &QPushButton::clicked, this, &QDialog::accept);
-    connect(table_, &QTableWidget::itemSelectionChanged, this,
-            &RssFeedManagerDialog::on_selection_changed);
-    connect(table_, &QTableWidget::itemDoubleClicked, this,
-            [this](QTableWidgetItem*) { on_edit(); });
+    connect(table_, &QTableWidget::itemSelectionChanged, this, &RssFeedManagerDialog::on_selection_changed);
+    connect(table_, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem*) { on_edit(); });
 }
 
 void RssFeedManagerDialog::reload_table() {
@@ -152,18 +149,15 @@ void RssFeedManagerDialog::reload_table() {
 
         auto* on_item = new QTableWidgetItem(r.enabled ? QStringLiteral("●") : QStringLiteral("○"));
         on_item->setTextAlignment(Qt::AlignCenter);
-        on_item->setForeground(r.enabled ? QBrush(QColor(22, 163, 74))
-                                          : QBrush(QColor(148, 163, 184)));
+        on_item->setForeground(r.enabled ? QBrush(QColor(22, 163, 74)) : QBrush(QColor(148, 163, 184)));
         table_->setItem(i, kColEnabled, on_item);
 
-        auto* type_item = new QTableWidgetItem(r.is_builtin ? (r.is_customized ? "DEF*" : "DEF")
-                                                              : "USR");
+        auto* type_item = new QTableWidgetItem(r.is_builtin ? (r.is_customized ? "DEF*" : "DEF") : "USR");
         type_item->setTextAlignment(Qt::AlignCenter);
-        type_item->setForeground(r.is_builtin ? QBrush(QColor(59, 130, 246))
-                                                : QBrush(QColor(217, 119, 6)));
-        type_item->setToolTip(r.is_builtin ? (r.is_customized ? tr("Built-in feed with user edits")
-                                                                : tr("Built-in default feed"))
-                                            : tr("User-added feed"));
+        type_item->setForeground(r.is_builtin ? QBrush(QColor(59, 130, 246)) : QBrush(QColor(217, 119, 6)));
+        type_item->setToolTip(
+            r.is_builtin ? (r.is_customized ? tr("Built-in feed with user edits") : tr("Built-in default feed"))
+                         : tr("User-added feed"));
         table_->setItem(i, kColType, type_item);
 
         table_->setItem(i, kColSource, make_item(r.feed.source));
@@ -178,8 +172,7 @@ void RssFeedManagerDialog::reload_table() {
 
     on_selection_changed();
     const int total = rows_.size();
-    const int enabled = std::count_if(rows_.begin(), rows_.end(),
-                                       [](const auto& r) { return r.enabled; });
+    const int enabled = std::count_if(rows_.begin(), rows_.end(), [](const auto& r) { return r.enabled; });
     status_label_->setText(tr("%1 feeds (%2 enabled)").arg(total).arg(enabled));
 }
 
@@ -216,8 +209,7 @@ void RssFeedManagerDialog::on_add() {
         return;
     const auto f = dlg.feed();
     if (!services::NewsService::instance().add_user_feed(f)) {
-        QMessageBox::warning(this, tr("Save failed"),
-                             tr("Could not save the feed. See log for details."));
+        QMessageBox::warning(this, tr("Save failed"), tr("Could not save the feed. See log for details."));
         return;
     }
     dirty_ = true;
@@ -234,8 +226,7 @@ void RssFeedManagerDialog::on_edit() {
         return;
     auto f = dlg.feed();
     if (!services::NewsService::instance().update_feed(f, current.enabled)) {
-        QMessageBox::warning(this, tr("Save failed"),
-                             tr("Could not save the feed. See log for details."));
+        QMessageBox::warning(this, tr("Save failed"), tr("Could not save the feed. See log for details."));
         return;
     }
     dirty_ = true;
@@ -255,12 +246,10 @@ void RssFeedManagerDialog::on_delete_or_reset() {
     } else {
         prompt = tr("Delete user feed \"%1\"?").arg(r.feed.name);
     }
-    if (QMessageBox::question(this, tr("Confirm"), prompt,
-                              QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
+    if (QMessageBox::question(this, tr("Confirm"), prompt, QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
     if (!services::NewsService::instance().remove_or_reset_feed(r.feed.id)) {
-        QMessageBox::warning(this, tr("Failed"),
-                             tr("Could not remove the feed. See log for details."));
+        QMessageBox::warning(this, tr("Failed"), tr("Could not remove the feed. See log for details."));
         return;
     }
     dirty_ = true;
@@ -273,8 +262,7 @@ void RssFeedManagerDialog::on_toggle_enabled() {
         return;
     const auto& r = rows_[row];
     if (!services::NewsService::instance().set_feed_enabled(r.feed.id, !r.enabled)) {
-        QMessageBox::warning(this, tr("Failed"),
-                             tr("Could not toggle the feed. See log for details."));
+        QMessageBox::warning(this, tr("Failed"), tr("Could not toggle the feed. See log for details."));
         return;
     }
     dirty_ = true;
@@ -298,8 +286,7 @@ void RssFeedManagerDialog::on_test_url() {
     QNetworkRequest req((QUrl(url)));
     req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
     req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     req.setTransferTimeout(6000);
 
     QPointer<RssFeedManagerDialog> self = this;
@@ -313,28 +300,22 @@ void RssFeedManagerDialog::on_test_url() {
         if (reply->error() != QNetworkReply::NoError) {
             const int http = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             QMessageBox::warning(self, tr("Test"),
-                                  tr("Request failed: HTTP %1 — %2")
-                                      .arg(http)
-                                      .arg(reply->errorString()));
+                                 tr("Request failed: HTTP %1 — %2").arg(http).arg(reply->errorString()));
             self->status_label_->setText(tr("Test failed."));
             return;
         }
         const QByteArray data = reply->readAll();
         const QByteArray head = data.trimmed().left(256).toLower();
-        if (head.startsWith("<?xml") || head.startsWith("<rss") ||
-            head.startsWith("<feed") || head.startsWith("<rdf")) {
-            QMessageBox::information(
-                self, tr("Test"),
-                tr("✓ Feed responded with %1 bytes of XML.").arg(data.size()));
+        if (head.startsWith("<?xml") || head.startsWith("<rss") || head.startsWith("<feed") ||
+            head.startsWith("<rdf")) {
+            QMessageBox::information(self, tr("Test"), tr("✓ Feed responded with %1 bytes of XML.").arg(data.size()));
             self->status_label_->setText(tr("Test OK."));
         } else if (head.contains("<html") || head.contains("<!doctype html")) {
-            QMessageBox::warning(self, tr("Test"),
-                                  tr("Server returned HTML — likely a block or login page."));
+            QMessageBox::warning(self, tr("Test"), tr("Server returned HTML — likely a block or login page."));
             self->status_label_->setText(tr("Test returned HTML."));
         } else {
-            QMessageBox::warning(
-                self, tr("Test"),
-                tr("Response doesn't look like RSS/Atom XML (%1 bytes).").arg(data.size()));
+            QMessageBox::warning(self, tr("Test"),
+                                 tr("Response doesn't look like RSS/Atom XML (%1 bytes).").arg(data.size()));
             self->status_label_->setText(tr("Test unclear."));
         }
     });

@@ -10,8 +10,8 @@
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QPointer>
-#include <QTimer>
 #include <QScrollArea>
+#include <QTimer>
 #include <QVBoxLayout>
 
 // ── Screen-level stylesheet ─────────────────────────────────────────────────
@@ -177,28 +177,41 @@ void AkShareScreen::changeEvent(QEvent* event) {
 
 void AkShareScreen::retranslateUi() {
     // Header
-    if (header_title_) header_title_->setText(tr("AKSHARE DATA EXPLORER"));
-    if (header_sub_)   header_sub_->setText(tr("1000+ CHINESE & GLOBAL FINANCIAL DATA ENDPOINTS"));
-    if (header_badge_) header_badge_->setText(tr("FREE API"));
+    if (header_title_)
+        header_title_->setText(tr("AKSHARE DATA EXPLORER"));
+    if (header_sub_)
+        header_sub_->setText(tr("1000+ CHINESE & GLOBAL FINANCIAL DATA ENDPOINTS"));
+    if (header_badge_)
+        header_badge_->setText(tr("FREE API"));
 
     // Endpoint panel — endpoint_count_ / data_status_ carry data-derived text
     // refreshed on the next source load, so we only re-apply static chrome here.
-    if (search_input_) search_input_->setPlaceholderText(tr("Search endpoints..."));
-    if (empty_state_) empty_state_->setText(tr("Select a data source above\nto load available endpoints"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search endpoints..."));
+    if (empty_state_)
+        empty_state_->setText(tr("Select a data source above\nto load available endpoints"));
 
     // Parameter labels
-    if (sym_label_)    sym_label_->setText(tr("SYMBOL"));
-    if (start_label_)  start_label_->setText(tr("START"));
-    if (end_label_)    end_label_->setText(tr("END"));
-    if (period_label_) period_label_->setText(tr("PERIOD"));
-    if (exec_btn_)     exec_btn_->setText(tr("EXECUTE"));
+    if (sym_label_)
+        sym_label_->setText(tr("SYMBOL"));
+    if (start_label_)
+        start_label_->setText(tr("START"));
+    if (end_label_)
+        end_label_->setText(tr("END"));
+    if (period_label_)
+        period_label_->setText(tr("PERIOD"));
+    if (exec_btn_)
+        exec_btn_->setText(tr("EXECUTE"));
 
     // Data panel toolbar
-    if (view_toggle_btn_) view_toggle_btn_->setText(is_table_view_ ? tr("JSON") : tr("TABLE"));
-    if (refresh_btn_)     refresh_btn_->setText(tr("REFRESH"));
+    if (view_toggle_btn_)
+        view_toggle_btn_->setText(is_table_view_ ? tr("JSON") : tr("TABLE"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
 
     // Status bar
-    if (status_left_) status_left_->setText(tr("AKSHARE DATA"));
+    if (status_left_)
+        status_left_->setText(tr("AKSHARE DATA"));
     if (status_source_ && active_source_ < 0)
         status_source_->setText(tr("SOURCE: --"));
 }
@@ -617,8 +630,7 @@ void AkShareScreen::load_endpoints(const AkShareSource& source) {
     QPointer<AkShareScreen> self = this;
 
     services::akshare::AkShareService::instance().fetch_endpoints(
-        source.script,
-        [self, script = source.script, cache_key](const services::akshare::EndpointsResult& r) {
+        source.script, [self, script = source.script, cache_key](const services::akshare::EndpointsResult& r) {
             if (!self)
                 return;
 
@@ -631,9 +643,8 @@ void AkShareScreen::load_endpoints(const AkShareSource& source) {
 
             const QJsonObject obj = r.data;
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                60 * 60, "akshare");
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 60 * 60,
+                "akshare");
             self->endpoint_cache_[script] = obj;
             self->populate_endpoint_list(obj);
         });
@@ -718,8 +729,7 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
     QPointer<AkShareScreen> self = this;
 
     services::akshare::AkShareService::instance().query(
-        script, endpoint, args,
-        [self, endpoint, cache_key](const services::akshare::QueryResult& r) {
+        script, endpoint, args, [self, endpoint, cache_key](const services::akshare::QueryResult& r) {
             if (!self)
                 return;
 
@@ -738,9 +748,7 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
 
             if (!data_array.isEmpty()) {
                 fincept::CacheManager::instance().put(
-                    cache_key,
-                    QVariant(QString::fromUtf8(
-                        QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
                     2 * 60, "akshare");
             }
 
@@ -859,9 +867,12 @@ QVariantMap AkShareScreen::save_state() const {
         {"search", search_input_ ? search_input_->text() : QString()},
         {"table_view", is_table_view_},
     };
-    if (param_symbol_) state["param_symbol"] = param_symbol_->text();
-    if (param_start_) state["param_start"] = param_start_->text();
-    if (param_end_) state["param_end"] = param_end_->text();
+    if (param_symbol_)
+        state["param_symbol"] = param_symbol_->text();
+    if (param_start_)
+        state["param_start"] = param_start_->text();
+    if (param_end_)
+        state["param_end"] = param_end_->text();
     if (json_view_ && !json_view_->toPlainText().isEmpty()) {
         const QString jt = json_view_->toPlainText();
         if (jt.size() < 300000)

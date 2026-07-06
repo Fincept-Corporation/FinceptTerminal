@@ -32,8 +32,8 @@ class DataMappingTestClient : public QObject {
 
     /// Issue a single test request. `context` scopes the callback's lifetime
     /// (Qt-style — when context is destroyed, the callback is dropped).
-    void test_api(Method method, const QString& url, const QJsonObject& body,
-                  const QObject* context, Callback callback);
+    void test_api(Method method, const QString& url, const QJsonObject& body, const QObject* context,
+                  Callback callback);
 
   private:
     DataMappingTestClient() = default;

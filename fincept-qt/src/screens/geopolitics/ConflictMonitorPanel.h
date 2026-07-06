@@ -45,7 +45,7 @@ class ConflictMonitorPanel : public QWidget {
 
     // Map
     fincept::ui::WorldMapWidget* map_widget_ = nullptr;
-    QComboBox* map_type_combo_ = nullptr;  // basemap selector in the map toolbar
+    QComboBox* map_type_combo_ = nullptr; // basemap selector in the map toolbar
 
     QTableWidget* events_table_ = nullptr;
 

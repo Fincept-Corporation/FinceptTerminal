@@ -59,28 +59,27 @@ void PendingOrdersPanel::build_ui() {
     root->setSpacing(0);
 
     // Global stylesheet via descendant selectors (P7) — amber #d97706 accents.
-    setStyleSheet(QString(
-        "#pendingOrdersPanel{background:%1;border:1px solid %3;}"
-        "#acHeader{background:%2;border-bottom:1px solid %3;}"
-        "#acTitle{color:%4;font-size:14px;font-weight:700;letter-spacing:0.5px;}"
-        "#acStatsBar{background:%2;border-bottom:1px solid %3;}"
-        "#acStatCaption{color:%5;font-size:10px;letter-spacing:0.5px;}"
-        "#acStatValue{color:%6;font-size:15px;font-weight:700;}"
-        "#acTable{background:%1;color:%6;gridline-color:%3;border:none;}"
-        "#acTable::item{padding:2px 6px;}"
-        "QHeaderView::section{background:%2;color:%5;border:none;border-bottom:1px solid %3;"
-        "padding:4px 6px;font-size:10px;font-weight:700;letter-spacing:0.5px;}"
-        "#acCombo{background:%2;color:%6;border:1px solid %3;padding:3px 8px;font-size:11px;}"
-        "#acApproveAll{background:rgba(34,197,94,0.14);color:%7;border:1px solid %7;"
-        "padding:5px 16px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
-        "#acApproveAll:hover{background:rgba(34,197,94,0.28);}"
-        "#acRejectAll{background:rgba(220,38,38,0.12);color:%8;border:1px solid %8;"
-        "padding:5px 16px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
-        "#acRejectAll:hover{background:rgba(220,38,38,0.25);}")
-        .arg(fincept::ui::colors::DARK(), fincept::ui::colors::PANEL(),
-             fincept::ui::colors::BORDER(), fincept::ui::colors::AMBER(),
-             fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::TEXT_PRIMARY(),
-             fincept::ui::colors::POSITIVE(), fincept::ui::colors::NEGATIVE()));
+    setStyleSheet(QString("#pendingOrdersPanel{background:%1;border:1px solid %3;}"
+                          "#acHeader{background:%2;border-bottom:1px solid %3;}"
+                          "#acTitle{color:%4;font-size:14px;font-weight:700;letter-spacing:0.5px;}"
+                          "#acStatsBar{background:%2;border-bottom:1px solid %3;}"
+                          "#acStatCaption{color:%5;font-size:10px;letter-spacing:0.5px;}"
+                          "#acStatValue{color:%6;font-size:15px;font-weight:700;}"
+                          "#acTable{background:%1;color:%6;gridline-color:%3;border:none;}"
+                          "#acTable::item{padding:2px 6px;}"
+                          "QHeaderView::section{background:%2;color:%5;border:none;border-bottom:1px solid %3;"
+                          "padding:4px 6px;font-size:10px;font-weight:700;letter-spacing:0.5px;}"
+                          "#acCombo{background:%2;color:%6;border:1px solid %3;padding:3px 8px;font-size:11px;}"
+                          "#acApproveAll{background:rgba(34,197,94,0.14);color:%7;border:1px solid %7;"
+                          "padding:5px 16px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                          "#acApproveAll:hover{background:rgba(34,197,94,0.28);}"
+                          "#acRejectAll{background:rgba(220,38,38,0.12);color:%8;border:1px solid %8;"
+                          "padding:5px 16px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
+                          "#acRejectAll:hover{background:rgba(220,38,38,0.25);}")
+                      .arg(fincept::ui::colors::DARK(), fincept::ui::colors::PANEL(), fincept::ui::colors::BORDER(),
+                           fincept::ui::colors::AMBER(), fincept::ui::colors::TEXT_SECONDARY(),
+                           fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::POSITIVE(),
+                           fincept::ui::colors::NEGATIVE()));
 
     // ── Header: title + account selector + status filter ──────────────────────
     auto* header = new QWidget;
@@ -159,8 +158,8 @@ void PendingOrdersPanel::build_ui() {
     table_ = new QTableWidget;
     table_->setObjectName("acTable");
     table_->setColumnCount(kColCount);
-    table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"),
-                                       tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
+    table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"), tr("Qty"),
+                                       tr("Price Type"), tr("Status"), tr("Actions")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -176,8 +175,7 @@ void PendingOrdersPanel::build_ui() {
     connect(status_filter_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
     connect(approve_all_btn_, &QPushButton::clicked, this, [this]() {
         const QString acct = selected_account();
-        auto ans = QMessageBox::question(this, tr("Approve All"),
-                                         tr("Execute ALL pending orders now?"),
+        auto ans = QMessageBox::question(this, tr("Approve All"), tr("Execute ALL pending orders now?"),
                                          QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (ans != QMessageBox::Yes)
             return;
@@ -187,12 +185,11 @@ void PendingOrdersPanel::build_ui() {
         const QString acct = selected_account();
         if (acct.isEmpty()) {
             QMessageBox::information(this, tr("Reject All"),
-                                    tr("Select a specific account to reject all its pending orders."));
+                                     tr("Select a specific account to reject all its pending orders."));
             return;
         }
         bool ok = false;
-        const QString reason = QInputDialog::getText(this, tr("Reject All"),
-                                                     tr("Rejection reason:"), QLineEdit::Normal,
+        const QString reason = QInputDialog::getText(this, tr("Reject All"), tr("Rejection reason:"), QLineEdit::Normal,
                                                      tr("Rejected by user"), &ok);
         if (!ok)
             return;
@@ -215,9 +212,12 @@ void PendingOrdersPanel::changeEvent(QEvent* event) {
 }
 
 void PendingOrdersPanel::retranslateUi() {
-    if (title_label_)     title_label_->setText(tr("PENDING ORDERS"));
-    if (account_caption_) account_caption_->setText(tr("Account:"));
-    if (show_caption_)    show_caption_->setText(tr("Show:"));
+    if (title_label_)
+        title_label_->setText(tr("PENDING ORDERS"));
+    if (account_caption_)
+        account_caption_->setText(tr("Account:"));
+    if (show_caption_)
+        show_caption_->setText(tr("Show:"));
 
     // Combo items: re-set visible text by index; userData keys are unchanged.
     if (status_filter_ && status_filter_->count() >= 4) {
@@ -227,18 +227,25 @@ void PendingOrdersPanel::retranslateUi() {
         status_filter_->setItemText(3, tr("All"));
     }
 
-    if (stat_pending_cap_)  stat_pending_cap_->setText(tr("PENDING"));
-    if (stat_approved_cap_) stat_approved_cap_->setText(tr("APPROVED"));
-    if (stat_rejected_cap_) stat_rejected_cap_->setText(tr("REJECTED"));
-    if (stat_buy_cap_)      stat_buy_cap_->setText(tr("BUY"));
-    if (stat_sell_cap_)     stat_sell_cap_->setText(tr("SELL"));
+    if (stat_pending_cap_)
+        stat_pending_cap_->setText(tr("PENDING"));
+    if (stat_approved_cap_)
+        stat_approved_cap_->setText(tr("APPROVED"));
+    if (stat_rejected_cap_)
+        stat_rejected_cap_->setText(tr("REJECTED"));
+    if (stat_buy_cap_)
+        stat_buy_cap_->setText(tr("BUY"));
+    if (stat_sell_cap_)
+        stat_sell_cap_->setText(tr("SELL"));
 
-    if (approve_all_btn_) approve_all_btn_->setText(tr("APPROVE ALL"));
-    if (reject_all_btn_)  reject_all_btn_->setText(tr("REJECT ALL"));
+    if (approve_all_btn_)
+        approve_all_btn_->setText(tr("APPROVE ALL"));
+    if (reject_all_btn_)
+        reject_all_btn_->setText(tr("REJECT ALL"));
 
     if (table_) {
-        table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"),
-                                           tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
+        table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"), tr("Qty"),
+                                           tr("Price Type"), tr("Status"), tr("Actions")});
     }
     // Per-row Approve/Reject button widgets are rebuilt on the next refresh().
 }
@@ -292,7 +299,7 @@ void PendingOrdersPanel::refresh() {
 
         auto* side_item = new QTableWidgetItem(o.action);
         const QString actUp = o.action.toUpper();
-        side_item->setForeground(actUp == "BUY"   ? QColor(fincept::ui::colors::POSITIVE())
+        side_item->setForeground(actUp == "BUY"    ? QColor(fincept::ui::colors::POSITIVE())
                                  : actUp == "SELL" ? QColor(fincept::ui::colors::NEGATIVE())
                                                    : QColor(fincept::ui::colors::TEXT_PRIMARY()));
         table_->setItem(row, kColSide, side_item);
@@ -301,7 +308,7 @@ void PendingOrdersPanel::refresh() {
         set(kColPriceType, o.price_type);
 
         auto* status_item = new QTableWidgetItem(o.status.toUpper());
-        status_item->setForeground(o.status == "approved" ? QColor(fincept::ui::colors::POSITIVE())
+        status_item->setForeground(o.status == "approved"   ? QColor(fincept::ui::colors::POSITIVE())
                                    : o.status == "rejected" ? QColor(fincept::ui::colors::NEGATIVE())
                                                             : QColor(fincept::ui::colors::AMBER()));
         table_->setItem(row, kColStatus, status_item);
@@ -358,8 +365,8 @@ void PendingOrdersPanel::approve_row(const QString& pending_id) {
 
 void PendingOrdersPanel::reject_row(const QString& pending_id) {
     bool ok = false;
-    const QString reason = QInputDialog::getText(this, tr("Reject Order"), tr("Rejection reason:"),
-                                                 QLineEdit::Normal, tr("Rejected by user"), &ok);
+    const QString reason = QInputDialog::getText(this, tr("Reject Order"), tr("Rejection reason:"), QLineEdit::Normal,
+                                                 tr("Rejected by user"), &ok);
     if (!ok)
         return;
     ActionCenter::instance().reject_order(pending_id, reason);
@@ -368,16 +375,20 @@ void PendingOrdersPanel::reject_row(const QString& pending_id) {
 // ── ActionCenter signal slots ───────────────────────────────────────────────
 
 void PendingOrdersPanel::on_pending_created(const PendingOrder&) {
-    if (isVisible()) refresh();
+    if (isVisible())
+        refresh();
 }
 void PendingOrdersPanel::on_order_approved(const QString&, const QString&) {
-    if (isVisible()) refresh();
+    if (isVisible())
+        refresh();
 }
 void PendingOrdersPanel::on_order_rejected(const QString&, const QString&) {
-    if (isVisible()) refresh();
+    if (isVisible())
+        refresh();
 }
 void PendingOrdersPanel::on_stats_updated(const QString&) {
-    if (isVisible()) refresh_stats();
+    if (isVisible())
+        refresh_stats();
 }
 
 } // namespace fincept::screens

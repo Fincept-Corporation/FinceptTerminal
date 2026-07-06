@@ -92,16 +92,23 @@ QVector<FeedItem> FeedScraper::parse(const QByteArray& body, const FeedSubscript
 
     if (sub.parse_mode == ParseMode::Manual) {
         switch (fmt) {
-            case FeedFormat::Json: return parse_json(body, sub);
-            case FeedFormat::Csv: return parse_csv(body, sub);
-            default: return parse_xml_manual(body, sub); // rss/atom/xml all element-based
+            case FeedFormat::Json:
+                return parse_json(body, sub);
+            case FeedFormat::Csv:
+                return parse_csv(body, sub);
+            default:
+                return parse_xml_manual(body, sub); // rss/atom/xml all element-based
         }
     }
     switch (fmt) {
-        case FeedFormat::Json: return parse_json(body, sub);
-        case FeedFormat::Csv: return parse_csv(body, sub);
-        case FeedFormat::Html: return {}; // auto HTML table extraction out of scope for v1 auto mode
-        default: return parse_rss_atom(body, sub);
+        case FeedFormat::Json:
+            return parse_json(body, sub);
+        case FeedFormat::Csv:
+            return parse_csv(body, sub);
+        case FeedFormat::Html:
+            return {}; // auto HTML table extraction out of scope for v1 auto mode
+        default:
+            return parse_rss_atom(body, sub);
     }
 }
 
@@ -313,10 +320,14 @@ DiscoveredSchema FeedScraper::discover(const QByteArray& body, const FeedSubscri
     if (fmt == FeedFormat::Auto)
         fmt = sniff_format(body);
     switch (fmt) {
-        case FeedFormat::Json: return discover_json(body, sub);
-        case FeedFormat::Csv: return discover_csv(body);
-        case FeedFormat::Html: return {};
-        default: return discover_xml(body);
+        case FeedFormat::Json:
+            return discover_json(body, sub);
+        case FeedFormat::Csv:
+            return discover_csv(body);
+        case FeedFormat::Html:
+            return {};
+        default:
+            return discover_xml(body);
     }
 }
 
@@ -457,8 +468,8 @@ DiscoveredSchema FeedScraper::discover_json(const QByteArray& body, const FeedSu
     }
     // Honour an explicit override if the user already picked an array path.
     if (!sub.mapping.item_selector.isEmpty()) {
-        const QJsonValue v = json_path(doc.isArray() ? QJsonValue(doc.array()) : QJsonValue(doc.object()),
-                                       sub.mapping.item_selector);
+        const QJsonValue v =
+            json_path(doc.isArray() ? QJsonValue(doc.array()) : QJsonValue(doc.object()), sub.mapping.item_selector);
         if (v.isArray()) {
             arr = v.toArray();
             path = sub.mapping.item_selector;
@@ -495,7 +506,8 @@ DiscoveredSchema FeedScraper::discover_csv(const QByteArray& body) {
     const QStringList headers = lines.first().split(delim);
     const QStringList firstRow = lines.size() > 1 ? lines[1].split(delim) : QStringList();
     for (int i = 0; i < headers.size(); ++i)
-        s.fields.append({headers[i].trimmed(), i < firstRow.size() ? firstRow[i].trimmed().left(kSampleMax) : QString()});
+        s.fields.append(
+            {headers[i].trimmed(), i < firstRow.size() ? firstRow[i].trimmed().left(kSampleMax) : QString()});
     s.ok = !s.fields.isEmpty();
     return s;
 }

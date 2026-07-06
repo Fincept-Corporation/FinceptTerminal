@@ -7,9 +7,8 @@
 //
 // Part of the partial-class split of WindowFrame.cpp.
 
-#include "app/WindowFrame.h"
-
 #include "app/DockScreenRouter.h"
+#include "app/WindowFrame.h"
 #include "core/logging/Logger.h"
 #include "core/session/SessionManager.h"
 #include "screens/chat_mode/ChatModeScreen.h"
@@ -32,7 +31,8 @@
 namespace fincept {
 
 void WindowFrame::toggle_chat_mode() {
-    if (locked_) return;
+    if (locked_)
+        return;
     chat_mode_ = !chat_mode_;
 
     if (chat_mode_) {
@@ -63,7 +63,6 @@ void WindowFrame::toggle_chat_mode() {
         LOG_INFO("WindowFrame", "Exited Chat Mode");
     }
 }
-
 
 void WindowFrame::toggle_focus_mode() {
     // Don't let focus mode toggle shell visibility while the user is on an

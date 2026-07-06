@@ -27,7 +27,7 @@ static constexpr int kAltTtlSec = 10 * 60; // 10 min — deterministic given sam
 // params   = JSON object with name/type/value/rate/term/fee/current_value/additional
 
 static void run_alt_async(const QString& command, const QJsonObject& params, ToolContext ctx,
-                           std::shared_ptr<QPromise<ToolResult>> promise) {
+                          std::shared_ptr<QPromise<ToolResult>> promise) {
     const QString data_json = QString::fromUtf8(QJsonDocument(params).toJson(QJsonDocument::Compact));
     const QString cache_key = "alt:" + command + ":" + data_json;
 
@@ -44,8 +44,7 @@ static void run_alt_async(const QString& command, const QJsonObject& params, Too
 
     auto* runner = &python::PythonRunner::instance();
     AsyncDispatch::callback_to_promise(
-        runner, ctx, promise,
-        [runner, command, data_json, cache_key, ctx](auto resolve) {
+        runner, ctx, promise, [runner, command, data_json, cache_key, ctx](auto resolve) {
             runner->run("Analytics/alternateInvestment/cli.py", {command, "--data", data_json},
                         [resolve, cache_key, ctx](const python::PythonResult& result) {
                             if (ctx.cancelled()) {
@@ -53,8 +52,7 @@ static void run_alt_async(const QString& command, const QJsonObject& params, Too
                                 return;
                             }
                             if (!result.success) {
-                                resolve(ToolResult::fail(
-                                    result.error.isEmpty() ? "Analysis failed" : result.error));
+                                resolve(ToolResult::fail(result.error.isEmpty() ? "Analysis failed" : result.error));
                                 return;
                             }
                             // Extract JSON from stdout
@@ -66,8 +64,7 @@ static void run_alt_async(const QString& command, const QJsonObject& params, Too
                                 return;
                             }
                             QJsonParseError err;
-                            auto doc = QJsonDocument::fromJson(
-                                out.mid(start, end - start + 1).toUtf8(), &err);
+                            auto doc = QJsonDocument::fromJson(out.mid(start, end - start + 1).toUtf8(), &err);
                             if (doc.isNull() || !doc.isObject()) {
                                 resolve(ToolResult::fail("Invalid JSON: " + err.errorString()));
                                 return;
@@ -119,7 +116,7 @@ static ToolSchema make_schema(const QString& type_description) {
         t.input_schema = make_schema(TYPE_DESC);                                                                       \
         t.default_timeout_ms = kAltTimeoutMs;                                                                          \
         t.async_handler = [](const QJsonObject& args, ToolContext ctx,                                                 \
-                              std::shared_ptr<QPromise<ToolResult>> promise) {                                          \
+                             std::shared_ptr<QPromise<ToolResult>> promise) {                                          \
             QJsonObject p;                                                                                             \
             p["name"] = args["name"].toString("Investment");                                                           \
             p["type"] = args["type"].toString("default");                                                              \

@@ -14,7 +14,8 @@ PredictionExchangeRegistry::PredictionExchangeRegistry() : QObject(nullptr) {}
 PredictionExchangeRegistry::~PredictionExchangeRegistry() = default;
 
 void PredictionExchangeRegistry::register_adapter(std::unique_ptr<PredictionExchangeAdapter> adapter) {
-    if (!adapter) return;
+    if (!adapter)
+        return;
     const QString id = adapter->id();
     for (const auto& e : entries_) {
         if (e.id == id) {
@@ -22,7 +23,8 @@ void PredictionExchangeRegistry::register_adapter(std::unique_ptr<PredictionExch
             return;
         }
     }
-    if (active_id_.isEmpty()) active_id_ = id;
+    if (active_id_.isEmpty())
+        active_id_ = id;
     entries_.push_back({id, std::move(adapter)});
     LOG_INFO("PredictionRegistry", "Registered adapter: " + id);
 }
@@ -30,13 +32,15 @@ void PredictionExchangeRegistry::register_adapter(std::unique_ptr<PredictionExch
 QStringList PredictionExchangeRegistry::available_ids() const {
     QStringList out;
     out.reserve(entries_.size());
-    for (const auto& e : entries_) out.push_back(e.id);
+    for (const auto& e : entries_)
+        out.push_back(e.id);
     return out;
 }
 
 PredictionExchangeAdapter* PredictionExchangeRegistry::adapter(const QString& id) const {
     for (const auto& e : entries_) {
-        if (e.id == id) return e.adapter.get();
+        if (e.id == id)
+            return e.adapter.get();
     }
     return nullptr;
 }
@@ -50,7 +54,8 @@ QString PredictionExchangeRegistry::active_id() const {
 }
 
 void PredictionExchangeRegistry::set_active(const QString& id) {
-    if (id == active_id_) return;
+    if (id == active_id_)
+        return;
     if (!adapter(id)) {
         LOG_WARN("PredictionRegistry", "Attempt to activate unknown adapter: " + id);
         return;

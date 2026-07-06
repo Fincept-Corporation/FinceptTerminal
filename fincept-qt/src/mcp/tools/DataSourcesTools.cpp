@@ -257,7 +257,7 @@ std::vector<ToolDef> get_data_sources_tools() {
         t.name = "ds_delete_connection";
         t.description = "Delete a saved data source connection by ID.";
         t.category = "data-sources";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties = QJsonObject{
             {"id", QJsonObject{{"type", "string"}, {"description", "Connection ID to delete"}}},
         };

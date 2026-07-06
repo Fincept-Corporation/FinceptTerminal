@@ -93,7 +93,7 @@ struct ApiResponse {
 struct RateLimitInfo {
     int limit = 0;
     int remaining = 0;
-    qint64 reset_at = 0;       // unix timestamp (seconds)
+    qint64 reset_at = 0; // unix timestamp (seconds)
     int window_seconds = 0;
     int concurrent_limit = 0;
 

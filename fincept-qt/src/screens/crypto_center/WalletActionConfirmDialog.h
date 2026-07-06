@@ -31,8 +31,7 @@ namespace fincept::screens {
 class WalletActionConfirmDialog : public QDialog {
     Q_OBJECT
   public:
-    explicit WalletActionConfirmDialog(WalletActionSummary summary,
-                                       QWidget* parent = nullptr);
+    explicit WalletActionConfirmDialog(WalletActionSummary summary, QWidget* parent = nullptr);
     ~WalletActionConfirmDialog() override;
 
     /// Convenience: show modally, return true on confirm, false on cancel /

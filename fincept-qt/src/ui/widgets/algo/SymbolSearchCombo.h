@@ -8,11 +8,11 @@ namespace fincept::ui::algo {
 
 class SymbolSearchCombo : public QComboBox {
     Q_OBJECT
-public:
+  public:
     explicit SymbolSearchCombo(QWidget* parent = nullptr);
     void set_symbols(const QStringList& symbols);
 
-private:
+  private:
     QCompleter* completer_ = nullptr;
     QStringListModel* model_ = nullptr;
 };

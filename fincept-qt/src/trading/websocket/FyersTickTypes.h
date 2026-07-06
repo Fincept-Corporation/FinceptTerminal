@@ -16,7 +16,7 @@ struct FyersTick {
     double tot_sell_qty = 0.0;
     double ltq = 0.0;
     double atp = 0.0;
-    double oi = 0.0;        // open interest (sf field 12); 0 for cash/equity
+    double oi = 0.0; // open interest (sf field 12); 0 for cash/equity
     quint32 timestamp = 0;
     quint64 fytoken = 0;
     quint16 fy_code = 0;
@@ -59,7 +59,7 @@ inline FyersOptionLeg fyers_parse_option(const QString& raw) {
         return leg;
     int u = 0;
     while (u < n && s.at(u).isLetter())
-        ++u;                                   // underlying root (leading letters)
+        ++u; // underlying root (leading letters)
     if (u == 0)
         return leg;
 
@@ -89,7 +89,7 @@ inline FyersOptionLeg fyers_parse_option(const QString& raw) {
     if ((suf == QLatin1String("CE") || suf == QLatin1String("PE")) && s.at(n - 3).isDigit()) {
         leg.underlying = s.left(u);
         leg.is_call = (suf == QLatin1String("CE"));
-        leg.valid = true;                      // strike stays 0 — see FyersOptionLeg
+        leg.valid = true; // strike stays 0 — see FyersOptionLeg
         return leg;
     }
     return leg;

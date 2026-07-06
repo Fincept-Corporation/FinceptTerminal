@@ -15,8 +15,7 @@ namespace fincept::wallet {
 
 namespace {
 
-constexpr const char* kBase58Alphabet =
-    "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+constexpr const char* kBase58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 // Build a reverse-lookup table once. -1 indicates an invalid character.
 std::array<int8_t, 256> build_b58_table() {
@@ -76,8 +75,7 @@ QByteArray Ed25519Verifier::decode_base58(const QString& s) noexcept {
     for (int i = 0; i < zeros; ++i) {
         out.append('\0');
     }
-    out.append(reinterpret_cast<const char*>(b256.data() + b256.size() - b256_len),
-               b256_len);
+    out.append(reinterpret_cast<const char*>(b256.data() + b256.size() - b256_len), b256_len);
     return out;
 }
 
@@ -119,8 +117,7 @@ QString Ed25519Verifier::encode_base58(const QByteArray& bytes) {
     return out;
 }
 
-bool Ed25519Verifier::verify(const QString& pubkey_b58,
-                             const QByteArray& message,
+bool Ed25519Verifier::verify(const QString& pubkey_b58, const QByteArray& message,
                              const QString& signature_b58) noexcept {
     const QByteArray pubkey = decode_base58(pubkey_b58);
     if (pubkey.size() != 32) {
@@ -136,11 +133,10 @@ bool Ed25519Verifier::verify(const QString& pubkey_b58,
         return false;
     }
 
-    const int ok = ::ed25519_verify(
-        reinterpret_cast<const unsigned char*>(signature.constData()),
-        reinterpret_cast<const unsigned char*>(message.constData()),
-        static_cast<size_t>(message.size()),
-        reinterpret_cast<const unsigned char*>(pubkey.constData()));
+    const int ok = ::ed25519_verify(reinterpret_cast<const unsigned char*>(signature.constData()),
+                                    reinterpret_cast<const unsigned char*>(message.constData()),
+                                    static_cast<size_t>(message.size()),
+                                    reinterpret_cast<const unsigned char*>(pubkey.constData()));
     return ok == 1;
 }
 

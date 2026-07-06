@@ -48,8 +48,8 @@ int run_paper_trading_selftest() {
 
     // Place a market order and fill it immediately at `px` (the path every screen
     // uses for a market order: place -> fill).
-    auto open_market = [&](const QString& sym, const QString& side, double qty, double px,
-                           const QString& product, const QString& exchange) {
+    auto open_market = [&](const QString& sym, const QString& side, double qty, double px, const QString& product,
+                           const QString& exchange) {
         auto o = pt_place_order(pid, sym, side, QStringLiteral("market"), qty, px, std::nullopt,
                                 /*reduce_only=*/false, exchange, product);
         pt_fill_order(o.id, px);
@@ -76,7 +76,8 @@ int run_paper_trading_selftest() {
     {
         open_market(opt, QStringLiteral("sell"), 50, 200.0, QStringLiteral("NRML"), NFO);
         auto p = position_for(pid, opt);
-        check("short: position opened as short", p && p->side.compare(QStringLiteral("short"), Qt::CaseInsensitive) == 0);
+        check("short: position opened as short",
+              p && p->side.compare(QStringLiteral("short"), Qt::CaseInsensitive) == 0);
         check("short: unrealized P&L ~0 at entry", p && approx(p->unrealized_pnl, 0.0));
     }
 
@@ -88,8 +89,7 @@ int run_paper_trading_selftest() {
     {
         pt_update_position_price(pid, opt, 0.0);
         auto p = position_for(pid, opt);
-        check("zero-tick: P&L is NOT the full premium (+10000)",
-              p && !approx(p->unrealized_pnl, 10000.0, 1.0));
+        check("zero-tick: P&L is NOT the full premium (+10000)", p && !approx(p->unrealized_pnl, 10000.0, 1.0));
         check("zero-tick: P&L holds at last good value (~0)", p && approx(p->unrealized_pnl, 0.0));
 
         // A real tick still marks correctly: short 50 @ 200, now 150 -> +2500.
@@ -146,8 +146,8 @@ int run_paper_trading_selftest() {
     // Clean up the throwaway portfolio (positions/orders/trades/blocks cascade).
     pt_delete_portfolio(pid);
 
-    std::printf("\npaper-trading selftest: %s (%d failure%s)\n", failures == 0 ? "OK" : "FAILED",
-                failures, failures == 1 ? "" : "s");
+    std::printf("\npaper-trading selftest: %s (%d failure%s)\n", failures == 0 ? "OK" : "FAILED", failures,
+                failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }
 

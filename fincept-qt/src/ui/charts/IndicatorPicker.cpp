@@ -12,8 +12,7 @@
 
 namespace fincept::ui {
 
-IndicatorPicker::IndicatorPicker(ChartOverlayManager* mgr, QWidget* parent)
-    : QWidget(parent), mgr_(mgr) {
+IndicatorPicker::IndicatorPicker(ChartOverlayManager* mgr, QWidget* parent) : QWidget(parent), mgr_(mgr) {
     setObjectName("indicatorPicker");
     setFixedHeight(28);
 
@@ -50,7 +49,8 @@ void IndicatorPicker::changeEvent(QEvent* event) {
 }
 
 void IndicatorPicker::retranslateUi() {
-    if (add_btn_) add_btn_->setText(tr("+ Indicator"));
+    if (add_btn_)
+        add_btn_->setText(tr("+ Indicator"));
     // The dropdown menu (category sections + indicator names) and the chips
     // (driven by each layer's display_name()) are rebuilt on demand, so they
     // pick up the active translator the next time they are shown.
@@ -72,9 +72,7 @@ void IndicatorPicker::build_menu() {
 
         auto* action = menu->addAction(def.name);
         action->setEnabled(!mgr_->has_layer(def.id));
-        connect(action, &QAction::triggered, this, [this, id = def.id]() {
-            emit indicator_requested(id);
-        });
+        connect(action, &QAction::triggered, this, [this, id = def.id]() { emit indicator_requested(id); });
     }
     menu->popup(add_btn_->mapToGlobal(QPoint(0, add_btn_->height())));
 }
@@ -85,9 +83,7 @@ void IndicatorPicker::add_chip(const QString& id, const QString& name) {
     chip->setFixedHeight(20);
     chip->setCursor(Qt::PointingHandCursor);
     chip->setProperty("layerId", id);
-    connect(chip, &QPushButton::clicked, this, [this, id]() {
-        emit indicator_removed(id);
-    });
+    connect(chip, &QPushButton::clicked, this, [this, id]() { emit indicator_removed(id); });
     chip_layout_->addWidget(chip);
 }
 
@@ -121,14 +117,10 @@ QVector<IndicatorDef> IndicatorPicker::available_indicators() {
     // QCoreApplication::translate with an explicit context rather than tr().
     auto t = [](const char* s) { return QCoreApplication::translate("IndicatorPicker", s); };
     return {
-        {"ema_9",     t("EMA (9)"),          t("Trend")},
-        {"ema_21",    t("EMA (21)"),         t("Trend")},
-        {"ema_50",    t("EMA (50)"),         t("Trend")},
-        {"ema_200",   t("EMA (200)"),        t("Trend")},
-        {"vwap",      t("VWAP"),             t("Volume")},
-        {"bb_20_2.0", t("Bollinger (20,2)"), t("Volatility")},
-        {"sr_auto",   t("Auto S/R"),         t("Levels")},
-        {"pivot_std", t("Pivot Points"),     t("Levels")},
+        {"ema_9", t("EMA (9)"), t("Trend")},     {"ema_21", t("EMA (21)"), t("Trend")},
+        {"ema_50", t("EMA (50)"), t("Trend")},   {"ema_200", t("EMA (200)"), t("Trend")},
+        {"vwap", t("VWAP"), t("Volume")},        {"bb_20_2.0", t("Bollinger (20,2)"), t("Volatility")},
+        {"sr_auto", t("Auto S/R"), t("Levels")}, {"pivot_std", t("Pivot Points"), t("Levels")},
     };
 }
 

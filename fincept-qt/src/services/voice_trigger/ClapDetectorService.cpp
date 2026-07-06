@@ -22,7 +22,7 @@ namespace {
 // Anon-namespaced + uniquely-prefixed to avoid the unity-build symbol
 // collision trap that bit SpeechService / TtsService earlier.
 constexpr auto CLAP_TAG = "ClapDetector";
-constexpr int  kClapShutdownTimeoutMs = 1500;
+constexpr int kClapShutdownTimeoutMs = 1500;
 } // namespace
 
 ClapDetectorService& ClapDetectorService::instance() {
@@ -83,17 +83,15 @@ void ClapDetectorService::start() {
 #else
     const QChar kPathSep = ':';
 #endif
-    env.insert("PYTHONPATH", existing_pypath.isEmpty()
-                                 ? scripts_dir
-                                 : (scripts_dir + kPathSep + existing_pypath));
+    env.insert("PYTHONPATH", existing_pypath.isEmpty() ? scripts_dir : (scripts_dir + kPathSep + existing_pypath));
 
     auto& cfg = AppConfig::instance();
-    const QString mode    = cfg.get("voice/clap_to_start/mode", "double").toString();
-    const QString peak    = cfg.get("voice/clap_to_start/peak_min", "12000").toString();
-    const QString ratio   = cfg.get("voice/clap_to_start/pr_ratio", "4.0").toString();
-    const QString gap     = cfg.get("voice/clap_to_start/max_gap_ms", "1500").toString();
+    const QString mode = cfg.get("voice/clap_to_start/mode", "double").toString();
+    const QString peak = cfg.get("voice/clap_to_start/peak_min", "12000").toString();
+    const QString ratio = cfg.get("voice/clap_to_start/pr_ratio", "4.0").toString();
+    const QString gap = cfg.get("voice/clap_to_start/max_gap_ms", "1500").toString();
     const QString debounce = cfg.get("voice/clap_to_start/debounce_ms", "1500").toString();
-    const QString device  = cfg.get("voice/deepgram/device", "").toString();
+    const QString device = cfg.get("voice/deepgram/device", "").toString();
 
     LOG_INFO(CLAP_TAG, QString("env: mode=%1 peak=%2 ratio=%3 gap=%4 debounce=%5 device='%6'")
                            .arg(mode, peak, ratio, gap, debounce, device));
@@ -116,10 +114,9 @@ void ClapDetectorService::start() {
 #endif
 
     connect(process_, &QProcess::readyReadStandardOutput, this, &ClapDetectorService::on_stdout_ready);
-    connect(process_, &QProcess::readyReadStandardError,  this, &ClapDetectorService::on_stderr_ready);
+    connect(process_, &QProcess::readyReadStandardError, this, &ClapDetectorService::on_stderr_ready);
     connect(process_, &QProcess::started, this, [this]() {
-        LOG_INFO(CLAP_TAG, QString("QProcess::started — pid=%1")
-                               .arg(process_ ? process_->processId() : 0));
+        LOG_INFO(CLAP_TAG, QString("QProcess::started — pid=%1").arg(process_ ? process_->processId() : 0));
     });
     connect(process_, &QProcess::finished, this, &ClapDetectorService::on_process_finished);
     connect(process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {

@@ -172,16 +172,17 @@ void WebSocketClient::on_binary_received(const QByteArray& data) {
 
 void WebSocketClient::on_error(QAbstractSocket::SocketError err) {
     const QString es = socket_ ? socket_->errorString() : QStringLiteral("(no socket)");
-    LOG_ERROR(kTag, QString("[%1] Error on %2: %3 (code=%4)")
-                       .arg(thread_label(), redact_url(url_), es)
-                       .arg(static_cast<int>(err)));
+    LOG_ERROR(
+        kTag,
+        QString("[%1] Error on %2: %3 (code=%4)").arg(thread_label(), redact_url(url_), es).arg(static_cast<int>(err)));
     emit error_occurred(es);
 }
 
 void WebSocketClient::attempt_reconnect() {
     if (reconnect_stopped_) {
-        LOG_INFO(kTag, QString("[%1] attempt_reconnect skipped for %2 (stop_reconnect)")
-                           .arg(thread_label(), redact_url(url_)));
+        LOG_INFO(
+            kTag,
+            QString("[%1] attempt_reconnect skipped for %2 (stop_reconnect)").arg(thread_label(), redact_url(url_)));
         return;
     }
     reconnect_attempts_++;

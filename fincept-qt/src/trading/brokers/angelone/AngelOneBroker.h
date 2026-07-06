@@ -65,13 +65,11 @@ class AngelOneBroker : public IBroker {
                                                  const QVector<QString>& symbols) override;
 
     // --- Multi-quote & Market Depth ---
-    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
-        const BrokerCredentials& creds,
-        const QVector<QPair<QString, QString>>& symbols) override;
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const BrokerCredentials& creds,
+                                                       const QVector<QPair<QString, QString>>& symbols) override;
 
-    ApiResponse<MarketDepth> get_market_depth(
-        const BrokerCredentials& creds,
-        const QString& symbol, const QString& exchange) override;
+    ApiResponse<MarketDepth> get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                              const QString& exchange) override;
 
     ApiResponse<QVector<BrokerCandle>> get_history(const BrokerCredentials& creds, const QString& symbol,
                                                    const QString& resolution, const QString& from_date,

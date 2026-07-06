@@ -6,8 +6,6 @@
 //
 // Part of the partial-class split of CryptoTradingScreen.cpp.
 
-#include "screens/crypto_trading/CryptoTradingScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
@@ -17,6 +15,7 @@
 #include "screens/crypto_trading/CryptoOrderBook.h"
 #include "screens/crypto_trading/CryptoOrderEntry.h"
 #include "screens/crypto_trading/CryptoTickerBar.h"
+#include "screens/crypto_trading/CryptoTradingScreen.h"
 #include "screens/crypto_trading/CryptoWatchlist.h"
 #include "trading/ExchangeService.h"
 #include "trading/ExchangeSession.h"
@@ -42,7 +41,6 @@ using namespace fincept::trading;
 using namespace fincept::screens::crypto;
 
 static const QString TAG = "CryptoTrading";
-
 
 void CryptoTradingScreen::apply_feed_mode(bool ws_connected) {
     // WS-only mode: no REST polling fallbacks. We keep this method as a
@@ -161,20 +159,23 @@ void CryptoTradingScreen::flush_ws_updates() {
                     }
 
                     if (!self)
-                        return;  // widget destroyed — nothing to reset
-                    QMetaObject::invokeMethod(self, [self, r]() {
-                        if (!self)
-                            return;
-                        self->paper_bookkeeping_in_flight_.store(false);
-                        self->bottom_panel_->set_positions(r.positions);
-                        if (r.fill_occurred) {
-                            self->portfolio_ = r.portfolio;
-                            self->order_entry_->set_balance(r.portfolio.balance);
-                            self->bottom_panel_->set_orders(r.orders);
-                            self->bottom_panel_->set_trades(r.trades);
-                            self->bottom_panel_->set_stats(r.stats);
-                        }
-                    }, Qt::QueuedConnection);
+                        return; // widget destroyed — nothing to reset
+                    QMetaObject::invokeMethod(
+                        self,
+                        [self, r]() {
+                            if (!self)
+                                return;
+                            self->paper_bookkeeping_in_flight_.store(false);
+                            self->bottom_panel_->set_positions(r.positions);
+                            if (r.fill_occurred) {
+                                self->portfolio_ = r.portfolio;
+                                self->order_entry_->set_balance(r.portfolio.balance);
+                                self->bottom_panel_->set_orders(r.orders);
+                                self->bottom_panel_->set_trades(r.trades);
+                                self->bottom_panel_->set_stats(r.stats);
+                            }
+                        },
+                        Qt::QueuedConnection);
                 });
             }
         }
@@ -283,21 +284,24 @@ void CryptoTradingScreen::refresh_portfolio() {
         }
         if (!self || !s.ok)
             return;
-        QMetaObject::invokeMethod(self, [self, s]() {
-            if (!self)
-                return;
-            self->portfolio_ = s.portfolio;
-            self->order_entry_->set_balance(s.portfolio.balance);
-            self->bottom_panel_->set_positions(s.positions);
-            self->bottom_panel_->set_orders(s.orders);
-            self->bottom_panel_->set_trades(s.trades);
-            self->bottom_panel_->set_stats(s.stats);
-            LOG_INFO(TAG, QString("Paper portfolio refreshed: %1 positions, %2 orders, %3 trades, balance=%4")
-                              .arg(s.positions.size())
-                              .arg(s.orders.size())
-                              .arg(s.trades.size())
-                              .arg(s.portfolio.balance, 0, 'f', 2));
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, s]() {
+                if (!self)
+                    return;
+                self->portfolio_ = s.portfolio;
+                self->order_entry_->set_balance(s.portfolio.balance);
+                self->bottom_panel_->set_positions(s.positions);
+                self->bottom_panel_->set_orders(s.orders);
+                self->bottom_panel_->set_trades(s.trades);
+                self->bottom_panel_->set_stats(s.stats);
+                LOG_INFO(TAG, QString("Paper portfolio refreshed: %1 positions, %2 orders, %3 trades, balance=%4")
+                                  .arg(s.positions.size())
+                                  .arg(s.orders.size())
+                                  .arg(s.trades.size())
+                                  .arg(s.portfolio.balance, 0, 'f', 2));
+            },
+            Qt::QueuedConnection);
     });
 }
 

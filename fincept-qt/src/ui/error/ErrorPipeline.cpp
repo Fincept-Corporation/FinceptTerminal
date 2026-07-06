@@ -10,20 +10,17 @@ ErrorPipeline& ErrorPipeline::instance() {
     return s;
 }
 
-void ErrorPipeline::report_panel_error(const QString& panel_id, Severity sev,
-                                        const QString& message, const QString& source) {
+void ErrorPipeline::report_panel_error(const QString& panel_id, Severity sev, const QString& message,
+                                       const QString& source) {
     panel_errors_[panel_id] = panel_errors_.value(panel_id) + 1;
-    LOG_WARN("ErrorPipeline",
-             QString("Panel %1 error (sev=%2): %3 [from %4]")
-                 .arg(panel_id)
-                 .arg(sev == Severity::Error ? "err" : "warn")
-                 .arg(message, source.isEmpty() ? QStringLiteral("-") : source));
+    LOG_WARN("ErrorPipeline", QString("Panel %1 error (sev=%2): %3 [from %4]")
+                                  .arg(panel_id)
+                                  .arg(sev == Severity::Error ? "err" : "warn")
+                                  .arg(message, source.isEmpty() ? QStringLiteral("-") : source));
 
-    ToastService::instance().post(
-        sev == Severity::Error ? ToastService::Severity::Error
-                               : ToastService::Severity::Warning,
-        message,
-        source.isEmpty() ? panel_id : source);
+    ToastService::instance().post(sev == Severity::Error ? ToastService::Severity::Error
+                                                         : ToastService::Severity::Warning,
+                                  message, source.isEmpty() ? panel_id : source);
 
     emit panel_errors_changed(panel_id);
 }
@@ -33,23 +30,20 @@ void ErrorPipeline::clear_panel_errors(const QString& panel_id) {
         emit panel_errors_changed(panel_id);
 }
 
-void ErrorPipeline::report_shell_error(const QString& category, Severity sev,
-                                        const QString& message, const QString& source) {
+void ErrorPipeline::report_shell_error(const QString& category, Severity sev, const QString& message,
+                                       const QString& source) {
     if (message.isEmpty()) {
         clear_shell_error(category);
         return;
     }
     shell_errors_[category] = message;
-    LOG_WARN("ErrorPipeline",
-             QString("Shell error [%1] sev=%2: %3 [from %4]")
-                 .arg(category)
-                 .arg(sev == Severity::Error ? "err" : "warn")
-                 .arg(message, source.isEmpty() ? QStringLiteral("-") : source));
-    ToastService::instance().post(
-        sev == Severity::Error ? ToastService::Severity::Error
-                               : ToastService::Severity::Warning,
-        message,
-        source.isEmpty() ? category : source);
+    LOG_WARN("ErrorPipeline", QString("Shell error [%1] sev=%2: %3 [from %4]")
+                                  .arg(category)
+                                  .arg(sev == Severity::Error ? "err" : "warn")
+                                  .arg(message, source.isEmpty() ? QStringLiteral("-") : source));
+    ToastService::instance().post(sev == Severity::Error ? ToastService::Severity::Error
+                                                         : ToastService::Severity::Warning,
+                                  message, source.isEmpty() ? category : source);
     emit shell_errors_changed();
 }
 

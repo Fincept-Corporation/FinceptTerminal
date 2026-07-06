@@ -43,8 +43,8 @@ static QString btn_primary() {
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::BORDER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(),
+             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
 }
 
 static QString link_style() {
@@ -135,14 +135,19 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
     });
     connect(&auth, &auth::AuthManager::otp_verified, this, [this]() {
         verify_btn_->setEnabled(true);
-        for (QLineEdit* w : {first_name_, last_name_, email_, phone_, country_code_,
-                             password_, confirm_pw_, otp_input_}) {
-            if (w) w->clear();
+        for (QLineEdit* w :
+             {first_name_, last_name_, email_, phone_, country_code_, password_, confirm_pw_, otp_input_}) {
+            if (w)
+                w->clear();
         }
-        if (password_) password_->setEchoMode(QLineEdit::Password);
-        if (confirm_pw_) confirm_pw_->setEchoMode(QLineEdit::Password);
-        if (error_label_) error_label_->hide();
-        if (otp_error_) otp_error_->hide();
+        if (password_)
+            password_->setEchoMode(QLineEdit::Password);
+        if (confirm_pw_)
+            confirm_pw_->setEchoMode(QLineEdit::Password);
+        if (error_label_)
+            error_label_->hide();
+        if (otp_error_)
+            otp_error_->hide();
         pages_->setCurrentIndex(0);
     });
     connect(&auth, &auth::AuthManager::otp_failed, this, [this](const QString& err) {
@@ -425,33 +430,57 @@ void RegisterScreen::build_otp_page() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void RegisterScreen::retranslateUi() {
-    if (form_title_)       form_title_->setText(tr("CREATE ACCOUNT"));
-    if (first_name_lbl_)   first_name_lbl_->setText(tr("FIRST NAME"));
-    if (last_name_lbl_)    last_name_lbl_->setText(tr("LAST NAME"));
-    if (email_lbl_)        email_lbl_->setText(tr("EMAIL"));
-    if (code_lbl_)         code_lbl_->setText(tr("CODE"));
-    if (phone_lbl_)        phone_lbl_->setText(tr("PHONE"));
-    if (password_lbl_)     password_lbl_->setText(tr("PASSWORD"));
-    if (confirm_pw_lbl_)   confirm_pw_lbl_->setText(tr("CONFIRM PASSWORD"));
+    if (form_title_)
+        form_title_->setText(tr("CREATE ACCOUNT"));
+    if (first_name_lbl_)
+        first_name_lbl_->setText(tr("FIRST NAME"));
+    if (last_name_lbl_)
+        last_name_lbl_->setText(tr("LAST NAME"));
+    if (email_lbl_)
+        email_lbl_->setText(tr("EMAIL"));
+    if (code_lbl_)
+        code_lbl_->setText(tr("CODE"));
+    if (phone_lbl_)
+        phone_lbl_->setText(tr("PHONE"));
+    if (password_lbl_)
+        password_lbl_->setText(tr("PASSWORD"));
+    if (confirm_pw_lbl_)
+        confirm_pw_lbl_->setText(tr("CONFIRM PASSWORD"));
 
-    if (first_name_)   first_name_->setPlaceholderText(tr("First"));
-    if (last_name_)    last_name_->setPlaceholderText(tr("Last"));
-    if (email_)        email_->setPlaceholderText(tr("user@domain.com"));
-    if (country_code_) country_code_->setPlaceholderText(tr("+1"));
-    if (phone_)        phone_->setPlaceholderText(tr("234 567 8900"));
-    if (password_)     password_->setPlaceholderText(tr("min 8 characters"));
-    if (confirm_pw_)   confirm_pw_->setPlaceholderText(tr("re-enter password"));
+    if (first_name_)
+        first_name_->setPlaceholderText(tr("First"));
+    if (last_name_)
+        last_name_->setPlaceholderText(tr("Last"));
+    if (email_)
+        email_->setPlaceholderText(tr("user@domain.com"));
+    if (country_code_)
+        country_code_->setPlaceholderText(tr("+1"));
+    if (phone_)
+        phone_->setPlaceholderText(tr("234 567 8900"));
+    if (password_)
+        password_->setPlaceholderText(tr("min 8 characters"));
+    if (confirm_pw_)
+        confirm_pw_->setPlaceholderText(tr("re-enter password"));
 
-    if (register_btn_)      register_btn_->setText(tr("  CREATE ACCOUNT  "));
-    if (have_account_lbl_)  have_account_lbl_->setText(tr("Already have an account?"));
-    if (signin_btn_)        signin_btn_->setText(tr("SIGN IN"));
+    if (register_btn_)
+        register_btn_->setText(tr("  CREATE ACCOUNT  "));
+    if (have_account_lbl_)
+        have_account_lbl_->setText(tr("Already have an account?"));
+    if (signin_btn_)
+        signin_btn_->setText(tr("SIGN IN"));
 
-    if (otp_title_)        otp_title_->setText(tr("VERIFY EMAIL"));
-    if (otp_code_lbl_)     otp_code_lbl_->setText(tr("VERIFICATION CODE"));
-    if (otp_input_)        otp_input_->setPlaceholderText(tr("enter code from email"));
-    if (verify_btn_)       verify_btn_->setText(tr("  VERIFY  "));
-    if (resend_btn_)       resend_btn_->setText(tr("DIDN'T RECEIVE? RESEND"));
-    if (back_to_form_btn_) back_to_form_btn_->setText(tr("BACK TO FORM"));
+    if (otp_title_)
+        otp_title_->setText(tr("VERIFY EMAIL"));
+    if (otp_code_lbl_)
+        otp_code_lbl_->setText(tr("VERIFICATION CODE"));
+    if (otp_input_)
+        otp_input_->setPlaceholderText(tr("enter code from email"));
+    if (verify_btn_)
+        verify_btn_->setText(tr("  VERIFY  "));
+    if (resend_btn_)
+        resend_btn_->setText(tr("DIDN'T RECEIVE? RESEND"));
+    if (back_to_form_btn_)
+        back_to_form_btn_->setText(tr("BACK TO FORM"));
 }
 
 // ── Password Strength ────────────────────────────────────────────────────────

@@ -17,9 +17,7 @@ namespace fincept::screens {
 class ComingSoonTab : public QWidget {
     Q_OBJECT
   public:
-    explicit ComingSoonTab(const QString& tab_name,
-                           const QString& phase_label,
-                           const QString& description,
+    explicit ComingSoonTab(const QString& tab_name, const QString& phase_label, const QString& description,
                            QWidget* parent = nullptr);
     ~ComingSoonTab() override;
 

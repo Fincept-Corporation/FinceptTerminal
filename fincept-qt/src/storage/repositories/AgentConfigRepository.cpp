@@ -36,11 +36,11 @@ Result<AgentConfig> AgentConfigRepository::get_active() {
 }
 
 Result<void> AgentConfigRepository::save(const AgentConfig& c) {
-    auto r = exec_write(
-        "INSERT OR REPLACE INTO agent_configs "
-        "(id, name, description, config_json, category, is_default, is_active, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-        {c.id, c.name, c.description, c.config_json, c.category, c.is_default ? 1 : 0, c.is_active ? 1 : 0});
+    auto r =
+        exec_write("INSERT OR REPLACE INTO agent_configs "
+                   "(id, name, description, config_json, category, is_default, is_active, updated_at) "
+                   "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+                   {c.id, c.name, c.description, c.config_json, c.category, c.is_default ? 1 : 0, c.is_active ? 1 : 0});
     if (r.is_ok())
         SyncOutbox::record_unique("agent_config", c.id, "upsert");
     return r;

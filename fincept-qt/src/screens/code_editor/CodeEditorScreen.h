@@ -211,7 +211,7 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     void on_rename_cell(const QString& cell_id);
 
     // Header / Library
-    void on_view_changed(int index);          // 0 = Library, 1 = Editor
+    void on_view_changed(int index); // 0 = Library, 1 = Editor
     void on_library_search(const QString& text);
     void on_open_library_entry(int catalog_index);
 
@@ -219,9 +219,9 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     void build_ui();
     QWidget* build_header();
     QWidget* build_editor_page();
-    QWidget* build_library_page();            // CodeEditorScreen_Library.cpp
-    void populate_library();                  // CodeEditorScreen_Library.cpp
-    void relayout_library_cards();            // CodeEditorScreen_Library.cpp
+    QWidget* build_library_page(); // CodeEditorScreen_Library.cpp
+    void populate_library();       // CodeEditorScreen_Library.cpp
+    void relayout_library_cards(); // CodeEditorScreen_Library.cpp
     void set_view(int index);
     bool load_notebook_from_path(const QString& path);
     QWidget* build_toolbar();
@@ -271,7 +271,7 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     QStackedWidget* view_stack_ = nullptr;
     int active_view_ = 0; // 0 = Library, 1 = Editor
     QLabel* header_title_ = nullptr;
-    QVector<QPushButton*> view_btns_;          // [LIBRARY, EDITOR]
+    QVector<QPushButton*> view_btns_; // [LIBRARY, EDITOR]
     QLineEdit* lib_search_input_ = nullptr;
     QPushButton* header_new_btn_ = nullptr;
 

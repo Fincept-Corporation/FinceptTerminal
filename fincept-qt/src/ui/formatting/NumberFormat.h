@@ -4,7 +4,8 @@
 namespace fincept::ui::formatting {
 
 inline QString format_compact_volume(qint64 volume) {
-    if (volume <= 0) return "--";
+    if (volume <= 0)
+        return "--";
     double v = static_cast<double>(volume);
     if (v >= 1e9) {
         return QString::number(v / 1e9, 'f', 2) + "B";

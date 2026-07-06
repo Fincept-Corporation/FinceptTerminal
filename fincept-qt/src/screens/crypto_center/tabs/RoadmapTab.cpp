@@ -14,8 +14,7 @@ namespace fincept::screens {
 namespace {
 
 QString roadmap_font_stack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 } // namespace
@@ -76,15 +75,11 @@ void RoadmapTab::apply_theme() {
     using namespace ui::colors;
     const QString font = roadmap_font_stack();
 
-    const QString ss = QStringLiteral(
-        "QWidget#roadmapTab { background:%1; }"
-        "QScrollArea#roadmapTabScroll { background:%1; border:none; }"
-        "QWidget#roadmapTabContent { background:%1; }"
-        "QFrame#roadmapTabPanelHost { background:%2; border:1px solid %3; }"
-    )
-        .arg(BG_BASE(),
-             BG_SURFACE(),
-             BORDER_DIM());
+    const QString ss = QStringLiteral("QWidget#roadmapTab { background:%1; }"
+                                      "QScrollArea#roadmapTabScroll { background:%1; border:none; }"
+                                      "QWidget#roadmapTabContent { background:%1; }"
+                                      "QFrame#roadmapTabPanelHost { background:%2; border:1px solid %3; }")
+                           .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM());
 
     setStyleSheet(ss);
 }

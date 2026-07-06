@@ -12,14 +12,13 @@ namespace {
 
 Result<void> apply_v042(QSqlDatabase& db) {
     QSqlQuery q(db);
-    const char* sql =
-        "CREATE TABLE IF NOT EXISTS scan_watch_events ("
-        " id TEXT PRIMARY KEY,"
-        " watch_id TEXT NOT NULL DEFAULT '',"
-        " symbol TEXT NOT NULL DEFAULT '',"
-        " detail TEXT NOT NULL DEFAULT '',"
-        " fired_at INTEGER NOT NULL DEFAULT 0"
-        ")";
+    const char* sql = "CREATE TABLE IF NOT EXISTS scan_watch_events ("
+                      " id TEXT PRIMARY KEY,"
+                      " watch_id TEXT NOT NULL DEFAULT '',"
+                      " symbol TEXT NOT NULL DEFAULT '',"
+                      " detail TEXT NOT NULL DEFAULT '',"
+                      " fired_at INTEGER NOT NULL DEFAULT 0"
+                      ")";
     if (!q.exec(QString::fromUtf8(sql)))
         return Result<void>::err(q.lastError().text().toStdString());
     QSqlQuery idx(db);
@@ -33,7 +32,8 @@ Result<void> apply_v042(QSqlDatabase& db) {
 
 void register_migration_v042() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({42, "scan_watch_events", apply_v042});
 }

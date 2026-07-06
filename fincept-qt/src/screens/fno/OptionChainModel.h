@@ -45,10 +45,10 @@ class OptionChainModel : public QAbstractTableModel {
         // delegate). 0..1. Same for PE side.
         CeOiBarRole = Qt::UserRole + 1,
         PeOiBarRole,
-        IsAtmRole,         // true on the ATM row
-        IsCallItmRole,     // strike < spot — CE is in-the-money
-        IsPutItmRole,      // strike > spot — PE is in-the-money
-        StrikeRole,        // raw strike value
+        IsAtmRole,     // true on the ATM row
+        IsCallItmRole, // strike < spot — CE is in-the-money
+        IsPutItmRole,  // strike > spot — PE is in-the-money
+        StrikeRole,    // raw strike value
         CeTokenRole,
         PeTokenRole,
     };

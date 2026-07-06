@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QtGlobal>
+
 #include <algorithm>
 
 namespace fincept::ui {

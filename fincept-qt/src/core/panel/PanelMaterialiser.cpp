@@ -19,8 +19,7 @@ PanelMaterialiser::PanelMaterialiser() {
     connect(&tick_timer_, &QTimer::timeout, this, &PanelMaterialiser::tick);
 }
 
-void PanelMaterialiser::enqueue(const QString& id, std::function<void()> work, int priority,
-                                QObject* owner) {
+void PanelMaterialiser::enqueue(const QString& id, std::function<void()> work, int priority, QObject* owner) {
     if (!work)
         return;
     Item item;
@@ -31,9 +30,15 @@ void PanelMaterialiser::enqueue(const QString& id, std::function<void()> work, i
         item.has_owner = true;
     }
     switch (priority) {
-        case 0:  q_priority_0_.enqueue(std::move(item)); break;
-        case 1:  q_priority_1_.enqueue(std::move(item)); break;
-        default: q_priority_2_.enqueue(std::move(item)); break;
+        case 0:
+            q_priority_0_.enqueue(std::move(item));
+            break;
+        case 1:
+            q_priority_1_.enqueue(std::move(item));
+            break;
+        default:
+            q_priority_2_.enqueue(std::move(item));
+            break;
     }
     if (!tick_timer_.isActive())
         tick_timer_.start();
@@ -65,7 +70,8 @@ void PanelMaterialiser::drain_all_now() {
     auto run_all = [](QQueue<Item>& q) {
         while (!q.isEmpty()) {
             Item it = q.dequeue();
-            if (it.work) it.work();
+            if (it.work)
+                it.work();
         }
     };
     run_all(q_priority_0_);
@@ -80,12 +86,14 @@ int PanelMaterialiser::pending_count() const {
 }
 
 void PanelMaterialiser::set_tick_interval_ms(int ms) {
-    if (ms < 1) ms = 1;
+    if (ms < 1)
+        ms = 1;
     tick_timer_.setInterval(ms);
 }
 
 void PanelMaterialiser::set_max_per_tick(int n) {
-    if (n < 1) n = 1;
+    if (n < 1)
+        n = 1;
     max_per_tick_ = n;
 }
 

@@ -313,7 +313,8 @@ void PortfolioSectorPanel::update_correlation() {
     // Matrix
     for (int r = 0; r < n; ++r) {
         auto* row_label = new QLabel(sorted[r].symbol.left(4));
-        row_label->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
+        row_label->setStyleSheet(
+            QString("color:%1; font-size:10px; font-weight:700;").arg(ui::colors::TEXT_SECONDARY()));
         grid->addWidget(row_label, r + 1, 0);
 
         for (int c = 0; c < n; ++c) {
@@ -358,9 +359,12 @@ void PortfolioSectorPanel::changeEvent(QEvent* event) {
 }
 
 void PortfolioSectorPanel::retranslateUi() {
-    if (title_label_) title_label_->setText(tr("SECTORS"));
-    if (corr_title_)  corr_title_->setText(tr("CORRELATION"));
-    if (corr_note_)   corr_note_->setText(tr("(P&L return proxy, top 6 by weight)"));
+    if (title_label_)
+        title_label_->setText(tr("SECTORS"));
+    if (corr_title_)
+        corr_title_->setText(tr("CORRELATION"));
+    if (corr_note_)
+        corr_note_->setText(tr("(P&L return proxy, top 6 by weight)"));
 
     // Donut legend uses translated "Unclassified" + sector data; matrix shows
     // "Need 2+ holdings for correlation" or a grid. Re-run both so the strings

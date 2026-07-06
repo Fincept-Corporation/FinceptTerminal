@@ -56,8 +56,7 @@ QString ThemeManager::qss_font_family_list() const {
         // CSS spec: generic families (monospace, serif, sans-serif) are
         // unquoted; named families get double-quoted to survive families
         // with spaces ("SF Mono", "Cascadia Mono").
-        if (f.compare("monospace", Qt::CaseInsensitive) == 0 ||
-            f.compare("serif", Qt::CaseInsensitive) == 0 ||
+        if (f.compare("monospace", Qt::CaseInsensitive) == 0 || f.compare("serif", Qt::CaseInsensitive) == 0 ||
             f.compare("sans-serif", Qt::CaseInsensitive) == 0) {
             parts.append(f.toLower());
         } else {
@@ -76,17 +75,17 @@ QStringList ThemeManager::build_font_chain(const QString& preferred) {
     // system font, and QLineEdit/QTextEdit rendered with mismatched
     // glyph metrics (the visible "fragmented" text symptom).
     static const QStringList kDefaults = {
-        QStringLiteral("SF Mono"),           // macOS Mojave+ (system monospace)
-        QStringLiteral("Menlo"),             // macOS standard
-        QStringLiteral("Monaco"),            // macOS classic
-        QStringLiteral("Cascadia Mono"),     // Windows 11 + Terminal
-        QStringLiteral("Cascadia Code"),     // Windows 11
-        QStringLiteral("Consolas"),          // Windows
-        QStringLiteral("DejaVu Sans Mono"),  // Linux (Debian/Ubuntu)
-        QStringLiteral("Liberation Mono"),   // Linux (Fedora/RHEL)
-        QStringLiteral("Source Code Pro"),   // Adobe — common 3rd-party
-        QStringLiteral("Courier New"),       // universal but ugly last resort
-        QStringLiteral("monospace"),         // Qt generic family
+        QStringLiteral("SF Mono"),          // macOS Mojave+ (system monospace)
+        QStringLiteral("Menlo"),            // macOS standard
+        QStringLiteral("Monaco"),           // macOS classic
+        QStringLiteral("Cascadia Mono"),    // Windows 11 + Terminal
+        QStringLiteral("Cascadia Code"),    // Windows 11
+        QStringLiteral("Consolas"),         // Windows
+        QStringLiteral("DejaVu Sans Mono"), // Linux (Debian/Ubuntu)
+        QStringLiteral("Liberation Mono"),  // Linux (Fedora/RHEL)
+        QStringLiteral("Source Code Pro"),  // Adobe — common 3rd-party
+        QStringLiteral("Courier New"),      // universal but ugly last resort
+        QStringLiteral("monospace"),        // Qt generic family
     };
     QStringList chain;
     const QString trimmed = preferred.trimmed();
@@ -145,8 +144,7 @@ void ThemeManager::apply_density(const QString& density) {
     rebuild_and_apply();
 }
 
-void ThemeManager::apply_typography_and_density(const QString& family, int size_px,
-                                                const QString& density) {
+void ThemeManager::apply_typography_and_density(const QString& family, int size_px, const QString& density) {
     if (!family.isEmpty())
         font_families_ = build_font_chain(family);
     font_size_px_ = (size_px > 0) ? size_px : 14;
@@ -183,7 +181,9 @@ QFont ThemeManager::current_font() const {
 
 void ThemeManager::rebuild_and_apply() {
     LOG_INFO("ThemeManager", QString("rebuild_and_apply: families=[%1] size=%2px density_pad=%3")
-        .arg(font_families_.join(", ")).arg(font_size_px_).arg(density_pad_));
+                                 .arg(font_families_.join(", "))
+                                 .arg(font_size_px_)
+                                 .arg(density_pad_));
 
     QFont f;
     f.setFamilies(font_families_);
@@ -196,8 +196,8 @@ void ThemeManager::rebuild_and_apply() {
     f.setStyleStrategy(QFont::PreferAntialias);
     f.setPixelSize(font_size_px_);
     if (qApp->font() != f) {
-        LOG_INFO("ThemeManager", QString("Applying new QFont to qApp (resolved family: %1)")
-                                     .arg(QFontInfo(f).family()));
+        LOG_INFO("ThemeManager",
+                 QString("Applying new QFont to qApp (resolved family: %1)").arg(QFontInfo(f).family()));
         qApp->setFont(f);
     }
 
@@ -518,28 +518,28 @@ QString ThemeManager::build_global_qss() const {
         #negativeText { color: %21; }
         #warningText  { color: %22; }
     )")
-        .arg(t.bg_base)         // %1
-        .arg(t.text_primary)    // %2
-        .arg(t.border_med)      // %3
-        .arg(t.border_bright)   // %4
-        .arg(t.bg_surface)      // %5
-        .arg(t.border_dim)      // %6
-        .arg(p)                 // %7  padding
-        .arg(p2)                // %8  double padding
-        .arg(t.accent)          // %9
-        .arg(t.text_secondary)  // %10
-        .arg(t.bg_hover)        // %11
-        .arg(t.bg_raised)       // %12
-        .arg(t.text_dim)        // %13
-        .arg(t.row_alt)         // %14
-        .arg(qss_font_family_list())  // %15
-        .arg(font_size_px_)     // %16
-        .arg(t.text_on_accent)  // %17
-        .arg(t.icon_dim)        // %18
-        .arg(t.icon_hover)      // %19
-        .arg(t.positive)        // %20
-        .arg(t.negative)        // %21
-        .arg(t.warning);        // %22
+        .arg(t.bg_base)              // %1
+        .arg(t.text_primary)         // %2
+        .arg(t.border_med)           // %3
+        .arg(t.border_bright)        // %4
+        .arg(t.bg_surface)           // %5
+        .arg(t.border_dim)           // %6
+        .arg(p)                      // %7  padding
+        .arg(p2)                     // %8  double padding
+        .arg(t.accent)               // %9
+        .arg(t.text_secondary)       // %10
+        .arg(t.bg_hover)             // %11
+        .arg(t.bg_raised)            // %12
+        .arg(t.text_dim)             // %13
+        .arg(t.row_alt)              // %14
+        .arg(qss_font_family_list()) // %15
+        .arg(font_size_px_)          // %16
+        .arg(t.text_on_accent)       // %17
+        .arg(t.icon_dim)             // %18
+        .arg(t.icon_hover)           // %19
+        .arg(t.positive)             // %20
+        .arg(t.negative)             // %21
+        .arg(t.warning);             // %22
     // NOTE: the chain stops at %22 on purpose. The QSS body's only higher
     // "%NN" tokens are the URL-encoded '#' (%23) inside the inline SVG icon
     // data-URIs (e.g. stroke='%2380808080'). QString::arg fills placeholders by
@@ -558,7 +558,11 @@ QString ThemeManager::build_global_qss() const {
 QString ThemeManager::build_ads_qss() const {
     const auto& t = current_;
     LOG_INFO("ThemeManager", QString("build_ads_qss: bg_base=%1 bg_raised=%2 bg_surface=%3 accent=%4 border_dim=%5")
-        .arg(t.bg_base).arg(t.bg_raised).arg(t.bg_surface).arg(t.accent).arg(t.border_dim));
+                                 .arg(t.bg_base)
+                                 .arg(t.bg_raised)
+                                 .arg(t.bg_surface)
+                                 .arg(t.accent)
+                                 .arg(t.border_dim));
     // Applied to CDockManager to override ADS's default.css/focus_highlighting.css palette() colours.
     QString qss = QString(R"(
         ads--CDockContainerWidget { background: %1; }
@@ -620,14 +624,14 @@ QString ThemeManager::build_ads_qss() const {
         ads--CDockOverlayCross { background: transparent; }
         ads--CDockSplitter::handle:hover { background-color: %4; }
     )")
-        .arg(t.bg_base)        // %1
-        .arg(t.bg_raised)      // %2
-        .arg(t.border_dim)     // %3
-        .arg(t.accent)         // %4
-        .arg(t.bg_surface)     // %5
-        .arg(t.text_secondary) // %6
-        .arg(t.text_primary)   // %7
-        .arg(t.bg_hover);      // %8
+                      .arg(t.bg_base)        // %1
+                      .arg(t.bg_raised)      // %2
+                      .arg(t.border_dim)     // %3
+                      .arg(t.accent)         // %4
+                      .arg(t.bg_surface)     // %5
+                      .arg(t.text_secondary) // %6
+                      .arg(t.text_primary)   // %7
+                      .arg(t.bg_hover);      // %8
 
     LOG_INFO("ThemeManager", QString("build_ads_qss: produced %1 chars").arg(qss.length()));
     return qss;

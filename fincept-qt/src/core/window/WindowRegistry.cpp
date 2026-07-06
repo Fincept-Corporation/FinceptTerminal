@@ -20,8 +20,8 @@ void WindowRegistry::register_frame(WindowFrame* w) {
             return; // idempotent
     }
     windows_.append(QPointer<WindowFrame>(w));
-    LOG_DEBUG("WindowRegistry", QString("Frame registered: window_id=%1, total=%2")
-                                    .arg(w->window_id()).arg(windows_.size()));
+    LOG_DEBUG("WindowRegistry",
+              QString("Frame registered: window_id=%1, total=%2").arg(w->window_id()).arg(windows_.size()));
     emit frame_added(w);
     emit display_order_changed();
 }
@@ -42,8 +42,8 @@ void WindowRegistry::unregister_frame(WindowFrame* w) {
         }
     }
     if (removed) {
-        LOG_DEBUG("WindowRegistry", QString("Frame unregistered: window_id=%1, total=%2")
-                                        .arg(w->window_id()).arg(windows_.size()));
+        LOG_DEBUG("WindowRegistry",
+                  QString("Frame unregistered: window_id=%1, total=%2").arg(w->window_id()).arg(windows_.size()));
         emit display_order_changed();
     }
 }
@@ -55,8 +55,7 @@ QList<WindowFrame*> WindowRegistry::frames() const {
         if (p)
             out.append(p.data());
     }
-    std::sort(out.begin(), out.end(),
-              [](WindowFrame* a, WindowFrame* b) { return a->window_id() < b->window_id(); });
+    std::sort(out.begin(), out.end(), [](WindowFrame* a, WindowFrame* b) { return a->window_id() < b->window_id(); });
     return out;
 }
 

@@ -96,7 +96,8 @@ std::vector<EvalCase> corpus() {
         {"who are the peer companies of Microsoft", {"get_equity_peers"}},
 
         // ── SEC EDGAR ──
-        {"find the latest 10-K annual report for Tesla", {"edgar_10k_sections", "edgar_10k_full_text", "edgar_10k_search", "edgar_find_company"}},
+        {"find the latest 10-K annual report for Tesla",
+         {"edgar_10k_sections", "edgar_10k_full_text", "edgar_10k_search", "edgar_find_company"}},
         {"show me recent insider trading at Apple", {"edgar_insider_transactions", "edgar_insider_summary"}},
         {"what 13F holdings does Berkshire Hathaway report", {"edgar_13f_holdings", "edgar_13f_top_holdings"}},
         {"look up the CIK number for a company", {"edgar_resolve_cik", "edgar_find_company"}},
@@ -116,7 +117,8 @@ std::vector<EvalCase> corpus() {
         {"compute the accretion dilution of the merger", {"ma_accretion_dilution"}},
 
         // ── agents ──
-        {"run an AI agent to analyze a stock for me", {"run_stock_analysis_agent", "run_agent", "run_agent_structured"}},
+        {"run an AI agent to analyze a stock for me",
+         {"run_stock_analysis_agent", "run_agent", "run_agent_structured"}},
         {"list the available AI agents", {"list_agents", "list_agent_configs"}},
 
         // ── excel ──
@@ -175,7 +177,8 @@ QString top_names(const std::vector<ToolMatch>& results, int k) {
 int dump_tools_json() {
     auto tools = McpProvider::instance().audit_all_tools();
     std::sort(tools.begin(), tools.end(), [](const auto& a, const auto& b) {
-        if (a.category != b.category) return a.category < b.category;
+        if (a.category != b.category)
+            return a.category < b.category;
         return a.name < b.name;
     });
     QJsonArray arr;
@@ -203,10 +206,10 @@ int run_tool_selftest() {
     auto tools = McpProvider::instance().audit_all_tools();
     out(QString(QStringLiteral("\n[1] REGISTRY AUDIT — %1 registered tools")).arg(tools.size()));
 
-    QStringList no_handler;       // CRITICAL — tool can never run
-    QStringList bad_schema;       // CRITICAL — required param not declared
-    QStringList thin_desc;        // WARN — retrieval-poison
-    QStringList destructive_miss; // WARN — mutating verb but not flagged destructive
+    QStringList no_handler;              // CRITICAL — tool can never run
+    QStringList bad_schema;              // CRITICAL — required param not declared
+    QStringList thin_desc;               // WARN — retrieval-poison
+    QStringList destructive_miss;        // WARN — mutating verb but not flagged destructive
     QHash<QString, QStringList> by_desc; // duplicate-description detection
 
     static const QRegularExpression mutating_rx(
@@ -228,7 +231,8 @@ int run_tool_selftest() {
             for (const auto& r : schema.value("required").toArray()) {
                 const QString rn = r.toString();
                 if (!props.contains(rn)) {
-                    bad_schema << (t.name + QStringLiteral(" (required '") + rn + QStringLiteral("' not in properties)"));
+                    bad_schema << (t.name + QStringLiteral(" (required '") + rn +
+                                   QStringLiteral("' not in properties)"));
                 }
             }
         }
@@ -249,8 +253,8 @@ int run_tool_selftest() {
             out(QStringLiteral("    ✓ ") + label + QStringLiteral(": none"));
             return;
         }
-        out((critical ? QStringLiteral("    ✗ ") : QStringLiteral("    ⚠ ")) + label +
-            QStringLiteral(": ") + QString::number(items.size()));
+        out((critical ? QStringLiteral("    ✗ ") : QStringLiteral("    ⚠ ")) + label + QStringLiteral(": ") +
+            QString::number(items.size()));
         for (const auto& it : items)
             out(QStringLiteral("        - ") + it);
     };
@@ -317,9 +321,13 @@ int run_tool_selftest() {
 
     out(QStringLiteral("\n──────────────────────────────────────────────────────────────"));
     out(QString(QStringLiteral("  recall@1 = %1   recall@5 = %2   MRR = %3"))
-            .arg(recall1, 0, 'f', 3).arg(recall5, 0, 'f', 3).arg(mrr_avg, 0, 'f', 3));
+            .arg(recall1, 0, 'f', 3)
+            .arg(recall5, 0, 'f', 3)
+            .arg(mrr_avg, 0, 'f', 3));
     out(QString(QStringLiteral("  registry: %1 no-handler, %2 schema errors, %3 thin desc"))
-            .arg(no_handler.size()).arg(bad_schema.size()).arg(thin_desc.size()));
+            .arg(no_handler.size())
+            .arg(bad_schema.size())
+            .arg(thin_desc.size()));
 
     // ── Verdict ───────────────────────────────────────────────────────────────
     constexpr double kRecall5Target = 0.95;

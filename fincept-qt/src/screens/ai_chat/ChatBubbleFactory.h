@@ -31,25 +31,25 @@ namespace fincept::ai_chat {
 class ChatBubbleFactory {
   public:
     struct Options {
-        QString role;                                // "user" | "assistant" | "system"
-        QString content;                             // markdown
-        QString timestamp_iso;                       // ISO-8601 or "yyyy-MM-dd HH:mm:ss"; "" hides time
-        bool    show_footer       = true;            // timestamp + copy button
-        int     user_col_max_width = 560;
-        int     ai_col_max_width   = 680;
+        QString role;            // "user" | "assistant" | "system"
+        QString content;         // markdown
+        QString timestamp_iso;   // ISO-8601 or "yyyy-MM-dd HH:mm:ss"; "" hides time
+        bool show_footer = true; // timestamp + copy button
+        int user_col_max_width = 560;
+        int ai_col_max_width = 680;
     };
 
     /// Result of building a bubble. `row` is what the caller inserts into its
     /// messages layout. The other handles are exposed for callers that want to
     /// observe / mutate (e.g. streaming).
     struct Bubble {
-        QWidget*     row      = nullptr;   // outer row, includes alignment stretch
-        QWidget*     column   = nullptr;
-        QFrame*      frame    = nullptr;   // the visible bubble frame
-        QLabel*      body     = nullptr;
-        QLabel*      role_lbl = nullptr;
-        QLabel*      time_lbl = nullptr;   // nullptr if footer hidden
-        QPushButton* copy_btn = nullptr;   // nullptr if footer hidden / user / system
+        QWidget* row = nullptr; // outer row, includes alignment stretch
+        QWidget* column = nullptr;
+        QFrame* frame = nullptr; // the visible bubble frame
+        QLabel* body = nullptr;
+        QLabel* role_lbl = nullptr;
+        QLabel* time_lbl = nullptr;      // nullptr if footer hidden
+        QPushButton* copy_btn = nullptr; // nullptr if footer hidden / user / system
     };
 
     /// Build a finished message bubble (markdown rendered).

@@ -6,7 +6,6 @@
 // Part of the partial-class split of DockScreenRouter.cpp.
 
 #include "app/DockScreenRouter.h"
-
 #include "app/WindowFrame.h"
 #include "auth/InactivityGuard.h"
 #include "core/components/PopularityTracker.h"
@@ -60,8 +59,7 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
     // Pinnable is intentionally excluded too: the auto-hide pin button
     // converts panels to collapsible sidebars, which causes them to
     // disappear when another panel is opened alongside them.
-    dw->setFeatures(ads::CDockWidget::DockWidgetMovable |
-                    ads::CDockWidget::DockWidgetClosable |
+    dw->setFeatures(ads::CDockWidget::DockWidgetMovable | ads::CDockWidget::DockWidgetClosable |
                     ads::CDockWidget::DockWidgetFocusable);
 
     // Use dock-widget minimum size (not content size) so screens with large
@@ -96,8 +94,7 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
         // (FNO underlying/expiry, equity symbol/watchlist, …) was written under
         // an id that never matched on the next run and was effectively lost.
         // window id is included so the same dock id in two windows stays unique.
-        const PanelInstanceId panel_uuid =
-            PanelInstanceId::from_name(QStringLiteral("w%1:%2").arg(win_id).arg(id));
+        const PanelInstanceId panel_uuid = PanelInstanceId::from_name(QStringLiteral("w%1:%2").arg(win_id).arg(id));
         instance_ids_.insert(id, panel_uuid);
 
         // Strip any "#dup<N>" suffix from the type id so two watchlists
@@ -130,9 +127,7 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
         placeholder->setAutoFillBackground(true);
         auto* lbl = new QLabel(title_for_id(id));
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet(
-            QString("color:%1;font-size:14px;font-weight:500;")
-                .arg(QString(ui::colors::TEXT_DIM())));
+        lbl->setStyleSheet(QString("color:%1;font-size:14px;font-weight:500;").arg(QString(ui::colors::TEXT_DIM())));
         auto* vl = new QVBoxLayout(placeholder);
         vl->addWidget(lbl);
         dw->setWidget(placeholder);

@@ -39,12 +39,16 @@ inline QVector<Provider> all_providers() {
          QColor("#00E5FF"),
          {"backtest", "optimize", "walk_forward", "indicator", "indicator_signals", "labels", "splits", "returns",
           "signals", "labels_to_signals", "indicator_sweep"}},
-        {"backtestingpy", "Backtesting.py", QColor("#00D66F"),
+        {"backtestingpy",
+         "Backtesting.py",
+         QColor("#00D66F"),
          // Requires `pip install backtesting`. All commands surface a clean install
          // error when the dep is missing; kept in the provider list so users see
          // the option and can install it.
          {"backtest", "optimize", "walk_forward", "indicator"}},
-        {"fasttrade", "FastTrade", QColor("#FFC400"),
+        {"fasttrade",
+         "FastTrade",
+         QColor("#FFC400"),
          // Requires `pip install fast_trade`. Same rationale as backtestingpy.
          {"backtest"}},
         {"zipline",

@@ -42,7 +42,7 @@ namespace fincept::screens::widgets {
 
 /// A table of extracted data — one header row plus N data rows.
 struct ScrapedTable {
-    QString label;           // "Table 1", "items[]", "RSS feed" etc.
+    QString label; // "Table 1", "items[]", "RSS feed" etc.
     QStringList headers;
     QVector<QStringList> rows;
 };

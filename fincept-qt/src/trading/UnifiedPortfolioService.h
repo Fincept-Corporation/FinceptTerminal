@@ -99,8 +99,7 @@ class UnifiedPortfolioService : public QObject {
     QVector<AccountInfo> accounts() const;
 
     // --- Actions (async on a worker thread; action_finished on main thread) ---
-    void exit_child(const QString& account_id, const QString& symbol, const QString& exchange,
-                    const QString& product);
+    void exit_child(const QString& account_id, const QString& symbol, const QString& exchange, const QString& product);
     /// Square off `symbol` across every child account holding it.
     /// `from_holdings` selects which merged model to read children from.
     void exit_symbol(const QString& symbol, const QString& exchange, bool from_holdings);
@@ -118,8 +117,8 @@ class UnifiedPortfolioService : public QObject {
     void test_clear();
 
   signals:
-    void positions_changed();                    // structural rebuild needed
-    void holdings_changed();                     // structural rebuild needed
+    void positions_changed();                     // structural rebuild needed
+    void holdings_changed();                      // structural rebuild needed
     void position_patched(const QString& symbol); // in-place LTP/P&L update
     void holding_patched(const QString& symbol);  // in-place LTP/P&L update
     void summary_changed();                       // debounced

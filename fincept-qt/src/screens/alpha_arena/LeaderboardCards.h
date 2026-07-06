@@ -12,7 +12,7 @@ class QTableWidget;
 namespace fincept::screens::alpha_arena {
 
 struct AgentCardData {
-    QString agent_id, name, status;   // status: active|halted_user|halted_circuit
+    QString agent_id, name, status; // status: active|halted_user|halted_circuit
     QColor color;
     double equity = 0, pnl_pct = 0, upnl = 0;
     int open_positions = 0;
@@ -23,13 +23,13 @@ class LeaderboardCards : public QWidget {
     Q_OBJECT
   public:
     explicit LeaderboardCards(QWidget* parent = nullptr);
-    void set_data(QVector<AgentCardData> cards);   // caller sorts by equity desc
+    void set_data(QVector<AgentCardData> cards); // caller sorts by equity desc
     QString selected_agent() const { return selected_; }
   signals:
-    void agent_selected(QString agent_id);         // empty = deselected
+    void agent_selected(QString agent_id); // empty = deselected
     void halt_requested(QString agent_id);
     void resume_requested(QString agent_id);
-    void kill_requested(QString agent_id);         // close positions & halt one model
+    void kill_requested(QString agent_id); // close positions & halt one model
   private:
     void rebuild();
     QVector<AgentCardData> cards_;

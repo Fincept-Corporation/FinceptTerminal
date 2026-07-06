@@ -61,9 +61,11 @@ pr::PredictionOrderBook to_prediction(const pm::OrderBook& src) {
     out.tick_size = src.tick_size;
     out.min_order_size = src.min_order_size;
     out.bids.reserve(src.bids.size());
-    for (const auto& l : src.bids) out.bids.push_back({l.price, l.size});
+    for (const auto& l : src.bids)
+        out.bids.push_back({l.price, l.size});
     out.asks.reserve(src.asks.size());
-    for (const auto& l : src.asks) out.asks.push_back({l.price, l.size});
+    for (const auto& l : src.asks)
+        out.asks.push_back({l.price, l.size});
     return out;
 }
 
@@ -71,7 +73,8 @@ pr::PriceHistory to_prediction(const pm::PriceHistory& src, const QString& asset
     pr::PriceHistory out;
     out.asset_id = asset_id;
     out.points.reserve(src.points.size());
-    for (const auto& p : src.points) out.points.push_back({p.timestamp * 1000, p.price});
+    for (const auto& p : src.points)
+        out.points.push_back({p.timestamp * 1000, p.price});
     return out;
 }
 
@@ -88,21 +91,24 @@ pr::PredictionTrade to_prediction(const pm::Trade& src) {
 QVector<pr::PredictionMarket> to_prediction(const QVector<pm::Market>& src) {
     QVector<pr::PredictionMarket> out;
     out.reserve(src.size());
-    for (const auto& m : src) out.push_back(to_prediction(m));
+    for (const auto& m : src)
+        out.push_back(to_prediction(m));
     return out;
 }
 
 QVector<pr::PredictionEvent> to_prediction(const QVector<pm::Event>& src) {
     QVector<pr::PredictionEvent> out;
     out.reserve(src.size());
-    for (const auto& e : src) out.push_back(to_prediction(e));
+    for (const auto& e : src)
+        out.push_back(to_prediction(e));
     return out;
 }
 
 QVector<pr::PredictionTrade> to_prediction(const QVector<pm::Trade>& src) {
     QVector<pr::PredictionTrade> out;
     out.reserve(src.size());
-    for (const auto& t : src) out.push_back(to_prediction(t));
+    for (const auto& t : src)
+        out.push_back(to_prediction(t));
     return out;
 }
 

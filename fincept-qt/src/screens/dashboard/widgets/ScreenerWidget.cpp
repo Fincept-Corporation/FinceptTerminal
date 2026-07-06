@@ -1,9 +1,8 @@
 #include "screens/dashboard/widgets/ScreenerWidget.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -78,7 +77,6 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget(tr("STOCK SCREENER"
 
     apply_styles();
     set_loading(true);
-
 }
 
 void ScreenerWidget::apply_styles() {
@@ -137,9 +135,8 @@ void ScreenerWidget::refresh_data() {
     topics.reserve(kScreenerSymbols.size());
     for (const auto& sym : kScreenerSymbols)
         topics.append(QStringLiteral("market:quote:") + sym);
-    hub.request(topics, /*force=*/true);  // user-triggered: bypass min_interval
+    hub.request(topics, /*force=*/true); // user-triggered: bypass min_interval
 }
-
 
 void ScreenerWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
@@ -172,7 +169,6 @@ void ScreenerWidget::rebuild_all_quotes() {
     }
     apply_filter();
 }
-
 
 void ScreenerWidget::apply_filter() {
     if (all_quotes_.isEmpty())
@@ -270,7 +266,8 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
 void ScreenerWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("STOCK SCREENER"));
-    if (filter_lbl_) filter_lbl_->setText(tr("FILTER:"));
+    if (filter_lbl_)
+        filter_lbl_->setText(tr("FILTER:"));
     rebuild_all_quotes(); // re-renders headers + count label in the new language
 }
 

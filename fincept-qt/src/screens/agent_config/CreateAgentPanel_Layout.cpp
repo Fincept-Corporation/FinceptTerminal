@@ -7,10 +7,9 @@
 //
 // Part of the partial-class split of CreateAgentPanel.cpp.
 
-#include "screens/agent_config/CreateAgentPanel.h"
-
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "screens/agent_config/CreateAgentPanel.h"
 #include "services/agents/AgentService.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -84,7 +83,6 @@ static QLabel* field_lbl(const QString& text) {
 
 } // anonymous namespace
 
-
 QWidget* CreateAgentPanel::build_saved_panel() {
     auto* p = new QWidget(this);
     p->setMinimumWidth(180);
@@ -108,8 +106,8 @@ QWidget* CreateAgentPanel::build_saved_panel() {
     hl->addWidget(saved_title_);
     hl->addStretch();
     saved_count_ = new QLabel("0");
-    saved_count_->setStyleSheet(
-        QString("color:%1;font-size:10px;background:%2;padding:1px 6px;").arg(ui::colors::CYAN(), ui::colors::BG_BASE()));
+    saved_count_->setStyleSheet(QString("color:%1;font-size:10px;background:%2;padding:1px 6px;")
+                                    .arg(ui::colors::CYAN(), ui::colors::BG_BASE()));
     hl->addWidget(saved_count_);
     vl->addWidget(hdr);
 
@@ -262,8 +260,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
                 "QCheckBox::indicator{width:8px;height:8px;}"
                 "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
                 "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
-            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(),
-                 ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     vl->addWidget(terminal_tools_check_);
 
     terminal_sub_ = new QWidget;
@@ -278,8 +275,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
                 "QCheckBox::indicator{width:8px;height:8px;}"
                 "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
                 "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
-            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(),
-                 ui::colors::BORDER_DIM(), ui::colors::AMBER());
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER());
 
     terminal_destructive_check_ = new QCheckBox(tr("Allow destructive tools (place_order, delete_*, set_*, file ops)"));
     terminal_destructive_check_->setStyleSheet(
@@ -287,18 +283,16 @@ QWidget* CreateAgentPanel::build_form_panel() {
                 "QCheckBox::indicator{width:8px;height:8px;}"
                 "QCheckBox::indicator:unchecked{background:%2;border:1px solid %3;}"
                 "QCheckBox::indicator:checked{background:%4;border:1px solid %4;}")
-            .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED(),
-                 ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
+            .arg(ui::colors::NEGATIVE(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
     sub_vl->addWidget(terminal_destructive_check_);
 
-    terminal_external_check_ = new QCheckBox(
-        tr("Include external MCP servers (Notion, Slack, etc., from MCP Servers tab)"));
+    terminal_external_check_ =
+        new QCheckBox(tr("Include external MCP servers (Notion, Slack, etc., from MCP Servers tab)"));
     terminal_external_check_->setChecked(true);
     terminal_external_check_->setStyleSheet(neutral_check_style);
     sub_vl->addWidget(terminal_external_check_);
 
-    terminal_dry_run_check_ = new QCheckBox(
-        tr("Dry-run mode (return synthetic results — no real execution)"));
+    terminal_dry_run_check_ = new QCheckBox(tr("Dry-run mode (return synthetic results — no real execution)"));
     terminal_dry_run_check_->setStyleSheet(neutral_check_style);
     sub_vl->addWidget(terminal_dry_run_check_);
 
@@ -312,11 +306,9 @@ QWidget* CreateAgentPanel::build_form_panel() {
     // Categories sourced from src/mcp/tools/*.cpp registrations. Excludes
     // UI-only categories (navigation/system/settings) and recursive ones
     // (ai-chat/meta) — agents shouldn't drive the UI or call the chat LLM.
-    for (const auto& cat : {"markets", "watchlist", "news", "portfolio", "notes",
-                             "crypto-trading", "paper-trading", "sec-edgar",
-                             "ma-analytics", "alt-investments", "data-sources",
-                             "forum", "profile", "file_manager", "report-builder",
-                             "python", "datahub", "analytics"}) {
+    for (const auto& cat : {"markets", "watchlist", "news", "portfolio", "notes", "crypto-trading", "paper-trading",
+                            "sec-edgar", "ma-analytics", "alt-investments", "data-sources", "forum", "profile",
+                            "file_manager", "report-builder", "python", "datahub", "analytics"}) {
         auto* item = new QListWidgetItem(cat);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(Qt::Unchecked);
@@ -332,14 +324,12 @@ QWidget* CreateAgentPanel::build_form_panel() {
     sub_vl->addWidget(terminal_exclude_cats_edit_);
 
     terminal_name_include_edit_ = new QLineEdit;
-    terminal_name_include_edit_->setPlaceholderText(
-        tr("Tool name include regex (optional, e.g. ^get_)"));
+    terminal_name_include_edit_->setPlaceholderText(tr("Tool name include regex (optional, e.g. ^get_)"));
     terminal_name_include_edit_->setStyleSheet(input_style());
     sub_vl->addWidget(terminal_name_include_edit_);
 
     terminal_name_exclude_edit_ = new QLineEdit;
-    terminal_name_exclude_edit_->setPlaceholderText(
-        tr("Tool name exclude regex (optional, e.g. ^delete_)"));
+    terminal_name_exclude_edit_->setPlaceholderText(tr("Tool name exclude regex (optional, e.g. ^delete_)"));
     terminal_name_exclude_edit_->setStyleSheet(input_style());
     sub_vl->addWidget(terminal_name_exclude_edit_);
 
@@ -451,7 +441,8 @@ QWidget* CreateAgentPanel::build_form_panel() {
         sl->setSpacing(12);
         auto make_sub_chk = [](const QString& lbl) -> QCheckBox* {
             auto* c = new QCheckBox(lbl);
-            c->setStyleSheet(QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
+            c->setStyleSheet(
+                QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
             return c;
         };
         guardrails_pii_check_ = make_sub_chk(tr("PII Detection"));
@@ -488,7 +479,8 @@ QWidget* CreateAgentPanel::build_form_panel() {
         auto* mr2 = new QHBoxLayout;
         auto make_sub_chk = [](const QString& lbl) -> QCheckBox* {
             auto* c = new QCheckBox(lbl);
-            c->setStyleSheet(QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
+            c->setStyleSheet(
+                QString("QCheckBox{color:%1;font-size:10px;spacing:5px;}").arg(ui::colors::TEXT_PRIMARY()));
             return c;
         };
         memory_user_memories_check_ = make_sub_chk(tr("User Memories"));
@@ -644,8 +636,9 @@ QWidget* CreateAgentPanel::build_test_panel() {
     bl->addWidget(test_status_lbl_);
 
     test_output_hdr_ = new QLabel(tr("OUTPUT"));
-    test_output_hdr_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
-                                        .arg(ui::colors::TEXT_SECONDARY()));
+    test_output_hdr_->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:4px;")
+            .arg(ui::colors::TEXT_SECONDARY()));
     bl->addWidget(test_output_hdr_);
 
     test_result_ = new QTextEdit;
@@ -655,7 +648,8 @@ QWidget* CreateAgentPanel::build_test_panel() {
                 "QScrollBar:vertical{background:%1;width:5px;border:none;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}"
                 "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                 ui::colors::BORDER_BRIGHT()));
     bl->addWidget(test_result_, 1);
 
     vl->addWidget(body, 1);

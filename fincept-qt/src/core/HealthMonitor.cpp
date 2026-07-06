@@ -96,9 +96,7 @@ HealthStatus::Check HealthMonitor::check_broker_connections() const {
                     break;
                 case trading::ConnectionState::Disconnected:
                 case trading::ConnectionState::Connecting:
-                    problems.append(QString("%1 (%2)")
-                                        .arg(acct.display_name,
-                                             trading::connection_state_str(state)));
+                    problems.append(QString("%1 (%2)").arg(acct.display_name, trading::connection_state_str(state)));
                     break;
             }
         }
@@ -111,10 +109,7 @@ HealthStatus::Check HealthMonitor::check_broker_connections() const {
             c.detail = QString("%1/%2 live accounts connected").arg(connected).arg(considered);
         } else {
             c.ok = false;
-            c.detail = QString("%1/%2 connected; issues: %3")
-                           .arg(connected)
-                           .arg(considered)
-                           .arg(problems.join(", "));
+            c.detail = QString("%1/%2 connected; issues: %3").arg(connected).arg(considered).arg(problems.join(", "));
         }
     } catch (...) {
         c.ok = false;
@@ -145,18 +140,14 @@ HealthStatus::Check HealthMonitor::check_websocket_streams() const {
 
         if (expected == 0) {
             c.ok = true;
-            c.detail = QString("%1 stream(s) active; no live accounts expecting a stream")
-                           .arg(active_streams);
+            c.detail = QString("%1 stream(s) active; no live accounts expecting a stream").arg(active_streams);
         } else if (active_streams >= expected) {
             c.ok = true;
-            c.detail = QString("%1 stream(s) active for %2 live account(s)")
-                           .arg(active_streams)
-                           .arg(expected);
+            c.detail = QString("%1 stream(s) active for %2 live account(s)").arg(active_streams).arg(expected);
         } else {
             c.ok = false;
-            c.detail = QString("%1 stream(s) active but %2 live account(s) expect one")
-                           .arg(active_streams)
-                           .arg(expected);
+            c.detail =
+                QString("%1 stream(s) active but %2 live account(s) expect one").arg(active_streams).arg(expected);
         }
     } catch (...) {
         c.ok = false;
@@ -176,9 +167,8 @@ HealthStatus::Check HealthMonitor::check_python_pool() const {
     try {
         const bool available = python::PythonRunner::instance().is_available();
         c.ok = available;
-        c.detail = available
-                       ? "Python interpreter available (pool active/queued counts not exposed)"
-                       : "Python interpreter not available";
+        c.detail = available ? "Python interpreter available (pool active/queued counts not exposed)"
+                             : "Python interpreter not available";
     } catch (...) {
         c.ok = false;
         c.detail = "Exception while querying Python runner";
@@ -210,18 +200,13 @@ HealthStatus::Check HealthMonitor::check_datahub() const {
 
         if (errored == 0) {
             c.ok = true;
-            c.detail = QString("%1 topic(s), %2 with subscribers, no errors")
-                           .arg(topic_count)
-                           .arg(subscribed_topics);
+            c.detail = QString("%1 topic(s), %2 with subscribers, no errors").arg(topic_count).arg(subscribed_topics);
         } else {
             c.ok = false;
             QString sample = errored_topics.join(", ");
             if (errored > errored_topics.size())
                 sample += ", ...";
-            c.detail = QString("%1 topic(s), %2 in error state: %3")
-                           .arg(topic_count)
-                           .arg(errored)
-                           .arg(sample);
+            c.detail = QString("%1 topic(s), %2 in error state: %3").arg(topic_count).arg(errored).arg(sample);
         }
     } catch (...) {
         c.ok = false;

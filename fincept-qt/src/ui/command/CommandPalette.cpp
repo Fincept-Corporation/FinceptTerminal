@@ -32,14 +32,13 @@ void CommandPalette::show_for(QWidget* parent_frame) {
 CommandPalette::CommandPalette(QWidget* parent) : QDialog(parent) {
     setWindowFlag(Qt::FramelessWindowHint);
     setWindowFlag(Qt::Popup);
-    setStyleSheet(
-        "QDialog { background: #111827; border: 1px solid #374151; }"
-        "QLineEdit { background: #1f2937; color: #e5e7eb; border: 1px solid #374151; "
-        "            padding: 8px 12px; font-size: 13px; font-family: 'Consolas', monospace; }"
-        "QListWidget { background: #111827; color: #e5e7eb; border: none; }"
-        "QListWidget::item { padding: 6px 10px; }"
-        "QListWidget::item:hover { background: #1f2937; }"
-        "QListWidget::item:selected { background: #1f2937; color: #d97706; }");
+    setStyleSheet("QDialog { background: #111827; border: 1px solid #374151; }"
+                  "QLineEdit { background: #1f2937; color: #e5e7eb; border: 1px solid #374151; "
+                  "            padding: 8px 12px; font-size: 13px; font-family: 'Consolas', monospace; }"
+                  "QListWidget { background: #111827; color: #e5e7eb; border: none; }"
+                  "QListWidget::item { padding: 6px 10px; }"
+                  "QListWidget::item:hover { background: #1f2937; }"
+                  "QListWidget::item:selected { background: #1f2937; color: #d97706; }");
 
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(8, 8, 8, 8);
@@ -53,8 +52,7 @@ CommandPalette::CommandPalette(QWidget* parent) : QDialog(parent) {
 
     suggestions_ = new QListWidget(this);
     suggestions_->setSelectionMode(QAbstractItemView::SingleSelection);
-    connect(suggestions_, &QListWidget::itemActivated, this,
-            [this](QListWidgetItem*) { on_accept(); });
+    connect(suggestions_, &QListWidget::itemActivated, this, [this](QListWidgetItem*) { on_accept(); });
     vl->addWidget(suggestions_, /*stretch=*/1);
 
     // Initial population: first ~25 actions so the user sees something.
@@ -73,19 +71,21 @@ void CommandPalette::retranslateUi() {
 }
 
 void CommandPalette::on_text_changed(const QString& text) {
-    if (!suggestions_) return;
+    if (!suggestions_)
+        return;
     suggestions_->clear();
-    auto matches = SuggestionIndex::instance().query(
-        text.isEmpty() ? QStringLiteral("a") : text, /*limit=*/25);
+    auto matches = SuggestionIndex::instance().query(text.isEmpty() ? QStringLiteral("a") : text, /*limit=*/25);
     if (matches.isEmpty() && !text.isEmpty()) {
         // Empty query branch: still show top actions by walking the registry.
         for (const QString& id : ActionRegistry::instance().all_ids()) {
             const auto* def = ActionRegistry::instance().find(id);
-            if (!def) continue;
+            if (!def)
+                continue;
             auto* item = new QListWidgetItem(def->display.isEmpty() ? def->id : def->display);
             item->setData(Qt::UserRole, def->id);
             suggestions_->addItem(item);
-            if (suggestions_->count() >= 25) break;
+            if (suggestions_->count() >= 25)
+                break;
         }
     } else {
         for (const auto& m : matches) {
@@ -120,10 +120,7 @@ void CommandPalette::on_accept() {
     ctx.focused_frame = WindowCycler::instance().focused_frame();
     auto r = ActionRegistry::instance().invoke(action_id, ctx);
     if (r.is_err()) {
-        ToastService::instance().post(
-            ToastService::Severity::Warning,
-            QString::fromStdString(r.error()),
-            "palette");
+        ToastService::instance().post(ToastService::Severity::Warning, QString::fromStdString(r.error()), "palette");
     }
     accept();
 }

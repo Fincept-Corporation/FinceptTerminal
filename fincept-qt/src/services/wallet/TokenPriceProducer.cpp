@@ -20,7 +20,7 @@ namespace fincept::wallet {
 namespace {
 
 constexpr const char* kTokenPriceFamilyPrefix = "market:price:token:";
-constexpr const char* kFncptAlias   = "market:price:fncpt";
+constexpr const char* kFncptAlias = "market:price:fncpt";
 // Jupiter Lite Price API v3. Same host we already use; the response shape
 // keys results by mint, so a single call serves any number of mints.
 constexpr const char* kJupiterPriceBase = "https://lite-api.jup.ag/price/v3?ids=";
@@ -36,7 +36,7 @@ TokenPriceProducer::~TokenPriceProducer() = default;
 QStringList TokenPriceProducer::topic_patterns() const {
     return QStringList{
         QStringLiteral("market:price:token:*"),
-        QStringLiteral("market:price:fncpt"),  // back-compat alias
+        QStringLiteral("market:price:fncpt"), // back-compat alias
     };
 }
 
@@ -61,11 +61,13 @@ void TokenPriceProducer::refresh(const QStringList& topics) {
     QHash<QString, QStringList> topic_by_mint;
     for (const auto& t : topics) {
         const auto m = mint_for_topic(t);
-        if (m.isEmpty()) continue;
+        if (m.isEmpty())
+            continue;
         mints.insert(m);
         topic_by_mint[m].append(t);
     }
-    if (mints.isEmpty()) return;
+    if (mints.isEmpty())
+        return;
 
     // Build `?ids=<m1>,<m2>,…`. Jupiter handles arbitrary lengths up to
     // ~60 mints in one call; nothing in this codebase ever asks for that
@@ -75,22 +77,21 @@ void TokenPriceProducer::refresh(const QStringList& topics) {
 
     QNetworkRequest req{QUrl(url)};
     req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     auto* reply = nam_->get(req);
 
     QPointer<TokenPriceProducer> self = this;
-    connect(reply, &QNetworkReply::finished, this,
-            [self, reply, topic_by_mint, ids]() {
+    connect(reply, &QNetworkReply::finished, this, [self, reply, topic_by_mint, ids]() {
         reply->deleteLater();
-        if (!self) return;
+        if (!self)
+            return;
         auto& hub = fincept::datahub::DataHub::instance();
         if (reply->error() != QNetworkReply::NoError) {
             const auto err = reply->errorString();
             LOG_WARN("TokenPrice", "Jupiter fetch failed: " + err);
-            for (auto it = topic_by_mint.constBegin();
-                 it != topic_by_mint.constEnd(); ++it) {
-                for (const auto& t : it.value()) hub.publish_error(t, err);
+            for (auto it = topic_by_mint.constBegin(); it != topic_by_mint.constEnd(); ++it) {
+                for (const auto& t : it.value())
+                    hub.publish_error(t, err);
             }
             return;
         }
@@ -104,8 +105,7 @@ void TokenPriceProducer::refresh(const QStringList& topics) {
 
         // Find the SOL entry for the SOL/FNCPT cross-rate that legacy
         // FncptPrice consumers expect on the `sol` field.
-        const auto sol_obj =
-            root.value(QString::fromLatin1(kWrappedSolMint)).toObject();
+        const auto sol_obj = root.value(QString::fromLatin1(kWrappedSolMint)).toObject();
         const double sol_usd = sol_obj.value(QStringLiteral("usdPrice")).toDouble();
 
         for (const auto& mint : ids) {

@@ -44,8 +44,8 @@ class AnalyticsSectorsView : public QWidget {
   private:
     struct SectorInfo {
         QString name;
-        double weight = 0;        // percent of portfolio (0..100)
-        double market_value = 0;  // in portfolio currency
+        double weight = 0;       // percent of portfolio (0..100)
+        double market_value = 0; // in portfolio currency
         double cost_basis = 0;
         double pnl = 0;
         double pnl_percent = 0;

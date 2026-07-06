@@ -100,15 +100,15 @@ fincept::Result<void> InstrumentRepository::replace_all(const QString& broker_id
     // which is what powers symbol search and resolution this session.
     const int persisted = count(broker_id);
     if (persisted == 0 && !instruments.isEmpty()) {
-        LOG_ERROR("InstrumentRepo",
-                  QString("replace_all persisted 0 rows for %1 despite %2 parsed instruments — "
-                          "commit succeeded but nothing landed on disk (in-memory cache still used)")
-                      .arg(broker_id)
-                      .arg(instruments.size()));
+        LOG_ERROR("InstrumentRepo", QString("replace_all persisted 0 rows for %1 despite %2 parsed instruments — "
+                                            "commit succeeded but nothing landed on disk (in-memory cache still used)")
+                                        .arg(broker_id)
+                                        .arg(instruments.size()));
     } else {
-        LOG_INFO("InstrumentRepo",
-                 QString("Replaced %1 instruments for %2 (verified %3 rows persisted)")
-                     .arg(instruments.size()).arg(broker_id).arg(persisted));
+        LOG_INFO("InstrumentRepo", QString("Replaced %1 instruments for %2 (verified %3 rows persisted)")
+                                       .arg(instruments.size())
+                                       .arg(broker_id)
+                                       .arg(persisted));
     }
     return fincept::Result<void>::ok();
 }

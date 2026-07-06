@@ -55,11 +55,9 @@ QString FileManagerService::full_path(const QString& stored_name) const {
     if (!is_safe_basename(stored_name))
         return {};
 
-    const QString resolved =
-        QDir(storage_dir()).absoluteFilePath(stored_name);
+    const QString resolved = QDir(storage_dir()).absoluteFilePath(stored_name);
 
-    const QString root =
-        QDir(storage_dir()).absolutePath() + '/';
+    const QString root = QDir(storage_dir()).absolutePath() + '/';
 
     if (!resolved.startsWith(root))
         return {};
@@ -199,8 +197,7 @@ QString FileManagerService::import_file(const QString& source_path, const QStrin
 QString FileManagerService::register_file(const QString& stored_name, const QString& original_name, qint64 size,
                                           const QString& mime_type, const QString& source_screen) {
     if (!is_safe_basename(stored_name)) {
-        LOG_WARN(kFileManagerTag,
-                 QString("Rejected unsafe stored_name: %1").arg(stored_name));
+        LOG_WARN(kFileManagerTag, QString("Rejected unsafe stored_name: %1").arg(stored_name));
         return {};
     }
 

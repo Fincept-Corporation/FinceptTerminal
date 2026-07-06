@@ -3,10 +3,10 @@
 #include "core/logging/Logger.h"
 
 #ifdef HAS_QT_WEBENGINE
-#include <QWebEngineProfile>
-#include <QWebEngineSettings>
-#include <QWebEngineView>
-#include <QWebEnginePage>
+#    include <QWebEnginePage>
+#    include <QWebEngineProfile>
+#    include <QWebEngineSettings>
+#    include <QWebEngineView>
 #endif
 
 #include <QContextMenuEvent>
@@ -61,11 +61,11 @@ class ChartWebView : public QWebEngineView {
 // fallback. Probe the locations Qt searches for the helper: the Qt
 // libexec dir, the app dir, and an app/bin subdir.
 bool webengine_runtime_available() {
-#ifdef Q_OS_WIN
+#    ifdef Q_OS_WIN
     const QString proc = QStringLiteral("QtWebEngineProcess.exe");
-#else
+#    else
     const QString proc = QStringLiteral("QtWebEngineProcess");
-#endif
+#    endif
     const QString app = QCoreApplication::applicationDirPath();
     const QStringList candidates = {
         QLibraryInfo::path(QLibraryInfo::LibraryExecutablesPath) + QStringLiteral("/") + proc,
@@ -103,9 +103,8 @@ bool KLineChartWidget::is_available() const {
     static const bool ok = []() {
         const bool present = webengine_runtime_available();
         if (!present)
-            LOG_WARN("KLineChart",
-                     "Qt WebEngine runtime not found (QtWebEngineProcess missing from "
-                     "deployment) — falling back to the Qt-Charts chart");
+            LOG_WARN("KLineChart", "Qt WebEngine runtime not found (QtWebEngineProcess missing from "
+                                   "deployment) — falling back to the Qt-Charts chart");
         return present;
     }();
     return ok;
@@ -143,11 +142,10 @@ void KLineChartWidget::ensure_web_view() {
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, true);
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
 
-    connect(web_view_, &QWebEngineView::loadFinished,
-            this, &KLineChartWidget::on_load_finished);
+    connect(web_view_, &QWebEngineView::loadFinished, this, &KLineChartWidget::on_load_finished);
 
-    const QString html_path = QCoreApplication::applicationDirPath()
-                              + QStringLiteral("/resources/charts/klinechart.html");
+    const QString html_path =
+        QCoreApplication::applicationDirPath() + QStringLiteral("/resources/charts/klinechart.html");
     QUrl url = QUrl::fromLocalFile(html_path);
     url.setQuery(QStringLiteral("v=%1").arg(QDateTime::currentMSecsSinceEpoch())); // cache-bust
     web_view_->load(url);
@@ -157,7 +155,8 @@ void KLineChartWidget::ensure_web_view() {
 }
 
 void KLineChartWidget::on_load_finished(bool ok) {
-    if (!ok) return;
+    if (!ok)
+        return;
     page_ready_ = true;
     flush_pending();
     install_chart_event_filter(); // render widget exists by now
@@ -170,7 +169,8 @@ void KLineChartWidget::run_js(const QString& js) {
         pending_js_.enqueue(js);
         return;
     }
-    if (!web_view_) return;
+    if (!web_view_)
+        return;
     web_view_->page()->runJavaScript(js);
 #else
     Q_UNUSED(js);
@@ -179,7 +179,8 @@ void KLineChartWidget::run_js(const QString& js) {
 
 void KLineChartWidget::flush_pending() {
 #ifdef HAS_QT_WEBENGINE
-    if (!web_view_) return;
+    if (!web_view_)
+        return;
     while (!pending_js_.isEmpty()) {
         web_view_->page()->runJavaScript(pending_js_.dequeue());
     }
@@ -194,7 +195,8 @@ void KLineChartWidget::set_candles(const QJsonArray& candles) {
     for (const auto& v : candles) {
         QJsonObject src = v.toObject();
         QJsonObject dst;
-        dst[QStringLiteral("timestamp")] = static_cast<double>(src[QStringLiteral("timestamp")].toVariant().toLongLong()) * 1000.0;
+        dst[QStringLiteral("timestamp")] =
+            static_cast<double>(src[QStringLiteral("timestamp")].toVariant().toLongLong()) * 1000.0;
         dst[QStringLiteral("open")] = src[QStringLiteral("open")].toDouble();
         dst[QStringLiteral("high")] = src[QStringLiteral("high")].toDouble();
         dst[QStringLiteral("low")] = src[QStringLiteral("low")].toDouble();
@@ -209,7 +211,8 @@ void KLineChartWidget::set_candles(const QJsonArray& candles) {
 
 void KLineChartWidget::update_candle(const QJsonObject& candle) {
     QJsonObject dst;
-    dst[QStringLiteral("timestamp")] = static_cast<double>(candle[QStringLiteral("timestamp")].toVariant().toLongLong()) * 1000.0;
+    dst[QStringLiteral("timestamp")] =
+        static_cast<double>(candle[QStringLiteral("timestamp")].toVariant().toLongLong()) * 1000.0;
     dst[QStringLiteral("open")] = candle[QStringLiteral("open")].toDouble();
     dst[QStringLiteral("high")] = candle[QStringLiteral("high")].toDouble();
     dst[QStringLiteral("low")] = candle[QStringLiteral("low")].toDouble();
@@ -235,9 +238,7 @@ void KLineChartWidget::remove_indicator(const QString& name, const QString& pane
 }
 
 void KLineChartWidget::set_position_line(double price, const QString& label, const QString& color_hex) {
-    run_js(QStringLiteral("window.setPositionLine(%1,'%2','%3')")
-               .arg(price, 0, 'f', 6)
-               .arg(label, color_hex));
+    run_js(QStringLiteral("window.setPositionLine(%1,'%2','%3')").arg(price, 0, 'f', 6).arg(label, color_hex));
 }
 
 void KLineChartWidget::clear_position_line() {
@@ -268,7 +269,10 @@ void KLineChartWidget::show_chart_context_menu(int local_y, const QPoint& global
     // (some platforms deliver both a mouse-press and a ContextMenu) can't pop a
     // second menu, but the next genuine right-click can.
     QPointer<KLineChartWidget> self = this;
-    QTimer::singleShot(0, this, [self] { if (self) self->menu_open_ = false; });
+    QTimer::singleShot(0, this, [self] {
+        if (self)
+            self->menu_open_ = false;
+    });
 
     if (!chosen)
         return;
@@ -281,15 +285,14 @@ void KLineChartWidget::show_chart_context_menu(int local_y, const QPoint& global
 #ifdef HAS_QT_WEBENGINE
     if (web_view_ && page_ready_) {
         QPointer<KLineChartWidget> self = this;
-        web_view_->page()->runJavaScript(
-            QStringLiteral("window.priceAtY(%1)").arg(local_y),
-            [self, is_buy](const QVariant& v) {
-                if (!self)
-                    return;
-                bool ok = false;
-                const double price = v.toDouble(&ok);
-                self->emit_trade(is_buy, (ok && price > 0) ? price : -1.0);
-            });
+        web_view_->page()->runJavaScript(QStringLiteral("window.priceAtY(%1)").arg(local_y),
+                                         [self, is_buy](const QVariant& v) {
+                                             if (!self)
+                                                 return;
+                                             bool ok = false;
+                                             const double price = v.toDouble(&ok);
+                                             self->emit_trade(is_buy, (ok && price > 0) ? price : -1.0);
+                                         });
         return;
     }
 #endif
@@ -313,7 +316,10 @@ void KLineChartWidget::install_chart_event_filter() {
     QWidget* proxy = web_view_->focusProxy();
     if (!proxy) {
         QPointer<KLineChartWidget> self = this;
-        QTimer::singleShot(50, this, [self] { if (self) self->install_chart_event_filter(); });
+        QTimer::singleShot(50, this, [self] {
+            if (self)
+                self->install_chart_event_filter();
+        });
         return;
     }
     if (proxy == filtered_proxy_)
@@ -336,8 +342,7 @@ bool KLineChartWidget::eventFilter(QObject* obj, QEvent* ev) {
         if (ev->type() == QEvent::MouseButtonPress) {
             auto* me = static_cast<QMouseEvent*>(ev);
             if (me->button() == Qt::RightButton) {
-                show_chart_context_menu(static_cast<int>(me->position().y()),
-                                        me->globalPosition().toPoint());
+                show_chart_context_menu(static_cast<int>(me->position().y()), me->globalPosition().toPoint());
                 return true;
             }
         }

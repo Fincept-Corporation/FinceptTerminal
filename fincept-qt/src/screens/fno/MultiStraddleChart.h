@@ -30,7 +30,7 @@ class MultiStraddleChart : public QChartView {
     Q_OBJECT
   public:
     struct Sample {
-        qint64 ts_secs = 0;   // floored to minute, unix epoch seconds
+        qint64 ts_secs = 0; // floored to minute, unix epoch seconds
         double premium = 0;
     };
     struct Selection {
@@ -55,7 +55,7 @@ class MultiStraddleChart : public QChartView {
     void hide_crosshair();
 
     QChart* chart_ = nullptr;
-    QVector<QLineSeries*> series_;          // owned by the chart
+    QVector<QLineSeries*> series_; // owned by the chart
     QDateTimeAxis* axis_x_ = nullptr;
     QValueAxis* axis_y_ = nullptr;
     QGraphicsLineItem* hover_line_ = nullptr;

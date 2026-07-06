@@ -6,12 +6,12 @@ namespace fincept::ui {
 
 class SupportResistanceLayer : public HorizontalLineLayer {
     Q_OBJECT
-public:
+  public:
     explicit SupportResistanceLayer(QObject* parent = nullptr);
 
     void compute(const QVector<CandleData>& candles) override;
 
-private:
+  private:
     struct Cluster {
         double price = 0;
         int touches = 0;

@@ -18,17 +18,17 @@ struct IndicatorDef {
 
 class IndicatorPicker : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit IndicatorPicker(ChartOverlayManager* mgr, QWidget* parent = nullptr);
 
-signals:
+  signals:
     void indicator_requested(const QString& id);
     void indicator_removed(const QString& id);
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();

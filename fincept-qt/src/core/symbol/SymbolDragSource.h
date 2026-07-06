@@ -3,6 +3,7 @@
 #include "core/symbol/SymbolRef.h"
 
 #include <QObject>
+
 #include <functional>
 
 class QWidget;
@@ -13,8 +14,7 @@ class QMouseEvent;
 namespace fincept::symbol_dnd {
 
 /// Start a QDrag carrying a SymbolRef. Caller must invoke past startDragDistance.
-void startSymbolDrag(QWidget* source, const SymbolRef& ref,
-                     SymbolGroup source_group = SymbolGroup::None);
+void startSymbolDrag(QWidget* source, const SymbolRef& ref, SymbolGroup source_group = SymbolGroup::None);
 
 /// Drop handler for application/x-fincept-symbol. Caller must setAcceptDrops(true) on the target.
 class SymbolDropFilter : public QObject {
@@ -41,8 +41,7 @@ class SymbolDragFilter : public QObject {
   public:
     using RefProvider = std::function<SymbolRef()>;
 
-    SymbolDragFilter(QWidget* source, RefProvider provider,
-                     SymbolGroup source_group = SymbolGroup::None);
+    SymbolDragFilter(QWidget* source, RefProvider provider, SymbolGroup source_group = SymbolGroup::None);
 
     void set_source_group(SymbolGroup g) { source_group_ = g; }
 
@@ -58,6 +57,6 @@ class SymbolDragFilter : public QObject {
 };
 
 SymbolDragFilter* installDragSource(QWidget* source, SymbolDragFilter::RefProvider provider,
-                                     SymbolGroup source_group = SymbolGroup::None);
+                                    SymbolGroup source_group = SymbolGroup::None);
 
 } // namespace fincept::symbol_dnd

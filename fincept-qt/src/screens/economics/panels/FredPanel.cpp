@@ -131,8 +131,10 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
 
 QVariantMap FredPanel::save_panel_state() const {
     QVariantMap s;
-    if (series_input_) s["series"] = series_input_->text();
-    if (preset_combo_) s["preset"] = preset_combo_->currentIndex();
+    if (series_input_)
+        s["series"] = series_input_->text();
+    if (preset_combo_)
+        s["preset"] = preset_combo_->currentIndex();
     return s;
 }
 

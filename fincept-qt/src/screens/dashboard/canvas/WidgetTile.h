@@ -84,7 +84,6 @@ class WidgetTile : public QWidget {
 
     static constexpr int kGripSize = 20;
     static constexpr int kEdgeZone = 8; // px from right/bottom edge for resize
-
 };
 
 } // namespace fincept::screens

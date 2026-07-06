@@ -24,13 +24,9 @@ class SurfaceLineWidget : public QWidget {
     // Render a single named curve.
     // Optional categorical x-labels are rendered as tick labels under the axis;
     // if empty, numeric x_values are formatted directly.
-    void set_curve(const QString& title,
-                   const std::vector<float>& x_values,
-                   const std::vector<float>& y_values,
-                   const QStringList& x_labels = {},
-                   const QString& x_axis_title = QString(),
-                   const QString& y_axis_title = QString(),
-                   const QColor& line_color = QColor(88, 166, 255));
+    void set_curve(const QString& title, const std::vector<float>& x_values, const std::vector<float>& y_values,
+                   const QStringList& x_labels = {}, const QString& x_axis_title = QString(),
+                   const QString& y_axis_title = QString(), const QColor& line_color = QColor(88, 166, 255));
 
     // Render multiple curves on the same axes (e.g. one per commodity for contango).
     struct Series {
@@ -39,9 +35,7 @@ class SurfaceLineWidget : public QWidget {
         std::vector<float> y_values;
         QColor color;
     };
-    void set_series(const QString& title,
-                    const std::vector<Series>& series,
-                    const QString& x_axis_title = QString(),
+    void set_series(const QString& title, const std::vector<Series>& series, const QString& x_axis_title = QString(),
                     const QString& y_axis_title = QString());
 
     void clear();

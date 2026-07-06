@@ -122,8 +122,7 @@ struct ToolContext {
 /// The promise is heap-allocated and shared so the handler can capture it
 /// by value into lambdas / network callbacks.
 using AsyncToolHandler =
-    std::function<void(const QJsonObject& args, ToolContext ctx,
-                       std::shared_ptr<QPromise<ToolResult>> promise)>;
+    std::function<void(const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise)>;
 
 // ============================================================================
 // Tool Input Schema — JSON Schema 2020-12 subset
@@ -151,32 +150,40 @@ struct ToolParam {
     QString type = "string"; // "string" | "integer" | "number" | "boolean" | "array" | "object"
     QString description;
     bool required = false;
-    QJsonValue default_value;          // null/undefined if no default
-    QStringList enum_values;            // string enums; empty if not enumerated
+    QJsonValue default_value; // null/undefined if no default
+    QStringList enum_values;  // string enums; empty if not enumerated
     std::optional<double> minimum;
     std::optional<double> maximum;
-    std::optional<int> min_length;      // for strings
-    std::optional<int> max_length;      // for strings
-    QString pattern;                    // regex string for strings
-    QJsonObject items;                  // schema for array elements (raw JSON)
+    std::optional<int> min_length; // for strings
+    std::optional<int> max_length; // for strings
+    QString pattern;               // regex string for strings
+    QJsonObject items;             // schema for array elements (raw JSON)
 
     QJsonObject to_json() const {
         QJsonObject j;
         j["type"] = type;
-        if (!description.isEmpty()) j["description"] = description;
+        if (!description.isEmpty())
+            j["description"] = description;
         if (!default_value.isNull() && !default_value.isUndefined())
             j["default"] = default_value;
         if (!enum_values.isEmpty()) {
             QJsonArray arr;
-            for (const auto& v : enum_values) arr.append(v);
+            for (const auto& v : enum_values)
+                arr.append(v);
             j["enum"] = arr;
         }
-        if (minimum.has_value())     j["minimum"] = *minimum;
-        if (maximum.has_value())     j["maximum"] = *maximum;
-        if (min_length.has_value())  j["minLength"] = *min_length;
-        if (max_length.has_value())  j["maxLength"] = *max_length;
-        if (!pattern.isEmpty())      j["pattern"] = pattern;
-        if (!items.isEmpty())        j["items"] = items;
+        if (minimum.has_value())
+            j["minimum"] = *minimum;
+        if (maximum.has_value())
+            j["maximum"] = *maximum;
+        if (min_length.has_value())
+            j["minLength"] = *min_length;
+        if (max_length.has_value())
+            j["maxLength"] = *max_length;
+        if (!pattern.isEmpty())
+            j["pattern"] = pattern;
+        if (!items.isEmpty())
+            j["items"] = items;
         return j;
     }
 };
@@ -246,11 +253,16 @@ enum class AuthLevel {
 
 inline const char* auth_level_str(AuthLevel a) {
     switch (a) {
-        case AuthLevel::None:            return "none";
-        case AuthLevel::Authenticated:   return "authenticated";
-        case AuthLevel::Verified:        return "verified";
-        case AuthLevel::Subscribed:      return "subscribed";
-        case AuthLevel::ExplicitConfirm: return "explicit_confirm";
+        case AuthLevel::None:
+            return "none";
+        case AuthLevel::Authenticated:
+            return "authenticated";
+        case AuthLevel::Verified:
+            return "verified";
+        case AuthLevel::Subscribed:
+            return "subscribed";
+        case AuthLevel::ExplicitConfirm:
+            return "explicit_confirm";
     }
     return "unknown";
 }
@@ -378,7 +390,7 @@ struct UnifiedTool {
     QString description;
     QJsonObject input_schema;
     bool is_internal = false;
-    QString category; // Phase 6: enables ToolFilter category include/exclude
+    QString category;            // Phase 6: enables ToolFilter category include/exclude
     bool is_destructive = false; // Tool RAG / tool_list surfacing — flag mutating tools
 };
 

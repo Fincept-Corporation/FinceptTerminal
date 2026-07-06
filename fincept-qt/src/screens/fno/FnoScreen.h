@@ -38,9 +38,7 @@ namespace fincept::screens::fno {
 class BuilderSubTab;
 class ChainSubTab;
 
-class FnoScreen : public QWidget,
-                  public fincept::screens::IStatefulScreen,
-                  public fincept::IGroupLinked {
+class FnoScreen : public QWidget, public fincept::screens::IStatefulScreen, public fincept::IGroupLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
   public:
@@ -100,7 +98,7 @@ class FnoScreen : public QWidget,
     SubTab active_tab_ = TabChain;
     QStackedWidget* stack_ = nullptr;
     QVector<QPushButton*> tab_btns_;
-    QHash<int, QWidget*> tabs_;  // slot index → widget
+    QHash<int, QWidget*> tabs_; // slot index → widget
 
     // Direct pointer to the chain sub-tab so showEvent can poke its
     // visibility-driven subscription path.

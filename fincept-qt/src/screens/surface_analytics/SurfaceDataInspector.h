@@ -29,12 +29,10 @@ class SurfaceDataInspector : public QWidget {
 
     // Push a tabular schema view (definition / ohlcv / statistics / ...).
     // Each name is shown as a tab. Headers seed the columns, rows seed cells.
-    void show_table(const QString& tab_name, const QStringList& headers,
-                    const QVector<QStringList>& rows);
+    void show_table(const QString& tab_name, const QStringList& headers, const QVector<QStringList>& rows);
 
     // Set the lineage block (dataset / schema / symbology / symbols / dates / count / cost).
-    void set_lineage(const QString& dataset, const QString& schema,
-                     const QString& symbology, const QString& symbols,
+    void set_lineage(const QString& dataset, const QString& schema, const QString& symbology, const QString& symbols,
                      const QString& date_range, qint64 row_count, double cost_usd);
 
     // Status / errors area

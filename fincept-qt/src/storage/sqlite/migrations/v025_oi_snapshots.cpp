@@ -41,12 +41,14 @@ Result<void> apply_v025(QSqlDatabase& db) {
                 PRIMARY KEY (token, ts_minute)
             ) WITHOUT ROWID
         )sql");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     {
         auto r = v025_sql(db, "CREATE INDEX IF NOT EXISTS idx_oi_snapshots_token_ts "
                               "ON oi_snapshots(token, ts_minute DESC)");
-        if (r.is_err()) return r;
+        if (r.is_err())
+            return r;
     }
     return Result<void>::ok();
 }
@@ -55,7 +57,8 @@ Result<void> apply_v025(QSqlDatabase& db) {
 
 void register_migration_v025() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({25, "oi_snapshots", apply_v025});
 }

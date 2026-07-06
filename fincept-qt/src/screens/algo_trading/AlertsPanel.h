@@ -26,9 +26,8 @@ class AlertsPanel : public QWidget {
   public:
     explicit AlertsPanel(QWidget* parent = nullptr);
 
-    void prefill(const QJsonArray& conditions, const QString& logic,
-                 const QStringList& symbols, const QString& timeframe,
-                 const QString& data_source, const QString& account_id);
+    void prefill(const QJsonArray& conditions, const QString& logic, const QStringList& symbols,
+                 const QString& timeframe, const QString& data_source, const QString& account_id);
 
   private slots:
     void on_save_watch();
@@ -43,27 +42,27 @@ class AlertsPanel : public QWidget {
 
     fincept::ui::algo::ConditionSection* section_ = nullptr;
     fincept::ui::algo::SymbolChipInput* symbols_input_ = nullptr;
-    QComboBox*    timeframe_combo_   = nullptr;
-    QComboBox*    data_source_combo_ = nullptr;
-    QComboBox*    account_combo_     = nullptr;
-    QSpinBox*     interval_spin_     = nullptr;
-    QSpinBox*     cooldown_spin_     = nullptr;
-    QCheckBox*    providers_chk_     = nullptr;
-    QLineEdit*    name_edit_         = nullptr;
-    QPushButton*  save_btn_          = nullptr;
-    QTableWidget* watches_table_     = nullptr;
-    QTableWidget* history_table_     = nullptr;
-    QLabel*       status_label_      = nullptr;
-    QString       editing_id_;        // non-empty when editing an existing watch
+    QComboBox* timeframe_combo_ = nullptr;
+    QComboBox* data_source_combo_ = nullptr;
+    QComboBox* account_combo_ = nullptr;
+    QSpinBox* interval_spin_ = nullptr;
+    QSpinBox* cooldown_spin_ = nullptr;
+    QCheckBox* providers_chk_ = nullptr;
+    QLineEdit* name_edit_ = nullptr;
+    QPushButton* save_btn_ = nullptr;
+    QTableWidget* watches_table_ = nullptr;
+    QTableWidget* history_table_ = nullptr;
+    QLabel* status_label_ = nullptr;
+    QString editing_id_; // non-empty when editing an existing watch
 
-    QLabel* cond_title_    = nullptr;
-    QLabel* sym_title_     = nullptr;
-    QLabel* tf_lbl_        = nullptr;
-    QLabel* ds_lbl_        = nullptr;
-    QLabel* acct_lbl_      = nullptr;
-    QLabel* iv_lbl_        = nullptr;
-    QLabel* cd_lbl_        = nullptr;
-    QLabel* name_lbl_      = nullptr;
+    QLabel* cond_title_ = nullptr;
+    QLabel* sym_title_ = nullptr;
+    QLabel* tf_lbl_ = nullptr;
+    QLabel* ds_lbl_ = nullptr;
+    QLabel* acct_lbl_ = nullptr;
+    QLabel* iv_lbl_ = nullptr;
+    QLabel* cd_lbl_ = nullptr;
+    QLabel* name_lbl_ = nullptr;
     QLabel* watches_title_ = nullptr;
     QLabel* history_title_ = nullptr;
 

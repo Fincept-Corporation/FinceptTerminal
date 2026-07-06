@@ -288,8 +288,7 @@ class DockScreenRouter : public QObject {
     QHash<QString, IGroupLinked*> group_linked_;
     QHash<QString, QPointer<ui::GroupBadge>> group_badges_;
 
-    void on_group_symbol_changed_external(fincept::SymbolGroup g, const fincept::SymbolRef& ref,
-                                          QObject* source);
+    void on_group_symbol_changed_external(fincept::SymbolGroup g, const fincept::SymbolRef& ref, QObject* source);
     /// Apply theme colors directly to all CDockAreaTitleBar and CDockWidgetTab
     /// widgets. Called after any addDockWidget() call since those create new
     /// QFrame-derived widgets that the app-level QFrame rule overrides.

@@ -13,10 +13,20 @@ Services& Services::root() {
     return s;
 }
 
-auth::AuthManager& Services::auth()           { return auth::AuthManager::instance(); }
-EventBus&          Services::events()         { return EventBus::instance(); }
-Database&          Services::db()             { return Database::instance(); }
-SecureStorage&     Services::secure_storage() { return SecureStorage::instance(); }
-datahub::DataHub&  Services::hub()            { return datahub::DataHub::instance(); }
+auth::AuthManager& Services::auth() {
+    return auth::AuthManager::instance();
+}
+EventBus& Services::events() {
+    return EventBus::instance();
+}
+Database& Services::db() {
+    return Database::instance();
+}
+SecureStorage& Services::secure_storage() {
+    return SecureStorage::instance();
+}
+datahub::DataHub& Services::hub() {
+    return datahub::DataHub::instance();
+}
 
 } // namespace fincept

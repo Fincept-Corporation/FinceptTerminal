@@ -57,7 +57,7 @@ class LayoutCatalog : public QObject {
     struct Entry {
         LayoutId id;
         QString name;
-        QString kind;          ///< 'auto' | 'user' | 'builtin' | 'crash_recovery'
+        QString kind; ///< 'auto' | 'user' | 'builtin' | 'crash_recovery'
         qint64 created_at_unix = 0;
         qint64 updated_at_unix = 0;
         QString description;

@@ -6,14 +6,13 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/ExchangeDaemonPool.h"
 
-#include <QThread>
-
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMutexLocker>
 #include <QPointer>
+#include <QThread>
 #include <QTimer>
 
 namespace fincept::trading {
@@ -25,9 +24,9 @@ const QString kSessionTag = "ExchangeSession";
 // Capped + exponentially backed off so a python script that crashes on start
 // can't spin into a tight respawn loop.
 constexpr int kMaxWsRestartAttempts = 5;
-constexpr int kWsRestartBaseMs = 1000;     // first backoff; doubles each attempt
-constexpr int kWsRestartMaxMs = 30000;     // backoff ceiling
-constexpr qint64 kWsHealthyRunMs = 60000;  // uptime past which a drop earns a fresh budget
+constexpr int kWsRestartBaseMs = 1000;    // first backoff; doubles each attempt
+constexpr int kWsRestartMaxMs = 30000;    // backoff ceiling
+constexpr qint64 kWsHealthyRunMs = 60000; // uptime past which a drop earns a fresh budget
 
 // SecureStorage keys for per-exchange crypto credentials. Keeping three
 // separate keys (rather than one JSON blob) matches the existing `auth`
@@ -100,7 +99,7 @@ void ExchangeSession::set_credentials(const ExchangeCredentials& creds) {
 
     auto put_or_remove = [&](const QString& key, const QString& value) {
         if (value.isEmpty()) {
-            (void) ss.remove(key);
+            (void)ss.remove(key);
         } else {
             auto r = ss.store(key, value);
             if (r.is_err())
@@ -113,8 +112,9 @@ void ExchangeSession::set_credentials(const ExchangeCredentials& creds) {
     put_or_remove(k_wallet, creds.wallet_address);
     put_or_remove(k_pk, creds.private_key);
 
-    LOG_INFO(kSessionTag, QString("Credentials updated for %1 (persisted=%2)")
-                              .arg(exchange_id_, creds.api_key.isEmpty() ? "no" : "yes"));
+    LOG_INFO(
+        kSessionTag,
+        QString("Credentials updated for %1 (persisted=%2)").arg(exchange_id_, creds.api_key.isEmpty() ? "no" : "yes"));
 }
 
 void ExchangeSession::load_stored_credentials() {
@@ -140,8 +140,8 @@ void ExchangeSession::load_stored_credentials() {
     if (r_pk.is_ok() && !r_pk.value().isEmpty())
         next.private_key = r_pk.value();
 
-    if (next.api_key.isEmpty() && next.secret.isEmpty() && next.password.isEmpty() &&
-        next.wallet_address.isEmpty() && next.private_key.isEmpty())
+    if (next.api_key.isEmpty() && next.secret.isEmpty() && next.password.isEmpty() && next.wallet_address.isEmpty() &&
+        next.private_key.isEmpty())
         return; // nothing stored — leave session state as-is
 
     {
@@ -266,9 +266,8 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
             LOG_WARN(kSessionTag, QString("[%1] WS stderr: %2").arg(exchange_id_, err));
     });
     connect(ws_process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
-        LOG_ERROR(kSessionTag, QString("[%1] WS process errorOccurred: %2")
-                                    .arg(exchange_id_)
-                                    .arg(static_cast<int>(err)));
+        LOG_ERROR(kSessionTag,
+                  QString("[%1] WS process errorOccurred: %2").arg(exchange_id_).arg(static_cast<int>(err)));
         ws_connected_ = false;
     });
     // A clean subprocess exit emits no python "status" line, so ws_connected_
@@ -296,7 +295,7 @@ void ExchangeSession::stop_ws() {
     auto* proc = ws_process_;
     ws_process_ = nullptr;
     ws_connected_ = false;
-    ws_should_run_ = false;  // deliberate stop — suppress the finished-driven respawn
+    ws_should_run_ = false; // deliberate stop — suppress the finished-driven respawn
     proc->disconnect(this);
     proc->terminate();
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
@@ -321,7 +320,7 @@ void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus sta
     }
 
     if (!ws_should_run_)
-        return;  // not supposed to be running — leave it down
+        return; // not supposed to be running — leave it down
 
     // A stream that ran healthily and only just dropped earns a fresh restart
     // budget; a fast crash-loop keeps burning the existing one.
@@ -329,9 +328,9 @@ void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus sta
         ws_restart_attempts_ = 0;
 
     if (ws_restart_attempts_ >= kMaxWsRestartAttempts) {
-        LOG_ERROR(kSessionTag, QString("[%1] WS not restarting — gave up after %2 attempts")
-                                   .arg(exchange_id_)
-                                   .arg(ws_restart_attempts_));
+        LOG_ERROR(
+            kSessionTag,
+            QString("[%1] WS not restarting — gave up after %2 attempts").arg(exchange_id_).arg(ws_restart_attempts_));
         return;
     }
 
@@ -350,7 +349,7 @@ void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus sta
         if (!self || !self->ws_should_run_)
             return;
         if (self->is_ws_active())
-            return;  // already back up (e.g. a manual restart beat us to it)
+            return; // already back up (e.g. a manual restart beat us to it)
         self->start_ws(primary, all);
     });
 }
@@ -366,8 +365,7 @@ void ExchangeSession::set_ws_primary_symbol(const QString& symbol) {
     // orderbook/trades/ohlc tasks to the new primary (stdin command) without
     // dropping the watchlist ticker streams. Fall back to a relaunch only if
     // the process isn't up yet, or this is a broker bridge (no cmd protocol).
-    if (ws_process_ && ws_process_->state() != QProcess::NotRunning &&
-        !session_is_broker_stream(exchange_id_)) {
+    if (ws_process_ && ws_process_->state() != QProcess::NotRunning && !session_is_broker_stream(exchange_id_)) {
         QJsonObject cmd;
         cmd[QStringLiteral("cmd")] = QStringLiteral("set_primary");
         cmd[QStringLiteral("symbol")] = symbol;
@@ -384,8 +382,7 @@ void ExchangeSession::set_ws_primary_symbol(const QString& symbol) {
 
 void ExchangeSession::set_ws_timeframe(const QString& timeframe) {
     // Re-point only the OHLC stream to a new chart timeframe, in place.
-    if (!ws_process_ || ws_process_->state() == QProcess::NotRunning ||
-        session_is_broker_stream(exchange_id_))
+    if (!ws_process_ || ws_process_->state() == QProcess::NotRunning || session_is_broker_stream(exchange_id_))
         return;
     QJsonObject cmd;
     cmd[QStringLiteral("cmd")] = QStringLiteral("set_timeframe");
@@ -555,7 +552,8 @@ void ExchangeSession::drain_ws_buffer() {
     if (ws_process_ && ws_process_->canReadLine()) {
         QPointer<ExchangeSession> self = this;
         QTimer::singleShot(1, this, [self]() {
-            if (self) self->drain_ws_buffer();
+            if (self)
+                self->drain_ws_buffer();
         });
     }
 }

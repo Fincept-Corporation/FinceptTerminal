@@ -43,11 +43,13 @@ static QVector<NewsArticle> fetch_articles_sync(bool force = false) {
         QEventLoop loop;
         bool done = false;
         svc->fetch_all_news(force, [&](bool ok, QVector<NewsArticle> arts) {
-            if (ok) result = std::move(arts);
+            if (ok)
+                result = std::move(arts);
             done = true;
             loop.quit();
         });
-        if (!done) loop.exec();
+        if (!done)
+            loop.exec();
         return result;
     }
 
@@ -57,14 +59,18 @@ static QVector<NewsArticle> fetch_articles_sync(bool force = false) {
     QMutex m;
     QWaitCondition cv;
     bool done = false;
-    QMetaObject::invokeMethod(svc, [svc, force, &result, &m, &cv, &done]() {
-        svc->fetch_all_news(force, [&result, &m, &cv, &done](bool ok, QVector<NewsArticle> arts) {
-            QMutexLocker lock(&m);
-            if (ok) result = std::move(arts);
-            done = true;
-            cv.wakeAll();
-        });
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        svc,
+        [svc, force, &result, &m, &cv, &done]() {
+            svc->fetch_all_news(force, [&result, &m, &cv, &done](bool ok, QVector<NewsArticle> arts) {
+                QMutexLocker lock(&m);
+                if (ok)
+                    result = std::move(arts);
+                done = true;
+                cv.wakeAll();
+            });
+        },
+        Qt::QueuedConnection);
 
     QMutexLocker lock(&m);
     while (!done)
@@ -152,23 +158,23 @@ std::vector<ToolDef> get_news_tools() {
                         "Sentiment: ALL (default), BULLISH, BEARISH, NEUTRAL.";
         t.category = "news";
         t.input_schema = ToolSchemaBuilder()
-            .string("category", "Category filter")
-                .default_str("ALL")
-                .enums({"ALL", "MARKETS", "MKT", "EARNINGS", "EARN", "ECONOMIC", "ECO",
-                        "CRYPTO", "CRPT", "GEOPOLITICS", "GEO", "ENERGY", "NRG",
-                        "DEFENSE", "DEF", "TECH", "REGULATORY"})
-            .string("time_range", "Time window")
-                .default_str("24H")
-                .enums({"1H", "6H", "24H", "48H", "7D", "30D"})
-            .string("sentiment", "Sentiment filter")
-                .default_str("ALL")
-                .enums({"ALL", "BULLISH", "BEARISH", "NEUTRAL"})
-            .string("query", "Keyword search across headline, summary, source, tickers")
-            .integer("limit", "Max articles")
-                .default_int(20).between(1, 100)
-            .boolean("force", "Force refresh ignoring cache")
-                .default_bool(false)
-            .build();
+                             .string("category", "Category filter")
+                             .default_str("ALL")
+                             .enums({"ALL", "MARKETS", "MKT", "EARNINGS", "EARN", "ECONOMIC", "ECO", "CRYPTO", "CRPT",
+                                     "GEOPOLITICS", "GEO", "ENERGY", "NRG", "DEFENSE", "DEF", "TECH", "REGULATORY"})
+                             .string("time_range", "Time window")
+                             .default_str("24H")
+                             .enums({"1H", "6H", "24H", "48H", "7D", "30D"})
+                             .string("sentiment", "Sentiment filter")
+                             .default_str("ALL")
+                             .enums({"ALL", "BULLISH", "BEARISH", "NEUTRAL"})
+                             .string("query", "Keyword search across headline, summary, source, tickers")
+                             .integer("limit", "Max articles")
+                             .default_int(20)
+                             .between(1, 100)
+                             .boolean("force", "Force refresh ignoring cache")
+                             .default_bool(false)
+                             .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             // Defaults are now injected by the validator; the .toString(...)
             // fallback args remain harmless but unnecessary.
@@ -407,9 +413,8 @@ std::vector<ToolDef> get_news_tools() {
             // corrupt Qt's parentage invariants (manifests as random crashes
             // ~10s later). Marshal onto the service's thread.
             auto* svc = &NewsService::instance();
-            QMetaObject::invokeMethod(svc, [svc]() {
-                svc->fetch_all_news(true, [](bool, QVector<NewsArticle>) {});
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                svc, [svc]() { svc->fetch_all_news(true, [](bool, QVector<NewsArticle>) {}); }, Qt::QueuedConnection);
             EventBus::instance().publish("news.refresh_requested", {});
             return ToolResult::ok("News feeds refresh triggered");
         };
@@ -423,8 +428,7 @@ std::vector<ToolDef> get_news_tools() {
         t.description = "Enable or disable an existing news keyword monitor by id. "
                         "Use get_news_monitors to discover monitor ids.";
         t.category = "news";
-        t.input_schema.properties =
-            QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Monitor id"}}}};
+        t.input_schema.properties = QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Monitor id"}}}};
         t.input_schema.required = {"id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString id = args["id"].toString().trimmed();
@@ -447,9 +451,8 @@ std::vector<ToolDef> get_news_tools() {
         t.name = "delete_news_monitor";
         t.description = "Permanently remove a news keyword monitor by id.";
         t.category = "news";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
-        t.input_schema.properties =
-            QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Monitor id"}}}};
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
+        t.input_schema.properties = QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Monitor id"}}}};
         t.input_schema.required = {"id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString id = args["id"].toString().trimmed();
@@ -500,22 +503,22 @@ std::vector<ToolDef> get_news_tools() {
             auto risk_to_json = [](const RiskSignal& r) {
                 return QJsonObject{{"level", r.level}, {"details", r.details}};
             };
-            return ToolResult::ok_data(QJsonObject{
-                {"summary", analysis.summary},
-                {"sentiment", QJsonObject{{"score", analysis.sentiment.score},
-                                          {"intensity", analysis.sentiment.intensity},
-                                          {"confidence", analysis.sentiment.confidence}}},
-                {"market_impact", QJsonObject{{"urgency", analysis.market_impact.urgency},
-                                              {"prediction", analysis.market_impact.prediction}}},
-                {"keywords", QJsonArray::fromStringList(analysis.keywords)},
-                {"topics", QJsonArray::fromStringList(analysis.topics)},
-                {"key_points", QJsonArray::fromStringList(analysis.key_points)},
-                {"risk_signals", QJsonObject{{"regulatory", risk_to_json(analysis.regulatory)},
-                                             {"geopolitical", risk_to_json(analysis.geopolitical)},
-                                             {"operational", risk_to_json(analysis.operational)},
-                                             {"market", risk_to_json(analysis.market)}}},
-                {"credits_used", analysis.credits_used},
-                {"credits_remaining", analysis.credits_remaining}});
+            return ToolResult::ok_data(
+                QJsonObject{{"summary", analysis.summary},
+                            {"sentiment", QJsonObject{{"score", analysis.sentiment.score},
+                                                      {"intensity", analysis.sentiment.intensity},
+                                                      {"confidence", analysis.sentiment.confidence}}},
+                            {"market_impact", QJsonObject{{"urgency", analysis.market_impact.urgency},
+                                                          {"prediction", analysis.market_impact.prediction}}},
+                            {"keywords", QJsonArray::fromStringList(analysis.keywords)},
+                            {"topics", QJsonArray::fromStringList(analysis.topics)},
+                            {"key_points", QJsonArray::fromStringList(analysis.key_points)},
+                            {"risk_signals", QJsonObject{{"regulatory", risk_to_json(analysis.regulatory)},
+                                                         {"geopolitical", risk_to_json(analysis.geopolitical)},
+                                                         {"operational", risk_to_json(analysis.operational)},
+                                                         {"market", risk_to_json(analysis.market)}}},
+                            {"credits_used", analysis.credits_used},
+                            {"credits_remaining", analysis.credits_remaining}});
         };
         tools.push_back(std::move(t));
     }
@@ -530,9 +533,8 @@ std::vector<ToolDef> get_news_tools() {
         t.input_schema.properties = QJsonObject{
             {"count", QJsonObject{{"type", "integer"},
                                   {"description", "Number of top headlines to summarize (default: 8, max: 25)"}}},
-            {"category",
-             QJsonObject{{"type", "string"},
-                         {"description", "Optional category filter to scope the summary (default: ALL)"}}},
+            {"category", QJsonObject{{"type", "string"},
+                                     {"description", "Optional category filter to scope the summary (default: ALL)"}}},
             {"time_range",
              QJsonObject{{"type", "string"}, {"description", "Time window for source articles (default: 24H)"}}}};
         t.handler = [](const QJsonObject& args) -> ToolResult {
@@ -552,20 +554,19 @@ std::vector<ToolDef> get_news_tools() {
             bool ok = false;
             QString summary;
             detail::run_async_wait(svc, [svc, filtered, count, &ok, &summary](auto signal_done) {
-                svc->summarize_headlines(filtered, count,
-                                         [signal_done, &ok, &summary](bool success, QString s) {
-                                             ok = success;
-                                             if (success)
-                                                 summary = std::move(s);
-                                             signal_done();
-                                         });
+                svc->summarize_headlines(filtered, count, [signal_done, &ok, &summary](bool success, QString s) {
+                    ok = success;
+                    if (success)
+                        summary = std::move(s);
+                    signal_done();
+                });
             });
 
             if (!ok || summary.isEmpty())
                 return ToolResult::fail("Summarization failed (network error or empty response)");
 
-            return ToolResult::ok_data(QJsonObject{
-                {"summary", summary}, {"headline_count", filtered.size()}, {"time_range", time_range}});
+            return ToolResult::ok_data(
+                QJsonObject{{"summary", summary}, {"headline_count", filtered.size()}, {"time_range", time_range}});
         };
         tools.push_back(std::move(t));
     }
@@ -588,18 +589,16 @@ std::vector<ToolDef> get_news_tools() {
         t.category = "news";
         t.input_schema.properties = QJsonObject{
             {"category", QJsonObject{{"type", "string"}, {"description", "Category filter (default: ALL)"}}},
-            {"time_range",
-             QJsonObject{{"type", "string"}, {"description", "Time window: 1H, 6H, 24H, 48H, 7D, 30D"}}},
+            {"time_range", QJsonObject{{"type", "string"}, {"description", "Time window: 1H, 6H, 24H, 48H, 7D, 30D"}}},
             {"breaking_only", QJsonObject{{"type", "boolean"},
                                           {"description", "Restrict to breaking-news clusters only (default: false)"}}},
-            {"min_sources",
-             QJsonObject{{"type", "integer"},
-                         {"description", "Only return clusters with at least N sources (default: 1)"}}},
+            {"min_sources", QJsonObject{{"type", "integer"},
+                                        {"description", "Only return clusters with at least N sources (default: 1)"}}},
             {"limit", QJsonObject{{"type", "integer"}, {"description", "Max clusters (default: 25, max: 100)"}}},
             {"include_articles",
-             QJsonObject{{"type", "boolean"},
-                         {"description",
-                          "Include the full sibling-article list per cluster (default: false; lead only)"}}}};
+             QJsonObject{
+                 {"type", "boolean"},
+                 {"description", "Include the full sibling-article list per cluster (default: false; lead only)"}}}};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString category = args["category"].toString("ALL");
             QString time_range = args["time_range"].toString("24H");
@@ -670,15 +669,12 @@ std::vector<ToolDef> get_news_tools() {
                         "Filter by min_level (CRITICAL or HIGH; default: HIGH) and time_range.";
         t.category = "news";
         t.input_schema.properties = QJsonObject{
-            {"min_level",
-             QJsonObject{{"type", "string"},
-                         {"description", "Minimum threat level: CRITICAL or HIGH (default: HIGH)"}}},
-            {"threat_category",
-             QJsonObject{{"type", "string"},
-                         {"description", "Filter by threat category: conflict, cyber, natural, "
-                                         "market, regulatory, general (default: any)"}}},
-            {"time_range", QJsonObject{{"type", "string"},
-                                       {"description", "Time window: 1H, 6H, 24H, 48H, 7D, 30D"}}},
+            {"min_level", QJsonObject{{"type", "string"},
+                                      {"description", "Minimum threat level: CRITICAL or HIGH (default: HIGH)"}}},
+            {"threat_category", QJsonObject{{"type", "string"},
+                                            {"description", "Filter by threat category: conflict, cyber, natural, "
+                                                            "market, regulatory, general (default: any)"}}},
+            {"time_range", QJsonObject{{"type", "string"}, {"description", "Time window: 1H, 6H, 24H, 48H, 7D, 30D"}}},
             {"limit", QJsonObject{{"type", "integer"}, {"description", "Max alerts (default: 25, max: 100)"}}}};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString min_level_s = args["min_level"].toString("HIGH").toUpper().trimmed();
@@ -722,14 +718,14 @@ std::vector<ToolDef> get_news_tools() {
                     break;
             }
 
-            return ToolResult::ok(QString("%1 threat alerts (%2 critical, %3 high)")
-                                      .arg(result.size()).arg(critical).arg(high),
-                                  QJsonObject{{"count", result.size()},
-                                              {"critical_count", critical},
-                                              {"high_count", high},
-                                              {"min_level", min_level_s},
-                                              {"time_range", time_range},
-                                              {"alerts", result}});
+            return ToolResult::ok(
+                QString("%1 threat alerts (%2 critical, %3 high)").arg(result.size()).arg(critical).arg(high),
+                QJsonObject{{"count", result.size()},
+                            {"critical_count", critical},
+                            {"high_count", high},
+                            {"min_level", min_level_s},
+                            {"time_range", time_range},
+                            {"alerts", result}});
         };
         tools.push_back(std::move(t));
     }
@@ -766,13 +762,22 @@ std::vector<ToolDef> get_news_tools() {
                 if (!a.category.isEmpty())
                     categories[a.category]++;
                 switch (a.sentiment) {
-                    case Sentiment::BULLISH: ++bullish; break;
-                    case Sentiment::BEARISH: ++bearish; break;
-                    default:                 ++neutral; break;
+                    case Sentiment::BULLISH:
+                        ++bullish;
+                        break;
+                    case Sentiment::BEARISH:
+                        ++bearish;
+                        break;
+                    default:
+                        ++neutral;
+                        break;
                 }
-                if (a.threat.level == ThreatLevel::CRITICAL) ++critical_threat;
-                else if (a.threat.level == ThreatLevel::HIGH) ++high_threat;
-                if (a.sort_ts > latest_ts) latest_ts = a.sort_ts;
+                if (a.threat.level == ThreatLevel::CRITICAL)
+                    ++critical_threat;
+                else if (a.threat.level == ThreatLevel::HIGH)
+                    ++high_threat;
+                if (a.sort_ts > latest_ts)
+                    latest_ts = a.sort_ts;
             }
 
             int breaking_clusters = 0;
@@ -801,10 +806,11 @@ std::vector<ToolDef> get_news_tools() {
                 {"sentiment", QJsonObject{{"bullish", bullish}, {"bearish", bearish}, {"neutral", neutral}}},
                 {"categories", cat_json}};
 
-            const QString summary = healthy
-                ? QString("OK: %1 articles from %2 sources").arg(all.size()).arg(sources.size())
-                : QString("DEGRADED: %1 articles from %2 sources — feeds may still be loading or blocked")
-                      .arg(all.size()).arg(sources.size());
+            const QString summary =
+                healthy ? QString("OK: %1 articles from %2 sources").arg(all.size()).arg(sources.size())
+                        : QString("DEGRADED: %1 articles from %2 sources — feeds may still be loading or blocked")
+                              .arg(all.size())
+                              .arg(sources.size());
             return ToolResult::ok(summary, data);
         };
         tools.push_back(std::move(t));

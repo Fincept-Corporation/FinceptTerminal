@@ -15,7 +15,7 @@ namespace fincept::services::crypto {
 
 struct TotpResult {
     bool success = false;
-    QString code;   // 6-digit code when success
+    QString code;      // 6-digit code when success
     int valid_for = 0; // seconds remaining on the current window
     QString error;
 };

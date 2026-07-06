@@ -41,9 +41,7 @@ PushpinBar::PushpinBar(QWidget* parent) : QWidget(parent) {
     empty_hint_->setStyleSheet("color:#6b7280;font-size:11px;font-style:italic;");
 
     // Dropping a symbol anywhere on the bar pins it.
-    symbol_dnd::installDropFilter(this, [](const SymbolRef& ref, SymbolGroup) {
-        PushpinService::instance().pin(ref);
-    });
+    symbol_dnd::installDropFilter(this, [](const SymbolRef& ref, SymbolGroup) { PushpinService::instance().pin(ref); });
 
     connect(&PushpinService::instance(), &PushpinService::pins_changed, this, &PushpinBar::rebuild);
     rebuild();

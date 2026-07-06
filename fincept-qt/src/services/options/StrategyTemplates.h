@@ -45,11 +45,16 @@ enum class StrategyCategory {
 
 inline const char* strategy_category_str(StrategyCategory c) {
     switch (c) {
-        case StrategyCategory::Bullish:    return "BULLISH";
-        case StrategyCategory::Bearish:    return "BEARISH";
-        case StrategyCategory::Neutral:    return "NEUTRAL";
-        case StrategyCategory::Volatility: return "VOLATILE";
-        case StrategyCategory::Others:     return "OTHERS";
+        case StrategyCategory::Bullish:
+            return "BULLISH";
+        case StrategyCategory::Bearish:
+            return "BEARISH";
+        case StrategyCategory::Neutral:
+            return "NEUTRAL";
+        case StrategyCategory::Volatility:
+            return "VOLATILE";
+        case StrategyCategory::Others:
+            return "OTHERS";
     }
     return "OTHERS";
 }
@@ -57,18 +62,18 @@ inline const char* strategy_category_str(StrategyCategory c) {
 /// One leg of a recipe — opaque to the chain. The instantiator resolves
 /// `offset_index` against the live chain to a concrete strike + token.
 struct StrategyLegRecipe {
-    fincept::trading::InstrumentType type;  // CE or PE only in v1
-    int offset_index;                       // 0 = ATM, ±N = chain rows from ATM
-    int lots;                               // signed: + = buy, − = sell
+    fincept::trading::InstrumentType type; // CE or PE only in v1
+    int offset_index;                      // 0 = ATM, ±N = chain rows from ATM
+    int lots;                              // signed: + = buy, − = sell
 };
 
 /// Catalogue entry — a named, categorised composition of legs.
 struct StrategyTemplate {
-    QString id;                             // "long_call", "iron_condor", …
-    QString name;                           // display name
+    QString id;   // "long_call", "iron_condor", …
+    QString name; // display name
     StrategyCategory category;
-    QString description;                    // one-line summary
-    QString outlook;                        // "Strongly bullish, expect big move up"
+    QString description; // one-line summary
+    QString outlook;     // "Strongly bullish, expect big move up"
     QVector<StrategyLegRecipe> legs;
     /// True when the recipe authors offsets at canonical width 1 and the
     /// instantiator should scale them by `options.width`. False for single-

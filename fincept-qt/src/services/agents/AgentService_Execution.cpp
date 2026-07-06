@@ -6,20 +6,18 @@
 //
 // Part of the partial-class split of AgentService.cpp.
 
-#include "services/agents/AgentService.h"
-
-#include "services/llm/LlmService.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/TopicPolicy.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpTypes.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "python/PythonRunner.h"
+#include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
-
-#include "datahub/DataHub.h"
-#include "datahub/TopicPolicy.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -435,7 +433,6 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
 
 // ── Workflow execution ───────────────────────────────────────────────────────
 
-
 QString AgentService::run_agent_structured(const QString& query, const QJsonObject& config,
                                            const QString& output_model) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -507,23 +504,20 @@ void AgentService::execute_multi_query(const QString& query, bool aggregate, con
 
 // ── Financial workflows (specialized) ────────────────────────────────────────
 
-
 // ── Agentic Mode ─────────────────────────────────────────────────────────────
 // Spawns a streaming Python subprocess that runs an AgenticRunner. Events
 // arrive as AGENTIC_EVENT: <json> lines on stdout; each is forwarded to the
 // `task_event` signal and DataHub topic `task:event:<task_id>`.
 
-QString AgentService::run_agentic_streaming(const QString& action, const QJsonObject& params,
-                                            const QJsonObject& config, const QString& known_task_id) {
+QString AgentService::run_agentic_streaming(const QString& action, const QJsonObject& params, const QJsonObject& config,
+                                            const QString& known_task_id) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     LOG_INFO("AgentService",
-             QString("Agentic streaming [%1] action=%2 task=%3")
-                 .arg(req_id.left(8), action, known_task_id.left(8)));
+             QString("Agentic streaming [%1] action=%2 task=%3").arg(req_id.left(8), action, known_task_id.left(8)));
 
     auto& py = python::PythonRunner::instance();
     if (!py.is_available()) {
-        QJsonObject evt{{"kind", "error"}, {"task_id", known_task_id},
-                        {"error", "Python not available"}};
+        QJsonObject evt{{"kind", "error"}, {"task_id", known_task_id}, {"error", "Python not available"}};
         publish_task_event(known_task_id, evt);
         return req_id;
     }
@@ -550,32 +544,35 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
     // Streaming line reader: parse only AGENTIC_EVENT: <json>; ignore other
     // lines (the Python wrapper still emits "thinking ..." / "done" via
     // stream_print which we don't need to surface here).
-    connect(proc, &QProcess::readyReadStandardOutput, this,
-            [self, proc, resolved_task_id, done_emitted, req_id]() {
-                if (!self) return;
-                static const QString kPrefix = QStringLiteral("AGENTIC_EVENT:");
-                while (proc->canReadLine()) {
-                    QString line = QString::fromUtf8(proc->readLine()).trimmed();
-                    if (!line.startsWith(kPrefix)) continue;
-                    QString rest = line.mid(kPrefix.length()).trimmed();
-                    QJsonDocument doc = QJsonDocument::fromJson(rest.toUtf8());
-                    if (!doc.isObject()) continue;
-                    QJsonObject evt = doc.object();
-                    // Adopt the task_id from the first event that carries one
-                    // (start_task scenario; resume_task already has it).
-                    QString tid = evt.value(QStringLiteral("task_id")).toString();
-                    if (tid.isEmpty()) tid = *resolved_task_id;
-                    else *resolved_task_id = tid;
-                    // Tag with the C++ correlator so UI panels can match.
-                    evt["request_id"] = req_id;
-                    self->publish_task_event(tid, evt);
-                    const QString kind = evt.value(QStringLiteral("kind")).toString();
-                    if (kind == QLatin1String("done") || kind == QLatin1String("error") ||
-                        kind == QLatin1String("cancelled")) {
-                        *done_emitted = true;
-                    }
-                }
-            });
+    connect(proc, &QProcess::readyReadStandardOutput, this, [self, proc, resolved_task_id, done_emitted, req_id]() {
+        if (!self)
+            return;
+        static const QString kPrefix = QStringLiteral("AGENTIC_EVENT:");
+        while (proc->canReadLine()) {
+            QString line = QString::fromUtf8(proc->readLine()).trimmed();
+            if (!line.startsWith(kPrefix))
+                continue;
+            QString rest = line.mid(kPrefix.length()).trimmed();
+            QJsonDocument doc = QJsonDocument::fromJson(rest.toUtf8());
+            if (!doc.isObject())
+                continue;
+            QJsonObject evt = doc.object();
+            // Adopt the task_id from the first event that carries one
+            // (start_task scenario; resume_task already has it).
+            QString tid = evt.value(QStringLiteral("task_id")).toString();
+            if (tid.isEmpty())
+                tid = *resolved_task_id;
+            else
+                *resolved_task_id = tid;
+            // Tag with the C++ correlator so UI panels can match.
+            evt["request_id"] = req_id;
+            self->publish_task_event(tid, evt);
+            const QString kind = evt.value(QStringLiteral("kind")).toString();
+            if (kind == QLatin1String("done") || kind == QLatin1String("error") || kind == QLatin1String("cancelled")) {
+                *done_emitted = true;
+            }
+        }
+    });
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             [self, proc, resolved_task_id, done_emitted, req_id](int exit_code, QProcess::ExitStatus) {
@@ -586,16 +583,21 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
                 static const QString kPrefix = QStringLiteral("AGENTIC_EVENT:");
                 for (const QString& raw : remaining.split('\n')) {
                     QString line = raw.trimmed();
-                    if (!line.startsWith(kPrefix)) continue;
+                    if (!line.startsWith(kPrefix))
+                        continue;
                     QString rest = line.mid(kPrefix.length()).trimmed();
                     QJsonDocument doc = QJsonDocument::fromJson(rest.toUtf8());
-                    if (!doc.isObject()) continue;
+                    if (!doc.isObject())
+                        continue;
                     QJsonObject evt = doc.object();
                     QString tid = evt.value(QStringLiteral("task_id")).toString();
-                    if (tid.isEmpty()) tid = *resolved_task_id;
-                    else *resolved_task_id = tid;
+                    if (tid.isEmpty())
+                        tid = *resolved_task_id;
+                    else
+                        *resolved_task_id = tid;
                     evt["request_id"] = req_id;
-                    if (self) self->publish_task_event(tid, evt);
+                    if (self)
+                        self->publish_task_event(tid, evt);
                     const QString kind = evt.value(QStringLiteral("kind")).toString();
                     if (kind == QLatin1String("done") || kind == QLatin1String("error") ||
                         kind == QLatin1String("cancelled")) {
@@ -603,15 +605,17 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
                     }
                 }
                 proc->deleteLater();
-                if (!self) return;
+                if (!self)
+                    return;
                 // If the subprocess died without emitting a terminal event,
                 // synthesise an error event so UI can clean up.
                 if (!*done_emitted) {
                     QJsonObject evt{{"kind", "error"},
                                     {"task_id", *resolved_task_id},
                                     {"request_id", req_id},
-                                    {"error", exit_code != 0 ? stderr_str.left(500)
-                                                             : QStringLiteral("Subprocess exited without terminal event")}};
+                                    {"error", exit_code != 0
+                                                  ? stderr_str.left(500)
+                                                  : QStringLiteral("Subprocess exited without terminal event")}};
                     self->publish_task_event(*resolved_task_id, evt);
                 }
             });
@@ -620,7 +624,8 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
             [self, proc, resolved_task_id, done_emitted, req_id](QProcess::ProcessError) {
                 QString err = proc->errorString();
                 proc->deleteLater();
-                if (!self || *done_emitted) return;
+                if (!self || *done_emitted)
+                    return;
                 *done_emitted = true;
                 QJsonObject evt{{"kind", "error"},
                                 {"task_id", *resolved_task_id},
@@ -656,8 +661,7 @@ QString AgentService::reply_to_question(const QString& task_id, const QString& a
 
 // ── Scheduled recurring tasks ────────────────────────────────────────────────
 
-QString AgentService::schedule_create_task(const QString& name, const QString& query,
-                                           const QString& schedule_expr,
+QString AgentService::schedule_create_task(const QString& name, const QString& query, const QString& schedule_expr,
                                            const QJsonObject& config, bool start_now) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
@@ -667,14 +671,14 @@ QString AgentService::schedule_create_task(const QString& name, const QString& q
     params["schedule_config"] = config;
     params["start_now"] = start_now;
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("agentic_schedule_create"), params, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self) return;
-                         if (ok)
-                             emit self->schedule_created(result.value("schedule_id").toString());
-                         else
-                             emit self->error_occurred("schedule_create", result["error"].toString());
-                     });
+    run_python_stdin(QStringLiteral("agentic_schedule_create"), params, {}, [self](bool ok, QJsonObject result) {
+        if (!self)
+            return;
+        if (ok)
+            emit self->schedule_created(result.value("schedule_id").toString());
+        else
+            emit self->error_occurred("schedule_create", result["error"].toString());
+    });
     // Make sure the polling timer is on now that there might be schedules.
     ensure_schedule_timer();
     return req_id;
@@ -683,12 +687,14 @@ QString AgentService::schedule_create_task(const QString& name, const QString& q
 QString AgentService::schedule_list() {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("agentic_schedule_list"), {}, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self) return;
-                         if (ok) emit self->schedules_listed(result.value("schedules").toArray());
-                         else emit self->error_occurred("schedule_list", result["error"].toString());
-                     });
+    run_python_stdin(QStringLiteral("agentic_schedule_list"), {}, {}, [self](bool ok, QJsonObject result) {
+        if (!self)
+            return;
+        if (ok)
+            emit self->schedules_listed(result.value("schedules").toArray());
+        else
+            emit self->error_occurred("schedule_list", result["error"].toString());
+    });
     return req_id;
 }
 
@@ -707,11 +713,11 @@ QString AgentService::schedule_delete(const QString& schedule_id) {
     QJsonObject params;
     params["schedule_id"] = schedule_id;
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("agentic_schedule_delete"), params, {},
-                     [self, schedule_id](bool ok, QJsonObject) {
-                         if (!self || !ok) return;
-                         emit self->schedule_deleted(schedule_id);
-                     });
+    run_python_stdin(QStringLiteral("agentic_schedule_delete"), params, {}, [self, schedule_id](bool ok, QJsonObject) {
+        if (!self || !ok)
+            return;
+        emit self->schedule_deleted(schedule_id);
+    });
     return req_id;
 }
 
@@ -720,31 +726,30 @@ QString AgentService::schedule_set_enabled(const QString& schedule_id, bool enab
     QJsonObject params;
     params["schedule_id"] = schedule_id;
     params["enabled"] = enabled;
-    run_python_stdin(QStringLiteral("agentic_schedule_set_enabled"), params, {},
-                     [](bool, QJsonObject) {});
+    run_python_stdin(QStringLiteral("agentic_schedule_set_enabled"), params, {}, [](bool, QJsonObject) {});
     return req_id;
 }
 
 void AgentService::tick_schedules() {
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("agentic_schedule_tick"), {}, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self || !ok) return;
-                         const QJsonArray due = result.value("due").toArray();
-                         for (const auto& v : due) {
-                             QJsonObject row = v.toObject();
-                             const QString sid = row.value("id").toString();
-                             const QString name = row.value("name").toString();
-                             const QString query = row.value("query").toString();
-                             const QJsonObject cfg = row.value("config").toObject();
-                             // Fire as a normal agentic task — streaming
-                             // events route through task:event:* like manual
-                             // starts. The schedule's id/name is forwarded so
-                             // UI can correlate the task with its trigger.
-                             const QString task_req = self->start_task(query, cfg);
-                             emit self->scheduled_task_fired(sid, name, task_req);
-                         }
-                     });
+    run_python_stdin(QStringLiteral("agentic_schedule_tick"), {}, {}, [self](bool ok, QJsonObject result) {
+        if (!self || !ok)
+            return;
+        const QJsonArray due = result.value("due").toArray();
+        for (const auto& v : due) {
+            QJsonObject row = v.toObject();
+            const QString sid = row.value("id").toString();
+            const QString name = row.value("name").toString();
+            const QString query = row.value("query").toString();
+            const QJsonObject cfg = row.value("config").toObject();
+            // Fire as a normal agentic task — streaming
+            // events route through task:event:* like manual
+            // starts. The schedule's id/name is forwarded so
+            // UI can correlate the task with its trigger.
+            const QString task_req = self->start_task(query, cfg);
+            emit self->scheduled_task_fired(sid, name, task_req);
+        }
+    });
 }
 
 // ── Library inspection (Phase 3 management UI) ───────────────────────────────
@@ -752,11 +757,11 @@ void AgentService::tick_schedules() {
 QString AgentService::skills_list() {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("agentic_skills_list"), {}, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self || !ok) return;
-                         emit self->skills_listed(result.value("skills").toArray());
-                     });
+    run_python_stdin(QStringLiteral("agentic_skills_list"), {}, {}, [self](bool ok, QJsonObject result) {
+        if (!self || !ok)
+            return;
+        emit self->skills_listed(result.value("skills").toArray());
+    });
     return req_id;
 }
 
@@ -764,22 +769,23 @@ QString AgentService::skill_delete(const QString& skill_id) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject p;
     p["skill_id"] = skill_id;
-    run_python_stdin(QStringLiteral("agentic_skill_delete"), p, {},
-                     [](bool, QJsonObject) {});
+    run_python_stdin(QStringLiteral("agentic_skill_delete"), p, {}, [](bool, QJsonObject) {});
     return req_id;
 }
 
 QString AgentService::archival_list(const QString& user_id, const QString& type) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject p;
-    if (!user_id.isEmpty()) p["user_id"] = user_id;
-    if (!type.isEmpty()) p["type"] = type;
+    if (!user_id.isEmpty())
+        p["user_id"] = user_id;
+    if (!type.isEmpty())
+        p["type"] = type;
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("agentic_memory_list"), p, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self || !ok) return;
-                         emit self->archival_listed(result.value("memories").toArray());
-                     });
+    run_python_stdin(QStringLiteral("agentic_memory_list"), p, {}, [self](bool ok, QJsonObject result) {
+        if (!self || !ok)
+            return;
+        emit self->archival_listed(result.value("memories").toArray());
+    });
     return req_id;
 }
 
@@ -787,34 +793,42 @@ QString AgentService::archival_delete(const QString& memory_id) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject p;
     p["memory_id"] = memory_id;
-    run_python_stdin(QStringLiteral("agentic_memory_delete"), p, {},
-                     [](bool, QJsonObject) {});
+    run_python_stdin(QStringLiteral("agentic_memory_delete"), p, {}, [](bool, QJsonObject) {});
     return req_id;
 }
 
 QString AgentService::reflexion_list() {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("agentic_reflexion_list"), {}, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self || !ok) return;
-                         emit self->reflexion_listed(result.value("reflections").toArray());
-                     });
+    run_python_stdin(QStringLiteral("agentic_reflexion_list"), {}, {}, [self](bool ok, QJsonObject result) {
+        if (!self || !ok)
+            return;
+        emit self->reflexion_listed(result.value("reflections").toArray());
+    });
     return req_id;
 }
 
 void AgentService::ensure_schedule_timer() {
-    if (schedule_timer_) return;
+    if (schedule_timer_)
+        return;
     auto* t = new QTimer(this);
     t->setInterval(30 * 1000); // 30s — finer than this is overkill at the minute granularity DSL
     QPointer<AgentService> self = this;
-    QObject::connect(t, &QTimer::timeout, this, [self]() { if (self) self->tick_schedules(); });
+    QObject::connect(t, &QTimer::timeout, this, [self]() {
+        if (self)
+            self->tick_schedules();
+    });
     t->start();
     schedule_timer_ = t;
     // Fire one immediate tick so a freshly-created `start_now=true` schedule
     // doesn't wait the full 30s.
-    QMetaObject::invokeMethod(this, [self]() { if (self) self->tick_schedules(); },
-                              Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [self]() {
+            if (self)
+                self->tick_schedules();
+        },
+        Qt::QueuedConnection);
 }
 
 QString AgentService::pause_task(const QString& task_id) {
@@ -824,7 +838,8 @@ QString AgentService::pause_task(const QString& task_id) {
     QPointer<AgentService> self = this;
     run_python_stdin(QStringLiteral("agentic_pause_task"), params, {},
                      [self, task_id, req_id](bool ok, QJsonObject result) {
-                         if (!self || !ok) return;
+                         if (!self || !ok)
+                             return;
                          QJsonObject evt{{"kind", "control_ack"},
                                          {"task_id", task_id},
                                          {"request_id", req_id},
@@ -841,7 +856,8 @@ QString AgentService::cancel_task(const QString& task_id) {
     QPointer<AgentService> self = this;
     run_python_stdin(QStringLiteral("agentic_cancel_task"), params, {},
                      [self, task_id, req_id](bool ok, QJsonObject result) {
-                         if (!self || !ok) return;
+                         if (!self || !ok)
+                             return;
                          QJsonObject evt{{"kind", "control_ack"},
                                          {"task_id", task_id},
                                          {"request_id", req_id},
@@ -854,15 +870,18 @@ QString AgentService::cancel_task(const QString& task_id) {
 QString AgentService::list_tasks(const QString& status_filter, int limit) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QJsonObject params;
-    if (!status_filter.isEmpty()) params["status"] = status_filter;
+    if (!status_filter.isEmpty())
+        params["status"] = status_filter;
     params["limit"] = limit;
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("list_tasks"), params, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self) return;
-                         if (ok) emit self->tasks_listed(result.value("tasks").toArray());
-                         else emit self->error_occurred("list_tasks", result["error"].toString());
-                     });
+    run_python_stdin(QStringLiteral("list_tasks"), params, {}, [self](bool ok, QJsonObject result) {
+        if (!self)
+            return;
+        if (ok)
+            emit self->tasks_listed(result.value("tasks").toArray());
+        else
+            emit self->error_occurred("list_tasks", result["error"].toString());
+    });
     return req_id;
 }
 
@@ -871,14 +890,15 @@ QString AgentService::get_task(const QString& task_id) {
     QJsonObject params;
     params["task_id"] = task_id;
     QPointer<AgentService> self = this;
-    run_python_stdin(QStringLiteral("get_task"), params, {},
-                     [self](bool ok, QJsonObject result) {
-                         if (!self) return;
-                         if (ok) emit self->task_loaded(result.value("task").toObject());
-                         else emit self->error_occurred("get_task", result["error"].toString());
-                     });
+    run_python_stdin(QStringLiteral("get_task"), params, {}, [self](bool ok, QJsonObject result) {
+        if (!self)
+            return;
+        if (ok)
+            emit self->task_loaded(result.value("task").toObject());
+        else
+            emit self->error_occurred("get_task", result["error"].toString());
+    });
     return req_id;
 }
-
 
 } // namespace fincept::services

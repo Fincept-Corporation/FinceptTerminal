@@ -100,9 +100,9 @@ void TradeAnalysisPanel::build_ui() {
     hhl->setContentsMargins(16, 0, 16, 0);
     title_lbl_ = new QLabel(tr("TRADE GEOPOLITICS ANALYSIS"), header);
     title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-                             .arg(ui::colors::WARNING())
-                             .arg(ui::fonts::TINY)
-                             .arg(ui::fonts::DATA_FAMILY()));
+                                  .arg(ui::colors::WARNING())
+                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
     hhl->addStretch();
     status_label_ = new QLabel(header);
@@ -152,15 +152,16 @@ void TradeAnalysisPanel::build_ui() {
     p0l->setContentsMargins(12, 12, 12, 12);
     p0l->setSpacing(10);
 
-    auto* hint0 = new QLabel(
-        tr("Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of international trade."),
-        p0);
+    auto* hint0 = new QLabel(tr("Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of "
+                                "international trade."),
+                             p0);
     hint0->setWordWrap(true);
     hint0->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                              .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
-    i18n_labels_.append({hint0, QStringLiteral("Analyzes efficiency gains, consumer benefits, growth effects, and adjustment costs of international trade.")});
+    i18n_labels_.append({hint0, QStringLiteral("Analyzes efficiency gains, consumer benefits, growth effects, and "
+                                               "adjustment costs of international trade.")});
     p0l->addWidget(hint0);
 
     auto* vol_spin = new QDoubleSpinBox;
@@ -183,7 +184,8 @@ void TradeAnalysisPanel::build_ui() {
     cons_spin->setValue(30);
     cons_spin->setSuffix(tr("% of consumption"));
     cons_spin->setStyleSheet(spin_style());
-    p0l->addWidget(make_field(tr("TRADED GOODS SHARE"), cons_spin, p0, tr("Share of consumption from tradeable goods")));
+    p0l->addWidget(
+        make_field(tr("TRADED GOODS SHARE"), cons_spin, p0, tr("Share of consumption from tradeable goods")));
 
     p0l->addStretch();
 
@@ -226,7 +228,9 @@ void TradeAnalysisPanel::build_ui() {
                              .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
-    i18n_labels_.append({hint1, QStringLiteral("Analyzes economic impact of tariffs, quotas, export subsidies, and non-tariff barriers.")});
+    i18n_labels_.append(
+        {hint1,
+         QStringLiteral("Analyzes economic impact of tariffs, quotas, export subsidies, and non-tariff barriers.")});
     p1l->addWidget(hint1);
 
     auto* tariff_spin = new QDoubleSpinBox;
@@ -234,7 +238,8 @@ void TradeAnalysisPanel::build_ui() {
     tariff_spin->setValue(10);
     tariff_spin->setSuffix("%");
     tariff_spin->setStyleSheet(spin_style());
-    p1l->addWidget(make_field(tr("TARIFF RATE"), tariff_spin, p1, tr("Import duty rate (e.g. 10% = standard MFN tariff)")));
+    p1l->addWidget(
+        make_field(tr("TARIFF RATE"), tariff_spin, p1, tr("Import duty rate (e.g. 10% = standard MFN tariff)")));
 
     auto* quota_spin = new QDoubleSpinBox;
     quota_spin->setRange(0, 1000000);
@@ -248,7 +253,8 @@ void TradeAnalysisPanel::build_ui() {
     subsidy_spin->setValue(5);
     subsidy_spin->setSuffix("%");
     subsidy_spin->setStyleSheet(spin_style());
-    p1l->addWidget(make_field(tr("EXPORT SUBSIDY RATE"), subsidy_spin, p1, tr("Government subsidy as % of export value")));
+    p1l->addWidget(
+        make_field(tr("EXPORT SUBSIDY RATE"), subsidy_spin, p1, tr("Government subsidy as % of export value")));
 
     auto* dev_combo = new QComboBox;
     dev_combo->setStyleSheet(combo_style());
@@ -300,14 +306,16 @@ void TradeAnalysisPanel::build_ui() {
     p2l->setContentsMargins(12, 12, 12, 12);
     p2l->setSpacing(10);
 
-    auto* hint2 =
-        new QLabel(tr("Analyzes trade creation vs. diversion effects for regional trade blocs and economic unions."), p2);
+    auto* hint2 = new QLabel(
+        tr("Analyzes trade creation vs. diversion effects for regional trade blocs and economic unions."), p2);
     hint2->setWordWrap(true);
     hint2->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
                              .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
-    i18n_labels_.append({hint2, QStringLiteral("Analyzes trade creation vs. diversion effects for regional trade blocs and economic unions.")});
+    i18n_labels_.append(
+        {hint2, QStringLiteral(
+                    "Analyzes trade creation vs. diversion effects for regional trade blocs and economic unions.")});
     p2l->addWidget(hint2);
 
     auto* bloc_combo = new QComboBox;
@@ -323,14 +331,16 @@ void TradeAnalysisPanel::build_ui() {
     tc_spin->setValue(100);
     tc_spin->setSuffix(tr("B USD"));
     tc_spin->setStyleSheet(spin_style());
-    p2l->addWidget(make_field(tr("TRADE CREATION ESTIMATE"), tc_spin, p2, tr("Expected new trade generated within bloc")));
+    p2l->addWidget(
+        make_field(tr("TRADE CREATION ESTIMATE"), tc_spin, p2, tr("Expected new trade generated within bloc")));
 
     auto* td_spin = new QDoubleSpinBox;
     td_spin->setRange(0, 1000);
     td_spin->setValue(30);
     td_spin->setSuffix(tr("B USD"));
     td_spin->setStyleSheet(spin_style());
-    p2l->addWidget(make_field(tr("TRADE DIVERSION ESTIMATE"), td_spin, p2, tr("Trade diverted from efficient non-members")));
+    p2l->addWidget(
+        make_field(tr("TRADE DIVERSION ESTIMATE"), td_spin, p2, tr("Trade diverted from efficient non-members")));
 
     p2l->addStretch();
 
@@ -374,7 +384,8 @@ void TradeAnalysisPanel::build_ui() {
                              .arg(ui::colors::TEXT_SECONDARY())
                              .arg(ui::fonts::SMALL)
                              .arg(ui::fonts::DATA_FAMILY));
-    i18n_labels_.append({hint3, QStringLiteral("Assesses FDI, employment, wage, and GDP impact of removing trade barriers.")});
+    i18n_labels_.append(
+        {hint3, QStringLiteral("Assesses FDI, employment, wage, and GDP impact of removing trade barriers.")});
     p3l->addWidget(hint3);
 
     auto* lib_combo = new QComboBox;
@@ -563,7 +574,8 @@ void TradeAnalysisPanel::changeEvent(QEvent* event) {
 }
 
 void TradeAnalysisPanel::retranslateUi() {
-    if (title_lbl_) title_lbl_->setText(tr("TRADE GEOPOLITICS ANALYSIS"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("TRADE GEOPOLITICS ANALYSIS"));
 
     // Analysis-type combo display labels (data keys preserved).
     if (type_combo_ && type_combo_->count() >= 4) {
@@ -583,11 +595,13 @@ void TradeAnalysisPanel::retranslateUi() {
 
     // Run buttons
     for (auto* btn : run_buttons_)
-        if (btn) btn->setText(tr("RUN ANALYSIS"));
+        if (btn)
+            btn->setText(tr("RUN ANALYSIS"));
 
     // Field captions + hints captured during build_ui().
     for (const auto& pair : i18n_labels_)
-        if (pair.first) pair.first->setText(tr(pair.second.toUtf8().constData()));
+        if (pair.first)
+            pair.first->setText(tr(pair.second.toUtf8().constData()));
 
     // status_label_ and the results table reflect the last action and refresh
     // on the next run; per-field combo item labels are set at build time.

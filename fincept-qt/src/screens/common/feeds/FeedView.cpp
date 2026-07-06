@@ -20,10 +20,14 @@ namespace {
 QString dot_color(FeedStatus s) {
     using namespace fincept::ui;
     switch (s) {
-        case FeedStatus::Ok: return colors::GREEN();
-        case FeedStatus::Fetching: return colors::AMBER();
-        case FeedStatus::Error: return colors::RED();
-        default: return colors::TEXT_TERTIARY();
+        case FeedStatus::Ok:
+            return colors::GREEN();
+        case FeedStatus::Fetching:
+            return colors::AMBER();
+        case FeedStatus::Error:
+            return colors::RED();
+        default:
+            return colors::TEXT_TERTIARY();
     }
 }
 

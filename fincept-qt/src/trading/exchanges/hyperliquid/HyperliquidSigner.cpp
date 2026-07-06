@@ -18,6 +18,7 @@
 // pick which behaviour to assert.
 
 #include "trading/exchanges/hyperliquid/HyperliquidSigner.h"
+
 #include "trading/exchanges/hyperliquid/Keccak256.h"
 
 #include <QByteArray>
@@ -46,32 +47,38 @@ QString serialize_object(const QJsonObject& obj) {
     keys.sort();
     QStringList parts;
     for (const auto& k : keys) {
-        parts << QStringLiteral("\"%1\":%2")
-                     .arg(k, canonical_serialize(obj.value(k)));
+        parts << QStringLiteral("\"%1\":%2").arg(k, canonical_serialize(obj.value(k)));
     }
     return QStringLiteral("{") + parts.join(QStringLiteral(",")) + QStringLiteral("}");
 }
 
 QString serialize_array(const QJsonArray& arr) {
     QStringList parts;
-    for (const auto& v : arr) parts << canonical_serialize(v);
+    for (const auto& v : arr)
+        parts << canonical_serialize(v);
     return QStringLiteral("[") + parts.join(QStringLiteral(",")) + QStringLiteral("]");
 }
 
 QString canonical_serialize(const QJsonValue& v) {
-    if (v.isObject()) return serialize_object(v.toObject());
-    if (v.isArray())  return serialize_array(v.toArray());
+    if (v.isObject())
+        return serialize_object(v.toObject());
+    if (v.isArray())
+        return serialize_array(v.toArray());
     if (v.isString()) {
         return QStringLiteral("\"") + v.toString() + QStringLiteral("\"");
     }
-    if (v.isBool())   return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-    if (v.isNull())   return QStringLiteral("null");
-    if (v.isDouble()) return QString::number(v.toDouble(), 'g', 17);
+    if (v.isBool())
+        return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    if (v.isNull())
+        return QStringLiteral("null");
+    if (v.isDouble())
+        return QString::number(v.toDouble(), 'g', 17);
     return QStringLiteral("null");
 }
 
 QByteArray hex_to_bytes(QString hex) {
-    if (hex.startsWith(QStringLiteral("0x"))) hex.remove(0, 2);
+    if (hex.startsWith(QStringLiteral("0x")))
+        hex.remove(0, 2);
     return QByteArray::fromHex(hex.toUtf8());
 }
 
@@ -86,9 +93,9 @@ QString bytes_to_hex_prefixed(const QByteArray& bytes) {
 //   chainId (uint256, big-endian, 32 bytes)
 //   verifyingContract (address, 20 bytes left-padded to 32)
 QByteArray hl_domain_separator(uint64_t chain_id) {
-    static const QByteArray kDomainTypeHash = keccak256(
-        QByteArrayLiteral("EIP712Domain(string name,string version,uint256 chainId,"
-                          "address verifyingContract)"));
+    static const QByteArray kDomainTypeHash =
+        keccak256(QByteArrayLiteral("EIP712Domain(string name,string version,uint256 chainId,"
+                                    "address verifyingContract)"));
     static const QByteArray kNameHash = keccak256(QByteArrayLiteral("HyperliquidSignTransaction"));
     static const QByteArray kVersionHash = keccak256(QByteArrayLiteral("1"));
 
@@ -125,10 +132,10 @@ QByteArray eip712_digest(const QByteArray& domain_separator, const QByteArray& s
 // v ∈ {27, 28} per the Ethereum ecrecover convention. RFC 6979 deterministic
 // nonce (default in modern OpenSSL ECDSA_do_sign).
 struct EcdsaSig {
-    QByteArray r;     // 32 bytes
-    QByteArray s;     // 32 bytes
-    uint8_t v;        // 27 or 28
-    QString signer_address;  // 0x<20-byte hex>
+    QByteArray r;           // 32 bytes
+    QByteArray s;           // 32 bytes
+    uint8_t v;              // 27 or 28
+    QString signer_address; // 0x<20-byte hex>
 };
 
 // OpenSSL 3.0 deprecated the EC_KEY family in favour of EVP_PKEY. The
@@ -138,21 +145,25 @@ struct EcdsaSig {
 // -Werror doesn't trip until we do the proper migration.
 // TODO(hyperliquid): port ecdsa_sign() to EVP_PKEY-based ECDSA.
 #if defined(__GNUC__) || defined(__clang__)
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #elif defined(_MSC_VER)
-#  pragma warning(push)
-#  pragma warning(disable: 4996)
+#    pragma warning(push)
+#    pragma warning(disable : 4996)
 #endif
 
 EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
     EcdsaSig out;
     EC_KEY* key = EC_KEY_new_by_curve_name(NID_secp256k1);
-    if (!key) return out;
+    if (!key)
+        return out;
 
-    BIGNUM* bn = BN_bin2bn(reinterpret_cast<const unsigned char*>(priv_key_32.constData()),
-                            priv_key_32.size(), nullptr);
-    if (!bn) { EC_KEY_free(key); return out; }
+    BIGNUM* bn =
+        BN_bin2bn(reinterpret_cast<const unsigned char*>(priv_key_32.constData()), priv_key_32.size(), nullptr);
+    if (!bn) {
+        EC_KEY_free(key);
+        return out;
+    }
     EC_KEY_set_private_key(key, bn);
 
     // Derive public key for v recovery.
@@ -160,9 +171,13 @@ EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
     EC_POINT_mul(EC_KEY_get0_group(key), pub, bn, nullptr, nullptr, nullptr);
     EC_KEY_set_public_key(key, pub);
 
-    ECDSA_SIG* sig = ECDSA_do_sign(reinterpret_cast<const unsigned char*>(digest.constData()),
-                                    digest.size(), key);
-    if (!sig) { EC_POINT_free(pub); BN_free(bn); EC_KEY_free(key); return out; }
+    ECDSA_SIG* sig = ECDSA_do_sign(reinterpret_cast<const unsigned char*>(digest.constData()), digest.size(), key);
+    if (!sig) {
+        EC_POINT_free(pub);
+        BN_free(bn);
+        EC_KEY_free(key);
+        return out;
+    }
 
     const BIGNUM* r_bn = nullptr;
     const BIGNUM* s_bn = nullptr;
@@ -199,9 +214,8 @@ EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
 
     // Compute signer address = last 20 bytes of keccak256(uncompressed pubkey[1:]).
     unsigned char pubbuf[65];
-    size_t publen = EC_POINT_point2oct(EC_KEY_get0_group(key), pub,
-                                        POINT_CONVERSION_UNCOMPRESSED,
-                                        pubbuf, sizeof(pubbuf), nullptr);
+    size_t publen =
+        EC_POINT_point2oct(EC_KEY_get0_group(key), pub, POINT_CONVERSION_UNCOMPRESSED, pubbuf, sizeof(pubbuf), nullptr);
     if (publen == 65) {
         QByteArray pub_no_prefix(reinterpret_cast<const char*>(pubbuf + 1), 64);
         QByteArray addr_hash = keccak256(pub_no_prefix);
@@ -220,9 +234,9 @@ EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
 }
 
 #if defined(__GNUC__) || defined(__clang__)
-#  pragma GCC diagnostic pop
+#    pragma GCC diagnostic pop
 #elif defined(_MSC_VER)
-#  pragma warning(pop)
+#    pragma warning(pop)
 #endif
 
 } // namespace
@@ -241,9 +255,8 @@ bool HyperliquidSigner::is_wired() {
     return false;
 }
 
-Result<SignedAction> HyperliquidSigner::sign_action(const QJsonObject& action,
-                                                      const QString& agent_priv_key_hex,
-                                                      bool is_testnet) {
+Result<SignedAction> HyperliquidSigner::sign_action(const QJsonObject& action, const QString& agent_priv_key_hex,
+                                                    bool is_testnet) {
     const QByteArray priv = hex_to_bytes(agent_priv_key_hex);
     if (priv.size() != 32) {
         return Result<SignedAction>::err("private key must be 32 bytes");

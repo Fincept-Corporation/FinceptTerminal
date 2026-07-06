@@ -7,7 +7,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
@@ -58,19 +57,21 @@ QWidget* QuantModulePanel::build_functime_panel() {
     tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Local sample-button helper — same shape as gs_quant's
-    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
-                                  const QString& tip, bool walk = false) -> QPushButton* {
+    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed, const QString& tip,
+                                 bool walk = false) -> QPushButton* {
         auto* btn = new QPushButton(tr("LOAD SAMPLE"), parent);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
         btn->setToolTip(tip);
-        btn->setStyleSheet(QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
-                                   "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
-                                   "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
-                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
+        btn->setStyleSheet(
+            QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
+                    "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
+                    "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
+                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
         QPointer<QLineEdit> guard(edit);
         connect(btn, &QPushButton::clicked, this, [guard, seed, walk]() {
-            if (guard) guard->setText(walk ? sample_random_walk(seed) : sample_series(seed));
+            if (guard)
+                guard->setText(walk ? sample_random_walk(seed) : sample_series(seed));
         });
         return btn;
     };
@@ -86,12 +87,11 @@ QWidget* QuantModulePanel::build_functime_panel() {
     fc_vals->setStyleSheet(input_ss());
     text_inputs_["fn_fc_values"] = fc_vals;
     fcl->addWidget(build_input_row(tr("Series Values"), fc_vals, fc));
-    fcl->addWidget(add_sample_btn(fc_vals, fc, 11,
-                                   tr("200-pt synthetic series: trend + 30-pt seasonal cycle + noise")));
+    fcl->addWidget(
+        add_sample_btn(fc_vals, fc, 11, tr("200-pt synthetic series: trend + 30-pt seasonal cycle + noise")));
 
     auto* fc_model = new QComboBox(fc);
-    fc_model->addItems({"linear", "ridge", "lasso", "elasticnet", "knn", "naive", "drift",
-                        "holt_winters", "arima"});
+    fc_model->addItems({"linear", "ridge", "lasso", "elasticnet", "knn", "naive", "drift", "holt_winters", "arima"});
     fc_model->setStyleSheet(combo_ss());
     combo_inputs_["fn_fc_model"] = fc_model;
     fcl->addWidget(build_input_row(tr("Model"), fc_model, fc));
@@ -132,13 +132,15 @@ QWidget* QuantModulePanel::build_functime_panel() {
         }
         if (vals.size() < 30) {
             display_error(tr("Need at least 30 observations; you provided %1. "
-                                  "Click LOAD SAMPLE for 200.")
+                             "Click LOAD SAMPLE for 200.")
                               .arg(vals.size()));
             return;
         }
         const QString model = combo_inputs_["fn_fc_model"]->currentText();
         show_loading(tr("Fitting %1 on %2 obs and projecting %3 steps...")
-                         .arg(model).arg(vals.size()).arg(int_inputs_["fn_fc_horizon"]->value()));
+                         .arg(model)
+                         .arg(vals.size())
+                         .arg(int_inputs_["fn_fc_horizon"]->value()));
         QJsonObject params;
         params["values"] = vals;
         params["model"] = model;
@@ -163,8 +165,7 @@ QWidget* QuantModulePanel::build_functime_panel() {
     an_vals->setStyleSheet(input_ss());
     text_inputs_["fn_an_values"] = an_vals;
     anl->addWidget(build_input_row(tr("Series Values"), an_vals, an));
-    anl->addWidget(add_sample_btn(an_vals, an, 21,
-                                   tr("200-pt series — paste in your own outliers to test detection")));
+    anl->addWidget(add_sample_btn(an_vals, an, 21, tr("200-pt series — paste in your own outliers to test detection")));
 
     auto* an_method = new QComboBox(an);
     an_method->addItems({"zscore", "iqr", "isolation_forest", "residual"});
@@ -221,8 +222,7 @@ QWidget* QuantModulePanel::build_functime_panel() {
     se_vals->setStyleSheet(input_ss());
     text_inputs_["fn_se_values"] = se_vals;
     sel->addWidget(build_input_row(tr("Series Values"), se_vals, se));
-    sel->addWidget(add_sample_btn(se_vals, se, 31,
-                                   tr("200-pt series with embedded period-30 seasonality")));
+    sel->addWidget(add_sample_btn(se_vals, se, 31, tr("200-pt series with embedded period-30 seasonality")));
 
     auto* se_period = new QSpinBox(se);
     se_period->setRange(0, 365);
@@ -272,16 +272,15 @@ QWidget* QuantModulePanel::build_functime_panel() {
     me_act->setStyleSheet(input_ss());
     text_inputs_["fn_me_actual"] = me_act;
     mel->addWidget(build_input_row(tr("Actual"), me_act, me));
-    mel->addWidget(add_sample_btn(me_act, me, 41,
-                                   tr("100-pt synthetic 'actual' series (level ~50)")));
+    mel->addWidget(add_sample_btn(me_act, me, 41, tr("100-pt synthetic 'actual' series (level ~50)")));
 
     auto* me_pred = new QLineEdit(me);
     me_pred->setPlaceholderText(tr("Predicted values (same length as actual)"));
     me_pred->setStyleSheet(input_ss());
     text_inputs_["fn_me_pred"] = me_pred;
     mel->addWidget(build_input_row(tr("Predicted"), me_pred, me));
-    mel->addWidget(add_sample_btn(me_pred, me, 42,
-                                   tr("100-pt synthetic 'predicted' series (similar shape, mild noise)")));
+    mel->addWidget(
+        add_sample_btn(me_pred, me, 42, tr("100-pt synthetic 'predicted' series (similar shape, mild noise)")));
 
     auto* me_run = make_run_button(tr("CALCULATE METRICS"), me);
     connect(me_run, &QPushButton::clicked, this, [this]() {
@@ -300,8 +299,7 @@ QWidget* QuantModulePanel::build_functime_panel() {
             return;
         }
         if (a.size() != p.size()) {
-            display_error(tr("Actual (%1) and Predicted (%2) must have the same length.")
-                              .arg(a.size()).arg(p.size()));
+            display_error(tr("Actual (%1) and Predicted (%2) must have the same length.").arg(a.size()).arg(p.size()));
             return;
         }
         show_loading(tr("Computing forecast accuracy on %1 pairs...").arg(a.size()));
@@ -325,8 +323,7 @@ QWidget* QuantModulePanel::build_functime_panel() {
     ci_vals->setStyleSheet(input_ss());
     text_inputs_["fn_ci_values"] = ci_vals;
     cil->addWidget(build_input_row(tr("Series Values"), ci_vals, ci));
-    cil->addWidget(add_sample_btn(ci_vals, ci, 51,
-                                   tr("200-pt synthetic series with seasonality")));
+    cil->addWidget(add_sample_btn(ci_vals, ci, 51, tr("200-pt synthetic series with seasonality")));
 
     auto* ci_method = new QComboBox(ci);
     ci_method->addItems({"bootstrap", "residual"});
@@ -397,8 +394,7 @@ QWidget* QuantModulePanel::build_functime_panel() {
     st_vals->setStyleSheet(input_ss());
     text_inputs_["fn_st_values"] = st_vals;
     stl->addWidget(build_input_row(tr("Series Values"), st_vals, st));
-    stl->addWidget(add_sample_btn(st_vals, st, 61,
-                                   tr("150-pt random walk with drift — should require d=1"), true));
+    stl->addWidget(add_sample_btn(st_vals, st, 61, tr("150-pt random walk with drift — should require d=1"), true));
 
     auto* st_max = new QSpinBox(st);
     st_max->setRange(0, 3);
@@ -450,8 +446,8 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
         const QString err = payload.value("error").toString(tr("Unknown error"));
         const QString kind = payload.value("error_kind").toString();
         const QString prefix = kind == "validation" ? tr("Input error: ")
-                              : kind == "runtime"    ? tr("Computation failed: ")
-                                                     : QString();
+                               : kind == "runtime"  ? tr("Computation failed: ")
+                                                    : QString();
         display_error(prefix + err);
         return;
     }
@@ -482,13 +478,13 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
 
         const auto ops = d.value("ops_available").toArray();
         QStringList op_names;
-        for (const auto& v : ops) op_names << v.toString();
+        for (const auto& v : ops)
+            op_names << v.toString();
         auto* lbl = new QLabel(tr("Operations available: %1").arg(op_names.join(", ")));
         lbl->setWordWrap(true);
         lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(lbl);
         status_label_->setText(tr("Functime backend ready"));
         return;
@@ -507,19 +503,18 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
         const double first_fc = d.value("first_forecast").toDouble();
         const double last_fc = d.value("last_forecast").toDouble();
 
-        auto* hdr = new QLabel(tr("MODEL %1  |  HORIZON %2 STEPS  |  LAGS %3")
-                                   .arg(model.toUpper()).arg(horizon).arg(lags));
+        auto* hdr =
+            new QLabel(tr("MODEL %1  |  HORIZON %2 STEPS  |  LAGS %3").arg(model.toUpper()).arg(horizon).arg(lags));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> fit = {
             gs_make_card(tr("IN-SAMPLE R²"), gs_fmt_num(r2, 3), this,
-                         r2 >= 0.7 ? ui::colors::POSITIVE()
-                                  : r2 >= 0.3 ? ui::colors::WARNING()
-                                              : ui::colors::NEGATIVE()),
+                         r2 >= 0.7   ? ui::colors::POSITIVE()
+                         : r2 >= 0.3 ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
             gs_make_card(tr("IN-SAMPLE MAE"), gs_fmt_num(mae, 4), this),
             gs_make_card(tr("IN-SAMPLE RMSE"), gs_fmt_num(rmse, 4), this),
             gs_make_card(tr("RESIDUAL σ"), gs_fmt_num(resid_std, 4), this),
@@ -542,9 +537,8 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
             gs_make_card(tr("FORECAST MEAN"), gs_fmt_num(d.value("forecast_mean").toDouble(), 4), this),
             gs_make_card(tr("FORECAST MAX"), gs_fmt_num(d.value("forecast_max").toDouble(), 4), this,
                          ui::colors::POSITIVE()),
-            gs_make_card(tr("SEASON USED"), d.value("season").toInt() > 0
-                                            ? QString::number(d.value("season").toInt())
-                                            : tr("none"), this),
+            gs_make_card(tr("SEASON USED"),
+                         d.value("season").toInt() > 0 ? QString::number(d.value("season").toInt()) : tr("none"), this),
         };
         results_layout_->addWidget(gs_card_row(bounds, this));
 
@@ -593,26 +587,28 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
 
         auto* hdr = new QLabel(tr("METHOD %1  |  %2 / %3 ANOMALIES (%4%)")
                                    .arg(method.toUpper())
-                                   .arg(n_anom).arg(n_obs)
+                                   .arg(n_anom)
+                                   .arg(n_obs)
                                    .arg(rate, 0, 'f', 2));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> top = {
             gs_make_card(tr("ANOMALIES FOUND"), QString::number(n_anom), this,
                          n_anom == 0 ? ui::colors::POSITIVE()
-                                     : rate > 5  ? ui::colors::NEGATIVE()
-                                                : ui::colors::WARNING()),
+                         : rate > 5  ? ui::colors::NEGATIVE()
+                                     : ui::colors::WARNING()),
             gs_make_card(tr("ANOMALY RATE"), QString::number(rate, 'f', 2) + "%", this,
-                         rate > 5 ? ui::colors::NEGATIVE()
-                                  : rate > 1 ? ui::colors::WARNING()
-                                             : ui::colors::POSITIVE()),
-            gs_make_card(tr("MAX |SCORE|"), gs_fmt_num(std::max(std::abs(d.value("score_min").toDouble()),
-                                                              std::abs(d.value("score_max").toDouble())), 3),
-                         this, ui::colors::WARNING()),
+                         rate > 5   ? ui::colors::NEGATIVE()
+                         : rate > 1 ? ui::colors::WARNING()
+                                    : ui::colors::POSITIVE()),
+            gs_make_card(
+                tr("MAX |SCORE|"),
+                gs_fmt_num(
+                    std::max(std::abs(d.value("score_min").toDouble()), std::abs(d.value("score_max").toDouble())), 3),
+                this, ui::colors::WARNING()),
             gs_make_card(tr("SCORE σ"), gs_fmt_num(d.value("score_std").toDouble(), 3), this),
         };
         results_layout_->addWidget(gs_card_row(top, this));
@@ -645,8 +641,7 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
                 val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 2, val_item);
                 auto* sc_item = new QTableWidgetItem(QString::number(score, 'f', 3));
-                sc_item->setForeground(QColor(std::abs(score) > 5 ? ui::colors::NEGATIVE()
-                                                                  : ui::colors::WARNING()));
+                sc_item->setForeground(QColor(std::abs(score) > 5 ? ui::colors::NEGATIVE() : ui::colors::WARNING()));
                 sc_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 3, sc_item);
                 table->setRowHeight(i, 22);
@@ -654,14 +649,15 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
             results_layout_->addWidget(table);
         } else {
             auto* clean = new QLabel(tr("No anomalies detected at the configured threshold."));
-            clean->setStyleSheet(QString("color:%1; font-size:11px; padding:10px;"
-                                         "background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.25); border-radius:2px;")
-                                     .arg(ui::colors::POSITIVE()));
+            clean->setStyleSheet(
+                QString("color:%1; font-size:11px; padding:10px;"
+                        "background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.25); border-radius:2px;")
+                    .arg(ui::colors::POSITIVE()));
             results_layout_->addWidget(clean);
         }
 
-        status_label_->setText(tr("%1: %2 anomalies in %3 obs (%4%)")
-                                   .arg(method).arg(n_anom).arg(n_obs).arg(rate, 0, 'f', 2));
+        status_label_->setText(
+            tr("%1: %2 anomalies in %3 obs (%4%)").arg(method).arg(n_anom).arg(n_obs).arg(rate, 0, 'f', 2));
         return;
     }
 
@@ -673,17 +669,18 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
         const double sstr = d.value("seasonal_strength").toDouble();
         const double rstd = d.value("residual_std").toDouble();
 
-        auto* hdr = new QLabel(tr("PERIOD %1%2  |  STL DECOMPOSITION")
-                                   .arg(period).arg(auto_det ? tr("  (auto-detected)") : QString()));
+        auto* hdr = new QLabel(
+            tr("PERIOD %1%2  |  STL DECOMPOSITION").arg(period).arg(auto_det ? tr("  (auto-detected)") : QString()));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         auto strength_color = [](double s) {
-            if (s > 0.6) return ui::colors::POSITIVE();
-            if (s > 0.3) return ui::colors::WARNING();
+            if (s > 0.6)
+                return ui::colors::POSITIVE();
+            if (s > 0.3)
+                return ui::colors::WARNING();
             return ui::colors::TEXT_PRIMARY();
         };
 
@@ -697,10 +694,14 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
 
         // Interpretation strip
         QString interp;
-        if (sstr > 0.6 && tstr > 0.6) interp = tr("Strong trend AND strong seasonality detected.");
-        else if (sstr > 0.6) interp = tr("Strong seasonal cycle, weak trend.");
-        else if (tstr > 0.6) interp = tr("Strong trend, weak/no seasonality.");
-        else interp = tr("Weak structure — series is close to noise around its mean.");
+        if (sstr > 0.6 && tstr > 0.6)
+            interp = tr("Strong trend AND strong seasonality detected.");
+        else if (sstr > 0.6)
+            interp = tr("Strong seasonal cycle, weak trend.");
+        else if (tstr > 0.6)
+            interp = tr("Strong trend, weak/no seasonality.");
+        else
+            interp = tr("Weak structure — series is close to noise around its mean.");
         auto* il = new QLabel(interp);
         il->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
                                   "padding:8px 10px; background:%2; border-left:3px solid %3;")
@@ -739,8 +740,8 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
             }
             results_layout_->addWidget(table);
         }
-        status_label_->setText(tr("STL period=%1  |  trend=%2  seasonal=%3")
-                                   .arg(period).arg(tstr, 0, 'f', 2).arg(sstr, 0, 'f', 2));
+        status_label_->setText(
+            tr("STL period=%1  |  trend=%2  seasonal=%3").arg(period).arg(tstr, 0, 'f', 2).arg(sstr, 0, 'f', 2));
         return;
     }
 
@@ -764,25 +765,27 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
 
         QList<QWidget*> pct_row = {
             gs_make_card(tr("MAPE"), QString::number(mape, 'f', 2) + "%", this,
-                         mape < 10 ? ui::colors::POSITIVE()
-                                  : mape < 30 ? ui::colors::WARNING()
-                                              : ui::colors::NEGATIVE()),
+                         mape < 10   ? ui::colors::POSITIVE()
+                         : mape < 30 ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
             gs_make_card(tr("SMAPE"), QString::number(smape, 'f', 2) + "%", this,
-                         smape < 10 ? ui::colors::POSITIVE()
-                                   : smape < 30 ? ui::colors::WARNING()
-                                                : ui::colors::NEGATIVE()),
+                         smape < 10   ? ui::colors::POSITIVE()
+                         : smape < 30 ? ui::colors::WARNING()
+                                      : ui::colors::NEGATIVE()),
             gs_make_card(tr("R²"), gs_fmt_num(r2, 4), this,
-                         r2 > 0.7 ? ui::colors::POSITIVE()
-                                  : r2 > 0.3 ? ui::colors::WARNING()
-                                             : ui::colors::NEGATIVE()),
+                         r2 > 0.7   ? ui::colors::POSITIVE()
+                         : r2 > 0.3 ? ui::colors::WARNING()
+                                    : ui::colors::NEGATIVE()),
             gs_make_card(tr("DIRECTION ACC"), QString::number(dir_acc, 'f', 1) + "%", this,
                          dir_acc > 60 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(pct_row, this));
 
         status_label_->setText(tr("MAE %1  |  RMSE %2  |  R² %3  |  MAPE %4%")
-                                   .arg(mae, 0, 'f', 3).arg(rmse, 0, 'f', 3)
-                                   .arg(r2, 0, 'f', 3).arg(mape, 0, 'f', 2));
+                                   .arg(mae, 0, 'f', 3)
+                                   .arg(rmse, 0, 'f', 3)
+                                   .arg(r2, 0, 'f', 3)
+                                   .arg(mape, 0, 'f', 2));
         return;
     }
 
@@ -794,11 +797,12 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
         const double mean_w = d.value("mean_width").toDouble();
 
         auto* hdr = new QLabel(tr("METHOD %1  |  CONFIDENCE %2%  |  HORIZON %3")
-                                   .arg(method.toUpper()).arg(conf * 100, 0, 'f', 1).arg(horizon));
+                                   .arg(method.toUpper())
+                                   .arg(conf * 100, 0, 'f', 1)
+                                   .arg(horizon));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> top = {
@@ -818,9 +822,7 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
                          ui::colors::POSITIVE()),
             gs_make_card(tr("LAGS"), QString::number(d.value("lags").toInt()), this),
             gs_make_card(tr("BOOT N"),
-                         d.value("n_boot").isNull() ? tr("n/a")
-                                                    : QString::number(d.value("n_boot").toInt()),
-                         this),
+                         d.value("n_boot").isNull() ? tr("n/a") : QString::number(d.value("n_boot").toInt()), this),
         };
         results_layout_->addWidget(gs_card_row(wide, this));
 
@@ -859,7 +861,8 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
         }
 
         status_label_->setText(tr("%1 intervals @ %2%  |  mean width %3")
-                                   .arg(intervals.size()).arg(conf * 100, 0, 'f', 1)
+                                   .arg(intervals.size())
+                                   .arg(conf * 100, 0, 'f', 1)
                                    .arg(mean_w, 0, 'f', 3));
         return;
     }
@@ -870,8 +873,7 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
         const int max_d = d.value("max_d_tested").toInt();
         const QJsonArray tests = d.value("tests").toArray();
 
-        auto* hdr = new QLabel(tr("RECOMMENDED DIFFERENCING ORDER:  d = %1   (tested 0..%2)")
-                                   .arg(rec_d).arg(max_d));
+        auto* hdr = new QLabel(tr("RECOMMENDED DIFFERENCING ORDER:  d = %1   (tested 0..%2)").arg(rec_d).arg(max_d));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
@@ -889,28 +891,24 @@ void QuantModulePanel::display_functime_result(const QString& command, const QJs
             QList<QWidget*> row = {
                 gs_make_card(label.toUpper(), verdict, this, verdict_col),
                 gs_make_card(tr("ADF p"), gs_fmt_num(t.value("adf_p_value").toDouble(), 4), this,
-                             t.value("adf_stationary").toBool() ? ui::colors::POSITIVE()
-                                                                : ui::colors::WARNING()),
+                             t.value("adf_stationary").toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()),
                 gs_make_card(tr("KPSS p"), gs_fmt_num(t.value("kpss_p_value").toDouble(), 4), this,
-                             t.value("kpss_stationary").toBool() ? ui::colors::POSITIVE()
-                                                                  : ui::colors::WARNING()),
+                             t.value("kpss_stationary").toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()),
                 gs_make_card(tr("OBS USED"), QString::number(t.value("n_observations").toInt()), this),
             };
             results_layout_->addWidget(gs_card_row(row, this));
         }
 
         // Test legend
-        auto* legend = new QLabel(
-            tr("ADF: H₀ = unit root (non-stationary). p < 0.05 ⇒ stationary.\n"
-            "KPSS: H₀ = stationary. p ≥ 0.05 ⇒ stationary.\n"
-            "Verdict requires BOTH tests to agree."));
+        auto* legend = new QLabel(tr("ADF: H₀ = unit root (non-stationary). p < 0.05 ⇒ stationary.\n"
+                                     "KPSS: H₀ = stationary. p ≥ 0.05 ⇒ stationary.\n"
+                                     "Verdict requires BOTH tests to agree."));
         legend->setStyleSheet(QString("color:%1; font-size:9px; font-family:'Courier New';"
                                       "padding:6px 10px; background:%2;")
                                   .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED()));
         results_layout_->addWidget(legend);
 
-        status_label_->setText(tr("Recommended d = %1 (tested %2 orders)")
-                                   .arg(rec_d).arg(tests.size()));
+        status_label_->setText(tr("Recommended d = %1 (tested %2 orders)").arg(rec_d).arg(tests.size()));
         return;
     }
 

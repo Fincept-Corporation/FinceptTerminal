@@ -157,8 +157,7 @@ void AuthManager::migrate_legacy_plaintext_credentials() {
         // Rewrite fincept_session without secrets and drop the plaintext key row
         // so the cleartext copies no longer exist on disk for this install.
         QJsonDocument doc(session_.to_persisted_json());
-        settings.set("fincept_session",
-                     QString::fromUtf8(doc.toJson(QJsonDocument::Compact)), "auth");
+        settings.set("fincept_session", QString::fromUtf8(doc.toJson(QJsonDocument::Compact)), "auth");
         settings.remove("fincept_api_key");
         LOG_INFO("Auth", "Migrated legacy plaintext credentials into SecureStorage and purged settings rows");
     }

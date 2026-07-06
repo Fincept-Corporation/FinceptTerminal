@@ -12,7 +12,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "ui/theme/Theme.h"
 
 #include <QAbstractItemView>
@@ -143,17 +142,14 @@ void QuantModulePanel::display_advanced_models_result(const QString& command, co
         QList<QWidget*> top = {
             gs_make_card(tr("MODEL ID"), payload.value("model_id").toString(), this),
             gs_make_card(tr("EPOCHS"),
-                         total_epochs > 0 && total_epochs != epochs
-                             ? tr("%1 / %2").arg(epochs).arg(total_epochs)
-                             : QString::number(epochs),
+                         total_epochs > 0 && total_epochs != epochs ? tr("%1 / %2").arg(epochs).arg(total_epochs)
+                                                                    : QString::number(epochs),
                          this, ui::colors::POSITIVE()),
             gs_make_card(tr("FINAL LOSS"), QString::number(final_loss, 'g', 4), this,
-                         final_loss < initial_loss * 0.5 ? ui::colors::POSITIVE()
-                                                          : ui::colors::WARNING()),
+                         final_loss < initial_loss * 0.5 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("LOSS REDUCTION"),
-                         initial_loss > 0
-                             ? QString::number((1.0 - final_loss / initial_loss) * 100, 'f', 1) + "%"
-                             : "—",
+                         initial_loss > 0 ? QString::number((1.0 - final_loss / initial_loss) * 100, 'f', 1) + "%"
+                                          : "—",
                          this, ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
@@ -178,8 +174,7 @@ void QuantModulePanel::display_advanced_models_result(const QString& command, co
             }
             results_layout_->addWidget(table);
         }
-        status_label_->setText(tr("Trained %1 epochs  final loss=%2")
-                                   .arg(epochs).arg(final_loss, 0, 'g', 4));
+        status_label_->setText(tr("Trained %1 epochs  final loss=%2").arg(epochs).arg(final_loss, 0, 'g', 4));
         return;
     }
 
@@ -192,14 +187,13 @@ void QuantModulePanel::display_advanced_models_result(const QString& command, co
             mn = std::min(mn, d);
             mx = std::max(mx, d);
         }
-        if (!preds.isEmpty()) mean /= preds.size();
+        if (!preds.isEmpty())
+            mean /= preds.size();
         QList<QWidget*> top = {
             gs_make_card(tr("MODEL ID"), payload.value("model_id").toString(), this),
             gs_make_card(tr("PREDICTIONS"), QString::number(preds.size()), this, ui::colors::POSITIVE()),
             gs_make_card(tr("MEAN"), QString::number(mean, 'f', 6), this, gs_pos_neg_color(mean)),
-            gs_make_card(tr("RANGE"),
-                         preds.isEmpty() ? "—"
-                                         : QString("[%1, %2]").arg(mn, 0, 'f', 4).arg(mx, 0, 'f', 4),
+            gs_make_card(tr("RANGE"), preds.isEmpty() ? "—" : QString("[%1, %2]").arg(mn, 0, 'f', 4).arg(mx, 0, 'f', 4),
                          this),
         };
         results_layout_->addWidget(gs_card_row(top, this));
@@ -250,7 +244,8 @@ void QuantModulePanel::display_advanced_models_result(const QString& command, co
             results_layout_->addWidget(gs_card_row(top, this));
             if (!models.isEmpty()) {
                 auto* table = new QTableWidget(models.size(), 5, this);
-                table->setHorizontalHeaderLabels({tr("Model ID"), tr("Type"), tr("Trained"), tr("Epochs"), tr("Created")});
+                table->setHorizontalHeaderLabels(
+                    {tr("Model ID"), tr("Type"), tr("Trained"), tr("Epochs"), tr("Created")});
                 table->verticalHeader()->setVisible(false);
                 table->setEditTriggers(QAbstractItemView::NoEditTriggers);
                 table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -304,7 +299,8 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
         results_layout_->addWidget(gs_card_row(top, this));
         if (!inds.isEmpty()) {
             QStringList lst;
-            for (const auto& v : inds) lst << v.toString();
+            for (const auto& v : inds)
+                lst << v.toString();
             auto* lbl = new QLabel(tr("Available: %1").arg(lst.join(", ")));
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1; font-family:'Courier New'; font-size:10px;"
@@ -350,11 +346,11 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
         for (const auto& k : keys) {
             const auto arr = payload.value(k).toArray();
             series.insert(k, arr);
-            double sum = 0, mn = std::numeric_limits<double>::infinity(),
-                   mx = -std::numeric_limits<double>::infinity();
+            double sum = 0, mn = std::numeric_limits<double>::infinity(), mx = -std::numeric_limits<double>::infinity();
             int n = 0;
             for (const auto& v : arr) {
-                if (v.isNull()) continue;
+                if (v.isNull())
+                    continue;
                 const double d = v.toDouble();
                 sum += d;
                 mn = std::min(mn, d);
@@ -370,12 +366,14 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
         int max_n = 0;
         // QJsonArray::size() returns qsizetype (qint64); std::max requires
         // matching arg types — explicit cast keeps both as int.
-        for (const auto& a : series) max_n = std::max(max_n, static_cast<int>(a.size()));
+        for (const auto& a : series)
+            max_n = std::max(max_n, static_cast<int>(a.size()));
         const int rows = std::min<int>(15, max_n);
         const int step = std::max<int>(1, max_n / rows);
         auto* table = new QTableWidget(rows, keys.size() + 1, this);
         QStringList hdr = {tr("Index")};
-        for (const auto& k : keys) hdr << k.toUpper();
+        for (const auto& k : keys)
+            hdr << k.toUpper();
         table->setHorizontalHeaderLabels(hdr);
         table->verticalHeader()->setVisible(false);
         table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -417,11 +415,11 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
     // ── Single-series indicators + evaluate_expression ───────────────────────
     if (payload.contains("data") && payload.value("data").isArray()) {
         const auto series = payload.value("data").toArray();
-        double sum = 0, mn = std::numeric_limits<double>::infinity(),
-               mx = -std::numeric_limits<double>::infinity();
+        double sum = 0, mn = std::numeric_limits<double>::infinity(), mx = -std::numeric_limits<double>::infinity();
         int n = 0;
         for (const auto& v : series) {
-            if (v.isNull()) continue;
+            if (v.isNull())
+                continue;
             const double d = v.toDouble();
             sum += d;
             mn = std::min(mn, d);
@@ -434,9 +432,7 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
             gs_make_card(tr("INDICATOR"), command.toUpper(), this),
             gs_make_card(tr("OBSERVATIONS"), QString::number(n), this),
             gs_make_card(tr("MEAN"), QString::number(mean, 'f', 4), this, gs_pos_neg_color(mean)),
-            gs_make_card(tr("RANGE"),
-                         n > 0 ? QString("[%1, %2]").arg(mn, 0, 'f', 4).arg(mx, 0, 'f', 4) : "—",
-                         this),
+            gs_make_card(tr("RANGE"), n > 0 ? QString("[%1, %2]").arg(mn, 0, 'f', 4).arg(mx, 0, 'f', 4) : "—", this),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
@@ -506,8 +502,14 @@ void QuantModulePanel::display_portfolio_opt_result(const QString& command, cons
             const auto p = v.toObject();
             const double vol = p.value("volatility").toDouble();
             const double sh = p.value("sharpe").toDouble();
-            if (vol < min_vol) { min_vol = vol; min_vol_pt = p; }
-            if (sh > max_sharpe) { max_sharpe = sh; max_sharpe_pt = p; }
+            if (vol < min_vol) {
+                min_vol = vol;
+                min_vol_pt = p;
+            }
+            if (sh > max_sharpe) {
+                max_sharpe = sh;
+                max_sharpe_pt = p;
+            }
         }
 
         QList<QWidget*> top = {
@@ -517,10 +519,11 @@ void QuantModulePanel::display_portfolio_opt_result(const QString& command, cons
             gs_make_card(tr("MAX SHARPE"), QString::number(max_sharpe, 'f', 3), this,
                          max_sharpe > 1.0 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("RANGE"),
-                         frontier.isEmpty() ? "—"
-                                            : QString("%1% – %2%")
-                                                  .arg(frontier.first().toObject().value("return").toDouble() * 100, 0, 'f', 1)
-                                                  .arg(frontier.last().toObject().value("return").toDouble() * 100, 0, 'f', 1),
+                         frontier.isEmpty()
+                             ? "—"
+                             : QString("%1% – %2%")
+                                   .arg(frontier.first().toObject().value("return").toDouble() * 100, 0, 'f', 1)
+                                   .arg(frontier.last().toObject().value("return").toDouble() * 100, 0, 'f', 1),
                          this),
         };
         results_layout_->addWidget(gs_card_row(top, this));
@@ -544,13 +547,16 @@ void QuantModulePanel::display_portfolio_opt_result(const QString& command, cons
                 auto add = [&](int col, const QString& s, const QString& fg = {}) {
                     auto* it = new QTableWidgetItem(s);
                     it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    if (!fg.isEmpty()) it->setForeground(QColor(fg));
+                    if (!fg.isEmpty())
+                        it->setForeground(QColor(fg));
                     table->setItem(r, col, it);
                 };
                 add(0, QString::number(ret * 100, 'f', 2) + "%", gs_pos_neg_color(ret));
                 add(1, QString::number(vol * 100, 'f', 2) + "%");
                 add(2, QString::number(sh, 'f', 3),
-                    sh >= 1.0 ? ui::colors::POSITIVE() : sh > 0 ? ui::colors::WARNING() : ui::colors::NEGATIVE());
+                    sh >= 1.0 ? ui::colors::POSITIVE()
+                    : sh > 0  ? ui::colors::WARNING()
+                              : ui::colors::NEGATIVE());
                 table->setRowHeight(r, 24);
             }
             results_layout_->addWidget(table);
@@ -575,21 +581,22 @@ void QuantModulePanel::display_portfolio_opt_result(const QString& command, cons
         gs_make_card(tr("EXP. RETURN"), has_ret ? fmt_pct_safe(QJsonValue(exp_ret)) : "—", this,
                      has_ret ? gs_pos_neg_color(exp_ret) : ui::colors::TEXT_TERTIARY()),
         gs_make_card(tr("SHARPE"), has_sharpe ? QString::number(sharpe, 'f', 3) : "—", this,
-                     !has_sharpe ? ui::colors::TEXT_TERTIARY()
-                                 : sharpe >= 1.0 ? ui::colors::POSITIVE()
-                                                  : sharpe > 0 ? ui::colors::WARNING()
-                                                                : ui::colors::NEGATIVE()),
+                     !has_sharpe     ? ui::colors::TEXT_TERTIARY()
+                     : sharpe >= 1.0 ? ui::colors::POSITIVE()
+                     : sharpe > 0    ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
     };
     results_layout_->addWidget(gs_card_row(top, this));
 
     // Black-Litterman extras
     if (command == "black_litterman") {
         QList<QWidget*> bl = {
-            gs_make_card(tr("VIEWS"), QString::number(payload.value("views_incorporated").toInt()), this, ui::colors::INFO()),
-            gs_make_card(tr("EQUILIBRIUM"),
-                         tr("%1 assets").arg(payload.value("equilibrium_returns").toObject().size()), this),
-            gs_make_card(tr("POSTERIOR"),
-                         tr("%1 assets").arg(payload.value("posterior_returns").toObject().size()), this),
+            gs_make_card(tr("VIEWS"), QString::number(payload.value("views_incorporated").toInt()), this,
+                         ui::colors::INFO()),
+            gs_make_card(tr("EQUILIBRIUM"), tr("%1 assets").arg(payload.value("equilibrium_returns").toObject().size()),
+                         this),
+            gs_make_card(tr("POSTERIOR"), tr("%1 assets").arg(payload.value("posterior_returns").toObject().size()),
+                         this),
             gs_make_card(tr("METHOD"), "BL", this),
         };
         results_layout_->addWidget(gs_card_row(bl, this));

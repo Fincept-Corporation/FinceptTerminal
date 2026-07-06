@@ -20,13 +20,16 @@ class TickerBar : public QWidget {
 
     struct Entry {
         QString symbol;
-        double  price  = 0;
-        double  change = 0;
+        double price = 0;
+        double change = 0;
     };
 
     void set_data(const QVector<Entry>& entries);
-    void pause()  { scroll_timer_.stop(); }
-    void resume() { if (total_width_ > 0) scroll_timer_.start(); }
+    void pause() { scroll_timer_.stop(); }
+    void resume() {
+        if (total_width_ > 0)
+            scroll_timer_.start();
+    }
 
     /// Returns the current symbol list (persisted user preference).
     QStringList symbols() const { return symbols_; }
@@ -52,18 +55,18 @@ class TickerBar : public QWidget {
 
     // ── Scrolling ──
     QVector<Entry> entries_;
-    QTimer         scroll_timer_;
-    double         offset_      = 0;
-    int            total_width_ = 0;
+    QTimer scroll_timer_;
+    double offset_ = 0;
+    int total_width_ = 0;
 
     // ── Symbol list ──
     QStringList symbols_;
 
     // ── Inline edit overlay ──
-    QWidget*     edit_bar_   = nullptr;
-    QLabel*      edit_label_ = nullptr;
-    QLineEdit*   edit_input_ = nullptr;
-    QPushButton* edit_ok_    = nullptr;
+    QWidget* edit_bar_ = nullptr;
+    QLabel* edit_label_ = nullptr;
+    QLineEdit* edit_input_ = nullptr;
+    QPushButton* edit_ok_ = nullptr;
     QPushButton* edit_cancel_ = nullptr;
 
     void retranslateUi();

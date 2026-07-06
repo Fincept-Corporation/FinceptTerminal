@@ -17,29 +17,42 @@ using fincept::trading::InstrumentType;
 
 namespace {
 
-QString iso_now() { return QDateTime::currentDateTimeUtc().toString(Qt::ISODate); }
+QString iso_now() {
+    return QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+}
 
 const char* type_to_str(InstrumentType t) {
     switch (t) {
-        case InstrumentType::CE:    return "CE";
-        case InstrumentType::PE:    return "PE";
-        case InstrumentType::FUT:   return "FUT";
-        case InstrumentType::EQ:    return "EQ";
-        case InstrumentType::INDEX: return "INDEX";
-        default:                    return "UNKNOWN";
+        case InstrumentType::CE:
+            return "CE";
+        case InstrumentType::PE:
+            return "PE";
+        case InstrumentType::FUT:
+            return "FUT";
+        case InstrumentType::EQ:
+            return "EQ";
+        case InstrumentType::INDEX:
+            return "INDEX";
+        default:
+            return "UNKNOWN";
     }
 }
 
 InstrumentType type_from_str(const QString& s) {
-    if (s == "CE")    return InstrumentType::CE;
-    if (s == "PE")    return InstrumentType::PE;
-    if (s == "FUT")   return InstrumentType::FUT;
-    if (s == "EQ")    return InstrumentType::EQ;
-    if (s == "INDEX") return InstrumentType::INDEX;
+    if (s == "CE")
+        return InstrumentType::CE;
+    if (s == "PE")
+        return InstrumentType::PE;
+    if (s == "FUT")
+        return InstrumentType::FUT;
+    if (s == "EQ")
+        return InstrumentType::EQ;
+    if (s == "INDEX")
+        return InstrumentType::INDEX;
     return InstrumentType::UNKNOWN;
 }
 
-}  // namespace
+} // namespace
 
 StrategiesRepository& StrategiesRepository::instance() {
     static StrategiesRepository s;
@@ -108,38 +121,33 @@ SavedStrategyRow StrategiesRepository::map_row(QSqlQuery& q) {
 
 Result<qint64> StrategiesRepository::save(const Strategy& s) {
     const QString now = iso_now();
-    return exec_insert(
-        "INSERT INTO strategies (name, underlying, expiry, created_at, modified_at, notes, legs_json) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        {s.name, s.underlying, s.expiry, now, now, s.notes, legs_to_json(s.legs)});
+    return exec_insert("INSERT INTO strategies (name, underlying, expiry, created_at, modified_at, notes, legs_json) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       {s.name, s.underlying, s.expiry, now, now, s.notes, legs_to_json(s.legs)});
 }
 
 Result<void> StrategiesRepository::update(qint64 id, const Strategy& s) {
-    return exec_write(
-        "UPDATE strategies SET name=?, underlying=?, expiry=?, modified_at=?, notes=?, legs_json=? "
-        "WHERE id=?",
-        {s.name, s.underlying, s.expiry, iso_now(), s.notes, legs_to_json(s.legs), id});
+    return exec_write("UPDATE strategies SET name=?, underlying=?, expiry=?, modified_at=?, notes=?, legs_json=? "
+                      "WHERE id=?",
+                      {s.name, s.underlying, s.expiry, iso_now(), s.notes, legs_to_json(s.legs), id});
 }
 
 Result<SavedStrategyRow> StrategiesRepository::get(qint64 id) {
-    return query_one(
-        "SELECT id, name, underlying, expiry, created_at, modified_at, notes, legs_json "
-        "FROM strategies WHERE id=?",
-        {id}, &StrategiesRepository::map_row);
+    return query_one("SELECT id, name, underlying, expiry, created_at, modified_at, notes, legs_json "
+                     "FROM strategies WHERE id=?",
+                     {id}, &StrategiesRepository::map_row);
 }
 
 Result<QVector<SavedStrategyRow>> StrategiesRepository::list_all() {
-    return query_list(
-        "SELECT id, name, underlying, expiry, created_at, modified_at, notes, legs_json "
-        "FROM strategies ORDER BY modified_at DESC",
-        {}, &StrategiesRepository::map_row);
+    return query_list("SELECT id, name, underlying, expiry, created_at, modified_at, notes, legs_json "
+                      "FROM strategies ORDER BY modified_at DESC",
+                      {}, &StrategiesRepository::map_row);
 }
 
 Result<QVector<SavedStrategyRow>> StrategiesRepository::list_by_underlying(const QString& underlying) {
-    return query_list(
-        "SELECT id, name, underlying, expiry, created_at, modified_at, notes, legs_json "
-        "FROM strategies WHERE underlying=? ORDER BY modified_at DESC",
-        {underlying}, &StrategiesRepository::map_row);
+    return query_list("SELECT id, name, underlying, expiry, created_at, modified_at, notes, legs_json "
+                      "FROM strategies WHERE underlying=? ORDER BY modified_at DESC",
+                      {underlying}, &StrategiesRepository::map_row);
 }
 
 Result<void> StrategiesRepository::remove(qint64 id) {

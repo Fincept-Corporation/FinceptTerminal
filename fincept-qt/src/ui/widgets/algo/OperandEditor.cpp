@@ -14,8 +14,7 @@ using fincept::services::algo::ParamSpec;
 
 namespace fincept::ui::algo {
 
-OperandEditor::OperandEditor(bool allow_value, QWidget* parent)
-    : QWidget(parent), allow_value_(allow_value) {
+OperandEditor::OperandEditor(bool allow_value, QWidget* parent) : QWidget(parent), allow_value_(allow_value) {
     setObjectName(QStringLiteral("operandEditor"));
     build_ui();
 }
@@ -84,13 +83,12 @@ void OperandEditor::build_ui() {
     // their rows render with near-invisible, vertically-clipped text. Style both
     // to the dark theme explicitly: opaque background, readable row height, and
     // clear hover/selection states.
-    const QString list_qss =
-        QString("QAbstractItemView { background:%1; color:%2; border:1px solid %3; "
-                "outline:0; selection-background-color:%4; selection-color:%5; }"
-                "QAbstractItemView::item { min-height:22px; padding:3px 8px; border:0; }"
-                "QAbstractItemView::item:hover { background:%6; }")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
-            .arg(ui::colors::ACCENT_BG(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER());
+    const QString list_qss = QString("QAbstractItemView { background:%1; color:%2; border:1px solid %3; "
+                                     "outline:0; selection-background-color:%4; selection-color:%5; }"
+                                     "QAbstractItemView::item { min-height:22px; padding:3px 8px; border:0; }"
+                                     "QAbstractItemView::item:hover { background:%6; }")
+                                 .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED())
+                                 .arg(ui::colors::ACCENT_BG(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER());
     if (auto* view = indicator_combo_->view())
         view->setStyleSheet(list_qss);
     if (auto* c = indicator_combo_->completer()) {
@@ -140,22 +138,20 @@ void OperandEditor::build_ui() {
     row->addWidget(value_spin_);
 
     if (mode_combo_)
-        connect(mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                this, &OperandEditor::on_mode_changed);
-    connect(indicator_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &OperandEditor::on_indicator_changed);
-    connect(field_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) { emit changed(); });
+        connect(mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                &OperandEditor::on_mode_changed);
+    connect(indicator_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &OperandEditor::on_indicator_changed);
+    connect(field_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emit changed(); });
     connect(offset_btn_, &QPushButton::toggled, this, [this](bool on) {
         offset_combo_->setVisible(on && !is_value_mode());
         if (!on)
             offset_combo_->setCurrentIndex(0); // collapse back to "Current bar"
         emit changed();
     });
-    connect(offset_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this](int) { emit changed(); });
-    connect(value_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-            this, [this](double) { emit changed(); });
+    connect(offset_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) { emit changed(); });
+    connect(value_spin_, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+            [this](double) { emit changed(); });
 
     // Land on the first real indicator (skip the leading category header).
     if (indicator_combo_->count() > 1)
@@ -173,8 +169,7 @@ void OperandEditor::populate_indicators() {
             indicator_combo_->addItem(QStringLiteral("-- %1 --").arg(ind.category.toUpper()), QString());
             // Make the header row non-selectable.
             const int hidx = indicator_combo_->count() - 1;
-            indicator_combo_->model()->setData(
-                indicator_combo_->model()->index(hidx, 0), false, Qt::UserRole - 1);
+            indicator_combo_->model()->setData(indicator_combo_->model()->index(hidx, 0), false, Qt::UserRole - 1);
         }
         indicator_combo_->addItem(ind.label, ind.id);
     }
@@ -210,8 +205,7 @@ void OperandEditor::rebuild_params() {
         spin->setSingleStep(p.step);
         spin->setValue(p.def);
         spin->setMaximumWidth(70);
-        connect(spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
-                this, [this](double) { emit changed(); });
+        connect(spin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double) { emit changed(); });
         params_layout_->addWidget(lbl);
         params_layout_->addWidget(spin);
         param_spins_.append(spin);
@@ -261,9 +255,13 @@ bool OperandEditor::is_value_mode() const {
     return mode_combo_ && mode_combo_->currentData().toString() == "value";
 }
 
-double OperandEditor::value() const { return value_spin_->value(); }
+double OperandEditor::value() const {
+    return value_spin_->value();
+}
 
-QString OperandEditor::indicator_id() const { return indicator_combo_->currentData().toString(); }
+QString OperandEditor::indicator_id() const {
+    return indicator_combo_->currentData().toString();
+}
 
 QJsonObject OperandEditor::params() const {
     QJsonObject obj;
@@ -294,7 +292,9 @@ void OperandEditor::set_value_mode(bool on) {
     apply_mode_visibility();
 }
 
-void OperandEditor::set_value(double v) { value_spin_->setValue(v); }
+void OperandEditor::set_value(double v) {
+    value_spin_->setValue(v);
+}
 
 void OperandEditor::set_indicator(const QString& id) {
     for (int i = 0; i < indicator_combo_->count(); ++i) {

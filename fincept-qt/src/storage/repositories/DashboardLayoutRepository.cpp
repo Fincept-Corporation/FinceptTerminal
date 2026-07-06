@@ -94,14 +94,13 @@ Result<void> DashboardLayoutRepository::save_layout(const screens::GridLayout& l
     // Insert new instances
     int sort = 0;
     for (const auto& item : layout.items) {
-        const QString cfg_json =
-            QString::fromUtf8(QJsonDocument(item.config).toJson(QJsonDocument::Compact));
-        auto ri = exec_write(
-            "INSERT INTO dashboard_widget_instances "
-            "(instance_id, layout_id, widget_type, grid_x, grid_y, grid_w, grid_h, min_w, min_h, sort_order, config_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            {item.instance_id, layout_id, item.id, item.cell.x, item.cell.y, item.cell.w, item.cell.h, item.cell.min_w,
-             item.cell.min_h, sort++, cfg_json});
+        const QString cfg_json = QString::fromUtf8(QJsonDocument(item.config).toJson(QJsonDocument::Compact));
+        auto ri = exec_write("INSERT INTO dashboard_widget_instances "
+                             "(instance_id, layout_id, widget_type, grid_x, grid_y, grid_w, grid_h, min_w, min_h, "
+                             "sort_order, config_json) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                             {item.instance_id, layout_id, item.id, item.cell.x, item.cell.y, item.cell.w, item.cell.h,
+                              item.cell.min_w, item.cell.min_h, sort++, cfg_json});
         if (ri.is_err())
             return ri;
     }

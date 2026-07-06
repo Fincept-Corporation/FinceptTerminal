@@ -16,13 +16,14 @@
 //                               redirecting the user's active screen).
 //   ToolPolicy::None          — attach no tools at all (legacy use_tools=false).
 
-#include "services/llm/LlmService.h"
 #include "mcp/McpTypes.h"
+#include "services/llm/LlmService.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSet>
 #include <QString>
+
 #include <functional>
 
 namespace fincept::ai_chat::detail {
@@ -59,9 +60,7 @@ inline thread_local QString t_chat_session_id;
 
 struct ChatSessionGuard {
     QString prev;
-    explicit ChatSessionGuard(QString id) : prev(std::move(t_chat_session_id)) {
-        t_chat_session_id = std::move(id);
-    }
+    explicit ChatSessionGuard(QString id) : prev(std::move(t_chat_session_id)) { t_chat_session_id = std::move(id); }
     ~ChatSessionGuard() { t_chat_session_id = std::move(prev); }
     ChatSessionGuard(const ChatSessionGuard&) = delete;
     ChatSessionGuard& operator=(const ChatSessionGuard&) = delete;
@@ -97,10 +96,8 @@ inline mcp::ToolFilter apply_request_policy(const mcp::ToolFilter& base) {
 // non-OpenAI models (claude-*, gemini-*, deepseek-*, qwen-*, …) keep max_tokens.
 // `model_lower` must already be lower-cased by the caller.
 inline bool is_openai_family_model(const QString& model_lower) {
-    return model_lower.startsWith(QLatin1String("gpt-")) ||
-           model_lower.startsWith(QLatin1String("chatgpt")) ||
-           model_lower.startsWith(QLatin1String("o1")) ||
-           model_lower.startsWith(QLatin1String("o3")) ||
+    return model_lower.startsWith(QLatin1String("gpt-")) || model_lower.startsWith(QLatin1String("chatgpt")) ||
+           model_lower.startsWith(QLatin1String("o1")) || model_lower.startsWith(QLatin1String("o3")) ||
            model_lower.startsWith(QLatin1String("o4"));
 }
 
@@ -120,9 +117,7 @@ inline bool is_openai_family_model(const QString& model_lower) {
 // model surfaces (via tool_list) or commits to (via tool_describe) across the
 // turn, and feed them back into format_tools_for_openai so they become real,
 // callable functions on the next round.
-inline void note_tool_activations(const QString& bare_tool_name,
-                                  const QJsonObject& args,
-                                  const mcp::ToolResult& result,
+inline void note_tool_activations(const QString& bare_tool_name, const QJsonObject& args, const mcp::ToolResult& result,
                                   QSet<QString>& activated) {
     if (!result.success)
         return;

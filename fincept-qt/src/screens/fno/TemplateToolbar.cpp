@@ -9,10 +9,10 @@
 
 namespace fincept::screens::fno {
 
-using fincept::services::options::StrategyCategory;
-using fincept::services::options::StrategyInstantiationOptions;
 using fincept::services::options::catalog;
 using fincept::services::options::strategy_category_str;
+using fincept::services::options::StrategyCategory;
+using fincept::services::options::StrategyInstantiationOptions;
 using namespace fincept::ui;
 
 TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
@@ -38,8 +38,7 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
                 template_combo_->insertSeparator(template_combo_->count());
             prev_cat = tpl.category;
         }
-        const QString text = QString("%1: %2")
-                                 .arg(strategy_category_str(tpl.category), tpl.name);
+        const QString text = QString("%1: %2").arg(strategy_category_str(tpl.category), tpl.name);
         template_combo_->addItem(text, tpl.id);
     }
     lay->addWidget(template_combo_);
@@ -88,26 +87,25 @@ TemplateToolbar::TemplateToolbar(QWidget* parent) : QWidget(parent) {
     connect(use_btn_, &QPushButton::clicked, this, &TemplateToolbar::on_use_clicked);
     lay->addWidget(use_btn_);
 
-    setStyleSheet(QString(
-        "#fnoTemplateToolbar { background:%1; border-bottom:1px solid %2; }"
-        "#fnoToolbarLabel { color:%3; font-size:9px; font-weight:700; "
-        "  letter-spacing:0.6px; background:transparent; }"
-        "#fnoToolbarCombo { background:%4; color:%5; border:1px solid %2; "
-        "  padding:1px 4px; font-size:11px; min-width:200px; }"
-        "#fnoToolbarCombo QAbstractItemView { background:%4; color:%5; "
-        "  border:1px solid %2; selection-background-color:%6; }"
-        "#fnoToolbarSpin { background:%4; color:%5; border:1px solid %2; "
-        "  padding:1px 4px; font-size:11px; }"
-        "#fnoToolbarAccentBtn { background:%1; color:%7; border:1px solid %2; "
-        "  padding:2px 10px; font-size:10px; font-weight:700; }"
-        "#fnoToolbarAccentBtn:hover { background:%6; color:%5; }")
+    setStyleSheet(QString("#fnoTemplateToolbar { background:%1; border-bottom:1px solid %2; }"
+                          "#fnoToolbarLabel { color:%3; font-size:9px; font-weight:700; "
+                          "  letter-spacing:0.6px; background:transparent; }"
+                          "#fnoToolbarCombo { background:%4; color:%5; border:1px solid %2; "
+                          "  padding:1px 4px; font-size:11px; min-width:200px; }"
+                          "#fnoToolbarCombo QAbstractItemView { background:%4; color:%5; "
+                          "  border:1px solid %2; selection-background-color:%6; }"
+                          "#fnoToolbarSpin { background:%4; color:%5; border:1px solid %2; "
+                          "  padding:1px 4px; font-size:11px; }"
+                          "#fnoToolbarAccentBtn { background:%1; color:%7; border:1px solid %2; "
+                          "  padding:2px 10px; font-size:10px; font-weight:700; }"
+                          "#fnoToolbarAccentBtn:hover { background:%6; color:%5; }")
                       .arg(colors::BG_RAISED(),      // %1
-                           colors::BORDER_DIM(),      // %2
-                           colors::TEXT_SECONDARY(),   // %3
-                           colors::BG_BASE(),          // %4
-                           colors::TEXT_PRIMARY(),     // %5
-                           colors::BG_HOVER(),         // %6
-                           colors::AMBER()));          // %7
+                           colors::BORDER_DIM(),     // %2
+                           colors::TEXT_SECONDARY(), // %3
+                           colors::BG_BASE(),        // %4
+                           colors::TEXT_PRIMARY(),   // %5
+                           colors::BG_HOVER(),       // %6
+                           colors::AMBER()));        // %7
 }
 
 void TemplateToolbar::on_use_clicked() {
@@ -128,12 +126,18 @@ void TemplateToolbar::changeEvent(QEvent* event) {
 }
 
 void TemplateToolbar::retranslateUi() {
-    if (template_label_) template_label_->setText(tr("TEMPLATE"));
-    if (width_label_)    width_label_->setText(tr("W:"));
-    if (shift_label_)    shift_label_->setText(tr("S:"));
-    if (lots_label_)     lots_label_->setText(tr("L:"));
-    if (add_btn_)        add_btn_->setText(tr("+ ADD LEG"));
-    if (use_btn_)        use_btn_->setText(tr("USE"));
+    if (template_label_)
+        template_label_->setText(tr("TEMPLATE"));
+    if (width_label_)
+        width_label_->setText(tr("W:"));
+    if (shift_label_)
+        shift_label_->setText(tr("S:"));
+    if (lots_label_)
+        lots_label_->setText(tr("L:"));
+    if (add_btn_)
+        add_btn_->setText(tr("+ ADD LEG"));
+    if (use_btn_)
+        use_btn_->setText(tr("USE"));
 }
 
 } // namespace fincept::screens::fno

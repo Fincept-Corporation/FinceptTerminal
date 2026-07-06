@@ -28,11 +28,11 @@ struct HttpResult {
     QString network_error;
 };
 
-HttpResult do_request(QNetworkAccessManager& nam, QNetworkRequest req, const QByteArray& body,
-                      bool is_post, bool follow_redirects) {
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     follow_redirects ? QNetworkRequest::NoLessSafeRedirectPolicy
-                                      : QNetworkRequest::ManualRedirectPolicy);
+HttpResult do_request(QNetworkAccessManager& nam, QNetworkRequest req, const QByteArray& body, bool is_post,
+                      bool follow_redirects) {
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, follow_redirects
+                                                                   ? QNetworkRequest::NoLessSafeRedirectPolicy
+                                                                   : QNetworkRequest::ManualRedirectPolicy);
     QNetworkReply* reply = is_post ? nam.post(req, body) : nam.get(req);
 
     QEventLoop loop;
@@ -59,20 +59,19 @@ QString extract_error(const QByteArray& body, const QString& fallback) {
 
 } // namespace
 
-AutoLoginResult run_auto_login(const QString& user_id, const QString& password,
-                               const QString& api_key, const QString& api_secret,
-                               const QString& totp_secret,
+AutoLoginResult run_auto_login(const QString& user_id, const QString& password, const QString& api_key,
+                               const QString& api_secret, const QString& totp_secret,
                                const ProgressCallback& progress) {
     AutoLoginResult out;
     out.token.success = false;
 
     const auto report = [&](const QString& stage) {
-        if (progress) progress(stage);
+        if (progress)
+            progress(stage);
         LOG_INFO("ZerodhaAutoLogin", stage);
     };
 
-    if (user_id.isEmpty() || password.isEmpty() || api_key.isEmpty() ||
-        api_secret.isEmpty() || totp_secret.isEmpty()) {
+    if (user_id.isEmpty() || password.isEmpty() || api_key.isEmpty() || api_secret.isEmpty() || totp_secret.isEmpty()) {
         out.token.error = "Missing one or more required fields";
         return out;
     }
@@ -108,9 +107,9 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password,
 
         HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow=*/false);
         if (r.status != 200) {
-            out.token.error = extract_error(r.body, r.network_error.isEmpty()
-                                                       ? QStringLiteral("Invalid Kite user ID or password")
-                                                       : r.network_error);
+            out.token.error =
+                extract_error(r.body, r.network_error.isEmpty() ? QStringLiteral("Invalid Kite user ID or password")
+                                                                : r.network_error);
             return out;
         }
         const auto doc = QJsonDocument::fromJson(r.body);
@@ -143,14 +142,12 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password,
         HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow=*/false);
         if (r.status != 200) {
             QString msg = extract_error(r.body, "Invalid TOTP");
-            if (msg.contains("TwoFAException", Qt::CaseInsensitive) ||
-                msg.contains("TOTP", Qt::CaseInsensitive))
+            if (msg.contains("TwoFAException", Qt::CaseInsensitive) || msg.contains("TOTP", Qt::CaseInsensitive))
                 msg = "Invalid TOTP - check your device clock";
             out.token.error = msg;
-            LOG_WARN("ZerodhaAutoLogin",
-                     QString("2FA failed (system_time=%1, generated_code_len=%2)")
-                         .arg(QDateTime::currentSecsSinceEpoch())
-                         .arg(totp.size()));
+            LOG_WARN("ZerodhaAutoLogin", QString("2FA failed (system_time=%1, generated_code_len=%2)")
+                                             .arg(QDateTime::currentSecsSinceEpoch())
+                                             .arg(totp.size()));
             return out;
         }
     }
@@ -191,8 +188,7 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password,
     report("Exchanging token...");
     {
         const QByteArray checksum =
-            QCryptographicHash::hash((api_key + request_token + api_secret).toUtf8(),
-                                     QCryptographicHash::Sha256)
+            QCryptographicHash::hash((api_key + request_token + api_secret).toUtf8(), QCryptographicHash::Sha256)
                 .toHex();
 
         QNetworkRequest req(QUrl("https://api.kite.trade/session/token"));
@@ -226,8 +222,7 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password,
                 continue;
             extra.insert(k, it.value());
         }
-        out.token.additional_data =
-            QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
+        out.token.additional_data = QString::fromUtf8(QJsonDocument(extra).toJson(QJsonDocument::Compact));
     }
 
     report(QString("Connected as %1").arg(out.token.user_id));

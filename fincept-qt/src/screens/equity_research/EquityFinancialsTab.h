@@ -27,7 +27,7 @@ class EquityFinancialsTab : public QWidget {
   private:
     void build_ui();
     void retranslateUi();
-    void rebuild_views();  ///< Tear down + rebuild stack_ pages so new locale text flows through.
+    void rebuild_views(); ///< Tear down + rebuild stack_ pages so new locale text flows through.
 
     // Statement view builders
     QWidget* build_income_view();

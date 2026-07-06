@@ -36,15 +36,13 @@ static Result<void> sql(QSqlDatabase& db, const char* stmt) {
 static Result<void> apply_v021(QSqlDatabase& db) {
     // Reset legacy 2000 in global settings. Use 0 as the "no override —
     // resolve from ModelCatalog" sentinel.
-    if (auto r = sql(db, "UPDATE llm_global_settings SET max_tokens = 0 WHERE max_tokens = 2000");
-        r.is_err())
+    if (auto r = sql(db, "UPDATE llm_global_settings SET max_tokens = 0 WHERE max_tokens = 2000"); r.is_err())
         return r;
 
     // Same for per-profile rows. The table only exists from v010 onward;
     // a fresh DB will pass through v010 before reaching v021, so this
     // statement is always safe.
-    if (auto r = sql(db, "UPDATE llm_profiles SET max_tokens = 0 WHERE max_tokens = 2000");
-        r.is_err())
+    if (auto r = sql(db, "UPDATE llm_profiles SET max_tokens = 0 WHERE max_tokens = 2000"); r.is_err())
         return r;
 
     return Result<void>::ok();

@@ -1,9 +1,8 @@
 // src/services/agents/AgentService.h
 #pragma once
+#include "datahub/Producer.h"
 #include "services/agents/AgentTypes.h"
 #include "storage/repositories/AgentConfigRepository.h"
-
-#    include "datahub/Producer.h"
 
 #include <QJsonObject>
 #include <QObject>
@@ -14,9 +13,7 @@ namespace fincept::services {
 /// Delegates to Python finagent_core/main.py via PythonRunner (lightweight calls)
 /// or custom QProcess + stdin (large payloads like agent execution).
 /// All results emitted as signals on the Qt event loop.
-class AgentService : public QObject
-    , public fincept::datahub::Producer
-{
+class AgentService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static AgentService& instance();
@@ -85,10 +82,8 @@ class AgentService : public QObject
     /// in scheduler.py: "every 30m", "hourly", "daily 09:30", "weekday 16:00".
     /// `start_now=true` fires once on the next tick instead of waiting for the
     /// first cadence boundary.
-    QString schedule_create_task(const QString& name, const QString& query,
-                                 const QString& schedule_expr,
-                                 const QJsonObject& config = {},
-                                 bool start_now = false);
+    QString schedule_create_task(const QString& name, const QString& query, const QString& schedule_expr,
+                                 const QJsonObject& config = {}, bool start_now = false);
     QString schedule_list();
     QString schedule_delete(const QString& schedule_id);
     QString schedule_set_enabled(const QString& schedule_id, bool enabled);
@@ -107,8 +102,8 @@ class AgentService : public QObject
     QString execute_plan(const QJsonObject& plan, const QJsonObject& config = {});
 
     // ── Memory & Knowledge ───────────────────────────────────────────────────
-    void store_memory(const QString& content, const QString& memory_type = "general",
-                      const QJsonObject& metadata = {}, const QString& agent_id = {});
+    void store_memory(const QString& content, const QString& memory_type = "general", const QJsonObject& metadata = {},
+                      const QString& agent_id = {});
     void recall_memories(const QString& query, const QString& memory_type = {}, int limit = 10,
                          const QString& agent_id = {});
     void search_knowledge(const QString& query, int limit = 10);
@@ -180,8 +175,7 @@ class AgentService : public QObject
     void schedule_created(const QString& schedule_id);
     void schedule_deleted(const QString& schedule_id);
     /// Emitted when a scheduled task auto-fires; carries the new agentic task_id.
-    void scheduled_task_fired(const QString& schedule_id, const QString& schedule_name,
-                              const QString& task_id);
+    void scheduled_task_fired(const QString& schedule_id, const QString& schedule_name, const QString& task_id);
     /// Phase 3 library inspection signals.
     void skills_listed(const QJsonArray& skills);
     void archival_listed(const QJsonArray& memories);
@@ -227,8 +221,8 @@ class AgentService : public QObject
     /// Streaming runner for the `agentic_start_task` / `agentic_resume_task`
     /// Python actions. Parses AGENTIC_EVENT: <json> lines and routes them
     /// through publish_task_event(). Returns the request_id correlator.
-    QString run_agentic_streaming(const QString& action, const QJsonObject& params,
-                                  const QJsonObject& config, const QString& known_task_id = {});
+    QString run_agentic_streaming(const QString& action, const QJsonObject& params, const QJsonObject& config,
+                                  const QString& known_task_id = {});
     /// One tick of the scheduler — pulls due schedules from Python and fires
     /// each as a fresh agentic task. Called on a QTimer (30s) once any
     /// schedule exists.

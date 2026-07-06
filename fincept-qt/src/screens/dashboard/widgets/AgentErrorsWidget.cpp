@@ -13,8 +13,7 @@
 
 namespace fincept::screens::widgets {
 
-AgentErrorsWidget::AgentErrorsWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget(tr("AGENT ERRORS"), parent) {
+AgentErrorsWidget::AgentErrorsWidget(const QJsonObject& cfg, QWidget* parent) : BaseWidget(tr("AGENT ERRORS"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 6, 8, 6);
     vl->setSpacing(4);
@@ -133,13 +132,13 @@ void AgentErrorsWidget::on_theme_changed() {
 }
 
 void AgentErrorsWidget::apply_styles() {
-    table_->setStyleSheet(QString(
-        "QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
-        "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-        "padding:2px 4px;font-size:9px;font-weight:bold;}"
-        "QTableWidget::item{padding:2px 4px;}")
-        .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::TEXT_TERTIARY()));
+    table_->setStyleSheet(
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+                "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
+                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "QTableWidget::item{padding:2px 4px;}")
+            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
+                 ui::colors::TEXT_TERTIARY()));
 }
 
 void AgentErrorsWidget::retranslateUi() {

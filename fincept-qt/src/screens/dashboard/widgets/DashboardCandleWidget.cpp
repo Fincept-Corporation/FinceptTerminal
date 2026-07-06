@@ -100,9 +100,7 @@ void CandleCanvas::rebuild_cache() {
     if (plot_w <= 0 || plot_h <= 0)
         return;
 
-    auto py = [&](double price) -> int {
-        return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h);
-    };
+    auto py = [&](double price) -> int { return static_cast<int>(plot_h - (price - lo) / (hi - lo) * plot_h); };
 
     // Grid lines.
     p.setPen(QPen(QColor(ui::colors::BORDER_DIM()), 1, Qt::DotLine));
@@ -278,11 +276,11 @@ void DashboardCandleWidget::hideEvent(QHideEvent* e) {
 void DashboardCandleWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
-    hub.subscribe<QVector<services::HistoryPoint>>(
-        this, history_topic(), [this](const QVector<services::HistoryPoint>& pts) {
-            set_loading(false);
-            canvas_->set_candles(pts);
-        });
+    hub.subscribe<QVector<services::HistoryPoint>>(this, history_topic(),
+                                                   [this](const QVector<services::HistoryPoint>& pts) {
+                                                       set_loading(false);
+                                                       canvas_->set_candles(pts);
+                                                   });
     hub_active_ = true;
 }
 

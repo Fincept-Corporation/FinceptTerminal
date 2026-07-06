@@ -9,13 +9,13 @@
 
 #include "screens/ai_chat/AiChatScreen.h"
 
-#include "screens/ai_chat/ChatBubbleFactory.h"
-#include "services/llm/LlmService.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "mcp/McpService.h"
+#include "screens/ai_chat/ChatBubbleFactory.h"
+#include "services/llm/LlmService.h"
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -49,7 +49,6 @@
 
 #include <cmath>
 #include <memory>
-
 
 namespace fincept::screens {
 
@@ -134,8 +133,8 @@ void AiChatScreen::refresh_theme() {
 
 void AiChatScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming,
-            this, &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
+    connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::finished_streaming, this,
+            &AiChatScreen::on_streaming_done, Qt::UniqueConnection);
     connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::config_changed, this,
             &AiChatScreen::on_provider_changed, Qt::UniqueConnection);
     // Phase 7: rehydrate the linked symbol from SymbolContext on every
@@ -144,8 +143,7 @@ void AiChatScreen::showEvent(QShowEvent* e) {
     // symbol is the source of truth. Without this, a layout reload would
     // leave linked_symbol_ empty until the publisher next changes it.
     if (link_group_ != fincept::SymbolGroup::None) {
-        const fincept::SymbolRef rehydrated =
-            fincept::SymbolContext::instance().group_symbol(link_group_);
+        const fincept::SymbolRef rehydrated = fincept::SymbolContext::instance().group_symbol(link_group_);
         if (rehydrated.is_valid())
             linked_symbol_ = rehydrated;
     }
@@ -166,27 +164,38 @@ void AiChatScreen::hideEvent(QHideEvent* e) {
 // on_provider_changed for the header label refresh.
 
 void AiChatScreen::subscribe_mcp_events() {
-    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+    if (!mcp_event_subs_.isEmpty())
+        return; // idempotent
 
     QPointer<AiChatScreen> self = this;
     auto on_provider_event = [self](const QVariantMap&) {
-        if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self]() {
-            if (!self) return;
-            ai_chat::LlmService::instance().reload_config();
-        }, Qt::QueuedConnection);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self]() {
+                if (!self)
+                    return;
+                ai_chat::LlmService::instance().reload_config();
+            },
+            Qt::QueuedConnection);
     };
 
     auto on_session_created = [self](const QVariantMap&) {
-        if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self]() {
-            if (!self) return;
-            self->load_sessions();
-        }, Qt::QueuedConnection);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self]() {
+                if (!self)
+                    return;
+                self->load_sessions();
+            },
+            Qt::QueuedConnection);
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("llm.provider_changed",   on_provider_event));
+    mcp_event_subs_.append(bus.subscribe("llm.provider_changed", on_provider_event));
     mcp_event_subs_.append(bus.subscribe("ai_chat.session_created", on_session_created));
 }
 
@@ -209,21 +218,30 @@ void AiChatScreen::changeEvent(QEvent* event) {
 
 void AiChatScreen::retranslateUi() {
     // Sidebar
-    if (new_btn_)            new_btn_->setToolTip(tr("New Chat  (Ctrl+N)"));
-    if (search_edit_)        search_edit_->setPlaceholderText(tr("Search sessions..."));
-    if (rename_btn_)         rename_btn_->setText(tr("Rename"));
-    if (delete_btn_)         delete_btn_->setText(tr("Delete"));
-    if (provider_lbl_)       provider_lbl_->setToolTip(tr("Active LLM Provider"));
-    if (model_lbl_)          model_lbl_->setToolTip(tr("Active Model — change in Settings > LLM Configuration"));
+    if (new_btn_)
+        new_btn_->setToolTip(tr("New Chat  (Ctrl+N)"));
+    if (search_edit_)
+        search_edit_->setPlaceholderText(tr("Search sessions..."));
+    if (rename_btn_)
+        rename_btn_->setText(tr("Rename"));
+    if (delete_btn_)
+        delete_btn_->setText(tr("Delete"));
+    if (provider_lbl_)
+        provider_lbl_->setToolTip(tr("Active LLM Provider"));
+    if (model_lbl_)
+        model_lbl_->setToolTip(tr("Active Model — change in Settings > LLM Configuration"));
     // Sidebar toggle tooltip depends on the collapse state — re-derive.
     if (sidebar_toggle_btn_)
         sidebar_toggle_btn_->setToolTip(sidebar_collapsed_ ? tr("Expand sidebar  (Ctrl+B)")
-                                                            : tr("Collapse sidebar  (Ctrl+B)"));
+                                                           : tr("Collapse sidebar  (Ctrl+B)"));
     // Header
-    if (hdr_model_lbl_)      hdr_model_lbl_->setToolTip(tr("Active model — change in Settings > LLM Configuration"));
+    if (hdr_model_lbl_)
+        hdr_model_lbl_->setToolTip(tr("Active model — change in Settings > LLM Configuration"));
     // Input area
-    if (input_box_)          input_box_->setPlaceholderText(tr("Message Fincept AI..."));
-    if (attach_btn_)         attach_btn_->setToolTip(tr("Attach a file to this message"));
+    if (input_box_)
+        input_box_->setPlaceholderText(tr("Message Fincept AI..."));
+    if (attach_btn_)
+        attach_btn_->setToolTip(tr("Attach a file to this message"));
     // Typing label — only refresh while visible (timer will overwrite shortly anyway)
     if (typing_dots_lbl_ && typing_indicator_ && typing_indicator_->isVisible())
         typing_dots_lbl_->setText(tr("AI is thinking"));
@@ -252,7 +270,6 @@ bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
     }
     return QWidget::eventFilter(obj, event);
 }
-
 
 QVariantMap AiChatScreen::save_state() const {
     QVariantMap s{{"session_id", active_session_id_}};

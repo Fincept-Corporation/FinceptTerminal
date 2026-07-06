@@ -26,23 +26,28 @@ namespace fincept::screens {
 namespace {
 
 QString home_font_stack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 QString shorten_pubkey(const QString& pk) {
-    if (pk.size() < 16) return pk;
+    if (pk.size() < 16)
+        return pk;
     return pk.left(8) + QStringLiteral("…") + pk.right(8);
 }
 
 QString relative_time(qint64 ts_ms) {
-    if (ts_ms == 0) return QStringLiteral("never");
+    if (ts_ms == 0)
+        return QStringLiteral("never");
     const auto delta = QDateTime::currentMSecsSinceEpoch() - ts_ms;
-    if (delta < 0) return QStringLiteral("just now");
+    if (delta < 0)
+        return QStringLiteral("just now");
     const auto seconds = delta / 1000;
-    if (seconds < 60) return QStringLiteral("%1s ago").arg(seconds);
-    if (seconds < 3600) return QStringLiteral("%1m ago").arg(seconds / 60);
-    if (seconds < 86400) return QStringLiteral("%1h ago").arg(seconds / 3600);
+    if (seconds < 60)
+        return QStringLiteral("%1s ago").arg(seconds);
+    if (seconds < 3600)
+        return QStringLiteral("%1m ago").arg(seconds / 60);
+    if (seconds < 86400)
+        return QStringLiteral("%1h ago").arg(seconds / 3600);
     return QStringLiteral("%1d ago").arg(seconds / 86400);
 }
 
@@ -54,16 +59,12 @@ HomeTab::HomeTab(QWidget* parent) : QWidget(parent) {
     apply_theme();
 
     auto& svc = fincept::wallet::WalletService::instance();
-    connect(&svc, &fincept::wallet::WalletService::wallet_connected, this,
-            &HomeTab::on_wallet_connected);
-    connect(&svc, &fincept::wallet::WalletService::wallet_disconnected, this,
-            &HomeTab::on_wallet_disconnected);
-    connect(&svc, &fincept::wallet::WalletService::balance_mode_changed, this,
-            &HomeTab::on_mode_changed);
+    connect(&svc, &fincept::wallet::WalletService::wallet_connected, this, &HomeTab::on_wallet_connected);
+    connect(&svc, &fincept::wallet::WalletService::wallet_disconnected, this, &HomeTab::on_wallet_disconnected);
+    connect(&svc, &fincept::wallet::WalletService::balance_mode_changed, this, &HomeTab::on_mode_changed);
 
     auto& hub = fincept::datahub::DataHub::instance();
-    connect(&hub, &fincept::datahub::DataHub::topic_error, this,
-            &HomeTab::on_topic_error);
+    connect(&hub, &fincept::datahub::DataHub::topic_error, this, &HomeTab::on_topic_error);
 
     apply_mode_to_buttons(svc.balance_mode_is_stream());
     if (svc.is_connected()) {
@@ -109,8 +110,7 @@ void HomeTab::build_ui() {
         body_l->setContentsMargins(0, 0, 0, 0);
         body_l->setSpacing(0);
 
-        auto add_row = [body_l, body](const QString& caption, QLabel*& cap_out,
-                                      QLabel*& val_out, bool last) {
+        auto add_row = [body_l, body](const QString& caption, QLabel*& cap_out, QLabel*& val_out, bool last) {
             auto* row = new QWidget(body);
             row->setObjectName(QStringLiteral("homeTabRow"));
             row->setProperty("isLast", last);
@@ -290,23 +290,26 @@ void HomeTab::build_ui() {
         QApplication::clipboard()->setText(current_pubkey_);
         copy_button_->setText(tr("COPIED"));
         QTimer::singleShot(1200, this, [this]() {
-            if (copy_button_) copy_button_->setText(tr("COPY ADDRESS"));
+            if (copy_button_)
+                copy_button_->setText(tr("COPY ADDRESS"));
         });
     });
-    connect(disconnect_button_, &QPushButton::clicked, this, []() {
-        fincept::wallet::WalletService::instance().disconnect();
-    });
+    connect(disconnect_button_, &QPushButton::clicked, this,
+            []() { fincept::wallet::WalletService::instance().disconnect(); });
     connect(refresh_button_, &QPushButton::clicked, this, [this]() {
-        if (current_pubkey_.isEmpty()) return;
+        if (current_pubkey_.isEmpty())
+            return;
         clear_error_strip();
         fincept::wallet::WalletService::instance().force_balance_refresh();
     });
     connect(mode_poll_button_, &QPushButton::toggled, this, [](bool checked) {
-        if (!checked) return;
+        if (!checked)
+            return;
         fincept::wallet::WalletService::instance().set_balance_mode(false);
     });
     connect(mode_stream_button_, &QPushButton::toggled, this, [](bool checked) {
-        if (!checked) return;
+        if (!checked)
+            return;
         fincept::wallet::WalletService::instance().set_balance_mode(true);
     });
 }
@@ -315,49 +318,47 @@ void HomeTab::apply_theme() {
     using namespace ui::colors;
     const QString font = home_font_stack();
 
-    const QString ss = QStringLiteral(
-        "QWidget#homeTab { background:%1; }"
-        "QFrame#homeTabPanel { background:%2; border:1px solid %3; }"
-        "QWidget#homeTabPanelHead { background:%10; border-bottom:1px solid %3; }"
-        "QWidget#homeTabPanelFoot { background:%10; border-top:1px solid %3; }"
-        "QLabel#homeTabPanelTitle { color:%4; font-family:%5; font-size:11px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#homeTabPanelStatus { color:%6; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#homeTabPanelStatusOk { color:%9; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QWidget#homeTabRow { background:transparent; border-bottom:1px solid %3; }"
-        "QWidget#homeTabRow[isLast=\"true\"] { border-bottom:none; }"
-        "QLabel#homeTabCaption { color:%7; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#homeTabRowValue { color:%8; font-family:%5; font-size:12px;"
-        "  background:transparent; }"
-        "QFrame#homeTabErrorStrip { background:rgba(220,38,38,0.10);"
-        "  border:1px solid %11; }"
-        "QLabel#homeTabErrorIcon { color:%11; font-family:%5; font-size:13px;"
-        "  font-weight:700; background:transparent; }"
-        "QLabel#homeTabErrorText { color:%11; font-family:%5; font-size:11px;"
-        "  background:transparent; }"
-        "QPushButton#homeTabButton { background:%10; color:%7; border:1px solid %3;"
-        "  font-family:%5; font-size:11px; font-weight:700; letter-spacing:1px; padding:0 12px; }"
-        "QPushButton#homeTabButton:hover { background:%12; color:%8; border-color:%13; }"
-        "QPushButton#homeTabDangerButton { background:rgba(220,38,38,0.10); color:%11;"
-        "  border:1px solid %14; font-family:%5; font-size:11px; font-weight:700;"
-        "  letter-spacing:1px; padding:0 12px; }"
-        "QPushButton#homeTabDangerButton:hover { background:%11; color:%8; }"
-        "QPushButton#homeTabToggle { background:transparent; color:%6; border:1px solid %3;"
-        "  font-family:%5; font-size:10px; font-weight:700; letter-spacing:1.2px;"
-        "  padding:0 10px; }"
-        "QPushButton#homeTabToggle:hover { color:%8; border-color:%13; }"
-        "QPushButton#homeTabToggle:checked { background:rgba(217,119,6,0.12); color:%4;"
-        "  border-color:%4; }"
-        "QLabel#homeTabRoadmapBody { color:%7; font-family:%5; font-size:11px;"
-        "  background:transparent; }"
-    )
-        .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), AMBER(), font,
-             TEXT_TERTIARY(), TEXT_SECONDARY(), TEXT_PRIMARY(), POSITIVE())
-        .arg(BG_RAISED(), NEGATIVE(), BG_HOVER(), BORDER_BRIGHT(),
-             QStringLiteral("#7f1d1d"));
+    const QString ss =
+        QStringLiteral("QWidget#homeTab { background:%1; }"
+                       "QFrame#homeTabPanel { background:%2; border:1px solid %3; }"
+                       "QWidget#homeTabPanelHead { background:%10; border-bottom:1px solid %3; }"
+                       "QWidget#homeTabPanelFoot { background:%10; border-top:1px solid %3; }"
+                       "QLabel#homeTabPanelTitle { color:%4; font-family:%5; font-size:11px;"
+                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                       "QLabel#homeTabPanelStatus { color:%6; font-family:%5; font-size:10px;"
+                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                       "QLabel#homeTabPanelStatusOk { color:%9; font-family:%5; font-size:10px;"
+                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                       "QWidget#homeTabRow { background:transparent; border-bottom:1px solid %3; }"
+                       "QWidget#homeTabRow[isLast=\"true\"] { border-bottom:none; }"
+                       "QLabel#homeTabCaption { color:%7; font-family:%5; font-size:10px;"
+                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                       "QLabel#homeTabRowValue { color:%8; font-family:%5; font-size:12px;"
+                       "  background:transparent; }"
+                       "QFrame#homeTabErrorStrip { background:rgba(220,38,38,0.10);"
+                       "  border:1px solid %11; }"
+                       "QLabel#homeTabErrorIcon { color:%11; font-family:%5; font-size:13px;"
+                       "  font-weight:700; background:transparent; }"
+                       "QLabel#homeTabErrorText { color:%11; font-family:%5; font-size:11px;"
+                       "  background:transparent; }"
+                       "QPushButton#homeTabButton { background:%10; color:%7; border:1px solid %3;"
+                       "  font-family:%5; font-size:11px; font-weight:700; letter-spacing:1px; padding:0 12px; }"
+                       "QPushButton#homeTabButton:hover { background:%12; color:%8; border-color:%13; }"
+                       "QPushButton#homeTabDangerButton { background:rgba(220,38,38,0.10); color:%11;"
+                       "  border:1px solid %14; font-family:%5; font-size:11px; font-weight:700;"
+                       "  letter-spacing:1px; padding:0 12px; }"
+                       "QPushButton#homeTabDangerButton:hover { background:%11; color:%8; }"
+                       "QPushButton#homeTabToggle { background:transparent; color:%6; border:1px solid %3;"
+                       "  font-family:%5; font-size:10px; font-weight:700; letter-spacing:1.2px;"
+                       "  padding:0 10px; }"
+                       "QPushButton#homeTabToggle:hover { color:%8; border-color:%13; }"
+                       "QPushButton#homeTabToggle:checked { background:rgba(217,119,6,0.12); color:%4;"
+                       "  border-color:%4; }"
+                       "QLabel#homeTabRoadmapBody { color:%7; font-family:%5; font-size:11px;"
+                       "  background:transparent; }")
+            .arg(BG_BASE(), BG_SURFACE(), BORDER_DIM(), AMBER(), font, TEXT_TERTIARY(), TEXT_SECONDARY(),
+                 TEXT_PRIMARY(), POSITIVE())
+            .arg(BG_RAISED(), NEGATIVE(), BG_HOVER(), BORDER_BRIGHT(), QStringLiteral("#7f1d1d"));
 
     setStyleSheet(ss);
 }
@@ -386,7 +387,8 @@ void HomeTab::on_wallet_disconnected() {
 
 void HomeTab::on_mode_changed(bool is_stream) {
     apply_mode_to_buttons(is_stream);
-    if (current_pubkey_.isEmpty()) return;
+    if (current_pubkey_.isEmpty())
+        return;
     clear_error_strip();
 }
 
@@ -404,7 +406,8 @@ void HomeTab::clear_error_strip() {
 }
 
 void HomeTab::show_error_strip(const QString& msg) {
-    if (!error_strip_) return;
+    if (!error_strip_)
+        return;
     error_strip_text_->setText(msg);
     error_strip_->show();
 }
@@ -433,24 +436,38 @@ void HomeTab::changeEvent(QEvent* event) {
 
 void HomeTab::retranslateUi() {
     // Wallet panel chrome.
-    if (wallet_title_)      wallet_title_->setText(tr("WALLET"));
-    if (wallet_status_)     wallet_status_->setText(tr("● CONNECTED"));
-    if (provider_caption_)  provider_caption_->setText(tr("PROVIDER"));
-    if (address_caption_)   address_caption_->setText(tr("ADDRESS"));
-    if (connected_caption_) connected_caption_->setText(tr("CONNECTED"));
-    if (copy_button_)       copy_button_->setText(tr("COPY ADDRESS"));
-    if (disconnect_button_) disconnect_button_->setText(tr("DISCONNECT"));
+    if (wallet_title_)
+        wallet_title_->setText(tr("WALLET"));
+    if (wallet_status_)
+        wallet_status_->setText(tr("● CONNECTED"));
+    if (provider_caption_)
+        provider_caption_->setText(tr("PROVIDER"));
+    if (address_caption_)
+        address_caption_->setText(tr("ADDRESS"));
+    if (connected_caption_)
+        connected_caption_->setText(tr("CONNECTED"));
+    if (copy_button_)
+        copy_button_->setText(tr("COPY ADDRESS"));
+    if (disconnect_button_)
+        disconnect_button_->setText(tr("DISCONNECT"));
 
     // Holdings panel chrome.
-    if (holdings_title_)     holdings_title_->setText(tr("HOLDINGS"));
-    if (mode_poll_button_)   mode_poll_button_->setText(tr("POLL"));
-    if (mode_stream_button_) mode_stream_button_->setText(tr("STREAM"));
-    if (mode_label_)         mode_label_->setText(tr("MAINNET"));
-    if (refresh_button_)     refresh_button_->setText(tr("REFRESH"));
+    if (holdings_title_)
+        holdings_title_->setText(tr("HOLDINGS"));
+    if (mode_poll_button_)
+        mode_poll_button_->setText(tr("POLL"));
+    if (mode_stream_button_)
+        mode_stream_button_->setText(tr("STREAM"));
+    if (mode_label_)
+        mode_label_->setText(tr("MAINNET"));
+    if (refresh_button_)
+        refresh_button_->setText(tr("REFRESH"));
 
     // Roadmap panel.
-    if (roadmap_title_) roadmap_title_->setText(tr("$FNCPT ROADMAP"));
-    if (roadmap_phase_) roadmap_phase_->setText(tr("PHASE 2"));
+    if (roadmap_title_)
+        roadmap_title_->setText(tr("$FNCPT ROADMAP"));
+    if (roadmap_phase_)
+        roadmap_phase_->setText(tr("PHASE 2"));
     if (roadmap_body_)
         roadmap_body_->setText(
             tr("PHASE 1   WALLET & BALANCE        SHIPPED        connect Solana wallet, view $FNCPT + SOL\n"

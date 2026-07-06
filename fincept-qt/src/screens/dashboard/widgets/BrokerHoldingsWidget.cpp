@@ -60,8 +60,7 @@ BrokerHoldingsWidget::BrokerHoldingsWidget(const QJsonObject& cfg, QWidget* pare
 
     // Columns: Symbol, Qty, Avg, LTP, P&L %, and a trailing per-row exit button.
     table_ = new QTableWidget(0, 6, this);
-    table_->setHorizontalHeaderLabels(
-        {tr("Symbol"), tr("Qty"), tr("Avg"), tr("LTP"), tr("P&L %"), QString()});
+    table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg"), tr("LTP"), tr("P&L %"), QString()});
     table_->verticalHeader()->setVisible(false);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionMode(QAbstractItemView::NoSelection);
@@ -162,8 +161,7 @@ void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows)
         auto* qty = new QTableWidgetItem(QString::number(h.quantity, 'f', 0));
         auto* avg = new QTableWidgetItem(QString::number(h.avg_price, 'f', 2));
         auto* ltp = new QTableWidgetItem(QString::number(h.ltp, 'f', 2));
-        auto* pnl_pct = new QTableWidgetItem(
-            QString("%1%2%").arg(h.pnl_pct >= 0 ? "+" : "").arg(h.pnl_pct, 0, 'f', 2));
+        auto* pnl_pct = new QTableWidgetItem(QString("%1%2%").arg(h.pnl_pct >= 0 ? "+" : "").arg(h.pnl_pct, 0, 'f', 2));
         const QColor col(h.pnl_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
         pnl_pct->setForeground(col);
         qty->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -183,8 +181,7 @@ void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows)
         exit_btn->setProperty("holdingsExit", true);
         const bool can_sell = h.quantity > 0;
         exit_btn->setEnabled(can_sell);
-        connect(exit_btn, &QPushButton::clicked, this,
-                [this, h]() { square_off_holding(h); });
+        connect(exit_btn, &QPushButton::clicked, this, [this, h]() { square_off_holding(h); });
         table_->setCellWidget(i, 5, exit_btn);
         if (can_sell)
             ++sellable;
@@ -231,8 +228,7 @@ void BrokerHoldingsWidget::square_off_holding(const trading::BrokerHolding& h) {
 
     const auto answer = QMessageBox::warning(
         this, tr("Square Off Holding"),
-        tr("Place a MARKET SELL order for %1 %2 (CNC)?")
-            .arg(QString::number(h.quantity, 'f', 0), h.symbol),
+        tr("Place a MARKET SELL order for %1 %2 (CNC)?").arg(QString::number(h.quantity, 'f', 0), h.symbol),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes)
         return;
@@ -262,12 +258,12 @@ void BrokerHoldingsWidget::square_off_all() {
         return;
     }
 
-    const auto answer = QMessageBox::warning(
-        this, tr("Square Off All Holdings"),
-        tr("This will place MARKET SELL orders to exit ALL %1 holding(s) in this account.\n\n"
-           "Positions are NOT affected. Continue?")
-            .arg(targets.size()),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    const auto answer =
+        QMessageBox::warning(this, tr("Square Off All Holdings"),
+                             tr("This will place MARKET SELL orders to exit ALL %1 holding(s) in this account.\n\n"
+                                "Positions are NOT affected. Continue?")
+                                 .arg(targets.size()),
+                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes)
         return;
 
@@ -282,8 +278,7 @@ void BrokerHoldingsWidget::square_off_all() {
     }
 
     if (failures.isEmpty()) {
-        QMessageBox::information(this, tr("Square Off All Holdings"),
-                                 tr("Placed %1 sell order(s).").arg(placed));
+        QMessageBox::information(this, tr("Square Off All Holdings"), tr("Placed %1 sell order(s).").arg(placed));
     } else {
         QMessageBox::warning(this, tr("Square Off All Holdings"),
                              tr("Placed %1 order(s). %2 failed:\n%3")
@@ -299,19 +294,18 @@ void BrokerHoldingsWidget::on_theme_changed() {
 
 void BrokerHoldingsWidget::apply_styles() {
     header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;")
-            .arg(ui::colors::TEXT_TERTIARY()));
-    table_->setStyleSheet(QString(
-        "QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
-        "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-        "padding:2px 4px;font-size:9px;font-weight:bold;}"
-        "QTableWidget::item{padding:2px 4px;}"
-        "QPushButton[holdingsExit=\"true\"]{color:%5;background:transparent;border:1px solid %5;"
-        "border-radius:2px;padding:0 6px;font-size:9px;font-weight:bold;}"
-        "QPushButton[holdingsExit=\"true\"]:hover{color:%6;background:%5;}"
-        "QPushButton[holdingsExit=\"true\"]:disabled{color:%2;border-color:%2;}")
-        .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::TEXT_TERTIARY(), ui::colors::NEGATIVE(), ui::colors::BG_BASE()));
+        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    table_->setStyleSheet(
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+                "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
+                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "QTableWidget::item{padding:2px 4px;}"
+                "QPushButton[holdingsExit=\"true\"]{color:%5;background:transparent;border:1px solid %5;"
+                "border-radius:2px;padding:0 6px;font-size:9px;font-weight:bold;}"
+                "QPushButton[holdingsExit=\"true\"]:hover{color:%6;background:%5;}"
+                "QPushButton[holdingsExit=\"true\"]:disabled{color:%2;border-color:%2;}")
+            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
+                 ui::colors::TEXT_TERTIARY(), ui::colors::NEGATIVE(), ui::colors::BG_BASE()));
 
     if (square_off_all_btn_)
         square_off_all_btn_->setStyleSheet(

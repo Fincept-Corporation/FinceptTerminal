@@ -42,10 +42,10 @@ class Services {
 
     // -- Accessors (façade over existing singletons during migration) ----------
     auth::AuthManager& auth();
-    EventBus&          events();
-    Database&          db();
-    SecureStorage&     secure_storage();
-    datahub::DataHub&  hub();
+    EventBus& events();
+    Database& db();
+    SecureStorage& secure_storage();
+    datahub::DataHub& hub();
 
   private:
     Services() = default;

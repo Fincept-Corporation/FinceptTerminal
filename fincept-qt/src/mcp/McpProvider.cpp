@@ -30,9 +30,14 @@ McpProvider& McpProvider::instance() {
 // without re-walking the schema each call.
 static UnifiedTool make_snapshot(const ToolDef& t) {
     return UnifiedTool{
-        QString(INTERNAL_SERVER_ID), QString(INTERNAL_SERVER_NAME),
-        t.name, t.description, t.input_schema.to_json(),
-        /*is_internal=*/true, t.category, t.is_destructive,
+        QString(INTERNAL_SERVER_ID),
+        QString(INTERNAL_SERVER_NAME),
+        t.name,
+        t.description,
+        t.input_schema.to_json(),
+        /*is_internal=*/true,
+        t.category,
+        t.is_destructive,
     };
 }
 
@@ -43,7 +48,7 @@ static UnifiedTool make_snapshot(const ToolDef& t) {
 void McpProvider::register_tool(ToolDef tool) {
     QMutexLocker lock(&mutex_);
     QString name = tool.name;
-    snapshots_.insert(name, make_snapshot(tool));  // serialise schema once
+    snapshots_.insert(name, make_snapshot(tool)); // serialise schema once
     tools_.insert(name, std::move(tool));
     ++generation_;
 }
@@ -199,8 +204,7 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
         if (!tools_.contains(resolved)) {
             for (auto it = tools_.constBegin(); it != tools_.constEnd(); ++it) {
                 if (it.value().legacy_aliases.contains(name)) {
-                    LOG_INFO(TAG, QString("Tool called by legacy name '%1' — canonical '%2'")
-                                      .arg(name, it.key()));
+                    LOG_INFO(TAG, QString("Tool called by legacy name '%1' — canonical '%2'").arg(name, it.key()));
                     resolved = it.key();
                     break;
                 }
@@ -284,9 +288,8 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
             }
             watchdog->deleteLater();
         });
-        QMetaObject::invokeMethod(watchdog, [watchdog, ms = ctx.timeout_ms]() {
-            watchdog->start(ms);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            watchdog, [watchdog, ms = ctx.timeout_ms]() { watchdog->start(ms); }, Qt::QueuedConnection);
 
         try {
             LOG_DEBUG(TAG, "Calling async tool: " + name);
@@ -396,11 +399,10 @@ QString McpProvider::encode_tool_name_for_wire(const QString& tool_name) {
         static QSet<QString> warned;
         if (!warned.contains(out)) {
             warned.insert(out);
-            LOG_WARN("McpProvider",
-                     QString("Tool name '%1' does not match the provider-safe regex "
-                             "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$ — Kimi/Anthropic/OpenAI will "
-                             "reject the request. Rename the tool at source.")
-                         .arg(out));
+            LOG_WARN("McpProvider", QString("Tool name '%1' does not match the provider-safe regex "
+                                            "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$ — Kimi/Anthropic/OpenAI will "
+                                            "reject the request. Rename the tool at source.")
+                                        .arg(out));
         }
     }
     return out;
@@ -458,8 +460,7 @@ std::optional<ToolResult> McpProvider::check_authorization(const QString& name, 
             LOG_WARN(TAG, QString("Tool '%1' blocked: auth_required=%2 is_destructive=%3")
                               .arg(name, auth_level_str(auth_required))
                               .arg(is_destructive ? "true" : "false"));
-            return ToolResult::fail(QString("Tool '%1' requires %2 auth")
-                                        .arg(name, auth_level_str(auth_required)));
+            return ToolResult::fail(QString("Tool '%1' requires %2 auth").arg(name, auth_level_str(auth_required)));
         }
     } else if (auth_required >= AuthLevel::Verified) {
         // Fail-closed: Verified/Subscribed/ExplicitConfirm cannot be
@@ -472,8 +473,9 @@ std::optional<ToolResult> McpProvider::check_authorization(const QString& name, 
         // Phase 6.12 work. Tools tagged Authenticated+destructive still
         // run today; once the modal ships, install the checker and the
         // upper branch starts gating them.
-        LOG_INFO(TAG, QString("Tool '%1' is destructive (flag is advisory; install McpProvider::set_auth_checker to gate)")
-                          .arg(name));
+        LOG_INFO(TAG,
+                 QString("Tool '%1' is destructive (flag is advisory; install McpProvider::set_auth_checker to gate)")
+                     .arg(name));
     }
     return std::nullopt;
 }

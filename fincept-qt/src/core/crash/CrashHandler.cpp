@@ -54,7 +54,7 @@ namespace {
 // paths are always well under the limit.
 constexpr size_t kDirBufferLen = MAX_PATH;
 wchar_t g_dump_dir[kDirBufferLen] = {0};
-bool    g_installed = false;
+bool g_installed = false;
 
 LONG WINAPI unhandled_exception_filter(EXCEPTION_POINTERS* ep) {
     if (!g_installed || !ep || g_dump_dir[0] == L'\0') {
@@ -69,32 +69,25 @@ LONG WINAPI unhandled_exception_filter(EXCEPTION_POINTERS* ep) {
     // swprintf_s is safe inside the filter — it writes to a stack buffer and
     // does not allocate. The %04d/%02d specifiers are size-bounded so the
     // final path cannot overflow the buffer.
-    swprintf_s(path, L"%s\\crash_%04d%02d%02d_%02d%02d%02d_%lu.dmp",
-               g_dump_dir,
-               st.wYear, st.wMonth, st.wDay,
-               st.wHour, st.wMinute, st.wSecond,
-               GetCurrentProcessId());
+    swprintf_s(path, L"%s\\crash_%04d%02d%02d_%02d%02d%02d_%lu.dmp", g_dump_dir, st.wYear, st.wMonth, st.wDay, st.wHour,
+               st.wMinute, st.wSecond, GetCurrentProcessId());
 
-    HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr,
-                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file != INVALID_HANDLE_VALUE) {
         MINIDUMP_EXCEPTION_INFORMATION mei = {};
-        mei.ThreadId          = GetCurrentThreadId();
+        mei.ThreadId = GetCurrentThreadId();
         mei.ExceptionPointers = ep;
-        mei.ClientPointers    = FALSE;
+        mei.ClientPointers = FALSE;
 
         // MiniDumpWithDataSegs + MiniDumpWithThreadInfo give us enough to
         // reconstruct a usable stack + local variables in WinDbg without
         // producing a multi-GB dump. MiniDumpWithIndirectlyReferencedMemory
         // pulls in pointers-to-pointers so struct fields show up.
-        const MINIDUMP_TYPE dump_type = static_cast<MINIDUMP_TYPE>(
-            MiniDumpWithDataSegs |
-            MiniDumpWithThreadInfo |
-            MiniDumpWithIndirectlyReferencedMemory |
-            MiniDumpWithUnloadedModules);
+        const MINIDUMP_TYPE dump_type =
+            static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithThreadInfo |
+                                       MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithUnloadedModules);
 
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
-                          file, dump_type, &mei, nullptr, nullptr);
+        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, dump_type, &mei, nullptr, nullptr);
         CloseHandle(file);
     }
 
@@ -140,35 +133,34 @@ void install() {
     // SEH's __except blocks and cannot be overridden by the CRT. We return
     // EXCEPTION_CONTINUE_SEARCH so normal SEH unwinding still runs — we are
     // only here to capture the dump on the way past.
-    AddVectoredExceptionHandler(/*FirstHandler=*/0,
-        [](EXCEPTION_POINTERS* ep) -> LONG {
-            // Only capture the "this is about to kill us" codes. Filtering
-            // keeps benign SEH (e.g. C++ exceptions, which are SEH internally
-            // with code 0xE06D7363) from triggering a dump on every throw.
-            if (!ep || !ep->ExceptionRecord) return EXCEPTION_CONTINUE_SEARCH;
-            const DWORD code = ep->ExceptionRecord->ExceptionCode;
-            switch (code) {
-                case EXCEPTION_ACCESS_VIOLATION:
-                case EXCEPTION_STACK_OVERFLOW:
-                case EXCEPTION_ILLEGAL_INSTRUCTION:
-                case EXCEPTION_INT_DIVIDE_BY_ZERO:
-                case EXCEPTION_PRIV_INSTRUCTION:
-                case STATUS_STACK_BUFFER_OVERRUN: // 0xC0000409 — GS cookie, FAST_FAIL
-                case STATUS_HEAP_CORRUPTION:      // 0xC0000374
-                    unhandled_exception_filter(ep);
-                    break;
-                default:
-                    break;
-            }
+    AddVectoredExceptionHandler(/*FirstHandler=*/0, [](EXCEPTION_POINTERS* ep) -> LONG {
+        // Only capture the "this is about to kill us" codes. Filtering
+        // keeps benign SEH (e.g. C++ exceptions, which are SEH internally
+        // with code 0xE06D7363) from triggering a dump on every throw.
+        if (!ep || !ep->ExceptionRecord)
             return EXCEPTION_CONTINUE_SEARCH;
-        });
+        const DWORD code = ep->ExceptionRecord->ExceptionCode;
+        switch (code) {
+            case EXCEPTION_ACCESS_VIOLATION:
+            case EXCEPTION_STACK_OVERFLOW:
+            case EXCEPTION_ILLEGAL_INSTRUCTION:
+            case EXCEPTION_INT_DIVIDE_BY_ZERO:
+            case EXCEPTION_PRIV_INSTRUCTION:
+            case STATUS_STACK_BUFFER_OVERRUN: // 0xC0000409 — GS cookie, FAST_FAIL
+            case STATUS_HEAP_CORRUPTION:      // 0xC0000374
+                unhandled_exception_filter(ep);
+                break;
+            default:
+                break;
+        }
+        return EXCEPTION_CONTINUE_SEARCH;
+    });
 
     // Make sure MSVC's runtime doesn't silently replace our filter when the
     // CRT internally catches an exception. The call below is a no-op on most
     // modern MSVC runtimes but is harmless and documented to help.
     // https://learn.microsoft.com/cpp/c-runtime-library/reference/set-invalid-parameter-handler
-    _set_invalid_parameter_handler([](const wchar_t*, const wchar_t*, const wchar_t*,
-                                      unsigned int, uintptr_t) {
+    _set_invalid_parameter_handler([](const wchar_t*, const wchar_t*, const wchar_t*, unsigned int, uintptr_t) {
         // Trigger our filter by raising a non-continuable exception with the
         // current context, rather than letting the CRT call abort() which
         // exits without running our handler.

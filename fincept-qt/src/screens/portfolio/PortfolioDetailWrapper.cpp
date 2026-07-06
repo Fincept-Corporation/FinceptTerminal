@@ -177,8 +177,7 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
     switch (view) {
         case portfolio::DetailView::AnalyticsSectors: {
             auto* asv = new AnalyticsSectorsView;
-            connect(asv, &AnalyticsSectorsView::sector_selected,
-                    this, &PortfolioDetailWrapper::sector_selected);
+            connect(asv, &AnalyticsSectorsView::sector_selected, this, &PortfolioDetailWrapper::sector_selected);
             if (!current_correlation_.isEmpty())
                 asv->set_correlation(current_correlation_);
             widget = asv;
@@ -238,8 +237,10 @@ void PortfolioDetailWrapper::changeEvent(QEvent* event) {
 }
 
 void PortfolioDetailWrapper::retranslateUi() {
-    if (back_btn_)    back_btn_->setText(tr("← BACK"));
-    if (title_label_) title_label_->setText(view_title(current_view_));
+    if (back_btn_)
+        back_btn_->setText(tr("← BACK"));
+    if (title_label_)
+        title_label_->setText(view_title(current_view_));
     // portfolio_label_ holds "NAME | CURRENCY" — pure portfolio data, no
     // translation needed.
 }

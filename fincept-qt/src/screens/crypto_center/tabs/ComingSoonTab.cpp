@@ -12,15 +12,12 @@ namespace fincept::screens {
 namespace {
 
 QString cs_font_stack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 } // namespace
 
-ComingSoonTab::ComingSoonTab(const QString& tab_name,
-                             const QString& phase_label,
-                             const QString& description,
+ComingSoonTab::ComingSoonTab(const QString& tab_name, const QString& phase_label, const QString& description,
                              QWidget* parent)
     : QWidget(parent) {
     setObjectName(QStringLiteral("comingSoonTab"));
@@ -78,33 +75,32 @@ void ComingSoonTab::changeEvent(QEvent* event) {
 void ComingSoonTab::retranslateUi() {
     // tab_name / phase_label / description are caller-supplied data, not
     // translatable UI literals — only the fixed status line is retranslated.
-    if (status_label_) status_label_->setText(tr("STATUS  ·  COMING SOON"));
+    if (status_label_)
+        status_label_->setText(tr("STATUS  ·  COMING SOON"));
 }
 
 void ComingSoonTab::apply_theme() {
     using namespace ui::colors;
     const QString font = cs_font_stack();
 
-    const QString ss = QStringLiteral(
-        "QWidget#comingSoonTab { background:%1; }"
-        "QFrame#comingSoonCard { background:%2; border:1px solid %3; }"
-        "QLabel#comingSoonPhase { color:%4; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.5px; background:transparent; }"
-        "QLabel#comingSoonTitle { color:%6; font-family:%5; font-size:18px;"
-        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-        "QLabel#comingSoonDescription { color:%7; font-family:%5; font-size:12px;"
-        "  background:transparent; }"
-        "QLabel#comingSoonStatus { color:%8; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-    )
-        .arg(BG_BASE(),         // %1
-             BG_SURFACE(),      // %2
-             BORDER_DIM(),      // %3
-             AMBER(),           // %4
-             font,              // %5
-             TEXT_PRIMARY(),    // %6
-             TEXT_SECONDARY(),  // %7
-             TEXT_TERTIARY());  // %8
+    const QString ss = QStringLiteral("QWidget#comingSoonTab { background:%1; }"
+                                      "QFrame#comingSoonCard { background:%2; border:1px solid %3; }"
+                                      "QLabel#comingSoonPhase { color:%4; font-family:%5; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.5px; background:transparent; }"
+                                      "QLabel#comingSoonTitle { color:%6; font-family:%5; font-size:18px;"
+                                      "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
+                                      "QLabel#comingSoonDescription { color:%7; font-family:%5; font-size:12px;"
+                                      "  background:transparent; }"
+                                      "QLabel#comingSoonStatus { color:%8; font-family:%5; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }")
+                           .arg(BG_BASE(),        // %1
+                                BG_SURFACE(),     // %2
+                                BORDER_DIM(),     // %3
+                                AMBER(),          // %4
+                                font,             // %5
+                                TEXT_PRIMARY(),   // %6
+                                TEXT_SECONDARY(), // %7
+                                TEXT_TERTIARY()); // %8
 
     setStyleSheet(ss);
 }

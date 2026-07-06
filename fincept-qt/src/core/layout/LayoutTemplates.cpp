@@ -8,15 +8,15 @@ namespace fincept::layout {
 
 QList<LayoutTemplates::Persona> LayoutTemplates::personas() {
     return {
-        {QStringLiteral("equity_trader"),     QStringLiteral("Equity Trader"),
+        {QStringLiteral("equity_trader"), QStringLiteral("Equity Trader"),
          QStringLiteral("Stock trading with watchlist, ticker chart, and order book.")},
-        {QStringLiteral("crypto_trader"),     QStringLiteral("Crypto Trader"),
+        {QStringLiteral("crypto_trader"), QStringLiteral("Crypto Trader"),
          QStringLiteral("Live order book and chart for spot and perpetual markets.")},
         {QStringLiteral("portfolio_manager"), QStringLiteral("Portfolio Manager"),
          QStringLiteral("Holdings, allocation, risk and performance dashboard.")},
-        {QStringLiteral("research_analyst"),  QStringLiteral("Research Analyst"),
+        {QStringLiteral("research_analyst"), QStringLiteral("Research Analyst"),
          QStringLiteral("Equity research with fundamentals, news, and financials.")},
-        {QStringLiteral("macro_economist"),   QStringLiteral("Macro Economist"),
+        {QStringLiteral("macro_economist"), QStringLiteral("Macro Economist"),
          QStringLiteral("DBnomics series, economic calendar, world maps.")},
     };
 }

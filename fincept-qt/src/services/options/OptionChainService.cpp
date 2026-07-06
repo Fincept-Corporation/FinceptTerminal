@@ -43,10 +43,10 @@ using fincept::trading::InstrumentType;
 
 namespace {
 
-constexpr int kMaxRequestsPerSec = 5;          // chain refresh cap (REST batch heavy)
-constexpr int kChainTtlMs = 300'000;           // 5 min — chain freshness window
-constexpr int kChainMinIntervalMs = 60'000;    // 1 min floor between consecutive refreshes per topic
-constexpr int kChainCoalesceMs = 250;          // collapse rapid republishes (e.g. WS Phase 3)
+constexpr int kMaxRequestsPerSec = 5;       // chain refresh cap (REST batch heavy)
+constexpr int kChainTtlMs = 300'000;        // 5 min — chain freshness window
+constexpr int kChainMinIntervalMs = 60'000; // 1 min floor between consecutive refreshes per topic
+constexpr int kChainCoalesceMs = 250;       // collapse rapid republishes (e.g. WS Phase 3)
 constexpr int kChainTimeoutMs = 30'000;
 
 constexpr int kAtmIvTtlMs = 5'000;
@@ -64,10 +64,10 @@ const QString kAtmIvPrefix = QStringLiteral("option:atm_iv:");
 const QString kPcrPrefix = QStringLiteral("fno:pcr:");
 const QString kMaxPainPrefix = QStringLiteral("fno:max_pain:");
 
-constexpr int kGreeksThrottleMs = 500;        // per-strike Greeks recompute floor
-constexpr int kPerLegTickCoalesceMs = 100;    // option:tick coalesce window
+constexpr int kGreeksThrottleMs = 500;         // per-strike Greeks recompute floor
+constexpr int kPerLegTickCoalesceMs = 100;     // option:tick coalesce window
 constexpr double kDefaultRiskFreeRate = 0.067; // RBI 91-day T-bill ballpark
-constexpr double kUSRiskFreeRate = 0.043;     // US 3-month T-bill ballpark
+constexpr double kUSRiskFreeRate = 0.043;      // US 3-month T-bill ballpark
 
 const QString kDatabentoBrokerId = QStringLiteral("databento");
 const QString kDatabentoScript = QStringLiteral("databento_fno_chain.py");
@@ -90,7 +90,7 @@ bool parse_fyers_opt_symbol(const QString& sym, double& strike, bool& is_call) {
     while (i >= 0 && sym.at(i).isDigit())
         --i;
     if (i < 0 || i == int(sym.size()) - 1)
-        return false;  // no trailing strike digits
+        return false; // no trailing strike digits
     const QChar cp = sym.at(i);
     if (cp != QLatin1Char('C') && cp != QLatin1Char('P'))
         return false;
@@ -100,7 +100,7 @@ bool parse_fyers_opt_symbol(const QString& sym, double& strike, bool& is_call) {
     return ok;
 }
 
-}  // namespace
+} // namespace
 
 OptionChainService& OptionChainService::instance() {
     static OptionChainService s;
@@ -120,7 +120,7 @@ void OptionChainService::ensure_registered_with_hub() {
     chain_pol.min_interval_ms = kChainMinIntervalMs;
     chain_pol.coalesce_within_ms = kChainCoalesceMs;
     chain_pol.refresh_timeout_ms = kChainTimeoutMs;
-    chain_pol.pause_when_inactive = true;  // chain ticks are heavy; pause when window inactive
+    chain_pol.pause_when_inactive = true; // chain ticks are heavy; pause when window inactive
     hub.set_policy_pattern(QStringLiteral("option:chain:*"), chain_pol);
 
     // ATM IV is push-only — it's republished as a side effect of every chain
@@ -227,14 +227,12 @@ QStringList OptionChainService::databento_underlyings() {
         QStringLiteral("SPY"),  QStringLiteral("QQQ"),  QStringLiteral("IWM"),  QStringLiteral("DIA"),
         QStringLiteral("AAPL"), QStringLiteral("MSFT"), QStringLiteral("AMZN"), QStringLiteral("GOOGL"),
         QStringLiteral("TSLA"), QStringLiteral("NVDA"), QStringLiteral("META"), QStringLiteral("AMD"),
-        QStringLiteral("JPM"),  QStringLiteral("BAC"),  QStringLiteral("GS"),
-        QStringLiteral("XLF"),  QStringLiteral("XLE"),  QStringLiteral("XLK"),
-        QStringLiteral("GLD"),  QStringLiteral("SLV"),
+        QStringLiteral("JPM"),  QStringLiteral("BAC"),  QStringLiteral("GS"),   QStringLiteral("XLF"),
+        QStringLiteral("XLE"),  QStringLiteral("XLK"),  QStringLiteral("GLD"),  QStringLiteral("SLV"),
     };
 }
 
-void OptionChainService::list_databento_expiries(const QString& underlying,
-                                                  std::function<void(QStringList)> callback) {
+void OptionChainService::list_databento_expiries(const QString& underlying, std::function<void(QStringList)> callback) {
     if (databento_expiry_cache_.contains(underlying)) {
         callback(databento_expiry_cache_.value(underlying));
         return;
@@ -253,9 +251,9 @@ void OptionChainService::list_databento_expiries(const QString& underlying,
     };
     QPointer<OptionChainService> self = this;
     fincept::python::PythonRunner::instance().run(
-        kDatabentoScript, script_args,
-        [self, underlying, callback](fincept::python::PythonResult result) {
-            if (!self) return;
+        kDatabentoScript, script_args, [self, underlying, callback](fincept::python::PythonResult result) {
+            if (!self)
+                return;
             QStringList expiries;
             if (result.success) {
                 QJsonParseError err;
@@ -294,11 +292,10 @@ double OptionChainService::resolve_spot(const QString& broker_id, const QString&
     auto it = spot_cache_.find(key);
     if (it != spot_cache_.end())
         return *it;
-    return 0.0;  // populated during refresh_chain when underlying quote is fetched
+    return 0.0; // populated during refresh_chain when underlying quote is fetched
 }
 
-void OptionChainService::refresh_chain(const QString& broker_id, const QString& underlying,
-                                       const QString& expiry) {
+void OptionChainService::refresh_chain(const QString& broker_id, const QString& underlying, const QString& expiry) {
     if (broker_id == kDatabentoBrokerId) {
         refresh_chain_databento(underlying, expiry);
         return;
@@ -323,7 +320,8 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
 
     QVector<Instrument> instruments =
         InstrumentService::instance().find_options_for_underlying(broker_id, underlying, expiry, "NFO");
-    LOG_INFO("OptionChain", QString("refresh_chain: find_options_for_underlying → %1 instruments").arg(instruments.size()));
+    LOG_INFO("OptionChain",
+             QString("refresh_chain: find_options_for_underlying → %1 instruments").arg(instruments.size()));
     if (instruments.isEmpty()) {
         in_flight_.remove(topic);
         fincept::datahub::DataHub::instance().publish_error(topic,
@@ -355,8 +353,7 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
     // back to the FUT price above.
     static const QSet<QString> kIndexNames = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"};
     const bool is_index = kIndexNames.contains(underlying);
-    const QString underlying_sym =
-        is_index ? "NSE_INDEX:" + underlying : "NSE:" + underlying;
+    const QString underlying_sym = is_index ? "NSE_INDEX:" + underlying : "NSE:" + underlying;
     quote_syms.append(underlying_sym);
 
     // Load credentials via AccountManager (keys are account.{uuid}.*),
@@ -395,8 +392,8 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                     return;
                 }
 
-                LOG_INFO("OptionChain", QString("get_quotes returned %1 quotes for %2")
-                                            .arg(resp.data->size()).arg(topic));
+                LOG_INFO("OptionChain",
+                         QString("get_quotes returned %1 quotes for %2").arg(resp.data->size()).arg(topic));
 
                 // Build a quick lookup from "EXCH:brsymbol" → BrokerQuote.
                 QHash<QString, BrokerQuote> by_sym;
@@ -419,8 +416,8 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                         spot_chg_pct = it->change_pct;
                     }
                 }
-                LOG_INFO("OptionChain", QString("spot=%1 (underlying_sym='%2', fut_sym='%3')")
-                                            .arg(spot).arg(underlying_sym, fut_sym));
+                LOG_INFO("OptionChain",
+                         QString("spot=%1 (underlying_sym='%2', fut_sym='%3')").arg(spot).arg(underlying_sym, fut_sym));
                 if (spot > 0)
                     self->spot_cache_.insert(cache_key(broker_id, underlying), spot);
 
@@ -448,8 +445,8 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                 chain.spot = spot;
                 chain.spot_change = spot_chg;
                 chain.spot_change_pct = spot_chg_pct;
-                chain.kind = (underlying == "NIFTY" || underlying == "BANKNIFTY"
-                              || underlying == "FINNIFTY" || underlying == "MIDCPNIFTY")
+                chain.kind = (underlying == "NIFTY" || underlying == "BANKNIFTY" || underlying == "FINNIFTY" ||
+                              underlying == "MIDCPNIFTY")
                                  ? UnderlyingKind::Index
                                  : UnderlyingKind::Stock;
                 chain.timestamp_ms = QDateTime::currentMSecsSinceEpoch();
@@ -492,20 +489,18 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                 // Publish chain + derived stats. Hub fans out to subscribers.
                 auto& hub = fincept::datahub::DataHub::instance();
                 hub.publish(topic, QVariant::fromValue(chain));
-                hub.publish(kPcrPrefix + broker_id + ":" + underlying + ":" + expiry,
-                            QVariant::fromValue(chain.pcr));
+                hub.publish(kPcrPrefix + broker_id + ":" + underlying + ":" + expiry, QVariant::fromValue(chain.pcr));
                 hub.publish(kMaxPainPrefix + broker_id + ":" + underlying + ":" + expiry,
                             QVariant::fromValue(chain.max_pain));
                 self->publish_per_leg_ticks(chain);
                 self->last_chain_ = chain;
                 emit self->chain_published(chain);
-                LOG_INFO("OptionChain",
-                         QString("Published %1 strikes for %2/%3/%4 (spot=%5, ATM=%6, PCR=%7)")
-                             .arg(chain.rows.size())
-                             .arg(broker_id, underlying, expiry)
-                             .arg(spot, 0, 'f', 2)
-                             .arg(chain.atm_strike, 0, 'f', 2)
-                             .arg(chain.pcr, 0, 'f', 3));
+                LOG_INFO("OptionChain", QString("Published %1 strikes for %2/%3/%4 (spot=%5, ATM=%6, PCR=%7)")
+                                            .arg(chain.rows.size())
+                                            .arg(broker_id, underlying, expiry)
+                                            .arg(spot, 0, 'f', 2)
+                                            .arg(chain.atm_strike, 0, 'f', 2)
+                                            .arg(chain.pcr, 0, 'f', 3));
 
                 // Kick off Greeks/IV enrichment — async; republishes when ready.
                 self->enrich_with_greeks(chain, topic);
@@ -538,9 +533,9 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
 
     QPointer<OptionChainService> self = this;
     fincept::python::PythonRunner::instance().run(
-        kDatabentoScript, script_args,
-        [self, topic, underlying, expiry](fincept::python::PythonResult result) {
-            if (!self) return;
+        kDatabentoScript, script_args, [self, topic, underlying, expiry](fincept::python::PythonResult result) {
+            if (!self)
+                return;
             self->in_flight_.remove(topic);
 
             if (!result.success) {
@@ -620,12 +615,11 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
             self->publish_per_leg_ticks(chain);
             self->last_chain_ = chain;
             emit self->chain_published(chain);
-            LOG_INFO("OptionChain",
-                     QString("Published %1 strikes from Databento for %2/%3 (spot=%4, ATM=%5)")
-                         .arg(chain.rows.size())
-                         .arg(underlying, expiry)
-                         .arg(spot, 0, 'f', 2)
-                         .arg(chain.atm_strike, 0, 'f', 2));
+            LOG_INFO("OptionChain", QString("Published %1 strikes from Databento for %2/%3 (spot=%4, ATM=%5)")
+                                        .arg(chain.rows.size())
+                                        .arg(underlying, expiry)
+                                        .arg(spot, 0, 'f', 2)
+                                        .arg(chain.atm_strike, 0, 'f', 2));
 
             self->enrich_with_greeks(chain, topic);
         });
@@ -635,7 +629,7 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
 // Single REST call returns OI, Greeks, IV, volume, spot, expiries — no Python.
 
 void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QString& underlying,
-                                              const QString& expiry) {
+                                             const QString& expiry) {
     const QString topic = chain_topic(broker_id, underlying, expiry);
     LOG_INFO("OptionChain", QString("refresh_chain_fyers: %1/%2/%3").arg(broker_id, underlying, expiry));
 
@@ -654,8 +648,8 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
     qint64 expiry_ts = 0;
     if (expiry.length() >= 9 && expiry[2] == QLatin1Char('-') && expiry[6] == QLatin1Char('-')) {
         static const QHash<QString, int> kMon = {
-            {"JAN",1},{"FEB",2},{"MAR",3},{"APR",4},{"MAY",5},{"JUN",6},
-            {"JUL",7},{"AUG",8},{"SEP",9},{"OCT",10},{"NOV",11},{"DEC",12},
+            {"JAN", 1}, {"FEB", 2}, {"MAR", 3}, {"APR", 4},  {"MAY", 5},  {"JUN", 6},
+            {"JUL", 7}, {"AUG", 8}, {"SEP", 9}, {"OCT", 10}, {"NOV", 11}, {"DEC", 12},
         };
         int day = QStringView(expiry).left(2).toInt();
         int month = kMon.value(expiry.mid(3, 3).toUpper(), 0);
@@ -679,8 +673,8 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
     if (creds.access_token.isEmpty() && !accounts.isEmpty())
         creds = fincept::trading::AccountManager::instance().load_credentials(accounts.first().account_id);
 
-    QString url = QString("https://api-t1.fyers.in/data/options-chain-v3?symbol=%1&strikecount=50&greeks=1")
-                      .arg(api_sym);
+    QString url =
+        QString("https://api-t1.fyers.in/data/options-chain-v3?symbol=%1&strikecount=50&greeks=1").arg(api_sym);
     if (expiry_ts > 0)
         url += QString("&timestamp=%1").arg(expiry_ts);
 
@@ -696,149 +690,149 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
         if (!self)
             return;
 
-        QMetaObject::invokeMethod(self.data(), [self, resp, broker_id, underlying, expiry, topic]() {
-            if (!self)
-                return;
-            self->in_flight_.remove(topic);
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self, resp, broker_id, underlying, expiry, topic]() {
+                if (!self)
+                    return;
+                self->in_flight_.remove(topic);
 
-            if (!resp.success || resp.json.value("s").toString() != "ok") {
-                const QString err = resp.success ? resp.json.value("message").toString("API error")
-                                                 : resp.error;
-                LOG_ERROR("OptionChain", QString("Fyers option chain failed: %1").arg(err));
-                fincept::datahub::DataHub::instance().publish_error(topic, err);
-                emit self->chain_failed(topic, err);
-                return;
-            }
-
-            auto data = resp.json.value("data").toObject();
-            auto arr = data.value("optionsChain").toArray();
-            LOG_INFO("OptionChain", QString("Fyers option chain: %1 entries").arg(arr.size()));
-
-            double spot = 0, spot_chg = 0, spot_chg_pct = 0;
-            static const QSet<QString> kIdx = {"NIFTY","BANKNIFTY","FINNIFTY","MIDCPNIFTY"};
-
-            // Group by strike: CE + PE
-            struct StrikePair {
-                OptionChainRow row;
-                bool has_ce = false, has_pe = false;
-            };
-            QMap<double, StrikePair> by_strike;
-
-            for (const auto& v : arr) {
-                auto o = v.toObject();
-                double strike = o.value("strike_price").toDouble();
-                QString opt_type = o.value("option_type").toString();
-
-                if (strike < 0 || opt_type.isEmpty()) {
-                    spot = o.value("ltp").toDouble();
-                    spot_chg = o.value("ltpch").toDouble();
-                    spot_chg_pct = o.value("ltpchp").toDouble();
-                    continue;
+                if (!resp.success || resp.json.value("s").toString() != "ok") {
+                    const QString err = resp.success ? resp.json.value("message").toString("API error") : resp.error;
+                    LOG_ERROR("OptionChain", QString("Fyers option chain failed: %1").arg(err));
+                    fincept::datahub::DataHub::instance().publish_error(topic, err);
+                    emit self->chain_failed(topic, err);
+                    return;
                 }
 
-                BrokerQuote q;
-                q.symbol = o.value("symbol").toString();
-                q.ltp = o.value("ltp").toDouble();
-                q.bid = o.value("bid").toDouble();
-                q.ask = o.value("ask").toDouble();
-                q.volume = o.value("volume").toDouble();
-                q.change = o.value("ltpch").toDouble();
-                q.change_pct = o.value("ltpchp").toDouble();
-                q.oi = qint64(o.value("oi").toDouble());
-                q.oi_change_pct = o.value("oichp").toDouble();
+                auto data = resp.json.value("data").toObject();
+                auto arr = data.value("optionsChain").toArray();
+                LOG_INFO("OptionChain", QString("Fyers option chain: %1 entries").arg(arr.size()));
 
-                auto greeks_obj = o.value("greeks").toObject();
-                OptionGreeks greeks;
-                greeks.delta = greeks_obj.value("delta").toDouble();
-                greeks.gamma = greeks_obj.value("gamma").toDouble();
-                greeks.theta = greeks_obj.value("theta").toDouble();
-                greeks.vega = greeks_obj.value("vega").toDouble();
-                greeks.valid = true;
-                double iv = greeks_obj.value("iv").toDouble() / 100.0; // API returns %, we store decimal
+                double spot = 0, spot_chg = 0, spot_chg_pct = 0;
+                static const QSet<QString> kIdx = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"};
 
-                qint64 token = qint64(o.value("fyToken").toString().toLongLong());
+                // Group by strike: CE + PE
+                struct StrikePair {
+                    OptionChainRow row;
+                    bool has_ce = false, has_pe = false;
+                };
+                QMap<double, StrikePair> by_strike;
 
-                auto& pair = by_strike[strike];
-                pair.row.strike = strike;
-                if (opt_type == "CE") {
-                    pair.has_ce = true;
-                    pair.row.ce_quote = q;
-                    pair.row.ce_token = token;
-                    pair.row.ce_symbol = q.symbol;
-                    pair.row.ce_greeks = greeks;
-                    pair.row.ce_iv = iv;
-                } else if (opt_type == "PE") {
-                    pair.has_pe = true;
-                    pair.row.pe_quote = q;
-                    pair.row.pe_token = token;
-                    pair.row.pe_symbol = q.symbol;
-                    pair.row.pe_greeks = greeks;
-                    pair.row.pe_iv = iv;
+                for (const auto& v : arr) {
+                    auto o = v.toObject();
+                    double strike = o.value("strike_price").toDouble();
+                    QString opt_type = o.value("option_type").toString();
+
+                    if (strike < 0 || opt_type.isEmpty()) {
+                        spot = o.value("ltp").toDouble();
+                        spot_chg = o.value("ltpch").toDouble();
+                        spot_chg_pct = o.value("ltpchp").toDouble();
+                        continue;
+                    }
+
+                    BrokerQuote q;
+                    q.symbol = o.value("symbol").toString();
+                    q.ltp = o.value("ltp").toDouble();
+                    q.bid = o.value("bid").toDouble();
+                    q.ask = o.value("ask").toDouble();
+                    q.volume = o.value("volume").toDouble();
+                    q.change = o.value("ltpch").toDouble();
+                    q.change_pct = o.value("ltpchp").toDouble();
+                    q.oi = qint64(o.value("oi").toDouble());
+                    q.oi_change_pct = o.value("oichp").toDouble();
+
+                    auto greeks_obj = o.value("greeks").toObject();
+                    OptionGreeks greeks;
+                    greeks.delta = greeks_obj.value("delta").toDouble();
+                    greeks.gamma = greeks_obj.value("gamma").toDouble();
+                    greeks.theta = greeks_obj.value("theta").toDouble();
+                    greeks.vega = greeks_obj.value("vega").toDouble();
+                    greeks.valid = true;
+                    double iv = greeks_obj.value("iv").toDouble() / 100.0; // API returns %, we store decimal
+
+                    qint64 token = qint64(o.value("fyToken").toString().toLongLong());
+
+                    auto& pair = by_strike[strike];
+                    pair.row.strike = strike;
+                    if (opt_type == "CE") {
+                        pair.has_ce = true;
+                        pair.row.ce_quote = q;
+                        pair.row.ce_token = token;
+                        pair.row.ce_symbol = q.symbol;
+                        pair.row.ce_greeks = greeks;
+                        pair.row.ce_iv = iv;
+                    } else if (opt_type == "PE") {
+                        pair.has_pe = true;
+                        pair.row.pe_quote = q;
+                        pair.row.pe_token = token;
+                        pair.row.pe_symbol = q.symbol;
+                        pair.row.pe_greeks = greeks;
+                        pair.row.pe_iv = iv;
+                    }
                 }
-            }
 
-            OptionChain chain;
-            chain.broker_id = broker_id;
-            chain.underlying = underlying;
-            chain.expiry = expiry;
-            chain.spot = spot;
-            chain.spot_change = spot_chg;
-            chain.spot_change_pct = spot_chg_pct;
-            chain.kind = kIdx.contains(underlying) ? UnderlyingKind::Index : UnderlyingKind::Stock;
-            chain.timestamp_ms = QDateTime::currentMSecsSinceEpoch();
-            chain.rows.reserve(by_strike.size());
+                OptionChain chain;
+                chain.broker_id = broker_id;
+                chain.underlying = underlying;
+                chain.expiry = expiry;
+                chain.spot = spot;
+                chain.spot_change = spot_chg;
+                chain.spot_change_pct = spot_chg_pct;
+                chain.kind = kIdx.contains(underlying) ? UnderlyingKind::Index : UnderlyingKind::Stock;
+                chain.timestamp_ms = QDateTime::currentMSecsSinceEpoch();
+                chain.rows.reserve(by_strike.size());
 
-            for (auto it = by_strike.constBegin(); it != by_strike.constEnd(); ++it)
-                chain.rows.append(it->row);
+                for (auto it = by_strike.constBegin(); it != by_strike.constEnd(); ++it)
+                    chain.rows.append(it->row);
 
-            // options-chain-v3 omits lot size — backfill from the instrument
-            // master (all NFO legs of an underlying share one lot) so the chain,
-            // strategy builder, and right-click order path all have it.
-            int lot_size = 0;
-            for (const auto& in : InstrumentService::instance().find_options_for_underlying(
-                     broker_id, underlying, expiry, QStringLiteral("NFO"))) {
-                if (in.lot_size > 0) {
-                    lot_size = in.lot_size;
-                    break;
+                // options-chain-v3 omits lot size — backfill from the instrument
+                // master (all NFO legs of an underlying share one lot) so the chain,
+                // strategy builder, and right-click order path all have it.
+                int lot_size = 0;
+                for (const auto& in : InstrumentService::instance().find_options_for_underlying(
+                         broker_id, underlying, expiry, QStringLiteral("NFO"))) {
+                    if (in.lot_size > 0) {
+                        lot_size = in.lot_size;
+                        break;
+                    }
                 }
-            }
-            if (lot_size > 0)
+                if (lot_size > 0)
+                    for (auto& row : chain.rows)
+                        row.lot_size = lot_size;
+
+                chain.atm_strike = compute_atm(chain.rows, spot);
+                chain.pcr = compute_pcr(chain.rows, chain.total_ce_oi, chain.total_pe_oi);
+                chain.max_pain = compute_max_pain(chain.rows);
                 for (auto& row : chain.rows)
-                    row.lot_size = lot_size;
+                    row.is_atm = (std::abs(row.strike - chain.atm_strike) < 1e-6);
 
-            chain.atm_strike = compute_atm(chain.rows, spot);
-            chain.pcr = compute_pcr(chain.rows, chain.total_ce_oi, chain.total_pe_oi);
-            chain.max_pain = compute_max_pain(chain.rows);
-            for (auto& row : chain.rows)
-                row.is_atm = (std::abs(row.strike - chain.atm_strike) < 1e-6);
+                if (spot > 0)
+                    self->spot_cache_.insert(cache_key(broker_id, underlying), spot);
 
-            if (spot > 0)
-                self->spot_cache_.insert(cache_key(broker_id, underlying), spot);
+                auto& hub = fincept::datahub::DataHub::instance();
+                hub.publish(topic, QVariant::fromValue(chain));
+                hub.publish(kPcrPrefix + broker_id + ":" + underlying + ":" + expiry, QVariant::fromValue(chain.pcr));
+                hub.publish(kMaxPainPrefix + broker_id + ":" + underlying + ":" + expiry,
+                            QVariant::fromValue(chain.max_pain));
+                self->publish_per_leg_ticks(chain);
+                self->publish_atm_iv(chain);
+                self->last_chain_ = chain;
+                emit self->chain_published(chain);
 
-            auto& hub = fincept::datahub::DataHub::instance();
-            hub.publish(topic, QVariant::fromValue(chain));
-            hub.publish(kPcrPrefix + broker_id + ":" + underlying + ":" + expiry,
-                        QVariant::fromValue(chain.pcr));
-            hub.publish(kMaxPainPrefix + broker_id + ":" + underlying + ":" + expiry,
-                        QVariant::fromValue(chain.max_pain));
-            self->publish_per_leg_ticks(chain);
-            self->publish_atm_iv(chain);
-            self->last_chain_ = chain;
-            emit self->chain_published(chain);
+                // Hand off to the live WS feed (Fyers + market open + connected).
+                // While it stays fresh this REST path is suppressed in refresh().
+                self->maybe_start_ws_stream(chain, topic);
 
-            // Hand off to the live WS feed (Fyers + market open + connected).
-            // While it stays fresh this REST path is suppressed in refresh().
-            self->maybe_start_ws_stream(chain, topic);
-
-            LOG_INFO("OptionChain",
-                     QString("Fyers chain: %1 strikes, spot=%2, ATM=%3, PCR=%4, OI CE=%5 PE=%6")
-                         .arg(chain.rows.size())
-                         .arg(spot, 0, 'f', 2)
-                         .arg(chain.atm_strike, 0, 'f', 0)
-                         .arg(chain.pcr, 0, 'f', 3)
-                         .arg(chain.total_ce_oi, 0, 'f', 0)
-                         .arg(chain.total_pe_oi, 0, 'f', 0));
-        }, Qt::QueuedConnection);
+                LOG_INFO("OptionChain", QString("Fyers chain: %1 strikes, spot=%2, ATM=%3, PCR=%4, OI CE=%5 PE=%6")
+                                            .arg(chain.rows.size())
+                                            .arg(spot, 0, 'f', 2)
+                                            .arg(chain.atm_strike, 0, 'f', 0)
+                                            .arg(chain.pcr, 0, 'f', 3)
+                                            .arg(chain.total_ce_oi, 0, 'f', 0)
+                                            .arg(chain.total_pe_oi, 0, 'f', 0));
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -857,8 +851,7 @@ double OptionChainService::compute_atm(const QVector<OptionChainRow>& rows, doub
     return best_strike;
 }
 
-double OptionChainService::compute_pcr(const QVector<OptionChainRow>& rows, double& total_ce_oi,
-                                       double& total_pe_oi) {
+double OptionChainService::compute_pcr(const QVector<OptionChainRow>& rows, double& total_ce_oi, double& total_pe_oi) {
     total_ce_oi = 0;
     total_pe_oi = 0;
     for (const auto& r : rows) {
@@ -898,7 +891,7 @@ double OptionChainService::compute_t_years(const QString& expiry) {
     const QDate today = QDate::currentDate();
     const int days = today.daysTo(exp);
     if (days <= 0)
-        return 1.0 / 365.0;  // expiry day or past — clamp to one day
+        return 1.0 / 365.0; // expiry day or past — clamp to one day
     return double(days) / 365.0;
 }
 
@@ -934,7 +927,8 @@ void OptionChainService::pin_contracts(const QString& topic, const QStringList& 
         maybe_start_ws_stream(last_chain_, topic);
     } else {
         LOG_DEBUG("OptionChain", QString("pin_contracts: stored %1 pin(s) for %2 (applies at next WS refresh)")
-                                     .arg(symbols.size()).arg(topic));
+                                     .arg(symbols.size())
+                                     .arg(topic));
     }
 }
 
@@ -966,7 +960,7 @@ void OptionChainService::maybe_start_ws_stream(const OptionChain& chain, const Q
         }
     }
     if (account_id.isEmpty()) {
-        stop_ws_stream();  // not connected → REST fallback
+        stop_ws_stream(); // not connected → REST fallback
         return;
     }
 
@@ -975,14 +969,15 @@ void OptionChainService::maybe_start_ws_stream(const OptionChain& chain, const Q
     double best = std::numeric_limits<double>::max();
     for (int i = 0; i < chain.rows.size(); ++i) {
         const double d = std::abs(chain.rows[i].strike - chain.atm_strike);
-        if (d < best) { best = d; atm_idx = i; }
+        if (d < best) {
+            best = d;
+            atm_idx = i;
+        }
     }
     const int lo = std::max(0, atm_idx - kWsWindowStrikes);
     const int hi = std::min(int(chain.rows.size()) - 1, atm_idx + kWsWindowStrikes);
 
-    auto fyers_sym = [](const QString& s) {
-        return s.contains(QLatin1Char(':')) ? s : QStringLiteral("NSE:") + s;
-    };
+    auto fyers_sym = [](const QString& s) { return s.contains(QLatin1Char(':')) ? s : QStringLiteral("NSE:") + s; };
 
     // Key the routing map by (strike, side) — see opt_leg_key. The WS subscribe
     // still uses the broker symbol; only the tick→row match is format-agnostic.
@@ -1017,7 +1012,7 @@ void OptionChainService::maybe_start_ws_stream(const OptionChain& chain, const Q
     ws_sym_token_ = sym_token;
 
     auto& dsm = DataStreamManager::instance();
-    dsm.start_stream(account_id);  // idempotent: creates+starts or resume()s
+    dsm.start_stream(account_id); // idempotent: creates+starts or resume()s
     auto* stream = dsm.stream_for(account_id);
     if (!stream) {
         stop_ws_stream();
@@ -1028,15 +1023,14 @@ void OptionChainService::maybe_start_ws_stream(const OptionChain& chain, const Q
     // by ws_account_id_ + ws_sym_token_. Rebind to the (possibly new) stream.
     if (ws_quote_conn_)
         disconnect(ws_quote_conn_);
-    ws_quote_conn_ = connect(stream, &fincept::trading::AccountDataStream::quote_updated,
-                             this, &OptionChainService::on_ws_quote);
+    ws_quote_conn_ =
+        connect(stream, &fincept::trading::AccountDataStream::quote_updated, this, &OptionChainService::on_ws_quote);
 
     // Tear the feed down when the chain topic loses its last subscriber (the
     // Chain tab was hidden or switched to another expiry/underlying).
     if (!ws_idle_conn_) {
         QPointer<OptionChainService> self = this;
-        ws_idle_conn_ = connect(&fincept::datahub::DataHub::instance(),
-                                &fincept::datahub::DataHub::topic_idle, this,
+        ws_idle_conn_ = connect(&fincept::datahub::DataHub::instance(), &fincept::datahub::DataHub::topic_idle, this,
                                 [self](const QString& t) {
                                     if (self && t == self->ws_topic_)
                                         self->stop_ws_stream();
@@ -1069,7 +1063,9 @@ void OptionChainService::on_ws_quote(const QString& account_id, const QString& s
         if (t_now - s_last_unmatched_ms > 5'000) {
             s_last_unmatched_ms = t_now;
             LOG_DEBUG("OptionChain", QString("WS tick unmatched: %1 (strike=%2 %3) not in window")
-                                         .arg(symbol).arg(k_strike, 0, 'f', 0).arg(k_call ? "CE" : "PE"));
+                                         .arg(symbol)
+                                         .arg(k_strike, 0, 'f', 0)
+                                         .arg(k_call ? "CE" : "PE"));
         }
         return;
     }
@@ -1083,14 +1079,16 @@ void OptionChainService::on_ws_quote(const QString& account_id, const QString& s
     for (auto& row : last_chain_.rows) {
         if (row.ce_token == token) {
             q.oi_change_pct = row.ce_quote.oi_change_pct;
-            if (q.oi == 0) q.oi = row.ce_quote.oi;
+            if (q.oi == 0)
+                q.oi = row.ce_quote.oi;
             row.ce_quote = q;
             matched = true;
             break;
         }
         if (row.pe_token == token) {
             q.oi_change_pct = row.pe_quote.oi_change_pct;
-            if (q.oi == 0) q.oi = row.pe_quote.oi;
+            if (q.oi == 0)
+                q.oi = row.pe_quote.oi;
             row.pe_quote = q;
             matched = true;
             break;
@@ -1104,8 +1102,9 @@ void OptionChainService::on_ws_quote(const QString& account_id, const QString& s
     static qint64 s_last_ws_log_ms = 0;
     if (now - s_last_ws_log_ms > 5'000) {
         s_last_ws_log_ms = now;
-        LOG_INFO("OptionChain", QString("WS tick live: %1 ltp=%2 oi=%3 → token %4")
-                                    .arg(symbol).arg(q.ltp, 0, 'f', 2).arg(q.oi).arg(token));
+        LOG_INFO(
+            "OptionChain",
+            QString("WS tick live: %1 ltp=%2 oi=%3 → token %4").arg(symbol).arg(q.ltp, 0, 'f', 2).arg(q.oi).arg(token));
     }
     ws_last_tick_ms_ = now;
 
@@ -1140,8 +1139,14 @@ void OptionChainService::publish_atm_iv(const OptionChain& chain) {
     for (const auto& row : chain.rows) {
         if (!row.is_atm)
             continue;
-        if (row.ce_iv > 0) { atm_ce_iv = row.ce_iv; ++hits; }
-        if (row.pe_iv > 0) { atm_pe_iv = row.pe_iv; ++hits; }
+        if (row.ce_iv > 0) {
+            atm_ce_iv = row.ce_iv;
+            ++hits;
+        }
+        if (row.pe_iv > 0) {
+            atm_pe_iv = row.pe_iv;
+            ++hits;
+        }
         break;
     }
     if (hits == 0)
@@ -1161,17 +1166,15 @@ void OptionChainService::publish_atm_iv(const OptionChain& chain) {
         const QString today = QDate::currentDate().toString(Qt::ISODate);
         auto r = fincept::IvHistoryRepository::instance().upsert(chain.underlying, today, atm_iv);
         if (r.is_err()) {
-            LOG_DEBUG("OptionChain", QString("iv_history upsert failed: %1")
-                                          .arg(QString::fromStdString(r.error())));
+            LOG_DEBUG("OptionChain", QString("iv_history upsert failed: %1").arg(QString::fromStdString(r.error())));
         }
     }
 
-    LOG_DEBUG("OptionChain",
-              QString("Published ATM IV %1=%2 (CE=%3 PE=%4)")
-                  .arg(chain.underlying)
-                  .arg(atm_iv, 0, 'f', 4)
-                  .arg(atm_ce_iv, 0, 'f', 4)
-                  .arg(atm_pe_iv, 0, 'f', 4));
+    LOG_DEBUG("OptionChain", QString("Published ATM IV %1=%2 (CE=%3 PE=%4)")
+                                 .arg(chain.underlying)
+                                 .arg(atm_iv, 0, 'f', 4)
+                                 .arg(atm_ce_iv, 0, 'f', 4)
+                                 .arg(atm_pe_iv, 0, 'f', 4));
 }
 
 void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QString& topic) {
@@ -1191,7 +1194,7 @@ void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QStr
             return;
         const qint64 last = last_greeks_compute_ms_.value(token, 0);
         if (now_ms - last < kGreeksThrottleMs && (greeks_cache_.contains(token) || iv_cache_.contains(token)))
-            return;  // throttled — cached values will be applied below
+            return; // throttled — cached values will be applied below
         // Pick mid price when both bid/ask are present, else LTP. Skip when
         // we have no usable price — IV solver would just fail.
         double price = 0;

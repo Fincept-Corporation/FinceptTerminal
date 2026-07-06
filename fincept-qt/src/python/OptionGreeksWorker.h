@@ -56,7 +56,7 @@ class OptionGreeksWorker : public QObject {
     bool shutting_down_ = false;
     int restart_count_ = 0;
     static constexpr int kMaxRestarts = 5;
-    static constexpr int kReadyTimeoutMs = 20'000;  // py_vollib + scipy import
+    static constexpr int kReadyTimeoutMs = 20'000; // py_vollib + scipy import
 
     struct Pending {
         QString action;

@@ -76,8 +76,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // match_exchanges are the broker exchanges that can trade the symbol's market
     // (e.g. {"NSE"} or the US venues); the order routes to a usable account whose
     // broker serves one of them, so multi-broker setups pick the right account.
-    void open_external_order_ticket(const QString& symbol, const QString& exchange,
-                                    const QStringList& match_exchanges, bool is_buy, double ref_price);
+    void open_external_order_ticket(const QString& symbol, const QString& exchange, const QStringList& match_exchanges,
+                                    bool is_buy, double ref_price);
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -98,8 +98,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // broadcast the same order to every selected account on a worker thread.
     void on_multi_broker_submit(const trading::UnifiedOrder& order, const QStringList& account_ids);
     void on_cancel_order(const QString& order_id);
-    void on_cancel_all_orders();                                          // CANCEL ALL ORDERS button
-    void on_close_all_positions();                                        // SQUARE OFF ALL button (positions)
+    void on_cancel_all_orders();   // CANCEL ALL ORDERS button
+    void on_close_all_positions(); // SQUARE OFF ALL button (positions)
     // SQUARE OFF ALL button on the Holdings tab — market-sells every holding
     // (CNC/delivery). Acts ONLY on holdings; positions are untouched.
     void on_square_off_all_holdings(const QVector<trading::BrokerHolding>& holdings);
@@ -120,8 +120,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // open an order ticket. `qty` pre-fills the ticket (held qty on a reduce/exit).
     void on_trade_symbol_requested(const QString& symbol, const QString& product, bool is_buy, double qty);
     // EXIT clicked on the chart's position card → confirm + square off the symbol.
-    void on_chart_exit_position(const QString& symbol, const QString& exchange,
-                                const QString& product_type, const QString& side, double qty);
+    void on_chart_exit_position(const QString& symbol, const QString& exchange, const QString& product_type,
+                                const QString& side, double qty);
 
     // Named-watchlist management (backed by WatchlistRepository, global lists)
     void on_watchlist_selected(const QString& id);
@@ -140,12 +140,9 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
 
     // DataStreamManager signal handlers (on-demand / one-shot — kept as legacy signals)
     void on_stream_candles_fetched(const QString& account_id, const QVector<trading::BrokerCandle>& candles);
-    void on_stream_orderbook_fetched(const QString& account_id,
-                                     const QVector<QPair<double, double>>& bids,
-                                     const QVector<QPair<double, double>>& asks,
-                                     double spread, double spread_pct,
-                                     const QVector<int>& bid_orders,
-                                     const QVector<int>& ask_orders);
+    void on_stream_orderbook_fetched(const QString& account_id, const QVector<QPair<double, double>>& bids,
+                                     const QVector<QPair<double, double>>& asks, double spread, double spread_pct,
+                                     const QVector<int>& bid_orders, const QVector<int>& ask_orders);
     void on_stream_time_sales_fetched(const QString& account_id, const QVector<trading::BrokerTrade>& trades);
     void on_stream_latest_trade_fetched(const QString& account_id, const trading::BrokerTrade& trade);
     void on_stream_calendar_fetched(const QString& account_id, const QVector<trading::MarketCalendarDay>& days);
@@ -201,8 +198,7 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // topics. This router reconciles the two by (underlying, strike, side) and
     // patches the position/holding row + paper P&L. Bound to the focused stream
     // (opt_quote_conn_) only while an option position is actually held.
-    void route_option_quote(const QString& account_id, const QString& symbol,
-                            const trading::BrokerQuote& quote);
+    void route_option_quote(const QString& account_id, const QString& symbol, const trading::BrokerQuote& quote);
 
     // Named-watchlist controller (WatchlistRepository). load_watchlists() refreshes
     // the combo + seeds a default from the broker's default_watchlist on first run;
@@ -228,8 +224,8 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void ensure_instruments_loaded(const QString& account_id);
 
     // ── Command bar widgets ──
-    QPushButton* account_btn_ = nullptr;  // shows focused account name
-    QMenu* account_menu_ = nullptr;       // lists all active accounts
+    QPushButton* account_btn_ = nullptr; // shows focused account name
+    QMenu* account_menu_ = nullptr;      // lists all active accounts
     QLineEdit* symbol_input_ = nullptr;
     QCompleter* symbol_completer_ = nullptr;             // dynamic instrument-search popup
     QStringListModel* symbol_completer_model_ = nullptr; // suggestions, refreshed per keystroke
@@ -243,7 +239,7 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     QPushButton* accounts_btn_ = nullptr; // opens AccountManagementDialog
     QLabel* exchange_label_ = nullptr;
     QLabel* clock_label_ = nullptr;
-    QLabel* conn_label_ = nullptr;        // aggregate connection status
+    QLabel* conn_label_ = nullptr; // aggregate connection status
 
     // ── Sub-widgets ──
     equity::EquityTickerBar* ticker_bar_ = nullptr;
@@ -265,14 +261,14 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
-    QSplitter* main_splitter_ = nullptr;              // kept to toggle the feed column width
+    QSplitter* main_splitter_ = nullptr; // kept to toggle the feed column width
 
     // ── Timers (only UI-local timers remain; data timers are in AccountDataStream) ──
     QTimer* clock_timer_ = nullptr;
     QTimer* market_clock_timer_ = nullptr;
 
     // ── Multi-account state ──
-    QString focused_account_id_;          // the account targeted by order entry + chart
+    QString focused_account_id_; // the account targeted by order entry + chart
     QString selected_symbol_ = "RELIANCE";
     QString selected_exchange_ = "NSE";
 
@@ -304,10 +300,10 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // Paper order book day shown in the Orders tab (default today; date selector
     // moves it to view a past IST session). Open positions/holdings stay current.
     QDate orders_view_day_ = QDate::currentDate();
-    QStringList position_symbols_; // symbols with open positions (transient, for live pricing)
-    QStringList holding_symbols_;  // symbols in holdings (transient, for live pricing)
+    QStringList position_symbols_;                    // symbols with open positions (transient, for live pricing)
+    QStringList holding_symbols_;                     // symbols in holdings (transient, for live pricing)
     QVector<trading::BrokerPosition> live_positions_; // cached live positions for focused account
-    double current_price_ = 0.0;  // last known LTP for selected symbol
+    double current_price_ = 0.0;                      // last known LTP for selected symbol
 
     bool initialized_ = false;
     bool hub_active_ = false;

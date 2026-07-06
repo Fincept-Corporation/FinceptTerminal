@@ -22,7 +22,9 @@ class QGraphicsEllipseItem;
 class QGraphicsSimpleTextItem;
 class QLabel;
 
-namespace fincept::ui { class IndicatorPicker; }
+namespace fincept::ui {
+class IndicatorPicker;
+}
 
 namespace fincept::screens::crypto {
 

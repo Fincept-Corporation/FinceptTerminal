@@ -9,8 +9,8 @@ DataMappingTestClient& DataMappingTestClient::instance() {
     return s;
 }
 
-void DataMappingTestClient::test_api(Method method, const QString& url, const QJsonObject& body,
-                                     const QObject* context, Callback callback) {
+void DataMappingTestClient::test_api(Method method, const QString& url, const QJsonObject& body, const QObject* context,
+                                     Callback callback) {
     auto& http = HttpClient::instance();
     switch (method) {
         case Method::Get:

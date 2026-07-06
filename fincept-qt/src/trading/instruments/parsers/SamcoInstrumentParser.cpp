@@ -98,9 +98,12 @@ QVector<Instrument> parse_samco(const QByteArray& payload) {
         const char* exch;
     };
     static const Idx kIdx[] = {
-        {"NIFTY", "NIFTY 50", "NSE"},      {"BANKNIFTY", "NIFTY BANK", "NSE"},
-        {"FINNIFTY", "NIFTY FIN SERVICE", "NSE"}, {"MIDCPNIFTY", "NIFTY MID SELECT", "NSE"},
-        {"SENSEX", "SENSEX", "BSE"},       {"BANKEX", "BANKEX", "BSE"},
+        {"NIFTY", "NIFTY 50", "NSE"},
+        {"BANKNIFTY", "NIFTY BANK", "NSE"},
+        {"FINNIFTY", "NIFTY FIN SERVICE", "NSE"},
+        {"MIDCPNIFTY", "NIFTY MID SELECT", "NSE"},
+        {"SENSEX", "SENSEX", "BSE"},
+        {"BANKEX", "BANKEX", "BSE"},
     };
     for (const auto& ix : kIdx) {
         Instrument inst;

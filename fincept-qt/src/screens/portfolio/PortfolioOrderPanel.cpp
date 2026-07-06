@@ -194,13 +194,20 @@ void PortfolioOrderPanel::changeEvent(QEvent* event) {
 }
 
 void PortfolioOrderPanel::retranslateUi() {
-    if (title_label_)  title_label_->setText(tr("ORDER ENTRY"));
-    if (buy_tab_)      buy_tab_->setText(tr("BUY"));
-    if (sell_tab_)     sell_tab_->setText(tr("SELL"));
-    if (price_prefix_) price_prefix_->setText(tr("PRICE"));
-    if (qty_prefix_)   qty_prefix_->setText(tr("QTY HELD"));
-    if (mv_prefix_)    mv_prefix_->setText(tr("MKT VAL"));
-    if (note_label_)   note_label_->setText(tr("Orders are recorded\nin your portfolio"));
+    if (title_label_)
+        title_label_->setText(tr("ORDER ENTRY"));
+    if (buy_tab_)
+        buy_tab_->setText(tr("BUY"));
+    if (sell_tab_)
+        sell_tab_->setText(tr("SELL"));
+    if (price_prefix_)
+        price_prefix_->setText(tr("PRICE"));
+    if (qty_prefix_)
+        qty_prefix_->setText(tr("QTY HELD"));
+    if (mv_prefix_)
+        mv_prefix_->setText(tr("MKT VAL"));
+    if (note_label_)
+        note_label_->setText(tr("Orders are recorded\nin your portfolio"));
     if (submit_btn_)
         submit_btn_->setText(side_ == "BUY" ? tr("OPEN BUY ORDER") : tr("OPEN SELL ORDER"));
     // Re-render the formatted value cells (currency-prefixed MKT VAL etc.).

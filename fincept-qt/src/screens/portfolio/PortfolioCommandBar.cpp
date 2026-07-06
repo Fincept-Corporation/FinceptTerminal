@@ -145,11 +145,11 @@ void PortfolioCommandBar::build_portfolio_selector() {
     search_edit_ = new QLineEdit;
     search_edit_->setPlaceholderText(tr("Search portfolios..."));
     search_edit_->setFixedHeight(26);
-    search_edit_->setStyleSheet(QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
-                                        "  padding:0 8px; font-size:11px; }"
-                                        "QLineEdit:focus { border-color:%4; }")
-                                    .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                                         ui::colors::AMBER()));
+    search_edit_->setStyleSheet(
+        QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
+                "  padding:0 8px; font-size:11px; }"
+                "QLineEdit:focus { border-color:%4; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     dd_layout->addWidget(search_edit_);
 
     portfolio_list_ = new QListWidget;
@@ -233,20 +233,20 @@ void PortfolioCommandBar::build_overflow_menu() {
                                           "QMenu::item { padding:6px 16px; }"
                                           "QMenu::item:selected { background:%4; color:%5; }"
                                           "QMenu::separator { height:1px; background:%3; margin:4px 8px; }")
-                                      .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
-                                           ui::colors::AMBER_DIM(), ui::colors::AMBER()));
+                                      .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(),
+                                           ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER()));
 
-    export_csv_action_  = overflow_menu_->addAction(tr("Export CSV"));
+    export_csv_action_ = overflow_menu_->addAction(tr("Export CSV"));
     export_json_action_ = overflow_menu_->addAction(tr("Export JSON"));
-    import_action_      = overflow_menu_->addAction(tr("Import JSON…"));
+    import_action_ = overflow_menu_->addAction(tr("Import JSON…"));
     overflow_menu_->addSeparator();
     ffn_action_ = overflow_menu_->addAction(tr("FFN Analysis"));
     ffn_action_->setCheckable(true);
 
-    connect(export_csv_action_,  &QAction::triggered, this, &PortfolioCommandBar::export_csv_requested);
+    connect(export_csv_action_, &QAction::triggered, this, &PortfolioCommandBar::export_csv_requested);
     connect(export_json_action_, &QAction::triggered, this, &PortfolioCommandBar::export_json_requested);
-    connect(import_action_,      &QAction::triggered, this, &PortfolioCommandBar::import_requested);
-    connect(ffn_action_,         &QAction::triggered, this, &PortfolioCommandBar::ffn_toggled);
+    connect(import_action_, &QAction::triggered, this, &PortfolioCommandBar::import_requested);
+    connect(ffn_action_, &QAction::triggered, this, &PortfolioCommandBar::ffn_toggled);
 
     overflow_menu_->addSeparator();
     backtest_action_ = overflow_menu_->addAction(tr("Backtest Portfolio"));
@@ -368,7 +368,8 @@ void PortfolioCommandBar::apply_row1_styles() {
                 "  padding:0 6px; font-size:11px; font-weight:600; min-width:42px; }"
                 "QComboBox::drop-down { border:none; width:14px; }"
                 "QComboBox QAbstractItemView { background:%1; color:%2; selection-background-color:%4; }")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM()));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                 ui::colors::AMBER_DIM()));
 
     overflow_btn_->setStyleSheet(
         QString("QToolButton#pfOverflowBtn { background:transparent; color:%1; border:1px solid %2;"
@@ -513,24 +514,39 @@ void PortfolioCommandBar::retranslateUi() {
         selector_btn_->setText(tr("NO PORTFOLIOS — CREATE ONE  ▾"));
     }
 
-    if (search_edit_)   search_edit_->setPlaceholderText(tr("Search portfolios..."));
-    if (create_btn_)    create_btn_->setText(tr("+ CREATE NEW"));
-    if (delete_btn_)    delete_btn_->setText(tr("DELETE"));
-    if (refresh_btn_)   refresh_btn_->setToolTip(tr("Refresh portfolio data"));
-    if (interval_cb_)   interval_cb_->setToolTip(tr("Auto-refresh interval"));
-    if (overflow_btn_)  overflow_btn_->setToolTip(tr("More actions"));
+    if (search_edit_)
+        search_edit_->setPlaceholderText(tr("Search portfolios..."));
+    if (create_btn_)
+        create_btn_->setText(tr("+ CREATE NEW"));
+    if (delete_btn_)
+        delete_btn_->setText(tr("DELETE"));
+    if (refresh_btn_)
+        refresh_btn_->setToolTip(tr("Refresh portfolio data"));
+    if (interval_cb_)
+        interval_cb_->setToolTip(tr("Auto-refresh interval"));
+    if (overflow_btn_)
+        overflow_btn_->setToolTip(tr("More actions"));
 
-    if (export_csv_action_)  export_csv_action_->setText(tr("Export CSV"));
-    if (export_json_action_) export_json_action_->setText(tr("Export JSON"));
-    if (import_action_)      import_action_->setText(tr("Import JSON…"));
-    if (ffn_action_)         ffn_action_->setText(tr("FFN Analysis"));
+    if (export_csv_action_)
+        export_csv_action_->setText(tr("Export CSV"));
+    if (export_json_action_)
+        export_json_action_->setText(tr("Export JSON"));
+    if (import_action_)
+        import_action_->setText(tr("Import JSON…"));
+    if (ffn_action_)
+        ffn_action_->setText(tr("FFN Analysis"));
 
     // Row 2 trade cluster
-    if (buy_btn_)   buy_btn_->setText(tr("BUY"));
-    if (sell_btn_)  sell_btn_->setText(tr("SELL"));
-    if (div_btn_)   div_btn_->setText(tr("DIV"));
-    if (ai_btn_)    ai_btn_->setText(tr("AI"));
-    if (agent_btn_) agent_btn_->setText(tr("AGENT"));
+    if (buy_btn_)
+        buy_btn_->setText(tr("BUY"));
+    if (sell_btn_)
+        sell_btn_->setText(tr("SELL"));
+    if (div_btn_)
+        div_btn_->setText(tr("DIV"));
+    if (ai_btn_)
+        ai_btn_->setText(tr("AI"));
+    if (agent_btn_)
+        agent_btn_->setText(tr("AGENT"));
 
     // Row 2 detail tabs — populated in kDetailButtons order, so iterate by index.
     constexpr int kDetailCount = static_cast<int>(sizeof(kDetailButtons) / sizeof(kDetailButtons[0]));

@@ -18,10 +18,10 @@ Result<void> apply_v037(QSqlDatabase& db) {
 
     if (!q.exec("CREATE TABLE IF NOT EXISTS sync_outbox ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                "entity TEXT NOT NULL, "       // 'watchlist','note','portfolio',...
-                "local_id TEXT NOT NULL, "     // stringified local PK (uuid or int)
-                "op TEXT NOT NULL, "           // 'create' | 'update' | 'delete' | domain op
-                "payload TEXT, "               // optional op hint (e.g. stock symbol)
+                "entity TEXT NOT NULL, "   // 'watchlist','note','portfolio',...
+                "local_id TEXT NOT NULL, " // stringified local PK (uuid or int)
+                "op TEXT NOT NULL, "       // 'create' | 'update' | 'delete' | domain op
+                "payload TEXT, "           // optional op hint (e.g. stock symbol)
                 "created_at TEXT NOT NULL DEFAULT (datetime('now')), "
                 "attempts INTEGER NOT NULL DEFAULT 0, "
                 "last_error TEXT)"))
@@ -33,8 +33,8 @@ Result<void> apply_v037(QSqlDatabase& db) {
     if (!q.exec("CREATE TABLE IF NOT EXISTS sync_map ("
                 "entity TEXT NOT NULL, "
                 "local_id TEXT NOT NULL, "
-                "remote_id TEXT NOT NULL, "    // server public_id (wl_, nte_, pfl_, ...)
-                "remote_updated_at TEXT, "     // for last-write-wins
+                "remote_id TEXT NOT NULL, " // server public_id (wl_, nte_, pfl_, ...)
+                "remote_updated_at TEXT, "  // for last-write-wins
                 "PRIMARY KEY (entity, local_id))"))
         return Result<void>::err(q.lastError().text().toStdString());
 

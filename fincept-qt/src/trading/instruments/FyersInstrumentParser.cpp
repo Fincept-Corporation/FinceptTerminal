@@ -1,8 +1,7 @@
 #include "trading/instruments/FyersInstrumentParser.h"
 
-#include "trading/instruments/InstrumentNormalize.h"
-
 #include "core/logging/Logger.h"
+#include "trading/instruments/InstrumentNormalize.h"
 
 #include <QDateTime>
 #include <QJsonDocument>
@@ -11,25 +10,35 @@
 namespace fincept::trading {
 
 static InstrumentType inst_type_from_fyers(int exInstType, const QString& optType) {
-    if (optType == "CE") return InstrumentType::CE;
-    if (optType == "PE") return InstrumentType::PE;
-    if (exInstType == 11) return InstrumentType::FUT;
-    if (exInstType == 0)  return InstrumentType::EQ;
+    if (optType == "CE")
+        return InstrumentType::CE;
+    if (optType == "PE")
+        return InstrumentType::PE;
+    if (exInstType == 11)
+        return InstrumentType::FUT;
+    if (exInstType == 0)
+        return InstrumentType::EQ;
     return InstrumentType::UNKNOWN;
 }
 
 static QString normalise_exchange(int segment, const QString& exchangeName) {
     // segment: 10=CM, 11=FO, 12=CD, 20=BSE_CM, 21=BSE_FO, 30=MCX_COM
-    if (segment == 11) return QStringLiteral("NFO");
-    if (segment == 12) return QStringLiteral("CDS");
-    if (segment == 21) return QStringLiteral("BFO");
-    if (segment == 30) return QStringLiteral("MCX");
-    if (exchangeName == "BSE") return QStringLiteral("BSE");
+    if (segment == 11)
+        return QStringLiteral("NFO");
+    if (segment == 12)
+        return QStringLiteral("CDS");
+    if (segment == 21)
+        return QStringLiteral("BFO");
+    if (segment == 30)
+        return QStringLiteral("MCX");
+    if (exchangeName == "BSE")
+        return QStringLiteral("BSE");
     return QStringLiteral("NSE");
 }
 
 static QString format_expiry(qint64 unix_ts) {
-    if (unix_ts <= 0) return {};
+    if (unix_ts <= 0)
+        return {};
     // IST = UTC+5:30. Offset directly instead of QTimeZone("Asia/Kolkata")
     // which can silently fail on Windows when the IANA tz database is missing.
     constexpr int kIstOffsetSecs = 5 * 3600 + 30 * 60;
@@ -50,7 +59,8 @@ QVector<Instrument> FyersInstrumentParser::parse(const QByteArray& json_data) {
     result.reserve(root.size());
 
     for (auto it = root.begin(); it != root.end(); ++it) {
-        if (!it.value().isObject()) continue;
+        if (!it.value().isObject())
+            continue;
         QJsonObject entry = it.value().toObject();
 
         Instrument inst;
@@ -87,13 +97,11 @@ QVector<Instrument> FyersInstrumentParser::parse(const QByteArray& json_data) {
         if (expiryTs > 0)
             inst.expiry = format_expiry(expiryTs);
 
-        if (strike > 0 && (inst.instrument_type == InstrumentType::CE ||
-                           inst.instrument_type == InstrumentType::PE))
+        if (strike > 0 && (inst.instrument_type == InstrumentType::CE || inst.instrument_type == InstrumentType::PE))
             inst.strike = strike;
 
         // Build normalised symbol
-        if (inst.instrument_type == InstrumentType::EQ ||
-            inst.instrument_type == InstrumentType::UNKNOWN) {
+        if (inst.instrument_type == InstrumentType::EQ || inst.instrument_type == InstrumentType::UNKNOWN) {
             inst.symbol = exSymbol;
         } else if (inst.instrument_type == InstrumentType::FUT) {
             // NIFTY + 26MAY26 + FUT → NIFTY26MAY26FUT
@@ -104,8 +112,8 @@ QVector<Instrument> FyersInstrumentParser::parse(const QByteArray& json_data) {
             // CE/PE: NIFTY + 26MAY26 + 24000 + CE
             QString exp_compact = inst.expiry;
             exp_compact.remove('-');
-            inst.symbol = inst.name + exp_compact + norm::format_strike(inst.strike) +
-                          instrument_type_str(inst.instrument_type);
+            inst.symbol =
+                inst.name + exp_compact + norm::format_strike(inst.strike) + instrument_type_str(inst.instrument_type);
         }
 
         result.append(std::move(inst));
@@ -115,11 +123,14 @@ QVector<Instrument> FyersInstrumentParser::parse(const QByteArray& json_data) {
     for (const auto& i : result) {
         if (i.exchange == "NFO") {
             ++nfo_count;
-            if (!i.expiry.isEmpty()) ++nfo_with_expiry;
+            if (!i.expiry.isEmpty())
+                ++nfo_with_expiry;
         }
     }
     LOG_INFO("FyersParser", QString("Parsed %1 instruments (NFO=%2, with_expiry=%3)")
-                                .arg(result.size()).arg(nfo_count).arg(nfo_with_expiry));
+                                .arg(result.size())
+                                .arg(nfo_count)
+                                .arg(nfo_with_expiry));
     return result;
 }
 

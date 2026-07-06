@@ -66,8 +66,7 @@ class EquityResearchService : public QObject {
 
     // Candle source: cache → region-matched connected broker → yfinance
     // fallback. done(ok, hist_json) is invoked on the main thread.
-    void ensure_candles(const QString& symbol, const QString& period,
-                        std::function<void(bool, const QString&)> done);
+    void ensure_candles(const QString& symbol, const QString& period, std::function<void(bool, const QString&)> done);
 
     // yfinance news path — the fallback fetch_news() uses when Google News
     // (fetch_company_news.py) is unavailable or returns no articles.

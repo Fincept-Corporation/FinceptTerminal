@@ -36,9 +36,15 @@ HyperliquidVenue::HyperliquidVenue(QObject* parent) : QObject(parent) {
 
 HyperliquidVenue::~HyperliquidVenue() = default;
 
-void HyperliquidVenue::set_testnet(bool testnet) { client_->set_testnet(testnet); }
-void HyperliquidVenue::set_user_address(const QString& addr) { user_address_ = addr; }
-void HyperliquidVenue::set_competition_id(const QString& comp_id) { competition_id_ = comp_id; }
+void HyperliquidVenue::set_testnet(bool testnet) {
+    client_->set_testnet(testnet);
+}
+void HyperliquidVenue::set_user_address(const QString& addr) {
+    user_address_ = addr;
+}
+void HyperliquidVenue::set_competition_id(const QString& comp_id) {
+    competition_id_ = comp_id;
+}
 
 void HyperliquidVenue::connect() {
     state_ = ConnectionState::Connecting;
@@ -56,10 +62,18 @@ void HyperliquidVenue::connect() {
 
 void HyperliquidVenue::on_ws_state_changed(int state) {
     switch (static_cast<QAbstractSocket::SocketState>(state)) {
-    case QAbstractSocket::ConnectedState:    state_ = ConnectionState::Connected; break;
-    case QAbstractSocket::ConnectingState:   state_ = ConnectionState::Connecting; break;
-    case QAbstractSocket::UnconnectedState:  state_ = ConnectionState::Disconnected; break;
-    default:                                 state_ = ConnectionState::Degraded; break;
+        case QAbstractSocket::ConnectedState:
+            state_ = ConnectionState::Connected;
+            break;
+        case QAbstractSocket::ConnectingState:
+            state_ = ConnectionState::Connecting;
+            break;
+        case QAbstractSocket::UnconnectedState:
+            state_ = ConnectionState::Disconnected;
+            break;
+        default:
+            state_ = ConnectionState::Degraded;
+            break;
     }
 }
 
@@ -73,7 +87,8 @@ void HyperliquidVenue::on_ws_message(QJsonObject msg) {
         const double mid = ctx.value(QStringLiteral("midPx")).toString().toDouble();
         if (!coin.isEmpty() && mid > 0.0) {
             marks_.insert(coin, mid);
-            if (mark_update_cb_) mark_update_cb_(coin, mid, QDateTime::currentMSecsSinceEpoch());
+            if (mark_update_cb_)
+                mark_update_cb_(coin, mid, QDateTime::currentMSecsSinceEpoch());
         }
     } else if (channel == QLatin1String("userEvents")) {
         // Dispatch fills / liquidations off `data` here once we have a user
@@ -82,16 +97,17 @@ void HyperliquidVenue::on_ws_message(QJsonObject msg) {
 }
 
 void HyperliquidVenue::reconcile_tick() {
-    if (user_address_.isEmpty() || competition_id_.isEmpty()) return;
+    if (user_address_.isEmpty() || competition_id_.isEmpty())
+        return;
     QJsonObject body;
     body[QStringLiteral("type")] = QStringLiteral("clearinghouseState");
     body[QStringLiteral("user")] = user_address_;
     QPointer<HyperliquidVenue> self(this);
     client_->info(body, [self](Result<QJsonDocument> r) {
-        if (!self) return;
+        if (!self)
+            return;
         if (r.is_err()) {
-            LOG_WARN("Hyperliquid", QString("reconcile failed: %1")
-                                        .arg(QString::fromStdString(r.error())));
+            LOG_WARN("Hyperliquid", QString("reconcile failed: %1").arg(QString::fromStdString(r.error())));
             return;
         }
         const QJsonObject doc = r.value().object();
@@ -103,40 +119,41 @@ void HyperliquidVenue::reconcile_tick() {
             const auto pos = v.toObject().value(QStringLiteral("position")).toObject();
             const QString coin = pos.value(QStringLiteral("coin")).toString();
             const double szi = pos.value(QStringLiteral("szi")).toString().toDouble();
-            if (!coin.isEmpty()) remote_qty.insert(coin, szi);
+            if (!coin.isEmpty())
+                remote_qty.insert(coin, szi);
         }
 
         // Local-vs-remote drift comparison was removed along with the legacy
         // AlphaArenaRepo (its aa_* tables were dropped in migration v050).
         // The new arena ledger lives in fincept::arena::ArenaStore — re-wire
         // the position_drift signal against it when the live order path lands.
-        LOG_DEBUG("Hyperliquid",
-                  QString("reconcile: %1 remote position(s)").arg(remote_qty.size()));
+        LOG_DEBUG("Hyperliquid", QString("reconcile: %1 remote position(s)").arg(remote_qty.size()));
     });
 }
 
-void HyperliquidVenue::place_order(const OrderRequest& req,
-                                    std::function<void(OrderAck)> ack_cb) {
+void HyperliquidVenue::place_order(const OrderRequest& req, std::function<void(OrderAck)> ack_cb) {
     if (!HyperliquidSigner::is_wired()) {
         OrderAck a;
         a.status = QStringLiteral("rejected");
         a.error = QStringLiteral("hl_signer_not_wired");
-        if (ack_cb) ack_cb(a);
+        if (ack_cb)
+            ack_cb(a);
         return;
     }
 
     // Action body — Hyperliquid `order` action shape.
     QJsonObject order;
-    order[QStringLiteral("a")] = 0;                                // asset id; populated from meta cache (TBD)
+    order[QStringLiteral("a")] = 0; // asset id; populated from meta cache (TBD)
     order[QStringLiteral("b")] = (req.side == QLatin1String("buy"));
-    order[QStringLiteral("p")] = QStringLiteral("0");              // 0 means market for IOC
+    order[QStringLiteral("p")] = QStringLiteral("0"); // 0 means market for IOC
     order[QStringLiteral("s")] = QString::number(req.qty, 'f', 8);
     order[QStringLiteral("r")] = req.reduce_only;
     QJsonObject t;
     t[QStringLiteral("limit")] = QJsonObject{{"tif", "Ioc"}};
     order[QStringLiteral("t")] = t;
 
-    QJsonArray orders; orders.append(order);
+    QJsonArray orders;
+    orders.append(order);
 
     QJsonObject action;
     action[QStringLiteral("type")] = QStringLiteral("order");
@@ -150,7 +167,8 @@ void HyperliquidVenue::place_order(const OrderRequest& req,
     OrderAck a;
     a.status = QStringLiteral("rejected");
     a.error = QStringLiteral("hl_live_path_not_yet_wired");
-    if (ack_cb) ack_cb(a);
+    if (ack_cb)
+        ack_cb(a);
 }
 
 void HyperliquidVenue::cancel_order(const QString& venue_order_id) {

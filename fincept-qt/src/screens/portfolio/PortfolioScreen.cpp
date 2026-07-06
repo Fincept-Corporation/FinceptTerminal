@@ -10,13 +10,13 @@
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
-#include "screens/portfolio/PortfolioInsightsPanel.h"
 #include "screens/portfolio/PortfolioBlotter.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
 #include "screens/portfolio/PortfolioDialogs.h"
 #include "screens/portfolio/PortfolioFFNView.h"
 #include "screens/portfolio/PortfolioHeatmap.h"
+#include "screens/portfolio/PortfolioInsightsPanel.h"
 #include "screens/portfolio/PortfolioOrderPanel.h"
 #include "screens/portfolio/PortfolioPanelHeader.h"
 #include "screens/portfolio/PortfolioPerfChart.h"
@@ -24,8 +24,8 @@
 #include "screens/portfolio/PortfolioStatsRibbon.h"
 #include "screens/portfolio/PortfolioStatusBar.h"
 #include "screens/portfolio/PortfolioTxnPanel.h"
-#include "services/file_manager/FileManagerService.h"
 #include "services/cloud/CloudSyncEngine.h"
+#include "services/file_manager/FileManagerService.h"
 #include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
@@ -45,7 +45,6 @@
 #include <QVBoxLayout>
 
 #include <memory>
-
 
 namespace fincept::screens {
 
@@ -100,8 +99,8 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
                 // currency-normalisation are correct.
                 if (!perf_chart_ || !summary_loaded_)
                     return;
-                const QString want = services::PortfolioService::default_benchmark_for_currency(
-                    current_summary_.portfolio.currency);
+                const QString want =
+                    services::PortfolioService::default_benchmark_for_currency(current_summary_.portfolio.currency);
                 if (symbol != want)
                     return; // ignore the secondary SPY-for-Beta fetch
                 perf_chart_->set_benchmark_history(symbol, dates, closes);
@@ -113,13 +112,12 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     });
     // After yfinance backfill lands, refresh snapshots and metrics so Beta/MDD
     // populate without requiring a manual refresh.
-    connect(&svc, &services::PortfolioService::history_backfilled, this,
-            [this](QString portfolio_id, int point_count) {
-                if (point_count <= 0 || !summary_loaded_ || portfolio_id != selected_id_)
-                    return;
-                services::PortfolioService::instance().load_snapshots(portfolio_id);
-                services::PortfolioService::instance().compute_metrics(current_summary_);
-            });
+    connect(&svc, &services::PortfolioService::history_backfilled, this, [this](QString portfolio_id, int point_count) {
+        if (point_count <= 0 || !summary_loaded_ || portfolio_id != selected_id_)
+            return;
+        services::PortfolioService::instance().load_snapshots(portfolio_id);
+        services::PortfolioService::instance().compute_metrics(current_summary_);
+    });
 
     // Restore persisted refresh interval (P17)
     {
@@ -146,7 +144,6 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
             [this](const ui::ThemeTokens&) { refresh_theme(); });
 }
 
-
 void PortfolioScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refresh_timer_->start();
@@ -164,7 +161,6 @@ void PortfolioScreen::hideEvent(QHideEvent* event) {
 }
 
 // ── Slots ────────────────────────────────────────────────────────────────────
-
 
 void PortfolioScreen::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
@@ -224,7 +220,6 @@ void PortfolioScreen::refresh_theme() {
         txn_panel_->refresh_theme();
 }
 
-
 void PortfolioScreen::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     reposition_order_panel();
@@ -252,10 +247,10 @@ const portfolio::HoldingWithQuote* PortfolioScreen::find_holding(const QString& 
     return nullptr;
 }
 
-
 QVariantMap PortfolioScreen::save_state() const {
     QVariantMap state{{"portfolio_id", selected_id_}, {"symbol", selected_symbol_}};
-    if (positions_filter_edit_) state["filter"] = positions_filter_edit_->text();
+    if (positions_filter_edit_)
+        state["filter"] = positions_filter_edit_->text();
     return state;
 }
 

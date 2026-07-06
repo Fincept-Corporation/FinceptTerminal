@@ -5,6 +5,7 @@
 #include <QQueue>
 #include <QString>
 #include <QTimer>
+
 #include <functional>
 
 namespace fincept {
@@ -25,8 +26,7 @@ class PanelMaterialiser : public QObject {
     /// are silently dropped via `cancel_for(owner)`. Without an owner,
     /// items remain in the queue indefinitely (or until they fire).
     /// Pass `nullptr` for fire-and-forget semantics.
-    void enqueue(const QString& id, std::function<void()> work, int priority = 1,
-                 QObject* owner = nullptr);
+    void enqueue(const QString& id, std::function<void()> work, int priority = 1, QObject* owner = nullptr);
 
     /// Drop every queued item whose `owner` matches. Called from
     /// WindowFrame's destructor so layouts that close mid-stage don't

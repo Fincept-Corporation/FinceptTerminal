@@ -16,10 +16,9 @@ namespace fincept::algo {
 
 class DeploymentRunner : public QObject {
     Q_OBJECT
-public:
+  public:
     explicit DeploymentRunner(const fincept::services::algo::AlgoDeployment& deployment,
-                              const fincept::services::algo::AlgoStrategy& strategy,
-                              QObject* parent = nullptr);
+                              const fincept::services::algo::AlgoStrategy& strategy, QObject* parent = nullptr);
     ~DeploymentRunner() override;
 
     void start();
@@ -38,7 +37,7 @@ public:
     AlgoMetrics metrics() const;
     AlgoPosition position() const;
 
-signals:
+  signals:
     void trade_executed(const fincept::algo::AlgoTradeRecord& trade);
     void metrics_updated(const QString& deployment_id, const fincept::algo::AlgoMetrics& metrics);
     void status_changed(const QString& deployment_id, const QString& status);
@@ -47,7 +46,7 @@ signals:
     // Real-time snapshot for the Dashboard (LTP, P&L, position, per-condition status).
     void live_update(const QString& deployment_id, const fincept::algo::AlgoLiveSnapshot& snap);
 
-public slots:
+  public slots:
     void on_order_filled(const QString& broker_order_id, double fill_price, double fill_qty);
     void on_order_rejected(const QString& broker_order_id, const QString& reason);
     // Multi-leg F&O basket fills (P3.4). One call per leg from AlgoEngine::execute_basket.
@@ -55,16 +54,15 @@ public slots:
     // entry records the basket position (record_entry_legs) and an exit realizes it
     // (record_exit_legs). If any leg was rejected on entry the basket is abandoned
     // (the engine has already rolled back the filled legs at the broker).
-    void on_leg_filled(int leg_index, const fincept::algo::AlgoOrderLeg& leg,
-                       double fill_price, double fill_qty);
+    void on_leg_filled(int leg_index, const fincept::algo::AlgoOrderLeg& leg, double fill_price, double fill_qty);
     void on_leg_rejected(int leg_index, const QString& reason);
 
-private slots:
+  private slots:
     void on_candle_closed(const fincept::algo::OhlcvCandle& candle);
     void on_tick_data(const QVariant& data);
     void on_heartbeat();
 
-private:
+  private:
     // Live market data: subscribe to the shared per-account quote feed via
     // DataStreamManager (the same feed the Equity watchlist uses). Quotes arrive
     // on the engine thread via on_tick_data(). No private broker polling — one
@@ -112,10 +110,10 @@ private:
     std::atomic<bool> paused_{false};
     QTimer* heartbeat_timer_ = nullptr;
     int64_t last_heartbeat_ms_ = 0;
-    bool first_tick_logged_ = false;    // log the first live quote once, for trackability
-    bool live_mode_ = false;            // timeframe == "live" → evaluate per tick
-    int64_t last_emit_ms_ = 0;          // throttle for live_update emission
-    double last_tick_price_ = 0;        // previous tick price → tick-to-tick crossovers
+    bool first_tick_logged_ = false; // log the first live quote once, for trackability
+    bool live_mode_ = false;         // timeframe == "live" → evaluate per tick
+    int64_t last_emit_ms_ = 0;       // throttle for live_update emission
+    double last_tick_price_ = 0;     // previous tick price → tick-to-tick crossovers
 
     // Finalize the in-flight multi-leg basket once every leg has reported a
     // fill or rejection (called from on_leg_filled / on_leg_rejected).

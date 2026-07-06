@@ -1,9 +1,9 @@
 // src/screens/agent_config/AgentsViewPanel.cpp
 #include "screens/agent_config/AgentsViewPanel.h"
 
-#include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/repositories/AgentConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "ui/theme/Theme.h"
@@ -159,7 +159,8 @@ QWidget* AgentsViewPanel::build_config_panel() {
     vl->setSpacing(8);
 
     agent_name_label_ = new QLabel(tr("Select an agent"));
-    agent_name_label_->setStyleSheet(QString("color:%1;font-size:16px;font-weight:700;").arg(ui::colors::TEXT_PRIMARY()));
+    agent_name_label_->setStyleSheet(
+        QString("color:%1;font-size:16px;font-weight:700;").arg(ui::colors::TEXT_PRIMARY()));
     vl->addWidget(agent_name_label_);
 
     agent_desc_label_ = new QLabel;
@@ -182,7 +183,8 @@ QWidget* AgentsViewPanel::build_config_panel() {
     vl->addWidget(llm_profile_combo_);
 
     llm_resolved_lbl_ = new QLabel;
-    llm_resolved_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    llm_resolved_lbl_->setStyleSheet(
+        QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
     vl->addWidget(llm_resolved_lbl_);
 
     // ── INSTRUCTIONS ──
@@ -207,7 +209,8 @@ QWidget* AgentsViewPanel::build_config_panel() {
     // ── FEATURES ──
     features_hdr_ = section_hdr(tr("FEATURES"));
     vl->addWidget(features_hdr_);
-    const QString chk_style = QString("QCheckBox{color:%1;font-size:11px;spacing:6px;}").arg(ui::colors::TEXT_PRIMARY());
+    const QString chk_style =
+        QString("QCheckBox{color:%1;font-size:11px;spacing:6px;}").arg(ui::colors::TEXT_PRIMARY());
     auto* feat_grid = new QGridLayout;
     reasoning_check_ = new QCheckBox(tr("Reasoning"));
     reasoning_check_->setStyleSheet(chk_style);
@@ -320,7 +323,8 @@ QWidget* AgentsViewPanel::build_query_panel() {
         QString("QComboBox{background:%1;color:%2;border:1px solid %3;padding:2px 6px;font-size:10px;}"
                 "QComboBox::drop-down{border:none;}"
                 "QComboBox QAbstractItemView{background:%1;color:%2;selection-background-color:%4;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER_DIM()));
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
+                 ui::colors::AMBER_DIM()));
     opts->addWidget(output_model_combo_);
     opts->addStretch();
     vl->addLayout(opts);
@@ -338,8 +342,8 @@ QWidget* AgentsViewPanel::build_query_panel() {
     run_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;padding:8px;font-size:11px;"
                                     "font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%3;}"
                                     "QPushButton:disabled{background:%4;color:%5;}")
-                                .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(), ui::colors::BG_RAISED(),
-                                     ui::colors::TEXT_TERTIARY()));
+                                .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE(),
+                                     ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
     vl->addWidget(run_btn_);
 
     routing_info_label_ = new QLabel;
@@ -363,7 +367,8 @@ QWidget* AgentsViewPanel::build_query_panel() {
         QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}"
                 "QScrollBar:vertical{background:%1;width:6px;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}")
-            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                 ui::colors::BORDER_BRIGHT()));
     // Document stylesheet controls rendered markdown colors (headers, code, links, etc.)
     result_display_->document()->setDefaultStyleSheet(
         QString("body { color: %1; background: %2; font-size: 12px; }"
@@ -443,11 +448,13 @@ void AgentsViewPanel::setup_connections() {
         if (r.success) {
             result_display_->setMarkdown(r.response);
             result_status_->setText(tr("Completed in %1ms").arg(r.execution_time_ms));
-            result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+            result_status_->setStyleSheet(
+                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
         } else {
             result_display_->setPlainText(tr("Error: %1").arg(r.error));
             result_status_->setText(tr("FAILED"));
-            result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+            result_status_->setStyleSheet(
+                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         }
     });
 
@@ -479,11 +486,13 @@ void AgentsViewPanel::setup_connections() {
         if (r.success) {
             result_display_->setMarkdown(r.response);
             result_status_->setText(tr("Completed in %1ms").arg(r.execution_time_ms));
-            result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+            result_status_->setStyleSheet(
+                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
         } else {
             result_display_->setPlainText(tr("Error: %1").arg(r.error));
             result_status_->setText(tr("FAILED"));
-            result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+            result_status_->setStyleSheet(
+                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         }
     });
 
@@ -835,7 +844,8 @@ QVariantMap AgentsViewPanel::save_draft() const {
 }
 
 void AgentsViewPanel::restore_draft(const QVariantMap& d) {
-    if (d.isEmpty()) return;
+    if (d.isEmpty())
+        return;
     if (query_input_ && d.contains("query"))
         query_input_->setPlainText(d["query"].toString());
     if (result_display_ && d.contains("result"))
@@ -852,43 +862,67 @@ void AgentsViewPanel::changeEvent(QEvent* event) {
 
 void AgentsViewPanel::retranslateUi() {
     // Left panel.
-    if (list_title_)       list_title_->setText(tr("AGENTS"));
-    if (list_refresh_btn_) list_refresh_btn_->setText(tr("REFRESH"));
+    if (list_title_)
+        list_title_->setText(tr("AGENTS"));
+    if (list_refresh_btn_)
+        list_refresh_btn_->setText(tr("REFRESH"));
     // Category combo item 0 is the fixed "All Categories" entry (empty data).
     if (category_combo_ && category_combo_->count() > 0 && category_combo_->itemData(0).toString().isEmpty())
         category_combo_->setItemText(0, tr("All Categories"));
 
     // Center toolbar + headers.
-    if (json_toggle_btn_) json_toggle_btn_->setText(tr("JSON EDITOR"));
-    if (add_team_btn_)    add_team_btn_->setText(tr("+ ADD TO TEAM"));
-    if (llm_profile_hdr_)  llm_profile_hdr_->setText(tr("LLM PROFILE"));
-    if (instructions_hdr_) instructions_hdr_->setText(tr("INSTRUCTIONS"));
-    if (tools_hdr_)        tools_hdr_->setText(tr("TOOLS"));
-    if (features_hdr_)     features_hdr_->setText(tr("FEATURES"));
+    if (json_toggle_btn_)
+        json_toggle_btn_->setText(tr("JSON EDITOR"));
+    if (add_team_btn_)
+        add_team_btn_->setText(tr("+ ADD TO TEAM"));
+    if (llm_profile_hdr_)
+        llm_profile_hdr_->setText(tr("LLM PROFILE"));
+    if (instructions_hdr_)
+        instructions_hdr_->setText(tr("INSTRUCTIONS"));
+    if (tools_hdr_)
+        tools_hdr_->setText(tr("TOOLS"));
+    if (features_hdr_)
+        features_hdr_->setText(tr("FEATURES"));
     if (llm_profile_combo_)
         llm_profile_combo_->setToolTip(
             tr("Select which LLM profile this agent uses. Create profiles in Settings > LLM Config > Profiles."));
-    if (instructions_edit_) instructions_edit_->setPlaceholderText(tr("System prompt / instructions..."));
+    if (instructions_edit_)
+        instructions_edit_->setPlaceholderText(tr("System prompt / instructions..."));
 
     // Feature checkboxes.
-    if (reasoning_check_)      reasoning_check_->setText(tr("Reasoning"));
-    if (memory_check_)         memory_check_->setText(tr("Memory"));
-    if (knowledge_check_)      knowledge_check_->setText(tr("Knowledge"));
-    if (guardrails_check_)     guardrails_check_->setText(tr("Guardrails"));
-    if (tracing_check_)        tracing_check_->setText(tr("Tracing"));
-    if (agentic_memory_check_) agentic_memory_check_->setText(tr("Agentic Memory"));
+    if (reasoning_check_)
+        reasoning_check_->setText(tr("Reasoning"));
+    if (memory_check_)
+        memory_check_->setText(tr("Memory"));
+    if (knowledge_check_)
+        knowledge_check_->setText(tr("Knowledge"));
+    if (guardrails_check_)
+        guardrails_check_->setText(tr("Guardrails"));
+    if (tracing_check_)
+        tracing_check_->setText(tr("Tracing"));
+    if (agentic_memory_check_)
+        agentic_memory_check_->setText(tr("Agentic Memory"));
 
-    if (save_btn_)       save_btn_->setText(tr("SAVE CONFIG"));
-    if (delete_btn_)     delete_btn_->setText(tr("DELETE"));
-    if (json_apply_btn_) json_apply_btn_->setText(tr("APPLY JSON"));
+    if (save_btn_)
+        save_btn_->setText(tr("SAVE CONFIG"));
+    if (delete_btn_)
+        delete_btn_->setText(tr("DELETE"));
+    if (json_apply_btn_)
+        json_apply_btn_->setText(tr("APPLY JSON"));
 
     // Right panel.
-    if (test_query_hdr_)  test_query_hdr_->setText(tr("TEST QUERY"));
-    if (auto_route_check_) auto_route_check_->setText(tr("Auto-Route"));
-    if (output_caption_)  output_caption_->setText(tr("Output:"));
-    if (query_input_)     query_input_->setPlaceholderText(tr("Enter a query to test this agent..."));
-    if (run_btn_ && !executing_) run_btn_->setText(tr("RUN AGENT"));
-    if (result_hdr_)      result_hdr_->setText(tr("RESULT"));
+    if (test_query_hdr_)
+        test_query_hdr_->setText(tr("TEST QUERY"));
+    if (auto_route_check_)
+        auto_route_check_->setText(tr("Auto-Route"));
+    if (output_caption_)
+        output_caption_->setText(tr("Output:"));
+    if (query_input_)
+        query_input_->setPlaceholderText(tr("Enter a query to test this agent..."));
+    if (run_btn_ && !executing_)
+        run_btn_->setText(tr("RUN AGENT"));
+    if (result_hdr_)
+        result_hdr_->setText(tr("RESULT"));
 
     // agent_name_label_ holds the selected agent's name; only restore the static
     // prompt when nothing is selected. The LLM profile combo / resolved label

@@ -3,6 +3,7 @@
 // Singleton that creates/destroys per-account data streams and forwards
 // their signals as aggregated signals for the UI to consume.
 
+#include "datahub/Producer.h"
 #include "trading/AccountDataStream.h"
 #include "trading/BrokerAccount.h"
 
@@ -14,13 +15,9 @@
 
 #include <functional>
 
-#    include "datahub/Producer.h"
-
 namespace fincept::trading {
 
-class DataStreamManager : public QObject
-    , public fincept::datahub::Producer
-{
+class DataStreamManager : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static DataStreamManager& instance();
@@ -37,8 +34,8 @@ class DataStreamManager : public QObject
     void stop_all();
 
     // --- Visibility control (P3: timers respect visibility) ---
-    void pause_all();   // Screen hidden — pause all timers
-    void resume_all();  // Screen shown — resume all timers
+    void pause_all();  // Screen hidden — pause all timers
+    void resume_all(); // Screen shown — resume all timers
 
     // Force an immediate portfolio (positions/holdings/orders/funds) refetch for
     // one account, bypassing the 5-min poll. No-op if no stream exists for the
@@ -60,8 +57,7 @@ class DataStreamManager : public QObject
     // published to broker:<id>:<acct>:quote:<symbol>), then forwards every quote
     // to `cb`. `cb` is invoked on `owner`'s thread (queued). `owner` is the
     // lifetime guard. All stream/DataHub mutation happens on the main thread.
-    void open_quote_feed(QObject* owner, const QString& consumer_id,
-                         const QString& account_id, const QString& symbol,
+    void open_quote_feed(QObject* owner, const QString& consumer_id, const QString& account_id, const QString& symbol,
                          std::function<void(const BrokerQuote&)> cb);
     void close_quote_feed(const QString& consumer_id, const QString& account_id);
 
@@ -73,12 +69,9 @@ class DataStreamManager : public QObject
   signals:
     // On-demand / one-shot signals — no hub topic exists for these
     void candles_fetched(const QString& account_id, const QVector<BrokerCandle>& candles);
-    void orderbook_fetched(const QString& account_id,
-                           const QVector<QPair<double, double>>& bids,
-                           const QVector<QPair<double, double>>& asks,
-                           double spread, double spread_pct,
-                           const QVector<int>& bid_orders,
-                           const QVector<int>& ask_orders);
+    void orderbook_fetched(const QString& account_id, const QVector<QPair<double, double>>& bids,
+                           const QVector<QPair<double, double>>& asks, double spread, double spread_pct,
+                           const QVector<int>& bid_orders, const QVector<int>& ask_orders);
     void time_sales_fetched(const QString& account_id, const QVector<BrokerTrade>& trades);
     void latest_trade_fetched(const QString& account_id, const BrokerTrade& trade);
     void calendar_fetched(const QString& account_id, const QVector<MarketCalendarDay>& days);

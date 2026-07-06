@@ -53,9 +53,9 @@ class Database {
     Database() = default;
     Result<void> apply_pragmas(QSqlDatabase& conn, bool include_database_wide);
 
-    QSqlDatabase db_;                         // main-thread (owning) connection
-    QThread* main_thread_ = nullptr;          // captured at open()
-    QString db_path_;                         // for cloning per-thread connections
+    QSqlDatabase db_;                            // main-thread (owning) connection
+    QThread* main_thread_ = nullptr;             // captured at open()
+    QString db_path_;                            // for cloning per-thread connections
     std::atomic<int> per_thread_connections_{0}; // diagnostic counter
 };
 

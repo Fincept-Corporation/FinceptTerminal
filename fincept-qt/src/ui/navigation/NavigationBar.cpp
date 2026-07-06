@@ -73,8 +73,10 @@ void NavigationBar::changeEvent(QEvent* event) {
 }
 
 void NavigationBar::retranslateUi() {
-    if (live_label_) live_label_->setText(tr(" LIVE"));
-    if (logout_btn_) logout_btn_->setText(tr("LOGOUT"));
+    if (live_label_)
+        live_label_->setText(tr(" LIVE"));
+    if (logout_btn_)
+        logout_btn_->setText(tr("LOGOUT"));
 }
 
 void NavigationBar::refresh_theme() {

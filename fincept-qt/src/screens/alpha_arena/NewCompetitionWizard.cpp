@@ -1,8 +1,10 @@
 #include "screens/alpha_arena/NewCompetitionWizard.h"
+
 #include "screens/alpha_arena/panels/Geofence.h"
 #include "screens/alpha_arena/panels/LiveModeGateDialog.h"
 #include "services/llm/ProviderCatalog.h"
 #include "trading/exchanges/hyperliquid/HyperliquidSigner.h"
+
 #include <QColor>
 #include <QDateTime>
 #include <QDoubleSpinBox>
@@ -25,12 +27,13 @@
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+
 #include <algorithm>
 
 namespace fincept::screens::alpha_arena {
 using fincept::ai_chat::ProviderCatalog;
-using fincept::arena::ArenaConfig;
 using fincept::arena::ArenaAgentSpec;
+using fincept::arena::ArenaConfig;
 using fincept::arena::ArenaModelOption;
 using fincept::arena::ArenaModelRegistry;
 
@@ -65,13 +68,19 @@ NewCompetitionWizard::NewCompetitionWizard(QWidget* parent) : QDialog(parent) {
     back_ = new QPushButton(tr("BACK"));
     next_ = new QPushButton(tr("NEXT"));
     auto* cancel = new QPushButton(tr("CANCEL"));
-    nav->addWidget(cancel); nav->addStretch(1); nav->addWidget(back_); nav->addWidget(next_);
+    nav->addWidget(cancel);
+    nav->addStretch(1);
+    nav->addWidget(back_);
+    nav->addWidget(next_);
     root->addLayout(nav);
     connect(cancel, &QPushButton::clicked, this, &QDialog::reject);
-    connect(back_, &QPushButton::clicked, this, [this]() { steps_->setCurrentIndex(0); update_nav(); });
+    connect(back_, &QPushButton::clicked, this, [this]() {
+        steps_->setCurrentIndex(0);
+        update_nav();
+    });
     connect(next_, &QPushButton::clicked, this, &NewCompetitionWizard::on_next_or_create);
-    connect(&ArenaModelRegistry::instance(), &ArenaModelRegistry::models_changed,
-            this, &NewCompetitionWizard::populate_models);
+    connect(&ArenaModelRegistry::instance(), &ArenaModelRegistry::models_changed, this,
+            &NewCompetitionWizard::populate_models);
     update_nav();
 }
 
@@ -101,10 +110,8 @@ void NewCompetitionWizard::build_step1() {
     model_hint_->setStyleSheet("color:#888;");
     v->addWidget(model_hint_);
     steps_->addWidget(page);
-    connect(provider_list_, &QListWidget::currentRowChanged,
-            this, &NewCompetitionWizard::on_provider_row_changed);
-    connect(model_list_, &QListWidget::itemChanged,
-            this, &NewCompetitionWizard::on_model_item_changed);
+    connect(provider_list_, &QListWidget::currentRowChanged, this, &NewCompetitionWizard::on_provider_row_changed);
+    connect(model_list_, &QListWidget::itemChanged, this, &NewCompetitionWizard::on_model_item_changed);
     populate_models();
 }
 
@@ -127,8 +134,7 @@ void NewCompetitionWizard::populate_models() {
     // still present, else default to the first provider with a ready option.
     QStringList providers = options_by_provider_.keys();
     std::sort(providers.begin(), providers.end(), [](const QString& a, const QString& b) {
-        return ProviderCatalog::display_name(a).compare(ProviderCatalog::display_name(b),
-                                                        Qt::CaseInsensitive) < 0;
+        return ProviderCatalog::display_name(a).compare(ProviderCatalog::display_name(b), Qt::CaseInsensitive) < 0;
     });
     provider_list_->clear();
     int restore_row = -1, first_ready = -1;
@@ -136,24 +142,28 @@ void NewCompetitionWizard::populate_models() {
         auto* it = new QListWidgetItem(provider_list_);
         it->setData(Qt::UserRole, p);
         const int row = provider_list_->count() - 1;
-        if (p == prev_provider) restore_row = row;
+        if (p == prev_provider)
+            restore_row = row;
         if (first_ready < 0)
             for (const auto& o : options_by_provider_.value(p))
-                if (o.ready) { first_ready = row; break; }
+                if (o.ready) {
+                    first_ready = row;
+                    break;
+                }
     }
     refresh_provider_decorations();
     repopulating_ = false;
     if (provider_list_->count() > 0)
         // currentRowChanged → populate_model_pane (re-applies checks).
-        provider_list_->setCurrentRow(restore_row >= 0 ? restore_row
-                                                       : (first_ready >= 0 ? first_ready : 0));
+        provider_list_->setCurrentRow(restore_row >= 0 ? restore_row : (first_ready >= 0 ? first_ready : 0));
     else
         populate_model_pane(QString());
     update_selection_summary();
 }
 
 void NewCompetitionWizard::on_provider_row_changed() {
-    if (repopulating_) return;
+    if (repopulating_)
+        return;
     populate_model_pane(current_provider());
 }
 
@@ -170,8 +180,8 @@ void NewCompetitionWizard::populate_model_pane(const QString& provider) {
         const QString key = o.provider + "/" + o.model_id;
         it->setText(o.ready ? o.display_name : o.display_name + tr("  — needs API key"));
         it->setData(Qt::UserRole, key);
-        it->setData(Qt::UserRole + 1, QVariant::fromValue(QStringList{o.provider, o.model_id,
-                    o.display_name, o.color_hex, o.source_kind, o.source_ref}));
+        it->setData(Qt::UserRole + 1, QVariant::fromValue(QStringList{o.provider, o.model_id, o.display_name,
+                                                                      o.color_hex, o.source_kind, o.source_ref}));
         it->setForeground(QColor(o.ready ? "#DDD" : "#555"));
         it->setFlags(o.ready ? (Qt::ItemIsEnabled | Qt::ItemIsUserCheckable) : Qt::NoItemFlags);
         it->setCheckState(selected_models_.contains(key) ? Qt::Checked : Qt::Unchecked);
@@ -180,15 +190,21 @@ void NewCompetitionWizard::populate_model_pane(const QString& provider) {
 }
 
 void NewCompetitionWizard::on_model_item_changed(QListWidgetItem* it) {
-    if (repopulating_ || !it) return;
+    if (repopulating_ || !it)
+        return;
     const QString key = it->data(Qt::UserRole).toString();
     if (it->checkState() == Qt::Checked) {
         const auto f = it->data(Qt::UserRole + 1).value<QStringList>();
-        if (f.size() < 6) return;
+        if (f.size() < 6)
+            return;
         ArenaModelOption o;
-        o.provider = f[0]; o.model_id = f[1]; o.display_name = f[2];
-        o.color_hex = f[3]; o.source_kind = f[4]; o.source_ref = f[5];
-        o.ready = true;   // only ready rows are checkable
+        o.provider = f[0];
+        o.model_id = f[1];
+        o.display_name = f[2];
+        o.color_hex = f[3];
+        o.source_kind = f[4];
+        o.source_ref = f[5];
+        o.ready = true; // only ready rows are checkable
         selected_models_.insert(key, o);
     } else {
         selected_models_.remove(key);
@@ -198,20 +214,25 @@ void NewCompetitionWizard::on_model_item_changed(QListWidgetItem* it) {
 }
 
 void NewCompetitionWizard::refresh_provider_decorations() {
-    QHash<QString, int> counts;   // checked models per provider (source of truth)
-    for (const auto& o : selected_models_) counts[o.provider.toLower()]++;
+    QHash<QString, int> counts; // checked models per provider (source of truth)
+    for (const auto& o : selected_models_)
+        counts[o.provider.toLower()]++;
     for (int i = 0; i < provider_list_->count(); ++i) {
         auto* it = provider_list_->item(i);
         const QString p = it->data(Qt::UserRole).toString();
         bool any_ready = false;
         for (const auto& o : options_by_provider_.value(p))
-            if (o.ready) { any_ready = true; break; }
+            if (o.ready) {
+                any_ready = true;
+                break;
+            }
         QString text = ProviderCatalog::display_name(p);
-        if (const int n = counts.value(p); n > 0) text += QStringLiteral(" (%1)").arg(n);
-        if (!any_ready) text += tr(" — needs key");
+        if (const int n = counts.value(p); n > 0)
+            text += QStringLiteral(" (%1)").arg(n);
+        if (!any_ready)
+            text += tr(" — needs key");
         it->setText(text);
-        it->setIcon(dot_icon(any_ready ? ProviderCatalog::brand_color(p)
-                                       : QStringLiteral("#555555")));
+        it->setIcon(dot_icon(any_ready ? ProviderCatalog::brand_color(p) : QStringLiteral("#555555")));
         it->setForeground(QColor(any_ready ? "#DDD" : "#777"));
     }
 }
@@ -220,8 +241,7 @@ void NewCompetitionWizard::update_selection_summary() {
     QStringList parts;
     for (const auto& o : selected_models_)
         parts << QStringLiteral("%1 (%2)").arg(o.model_id, ProviderCatalog::display_name(o.provider));
-    selection_summary_->setText(parts.isEmpty() ? tr("Selected: none")
-                                                : tr("Selected: ") + parts.join(", "));
+    selection_summary_->setText(parts.isEmpty() ? tr("Selected: none") : tr("Selected: ") + parts.join(", "));
 }
 
 void NewCompetitionWizard::build_step2() {
@@ -246,15 +266,20 @@ void NewCompetitionWizard::build_step2() {
     grid->addWidget(instruments_, row++, 1);
     grid->addWidget(new QLabel(tr("Capital / agent ($)")), row, 0);
     capital_ = new QDoubleSpinBox;
-    capital_->setRange(100, 10'000'000); capital_->setValue(10000); capital_->setDecimals(0);
+    capital_->setRange(100, 10'000'000);
+    capital_->setValue(10000);
+    capital_->setDecimals(0);
     grid->addWidget(capital_, row++, 1);
     grid->addWidget(new QLabel(tr("Round cadence (s)")), row, 0);
     cadence_ = new QSpinBox;
-    cadence_->setRange(60, 3600); cadence_->setValue(180);
+    cadence_->setRange(60, 3600);
+    cadence_->setValue(180);
     grid->addWidget(cadence_, row++, 1);
     grid->addWidget(new QLabel(tr("Max leverage")), row, 0);
     max_lev_ = new QDoubleSpinBox;
-    max_lev_->setRange(1, 50); max_lev_->setValue(10); max_lev_->setDecimals(0);
+    max_lev_->setRange(1, 50);
+    max_lev_->setValue(10);
+    max_lev_->setDecimals(0);
     grid->addWidget(max_lev_, row++, 1);
     v->addLayout(grid);
 
@@ -271,13 +296,16 @@ void NewCompetitionWizard::build_step2() {
     venue_paper_ = new QRadioButton(tr("Paper (real market data, simulated fills)"));
     venue_live_ = new QRadioButton(tr("Hyperliquid LIVE (real funds — beta: order mirroring not yet active)"));
     venue_paper_->setChecked(true);
-    vh->addWidget(venue_paper_); vh->addWidget(venue_live_);
+    vh->addWidget(venue_paper_);
+    vh->addWidget(venue_live_);
     av->addLayout(vh);
     // Hide content when unchecked. Collapsing Advanced also reverts the venue
     // to Paper — live mode must never ride along invisibly.
     const auto sync_adv = [adv, this]() {
-        for (auto* w : adv->findChildren<QWidget*>()) w->setVisible(adv->isChecked());
-        if (!adv->isChecked() && venue_live_->isChecked()) venue_paper_->setChecked(true);
+        for (auto* w : adv->findChildren<QWidget*>())
+            w->setVisible(adv->isChecked());
+        if (!adv->isChecked() && venue_live_->isChecked())
+            venue_paper_->setChecked(true);
     };
     connect(adv, &QGroupBox::toggled, this, sync_adv);
     sync_adv();
@@ -316,16 +344,21 @@ void NewCompetitionWizard::on_next_or_create() {
     cfg_.cadence_seconds = cadence_->value();
     cfg_.max_leverage = max_lev_->value();
     cfg_.system_prompt_override = custom_prompt_->toPlainText().trimmed();
-    for (const auto& o : selected_models_) {   // QMap values → deterministic order
+    for (const auto& o : selected_models_) { // QMap values → deterministic order
         ArenaAgentSpec a;
-        a.provider = o.provider; a.model_id = o.model_id; a.display_name = o.display_name;
-        a.color_hex = o.color_hex; a.source_kind = o.source_kind; a.source_ref = o.source_ref;
+        a.provider = o.provider;
+        a.model_id = o.model_id;
+        a.display_name = o.display_name;
+        a.color_hex = o.color_hex;
+        a.source_kind = o.source_kind;
+        a.source_ref = o.source_ref;
         cfg_.agents.append(a);
     }
     if (venue_live_->isChecked()) {
-        if (!engage_live_gates()) return;   // stays on the wizard
+        if (!engage_live_gates())
+            return; // stays on the wizard
         cfg_.venue = QStringLiteral("hyperliquid");
-        cfg_.live_mode = true;              // carried from the START (fixes the old ordering bug)
+        cfg_.live_mode = true; // carried from the START (fixes the old ordering bug)
     }
     accept();
 }
@@ -333,9 +366,9 @@ void NewCompetitionWizard::on_next_or_create() {
 bool NewCompetitionWizard::engage_live_gates() {
     if (!fincept::trading::hyperliquid::HyperliquidSigner::is_wired()) {
         QMessageBox::critical(this, windowTitle(),
-            tr("Live trading on Hyperliquid is not yet available in this build — paper mode is "
-               "fully supported. (Live mode is disabled so no real wallet key is stored for a "
-               "path that cannot execute a trade.)"));
+                              tr("Live trading on Hyperliquid is not yet available in this build — paper mode is "
+                                 "fully supported. (Live mode is disabled so no real wallet key is stored for a "
+                                 "path that cannot execute a trade.)"));
         return false;
     }
 #ifndef FINCEPT_UNSAFE_DISABLE_GEOFENCE
@@ -350,6 +383,8 @@ bool NewCompetitionWizard::engage_live_gates() {
     return dlg.exec() == QDialog::Accepted;
 }
 
-fincept::arena::ArenaConfig NewCompetitionWizard::config() const { return cfg_; }
+fincept::arena::ArenaConfig NewCompetitionWizard::config() const {
+    return cfg_;
+}
 
 } // namespace fincept::screens::alpha_arena

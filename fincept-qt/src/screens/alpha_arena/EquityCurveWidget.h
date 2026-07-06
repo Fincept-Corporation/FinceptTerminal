@@ -5,15 +5,15 @@
 #include <QColor>
 #include <QPoint>
 #include <QString>
-#include <QWidget>
 #include <QVector>
+#include <QWidget>
 
 namespace fincept::screens::alpha_arena {
 
 struct EquitySeries {
     QString agent_id, label;
     QColor color;
-    QVector<QPointF> points;   // x = ts (ms), y = equity
+    QVector<QPointF> points; // x = ts (ms), y = equity
 };
 
 class EquityCurveWidget : public QWidget {
@@ -21,10 +21,12 @@ class EquityCurveWidget : public QWidget {
   public:
     explicit EquityCurveWidget(QWidget* parent = nullptr);
     void set_data(QVector<EquitySeries> series, double baseline);
+
   protected:
     void paintEvent(QPaintEvent*) override;
     void mouseMoveEvent(QMouseEvent* e) override;
     void leaveEvent(QEvent*) override;
+
   private:
     QRectF plot_rect() const;
     QVector<EquitySeries> series_;

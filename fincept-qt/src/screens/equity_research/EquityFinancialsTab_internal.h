@@ -24,11 +24,11 @@
 
 namespace fincept::screens::financials_internal {
 
-inline const QString kAmber  = QStringLiteral("#f59e0b");
-inline const QString kCyan   = QStringLiteral("#22d3ee");
-inline const QString kGreen  = ui::colors::POSITIVE;
-inline const QString kRed    = ui::colors::NEGATIVE;
-inline const QString kBlue   = QStringLiteral("#3b82f6");
+inline const QString kAmber = QStringLiteral("#f59e0b");
+inline const QString kCyan = QStringLiteral("#22d3ee");
+inline const QString kGreen = ui::colors::POSITIVE;
+inline const QString kRed = ui::colors::NEGATIVE;
+inline const QString kBlue = QStringLiteral("#3b82f6");
 inline const QString kPurple = QStringLiteral("#a855f7");
 inline const QString kOrange = QStringLiteral("#f97316");
 inline const QString kYellow = QStringLiteral("#eab308");
@@ -60,9 +60,8 @@ inline QFrame* section_frame(const QString& title, const QString& color) {
 }
 
 // Large metric card: label on top, big value, optional subtitle
-inline QWidget* metric_card(const QString& label, QLabel*& val_out, QLabel*& sub_out,
-                            const QString& val_color, const QString& initial_val = QStringLiteral("—"),
-                            const QString& initial_sub = {}) {
+inline QWidget* metric_card(const QString& label, QLabel*& val_out, QLabel*& sub_out, const QString& val_color,
+                            const QString& initial_val = QStringLiteral("—"), const QString& initial_sub = {}) {
     auto* f = new QFrame;
     f->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
                          .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));

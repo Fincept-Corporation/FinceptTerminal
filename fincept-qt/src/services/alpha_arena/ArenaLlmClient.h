@@ -4,6 +4,7 @@
 // QNetworkReply. Response parsing is a pure static for selftest coverage.
 #include <QNetworkAccessManager>
 #include <QObject>
+
 #include <functional>
 
 namespace fincept::arena {
@@ -38,7 +39,7 @@ class ArenaLlmClient : public IArenaLlmClient {
     static ArenaLlmResult parse_response(const QString& provider, const QByteArray& body);
 
   private:
-    QNetworkAccessManager* nam_ = nullptr;   // GUI-thread QNAM (like LlmService::models_nam_)
+    QNetworkAccessManager* nam_ = nullptr; // GUI-thread QNAM (like LlmService::models_nam_)
 };
 
 } // namespace fincept::arena

@@ -21,9 +21,9 @@ namespace fincept::screens {
 /// panel-specific controls (period buttons, mode toggles, count badges, filter
 /// inputs, ⓢ counts, hide chevrons …) into `controls_slot` using its layout.
 struct PanelHeaderResult {
-    QWidget* header = nullptr;     ///< Add to layout
+    QWidget* header = nullptr;        ///< Add to layout
     QWidget* controls_slot = nullptr; ///< Right-side controls container; has a QHBoxLayout already
-    QLabel* title_label = nullptr; ///< In case you need to mutate it (e.g. theme refresh)
+    QLabel* title_label = nullptr;    ///< In case you need to mutate it (e.g. theme refresh)
 };
 
 inline PanelHeaderResult make_panel_header(const QString& title_text, QWidget* parent = nullptr) {

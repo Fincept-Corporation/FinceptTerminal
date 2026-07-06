@@ -5,17 +5,20 @@
 namespace fincept::wallet {
 
 double TokenHolding::ui_amount() const noexcept {
-    if (amount_raw.isEmpty()) return 0.0;
+    if (amount_raw.isEmpty())
+        return 0.0;
     bool ok = false;
     const auto raw = amount_raw.toLongLong(&ok);
-    if (!ok) return 0.0;
+    if (!ok)
+        return 0.0;
     return static_cast<double>(raw) / std::pow(10.0, decimals);
 }
 
 const TokenHolding* WalletBalance::fncpt_holding() const noexcept {
     const auto fncpt = QString::fromLatin1(kFncptMint);
     for (const auto& t : tokens) {
-        if (t.mint == fncpt) return &t;
+        if (t.mint == fncpt)
+            return &t;
     }
     return nullptr;
 }

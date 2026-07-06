@@ -27,7 +27,7 @@ class ComponentCard : public QFrame {
     void set_selected(bool s);
 
   signals:
-    void activated(const QString& id);       // double-click or Enter
+    void activated(const QString& id);        // double-click or Enter
     void selected_changed(const QString& id); // single click
 
   protected:

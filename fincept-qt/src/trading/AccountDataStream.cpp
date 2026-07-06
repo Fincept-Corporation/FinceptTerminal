@@ -6,8 +6,8 @@
 #include "trading/HistoricalDataService.h"
 #include "trading/OrderMatcher.h"
 #include "trading/PaperTrading.h"
-#include "trading/instruments/InstrumentService.h"
 #include "trading/brokers/alpaca/AlpacaWebSocket.h"
+#include "trading/instruments/InstrumentService.h"
 #include "trading/websocket/AliceBlueWebSocket.h"
 #include "trading/websocket/AngelOneWebSocket.h"
 #include "trading/websocket/BrokerWebSocketBase.h"
@@ -148,7 +148,8 @@ void AccountDataStream::refresh_portfolio_now() {
 
 void AccountDataStream::subscribe_symbols(const QString& consumer_id, const QStringList& symbols) {
     LOG_INFO("subdbg", QString("subscribe_symbols consumer='%1' (%2 syms): [%3] ws_connected=%4")
-                           .arg(consumer_id).arg(symbols.size())
+                           .arg(consumer_id)
+                           .arg(symbols.size())
                            .arg(symbols.join(','), ws_connected() ? "Y" : "N"));
     if (symbols.isEmpty())
         consumer_symbols_.remove(consumer_id);
@@ -216,10 +217,18 @@ void AccountDataStream::set_selected_symbol(const QString& symbol, const QString
 
 // ── Cached data access ──────────────────────────────────────────────────────
 
-QVector<BrokerPosition> AccountDataStream::cached_positions() const { return positions_; }
-QVector<BrokerHolding> AccountDataStream::cached_holdings() const { return holdings_; }
-QVector<BrokerOrderInfo> AccountDataStream::cached_orders() const { return orders_; }
-BrokerFunds AccountDataStream::cached_funds() const { return funds_; }
+QVector<BrokerPosition> AccountDataStream::cached_positions() const {
+    return positions_;
+}
+QVector<BrokerHolding> AccountDataStream::cached_holdings() const {
+    return holdings_;
+}
+QVector<BrokerOrderInfo> AccountDataStream::cached_orders() const {
+    return orders_;
+}
+BrokerFunds AccountDataStream::cached_funds() const {
+    return funds_;
+}
 
 BrokerQuote AccountDataStream::cached_quote(const QString& symbol) const {
     auto it = quote_cache_.find(symbol);
@@ -248,16 +257,17 @@ bool AccountDataStream::check_token_expiry(const QString& error) {
     // May be called from a QtConcurrent worker — AccountManager mutates state
     // and we emit a signal, so marshal to the thread that owns this object.
     QPointer<AccountDataStream> self = this;
-    QMetaObject::invokeMethod(this, [self]() {
-        if (!self)
-            return;
-        AccountManager::instance().set_connection_state(
-            self->account_id_, ConnectionState::TokenExpired,
-            QStringLiteral("Broker session token expired"));
-        LOG_WARN(ADS_TAG, QString("Token expired for account %1 (%2)")
-                              .arg(self->account_id_, self->broker_id_));
-        emit self->token_expired(self->account_id_);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [self]() {
+            if (!self)
+                return;
+            AccountManager::instance().set_connection_state(self->account_id_, ConnectionState::TokenExpired,
+                                                            QStringLiteral("Broker session token expired"));
+            LOG_WARN(ADS_TAG, QString("Token expired for account %1 (%2)").arg(self->account_id_, self->broker_id_));
+            emit self->token_expired(self->account_id_);
+        },
+        Qt::QueuedConnection);
     return true;
 }
 
@@ -319,24 +329,30 @@ void AccountDataStream::async_fetch_quote() {
     (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         if (!broker) {
-            if (self) self->quote_fetching_ = false;
+            if (self)
+                self->quote_fetching_ = false;
             return;
         }
         auto result = broker->get_quotes(creds, {symbol});
-        if (self) self->quote_fetching_ = false;
+        if (self)
+            self->quote_fetching_ = false;
         if (!result.success || !result.data || result.data->isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("async_fetch_quote failed for %1/%2 [%3]: %4")
-                                  .arg(bid, acct_id, symbol, result.error));
+            LOG_WARN(ADS_TAG,
+                     QString("async_fetch_quote failed for %1/%2 [%3]: %4").arg(bid, acct_id, symbol, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
         }
         const auto quote = result.data->first();
-        QMetaObject::invokeMethod(self, [self, acct_id, symbol, quote]() {
-            if (!self) return;
-            self->quote_cache_[symbol] = quote;
-            emit self->quote_updated(acct_id, symbol, quote);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, symbol, quote]() {
+                if (!self)
+                    return;
+                self->quote_cache_[symbol] = quote;
+                emit self->quote_updated(acct_id, symbol, quote);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -346,15 +362,16 @@ void AccountDataStream::async_fetch_positions() {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty())
+        return;
 
     (void)QtConcurrent::run([self, acct_id, bid, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         auto result = broker->get_positions(creds);
         if (!result.success || !result.data) {
-            LOG_WARN(ADS_TAG, QString("async_fetch_positions failed for %1/%2: %3")
-                                  .arg(bid, acct_id, result.error));
+            LOG_WARN(ADS_TAG, QString("async_fetch_positions failed for %1/%2: %3").arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
@@ -362,11 +379,15 @@ void AccountDataStream::async_fetch_positions() {
         // Success — log the count so an empty live blotter can be told apart from a
         // token/error (which logs WARN above): 0 rows here = genuinely no positions.
         LOG_INFO(ADS_TAG, QString("get_positions %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            self->positions_ = data;
-            emit self->positions_updated(acct_id, data);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                self->positions_ = data;
+                emit self->positions_updated(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -376,25 +397,30 @@ void AccountDataStream::async_fetch_holdings() {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty())
+        return;
 
     (void)QtConcurrent::run([self, acct_id, bid, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         auto result = broker->get_holdings(creds);
         if (!result.success || !result.data) {
-            LOG_WARN(ADS_TAG, QString("async_fetch_holdings failed for %1/%2: %3")
-                                  .arg(bid, acct_id, result.error));
+            LOG_WARN(ADS_TAG, QString("async_fetch_holdings failed for %1/%2: %3").arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
         }
         LOG_INFO(ADS_TAG, QString("get_holdings %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            self->holdings_ = data;
-            emit self->holdings_updated(acct_id, data);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                self->holdings_ = data;
+                emit self->holdings_updated(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -404,25 +430,30 @@ void AccountDataStream::async_fetch_orders() {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty())
+        return;
 
     (void)QtConcurrent::run([self, acct_id, bid, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         auto result = broker->get_orders(creds);
         if (!result.success || !result.data) {
-            LOG_WARN(ADS_TAG, QString("async_fetch_orders failed for %1/%2: %3")
-                                  .arg(bid, acct_id, result.error));
+            LOG_WARN(ADS_TAG, QString("async_fetch_orders failed for %1/%2: %3").arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
         }
         LOG_INFO(ADS_TAG, QString("get_orders %1/%2 → %3 row(s)").arg(bid, acct_id).arg(result.data->size()));
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            self->orders_ = data;
-            emit self->orders_updated(acct_id, data);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                self->orders_ = data;
+                emit self->orders_updated(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -432,24 +463,29 @@ void AccountDataStream::async_fetch_funds() {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty())
+        return;
 
     (void)QtConcurrent::run([self, acct_id, bid, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         auto result = broker->get_funds(creds);
         if (!result.success || !result.data) {
-            LOG_WARN(ADS_TAG, QString("async_fetch_funds failed for %1/%2: %3")
-                                  .arg(bid, acct_id, result.error));
+            LOG_WARN(ADS_TAG, QString("async_fetch_funds failed for %1/%2: %3").arg(bid, acct_id, result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
         }
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            self->funds_ = data;
-            emit self->funds_updated(acct_id, data);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                self->funds_ = data;
+                emit self->funds_updated(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -462,25 +498,33 @@ void AccountDataStream::async_fetch_watchlist_quotes() {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty())
+        return;
 
     (void)QtConcurrent::run([self, acct_id, bid, symbols, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         auto result = broker->get_quotes(creds, symbols.toVector());
         if (!result.success || !result.data) {
             LOG_WARN(ADS_TAG, QString("async_fetch_watchlist_quotes failed for %1/%2 (%3 syms): %4")
-                                  .arg(bid, acct_id).arg(symbols.size()).arg(result.error));
+                                  .arg(bid, acct_id)
+                                  .arg(symbols.size())
+                                  .arg(result.error));
             if (self)
                 self->check_token_expiry(result.error);
             return;
         }
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            for (const auto& q : data)
-                self->quote_cache_[q.symbol] = q;
-            emit self->watchlist_updated(acct_id, data);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                for (const auto& q : data)
+                    self->quote_cache_[q.symbol] = q;
+                emit self->watchlist_updated(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -520,13 +564,17 @@ void AccountDataStream::async_fetch_active_feed_quotes() {
         }
         // Emit PER-SYMBOL quote_updated (not watchlist_updated) so DataStreamManager
         // publishes each to broker:<id>:<acct>:quote:<symbol> (the topic algo feeds read).
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            for (const auto& q : data) {
-                self->quote_cache_[q.symbol] = q;
-                emit self->quote_updated(acct_id, q.symbol, q);
-            }
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                for (const auto& q : data) {
+                    self->quote_cache_[q.symbol] = q;
+                    emit self->quote_updated(acct_id, q.symbol, q);
+                }
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -540,11 +588,16 @@ void AccountDataStream::fetch_candles(const QString& symbol, const QString& time
     // windows), then delegate to the shared HistoricalDataService (broker fetch +
     // symbol resolution + 60s cache). Yahoo fallback is algo-only, not used here.
     auto lookback_for = [](const QString& tf) -> int {
-        if (tf == "1d" || tf == "D" || tf == "1w" || tf == "W") return 3 * 365;
-        if (tf == "1h" || tf == "60") return 60;
-        if (tf == "30m") return 45;
-        if (tf == "15m") return 30;
-        if (tf == "5m") return 15;
+        if (tf == "1d" || tf == "D" || tf == "1w" || tf == "W")
+            return 3 * 365;
+        if (tf == "1h" || tf == "60")
+            return 60;
+        if (tf == "30m")
+            return 45;
+        if (tf == "15m")
+            return 30;
+        if (tf == "5m")
+            return 15;
         return 7;
     };
 
@@ -558,8 +611,7 @@ void AccountDataStream::fetch_candles(const QString& symbol, const QString& time
                 emit self->candles_fetched(acct_id, candles);
             } else {
                 self->check_token_expiry(err);
-                LOG_WARN(ADS_TAG, QString("fetch_candles failed for %1/%2: %3")
-                                      .arg(self->broker_id_, acct_id, err));
+                LOG_WARN(ADS_TAG, QString("fetch_candles failed for %1/%2: %3").arg(self->broker_id_, acct_id, err));
             }
         });
 }
@@ -577,14 +629,16 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
 
     (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
 
         const QString today = QDate::currentDate().toString("yyyy-MM-dd");
         auto result = broker->get_historical_quotes_single(creds, symbol, today + "T00:00:00Z", "", 1000);
 
         if (!result.success || !result.data || result.data->isEmpty()) {
-            LOG_WARN(ADS_TAG, QString("fetch_orderbook: L2 depth failed for %1 (%2), trying snapshot")
-                                  .arg(symbol, result.error));
+            LOG_WARN(
+                ADS_TAG,
+                QString("fetch_orderbook: L2 depth failed for %1 (%2), trying snapshot").arg(symbol, result.error));
             auto snap = broker->get_quotes(creds, {symbol});
             if (!snap.success || !snap.data || snap.data->isEmpty()) {
                 LOG_WARN(ADS_TAG, QString("fetch_orderbook: snapshot fallback also failed for %1").arg(symbol));
@@ -593,15 +647,20 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
             const auto& q = snap.data->first();
             const double b = q.bid > 0 ? q.bid : (q.ltp > 0 ? q.ltp * 0.9995 : 0);
             const double a = q.ask > 0 ? q.ask : (q.ltp > 0 ? q.ltp * 1.0005 : 0);
-            if (b <= 0 || a <= 0) return;
+            if (b <= 0 || a <= 0)
+                return;
             QVector<QPair<double, double>> bids{{b, q.bid_size > 0 ? q.bid_size : 100.0}};
             QVector<QPair<double, double>> asks{{a, q.ask_size > 0 ? q.ask_size : 100.0}};
             const double spread = a - b;
             const double spread_pct = b > 0 ? (spread / b) * 100.0 : 0.0;
-            QMetaObject::invokeMethod(self, [self, acct_id, bids, asks, spread, spread_pct]() {
-                if (!self) return;
-                emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct, {}, {});
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                self,
+                [self, acct_id, bids, asks, spread, spread_pct]() {
+                    if (!self)
+                        return;
+                    emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct, {}, {});
+                },
+                Qt::QueuedConnection);
             return;
         }
 
@@ -611,11 +670,13 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
         for (const auto& q : *result.data) {
             if (q.bid > 0) {
                 bid_map[q.bid] += q.bid_size > 0 ? q.bid_size : 1.0;
-                if (q.oi > 0) bid_ord_map[q.bid] += static_cast<int>(q.oi);
+                if (q.oi > 0)
+                    bid_ord_map[q.bid] += static_cast<int>(q.oi);
             }
             if (q.ask > 0) {
                 ask_map[q.ask] += q.ask_size > 0 ? q.ask_size : 1.0;
-                if (q.oi > 0) ask_ord_map[q.ask] += static_cast<int>(q.oi);
+                if (q.oi > 0)
+                    ask_ord_map[q.ask] += static_cast<int>(q.oi);
             }
         }
         QVector<QPair<double, double>> bids, asks;
@@ -632,21 +693,24 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
             asks.append({p, ask_map[p]});
             ask_orders.append(ask_ord_map.value(p, 0));
         }
-        if (bids.isEmpty() || asks.isEmpty()) return;
+        if (bids.isEmpty() || asks.isEmpty())
+            return;
 
-        LOG_INFO(ADS_TAG, QString("fetch_orderbook: %1 bids, %2 asks for %3")
-                              .arg(bids.size()).arg(asks.size()).arg(symbol));
+        LOG_INFO(ADS_TAG,
+                 QString("fetch_orderbook: %1 bids, %2 asks for %3").arg(bids.size()).arg(asks.size()).arg(symbol));
 
         const double best_bid = bids.first().first;
         const double best_ask = asks.first().first;
         const double spread = best_ask - best_bid;
         const double spread_pct = best_bid > 0 ? (spread / best_bid) * 100.0 : 0.0;
-        QMetaObject::invokeMethod(self, [self, acct_id, bids, asks, spread, spread_pct,
-                                         bid_orders, ask_orders]() {
-            if (!self) return;
-            emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct,
-                                         bid_orders, ask_orders);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, bids, asks, spread, spread_pct, bid_orders, ask_orders]() {
+                if (!self)
+                    return;
+                emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct, bid_orders, ask_orders);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -656,18 +720,25 @@ void AccountDataStream::fetch_time_sales(const QString& symbol) {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty())
+        return;
 
     (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         const QString today = QDate::currentDate().toString("yyyy-MM-dd");
         auto result = broker->get_historical_trades_single(creds, symbol, today + "T00:00:00Z", "", 500);
-        if (!result.success || !result.data) return;
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            emit self->time_sales_fetched(acct_id, data);
-        }, Qt::QueuedConnection);
+        if (!result.success || !result.data)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                emit self->time_sales_fetched(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -677,17 +748,24 @@ void AccountDataStream::fetch_latest_trade(const QString& symbol) {
     QPointer<AccountDataStream> self = this;
 
     auto creds = AccountManager::instance().load_credentials(acct_id);
-    if (creds.api_key.isEmpty()) return;
+    if (creds.api_key.isEmpty())
+        return;
 
     (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         auto result = broker->get_latest_trade(creds, symbol);
-        if (!result.success || !result.data) return;
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            emit self->latest_trade_fetched(acct_id, data);
-        }, Qt::QueuedConnection);
+        if (!result.success || !result.data)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                emit self->latest_trade_fetched(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -700,15 +778,21 @@ void AccountDataStream::fetch_calendar() {
 
     (void)QtConcurrent::run([self, acct_id, bid, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         const QString start = QDate::currentDate().addDays(-5).toString("yyyy-MM-dd");
         const QString end = QDate::currentDate().addDays(30).toString("yyyy-MM-dd");
         auto result = broker->get_calendar(creds, start, end);
-        if (!result.success || !result.data) return;
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            emit self->calendar_fetched(acct_id, data);
-        }, Qt::QueuedConnection);
+        if (!result.success || !result.data)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                emit self->calendar_fetched(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -721,13 +805,19 @@ void AccountDataStream::fetch_clock() {
 
     (void)QtConcurrent::run([self, acct_id, bid, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
-        if (!broker) return;
+        if (!broker)
+            return;
         auto result = broker->get_clock(creds);
-        if (!result.success || !result.data) return;
-        QMetaObject::invokeMethod(self, [self, acct_id, data = *result.data]() {
-            if (!self) return;
-            emit self->clock_fetched(acct_id, data);
-        }, Qt::QueuedConnection);
+        if (!result.success || !result.data)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, data = *result.data]() {
+                if (!self)
+                    return;
+                emit self->clock_fetched(acct_id, data);
+            },
+            Qt::QueuedConnection);
     });
 }
 
@@ -748,8 +838,10 @@ void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
         // Guarded on a populated d.symbol so brokers that don't tag depth are unaffected.
         auto bare = [](QString s) {
             const int colon = s.lastIndexOf(QLatin1Char(':'));
-            if (colon >= 0) s = s.mid(colon + 1);
-            if (s.endsWith(QLatin1String("-EQ"))) s.chop(3);
+            if (colon >= 0)
+                s = s.mid(colon + 1);
+            if (s.endsWith(QLatin1String("-EQ")))
+                s.chop(3);
             return s;
         };
         if (!selected_symbol_.isEmpty() && !d.symbol.isEmpty() &&
@@ -766,12 +858,10 @@ void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
         const double spread_pct = best_bid > 0 ? spread / best_bid * 100.0 : 0;
         emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, {}, {});
     });
-    connect(ws, &BrokerWebSocketBase::connected, this, [this]() {
-        emit connection_state_changed(account_id_, ConnectionState::Connected);
-    });
-    connect(ws, &BrokerWebSocketBase::disconnected, this, [this]() {
-        emit connection_state_changed(account_id_, ConnectionState::Disconnected);
-    });
+    connect(ws, &BrokerWebSocketBase::connected, this,
+            [this]() { emit connection_state_changed(account_id_, ConnectionState::Connected); });
+    connect(ws, &BrokerWebSocketBase::disconnected, this,
+            [this]() { emit connection_state_changed(account_id_, ConnectionState::Disconnected); });
     connect(ws, &BrokerWebSocketBase::error_occurred, this, [this](const QString& e) {
         LOG_ERROR(ADS_TAG, QString("WS error: %1").arg(e));
         check_token_expiry(e);
@@ -781,11 +871,16 @@ void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
 // Map a normalised exchange string → Angel One SmartStream segment code.
 static AoExchangeType ao_exchange_type(const QString& exch) {
     const QString e = exch.toUpper();
-    if (e == "NFO" || e == "NSE_FO") return AoExchangeType::NSE_FO;
-    if (e == "BSE") return AoExchangeType::BSE_CM;
-    if (e == "BFO" || e == "BSE_FO") return AoExchangeType::BSE_FO;
-    if (e == "MCX") return AoExchangeType::MCX_FO;
-    if (e == "CDS") return AoExchangeType::CDE_FO;
+    if (e == "NFO" || e == "NSE_FO")
+        return AoExchangeType::NSE_FO;
+    if (e == "BSE")
+        return AoExchangeType::BSE_CM;
+    if (e == "BFO" || e == "BSE_FO")
+        return AoExchangeType::BSE_FO;
+    if (e == "MCX")
+        return AoExchangeType::MCX_FO;
+    if (e == "CDS")
+        return AoExchangeType::CDE_FO;
     return AoExchangeType::NSE_CM; // NSE cash / default
 }
 
@@ -812,8 +907,12 @@ void AccountDataStream::ws_init() {
             q.ask = tick.ask;
             q.change = tick.ltp - tick.prev_close;
             q.change_pct = tick.prev_close > 0 ? ((tick.ltp - tick.prev_close) / tick.prev_close) * 100.0 : 0;
-            q.timestamp = tick.timestamp;
-            q.oi = qint64(tick.oi);  // F&O open interest; 0 for cash/equity ticks
+            // Fyers HSM ltt (sf field 2) is epoch SECONDS in a 32-bit wire field;
+            // BrokerQuote timestamps are MILLISECONDS everywhere (CandleAggregator,
+            // algo runners). Convert here, the single FyersTick → BrokerQuote seam
+            // — FyersTick.timestamp itself is quint32 and cannot hold ms.
+            q.timestamp = tick.timestamp ? qint64(tick.timestamp) * 1000 : 0;
+            q.oi = qint64(tick.oi); // F&O open interest; 0 for cash/equity ticks
             quote_cache_[tick.symbol] = q;
             emit quote_updated(account_id_, tick.symbol, q);
         });
@@ -821,27 +920,30 @@ void AccountDataStream::ws_init() {
         connect(fws, &FyersWebSocket::depth_received, this,
                 [this](const QString& symbol, const QVector<QPair<double, double>>& bids,
                        const QVector<QPair<double, double>>& asks) {
-            // The WS streams depth for every subscribed watchlist symbol, but the
-            // depth table is single-symbol. Drop ticks that aren't for the selected
-            // symbol, else every watchlist symbol's book overwrites the table.
-            auto bare = [](QString s) {
-                const int colon = s.lastIndexOf(QLatin1Char(':'));
-                if (colon >= 0) s = s.mid(colon + 1);
-                if (s.endsWith(QLatin1String("-EQ"))) s.chop(3);
-                return s;
-            };
-            if (bare(symbol).compare(bare(selected_symbol_), Qt::CaseInsensitive) != 0)
-                return;
-            if (bids.isEmpty() && asks.isEmpty()) return;
-            const double best_bid = bids.isEmpty() ? 0 : bids.first().first;
-            const double best_ask = asks.isEmpty() ? 0 : asks.first().first;
-            double spread = 0, spread_pct = 0;
-            if (best_bid > 0 && best_ask > 0) {
-                spread = best_ask - best_bid;
-                spread_pct = (spread / best_bid) * 100.0;
-            }
-            emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, {}, {});
-        });
+                    // The WS streams depth for every subscribed watchlist symbol, but the
+                    // depth table is single-symbol. Drop ticks that aren't for the selected
+                    // symbol, else every watchlist symbol's book overwrites the table.
+                    auto bare = [](QString s) {
+                        const int colon = s.lastIndexOf(QLatin1Char(':'));
+                        if (colon >= 0)
+                            s = s.mid(colon + 1);
+                        if (s.endsWith(QLatin1String("-EQ")))
+                            s.chop(3);
+                        return s;
+                    };
+                    if (bare(symbol).compare(bare(selected_symbol_), Qt::CaseInsensitive) != 0)
+                        return;
+                    if (bids.isEmpty() && asks.isEmpty())
+                        return;
+                    const double best_bid = bids.isEmpty() ? 0 : bids.first().first;
+                    const double best_ask = asks.isEmpty() ? 0 : asks.first().first;
+                    double spread = 0, spread_pct = 0;
+                    if (best_bid > 0 && best_ask > 0) {
+                        spread = best_ask - best_bid;
+                        spread_pct = (spread / best_bid) * 100.0;
+                    }
+                    emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, {}, {});
+                });
 
         connect(fws, &FyersWebSocket::connected, this, [this]() {
             LOG_INFO(ADS_TAG, QString("Fyers HSM connected for %1").arg(account_id_));
@@ -858,7 +960,7 @@ void AccountDataStream::ws_init() {
                 if (is_fyers_fno_symbol(core))
                     return QStringLiteral("NSE:") + core;
                 if (colon >= 0)
-                    return sym;  // already-qualified equity (e.g. "BSE:TCS")
+                    return sym; // already-qualified equity (e.g. "BSE:TCS")
                 return QStringLiteral("NSE:") + core + QStringLiteral("-EQ");
             };
             QStringList fyers_symbols;
@@ -919,8 +1021,7 @@ void AccountDataStream::ws_init() {
             }
         });
 
-        connect(aws, &AlpacaWebSocket::bar_received, this,
-                [this](const QString& symbol, const BrokerCandle& bar) {
+        connect(aws, &AlpacaWebSocket::bar_received, this, [this](const QString& symbol, const BrokerCandle& bar) {
             auto it = quote_cache_.find(symbol);
             if (it != quote_cache_.end()) {
                 it->open = bar.open;
@@ -1012,9 +1113,15 @@ void AccountDataStream::ws_init() {
                 QVector<QPair<double, double>> bids, asks;
                 QVector<int> bid_orders, ask_orders;
                 for (const auto& b : tick.bids)
-                    if (b.price > 0.0) { bids.append({b.price, double(b.quantity)}); bid_orders.append(b.orders); }
+                    if (b.price > 0.0) {
+                        bids.append({b.price, double(b.quantity)});
+                        bid_orders.append(b.orders);
+                    }
                 for (const auto& a : tick.asks)
-                    if (a.price > 0.0) { asks.append({a.price, double(a.quantity)}); ask_orders.append(a.orders); }
+                    if (a.price > 0.0) {
+                        asks.append({a.price, double(a.quantity)});
+                        ask_orders.append(a.orders);
+                    }
                 const double best_bid = bids.isEmpty() ? 0.0 : bids.first().first;
                 const double best_ask = asks.isEmpty() ? 0.0 : asks.first().first;
                 double spread = 0.0, spread_pct = 0.0;
@@ -1023,7 +1130,9 @@ void AccountDataStream::ws_init() {
                     spread_pct = (spread / best_bid) * 100.0;
                 }
                 LOG_INFO(ADS_TAG, QString("Zerodha WS depth: %1 bids, %2 asks for %3")
-                                      .arg(bids.size()).arg(asks.size()).arg(q.symbol));
+                                      .arg(bids.size())
+                                      .arg(asks.size())
+                                      .arg(q.symbol));
                 emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, bid_orders, ask_orders);
             }
         });
@@ -1033,9 +1142,8 @@ void AccountDataStream::ws_init() {
             emit connection_state_changed(account_id_, ConnectionState::Connected);
             ws_resubscribe(); // resolves current symbols → tokens and subscribes
         });
-        connect(zws, &ZerodhaWebSocket::disconnected, this, [this]() {
-            emit connection_state_changed(account_id_, ConnectionState::Disconnected);
-        });
+        connect(zws, &ZerodhaWebSocket::disconnected, this,
+                [this]() { emit connection_state_changed(account_id_, ConnectionState::Disconnected); });
         connect(zws, &ZerodhaWebSocket::error_occurred, this, [this](const QString& e) {
             LOG_ERROR(ADS_TAG, QString("Zerodha WS error: %1").arg(e));
             // A 403/Forbidden on the KiteTicker handshake is a permission verdict,
@@ -1046,26 +1154,26 @@ void AccountDataStream::ws_init() {
             // loop is futile and otherwise leaves the user staring at blank quote
             // tables, so surface the cause once via the account's Error state.
             if (!ws_permission_denied_ &&
-                (e.contains(QStringLiteral("403")) ||
-                 e.contains(QStringLiteral("Forbidden"), Qt::CaseInsensitive))) {
+                (e.contains(QStringLiteral("403")) || e.contains(QStringLiteral("Forbidden"), Qt::CaseInsensitive))) {
                 ws_permission_denied_ = true;
                 QPointer<AccountDataStream> self = this;
-                QMetaObject::invokeMethod(this, [self]() {
-                    if (!self)
-                        return;
-                    const QString msg = QStringLiteral(
-                        "Live market data unavailable — Kite refused the streaming "
-                        "connection (403). This Kite API key has no active Kite Connect "
-                        "subscription. Account data still works; live quotes and "
-                        "streaming require an active Kite Connect plan for this key.");
-                    AccountManager::instance().set_connection_state(
-                        self->account_id_, ConnectionState::Error, msg);
-                    LOG_WARN(ADS_TAG,
-                             QString("Zerodha streaming denied (403) for %1 — no Kite "
-                                     "Connect market-data subscription for this API key")
-                                 .arg(self->account_id_));
-                    emit self->connection_state_changed(self->account_id_, ConnectionState::Error);
-                }, Qt::QueuedConnection);
+                QMetaObject::invokeMethod(
+                    this,
+                    [self]() {
+                        if (!self)
+                            return;
+                        const QString msg =
+                            QStringLiteral("Live market data unavailable — Kite refused the streaming "
+                                           "connection (403). This Kite API key has no active Kite Connect "
+                                           "subscription. Account data still works; live quotes and "
+                                           "streaming require an active Kite Connect plan for this key.");
+                        AccountManager::instance().set_connection_state(self->account_id_, ConnectionState::Error, msg);
+                        LOG_WARN(ADS_TAG, QString("Zerodha streaming denied (403) for %1 — no Kite "
+                                                  "Connect market-data subscription for this API key")
+                                              .arg(self->account_id_));
+                        emit self->connection_state_changed(self->account_id_, ConnectionState::Error);
+                    },
+                    Qt::QueuedConnection);
                 return;
             }
             check_token_expiry(e);
@@ -1093,9 +1201,8 @@ void AccountDataStream::ws_init() {
         QVector<qint64> tokens;
         auto& svc = InstrumentService::instance();
         for (const auto& s : syms) {
-            const QString exch = (s == selected_symbol_ && !selected_exchange_.isEmpty())
-                                     ? selected_exchange_
-                                     : QStringLiteral("NSE");
+            const QString exch =
+                (s == selected_symbol_ && !selected_exchange_.isEmpty()) ? selected_exchange_ : QStringLiteral("NSE");
             auto tok = svc.instrument_token(s, exch, broker_id_);
             if (tok.has_value())
                 tokens.append(*tok);
@@ -1147,8 +1254,8 @@ void AccountDataStream::ws_init() {
             return;
         }
         // Packed: "trading_token:::trading_sid:::base_url:::access_token[:::server_id]"
-        const QString auth_token = parts.value(0);   // JWT → "Authorization"
-        const QString sid = parts.value(1);          // redis session → "Sid"
+        const QString auth_token = parts.value(0); // JWT → "Authorization"
+        const QString sid = parts.value(1);        // redis session → "Sid"
         const QString access_tok = parts.value(3);
         const QString server_id = parts.value(4);
         if (auth_token.isEmpty() || sid.isEmpty()) {
@@ -1357,9 +1464,8 @@ void AccountDataStream::ws_init() {
         emit connection_state_changed(account_id_, ConnectionState::Connected);
         ws_resubscribe(); // resolves current symbols → {token, exchange_type} and subscribes
     });
-    connect(aows, &AngelOneWebSocket::disconnected, this, [this]() {
-        emit connection_state_changed(account_id_, ConnectionState::Disconnected);
-    });
+    connect(aows, &AngelOneWebSocket::disconnected, this,
+            [this]() { emit connection_state_changed(account_id_, ConnectionState::Disconnected); });
     connect(aows, &AngelOneWebSocket::error_occurred, this, [this](const QString& e) {
         LOG_ERROR(ADS_TAG, QString("AngelOne WS error: %1").arg(e));
         check_token_expiry(e);
@@ -1468,9 +1574,8 @@ void AccountDataStream::ws_resubscribe() {
         QVector<quint32> tokens;
         auto& svc = InstrumentService::instance();
         for (const auto& s : symbols) {
-            const QString exch = (s == selected_symbol_ && !selected_exchange_.isEmpty())
-                                     ? selected_exchange_
-                                     : QStringLiteral("NSE");
+            const QString exch =
+                (s == selected_symbol_ && !selected_exchange_.isEmpty()) ? selected_exchange_ : QStringLiteral("NSE");
             auto tok = svc.instrument_token(s, exch, broker_id_);
             if (tok.has_value() && *tok > 0)
                 tokens.append(static_cast<quint32>(*tok));
@@ -1501,9 +1606,8 @@ void AccountDataStream::ws_resubscribe() {
         QVector<AngelOneWebSocket::Subscription> subs;
         auto& svc = InstrumentService::instance();
         for (const auto& s : symbols) {
-            const QString exch = (s == selected_symbol_ && !selected_exchange_.isEmpty())
-                                     ? selected_exchange_
-                                     : QStringLiteral("NSE");
+            const QString exch =
+                (s == selected_symbol_ && !selected_exchange_.isEmpty()) ? selected_exchange_ : QStringLiteral("NSE");
             auto tok = svc.instrument_token(s, exch, broker_id_);
             if (tok.has_value() && *tok > 0)
                 subs.append({QString::number(*tok), ao_exchange_type(exch)});
@@ -1534,9 +1638,8 @@ void AccountDataStream::ws_resubscribe() {
         QVector<qint64> tokens;
         auto& svc = InstrumentService::instance();
         for (const auto& s : symbols) {
-            const QString exch = (s == selected_symbol_ && !selected_exchange_.isEmpty())
-                                     ? selected_exchange_
-                                     : QStringLiteral("NSE");
+            const QString exch =
+                (s == selected_symbol_ && !selected_exchange_.isEmpty()) ? selected_exchange_ : QStringLiteral("NSE");
             auto tok = svc.instrument_token(s, exch, broker_id_);
             if (tok.has_value())
                 tokens.append(*tok);

@@ -27,16 +27,15 @@ class HistoricalDataService : public QObject {
   public:
     static HistoricalDataService& instance();
 
-    using Callback =
-        std::function<void(bool ok, const QVector<BrokerCandle>& candles, const QString& error)>;
+    using Callback = std::function<void(bool ok, const QVector<BrokerCandle>& candles, const QString& error)>;
 
     // Fetch `lookback_days` of OHLCV history for `symbol` at `timeframe`
     // ("1m"/"3m"/"5m"/"15m"/"30m"/"1h"/"4h"/"1d") from `broker_id`/`account_id`.
     // Served from a short TTL cache when a fresh copy exists. Must be called on
     // the main thread (loads credentials there for SQLite thread-safety);
     // `callback` is invoked on the main thread.
-    void fetch(const QString& symbol, const QString& timeframe, int lookback_days,
-               const QString& broker_id, const QString& account_id, Callback callback);
+    void fetch(const QString& symbol, const QString& timeframe, int lookback_days, const QString& broker_id,
+               const QString& account_id, Callback callback);
 
   private:
     HistoricalDataService() = default;

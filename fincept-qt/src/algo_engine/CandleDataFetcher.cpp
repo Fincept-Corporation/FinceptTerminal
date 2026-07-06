@@ -1,5 +1,6 @@
 // src/algo_engine/CandleDataFetcher.cpp
 #include "algo_engine/CandleDataFetcher.h"
+
 #include "core/logging/Logger.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
@@ -8,13 +9,13 @@
 
 #include <QDateTime>
 #include <QJsonArray>
-#include <QSet>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
+#include <QSet>
 #include <QUrl>
 #include <QtConcurrent>
 
@@ -34,23 +35,34 @@ struct YahooInterval {
 };
 
 YahooInterval yahoo_interval(const QString& tf) {
-    if (tf == "1m")  return {QStringLiteral("1m"), 1};
-    if (tf == "3m")  return {QStringLiteral("1m"), 3};
-    if (tf == "5m")  return {QStringLiteral("5m"), 1};
-    if (tf == "15m") return {QStringLiteral("15m"), 1};
-    if (tf == "30m") return {QStringLiteral("30m"), 1};
-    if (tf == "1h")  return {QStringLiteral("60m"), 1};
-    if (tf == "4h")  return {QStringLiteral("60m"), 4};
-    if (tf == "1d")  return {QStringLiteral("1d"), 1};
+    if (tf == "1m")
+        return {QStringLiteral("1m"), 1};
+    if (tf == "3m")
+        return {QStringLiteral("1m"), 3};
+    if (tf == "5m")
+        return {QStringLiteral("5m"), 1};
+    if (tf == "15m")
+        return {QStringLiteral("15m"), 1};
+    if (tf == "30m")
+        return {QStringLiteral("30m"), 1};
+    if (tf == "1h")
+        return {QStringLiteral("60m"), 1};
+    if (tf == "4h")
+        return {QStringLiteral("60m"), 4};
+    if (tf == "1d")
+        return {QStringLiteral("1d"), 1};
     return {QStringLiteral("1d"), 1};
 }
 
 // Yahoo caps how far back intraday intervals reach. Clamp the request window so
 // we don't get an empty response for asking too much history.
 int yahoo_max_lookback_days(const QString& native_interval) {
-    if (native_interval == "1m") return 7;
-    if (native_interval == "5m" || native_interval == "15m" || native_interval == "30m") return 60;
-    if (native_interval == "60m") return 730;
+    if (native_interval == "1m")
+        return 7;
+    if (native_interval == "5m" || native_interval == "15m" || native_interval == "30m")
+        return 60;
+    if (native_interval == "60m")
+        return 730;
     return 100000; // daily / no practical cap
 }
 
@@ -120,8 +132,7 @@ QVector<OhlcvCandle> parse_yahoo_chart(const QJsonObject& root, int64_t tf_ms, Q
     candles.reserve(timestamps.size());
     for (int i = 0; i < timestamps.size(); ++i) {
         // Yahoo emits null for gaps/halts — skip those rows (matches yfinance dropna).
-        if (i >= opens.size() || opens[i].isNull() || highs[i].isNull() || lows[i].isNull() ||
-            closes[i].isNull())
+        if (i >= opens.size() || opens[i].isNull() || highs[i].isNull() || lows[i].isNull() || closes[i].isNull())
             continue;
         OhlcvCandle c;
         c.open_time = static_cast<int64_t>(timestamps[i].toDouble()) * 1000; // sec → ms
@@ -147,8 +158,8 @@ CandleDataFetcher& CandleDataFetcher::instance() {
     return s;
 }
 
-QVector<OhlcvCandle> CandleDataFetcher::broker_candles_to_ohlcv(
-    const QVector<trading::BrokerCandle>& src, const QString& timeframe) {
+QVector<OhlcvCandle> CandleDataFetcher::broker_candles_to_ohlcv(const QVector<trading::BrokerCandle>& src,
+                                                                const QString& timeframe) {
     const int64_t tf_ms = static_cast<int64_t>(timeframe_seconds(timeframe_from_string(timeframe))) * 1000;
     QVector<OhlcvCandle> out;
     out.reserve(src.size());
@@ -172,33 +183,40 @@ QVector<OhlcvCandle> CandleDataFetcher::broker_candles_to_ohlcv(
 }
 
 QString CandleDataFetcher::timeframe_to_broker_resolution(const QString& tf) {
-    if (tf == "1m")  return QStringLiteral("1");
-    if (tf == "3m")  return QStringLiteral("3");
-    if (tf == "5m")  return QStringLiteral("5");
-    if (tf == "15m") return QStringLiteral("15");
-    if (tf == "30m") return QStringLiteral("30");
-    if (tf == "1h")  return QStringLiteral("60");
-    if (tf == "4h")  return QStringLiteral("240");
-    if (tf == "1d")  return QStringLiteral("D");
+    if (tf == "1m")
+        return QStringLiteral("1");
+    if (tf == "3m")
+        return QStringLiteral("3");
+    if (tf == "5m")
+        return QStringLiteral("5");
+    if (tf == "15m")
+        return QStringLiteral("15");
+    if (tf == "30m")
+        return QStringLiteral("30");
+    if (tf == "1h")
+        return QStringLiteral("60");
+    if (tf == "4h")
+        return QStringLiteral("240");
+    if (tf == "1d")
+        return QStringLiteral("D");
     return QStringLiteral("D");
 }
 
-void CandleDataFetcher::fetch(const QString& symbol, const QString& timeframe,
-                               int lookback_days, DataSource source,
-                               const QString& broker_id, const QString& account_id,
-                               CandleCallback callback) {
-    if (source == DataSource::Broker ||
-        (source == DataSource::Auto && !broker_id.isEmpty())) {
-        fetch_from_broker(symbol, timeframe, lookback_days, broker_id, account_id,
-            [callback, symbol, timeframe, lookback_days, this](bool ok, const QVector<OhlcvCandle>& candles, const QString& err) {
+void CandleDataFetcher::fetch(const QString& symbol, const QString& timeframe, int lookback_days, DataSource source,
+                              const QString& broker_id, const QString& account_id, CandleCallback callback) {
+    if (source == DataSource::Broker || (source == DataSource::Auto && !broker_id.isEmpty())) {
+        fetch_from_broker(
+            symbol, timeframe, lookback_days, broker_id, account_id,
+            [callback, symbol, timeframe, lookback_days, this](bool ok, const QVector<OhlcvCandle>& candles,
+                                                               const QString& err) {
                 if (ok && !candles.isEmpty()) {
                     callback(true, candles, {});
                     return;
                 }
                 LOG_WARN("CandleDataFetcher",
-                         QString("Broker fetch failed for %1, falling back to Yahoo: %2")
-                             .arg(symbol, err));
-                fetch_from_yahoo({symbol}, timeframe, lookback_days,
+                         QString("Broker fetch failed for %1, falling back to Yahoo: %2").arg(symbol, err));
+                fetch_from_yahoo(
+                    {symbol}, timeframe, lookback_days,
                     [callback, symbol](const QHash<QString, QVector<OhlcvCandle>>& data, const QStringList& errors) {
                         if (data.contains(symbol)) {
                             callback(true, data[symbol], {});
@@ -212,21 +230,19 @@ void CandleDataFetcher::fetch(const QString& symbol, const QString& timeframe,
 
     // YFinance, or Auto without a connected broker → native Yahoo.
     fetch_from_yahoo({symbol}, timeframe, lookback_days,
-        [callback, symbol](const QHash<QString, QVector<OhlcvCandle>>& data, const QStringList& errors) {
-            if (data.contains(symbol)) {
-                callback(true, data[symbol], {});
-            } else {
-                callback(false, {}, errors.isEmpty() ? "No data" : errors.first());
-            }
-        });
+                     [callback, symbol](const QHash<QString, QVector<OhlcvCandle>>& data, const QStringList& errors) {
+                         if (data.contains(symbol)) {
+                             callback(true, data[symbol], {});
+                         } else {
+                             callback(false, {}, errors.isEmpty() ? "No data" : errors.first());
+                         }
+                     });
 }
 
-void CandleDataFetcher::fetch_multi(const QStringList& symbols, const QString& timeframe,
-                                     int lookback_days, DataSource source,
-                                     const QString& broker_id, const QString& account_id,
-                                     MultiCandleCallback callback) {
-    if (source == DataSource::Broker ||
-        (source == DataSource::Auto && !broker_id.isEmpty())) {
+void CandleDataFetcher::fetch_multi(const QStringList& symbols, const QString& timeframe, int lookback_days,
+                                    DataSource source, const QString& broker_id, const QString& account_id,
+                                    MultiCandleCallback callback) {
+    if (source == DataSource::Broker || (source == DataSource::Auto && !broker_id.isEmpty())) {
         QPointer<CandleDataFetcher> self = this;
         auto results = std::make_shared<QHash<QString, QVector<OhlcvCandle>>>();
         auto errors = std::make_shared<QStringList>();
@@ -235,34 +251,35 @@ void CandleDataFetcher::fetch_multi(const QStringList& symbols, const QString& t
 
         for (const auto& sym : symbols) {
             fetch_from_broker(sym, timeframe, lookback_days, broker_id, account_id,
-                [self, sym, results, errors, failed, remaining, callback, timeframe, lookback_days]
-                (bool ok, const QVector<OhlcvCandle>& candles, const QString& err) {
-                    // Broker callbacks are marshalled to self's (main) thread, so the
-                    // shared containers are mutated serially — no extra locking needed.
-                    if (ok && !candles.isEmpty()) {
-                        results->insert(sym, candles);
-                    } else {
-                        failed->append(sym);
-                        errors->append(QString("%1: %2").arg(sym, err));
-                    }
-                    if (remaining->fetch_sub(1) != 1)
-                        return;
-                    // Per-symbol Yahoo fallback: retry only the symbols the broker
-                    // couldn't serve, then merge Yahoo data over the broker results.
-                    if (failed->isEmpty() || !self) {
-                        callback(*results, *errors);
-                        return;
-                    }
-                    self->fetch_from_yahoo(*failed, timeframe, lookback_days,
-                        [results, errors, callback](const QHash<QString, QVector<OhlcvCandle>>& ydata,
-                                                    const QStringList& yerr) {
-                            for (auto it = ydata.begin(); it != ydata.end(); ++it)
-                                results->insert(it.key(), it.value());
-                            QStringList merged = *errors;
-                            merged += yerr;
-                            callback(*results, merged);
-                        });
-                });
+                              [self, sym, results, errors, failed, remaining, callback, timeframe,
+                               lookback_days](bool ok, const QVector<OhlcvCandle>& candles, const QString& err) {
+                                  // Broker callbacks are marshalled to self's (main) thread, so the
+                                  // shared containers are mutated serially — no extra locking needed.
+                                  if (ok && !candles.isEmpty()) {
+                                      results->insert(sym, candles);
+                                  } else {
+                                      failed->append(sym);
+                                      errors->append(QString("%1: %2").arg(sym, err));
+                                  }
+                                  if (remaining->fetch_sub(1) != 1)
+                                      return;
+                                  // Per-symbol Yahoo fallback: retry only the symbols the broker
+                                  // couldn't serve, then merge Yahoo data over the broker results.
+                                  if (failed->isEmpty() || !self) {
+                                      callback(*results, *errors);
+                                      return;
+                                  }
+                                  self->fetch_from_yahoo(
+                                      *failed, timeframe, lookback_days,
+                                      [results, errors, callback](const QHash<QString, QVector<OhlcvCandle>>& ydata,
+                                                                  const QStringList& yerr) {
+                                          for (auto it = ydata.begin(); it != ydata.end(); ++it)
+                                              results->insert(it.key(), it.value());
+                                          QStringList merged = *errors;
+                                          merged += yerr;
+                                          callback(*results, merged);
+                                      });
+                              });
         }
         return;
     }
@@ -270,9 +287,9 @@ void CandleDataFetcher::fetch_multi(const QStringList& symbols, const QString& t
     fetch_from_yahoo(symbols, timeframe, lookback_days, callback);
 }
 
-void CandleDataFetcher::fetch_from_broker(const QString& symbol, const QString& timeframe,
-                                           int lookback_days, const QString& broker_id,
-                                           const QString& account_id, CandleCallback callback) {
+void CandleDataFetcher::fetch_from_broker(const QString& symbol, const QString& timeframe, int lookback_days,
+                                          const QString& broker_id, const QString& account_id,
+                                          CandleCallback callback) {
     // Broker history (symbol resolution + bare-symbol fallback + cache) now lives
     // in the shared trading::HistoricalDataService; convert its BrokerCandle
     // result to the algo OhlcvCandle here. (Yahoo fallback is layered in fetch().)
@@ -287,8 +304,8 @@ void CandleDataFetcher::fetch_from_broker(const QString& symbol, const QString& 
         });
 }
 
-void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QString& timeframe,
-                                          int lookback_days, MultiCandleCallback callback) {
+void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QString& timeframe, int lookback_days,
+                                         MultiCandleCallback callback) {
     if (symbols.isEmpty()) {
         callback({}, {});
         return;
@@ -304,8 +321,7 @@ void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QStri
 
     const qint64 period2 = QDateTime::currentSecsSinceEpoch();
     const qint64 period1 = period2 - static_cast<qint64>(days) * 86400;
-    const int64_t tf_ms =
-        static_cast<int64_t>(timeframe_seconds(timeframe_from_string(timeframe))) * 1000;
+    const int64_t tf_ms = static_cast<int64_t>(timeframe_seconds(timeframe_from_string(timeframe))) * 1000;
 
     auto results = std::make_shared<QHash<QString, QVector<OhlcvCandle>>>();
     auto errors = std::make_shared<QStringList>();
@@ -313,13 +329,12 @@ void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QStri
 
     for (const QString& sym : symbols) {
         const QString yf = symbol_to_yahoo(sym);
-        const QString url =
-            QString("https://query1.finance.yahoo.com/v8/finance/chart/%1"
-                    "?period1=%2&period2=%3&interval=%4&includePrePost=false")
-                .arg(yf)
-                .arg(period1)
-                .arg(period2)
-                .arg(yi.interval);
+        const QString url = QString("https://query1.finance.yahoo.com/v8/finance/chart/%1"
+                                    "?period1=%2&period2=%3&interval=%4&includePrePost=false")
+                                .arg(yf)
+                                .arg(period1)
+                                .arg(period2)
+                                .arg(yi.interval);
 
         QNetworkRequest req{QUrl(url)};
         // Yahoo's chart endpoint 429s detailed browser UA strings (and python-requests),
@@ -338,8 +353,7 @@ void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QStri
                         errors->append(QString("%1: %2").arg(sym, reply->errorString()));
                     } else {
                         QString perr;
-                        auto candles =
-                            parse_yahoo_chart(QJsonDocument::fromJson(body).object(), tf_ms, &perr);
+                        auto candles = parse_yahoo_chart(QJsonDocument::fromJson(body).object(), tf_ms, &perr);
                         candles = aggregate_candles(candles, yi.aggregate);
                         if (!candles.isEmpty())
                             results->insert(sym, candles);

@@ -41,8 +41,7 @@ QString hash_fields(const QScreen* screen) {
     fingerprint += QString::number(screen->physicalSize().width(), 'f', 1) + 'x';
     fingerprint += QString::number(screen->physicalSize().height(), 'f', 1);
 
-    const QByteArray digest =
-        QCryptographicHash::hash(fingerprint.toUtf8(), QCryptographicHash::Sha256);
+    const QByteArray digest = QCryptographicHash::hash(fingerprint.toUtf8(), QCryptographicHash::Sha256);
     // 16 hex chars = 64 bits of fingerprint, enough to make collision over
     // any realistic monitor count negligible while keeping ids short.
     return "h:" + QString::fromLatin1(digest.toHex().left(16));

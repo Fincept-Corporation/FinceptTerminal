@@ -47,11 +47,11 @@ inline OrderMode parse_order_mode(const QString& s) {
 
 /// A queued order awaiting approval / rejection.
 struct PendingOrder {
-    QString id;         // UUID
-    QString account_id; // owning broker account
-    QString order_type; // "placeorder","smartorder","basketorder","splitorder","placegttorder"
+    QString id;             // UUID
+    QString account_id;     // owning broker account
+    QString order_type;     // "placeorder","smartorder","basketorder","splitorder","placegttorder"
     QJsonObject order_data; // serialized order (no credentials)
-    QString status;     // "pending","approved","rejected"
+    QString status;         // "pending","approved","rejected"
     QDateTime created_at;
     QDateTime approved_at;
     QDateTime rejected_at;
@@ -79,8 +79,7 @@ class ActionCenter : public QObject {
 
     // Queue an order for approval. Returns the new pending id (empty on failure).
     // `order_data` should NOT contain credentials. Emits pending_order_created.
-    QString queue_order(const QString& account_id, const QString& order_type,
-                        const QJsonObject& order_data);
+    QString queue_order(const QString& account_id, const QString& order_type, const QJsonObject& order_data);
 
     // User actions.
     void approve_order(const QString& pending_id);

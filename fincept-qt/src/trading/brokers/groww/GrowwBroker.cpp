@@ -99,7 +99,7 @@ const BrokerEnumMap<QString>& GrowwBroker::groww_enum_map() {
         BrokerEnumMap<QString> x;
         x.set(OrderType::Market, "MARKET");
         x.set(OrderType::Limit, "LIMIT");
-        x.set(OrderType::StopLoss, "STOP_LOSS_MARKET");      // SL-M: trigger only, market fill
+        x.set(OrderType::StopLoss, "STOP_LOSS_MARKET");     // SL-M: trigger only, market fill
         x.set(OrderType::StopLossLimit, "STOP_LOSS_LIMIT"); // SL:   trigger + limit price
         x.set(ProductType::Intraday, "MIS");
         x.set(ProductType::Delivery, "CNC");
@@ -151,19 +151,32 @@ int GrowwBroker::history_interval_minutes(const QString& resolution) {
 // 10minute, 15minute, 30minute, 1hour, 4hour, 1day, 1week, 1month.
 QString GrowwBroker::history_interval_token(const QString& resolution) {
     switch (history_interval_minutes(resolution)) {
-        case 1:    return "1minute";
-        case 2:    return "2minute";
-        case 3:    return "3minute";
-        case 5:    return "5minute";
-        case 10:   return "10minute";
-        case 15:   return "15minute";
-        case 30:   return "30minute";
-        case 60:   return "1hour";
-        case 240:  return "4hour";
-        case 1440: return "1day";
-        case 10080:return "1week";
-        case 43200:return "1month";
-        default:   return "1minute";
+        case 1:
+            return "1minute";
+        case 2:
+            return "2minute";
+        case 3:
+            return "3minute";
+        case 5:
+            return "5minute";
+        case 10:
+            return "10minute";
+        case 15:
+            return "15minute";
+        case 30:
+            return "30minute";
+        case 60:
+            return "1hour";
+        case 240:
+            return "4hour";
+        case 1440:
+            return "1day";
+        case 10080:
+            return "1week";
+        case 43200:
+            return "1month";
+        default:
+            return "1minute";
     }
 }
 
@@ -462,8 +475,8 @@ ApiResponse<QJsonObject> GrowwBroker::get_trade_book(const BrokerCredentials& cr
                 if (oid.isEmpty())
                     continue;
 
-                QString trades_url = QString("https://api.groww.in/v1/order/trades/%1?segment=%2&page=0&page_size=50")
-                                         .arg(oid, segment);
+                QString trades_url =
+                    QString("https://api.groww.in/v1/order/trades/%1?segment=%2&page=0&page_size=50").arg(oid, segment);
                 auto tr = BrokerHttp::instance().get(trades_url, hdrs);
                 if (!tr.success || is_token_expired(tr))
                     continue;
@@ -999,9 +1012,7 @@ ApiResponse<QVector<BrokerCandle>> GrowwBroker::get_history(const BrokerCredenti
     std::sort(result.begin(), result.end(),
               [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp < b.timestamp; });
     result.erase(std::unique(result.begin(), result.end(),
-                             [](const BrokerCandle& a, const BrokerCandle& b) {
-                                 return a.timestamp == b.timestamp;
-                             }),
+                             [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
                  result.end());
 
     return {true, result, "", ts};
@@ -1013,9 +1024,8 @@ ApiResponse<QVector<BrokerCandle>> GrowwBroker::get_history(const BrokerCredenti
 // call /v1/live-data/ltp and /v1/live-data/ohlc (max 50 per call per segment).
 // ============================================================================
 
-ApiResponse<QVector<BrokerQuote>> GrowwBroker::get_multi_quotes(
-    const BrokerCredentials& creds,
-    const QVector<QPair<QString, QString>>& symbols) {
+ApiResponse<QVector<BrokerQuote>> GrowwBroker::get_multi_quotes(const BrokerCredentials& creds,
+                                                                const QVector<QPair<QString, QString>>& symbols) {
     int64_t ts = now_ts();
 
     if (symbols.isEmpty())
@@ -1058,9 +1068,8 @@ ApiResponse<QVector<BrokerQuote>> GrowwBroker::get_multi_quotes(
 // Each level: { price, quantity, orders }
 // ============================================================================
 
-ApiResponse<MarketDepth> GrowwBroker::get_market_depth(
-    const BrokerCredentials& creds,
-    const QString& symbol, const QString& exchange) {
+ApiResponse<MarketDepth> GrowwBroker::get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                                       const QString& exchange) {
     int64_t ts = now_ts();
     auto hdrs = auth_headers(creds);
 
@@ -1137,8 +1146,7 @@ QJsonObject GrowwBroker::order_to_margin_row(const UnifiedOrder& order) {
     return row;
 }
 
-ApiResponse<OrderMargin> GrowwBroker::get_order_margins(const BrokerCredentials& creds,
-                                                        const UnifiedOrder& order) {
+ApiResponse<OrderMargin> GrowwBroker::get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) {
     int64_t ts = now_ts();
     auto hdrs = auth_headers(creds);
 
@@ -1170,9 +1178,8 @@ ApiResponse<OrderMargin> GrowwBroker::get_order_margins(const BrokerCredentials&
     m.var_margin = payload["span_required"].toDouble(); // closest analogue for F&O; 0 for cash
     m.elm = payload["exposure_required"].toDouble();
     m.additional = payload["option_buy_premium"].toDouble();
-    m.cash = payload.contains("cash_cnc_margin_required")
-                 ? payload["cash_cnc_margin_required"].toDouble()
-                 : payload["cash_mis_margin_required"].toDouble();
+    m.cash = payload.contains("cash_cnc_margin_required") ? payload["cash_cnc_margin_required"].toDouble()
+                                                          : payload["cash_mis_margin_required"].toDouble();
     m.bo_margin = 0.0; // Groww has no bracket orders
     m.pnl = 0.0;
     if (m.total > 0 && order.price > 0 && order.quantity > 0)
@@ -1381,8 +1388,8 @@ ApiResponse<GttOrder> GrowwBroker::gtt_get(const BrokerCredentials& creds, const
     const QStringList types = {"GTT", "OCO"};
     for (const auto& seg : segs) {
         for (const auto& type : types) {
-            QString url = QString("https://api.groww.in/v1/order-advance/status/%1/%2/internal/%3")
-                              .arg(seg, type, gtt_id);
+            QString url =
+                QString("https://api.groww.in/v1/order-advance/status/%1/%2/internal/%3").arg(seg, type, gtt_id);
             auto resp = BrokerHttp::instance().get(url, hdrs);
             if (!resp.success || is_token_expired(resp))
                 continue;
@@ -1426,7 +1433,7 @@ ApiResponse<QVector<GttOrder>> GrowwBroker::gtt_list(const BrokerCredentials& cr
 }
 
 ApiResponse<GttOrder> GrowwBroker::gtt_modify(const BrokerCredentials& creds, const QString& gtt_id,
-                                               const GttOrder& updated) {
+                                              const GttOrder& updated) {
     int64_t ts = now_ts();
     auto hdrs = auth_headers(creds);
     QJsonObject body = gtt_to_advance_body(updated, /*is_create=*/false);

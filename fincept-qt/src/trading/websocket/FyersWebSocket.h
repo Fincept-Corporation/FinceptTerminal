@@ -21,8 +21,7 @@ namespace fincept::trading {
 class FyersWebSocket : public QObject {
     Q_OBJECT
   public:
-    explicit FyersWebSocket(const QString& client_id, const QString& access_token,
-                            QObject* parent = nullptr);
+    explicit FyersWebSocket(const QString& client_id, const QString& access_token, QObject* parent = nullptr);
 
     void open();
     void close();
@@ -35,8 +34,7 @@ class FyersWebSocket : public QObject {
 
   signals:
     void tick_received(const fincept::trading::FyersTick& tick);
-    void depth_received(const QString& symbol,
-                        const QVector<QPair<double, double>>& bids,
+    void depth_received(const QString& symbol, const QVector<QPair<double, double>>& bids,
                         const QVector<QPair<double, double>>& asks);
     void connected();
     void disconnected();
@@ -80,12 +78,12 @@ class FyersWebSocket : public QObject {
     // BE read helpers
     static quint64 read_u64_be(const uchar* p);
     static quint32 read_u32_be(const uchar* p);
-    static qint32  read_i32_be(const uchar* p);
+    static qint32 read_i32_be(const uchar* p);
     static quint16 read_u16_be(const uchar* p);
     static quint16 read_u16_le(const uchar* p);
-    static void    write_u16_be(uchar* p, quint16 v);
-    static void    write_u32_be(uchar* p, quint32 v);
-    static void    write_u64_be(uchar* p, quint64 v);
+    static void write_u16_be(uchar* p, quint16 v);
+    static void write_u32_be(uchar* p, quint32 v);
+    static void write_u64_be(uchar* p, quint64 v);
 
     double field_to_price(qint32 raw, const TopicState& ts) const;
 

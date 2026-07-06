@@ -68,7 +68,7 @@ class PythonWorker : public QObject {
     bool shutting_down_ = false;
     int restart_count_ = 0;
     static constexpr int kMaxRestarts = 5;
-    static constexpr int kReadyTimeoutMs = 15'000;  // import yfinance+pandas
+    static constexpr int kReadyTimeoutMs = 15'000; // import yfinance+pandas
 
     // Pending request tracking. Keyed by request id for response correlation.
     struct Pending {

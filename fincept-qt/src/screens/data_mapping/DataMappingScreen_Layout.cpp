@@ -6,10 +6,9 @@
 //
 // Part of the partial-class split of DataMappingScreen.cpp.
 
+#include "core/logging/Logger.h"
 #include "screens/data_mapping/DataMappingScreen.h"
 #include "screens/data_mapping/DataMappingScreen_internal.h"
-
-#include "core/logging/Logger.h"
 #include "storage/repositories/DataMappingRepository.h"
 #include "ui/theme/Theme.h"
 
@@ -267,7 +266,6 @@ QWidget* DataMappingScreen::create_right_panel() {
     vl->addWidget(info, 1);
     return panel;
 }
-
 
 QWidget* DataMappingScreen::create_api_config_panel() {
     auto* panel = new QWidget(this);
@@ -619,7 +617,6 @@ QWidget* DataMappingScreen::create_test_save_panel() {
     return panel;
 }
 
-
 QWidget* DataMappingScreen::create_list_view() {
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
@@ -759,7 +756,6 @@ QWidget* DataMappingScreen::create_template_view() {
     return outer;
 }
 
-
 QWidget* DataMappingScreen::create_nav_footer() {
     auto* bar = new QWidget(this);
     bar->setObjectName("dmNavFooter");
@@ -816,7 +812,6 @@ QWidget* DataMappingScreen::create_status_bar() {
 
     return bar;
 }
-
 
 QWidget* DataMappingScreen::create_form_row(const QString& label_text, QWidget* input) {
     auto* w = new QWidget(this);

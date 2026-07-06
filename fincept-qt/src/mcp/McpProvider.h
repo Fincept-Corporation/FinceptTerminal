@@ -55,12 +55,12 @@ class McpProvider {
         QString name;
         QString category;
         QString description;
-        bool has_handler = false;   // sync OR async handler is set
-        bool is_async = false;      // async_handler is set
+        bool has_handler = false; // sync OR async handler is set
+        bool is_async = false;    // async_handler is set
         bool enabled = true;
         bool is_destructive = false;
         AuthLevel auth_required = AuthLevel::None;
-        QJsonObject input_schema;   // serialised JSON Schema
+        QJsonObject input_schema; // serialised JSON Schema
         QStringList legacy_aliases;
     };
 
@@ -87,8 +87,7 @@ class McpProvider {
     /// Pass an empty ToolContext to get the tool's defaults. Pass a populated
     /// one to override timeout / inject a cancellation hook (Phase 5 will
     /// thread cancellation tokens through here).
-    QFuture<ToolResult> call_tool_async(const QString& name, const QJsonObject& args,
-                                         ToolContext ctx = {});
+    QFuture<ToolResult> call_tool_async(const QString& name, const QJsonObject& args, ToolContext ctx = {});
 
     // ── Phase 6.3: Authorization hook ──────────────────────────────────────
     /// Caller-supplied predicate that returns true iff the call should

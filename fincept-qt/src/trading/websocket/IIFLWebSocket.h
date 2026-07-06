@@ -52,8 +52,7 @@ class IIFLWebSocket : public BrokerWebSocketBase {
     /// @param market_token  XTS market-data session token (sent as the WS `token`
     ///                       query param and as the subscription Authorization header)
     /// @param user_id        resolved XTS userID (sent as the WS `userID` query param)
-    explicit IIFLWebSocket(const QString& market_token, const QString& user_id,
-                           QObject* parent = nullptr);
+    explicit IIFLWebSocket(const QString& market_token, const QString& user_id, QObject* parent = nullptr);
     ~IIFLWebSocket() override;
 
     void open() override;
@@ -114,8 +113,7 @@ class IIFLWebSocket : public BrokerWebSocketBase {
 
     static constexpr const char* kBaseUrl = "https://ttblaze.iifl.com";
     static constexpr const char* kMarketDataPath = "/apimarketdata";
-    static constexpr const char* kSubscriptionUrl =
-        "https://ttblaze.iifl.com/apimarketdata/instruments/subscription";
+    static constexpr const char* kSubscriptionUrl = "https://ttblaze.iifl.com/apimarketdata/instruments/subscription";
 };
 
 } // namespace trading

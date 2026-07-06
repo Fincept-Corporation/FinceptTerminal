@@ -16,12 +16,12 @@ namespace fincept::wallet {
 
 namespace {
 
-constexpr const char* kLocksFamily   = "wallet:locks:";
+constexpr const char* kLocksFamily = "wallet:locks:";
 constexpr const char* kVeFncptFamily = "wallet:vefncpt:";
-constexpr const char* kKeyProgramId  = "fincept.lock_program_id";
+constexpr const char* kKeyProgramId = "fincept.lock_program_id";
 
 constexpr qint64 kSecondsPerMonth = 30LL * 24 * 60 * 60;
-constexpr qint64 kSecondsPerYear  = 365LL * 24 * 60 * 60;
+constexpr qint64 kSecondsPerYear = 365LL * 24 * 60 * 60;
 
 /// Demo locks for plan §3.2. Returned for any pubkey in mock mode so the
 /// UI is reviewable without an Anchor program. Numbers are anchored to
@@ -31,8 +31,7 @@ QVector<LockPosition> mock_positions() {
     QVector<LockPosition> out;
     out.reserve(3);
 
-    auto make = [now](const QString& id_seed, const QString& amount,
-                       qint64 duration_sec, double lifetime_yield) {
+    auto make = [now](const QString& id_seed, const QString& amount, qint64 duration_sec, double lifetime_yield) {
         LockPosition p;
         p.position_id = QStringLiteral("MockLock") + id_seed;
         p.amount_raw = amount;
@@ -42,11 +41,11 @@ QVector<LockPosition> mock_positions() {
         p.unlock_ts = p.lock_start_ts + duration_sec * 1000;
         p.duration_secs = duration_sec;
         // Weight = amount × multiplier-for-duration. Multipliers below.
-        const double mult = (duration_sec >= kSecondsPerYear * 4) ? 1.0
-                          : (duration_sec >= kSecondsPerYear * 2) ? 0.5
-                          : (duration_sec >= kSecondsPerYear)     ? 0.25
-                          : (duration_sec >= kSecondsPerMonth * 6) ? 0.125
-                          : 0.0625;
+        const double mult = (duration_sec >= kSecondsPerYear * 4)    ? 1.0
+                            : (duration_sec >= kSecondsPerYear * 2)  ? 0.5
+                            : (duration_sec >= kSecondsPerYear)      ? 0.25
+                            : (duration_sec >= kSecondsPerMonth * 6) ? 0.125
+                                                                     : 0.0625;
         const auto amt_units = amount.toULongLong();
         p.weight_raw = QString::number(static_cast<quint64>(amt_units * mult));
         p.lifetime_yield_usdc = lifetime_yield;
@@ -61,7 +60,7 @@ QVector<LockPosition> mock_positions() {
                        QStringLiteral("1000000000"), // 1,000 @ 6dp
                        kSecondsPerYear, 42.0));
     out.push_back(make(QStringLiteral("6mo"),
-                       QStringLiteral("500000000"),  // 500 @ 6dp
+                       QStringLiteral("500000000"), // 500 @ 6dp
                        kSecondsPerMonth * 6, 14.0));
     return out;
 }
@@ -88,33 +87,48 @@ QStringList StakingService::topic_patterns() const {
 
 double StakingService::multiplier_for(Duration d) noexcept {
     switch (d) {
-        case Duration::ThreeMonths: return 0.0625;
-        case Duration::SixMonths:   return 0.125;
-        case Duration::OneYear:     return 0.25;
-        case Duration::TwoYears:    return 0.5;
-        case Duration::FourYears:   return 1.0;
+        case Duration::ThreeMonths:
+            return 0.0625;
+        case Duration::SixMonths:
+            return 0.125;
+        case Duration::OneYear:
+            return 0.25;
+        case Duration::TwoYears:
+            return 0.5;
+        case Duration::FourYears:
+            return 1.0;
     }
     return 0.0;
 }
 
 QString StakingService::label_for(Duration d) {
     switch (d) {
-        case Duration::ThreeMonths: return QStringLiteral("3 MO");
-        case Duration::SixMonths:   return QStringLiteral("6 MO");
-        case Duration::OneYear:     return QStringLiteral("1 YR");
-        case Duration::TwoYears:    return QStringLiteral("2 YR");
-        case Duration::FourYears:   return QStringLiteral("4 YR");
+        case Duration::ThreeMonths:
+            return QStringLiteral("3 MO");
+        case Duration::SixMonths:
+            return QStringLiteral("6 MO");
+        case Duration::OneYear:
+            return QStringLiteral("1 YR");
+        case Duration::TwoYears:
+            return QStringLiteral("2 YR");
+        case Duration::FourYears:
+            return QStringLiteral("4 YR");
     }
     return {};
 }
 
 qint64 StakingService::seconds_for(Duration d) noexcept {
     switch (d) {
-        case Duration::ThreeMonths: return kSecondsPerMonth * 3;
-        case Duration::SixMonths:   return kSecondsPerMonth * 6;
-        case Duration::OneYear:     return kSecondsPerYear;
-        case Duration::TwoYears:    return kSecondsPerYear * 2;
-        case Duration::FourYears:   return kSecondsPerYear * 4;
+        case Duration::ThreeMonths:
+            return kSecondsPerMonth * 3;
+        case Duration::SixMonths:
+            return kSecondsPerMonth * 6;
+        case Duration::OneYear:
+            return kSecondsPerYear;
+        case Duration::TwoYears:
+            return kSecondsPerYear * 2;
+        case Duration::FourYears:
+            return kSecondsPerYear * 4;
     }
     return 0;
 }
@@ -129,7 +143,8 @@ QString StakingService::pubkey_from_vefncpt_topic(const QString& topic) {
 
 QString StakingService::resolve_program_id() const {
     auto r = SecureStorage::instance().retrieve(QString::fromLatin1(kKeyProgramId));
-    if (r.is_ok()) return r.value().trimmed();
+    if (r.is_ok())
+        return r.value().trimmed();
     return {};
 }
 
@@ -144,8 +159,7 @@ void StakingService::refresh(const QStringList& topics) {
         // Log once per process — refresh fires every 30 s in mock mode.
         static std::atomic<bool> once{false};
         if (!once.exchange(true)) {
-            LOG_INFO("Staking",
-                     "no fincept.lock_program_id configured — serving mock locks");
+            LOG_INFO("Staking", "no fincept.lock_program_id configured — serving mock locks");
         } else {
             LOG_DEBUG("Staking", "mock-mode refresh");
         }
@@ -154,14 +168,14 @@ void StakingService::refresh(const QStringList& topics) {
     for (const auto& topic : topics) {
         if (topic.startsWith(QLatin1String(kLocksFamily))) {
             const auto pk = pubkey_from_locks_topic(topic);
-            if (pk.isEmpty()) continue;
-            mock ? publish_mock_locks(topic, pk)
-                 : refresh_locks_real(topic, pk, program_id);
+            if (pk.isEmpty())
+                continue;
+            mock ? publish_mock_locks(topic, pk) : refresh_locks_real(topic, pk, program_id);
         } else if (topic.startsWith(QLatin1String(kVeFncptFamily))) {
             const auto pk = pubkey_from_vefncpt_topic(topic);
-            if (pk.isEmpty()) continue;
-            mock ? publish_mock_vefncpt(topic, pk)
-                 : refresh_vefncpt_real(topic, pk, program_id);
+            if (pk.isEmpty())
+                continue;
+            mock ? publish_mock_vefncpt(topic, pk) : refresh_vefncpt_real(topic, pk, program_id);
         }
     }
 }
@@ -176,22 +190,18 @@ void StakingService::refresh(const QStringList& topics) {
 // methods publish_error so the UI shows a clear "program not deployed" state
 // rather than silent empty rows.
 
-void StakingService::refresh_locks_real(const QString& topic,
-                                        const QString& /*pubkey*/,
+void StakingService::refresh_locks_real(const QString& topic, const QString& /*pubkey*/,
                                         const QString& /*program_id*/) {
     auto& hub = fincept::datahub::DataHub::instance();
-    hub.publish_error(topic,
-        QStringLiteral("real fetch not implemented yet — Anchor program "
-                       "deployment + Borsh deserialiser pending"));
+    hub.publish_error(topic, QStringLiteral("real fetch not implemented yet — Anchor program "
+                                            "deployment + Borsh deserialiser pending"));
 }
 
-void StakingService::refresh_vefncpt_real(const QString& topic,
-                                          const QString& /*pubkey*/,
+void StakingService::refresh_vefncpt_real(const QString& topic, const QString& /*pubkey*/,
                                           const QString& /*program_id*/) {
     auto& hub = fincept::datahub::DataHub::instance();
-    hub.publish_error(topic,
-        QStringLiteral("real fetch not implemented yet — Anchor program "
-                       "deployment + Borsh deserialiser pending"));
+    hub.publish_error(topic, QStringLiteral("real fetch not implemented yet — Anchor program "
+                                            "deployment + Borsh deserialiser pending"));
 }
 
 // ── Mock path ──────────────────────────────────────────────────────────────
@@ -236,15 +246,12 @@ void StakingService::publish_mock_vefncpt(const QString& topic, const QString& p
 // WITHDRAW buttons in the UI catch the error and surface it in the panel's
 // error strip rather than opening a confirm dialog.
 
-void StakingService::build_lock_tx(const QString& /*pubkey*/,
-                                   const QString& /*amount_raw*/,
-                                   Duration /*duration*/,
+void StakingService::build_lock_tx(const QString& /*pubkey*/, const QString& /*amount_raw*/, Duration /*duration*/,
                                    std::function<void(Result<QString>)> callback) {
     if (!program_is_configured()) {
-        callback(Result<QString>::err(
-            "fincept_lock Anchor program not deployed yet. Configure "
-            "SecureStorage `fincept.lock_program_id` once the program "
-            "ships to enable real locks."));
+        callback(Result<QString>::err("fincept_lock Anchor program not deployed yet. Configure "
+                                      "SecureStorage `fincept.lock_program_id` once the program "
+                                      "ships to enable real locks."));
         return;
     }
     // Real implementation: build a versioned tx with the `lock` instruction.
@@ -252,24 +259,19 @@ void StakingService::build_lock_tx(const QString& /*pubkey*/,
     callback(Result<QString>::err("real build_lock_tx not yet implemented"));
 }
 
-void StakingService::build_extend_tx(const QString& /*pubkey*/,
-                                     const QString& /*position_id*/,
-                                     Duration /*new_duration*/,
-                                     std::function<void(Result<QString>)> callback) {
+void StakingService::build_extend_tx(const QString& /*pubkey*/, const QString& /*position_id*/,
+                                     Duration /*new_duration*/, std::function<void(Result<QString>)> callback) {
     if (!program_is_configured()) {
-        callback(Result<QString>::err(
-            "fincept_lock Anchor program not deployed yet."));
+        callback(Result<QString>::err("fincept_lock Anchor program not deployed yet."));
         return;
     }
     callback(Result<QString>::err("real build_extend_tx not yet implemented"));
 }
 
-void StakingService::build_withdraw_tx(const QString& /*pubkey*/,
-                                       const QString& /*position_id*/,
+void StakingService::build_withdraw_tx(const QString& /*pubkey*/, const QString& /*position_id*/,
                                        std::function<void(Result<QString>)> callback) {
     if (!program_is_configured()) {
-        callback(Result<QString>::err(
-            "fincept_lock Anchor program not deployed yet."));
+        callback(Result<QString>::err("fincept_lock Anchor program not deployed yet."));
         return;
     }
     callback(Result<QString>::err("real build_withdraw_tx not yet implemented"));

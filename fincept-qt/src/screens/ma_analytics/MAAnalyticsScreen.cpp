@@ -49,31 +49,46 @@ void MAAnalyticsScreen::changeEvent(QEvent* e) {
 
 void MAAnalyticsScreen::retranslateUi() {
     // Top bar (module quick-buttons carry data short_label — not translated)
-    if (brand_label_)    brand_label_->setText(tr("M&A ANALYTICS"));
-    if (ready_label_)    ready_label_->setText(tr("READY"));
-    if (subtitle_label_) subtitle_label_->setText(tr("CORPORATE FINANCE TOOLKIT"));
+    if (brand_label_)
+        brand_label_->setText(tr("M&A ANALYTICS"));
+    if (ready_label_)
+        ready_label_->setText(tr("READY"));
+    if (subtitle_label_)
+        subtitle_label_->setText(tr("CORPORATE FINANCE TOOLKIT"));
 
     // Sidebar / right-panel section headers
-    if (modules_title_) modules_title_->setText(tr("MODULES"));
-    if (info_title_)    info_title_->setText(tr("MODULE INFO"));
-    if (cap_header_)    cap_header_->setText(tr("CAPABILITIES"));
-    if (stats_title_)   stats_title_->setText(tr("QUICK STATS"));
+    if (modules_title_)
+        modules_title_->setText(tr("MODULES"));
+    if (info_title_)
+        info_title_->setText(tr("MODULE INFO"));
+    if (cap_header_)
+        cap_header_->setText(tr("CAPABILITIES"));
+    if (stats_title_)
+        stats_title_->setText(tr("QUICK STATS"));
 
     // Quick-stat name labels
-    if (stat_total_modules_lbl_)     stat_total_modules_lbl_->setText(tr("Total Modules"));
-    if (stat_valuation_methods_lbl_) stat_valuation_methods_lbl_->setText(tr("Valuation Methods"));
-    if (stat_python_scripts_lbl_)    stat_python_scripts_lbl_->setText(tr("Python Scripts"));
-    if (stat_analysis_tools_lbl_)    stat_analysis_tools_lbl_->setText(tr("Analysis Tools"));
+    if (stat_total_modules_lbl_)
+        stat_total_modules_lbl_->setText(tr("Total Modules"));
+    if (stat_valuation_methods_lbl_)
+        stat_valuation_methods_lbl_->setText(tr("Valuation Methods"));
+    if (stat_python_scripts_lbl_)
+        stat_python_scripts_lbl_->setText(tr("Python Scripts"));
+    if (stat_analysis_tools_lbl_)
+        stat_analysis_tools_lbl_->setText(tr("Analysis Tools"));
 
     if (tips_label_)
         tips_label_->setText(tr("Click sidebar modules to switch views. "
                                 "Each module provides professional-grade analytics with export capabilities."));
 
     // Status bar
-    if (status_module_lbl_) status_module_lbl_->setText(tr("MODULE:"));
-    if (status_engine_lbl_) status_engine_lbl_->setText(tr("ENGINE:"));
-    if (status_status_lbl_) status_status_lbl_->setText(tr("STATUS:"));
-    if (status_ready_val_)  status_ready_val_->setText(tr("READY"));
+    if (status_module_lbl_)
+        status_module_lbl_->setText(tr("MODULE:"));
+    if (status_engine_lbl_)
+        status_engine_lbl_->setText(tr("ENGINE:"));
+    if (status_status_lbl_)
+        status_status_lbl_->setText(tr("STATUS:"));
+    if (status_ready_val_)
+        status_ready_val_->setText(tr("READY"));
 
     // Right-panel category line (mod.label is data; "%1 module" is translatable)
     update_right_panel();
@@ -331,8 +346,8 @@ QWidget* MAAnalyticsScreen::build_status_bar() {
     hl->setContentsMargins(12, 0, 12, 0);
     hl->setSpacing(16);
 
-    auto add_item = [&](const QString& label, const QString& value, const QString& obj_name,
-                        QLabel*& label_out, QLabel** value_out = nullptr) {
+    auto add_item = [&](const QString& label, const QString& value, const QString& obj_name, QLabel*& label_out,
+                        QLabel** value_out = nullptr) {
         auto* lbl = new QLabel(label, bar);
         lbl->setObjectName("maStatusLabel");
         label_out = lbl;

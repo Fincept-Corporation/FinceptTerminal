@@ -6,10 +6,10 @@
 //   - CreateAgentPanel_DataOps.cpp  — load/save/build_config_json/IO
 #include "screens/agent_config/CreateAgentPanel.h"
 
-#include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
 #include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/McpServerRepository.h"
 #include "ui/theme/Theme.h"
@@ -56,7 +56,6 @@ void CreateAgentPanel::build_ui() {
 }
 
 // ── Left: saved agents ───────────────────────────────────────────────────────
-
 
 void CreateAgentPanel::setup_connections() {
     connect(save_btn_, &QPushButton::clicked, this, &CreateAgentPanel::save_agent);
@@ -236,7 +235,6 @@ void CreateAgentPanel::refresh_llm_pill() {
     }
 }
 
-
 void CreateAgentPanel::apply_tools_selection(const QStringList& tools) {
     for (int i = 0; i < tools_list_->count(); ++i) {
         auto* item = tools_list_->item(i);
@@ -271,29 +269,48 @@ void CreateAgentPanel::changeEvent(QEvent* event) {
 
 void CreateAgentPanel::retranslateUi() {
     // ── Left: saved agents ────────────────────────────────────────────────────
-    if (saved_title_) saved_title_->setText(tr("SAVED AGENTS"));
-    if (load_btn_)    load_btn_->setText(tr("LOAD"));
-    if (del_btn_)     del_btn_->setText(tr("DEL"));
-    if (exp_btn_)     exp_btn_->setText(tr("EXP"));
-    if (imp_btn_)     imp_btn_->setText(tr("IMP"));
+    if (saved_title_)
+        saved_title_->setText(tr("SAVED AGENTS"));
+    if (load_btn_)
+        load_btn_->setText(tr("LOAD"));
+    if (del_btn_)
+        del_btn_->setText(tr("DEL"));
+    if (exp_btn_)
+        exp_btn_->setText(tr("EXP"));
+    if (imp_btn_)
+        imp_btn_->setText(tr("IMP"));
 
     // ── Center: form section headers ──────────────────────────────────────────
-    if (identity_hdr_)       identity_hdr_->setText(tr("IDENTITY"));
-    if (name_field_lbl_)     name_field_lbl_->setText(tr("Name"));
-    if (category_field_lbl_) category_field_lbl_->setText(tr("Category"));
-    if (model_hdr_)          model_hdr_->setText(tr("MODEL"));
-    if (instructions_hdr_)   instructions_hdr_->setText(tr("INSTRUCTIONS"));
-    if (tools_hdr_)          tools_hdr_->setText(tr("TOOLS"));
-    if (terminal_tools_hdr_) terminal_tools_hdr_->setText(tr("TERMINAL TOOLS"));
-    if (features_hdr_)       features_hdr_->setText(tr("FEATURES"));
-    if (mcp_servers_hdr_)    mcp_servers_hdr_->setText(tr("MCP SERVERS"));
+    if (identity_hdr_)
+        identity_hdr_->setText(tr("IDENTITY"));
+    if (name_field_lbl_)
+        name_field_lbl_->setText(tr("Name"));
+    if (category_field_lbl_)
+        category_field_lbl_->setText(tr("Category"));
+    if (model_hdr_)
+        model_hdr_->setText(tr("MODEL"));
+    if (instructions_hdr_)
+        instructions_hdr_->setText(tr("INSTRUCTIONS"));
+    if (tools_hdr_)
+        tools_hdr_->setText(tr("TOOLS"));
+    if (terminal_tools_hdr_)
+        terminal_tools_hdr_->setText(tr("TERMINAL TOOLS"));
+    if (features_hdr_)
+        features_hdr_->setText(tr("FEATURES"));
+    if (mcp_servers_hdr_)
+        mcp_servers_hdr_->setText(tr("MCP SERVERS"));
 
     // Placeholders + tooltips.
-    if (name_edit_)         name_edit_->setPlaceholderText(tr("e.g. My Equity Analyst"));
-    if (desc_edit_)         desc_edit_->setPlaceholderText(tr("Brief description of what this agent does..."));
-    if (llm_profile_combo_) llm_profile_combo_->setToolTip(tr("LLM profile for this agent. Configure profiles in Settings > LLM Config."));
-    if (instructions_edit_) instructions_edit_->setPlaceholderText(tr("System prompt — role, goals, constraints, persona..."));
-    if (tool_search_edit_)  tool_search_edit_->setPlaceholderText(tr("Filter tools..."));
+    if (name_edit_)
+        name_edit_->setPlaceholderText(tr("e.g. My Equity Analyst"));
+    if (desc_edit_)
+        desc_edit_->setPlaceholderText(tr("Brief description of what this agent does..."));
+    if (llm_profile_combo_)
+        llm_profile_combo_->setToolTip(tr("LLM profile for this agent. Configure profiles in Settings > LLM Config."));
+    if (instructions_edit_)
+        instructions_edit_->setPlaceholderText(tr("System prompt — role, goals, constraints, persona..."));
+    if (tool_search_edit_)
+        tool_search_edit_->setPlaceholderText(tr("Filter tools..."));
 
     // Terminal tools sub-section.
     if (terminal_tools_check_)
@@ -301,13 +318,15 @@ void CreateAgentPanel::retranslateUi() {
     if (terminal_destructive_check_)
         terminal_destructive_check_->setText(tr("Allow destructive tools (place_order, delete_*, set_*, file ops)"));
     if (terminal_external_check_)
-        terminal_external_check_->setText(tr("Include external MCP servers (Notion, Slack, etc., from MCP Servers tab)"));
+        terminal_external_check_->setText(
+            tr("Include external MCP servers (Notion, Slack, etc., from MCP Servers tab)"));
     if (terminal_dry_run_check_)
         terminal_dry_run_check_->setText(tr("Dry-run mode (return synthetic results — no real execution)"));
     if (terminal_cat_lbl_)
         terminal_cat_lbl_->setText(tr("Category whitelist (none checked = all enabled categories except UI-only)"));
     if (terminal_exclude_cats_edit_)
-        terminal_exclude_cats_edit_->setPlaceholderText(tr("Exclude categories (comma-separated, on top of UI-only defaults)"));
+        terminal_exclude_cats_edit_->setPlaceholderText(
+            tr("Exclude categories (comma-separated, on top of UI-only defaults)"));
     if (terminal_name_include_edit_)
         terminal_name_include_edit_->setPlaceholderText(tr("Tool name include regex (optional, e.g. ^get_)"));
     if (terminal_name_exclude_edit_)
@@ -316,53 +335,85 @@ void CreateAgentPanel::retranslateUi() {
         terminal_max_lbl_->setText(tr("Max tools (0 = no cap)"));
 
     // Feature toggles.
-    if (reasoning_check_)      reasoning_check_->setText(tr("Reasoning"));
-    if (memory_check_)         memory_check_->setText(tr("Memory"));
-    if (knowledge_check_)      knowledge_check_->setText(tr("Knowledge"));
-    if (guardrails_check_)     guardrails_check_->setText(tr("Guardrails"));
-    if (agentic_memory_check_) agentic_memory_check_->setText(tr("Agentic Memory"));
-    if (storage_check_)        storage_check_->setText(tr("Storage"));
-    if (tracing_check_)        tracing_check_->setText(tr("Tracing"));
-    if (compression_check_)    compression_check_->setText(tr("Compression"));
-    if (hooks_check_)          hooks_check_->setText(tr("Hooks"));
-    if (evaluation_check_)     evaluation_check_->setText(tr("Evaluation"));
+    if (reasoning_check_)
+        reasoning_check_->setText(tr("Reasoning"));
+    if (memory_check_)
+        memory_check_->setText(tr("Memory"));
+    if (knowledge_check_)
+        knowledge_check_->setText(tr("Knowledge"));
+    if (guardrails_check_)
+        guardrails_check_->setText(tr("Guardrails"));
+    if (agentic_memory_check_)
+        agentic_memory_check_->setText(tr("Agentic Memory"));
+    if (storage_check_)
+        storage_check_->setText(tr("Storage"));
+    if (tracing_check_)
+        tracing_check_->setText(tr("Tracing"));
+    if (compression_check_)
+        compression_check_->setText(tr("Compression"));
+    if (hooks_check_)
+        hooks_check_->setText(tr("Hooks"));
+    if (evaluation_check_)
+        evaluation_check_->setText(tr("Evaluation"));
 
     // Knowledge sub-fields.
-    if (knowledge_type_lbl_)     knowledge_type_lbl_->setText(tr("Type"));
-    if (knowledge_urls_edit_)    knowledge_urls_edit_->setPlaceholderText(tr("URLs (one per line)"));
-    if (knowledge_vectordb_lbl_) knowledge_vectordb_lbl_->setText(tr("Vector DB"));
-    if (knowledge_embedder_lbl_) knowledge_embedder_lbl_->setText(tr("Embedder"));
+    if (knowledge_type_lbl_)
+        knowledge_type_lbl_->setText(tr("Type"));
+    if (knowledge_urls_edit_)
+        knowledge_urls_edit_->setPlaceholderText(tr("URLs (one per line)"));
+    if (knowledge_vectordb_lbl_)
+        knowledge_vectordb_lbl_->setText(tr("Vector DB"));
+    if (knowledge_embedder_lbl_)
+        knowledge_embedder_lbl_->setText(tr("Embedder"));
 
     // Guardrails sub-fields.
-    if (guardrails_pii_check_)        guardrails_pii_check_->setText(tr("PII Detection"));
-    if (guardrails_injection_check_)  guardrails_injection_check_->setText(tr("Injection Prevention"));
-    if (guardrails_compliance_check_) guardrails_compliance_check_->setText(tr("Financial Compliance"));
+    if (guardrails_pii_check_)
+        guardrails_pii_check_->setText(tr("PII Detection"));
+    if (guardrails_injection_check_)
+        guardrails_injection_check_->setText(tr("Injection Prevention"));
+    if (guardrails_compliance_check_)
+        guardrails_compliance_check_->setText(tr("Financial Compliance"));
 
     // Memory sub-fields.
-    if (memory_dbpath_lbl_)          memory_dbpath_lbl_->setText(tr("DB Path"));
-    if (memory_table_lbl_)           memory_table_lbl_->setText(tr("Table"));
-    if (memory_user_memories_check_) memory_user_memories_check_->setText(tr("User Memories"));
-    if (memory_session_summary_check_) memory_session_summary_check_->setText(tr("Session Summary"));
+    if (memory_dbpath_lbl_)
+        memory_dbpath_lbl_->setText(tr("DB Path"));
+    if (memory_table_lbl_)
+        memory_table_lbl_->setText(tr("Table"));
+    if (memory_user_memories_check_)
+        memory_user_memories_check_->setText(tr("User Memories"));
+    if (memory_session_summary_check_)
+        memory_session_summary_check_->setText(tr("Session Summary"));
 
     // Storage sub-fields.
-    if (storage_type_lbl_)   storage_type_lbl_->setText(tr("Type"));
-    if (storage_dbpath_lbl_) storage_dbpath_lbl_->setText(tr("DB Path"));
-    if (storage_table_lbl_)  storage_table_lbl_->setText(tr("Table"));
+    if (storage_type_lbl_)
+        storage_type_lbl_->setText(tr("Type"));
+    if (storage_dbpath_lbl_)
+        storage_dbpath_lbl_->setText(tr("DB Path"));
+    if (storage_table_lbl_)
+        storage_table_lbl_->setText(tr("Table"));
 
     // Agentic memory sub-field.
-    if (agentic_userid_lbl_) agentic_userid_lbl_->setText(tr("User ID"));
+    if (agentic_userid_lbl_)
+        agentic_userid_lbl_->setText(tr("User ID"));
 
     // Form actions (status_lbl_ holds live state — not re-applied).
-    if (save_btn_)  save_btn_->setText(tr("SAVE AGENT"));
-    if (clear_btn_) clear_btn_->setText(tr("CLEAR"));
+    if (save_btn_)
+        save_btn_->setText(tr("SAVE AGENT"));
+    if (clear_btn_)
+        clear_btn_->setText(tr("CLEAR"));
 
     // ── Right: test panel ─────────────────────────────────────────────────────
-    if (test_panel_hdr_)  test_panel_hdr_->setText(tr("LIVE TEST"));
-    if (test_query_hdr_)  test_query_hdr_->setText(tr("QUERY"));
-    if (test_output_hdr_) test_output_hdr_->setText(tr("OUTPUT"));
-    if (test_query_edit_) test_query_edit_->setPlaceholderText(tr("Enter test query..."));
+    if (test_panel_hdr_)
+        test_panel_hdr_->setText(tr("LIVE TEST"));
+    if (test_query_hdr_)
+        test_query_hdr_->setText(tr("QUERY"));
+    if (test_output_hdr_)
+        test_output_hdr_->setText(tr("OUTPUT"));
+    if (test_query_edit_)
+        test_query_edit_->setPlaceholderText(tr("Enter test query..."));
     // test_btn_ flips to "RUNNING..." mid-test — only re-apply the idle label.
-    if (test_btn_ && pending_request_id_.isEmpty()) test_btn_->setText(tr("RUN TEST"));
+    if (test_btn_ && pending_request_id_.isEmpty())
+        test_btn_->setText(tr("RUN TEST"));
 
     // The LLM profile combo / resolved pill re-derive their text from data.
     refresh_llm_pill();

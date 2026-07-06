@@ -82,7 +82,7 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     QVector<QString> check_ids_;       // parallel file IDs
     QPushButton* bulk_delete_btn_ = nullptr;
     QWidget* bulk_bar_ = nullptr;
-    QLabel* bulk_sel_label_ = nullptr;     // "Selected files:" (cached for retranslateUi)
+    QLabel* bulk_sel_label_ = nullptr;      // "Selected files:" (cached for retranslateUi)
     QPushButton* bulk_clear_btn_ = nullptr; // "CLEAR SELECTION" (cached for retranslateUi)
 
     // ── Preview panel ────────────────────────────────────────────────────
@@ -97,8 +97,8 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
     QLabel* stats_label_ = nullptr;
     QPushButton* upload_btn_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
-    QLabel* title_label_ = nullptr;    // "FILE MANAGER" (cached for retranslateUi)
-    QLabel* subtitle_label_ = nullptr; // header subtitle (cached for retranslateUi)
+    QLabel* title_label_ = nullptr;          // "FILE MANAGER" (cached for retranslateUi)
+    QLabel* subtitle_label_ = nullptr;       // header subtitle (cached for retranslateUi)
     QLabel* preview_header_label_ = nullptr; // "PREVIEW" (cached for retranslateUi)
 
     // ── Splitter ─────────────────────────────────────────────────────────

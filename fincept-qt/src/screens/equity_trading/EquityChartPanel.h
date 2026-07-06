@@ -48,8 +48,7 @@ class EquityChartPanel : public QWidget {
     // `currency_code` (e.g. "INR") pins the P&L symbol to the position's own
     // currency; empty falls back to the global preference.
     void set_position(const QString& symbol, const QString& side, double qty, double entry_price,
-                      const QString& exchange, const QString& product_type,
-                      const QString& currency_code = QString());
+                      const QString& exchange, const QString& product_type, const QString& currency_code = QString());
     void clear_position();
     // Recompute the card's live P&L from the latest traded price (any backend).
     void update_pnl(double ltp);
@@ -63,8 +62,8 @@ class EquityChartPanel : public QWidget {
     void add_to_watchlist_requested();
     // Emitted when the user clicks EXIT on the position card. The screen confirms
     // and routes the square-off (it owns the active account).
-    void exit_position_requested(const QString& symbol, const QString& exchange,
-                                 const QString& product_type, const QString& side, double qty);
+    void exit_position_requested(const QString& symbol, const QString& exchange, const QString& product_type,
+                                 const QString& side, double qty);
 
   protected:
     void resizeEvent(QResizeEvent* e) override;

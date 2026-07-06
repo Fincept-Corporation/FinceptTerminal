@@ -19,18 +19,21 @@ namespace fincept::billing {
 struct TierConfig {
     static constexpr int kDecimals = 6;
 
-    static constexpr quint64 kBronzeThresholdRaw  = 100ULL * 1'000'000ULL;     ///< 100 veFNCPT
-    static constexpr quint64 kSilverThresholdRaw  = 1'000ULL * 1'000'000ULL;   ///< 1,000 veFNCPT
-    static constexpr quint64 kGoldThresholdRaw    = 10'000ULL * 1'000'000ULL;  ///< 10,000 veFNCPT
+    static constexpr quint64 kBronzeThresholdRaw = 100ULL * 1'000'000ULL;   ///< 100 veFNCPT
+    static constexpr quint64 kSilverThresholdRaw = 1'000ULL * 1'000'000ULL; ///< 1,000 veFNCPT
+    static constexpr quint64 kGoldThresholdRaw = 10'000ULL * 1'000'000ULL;  ///< 10,000 veFNCPT
 
     /// Tier from atomic weight. Pure function — used by both `TierService`
     /// (when publishing the topic) and any caller that needs a synchronous
     /// view (cross-screen gating in `AI Quant Lab`, `Alpha Arena`).
     static fincept::wallet::TierStatus::Tier tier_from_weight(quint64 weight_raw) noexcept {
         using Tier = fincept::wallet::TierStatus::Tier;
-        if (weight_raw >= kGoldThresholdRaw)   return Tier::Gold;
-        if (weight_raw >= kSilverThresholdRaw) return Tier::Silver;
-        if (weight_raw >= kBronzeThresholdRaw) return Tier::Bronze;
+        if (weight_raw >= kGoldThresholdRaw)
+            return Tier::Gold;
+        if (weight_raw >= kSilverThresholdRaw)
+            return Tier::Silver;
+        if (weight_raw >= kBronzeThresholdRaw)
+            return Tier::Bronze;
         return Tier::Free;
     }
 
@@ -39,10 +42,14 @@ struct TierConfig {
     static quint64 next_threshold_raw(fincept::wallet::TierStatus::Tier current) noexcept {
         using Tier = fincept::wallet::TierStatus::Tier;
         switch (current) {
-            case Tier::Free:   return kBronzeThresholdRaw;
-            case Tier::Bronze: return kSilverThresholdRaw;
-            case Tier::Silver: return kGoldThresholdRaw;
-            case Tier::Gold:   return 0;
+            case Tier::Free:
+                return kBronzeThresholdRaw;
+            case Tier::Bronze:
+                return kSilverThresholdRaw;
+            case Tier::Silver:
+                return kGoldThresholdRaw;
+            case Tier::Gold:
+                return 0;
         }
         return 0;
     }
@@ -51,10 +58,14 @@ struct TierConfig {
     static QString label_for(fincept::wallet::TierStatus::Tier t) {
         using Tier = fincept::wallet::TierStatus::Tier;
         switch (t) {
-            case Tier::Free:   return QStringLiteral("FREE");
-            case Tier::Bronze: return QStringLiteral("BRONZE");
-            case Tier::Silver: return QStringLiteral("SILVER");
-            case Tier::Gold:   return QStringLiteral("GOLD");
+            case Tier::Free:
+                return QStringLiteral("FREE");
+            case Tier::Bronze:
+                return QStringLiteral("BRONZE");
+            case Tier::Silver:
+                return QStringLiteral("SILVER");
+            case Tier::Gold:
+                return QStringLiteral("GOLD");
         }
         return {};
     }
@@ -71,15 +82,11 @@ struct TierConfig {
             case Tier::Bronze:
                 return {QStringLiteral("api-quota-basic")};
             case Tier::Silver:
-                return {QStringLiteral("api-quota-basic"),
-                        QStringLiteral("premium-screens"),
+                return {QStringLiteral("api-quota-basic"), QStringLiteral("premium-screens"),
                         QStringLiteral("ai-quant-lab")};
             case Tier::Gold:
-                return {QStringLiteral("api-quota-basic"),
-                        QStringLiteral("premium-screens"),
-                        QStringLiteral("ai-quant-lab"),
-                        QStringLiteral("alpha-arena"),
-                        QStringLiteral("all-agents")};
+                return {QStringLiteral("api-quota-basic"), QStringLiteral("premium-screens"),
+                        QStringLiteral("ai-quant-lab"), QStringLiteral("alpha-arena"), QStringLiteral("all-agents")};
         }
         return {};
     }

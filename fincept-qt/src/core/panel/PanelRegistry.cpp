@@ -40,12 +40,10 @@ PanelHandle* PanelRegistry::register_panel(PanelHandle* handle) {
     wire_handle_signals(handle);
 
     if (replacing) {
-        LOG_DEBUG(kPanelRegistryTag, QString("Replaced panel: %1 (%2)")
-                                          .arg(id.to_string(), handle->type_id()));
+        LOG_DEBUG(kPanelRegistryTag, QString("Replaced panel: %1 (%2)").arg(id.to_string(), handle->type_id()));
         emit panel_replaced(id);
     } else {
-        LOG_DEBUG(kPanelRegistryTag, QString("Registered panel: %1 (%2)")
-                                          .arg(id.to_string(), handle->type_id()));
+        LOG_DEBUG(kPanelRegistryTag, QString("Registered panel: %1 (%2)").arg(id.to_string(), handle->type_id()));
         emit panel_added(id);
     }
     return handle;
@@ -123,10 +121,8 @@ void PanelRegistry::wire_handle_signals(PanelHandle* handle) {
     // the status bar can refresh their summary without subscribing to
     // every PanelHandle individually.
     const PanelInstanceId id = handle->instance_id();
-    connect(handle, &PanelHandle::title_changed, this,
-            [this, id](const QString&) { emit panel_metadata_changed(id); });
-    connect(handle, &PanelHandle::frame_id_changed, this,
-            [this, id](WindowId) { emit panel_metadata_changed(id); });
+    connect(handle, &PanelHandle::title_changed, this, [this, id](const QString&) { emit panel_metadata_changed(id); });
+    connect(handle, &PanelHandle::frame_id_changed, this, [this, id](WindowId) { emit panel_metadata_changed(id); });
     connect(handle, &PanelHandle::link_group_changed, this,
             [this, id](const QString&) { emit panel_metadata_changed(id); });
     connect(handle, &PanelHandle::state_changed, this,

@@ -25,8 +25,7 @@ class UniverseScannerPanel : public QWidget {
   private slots:
     void on_strategies_loaded(QVector<fincept::services::algo::AlgoStrategy> strategies);
     void on_start_stop();
-    void on_match(const QString& watch_id, const QString& symbol, double price,
-                  const QString& detail);
+    void on_match(const QString& watch_id, const QString& symbol, double price, const QString& detail);
     void on_universe_changed(int index);
 
   private:
@@ -35,20 +34,20 @@ class UniverseScannerPanel : public QWidget {
     void deploy_symbol(const QString& symbol);
     bool current_strategy(fincept::services::algo::AlgoStrategy* out) const;
 
-    QComboBox*    strategy_combo_  = nullptr;
-    QComboBox*    universe_combo_  = nullptr;
+    QComboBox* strategy_combo_ = nullptr;
+    QComboBox* universe_combo_ = nullptr;
     fincept::ui::algo::SymbolChipInput* symbols_input_ = nullptr;
-    QLabel*       symbols_label_   = nullptr;
-    QComboBox*    account_combo_   = nullptr;
-    QSpinBox*     sweep_spin_      = nullptr;
-    QSpinBox*     cooldown_spin_   = nullptr;
-    QPushButton*  start_btn_       = nullptr;
-    QTableWidget* matches_table_   = nullptr;
-    QLabel*       status_label_    = nullptr;
+    QLabel* symbols_label_ = nullptr;
+    QComboBox* account_combo_ = nullptr;
+    QSpinBox* sweep_spin_ = nullptr;
+    QSpinBox* cooldown_spin_ = nullptr;
+    QPushButton* start_btn_ = nullptr;
+    QTableWidget* matches_table_ = nullptr;
+    QLabel* status_label_ = nullptr;
 
     QVector<fincept::services::algo::AlgoStrategy> strategies_;
-    QString watch_id_;     // non-empty while a scan is running
-    bool    running_ = false;
+    QString watch_id_; // non-empty while a scan is running
+    bool running_ = false;
 };
 
 } // namespace fincept::screens

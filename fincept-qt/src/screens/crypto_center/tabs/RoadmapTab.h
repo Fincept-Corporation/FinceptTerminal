@@ -6,7 +6,7 @@ namespace fincept::screens::panels {
 class BuybackBurnPanel;
 class SupplyChartPanel;
 class TreasuryPanel;
-}
+} // namespace fincept::screens::panels
 
 namespace fincept::screens {
 
@@ -31,7 +31,7 @@ class RoadmapTab : public QWidget {
 
     panels::BuybackBurnPanel* buyback_burn_ = nullptr;
     panels::SupplyChartPanel* supply_chart_ = nullptr;
-    panels::TreasuryPanel*    treasury_     = nullptr;
+    panels::TreasuryPanel* treasury_ = nullptr;
 };
 
 } // namespace fincept::screens

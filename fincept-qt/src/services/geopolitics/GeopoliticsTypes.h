@@ -35,9 +35,11 @@ inline QString pretty_category(const QString& cat) {
     }
     QStringList parts = base.split(QLatin1Char('_'), Qt::SkipEmptyParts);
     for (auto& p : parts)
-        if (!p.isEmpty()) p[0] = p[0].toUpper();
+        if (!p.isEmpty())
+            p[0] = p[0].toUpper();
     QString out = parts.join(QLatin1Char(' '));
-    if (unclassified) out += QStringLiteral(" (Unclassified)");
+    if (unclassified)
+        out += QStringLiteral(" (Unclassified)");
     return out;
 }
 
@@ -48,23 +50,38 @@ inline QColor category_color(const QString& cat) {
     if (base.endsWith(QStringLiteral("_unclassified")))
         base.chop(13);
 
-    if (base == QStringLiteral("armed_conflict"))     return QColor(255,   0,   0);
-    if (base == QStringLiteral("terrorism"))          return QColor(255,  69,   0);
-    if (base == QStringLiteral("protests"))           return QColor(255, 215,   0);
-    if (base == QStringLiteral("civilian_violence"))  return QColor(255, 100, 100);
-    if (base == QStringLiteral("riots"))              return QColor(255, 165,   0);
-    if (base == QStringLiteral("political_violence")) return QColor(147,  51, 234);
-    if (base == QStringLiteral("crisis"))             return QColor(  0, 229, 255);
-    if (base == QStringLiteral("explosions"))         return QColor(255,  20, 147);
-    if (base == QStringLiteral("strategic"))          return QColor(100, 149, 237);
-    if (base == QStringLiteral("diplomacy") ||
-        base == QStringLiteral("diplomatic"))         return QColor(167, 139, 250);
-    if (base == QStringLiteral("maritime"))           return QColor( 56, 189, 248);
-    if (base == QStringLiteral("elections"))          return QColor( 34, 197,  94);
-    if (base == QStringLiteral("sanctions"))          return QColor(251, 146,  60);
-    if (base == QStringLiteral("nuclear"))            return QColor(250, 204,  21);
-    if (base == QStringLiteral("cyber"))              return QColor( 20, 184, 166);
-    if (base == QStringLiteral("not_geopol"))         return QColor(100, 100, 100);
+    if (base == QStringLiteral("armed_conflict"))
+        return QColor(255, 0, 0);
+    if (base == QStringLiteral("terrorism"))
+        return QColor(255, 69, 0);
+    if (base == QStringLiteral("protests"))
+        return QColor(255, 215, 0);
+    if (base == QStringLiteral("civilian_violence"))
+        return QColor(255, 100, 100);
+    if (base == QStringLiteral("riots"))
+        return QColor(255, 165, 0);
+    if (base == QStringLiteral("political_violence"))
+        return QColor(147, 51, 234);
+    if (base == QStringLiteral("crisis"))
+        return QColor(0, 229, 255);
+    if (base == QStringLiteral("explosions"))
+        return QColor(255, 20, 147);
+    if (base == QStringLiteral("strategic"))
+        return QColor(100, 149, 237);
+    if (base == QStringLiteral("diplomacy") || base == QStringLiteral("diplomatic"))
+        return QColor(167, 139, 250);
+    if (base == QStringLiteral("maritime"))
+        return QColor(56, 189, 248);
+    if (base == QStringLiteral("elections"))
+        return QColor(34, 197, 94);
+    if (base == QStringLiteral("sanctions"))
+        return QColor(251, 146, 60);
+    if (base == QStringLiteral("nuclear"))
+        return QColor(250, 204, 21);
+    if (base == QStringLiteral("cyber"))
+        return QColor(20, 184, 166);
+    if (base == QStringLiteral("not_geopol"))
+        return QColor(100, 100, 100);
     return QColor(136, 136, 136);
 }
 
@@ -108,7 +125,7 @@ struct EventsPage {
     bool has_next = false;
     bool has_prev = false;
     double credits_used = 0.0;
-    int remaining_credits = -1;  // -1 = unknown / not reported
+    int remaining_credits = -1; // -1 = unknown / not reported
 };
 
 // ── Relationship map node ───────────────────────────────────────────────────

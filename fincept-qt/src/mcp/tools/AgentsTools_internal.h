@@ -37,22 +37,15 @@ inline QJsonObject agent_to_json(const services::AgentInfo& a) {
     for (const auto& c : a.capabilities)
         caps.append(c);
     return QJsonObject{
-        {"id", a.id},
-        {"name", a.name},
-        {"description", a.description},
-        {"category", a.category},
-        {"capabilities", caps},
-        {"provider", a.provider},
-        {"version", a.version},
+        {"id", a.id},           {"name", a.name},         {"description", a.description}, {"category", a.category},
+        {"capabilities", caps}, {"provider", a.provider}, {"version", a.version},
     };
 }
 
 inline QJsonObject result_to_json(const services::AgentExecutionResult& r) {
     return QJsonObject{
-        {"success", r.success},
-        {"response", r.response},
-        {"error", r.error},
-        {"execution_time_ms", r.execution_time_ms},
+        {"success", r.success},       {"response", r.response},
+        {"error", r.error},           {"execution_time_ms", r.execution_time_ms},
         {"request_id", r.request_id},
     };
 }
@@ -62,13 +55,8 @@ inline QJsonObject routing_to_json(const services::RoutingResult& r) {
     for (const auto& k : r.matched_keywords)
         kws.append(k);
     return QJsonObject{
-        {"success", r.success},
-        {"agent_id", r.agent_id},
-        {"intent", r.intent},
-        {"confidence", r.confidence},
-        {"matched_keywords", kws},
-        {"config", r.config},
-        {"request_id", r.request_id},
+        {"success", r.success},    {"agent_id", r.agent_id}, {"intent", r.intent},         {"confidence", r.confidence},
+        {"matched_keywords", kws}, {"config", r.config},     {"request_id", r.request_id},
     };
 }
 
@@ -118,12 +106,10 @@ inline QJsonObject config_to_json(const AgentConfig& c) {
 // Generic kicker: invoke a member fn that returns request_id, bridge
 // agent_result(req_id) signal back to the promise.
 template <typename KickFn>
-inline void dispatch_agent_run(KickFn&& kick, ToolContext ctx,
-                               std::shared_ptr<QPromise<ToolResult>> promise) {
+inline void dispatch_agent_run(KickFn&& kick, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
     auto* svc = &services::AgentService::instance();
     AsyncDispatch::callback_to_promise(
-        svc, std::move(ctx), promise,
-        [svc, kick = std::forward<KickFn>(kick)](auto resolve) mutable {
+        svc, std::move(ctx), promise, [svc, kick = std::forward<KickFn>(kick)](auto resolve) mutable {
             const QString req_id = kick();
             if (req_id.isEmpty()) {
                 resolve(ToolResult::fail("Failed to start agent run"));
@@ -131,40 +117,50 @@ inline void dispatch_agent_run(KickFn&& kick, ToolContext ctx,
             }
             auto* holder = new QObject(svc);
             QObject::connect(svc, &services::AgentService::agent_result, holder,
-                              [req_id, resolve, holder](services::AgentExecutionResult r) {
-                                  if (r.request_id != req_id)
-                                      return;
-                                  if (r.success)
-                                      resolve(ToolResult::ok(r.response.isEmpty() ? "OK" : r.response, result_to_json(r)));
-                                  else
-                                      resolve(ToolResult::fail(r.error.isEmpty() ? "Agent run failed" : r.error));
-                                  holder->deleteLater();
-                              });
+                             [req_id, resolve, holder](services::AgentExecutionResult r) {
+                                 if (r.request_id != req_id)
+                                     return;
+                                 if (r.success)
+                                     resolve(
+                                         ToolResult::ok(r.response.isEmpty() ? "OK" : r.response, result_to_json(r)));
+                                 else
+                                     resolve(ToolResult::fail(r.error.isEmpty() ? "Agent run failed" : r.error));
+                                 holder->deleteLater();
+                             });
             QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                              [resolve, holder](QString, QString msg) {
-                                  resolve(ToolResult::fail(msg));
-                                  holder->deleteLater();
-                              });
+                             [resolve, holder](QString, QString msg) {
+                                 resolve(ToolResult::fail(msg));
+                                 holder->deleteLater();
+                             });
         });
 }
 
 // ── WorkflowDef <-> JSON (consumed by save_workflow / get_workflow) ───
 inline const char* workflow_status_str(workflow::WorkflowStatus s) {
     switch (s) {
-        case workflow::WorkflowStatus::Draft:     return "draft";
-        case workflow::WorkflowStatus::Idle:      return "idle";
-        case workflow::WorkflowStatus::Running:   return "running";
-        case workflow::WorkflowStatus::Completed: return "completed";
-        case workflow::WorkflowStatus::Error:     return "error";
+        case workflow::WorkflowStatus::Draft:
+            return "draft";
+        case workflow::WorkflowStatus::Idle:
+            return "idle";
+        case workflow::WorkflowStatus::Running:
+            return "running";
+        case workflow::WorkflowStatus::Completed:
+            return "completed";
+        case workflow::WorkflowStatus::Error:
+            return "error";
     }
     return "draft";
 }
 
 inline workflow::WorkflowStatus parse_workflow_status(const QString& s) {
-    if (s == "idle")      return workflow::WorkflowStatus::Idle;
-    if (s == "running")   return workflow::WorkflowStatus::Running;
-    if (s == "completed") return workflow::WorkflowStatus::Completed;
-    if (s == "error")     return workflow::WorkflowStatus::Error;
+    if (s == "idle")
+        return workflow::WorkflowStatus::Idle;
+    if (s == "running")
+        return workflow::WorkflowStatus::Running;
+    if (s == "completed")
+        return workflow::WorkflowStatus::Completed;
+    if (s == "error")
+        return workflow::WorkflowStatus::Error;
     return workflow::WorkflowStatus::Draft;
 }
 

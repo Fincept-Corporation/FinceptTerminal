@@ -20,7 +20,7 @@ namespace fincept::services::python_cli {
 
 struct CliResult {
     bool success = false;
-    QJsonObject data;  // parsed top-level JSON object
+    QJsonObject data; // parsed top-level JSON object
     QString error;
 };
 

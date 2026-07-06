@@ -4,7 +4,7 @@
 #include "ui/widgets/LoadingOverlay.h"
 
 #ifdef HAS_QT_WEBENGINE
-#include "ui/charts/KLineChartWidget.h"
+#    include "ui/charts/KLineChartWidget.h"
 #endif
 
 #include <QHash>
@@ -80,7 +80,7 @@ class EquityOverviewTab : public QWidget {
     QFrame* make_panel_(const char* title_key, const char* title_color);
     QLabel* add_row_(QFrame* panel, const char* key, const char* val_color);
 
-    QHash<QLabel*, const char*> i18n_labels_;  ///< label → English source key for tr()
+    QHash<QLabel*, const char*> i18n_labels_; ///< label → English source key for tr()
 
     QWidget* build_col1();
     QWidget* build_chart_panel();

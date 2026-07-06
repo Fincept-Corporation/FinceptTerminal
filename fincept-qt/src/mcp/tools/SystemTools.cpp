@@ -62,7 +62,7 @@ std::vector<ToolDef> get_system_tools() {
         t.name = "clear_cache";
         t.description = "Clear all cache entries.";
         t.category = "system";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.handler = [](const QJsonObject&) -> ToolResult {
             CacheManager::instance().clear();
             return ToolResult::ok("Cache cleared");

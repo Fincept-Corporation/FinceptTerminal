@@ -41,13 +41,9 @@ class TabSessionStore {
     /// primary lookup; screen_key still gets written (the screen's type
     /// id) for diagnostics and for the legacy by-key path that some
     /// non-panel callers still use (workspace participants, etc.).
-    Result<void> save_screen_state_by_uuid(const QString& instance_uuid,
-                                           const QString& screen_key,
-                                           const QJsonObject& state,
-                                           int state_version,
-                                           const QString& session_id = {});
-    Result<QJsonObject> load_screen_state_by_uuid(const QString& instance_uuid,
-                                                  int expected_version);
+    Result<void> save_screen_state_by_uuid(const QString& instance_uuid, const QString& screen_key,
+                                           const QJsonObject& state, int state_version, const QString& session_id = {});
+    Result<QJsonObject> load_screen_state_by_uuid(const QString& instance_uuid, int expected_version);
 
     /// Drop a UUID-keyed row. Called by DockScreenRouter when a panel is
     /// permanently closed (vs. dematerialised) so the cache doesn't

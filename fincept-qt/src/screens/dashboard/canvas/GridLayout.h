@@ -27,7 +27,7 @@ struct GridItem {
     QString instance_id; // unique UUID per tile
     GridCell cell;
     bool is_static = false;
-    QJsonObject config;  // per-instance widget config (broker, account, symbol, …)
+    QJsonObject config; // per-instance widget config (broker, account, symbol, …)
 };
 
 struct GridLayout {

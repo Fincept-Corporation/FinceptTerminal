@@ -35,7 +35,6 @@
 
 namespace fincept::screens {
 
-
 // ── Static helpers (anon ns + statics from original file) ──
 namespace {
 
@@ -75,8 +74,9 @@ static const QString kYellow = "#eab308";
 }
 
 // Large metric card: label on top, big value, optional subtitle
-[[maybe_unused]] QWidget* metric_card(const QString& label, QLabel*& val_out, QLabel*& sub_out, const QString& val_color,
-                     const QString& initial_val = "—", const QString& initial_sub = {}) {
+[[maybe_unused]] QWidget* metric_card(const QString& label, QLabel*& val_out, QLabel*& sub_out,
+                                      const QString& val_color, const QString& initial_val = "—",
+                                      const QString& initial_sub = {}) {
     auto* f = new QFrame;
     f->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }")
                          .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
@@ -163,7 +163,6 @@ static const QString kYellow = "#eab308";
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
-
 EquityFinancialsTab::EquityFinancialsTab(QWidget* parent) : QWidget(parent) {
     build_ui();
     auto& svc = services::equity::EquityResearchService::instance();
@@ -207,10 +206,14 @@ void EquityFinancialsTab::changeEvent(QEvent* event) {
 }
 
 void EquityFinancialsTab::retranslateUi() {
-    if (btn_income_)     btn_income_->setText(tr("Income Statement"));
-    if (btn_balance_)    btn_balance_->setText(tr("Balance Sheet"));
-    if (btn_cashflow_)   btn_cashflow_->setText(tr("Cash Flow"));
-    if (btn_export_csv_) btn_export_csv_->setText(tr("EXPORT CSV"));
+    if (btn_income_)
+        btn_income_->setText(tr("Income Statement"));
+    if (btn_balance_)
+        btn_balance_->setText(tr("Balance Sheet"));
+    if (btn_cashflow_)
+        btn_cashflow_->setText(tr("Cash Flow"));
+    if (btn_export_csv_)
+        btn_export_csv_->setText(tr("EXPORT CSV"));
 
     rebuild_views();
 }
@@ -245,7 +248,6 @@ void EquityFinancialsTab::rebuild_views() {
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
-
 
 void EquityFinancialsTab::populate_table(QTableWidget* table, const QVector<QPair<QString, QJsonObject>>& stmt) {
 

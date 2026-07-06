@@ -67,8 +67,8 @@ class FeedMonitor : public QObject {
     bool paused_ = false;
 
     static constexpr int kMinRefreshSec = 15;
-    static constexpr int kMaxItems = 200;     // in-memory cache cap (live display)
-    static constexpr int kMaxHistory = 2000;  // persisted-history cap per feed
+    static constexpr int kMaxItems = 200;    // in-memory cache cap (live display)
+    static constexpr int kMaxHistory = 2000; // persisted-history cap per feed
 };
 
 } // namespace fincept::feeds

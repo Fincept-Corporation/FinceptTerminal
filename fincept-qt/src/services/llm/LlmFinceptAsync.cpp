@@ -6,13 +6,12 @@
 // string here. Follow-ups after tool execution use the sync /research/chat
 // endpoint via try_extract_and_execute_text_tool_calls.
 
-#include "services/llm/LlmService.h"
-
-#include "services/llm/LlmRequestPolicy.h"
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
+#include "services/llm/LlmRequestPolicy.h"
+#include "services/llm/LlmService.h"
 
 #include <QByteArray>
 #include <QJsonArray>
@@ -26,7 +25,9 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* kLlmFinceptTag = "LlmService"; }
+namespace {
+constexpr const char* kLlmFinceptTag = "LlmService";
+}
 
 // Build a compact tool catalog string for injection into the system prompt.
 // This allows models that don't support structured tool_calls to still emit
@@ -45,15 +46,11 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
     if (all_tools.empty())
         return {};
 
-    const bool default_filter = filter.categories.isEmpty() &&
-                                filter.exclude_categories.isEmpty() &&
-                                filter.name_patterns.isEmpty() &&
-                                filter.exclude_name_patterns.isEmpty() &&
+    const bool default_filter = filter.categories.isEmpty() && filter.exclude_categories.isEmpty() &&
+                                filter.name_patterns.isEmpty() && filter.exclude_name_patterns.isEmpty() &&
                                 filter.max_tools == 0;
-    const bool use_rag = default_filter &&
-                         fincept::AppConfig::instance()
-                             .get("mcp/use_tool_rag", QVariant(true))
-                             .toBool();
+    const bool use_rag =
+        default_filter && fincept::AppConfig::instance().get("mcp/use_tool_rag", QVariant(true)).toBool();
 
     QString catalog;
     catalog += "You have access to tools. To use one, emit a <tool_call> block:\n";
@@ -63,8 +60,7 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
         // Mirror McpService::tier_0_tool_names() (kept in sync manually — small
         // list, low churn).
         static const QSet<QString> kTier0 = {
-            "tool_list", "tool_describe", "navigate_to_tab", "list_tabs",
-            "get_current_tab", "get_auth_status",
+            "tool_list", "tool_describe", "navigate_to_tab", "list_tabs", "get_current_tab", "get_auth_status",
         };
         catalog += "Always-available tools:\n";
         for (const auto& tool : all_tools) {
@@ -73,14 +69,13 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
             QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
             catalog += "- " + fn_name + ": " + tool.description + "\n";
         }
-        const QString wire_list     = QStringLiteral("tool_list");
+        const QString wire_list = QStringLiteral("tool_list");
         const QString wire_describe = QStringLiteral("tool_describe");
-        catalog += QStringLiteral(
-            "\nFor any other capability, call fincept-terminal__%1 with a natural-language "
-            "query (e.g. {\"query\": \"draft a research report\"}). It returns the top 5 most "
-            "relevant tools. Then call fincept-terminal__%2(name) for the full schema, "
-            "then invoke the tool. For multi-intent requests, call %1 multiple times.\n")
-            .arg(wire_list, wire_describe);
+        catalog += QStringLiteral("\nFor any other capability, call fincept-terminal__%1 with a natural-language "
+                                  "query (e.g. {\"query\": \"draft a research report\"}). It returns the top 5 most "
+                                  "relevant tools. Then call fincept-terminal__%2(name) for the full schema, "
+                                  "then invoke the tool. For multi-intent requests, call %1 multiple times.\n")
+                       .arg(wire_list, wire_describe);
         return catalog;
     }
 
@@ -132,19 +127,19 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     prompt += "User: " + user_message;
 
     QJsonObject submit_body;
-    submit_body["prompt"]     = prompt;
+    submit_body["prompt"] = prompt;
     submit_body["max_tokens"] = resolved_max_tokens();
     // Temperature intentionally omitted — Fincept backend uses its own default.
 
     auto hdr = get_headers();
     const QString fincept_base = fincept::AppConfig::instance().api_base_url();
-    const QString async_url   = fincept_base + "/research/llm/async";
+    const QString async_url = fincept_base + "/research/llm/async";
     const QString status_base = fincept_base + "/research/llm/status/";
 
     LOG_INFO(kLlmFinceptTag, QString("Fincept async: submitting to %1 (api_key=%2, prompt_len=%3)")
-                      .arg(async_url)
-                      .arg(api_key_.isEmpty() ? "EMPTY" : api_key_.left(12) + "...")
-                      .arg(prompt.length()));
+                                 .arg(async_url)
+                                 .arg(api_key_.isEmpty() ? "EMPTY" : api_key_.left(12) + "...")
+                                 .arg(prompt.length()));
 
     QByteArray json_data = QJsonDocument(submit_body).toJson(QJsonDocument::Compact);
     auto submit = eventloop_request("POST", async_url, json_data, hdr, 30000);
@@ -210,9 +205,9 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
 
             QJsonObject usage = data_obj["data"].toObject()["usage"].toObject();
             if (!usage.isEmpty()) {
-                resp.prompt_tokens     = usage["input_tokens"].toInt();
+                resp.prompt_tokens = usage["input_tokens"].toInt();
                 resp.completion_tokens = usage["output_tokens"].toInt();
-                resp.total_tokens      = usage["total_tokens"].toInt();
+                resp.total_tokens = usage["total_tokens"].toInt();
             }
 
             // Check for text-based tool calls in the response.
@@ -221,7 +216,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                 LOG_INFO(kLlmFinceptTag, "Fincept: checking response for text-based tool calls");
                 // Use the sync /research/chat endpoint for follow-up after tool execution
                 QString followup_url = get_endpoint_url();
-                auto followup_hdr    = get_headers();
+                auto followup_hdr = get_headers();
                 auto tool_result =
                     try_extract_and_execute_text_tool_calls(resp.content, user_message, followup_url, followup_hdr);
                 if (tool_result.has_value()) {

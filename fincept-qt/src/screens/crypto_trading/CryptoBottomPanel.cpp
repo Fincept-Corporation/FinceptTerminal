@@ -41,12 +41,24 @@ using namespace fincept::ui;
 
 namespace {
 
-inline QColor kRowEven() { return QColor(colors::BG_BASE()); }
-inline QColor kRowOdd() { return QColor(colors::ROW_ALT()); }
-inline QColor kColorPos() { return QColor(colors::POSITIVE()); }
-inline QColor kColorNeg() { return QColor(colors::NEGATIVE()); }
-inline QColor kColorSec() { return QColor(colors::TEXT_SECONDARY()); }
-inline QColor kColorTert() { return QColor(colors::TEXT_TERTIARY()); }
+inline QColor kRowEven() {
+    return QColor(colors::BG_BASE());
+}
+inline QColor kRowOdd() {
+    return QColor(colors::ROW_ALT());
+}
+inline QColor kColorPos() {
+    return QColor(colors::POSITIVE());
+}
+inline QColor kColorNeg() {
+    return QColor(colors::NEGATIVE());
+}
+inline QColor kColorSec() {
+    return QColor(colors::TEXT_SECONDARY());
+}
+inline QColor kColorTert() {
+    return QColor(colors::TEXT_TERTIARY());
+}
 
 // Per-column resize policy.
 //  Stretch:     fills remaining horizontal space (use for the "primary" column
@@ -62,8 +74,8 @@ enum class ColMode { Stretch, Numeric, Compact, Action };
 struct ColSpec {
     QString header;
     ColMode mode = ColMode::Stretch;
-    int width_chars = 8;     // hint for Numeric mode
-    int fixed_px = 32;       // for Action mode
+    int width_chars = 8; // hint for Numeric mode
+    int fixed_px = 32;   // for Action mode
     Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter;
 };
 
@@ -74,7 +86,8 @@ QTableWidget* make_table(const QList<ColSpec>& cols) {
 
     QStringList headers;
     headers.reserve(cols.size());
-    for (const auto& c : cols) headers << c.header;
+    for (const auto& c : cols)
+        headers << c.header;
     t->setHorizontalHeaderLabels(headers);
 
     t->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -108,36 +121,36 @@ QTableWidget* make_table(const QList<ColSpec>& cols) {
     for (int i = 0; i < cols.size(); ++i) {
         const auto& c = cols[i];
         switch (c.mode) {
-        case ColMode::Stretch:
-            hh->setSectionResizeMode(i, QHeaderView::Stretch);
-            any_stretch = true;
-            break;
-        case ColMode::Numeric: {
-            hh->setSectionResizeMode(i, QHeaderView::Interactive);
-            // Width: max of header text and `width_chars` worth of '0'.
-            const int header_w = fm.horizontalAdvance(c.header) + 24;
-            const int data_w = fm.horizontalAdvance(QString(c.width_chars, QLatin1Char('0'))) + 16;
-            t->setColumnWidth(i, std::max(header_w, data_w));
-            break;
-        }
-        case ColMode::Compact:
-            hh->setSectionResizeMode(i, QHeaderView::ResizeToContents);
-            break;
-        case ColMode::Action:
-            hh->setSectionResizeMode(i, QHeaderView::Fixed);
-            t->setColumnWidth(i, c.fixed_px);
-            break;
+            case ColMode::Stretch:
+                hh->setSectionResizeMode(i, QHeaderView::Stretch);
+                any_stretch = true;
+                break;
+            case ColMode::Numeric: {
+                hh->setSectionResizeMode(i, QHeaderView::Interactive);
+                // Width: max of header text and `width_chars` worth of '0'.
+                const int header_w = fm.horizontalAdvance(c.header) + 24;
+                const int data_w = fm.horizontalAdvance(QString(c.width_chars, QLatin1Char('0'))) + 16;
+                t->setColumnWidth(i, std::max(header_w, data_w));
+                break;
+            }
+            case ColMode::Compact:
+                hh->setSectionResizeMode(i, QHeaderView::ResizeToContents);
+                break;
+            case ColMode::Action:
+                hh->setSectionResizeMode(i, QHeaderView::Fixed);
+                t->setColumnWidth(i, c.fixed_px);
+                break;
         }
     }
     // Fail-safe: if the caller forgot to mark a column as Stretch, stretch
     // the last numeric/compact column to fill remaining space.
-    if (!any_stretch) hh->setStretchLastSection(true);
+    if (!any_stretch)
+        hh->setStretchLastSection(true);
 
     return t;
 }
 
-QWidget* wrap_with_empty_state(QTableWidget* table, QStackedWidget*& out_stack,
-                                const QString& empty_text) {
+QWidget* wrap_with_empty_state(QTableWidget* table, QStackedWidget*& out_stack, const QString& empty_text) {
     out_stack = new QStackedWidget;
     out_stack->setObjectName("cryptoBottomStack");
     out_stack->addWidget(table);
@@ -171,7 +184,8 @@ QTableWidgetItem* CryptoBottomPanel::ensure_item(QTableWidget* table, int row, i
 }
 
 void CryptoBottomPanel::update_empty_state(QTableWidget* /*table*/, QStackedWidget* stack, int row_count) {
-    if (!stack) return;
+    if (!stack)
+        return;
     const int target = (row_count > 0) ? 0 : 1;
     if (stack->currentIndex() != target)
         stack->setCurrentIndex(target);
@@ -221,15 +235,24 @@ void CryptoBottomPanel::changeEvent(QEvent* event) {
 void CryptoBottomPanel::retranslateUi() {
     // Tab labels
     if (tabs_) {
-        if (positions_tab_idx_ >= 0) tabs_->setTabText(positions_tab_idx_, tr("POSITIONS"));
-        if (orders_tab_idx_ >= 0)    tabs_->setTabText(orders_tab_idx_, tr("ORDERS"));
-        if (trades_tab_idx_ >= 0)    tabs_->setTabText(trades_tab_idx_, tr("HISTORY"));
-        if (my_trades_tab_idx_ >= 0) tabs_->setTabText(my_trades_tab_idx_, tr("MY TRADES"));
-        if (fees_tab_idx_ >= 0)      tabs_->setTabText(fees_tab_idx_, tr("FEES"));
-        if (time_sales_tab_idx_ >= 0) tabs_->setTabText(time_sales_tab_idx_, tr("T&S"));
-        if (depth_tab_idx_ >= 0)     tabs_->setTabText(depth_tab_idx_, tr("DEPTH"));
-        if (market_tab_idx_ >= 0)    tabs_->setTabText(market_tab_idx_, tr("MARKET"));
-        if (stats_tab_idx_ >= 0)     tabs_->setTabText(stats_tab_idx_, tr("STATS"));
+        if (positions_tab_idx_ >= 0)
+            tabs_->setTabText(positions_tab_idx_, tr("POSITIONS"));
+        if (orders_tab_idx_ >= 0)
+            tabs_->setTabText(orders_tab_idx_, tr("ORDERS"));
+        if (trades_tab_idx_ >= 0)
+            tabs_->setTabText(trades_tab_idx_, tr("HISTORY"));
+        if (my_trades_tab_idx_ >= 0)
+            tabs_->setTabText(my_trades_tab_idx_, tr("MY TRADES"));
+        if (fees_tab_idx_ >= 0)
+            tabs_->setTabText(fees_tab_idx_, tr("FEES"));
+        if (time_sales_tab_idx_ >= 0)
+            tabs_->setTabText(time_sales_tab_idx_, tr("T&S"));
+        if (depth_tab_idx_ >= 0)
+            tabs_->setTabText(depth_tab_idx_, tr("DEPTH"));
+        if (market_tab_idx_ >= 0)
+            tabs_->setTabText(market_tab_idx_, tr("MARKET"));
+        if (stats_tab_idx_ >= 0)
+            tabs_->setTabText(stats_tab_idx_, tr("STATS"));
     }
 
     // Table headers
@@ -249,42 +272,59 @@ void CryptoBottomPanel::retranslateUi() {
         fees_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Maker %"), tr("Taker %")});
 
     // Empty-state placeholders
-    if (positions_empty_label_) positions_empty_label_->setText(tr("No open positions."));
-    if (orders_empty_label_)    orders_empty_label_->setText(tr("No active orders."));
-    if (trades_empty_label_)    trades_empty_label_->setText(tr("No trade history yet."));
+    if (positions_empty_label_)
+        positions_empty_label_->setText(tr("No open positions."));
+    if (orders_empty_label_)
+        orders_empty_label_->setText(tr("No active orders."));
+    if (trades_empty_label_)
+        trades_empty_label_->setText(tr("No trade history yet."));
     if (my_trades_empty_label_)
         my_trades_empty_label_->setText(tr("No exchange-side fills.\nConnect an API key in LIVE mode to populate."));
-    if (fees_empty_label_)      fees_empty_label_->setText(tr("No fee schedule loaded."));
+    if (fees_empty_label_)
+        fees_empty_label_->setText(tr("No fee schedule loaded."));
 
     // Bulk action buttons
-    if (close_all_btn_)  close_all_btn_->setText(tr("SQUARE OFF ALL"));
-    if (cancel_all_btn_) cancel_all_btn_->setText(tr("CANCEL ALL ORDERS"));
+    if (close_all_btn_)
+        close_all_btn_->setText(tr("SQUARE OFF ALL"));
+    if (cancel_all_btn_)
+        cancel_all_btn_->setText(tr("CANCEL ALL ORDERS"));
 
     // Market Info card titles
-    if (funding_title_)      funding_title_->setText(tr("FUNDING RATE"));
-    if (mark_title_)         mark_title_->setText(tr("MARK PRICE"));
-    if (index_title_)        index_title_->setText(tr("INDEX PRICE"));
-    if (oi_title_)           oi_title_->setText(tr("OPEN INTEREST"));
-    if (fees_title_)         fees_title_->setText(tr("MAKER / TAKER"));
-    if (next_funding_title_) next_funding_title_->setText(tr("NEXT FUNDING"));
+    if (funding_title_)
+        funding_title_->setText(tr("FUNDING RATE"));
+    if (mark_title_)
+        mark_title_->setText(tr("MARK PRICE"));
+    if (index_title_)
+        index_title_->setText(tr("INDEX PRICE"));
+    if (oi_title_)
+        oi_title_->setText(tr("OPEN INTEREST"));
+    if (fees_title_)
+        fees_title_->setText(tr("MAKER / TAKER"));
+    if (next_funding_title_)
+        next_funding_title_->setText(tr("NEXT FUNDING"));
 
     // Stats card titles
-    if (stat_titles_[0]) stat_titles_[0]->setText(tr("TOTAL P&L"));
-    if (stat_titles_[1]) stat_titles_[1]->setText(tr("WIN RATE"));
-    if (stat_titles_[2]) stat_titles_[2]->setText(tr("TOTAL TRADES"));
-    if (stat_titles_[3]) stat_titles_[3]->setText(tr("BEST TRADE"));
-    if (stat_titles_[4]) stat_titles_[4]->setText(tr("WORST TRADE"));
+    if (stat_titles_[0])
+        stat_titles_[0]->setText(tr("TOTAL P&L"));
+    if (stat_titles_[1])
+        stat_titles_[1]->setText(tr("WIN RATE"));
+    if (stat_titles_[2])
+        stat_titles_[2]->setText(tr("TOTAL TRADES"));
+    if (stat_titles_[3])
+        stat_titles_[3]->setText(tr("BEST TRADE"));
+    if (stat_titles_[4])
+        stat_titles_[4]->setText(tr("WORST TRADE"));
 }
 
 void CryptoBottomPanel::setup_positions_tab() {
     positions_table_ = make_table({
         {tr("Symbol"), ColMode::Stretch},
-        {tr("Side"),   ColMode::Compact},
-        {tr("Qty"),    ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Entry"),  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Mark"),   ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("P&L"),    ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Lev"),    ColMode::Compact},
+        {tr("Side"), ColMode::Compact},
+        {tr("Qty"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Entry"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Mark"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("P&L"), ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Lev"), ColMode::Compact},
     });
 
     // Wrap table + action bar in a container
@@ -333,12 +373,12 @@ void CryptoBottomPanel::setup_positions_tab() {
 void CryptoBottomPanel::setup_orders_tab() {
     orders_table_ = make_table({
         {tr("Symbol"), ColMode::Stretch},
-        {tr("Side"),   ColMode::Compact},
-        {tr("Type"),   ColMode::Compact},
-        {tr("Qty"),    ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Price"),  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Side"), ColMode::Compact},
+        {tr("Type"), ColMode::Compact},
+        {tr("Qty"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Price"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
         {tr("Status"), ColMode::Compact},
-        {QString(),    ColMode::Action,  0, 36}, // cancel button column
+        {QString(), ColMode::Action, 0, 36}, // cancel button column
     });
 
     // Wrap table + action bar in a container
@@ -387,12 +427,12 @@ void CryptoBottomPanel::setup_orders_tab() {
 void CryptoBottomPanel::setup_trades_tab() {
     trades_table_ = make_table({
         {tr("Symbol"), ColMode::Stretch},
-        {tr("Side"),   ColMode::Compact},
-        {tr("Price"),  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Qty"),    ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Fee"),    ColMode::Numeric,  8, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("P&L"),    ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Time"),   ColMode::Compact},
+        {tr("Side"), ColMode::Compact},
+        {tr("Price"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Qty"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Fee"), ColMode::Numeric, 8, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("P&L"), ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Time"), ColMode::Compact},
     });
     auto* host = wrap_with_empty_state(trades_table_, trades_stack_, tr("No trade history yet."));
     if (trades_stack_ && trades_stack_->widget(1))
@@ -403,16 +443,16 @@ void CryptoBottomPanel::setup_trades_tab() {
 void CryptoBottomPanel::setup_my_trades_tab() {
     my_trades_table_ = make_table({
         {tr("Symbol"), ColMode::Stretch},
-        {tr("Side"),   ColMode::Compact},
-        {tr("Price"),  ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Side"), ColMode::Compact},
+        {tr("Price"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
         {tr("Amount"), ColMode::Numeric, 10, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Cost"),   ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Fee"),    ColMode::Numeric,  9, 0, Qt::AlignRight | Qt::AlignVCenter},
-        {tr("Ccy"),    ColMode::Compact},
-        {tr("Time"),   ColMode::Compact},
+        {tr("Cost"), ColMode::Numeric, 11, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Fee"), ColMode::Numeric, 9, 0, Qt::AlignRight | Qt::AlignVCenter},
+        {tr("Ccy"), ColMode::Compact},
+        {tr("Time"), ColMode::Compact},
     });
     auto* host = wrap_with_empty_state(my_trades_table_, my_trades_stack_,
-                                        tr("No exchange-side fills.\nConnect an API key in LIVE mode to populate."));
+                                       tr("No exchange-side fills.\nConnect an API key in LIVE mode to populate."));
     if (my_trades_stack_ && my_trades_stack_->widget(1))
         my_trades_empty_label_ = my_trades_stack_->widget(1)->findChild<QLabel*>();
     my_trades_tab_idx_ = tabs_->addTab(host, tr("MY TRADES"));
@@ -420,7 +460,7 @@ void CryptoBottomPanel::setup_my_trades_tab() {
 
 void CryptoBottomPanel::setup_fees_tab() {
     fees_table_ = make_table({
-        {tr("Symbol"),  ColMode::Stretch},
+        {tr("Symbol"), ColMode::Stretch},
         {tr("Maker %"), ColMode::Numeric, 8, 0, Qt::AlignRight | Qt::AlignVCenter},
         {tr("Taker %"), ColMode::Numeric, 8, 0, Qt::AlignRight | Qt::AlignVCenter},
     });
@@ -458,9 +498,11 @@ QLabel* build_card(QGridLayout* grid, int row, int col, const QString& label_tex
 // Lets retranslateUi re-apply the card title without changing build_card's
 // signature.
 QLabel* card_title_of(QLabel* value) {
-    if (!value) return nullptr;
+    if (!value)
+        return nullptr;
     auto* card = value->parentWidget();
-    if (!card) return nullptr;
+    if (!card)
+        return nullptr;
     const auto labels = card->findChildren<QLabel*>(QString(), Qt::FindDirectChildrenOnly);
     return labels.isEmpty() ? nullptr : labels.first();
 }
@@ -478,20 +520,21 @@ void CryptoBottomPanel::setup_market_info_tab() {
     grid->setVerticalSpacing(10);
     // 3 cards per row at standard width — collapses gracefully because each
     // card's QFrame has expanding size policy.
-    for (int c = 0; c < 3; ++c) grid->setColumnStretch(c, 1);
+    for (int c = 0; c < 3; ++c)
+        grid->setColumnStretch(c, 1);
 
-    funding_label_      = build_card(grid, 0, 0, tr("FUNDING RATE"));
-    mark_label_         = build_card(grid, 0, 1, tr("MARK PRICE"));
-    index_label_        = build_card(grid, 0, 2, tr("INDEX PRICE"));
-    oi_label_           = build_card(grid, 1, 0, tr("OPEN INTEREST"));
-    fees_label_         = build_card(grid, 1, 1, tr("MAKER / TAKER"));
+    funding_label_ = build_card(grid, 0, 0, tr("FUNDING RATE"));
+    mark_label_ = build_card(grid, 0, 1, tr("MARK PRICE"));
+    index_label_ = build_card(grid, 0, 2, tr("INDEX PRICE"));
+    oi_label_ = build_card(grid, 1, 0, tr("OPEN INTEREST"));
+    fees_label_ = build_card(grid, 1, 1, tr("MAKER / TAKER"));
     next_funding_label_ = build_card(grid, 1, 2, tr("NEXT FUNDING"));
 
-    funding_title_      = card_title_of(funding_label_);
-    mark_title_         = card_title_of(mark_label_);
-    index_title_        = card_title_of(index_label_);
-    oi_title_           = card_title_of(oi_label_);
-    fees_title_         = card_title_of(fees_label_);
+    funding_title_ = card_title_of(funding_label_);
+    mark_title_ = card_title_of(mark_label_);
+    index_title_ = card_title_of(index_label_);
+    oi_title_ = card_title_of(oi_label_);
+    fees_title_ = card_title_of(fees_label_);
     next_funding_title_ = card_title_of(next_funding_label_);
 
     outer->addLayout(grid);
@@ -510,10 +553,10 @@ void CryptoBottomPanel::setup_stats_tab() {
     auto* grid = new QGridLayout;
     grid->setHorizontalSpacing(10);
     grid->setVerticalSpacing(10);
-    for (int c = 0; c < 3; ++c) grid->setColumnStretch(c, 1);
+    for (int c = 0; c < 3; ++c)
+        grid->setColumnStretch(c, 1);
 
-    const QString labels[] = {tr("TOTAL P&L"), tr("WIN RATE"), tr("TOTAL TRADES"), tr("BEST TRADE"),
-                              tr("WORST TRADE")};
+    const QString labels[] = {tr("TOTAL P&L"), tr("WIN RATE"), tr("TOTAL TRADES"), tr("BEST TRADE"), tr("WORST TRADE")};
     // Row 0: P&L card spans 1 col (most prominent metric), then Win Rate, Trades.
     // Row 1: Best / Worst.
     stat_values_[0] = build_card(grid, 0, 0, labels[0]);
@@ -579,7 +622,8 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
         set(4, QString::number(pos.current_price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(5, QString::number(pos.unrealized_pnl, 'f', 2), pos.unrealized_pnl >= 0 ? kColorPos() : kColorNeg(),
             Qt::AlignRight | Qt::AlignVCenter);
-        set(6, QString::number(pos.leverage, 'f', 1) + QStringLiteral("x"), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(6, QString::number(pos.leverage, 'f', 1) + QStringLiteral("x"), QColor(),
+            Qt::AlignRight | Qt::AlignVCenter);
     }
     positions_table_->setUpdatesEnabled(true);
     update_empty_state(positions_table_, positions_stack_, n);
@@ -715,7 +759,8 @@ void CryptoBottomPanel::set_trades(const QVector<trading::PtTrade>& trades) {
 
 void CryptoBottomPanel::set_stats(const trading::PtStats& stats) {
     auto repolish = [](QLabel* lbl) {
-        if (!lbl || !lbl->style()) return;
+        if (!lbl || !lbl->style())
+            return;
         lbl->style()->unpolish(lbl);
         lbl->style()->polish(lbl);
     };
@@ -725,7 +770,8 @@ void CryptoBottomPanel::set_stats(const trading::PtStats& stats) {
     repolish(stat_values_[0]);
 
     stat_values_[1]->setText(QString("%1%").arg(stats.win_rate, 0, 'f', 1));
-    stat_values_[2]->setText(QString("%1  W:%2 / L:%3").arg(stats.total_trades).arg(stats.winning_trades).arg(stats.losing_trades));
+    stat_values_[2]->setText(
+        QString("%1  W:%2 / L:%3").arg(stats.total_trades).arg(stats.winning_trades).arg(stats.losing_trades));
 
     stat_values_[3]->setText(QString("$%1").arg(stats.largest_win, 0, 'f', 2));
     stat_values_[3]->setProperty("pnl", "positive");
@@ -896,8 +942,8 @@ void CryptoBottomPanel::update_fees(const QJsonObject& json) {
     if (json.contains("symbol")) {
         fees_table_->setUpdatesEnabled(false);
         fees_table_->setRowCount(1);
-        write_row(0, kRowEven(), json.value("symbol").toString(),
-                  json.value("maker").toDouble(), json.value("taker").toDouble());
+        write_row(0, kRowEven(), json.value("symbol").toString(), json.value("maker").toDouble(),
+                  json.value("taker").toDouble());
         fees_table_->setUpdatesEnabled(true);
         update_empty_state(fees_table_, fees_stack_, 1);
         return;
@@ -912,8 +958,7 @@ void CryptoBottomPanel::update_fees(const QJsonObject& json) {
     for (int i = 0; i < n; ++i) {
         const auto f = fees[i].toObject();
         const QColor bg = (i % 2 == 0) ? kRowEven() : kRowOdd();
-        write_row(i, bg, f.value("symbol").toString(),
-                  f.value("maker").toDouble(), f.value("taker").toDouble());
+        write_row(i, bg, f.value("symbol").toString(), f.value("maker").toDouble(), f.value("taker").toDouble());
     }
     fees_table_->setUpdatesEnabled(true);
     update_empty_state(fees_table_, fees_stack_, n);
@@ -937,8 +982,7 @@ void CryptoBottomPanel::set_balance_unavailable(const QString& reason) {
     live_balance_label_->setText(tr("UNAVAILABLE"));
     live_equity_label_->setText(QStringLiteral("—"));
     live_margin_label_->setText(QStringLiteral("—"));
-    const QString tip = reason.isEmpty() ? tr("Balance unavailable")
-                                         : tr("Balance unavailable: %1").arg(reason);
+    const QString tip = reason.isEmpty() ? tr("Balance unavailable") : tr("Balance unavailable: %1").arg(reason);
     live_balance_label_->setToolTip(tip);
     live_equity_label_->setToolTip(tip);
     live_margin_label_->setToolTip(tip);

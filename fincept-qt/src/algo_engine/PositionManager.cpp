@@ -9,16 +9,14 @@
 
 namespace fincept::algo {
 
-PositionManager::PositionManager(const QString& deployment_id,
-                                 double stop_loss_pct, double take_profit_pct,
-                                 double trailing_stop_pct, double max_order_value,
-                                 double max_daily_loss)
-    : deployment_id_(deployment_id)
-    , stop_loss_pct_(stop_loss_pct)
-    , take_profit_pct_(take_profit_pct)
-    , trailing_stop_pct_(trailing_stop_pct)
-    , max_order_value_(max_order_value)
-    , max_daily_loss_(max_daily_loss) {
+PositionManager::PositionManager(const QString& deployment_id, double stop_loss_pct, double take_profit_pct,
+                                 double trailing_stop_pct, double max_order_value, double max_daily_loss)
+    : deployment_id_(deployment_id),
+      stop_loss_pct_(stop_loss_pct),
+      take_profit_pct_(take_profit_pct),
+      trailing_stop_pct_(trailing_stop_pct),
+      max_order_value_(max_order_value),
+      max_daily_loss_(max_daily_loss) {
     risk_.day_start_epoch = QDateTime::currentMSecsSinceEpoch();
 }
 
@@ -36,8 +34,7 @@ std::optional<AlgoOrderSignal> PositionManager::check_risk(double current_price)
         for (const auto& leg : std::as_const(legs_))
             basket_pnl += leg.unrealized_pnl;
 
-        double basket_pnl_pct = basket_entry_value_ > 1e-10
-            ? basket_pnl / basket_entry_value_ * 100.0 : 0;
+        double basket_pnl_pct = basket_entry_value_ > 1e-10 ? basket_pnl / basket_entry_value_ * 100.0 : 0;
 
         // Daily loss limit
         if (max_daily_loss_ > 0 && risk_.daily_pnl <= -std::abs(max_daily_loss_)) {
@@ -68,8 +65,7 @@ std::optional<AlgoOrderSignal> PositionManager::check_risk(double current_price)
         if (trailing_stop_pct_ > 0) {
             if (basket_pnl > basket_peak_pnl_)
                 basket_peak_pnl_ = basket_pnl;
-            double peak_pct = basket_entry_value_ > 1e-10
-                ? basket_peak_pnl_ / basket_entry_value_ * 100.0 : 0;
+            double peak_pct = basket_entry_value_ > 1e-10 ? basket_peak_pnl_ / basket_entry_value_ * 100.0 : 0;
             if (peak_pct - basket_pnl_pct >= trailing_stop_pct_) {
                 AlgoOrderSignal sig;
                 sig.deployment_id = deployment_id_;
@@ -177,10 +173,12 @@ double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
 
     metrics_.total_pnl += pnl;
     metrics_.total_trades++;
-    if (pnl > 0) metrics_.winning_trades++;
-    else if (pnl < 0) metrics_.losing_trades++;
-    metrics_.win_rate = metrics_.total_trades > 0
-        ? static_cast<double>(metrics_.winning_trades) / metrics_.total_trades * 100.0 : 0;
+    if (pnl > 0)
+        metrics_.winning_trades++;
+    else if (pnl < 0)
+        metrics_.losing_trades++;
+    metrics_.win_rate =
+        metrics_.total_trades > 0 ? static_cast<double>(metrics_.winning_trades) / metrics_.total_trades * 100.0 : 0;
     metrics_.last_trade_time = time_ms;
 
     risk_.daily_pnl += pnl;
@@ -195,9 +193,8 @@ double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
     return pnl;
 }
 
-void PositionManager::restore_state(PositionSide side, double qty, double entry_price,
-                                    double total_pnl, int total_trades, double win_rate,
-                                    double max_drawdown) {
+void PositionManager::restore_state(PositionSide side, double qty, double entry_price, double total_pnl,
+                                    int total_trades, double win_rate, double max_drawdown) {
     QMutexLocker lock(&mutex_);
     position_.side = side;
     position_.quantity = qty;
@@ -236,9 +233,11 @@ void PositionManager::update_price(double price) {
 
 void PositionManager::update_drawdown() {
     double equity = metrics_.total_pnl;
-    if (equity > risk_.peak_equity) risk_.peak_equity = equity;
+    if (equity > risk_.peak_equity)
+        risk_.peak_equity = equity;
     double dd = risk_.peak_equity - equity;
-    if (dd > risk_.max_drawdown) risk_.max_drawdown = dd;
+    if (dd > risk_.max_drawdown)
+        risk_.max_drawdown = dd;
     metrics_.max_drawdown = risk_.max_drawdown;
 }
 
@@ -253,7 +252,8 @@ bool PositionManager::is_paused() const {
 }
 
 bool PositionManager::validate_order_value(double qty, double price) const {
-    if (max_order_value_ <= 0) return true;
+    if (max_order_value_ <= 0)
+        return true;
     return (qty * price) <= max_order_value_;
 }
 
@@ -281,12 +281,12 @@ void PositionManager::reset_daily() {
 
 // ── Multi-leg basket methods (P3) ───────────────────────────────────────────
 
-void PositionManager::record_entry_legs(const QVector<fincept::algo::AlgoLegPosition>& legs,
-                                        int64_t time_ms) {
+void PositionManager::record_entry_legs(const QVector<fincept::algo::AlgoLegPosition>& legs, int64_t time_ms) {
     QMutexLocker lock(&mutex_);
-    Q_ASSERT(position_.side == PositionSide::None); // invariant: multi-leg path must not be called while a single-leg position is open
-    legs_        = legs;
-    multi_leg_   = true;
+    Q_ASSERT(position_.side ==
+             PositionSide::None); // invariant: multi-leg path must not be called while a single-leg position is open
+    legs_ = legs;
+    multi_leg_ = true;
     basket_peak_pnl_ = 0;
 
     // Compute entry value: Σ |entry_price * quantity| (unsigned, used as denominator)
@@ -294,12 +294,12 @@ void PositionManager::record_entry_legs(const QVector<fincept::algo::AlgoLegPosi
     double total_qty = 0;
     for (const auto& leg : std::as_const(legs_)) {
         basket_entry_value_ += std::abs(leg.entry_price * leg.quantity);
-        total_qty           += leg.quantity;
+        total_qty += leg.quantity;
     }
 
     metrics_.current_position_side = QStringLiteral("BASKET");
-    metrics_.current_position_qty  = total_qty;
-    metrics_.last_trade_time       = time_ms;
+    metrics_.current_position_qty = total_qty;
+    metrics_.last_trade_time = time_ms;
 }
 
 double PositionManager::record_exit_legs(int64_t time_ms) {
@@ -308,25 +308,27 @@ double PositionManager::record_exit_legs(int64_t time_ms) {
     for (const auto& leg : std::as_const(legs_))
         pnl += leg.unrealized_pnl;
 
-    metrics_.total_pnl  += pnl;
+    metrics_.total_pnl += pnl;
     metrics_.total_trades++;
-    if (pnl > 0)      metrics_.winning_trades++;
-    else if (pnl < 0) metrics_.losing_trades++;
-    metrics_.win_rate = metrics_.total_trades > 0
-        ? static_cast<double>(metrics_.winning_trades) / metrics_.total_trades * 100.0 : 0;
+    if (pnl > 0)
+        metrics_.winning_trades++;
+    else if (pnl < 0)
+        metrics_.losing_trades++;
+    metrics_.win_rate =
+        metrics_.total_trades > 0 ? static_cast<double>(metrics_.winning_trades) / metrics_.total_trades * 100.0 : 0;
     metrics_.last_trade_time = time_ms;
-    metrics_.unrealized_pnl  = 0;
+    metrics_.unrealized_pnl = 0;
 
     risk_.daily_pnl += pnl;
     update_drawdown();
 
     legs_.clear();
-    multi_leg_          = false;
+    multi_leg_ = false;
     basket_entry_value_ = 0;
-    basket_peak_pnl_    = 0;
+    basket_peak_pnl_ = 0;
 
     metrics_.current_position_side = QString();
-    metrics_.current_position_qty  = 0;
+    metrics_.current_position_qty = 0;
 
     return pnl;
 }
@@ -336,8 +338,8 @@ void PositionManager::update_leg_price(const QString& symbol, double ltp) {
     bool found = false;
     for (auto& leg : legs_) {
         if (leg.symbol == symbol) {
-            leg.current_price   = ltp;
-            leg.unrealized_pnl  = (ltp - leg.entry_price) * leg.quantity * leg.side_sign;
+            leg.current_price = ltp;
+            leg.unrealized_pnl = (ltp - leg.entry_price) * leg.quantity * leg.side_sign;
             found = true;
             break;
         }

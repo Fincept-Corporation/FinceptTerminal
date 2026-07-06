@@ -42,7 +42,8 @@ static bool is_youtube_url(const QString& url) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-VideoPlayerWidget::VideoPlayerWidget(QWidget* parent) : BaseWidget(tr("LIVE TV / STREAMS"), parent, ui::colors::AMBER()) {
+VideoPlayerWidget::VideoPlayerWidget(QWidget* parent)
+    : BaseWidget(tr("LIVE TV / STREAMS"), parent, ui::colors::AMBER()) {
 
     stack_ = new QStackedWidget;
     stack_->setStyleSheet("background: transparent;");
@@ -255,7 +256,7 @@ QString VideoPlayerWidget::resolve_ytdlp_program() const {
     // Contents/Resources/ (not Contents/MacOS/) — anything non-Mach-O in
     // MacOS/ makes codesign reject the bundle.
     const QStringList local_candidates = {
-        QDir(exe_dir).filePath("../Resources/" + exe_name),  // macOS canonical
+        QDir(exe_dir).filePath("../Resources/" + exe_name), // macOS canonical
         QDir(exe_dir).filePath(exe_name),
         QDir(exe_dir).filePath("tools/" + exe_name),
         QDir(exe_dir).filePath("bin/" + exe_name),
@@ -299,8 +300,7 @@ void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, con
     // -f bestvideo+bestaudio/best: best quality with audio
     // --no-playlist: single video only
     // -g: print URL only, don't download
-    proc->start(ytdlp_program,
-                {"-f", "best[ext=mp4]/best", "--no-playlist", "-g", youtube_url});
+    proc->start(ytdlp_program, {"-f", "best[ext=mp4]/best", "--no-playlist", "-g", youtube_url});
 }
 
 void VideoPlayerWidget::on_ytdlp_finished(int exit_code, QProcess::ExitStatus /*status*/) {

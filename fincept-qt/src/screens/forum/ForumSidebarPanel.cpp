@@ -61,8 +61,8 @@ void ForumSidebarPanel::build_ui() {
 
     brand_title_ = new QLabel(tr("COMMUNITY"));
     brand_title_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;letter-spacing:2px;"
-                                       "background:transparent;%2")
-                                   .arg(ui::colors::TEXT_PRIMARY(), M(13)));
+                                        "background:transparent;%2")
+                                    .arg(ui::colors::TEXT_PRIMARY(), M(13)));
 
     brand_hl->addWidget(brand_icon);
     brand_hl->addWidget(brand_title_, 1);
@@ -174,8 +174,8 @@ void ForumSidebarPanel::build_ui() {
     sh_hl->setContentsMargins(14, 0, 14, 0);
     activity_hdr_ = new QLabel(tr("ACTIVITY"));
     activity_hdr_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1.5px;"
-                                  "background:transparent;%2")
-                              .arg(ui::colors::TEXT_TERTIARY(), M(9)));
+                                         "background:transparent;%2")
+                                     .arg(ui::colors::TEXT_TERTIARY(), M(9)));
     sh_hl->addWidget(activity_hdr_);
     sh_hl->addStretch();
     body_vl->addWidget(stats_hdr);
@@ -198,7 +198,7 @@ void ForumSidebarPanel::build_ui() {
             QString("color:%1;font-size:16px;font-weight:700;background:transparent;%2").arg(color, M(16)));
         lbl_out = new QLabel(label);
         lbl_out->setStyleSheet(QString("color:%1;font-size:8px;letter-spacing:0.8px;background:transparent;%2")
-                             .arg(ui::colors::TEXT_DIM(), M(8)));
+                                   .arg(ui::colors::TEXT_DIM(), M(8)));
         cvl->addWidget(out);
         cvl->addWidget(lbl_out);
         return cell;
@@ -235,17 +235,17 @@ void ForumSidebarPanel::build_ui() {
     ch_dot->setStyleSheet(QString("color:%1;font-size:6px;background:transparent;").arg(ui::colors::AMBER()));
     channels_hdr_ = new QLabel(tr("CHANNELS"));
     channels_hdr_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1.5px;"
-                                  "background:transparent;%2")
-                              .arg(ui::colors::TEXT_TERTIARY(), M(9)));
+                                         "background:transparent;%2")
+                                     .arg(ui::colors::TEXT_TERTIARY(), M(9)));
 
     new_post_btn_ = new QPushButton("+");
     new_post_btn_->setFixedSize(18, 18);
     new_post_btn_->setCursor(Qt::PointingHandCursor);
     new_post_btn_->setToolTip(tr("New post"));
     new_post_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
-                                        "font-size:14px;font-weight:700;%2}"
-                                        "QPushButton:hover{color:%3;}")
-                                    .arg(ui::colors::TEXT_DIM(), M(14), ui::colors::AMBER()));
+                                         "font-size:14px;font-weight:700;%2}"
+                                         "QPushButton:hover{color:%3;}")
+                                     .arg(ui::colors::TEXT_DIM(), M(14), ui::colors::AMBER()));
     connect(new_post_btn_, &QPushButton::clicked, this, [this]() {
         int cat_id = active_category_id_ > 0 ? active_category_id_ : 1;
         emit new_post_requested(cat_id);
@@ -277,8 +277,8 @@ void ForumSidebarPanel::build_ui() {
     lb_dot->setStyleSheet(QString("color:%1;font-size:8px;background:transparent;").arg(ui::colors::AMBER()));
     leaderboard_hdr_ = new QLabel(tr("LEADERBOARD"));
     leaderboard_hdr_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1.5px;"
-                                  "background:transparent;%2")
-                              .arg(ui::colors::TEXT_TERTIARY(), M(9)));
+                                            "background:transparent;%2")
+                                        .arg(ui::colors::TEXT_TERTIARY(), M(9)));
     lb_hl->addWidget(lb_dot);
     lb_hl->addWidget(leaderboard_hdr_);
     lb_hl->addStretch();
@@ -511,16 +511,26 @@ void ForumSidebarPanel::changeEvent(QEvent* event) {
 }
 
 void ForumSidebarPanel::retranslateUi() {
-    if (brand_title_)     brand_title_->setText(tr("COMMUNITY"));
-    if (search_input_)    search_input_->setPlaceholderText(tr("Search discussions..."));
-    if (activity_hdr_)    activity_hdr_->setText(tr("ACTIVITY"));
-    if (stat_posts_lbl_)    stat_posts_lbl_->setText(tr("POSTS"));
-    if (stat_comments_lbl_) stat_comments_lbl_->setText(tr("REPLIES"));
-    if (stat_active_lbl_)   stat_active_lbl_->setText(tr("TODAY"));
-    if (trending_btn_)    trending_btn_->setText(tr("  ▲  TRENDING POSTS"));
-    if (channels_hdr_)    channels_hdr_->setText(tr("CHANNELS"));
-    if (new_post_btn_)    new_post_btn_->setToolTip(tr("New post"));
-    if (leaderboard_hdr_) leaderboard_hdr_->setText(tr("LEADERBOARD"));
+    if (brand_title_)
+        brand_title_->setText(tr("COMMUNITY"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search discussions..."));
+    if (activity_hdr_)
+        activity_hdr_->setText(tr("ACTIVITY"));
+    if (stat_posts_lbl_)
+        stat_posts_lbl_->setText(tr("POSTS"));
+    if (stat_comments_lbl_)
+        stat_comments_lbl_->setText(tr("REPLIES"));
+    if (stat_active_lbl_)
+        stat_active_lbl_->setText(tr("TODAY"));
+    if (trending_btn_)
+        trending_btn_->setText(tr("  ▲  TRENDING POSTS"));
+    if (channels_hdr_)
+        channels_hdr_->setText(tr("CHANNELS"));
+    if (new_post_btn_)
+        new_post_btn_->setToolTip(tr("New post"));
+    if (leaderboard_hdr_)
+        leaderboard_hdr_->setText(tr("LEADERBOARD"));
     // Profile name/sub/rep and category/contributor rows reflect live data and
     // refresh on the next fetch; the contributor placeholder is rebuilt then.
 }

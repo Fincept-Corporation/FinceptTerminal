@@ -84,7 +84,10 @@ class ZerodhaWebSocket : public QObject {
     static quint32 read_u32(const uchar* p);
     static qint32 read_i32(const uchar* p);
     static quint16 read_u16(const uchar* p);
-    static double paise_to_rupees(qint32 paise);
+    // Kite packs prices as int32 scaled per exchange segment (low byte of the
+    // instrument token): CDS (3) → 1e7, BCD (6) → 1e4, everything else → 100
+    // (paise). Convention per Zerodha's official KiteTicker clients.
+    static double price_from_wire(qint32 raw, quint32 instrument_token);
 
     QString api_key_;
     QString access_token_;

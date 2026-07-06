@@ -92,7 +92,7 @@ class PolymarketDetailPanel : public QWidget {
 
     void set_active_tab(int tab);
     void apply_accent_to_tabs();
-    void apply_presentation_to_stats();  // show/hide OPEN INT cell, re-label
+    void apply_presentation_to_stats(); // show/hide OPEN INT cell, re-label
     void render_status_badge(const fincept::services::prediction::PredictionMarket& market);
     void refresh_ticket_side_style();
     void on_submit_clicked();
@@ -103,11 +103,11 @@ class PolymarketDetailPanel : public QWidget {
 
     // Fixed-text captions cached for retranslateUi.
     QLabel* outcomes_header_ = nullptr;
-    QList<QLabel*> stat_caption_lbls_;        // VOLUME / LIQUIDITY / OPEN INT / END DATE / MIDPOINT / SPREAD / LAST TRADE
-    QLabel* no_acct_msg_lbl_ = nullptr;       // "Connect an account…"
-    QLabel* bal_caption_lbl_ = nullptr;       // "AVAILABLE"
-    QLabel* pos_caption_lbl_ = nullptr;       // "POSITION"
-    QList<QLabel*> trade_form_caption_lbls_;  // OUTCOME / PRICE (0–1) / SIZE / ORDER TYPE
+    QList<QLabel*> stat_caption_lbls_;  // VOLUME / LIQUIDITY / OPEN INT / END DATE / MIDPOINT / SPREAD / LAST TRADE
+    QLabel* no_acct_msg_lbl_ = nullptr; // "Connect an account…"
+    QLabel* bal_caption_lbl_ = nullptr; // "AVAILABLE"
+    QLabel* pos_caption_lbl_ = nullptr; // "POSITION"
+    QList<QLabel*> trade_form_caption_lbls_; // OUTCOME / PRICE (0–1) / SIZE / ORDER TYPE
 
     // Overview
     QLabel* question_label_ = nullptr;
@@ -128,18 +128,18 @@ class PolymarketDetailPanel : public QWidget {
     PolymarketActivityFeed* activity_feed_ = nullptr;
 
     // Trade ticket
-    QStackedWidget* ticket_stack_       = nullptr;  // 0=no-account, 1=ticket
-    QLabel*         ticket_balance_lbl_ = nullptr;
-    QLabel*         ticket_position_lbl_= nullptr;
-    QComboBox*      ticket_outcome_cb_  = nullptr;
-    QPushButton*    ticket_buy_btn_     = nullptr;
-    QPushButton*    ticket_sell_btn_    = nullptr;
-    QLineEdit*      ticket_price_edit_  = nullptr;
-    QLineEdit*      ticket_size_edit_   = nullptr;
-    QComboBox*      ticket_type_cb_     = nullptr;
-    QPushButton*    ticket_submit_btn_  = nullptr;
-    QLabel*         ticket_status_lbl_  = nullptr;
-    QString         ticket_side_        = "BUY";
+    QStackedWidget* ticket_stack_ = nullptr; // 0=no-account, 1=ticket
+    QLabel* ticket_balance_lbl_ = nullptr;
+    QLabel* ticket_position_lbl_ = nullptr;
+    QComboBox* ticket_outcome_cb_ = nullptr;
+    QPushButton* ticket_buy_btn_ = nullptr;
+    QPushButton* ticket_sell_btn_ = nullptr;
+    QLineEdit* ticket_price_edit_ = nullptr;
+    QLineEdit* ticket_size_edit_ = nullptr;
+    QComboBox* ticket_type_cb_ = nullptr;
+    QPushButton* ticket_submit_btn_ = nullptr;
+    QLabel* ticket_status_lbl_ = nullptr;
+    QString ticket_side_ = "BUY";
 
     // Holders
     QTableWidget* holders_table_ = nullptr;
@@ -165,11 +165,11 @@ class PolymarketDetailPanel : public QWidget {
     bool has_last_market_ = false;
 
     // Tab indices.
-    static constexpr int kTabTrade    = 3;
-    static constexpr int kTabTrades   = 4;
-    static constexpr int kTabHolders  = 5;
+    static constexpr int kTabTrade = 3;
+    static constexpr int kTabTrades = 4;
+    static constexpr int kTabHolders = 5;
     static constexpr int kTabComments = 6;
-    static constexpr int kTabRelated  = 7;
+    static constexpr int kTabRelated = 7;
 };
 
 } // namespace fincept::screens::polymarket

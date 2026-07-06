@@ -7,6 +7,7 @@
 // We deliberately avoid spawning a Python subprocess per tool call — the
 // agent process is already Python, so a round-trip would be wasteful.
 #include "mcp/McpTypes.h"
+
 #include <vector>
 
 namespace fincept::mcp::tools {

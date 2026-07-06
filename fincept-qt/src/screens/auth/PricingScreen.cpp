@@ -155,11 +155,12 @@ void PricingScreen::changeEvent(QEvent* event) {
 }
 
 void PricingScreen::retranslateUi() {
-    if (title_label_)    title_label_->setText(tr("PLANS & PRICING"));
-    if (subtitle_label_) subtitle_label_->setText(tr("Unlock the full power of Fincept Terminal"));
+    if (title_label_)
+        title_label_->setText(tr("PLANS & PRICING"));
+    if (subtitle_label_)
+        subtitle_label_->setText(tr("Unlock the full power of Fincept Terminal"));
     if (loading_label_)
-        loading_label_->setText(loading_is_refresh_ ? tr("Updating plan status...")
-                                                    : tr("Loading plans..."));
+        loading_label_->setText(loading_is_refresh_ ? tr("Updating plan status...") : tr("Loading plans..."));
 }
 
 void PricingScreen::showEvent(QShowEvent* event) {
@@ -354,8 +355,9 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
         auto* desc = new QLabel(plan.description);
         desc->setWordWrap(true);
         desc->setAlignment(Qt::AlignCenter);
-        desc->setStyleSheet(
-            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY()).arg(MF));
+        desc->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
+                                .arg(ui::colors::TEXT_TERTIARY())
+                                .arg(MF));
         vl->addWidget(desc);
     }
 
@@ -420,8 +422,9 @@ QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int
     for (const auto& feature : plan.features) {
         auto* feat = new QLabel(QString("  %1").arg(feature));
         feat->setWordWrap(true);
-        feat->setStyleSheet(
-            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_SECONDARY()).arg(MF));
+        feat->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
+                                .arg(ui::colors::TEXT_SECONDARY())
+                                .arg(MF));
         vl->addWidget(feat);
     }
 
@@ -491,57 +494,58 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
     }
     error_label_->hide();
 
-    auth::AuthApi::instance().generate_checkout_token(plan_id, [this, plan_id, processing_text, select_text](auth::ApiResponse r) {
-        for (auto* btn : cards_container_->findChildren<QPushButton*>()) {
-            if (btn->text() == processing_text) {
-                btn->setEnabled(true);
-                btn->setText(select_text);
+    auth::AuthApi::instance().generate_checkout_token(
+        plan_id, [this, plan_id, processing_text, select_text](auth::ApiResponse r) {
+            for (auto* btn : cards_container_->findChildren<QPushButton*>()) {
+                if (btn->text() == processing_text) {
+                    btn->setEnabled(true);
+                    btn->setText(select_text);
+                }
             }
-        }
 
-        if (!r.success) {
-            error_label_->setText(r.error.isEmpty() ? tr("Failed to generate checkout token") : r.error);
-            error_label_->show();
-            return;
-        }
+            if (!r.success) {
+                error_label_->setText(r.error.isEmpty() ? tr("Failed to generate checkout token") : r.error);
+                error_label_->show();
+                return;
+            }
 
-        QJsonObject payload = r.data;
-        if (payload.contains("data") && payload["data"].isObject())
-            payload = payload["data"].toObject();
+            QJsonObject payload = r.data;
+            if (payload.contains("data") && payload["data"].isObject())
+                payload = payload["data"].toObject();
 
-        QString token = payload["token"].toString();
-        if (token.isEmpty()) {
-            error_label_->setText(tr("No checkout token received from server"));
-            error_label_->show();
-            return;
-        }
+            QString token = payload["token"].toString();
+            if (token.isEmpty()) {
+                error_label_->setText(tr("No checkout token received from server"));
+                error_label_->show();
+                return;
+            }
 
-        QString url = QString("https://fincept.in/checkout?token=%1&plan=%2")
-                          .arg(QUrl::toPercentEncoding(token), QUrl::toPercentEncoding(plan_id));
-        QDesktopServices::openUrl(QUrl(url));
+            QString url = QString("https://fincept.in/checkout?token=%1&plan=%2")
+                              .arg(QUrl::toPercentEncoding(token), QUrl::toPercentEncoding(plan_id));
+            QDesktopServices::openUrl(QUrl(url));
 
-        // Store plan before payment so we can detect changes
-        awaiting_payment_ = true;
-        awaiting_plan_id_ = plan_id;
-        pre_payment_plan_ = auth::AuthManager::instance().session().account_type().toLower();
+            // Store plan before payment so we can detect changes
+            awaiting_payment_ = true;
+            awaiting_plan_id_ = plan_id;
+            pre_payment_plan_ = auth::AuthManager::instance().session().account_type().toLower();
 
-        // Start polling every 5 seconds to detect plan change
-        if (!payment_poll_timer_) {
-            payment_poll_timer_ = new QTimer(this);
-            payment_poll_timer_->setInterval(1000);
-            connect(payment_poll_timer_, &QTimer::timeout, this, &PricingScreen::poll_payment_status);
-        }
-        payment_poll_timer_->start();
+            // Start polling every 5 seconds to detect plan change
+            if (!payment_poll_timer_) {
+                payment_poll_timer_ = new QTimer(this);
+                payment_poll_timer_->setInterval(1000);
+                connect(payment_poll_timer_, &QTimer::timeout, this, &PricingScreen::poll_payment_status);
+            }
+            payment_poll_timer_->start();
 
-        // Also check on focus return for faster detection
-        if (focus_connection_)
-            disconnect(focus_connection_);
-        focus_connection_ =
-            connect(qApp, &QApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
-                if (state == Qt::ApplicationActive && awaiting_payment_)
-                    poll_payment_status();
-            });
-    });
+            // Also check on focus return for faster detection
+            if (focus_connection_)
+                disconnect(focus_connection_);
+            focus_connection_ =
+                connect(qApp, &QApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+                    if (state == Qt::ApplicationActive && awaiting_payment_)
+                        poll_payment_status();
+                });
+        });
 }
 
 void PricingScreen::poll_payment_status() {

@@ -3,11 +3,10 @@
 
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -20,7 +19,7 @@ namespace {
 inline void publish_to_hub(const QString& topic, const QVariant& value) {
     fincept::datahub::DataHub::instance().publish(topic, value);
 }
-}  // namespace
+} // namespace
 
 static QString marine_base() {
     return fincept::AppConfig::instance().api_base_url() + QStringLiteral("/marine");
@@ -84,9 +83,12 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
         body["limit"] = params.limit;
 
     const QString cache_key = QString("maritime:area:%1:%2:%3:%4:%5:%6")
-                                  .arg(params.min_lat).arg(params.max_lat)
-                                  .arg(params.min_lng).arg(params.max_lng)
-                                  .arg(params.days_ago).arg(params.limit);
+                                  .arg(params.min_lat)
+                                  .arg(params.max_lat)
+                                  .arg(params.min_lng)
+                                  .arg(params.max_lng)
+                                  .arg(params.days_ago)
+                                  .arg(params.limit);
 
     // Client-side safety net: if the API ignores `limit` and returns the full
     // unbounded set, cap the working set before we parse/sort/re-serialize so
@@ -100,8 +102,8 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
         page.vessels.reserve(arr.size());
         for (const auto& v : arr)
             page.vessels.append(parse_vessel(v.toObject()));
-        page.total_count       = root["total_count"].toInt(page.vessels.size());
-        page.credits_used      = root["credits_used"].toDouble(0.0);
+        page.total_count = root["total_count"].toInt(page.vessels.size());
+        page.credits_used = root["credits_used"].toDouble(0.0);
         page.remaining_credits = root["remaining_credits"].toInt(-1);
         emit vessels_loaded(page);
         return;
@@ -109,8 +111,7 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
 
     QPointer<MaritimeService> self = this;
     HttpClient::instance().post(
-        marine_base() + "/vessel/area-search", body,
-        [self, cache_key, hard_cap](Result<QJsonDocument> result) {
+        marine_base() + "/vessel/area-search", body, [self, cache_key, hard_cap](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -124,9 +125,7 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
             // Parse at most `hard_cap` vessels (0 = unbounded). Caps the
             // per-vessel parse + downstream sort/re-serialize work when the
             // server returns the full unbounded set despite the limit param.
-            const int parse_n = (hard_cap > 0)
-                                    ? std::min<int>(hard_cap, vessels_arr.size())
-                                    : vessels_arr.size();
+            const int parse_n = (hard_cap > 0) ? std::min<int>(hard_cap, vessels_arr.size()) : vessels_arr.size();
             VesselsPage page;
             page.vessels.reserve(parse_n);
             for (int i = 0; i < parse_n; ++i)
@@ -135,12 +134,10 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
             // Newest position first — last_pos_updated_at is ISO-8601 so plain
             // string compare gives correct lexicographic ordering.
             std::sort(page.vessels.begin(), page.vessels.end(),
-                      [](const VesselData& a, const VesselData& b) {
-                          return a.last_updated > b.last_updated;
-                      });
+                      [](const VesselData& a, const VesselData& b) { return a.last_updated > b.last_updated; });
 
-            page.total_count       = data["vessel_count"].toInt(page.vessels.size());
-            page.credits_used      = data["credits_used"].toDouble(0.0);
+            page.total_count = data["vessel_count"].toInt(page.vessels.size());
+            page.credits_used = data["credits_used"].toDouble(0.0);
             page.remaining_credits = data["remaining_credits"].toInt(-1);
 
             // Cache the (already-sorted) vessels + envelope.
@@ -150,28 +147,27 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
                 o["id"] = v.id;
                 o["imo"] = v.imo;
                 o["name"] = v.name;
-                o["last_pos_latitude"]  = QString::number(v.latitude, 'f', 8);
+                o["last_pos_latitude"] = QString::number(v.latitude, 'f', 8);
                 o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
-                o["last_pos_speed"]     = QString::number(v.speed);
-                o["last_pos_angle"]     = QString::number(v.angle);
+                o["last_pos_speed"] = QString::number(v.speed);
+                o["last_pos_angle"] = QString::number(v.angle);
                 o["route_from_port_name"] = v.from_port;
-                o["route_to_port_name"]   = v.to_port;
-                o["route_from_date"]    = v.from_date;
-                o["route_to_date"]      = v.to_date;
-                o["route_progress"]     = QString::number(v.route_progress);
-                o["current_draught"]    = QString::number(v.draught);
+                o["route_to_port_name"] = v.to_port;
+                o["route_from_date"] = v.from_date;
+                o["route_to_date"] = v.to_date;
+                o["route_progress"] = QString::number(v.route_progress);
+                o["current_draught"] = QString::number(v.draught);
                 o["last_pos_updated_at"] = v.last_updated;
-                o["fetched_at"]         = v.fetched_at;
+                o["fetched_at"] = v.fetched_at;
                 cached_arr.append(o);
             }
             QJsonObject cached_root;
-            cached_root["vessels"]           = cached_arr;
-            cached_root["total_count"]       = page.total_count;
-            cached_root["credits_used"]      = page.credits_used;
+            cached_root["vessels"] = cached_arr;
+            cached_root["total_count"] = page.total_count;
+            cached_root["credits_used"] = page.credits_used;
             cached_root["remaining_credits"] = page.remaining_credits;
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
                 kVesselTtlSec, "maritime");
 
             LOG_INFO("Maritime", QString("Area search: %1 vessels (total %2, %3 credits left)")
@@ -204,8 +200,7 @@ void MaritimeService::get_vessel_position(const QString& imo) {
     QPointer<MaritimeService> self = this;
     const QString imo_trimmed = imo.trimmed();
     HttpClient::instance().post(
-        marine_base() + "/vessel/position", body,
-        [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
+        marine_base() + "/vessel/position", body, [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -239,11 +234,11 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
         page.vessels.reserve(arr.size());
         for (const auto& v : arr)
             page.vessels.append(parse_vessel(v.toObject()));
-        page.total_count       = root["found_count"].toInt(page.vessels.size());
-        page.found_count       = page.total_count;
+        page.total_count = root["found_count"].toInt(page.vessels.size());
+        page.found_count = page.total_count;
         for (const auto& nf : root["not_found"].toArray())
             page.not_found.append(nf.toString());
-        page.credits_used      = root["credits_used"].toDouble(0.0);
+        page.credits_used = root["credits_used"].toDouble(0.0);
         page.remaining_credits = root["remaining_credits"].toInt(-1);
         emit vessels_loaded(page);
         return;
@@ -256,72 +251,68 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
     body["imos"] = arr;
 
     QPointer<MaritimeService> self = this;
-    HttpClient::instance().post(
-        marine_base() + "/vessel/multi", body, [self, cache_key](Result<QJsonDocument> result) {
-            if (!self)
-                return;
-            if (!result.is_ok()) {
-                LOG_ERROR("Maritime", "Multi vessel failed: " + QString::fromStdString(result.error()));
-                emit self->error_occurred("multi_vessel", QString::fromStdString(result.error()));
-                return;
-            }
-            const auto data = unwrap(result.value().object());
-            const auto vessels_arr = data["vessels"].toArray();
+    HttpClient::instance().post(marine_base() + "/vessel/multi", body, [self, cache_key](Result<QJsonDocument> result) {
+        if (!self)
+            return;
+        if (!result.is_ok()) {
+            LOG_ERROR("Maritime", "Multi vessel failed: " + QString::fromStdString(result.error()));
+            emit self->error_occurred("multi_vessel", QString::fromStdString(result.error()));
+            return;
+        }
+        const auto data = unwrap(result.value().object());
+        const auto vessels_arr = data["vessels"].toArray();
 
-            VesselsPage page;
-            page.vessels.reserve(vessels_arr.size());
-            for (const auto& v : vessels_arr)
-                page.vessels.append(self->parse_vessel(v.toObject()));
+        VesselsPage page;
+        page.vessels.reserve(vessels_arr.size());
+        for (const auto& v : vessels_arr)
+            page.vessels.append(self->parse_vessel(v.toObject()));
 
-            std::sort(page.vessels.begin(), page.vessels.end(),
-                      [](const VesselData& a, const VesselData& b) {
-                          return a.last_updated > b.last_updated;
-                      });
+        std::sort(page.vessels.begin(), page.vessels.end(),
+                  [](const VesselData& a, const VesselData& b) { return a.last_updated > b.last_updated; });
 
-            page.found_count       = data["found_count"].toInt(page.vessels.size());
-            page.total_count       = page.found_count;
-            for (const auto& nf : data["not_found"].toArray())
-                page.not_found.append(nf.toString());
-            page.credits_used      = data["credits_used"].toDouble(0.0);
-            page.remaining_credits = data["remaining_credits"].toInt(-1);
+        page.found_count = data["found_count"].toInt(page.vessels.size());
+        page.total_count = page.found_count;
+        for (const auto& nf : data["not_found"].toArray())
+            page.not_found.append(nf.toString());
+        page.credits_used = data["credits_used"].toDouble(0.0);
+        page.remaining_credits = data["remaining_credits"].toInt(-1);
 
-            // Cache the full envelope so cached replays carry not_found etc.
-            QJsonArray cached_arr;
-            for (const auto& v : page.vessels) {
-                QJsonObject o;
-                o["id"] = v.id;
-                o["imo"] = v.imo;
-                o["name"] = v.name;
-                o["last_pos_latitude"]  = QString::number(v.latitude, 'f', 8);
-                o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
-                o["last_pos_speed"]     = QString::number(v.speed);
-                o["last_pos_angle"]     = QString::number(v.angle);
-                o["route_from_port_name"] = v.from_port;
-                o["route_to_port_name"]   = v.to_port;
-                o["route_progress"]     = QString::number(v.route_progress);
-                o["last_pos_updated_at"] = v.last_updated;
-                cached_arr.append(o);
-            }
-            QJsonObject cached_root;
-            cached_root["vessels"]           = cached_arr;
-            cached_root["found_count"]       = page.found_count;
-            cached_root["not_found"]         = QJsonArray::fromStringList(page.not_found);
-            cached_root["credits_used"]      = page.credits_used;
-            cached_root["remaining_credits"] = page.remaining_credits;
-            fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
-                kVesselTtlSec, "maritime");
+        // Cache the full envelope so cached replays carry not_found etc.
+        QJsonArray cached_arr;
+        for (const auto& v : page.vessels) {
+            QJsonObject o;
+            o["id"] = v.id;
+            o["imo"] = v.imo;
+            o["name"] = v.name;
+            o["last_pos_latitude"] = QString::number(v.latitude, 'f', 8);
+            o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
+            o["last_pos_speed"] = QString::number(v.speed);
+            o["last_pos_angle"] = QString::number(v.angle);
+            o["route_from_port_name"] = v.from_port;
+            o["route_to_port_name"] = v.to_port;
+            o["route_progress"] = QString::number(v.route_progress);
+            o["last_pos_updated_at"] = v.last_updated;
+            cached_arr.append(o);
+        }
+        QJsonObject cached_root;
+        cached_root["vessels"] = cached_arr;
+        cached_root["found_count"] = page.found_count;
+        cached_root["not_found"] = QJsonArray::fromStringList(page.not_found);
+        cached_root["credits_used"] = page.credits_used;
+        cached_root["remaining_credits"] = page.remaining_credits;
+        fincept::CacheManager::instance().put(
+            cache_key, QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
+            kVesselTtlSec, "maritime");
 
-            LOG_INFO("Maritime", QString("Multi vessel: %1 found, %2 missing (%3 credits left)")
-                                     .arg(page.found_count)
-                                     .arg(page.not_found.size())
-                                     .arg(page.remaining_credits));
+        LOG_INFO("Maritime", QString("Multi vessel: %1 found, %2 missing (%3 credits left)")
+                                 .arg(page.found_count)
+                                 .arg(page.not_found.size())
+                                 .arg(page.remaining_credits));
 
-            emit self->vessels_loaded(page);
-            if (self->hub_registered_)
-                publish_to_hub(QStringLiteral("maritime:vessels:multi"), QVariant::fromValue(page));
-        });
+        emit self->vessels_loaded(page);
+        if (self->hub_registered_)
+            publish_to_hub(QStringLiteral("maritime:vessels:multi"), QVariant::fromValue(page));
+    });
 }
 
 // ── Vessel history ───────────────────────────────────────────────────────────
@@ -337,8 +328,8 @@ void MaritimeService::get_vessel_history(const QString& imo) {
         page.history.reserve(arr.size());
         for (const auto& v : arr)
             page.history.append(parse_vessel(v.toObject()));
-        page.total_records     = root["total_records"].toInt(page.history.size());
-        page.credits_used      = root["credits_used"].toDouble(0.0);
+        page.total_records = root["total_records"].toInt(page.history.size());
+        page.credits_used = root["credits_used"].toDouble(0.0);
         page.remaining_credits = root["remaining_credits"].toInt(-1);
         emit vessel_history_loaded(page);
         return;
@@ -349,8 +340,7 @@ void MaritimeService::get_vessel_history(const QString& imo) {
 
     QPointer<MaritimeService> self = this;
     HttpClient::instance().post(
-        marine_base() + "/vessel/history", body,
-        [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
+        marine_base() + "/vessel/history", body, [self, cache_key, imo_trimmed](Result<QJsonDocument> result) {
             if (!self)
                 return;
             if (!result.is_ok()) {
@@ -370,12 +360,10 @@ void MaritimeService::get_vessel_history(const QString& imo) {
                 page.history.append(self->parse_vessel(v.toObject()));
 
             std::sort(page.history.begin(), page.history.end(),
-                      [](const VesselData& a, const VesselData& b) {
-                          return a.last_updated > b.last_updated;
-                      });
+                      [](const VesselData& a, const VesselData& b) { return a.last_updated > b.last_updated; });
 
-            page.total_records     = data["total_records"].toInt(page.history.size());
-            page.credits_used      = data["credits_used"].toDouble(0.0);
+            page.total_records = data["total_records"].toInt(page.history.size());
+            page.credits_used = data["credits_used"].toDouble(0.0);
             page.remaining_credits = data["remaining_credits"].toInt(-1);
 
             QJsonArray cached_arr;
@@ -384,24 +372,23 @@ void MaritimeService::get_vessel_history(const QString& imo) {
                 o["id"] = v.id;
                 o["imo"] = v.imo;
                 o["name"] = v.name;
-                o["last_pos_latitude"]  = QString::number(v.latitude, 'f', 8);
+                o["last_pos_latitude"] = QString::number(v.latitude, 'f', 8);
                 o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
-                o["last_pos_speed"]     = QString::number(v.speed);
-                o["last_pos_angle"]     = QString::number(v.angle);
+                o["last_pos_speed"] = QString::number(v.speed);
+                o["last_pos_angle"] = QString::number(v.angle);
                 o["route_from_port_name"] = v.from_port;
-                o["route_to_port_name"]   = v.to_port;
+                o["route_to_port_name"] = v.to_port;
                 o["last_pos_updated_at"] = v.last_updated;
                 cached_arr.append(o);
             }
             QJsonObject cached_root;
-            cached_root["imo"]               = page.imo;
-            cached_root["history"]           = cached_arr;
-            cached_root["total_records"]     = page.total_records;
-            cached_root["credits_used"]      = page.credits_used;
+            cached_root["imo"] = page.imo;
+            cached_root["history"] = cached_arr;
+            cached_root["total_records"] = page.total_records;
+            cached_root["credits_used"] = page.credits_used;
             cached_root["remaining_credits"] = page.remaining_credits;
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
                 kHistoryTtlSec, "maritime");
 
             LOG_INFO("Maritime", QString("History [%1]: %2 records (total %3, %4 credits left)")
@@ -412,8 +399,7 @@ void MaritimeService::get_vessel_history(const QString& imo) {
 
             emit self->vessel_history_loaded(page);
             if (self->hub_registered_)
-                publish_to_hub(QStringLiteral("maritime:history:") + imo_trimmed,
-                               QVariant::fromValue(page));
+                publish_to_hub(QStringLiteral("maritime:history:") + imo_trimmed, QVariant::fromValue(page));
         });
 }
 
@@ -459,11 +445,12 @@ void MaritimeService::refresh(const QStringList& topics) {
 }
 
 int MaritimeService::max_requests_per_sec() const {
-    return 2;  // Fincept marine API — conservative
+    return 2; // Fincept marine API — conservative
 }
 
 void MaritimeService::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 

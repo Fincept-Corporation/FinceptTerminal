@@ -26,7 +26,6 @@ namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "DataHubTools";
 
-
 static QJsonValue variant_to_json(const QVariant& v) {
     // Try the direct QVariant -> QJsonValue path first; falls back to
     // string representation for types Qt can't natively serialise
@@ -39,11 +38,11 @@ static QJsonValue variant_to_json(const QVariant& v) {
     }
     if (j.isString()) {
         const QString s = j.toString();
-        if (s.size() > 4096) return QJsonValue(s.left(4096) + "...[truncated]");
+        if (s.size() > 4096)
+            return QJsonValue(s.left(4096) + "...[truncated]");
     }
     return j;
 }
-
 
 std::vector<ToolDef> get_datahub_tools() {
     std::vector<ToolDef> tools;
@@ -89,7 +88,8 @@ std::vector<ToolDef> get_datahub_tools() {
         t.input_schema.required = {"topic"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString topic = args["topic"].toString().trimmed();
-            if (topic.isEmpty()) return ToolResult::fail("Missing 'topic'");
+            if (topic.isEmpty())
+                return ToolResult::fail("Missing 'topic'");
             auto& hub = fincept::datahub::DataHub::instance();
             // peek_raw: MCP diagnostic tool shows stale data rather than
             // nothing — callers use stats() / last_publish_ms to judge freshness.
@@ -130,11 +130,11 @@ std::vector<ToolDef> get_datahub_tools() {
         t.input_schema.required = {"topic"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString topic = args["topic"].toString().trimmed();
-            if (topic.isEmpty()) return ToolResult::fail("Missing 'topic'");
+            if (topic.isEmpty())
+                return ToolResult::fail("Missing 'topic'");
             const bool force = args["force"].toBool(false);
             fincept::datahub::DataHub::instance().request(topic, force);
-            return ToolResult::ok(QString("Refresh requested for %1 (force=%2)")
-                                      .arg(topic, force ? "true" : "false"),
+            return ToolResult::ok(QString("Refresh requested for %1 (force=%2)").arg(topic, force ? "true" : "false"),
                                   QJsonObject{{"topic", topic}, {"force", force}});
         };
         tools.push_back(std::move(t));
@@ -155,16 +155,17 @@ std::vector<ToolDef> get_datahub_tools() {
                         "reason about its recent behaviour.";
         t.category = "datahub";
         t.input_schema = ToolSchemaBuilder()
-            .string("topic", "Topic name (e.g. market:quote:AAPL)")
-                .required().length(1, 256)
-            .integer("duration_ms", "Window length in milliseconds")
-                .required().between(100, 30000)
-            .build();
+                             .string("topic", "Topic name (e.g. market:quote:AAPL)")
+                             .required()
+                             .length(1, 256)
+                             .integer("duration_ms", "Window length in milliseconds")
+                             .required()
+                             .between(100, 30000)
+                             .build();
         // Generous timeout = max duration + slack. Provider's watchdog kicks
         // in only if the unsubscribe-and-resolve dance gets stuck.
         t.default_timeout_ms = 35000;
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString topic = args["topic"].toString().trimmed();
             int duration = std::clamp(args["duration_ms"].toInt(), 100, 30000);
 
@@ -175,40 +176,44 @@ std::vector<ToolDef> get_datahub_tools() {
             //     posts to a thread that actually has a running event loop
             //     (the worker thread that called the handler may have no
             //     event loop and would leak the owner)
-            QMetaObject::invokeMethod(qApp, [topic, duration, ctx, promise]() {
-                auto* owner = new QObject;
-                owner->setObjectName("mcp.subscribe_briefly:" + topic);
+            QMetaObject::invokeMethod(
+                qApp,
+                [topic, duration, ctx, promise]() {
+                    auto* owner = new QObject;
+                    owner->setObjectName("mcp.subscribe_briefly:" + topic);
 
-                auto collected = std::make_shared<QJsonArray>();
-                auto clock = std::make_shared<QElapsedTimer>();
-                clock->start();
+                    auto collected = std::make_shared<QJsonArray>();
+                    auto clock = std::make_shared<QElapsedTimer>();
+                    clock->start();
 
-                fincept::datahub::DataHub::instance().subscribe(
-                    owner, topic, [collected, clock](const QVariant& v) {
-                        QJsonObject e;
-                        e["t_ms"] = static_cast<qint64>(clock->elapsed());
-                        e["value"] = variant_to_json(v);
-                        collected->append(e);
+                    fincept::datahub::DataHub::instance().subscribe(
+                        owner, topic, [collected, clock](const QVariant& v) {
+                            QJsonObject e;
+                            e["t_ms"] = static_cast<qint64>(clock->elapsed());
+                            e["value"] = variant_to_json(v);
+                            collected->append(e);
+                        });
+
+                    QTimer::singleShot(duration, qApp, [topic, duration, collected, owner, promise, ctx]() {
+                        fincept::datahub::DataHub::instance().unsubscribe(owner);
+                        owner->deleteLater();
+
+                        if (promise->future().isFinished())
+                            return; // watchdog already fired
+                        QJsonObject out;
+                        out["topic"] = topic;
+                        out["duration_ms"] = duration;
+                        out["count"] = collected->size();
+                        out["samples"] = *collected;
+                        if (ctx.cancelled()) {
+                            promise->addResult(ToolResult::fail("cancelled"));
+                        } else {
+                            promise->addResult(ToolResult::ok_data(out));
+                        }
+                        promise->finish();
                     });
-
-                QTimer::singleShot(duration, qApp, [topic, duration, collected, owner, promise, ctx]() {
-                    fincept::datahub::DataHub::instance().unsubscribe(owner);
-                    owner->deleteLater();
-
-                    if (promise->future().isFinished()) return; // watchdog already fired
-                    QJsonObject out;
-                    out["topic"] = topic;
-                    out["duration_ms"] = duration;
-                    out["count"] = collected->size();
-                    out["samples"] = *collected;
-                    if (ctx.cancelled()) {
-                        promise->addResult(ToolResult::fail("cancelled"));
-                    } else {
-                        promise->addResult(ToolResult::ok_data(out));
-                    }
-                    promise->finish();
-                });
-            }, Qt::QueuedConnection);
+                },
+                Qt::QueuedConnection);
         };
         tools.push_back(std::move(t));
     }

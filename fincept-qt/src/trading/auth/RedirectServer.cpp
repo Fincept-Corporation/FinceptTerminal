@@ -21,26 +21,24 @@ constexpr const char* kResponseHtml =
 }
 
 RedirectServer::RedirectServer(QObject* parent)
-    : QObject(parent),
-      server_(new QTcpServer(this)),
-      timeout_timer_(new QTimer(this)) {
+    : QObject(parent), server_(new QTcpServer(this)), timeout_timer_(new QTimer(this)) {
     timeout_timer_->setSingleShot(true);
     connect(server_, &QTcpServer::newConnection, this, &RedirectServer::handle_new_connection);
     connect(timeout_timer_, &QTimer::timeout, this, &RedirectServer::handle_timeout);
 }
 
-RedirectServer::~RedirectServer() { stop(); }
+RedirectServer::~RedirectServer() {
+    stop();
+}
 
 bool RedirectServer::start(quint16 preferred_port, int timeout_seconds) {
     if (server_->isListening())
         server_->close();
 
     if (!server_->listen(QHostAddress::LocalHost, preferred_port)) {
-        LOG_WARN("RedirectServer",
-                 QString("Port %1 busy - falling back to ephemeral").arg(preferred_port));
+        LOG_WARN("RedirectServer", QString("Port %1 busy - falling back to ephemeral").arg(preferred_port));
         if (!server_->listen(QHostAddress::LocalHost, 0)) {
-            LOG_ERROR("RedirectServer",
-                      QString("Failed to bind loopback: %1").arg(server_->errorString()));
+            LOG_ERROR("RedirectServer", QString("Failed to bind loopback: %1").arg(server_->errorString()));
             return false;
         }
     }

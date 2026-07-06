@@ -2,13 +2,12 @@
 // UI construction: create_* views, populate_marketplace, build_server_card.
 // Part of the partial-class split of McpServersScreen.cpp.
 
-#include "screens/mcp_servers/McpServersScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpMarketplace.h"
 #include "mcp/McpProvider.h"
+#include "screens/mcp_servers/McpServersScreen.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -170,7 +169,6 @@ namespace fincept::screens {
 
 using namespace fincept::mcp;
 using namespace fincept::ui;
-
 
 QWidget* McpServersScreen::create_header() {
     auto* bar = new QWidget(this);
@@ -380,14 +378,13 @@ QWidget* McpServersScreen::create_status_bar() {
 
 // ── Slots ─────────────────────────────────────────────────────────────────────
 
-
 void McpServersScreen::populate_marketplace() {
     // Determine active category filter (read API key from UserRole — the
     // visible text is localized and would break the catalog lookup).
-    const QString filter_raw =
-        mkt_cat_list_ ? mkt_cat_list_->currentItem() ? mkt_cat_list_->currentItem()->data(Qt::UserRole).toString()
-                                                     : QStringLiteral("all")
-                      : QStringLiteral("all");
+    const QString filter_raw = mkt_cat_list_ ? mkt_cat_list_->currentItem()
+                                                   ? mkt_cat_list_->currentItem()->data(Qt::UserRole).toString()
+                                                   : QStringLiteral("all")
+                                             : QStringLiteral("all");
     const QString filter = (filter_raw == "all") ? "" : filter_raw;
 
     const QString search = search_input_ ? search_input_->text().trimmed() : "";
@@ -483,10 +480,14 @@ void McpServersScreen::populate_marketplace() {
             // toUpper() for unknown values (forward-compatible if the
             // marketplace adds new categories).
             QString cat_text;
-            if (e.category == "utilities")      cat_text = tr("UTILITIES");
-            else if (e.category == "developer") cat_text = tr("DEVELOPER");
-            else if (e.category == "database")  cat_text = tr("DATABASE");
-            else                                cat_text = e.category.toUpper();
+            if (e.category == "utilities")
+                cat_text = tr("UTILITIES");
+            else if (e.category == "developer")
+                cat_text = tr("DEVELOPER");
+            else if (e.category == "database")
+                cat_text = tr("DATABASE");
+            else
+                cat_text = e.category.toUpper();
             auto* cat_badge = new QLabel(cat_text);
             cat_badge->setObjectName("mktCatBadge");
             bottom->addWidget(cat_badge);
@@ -544,9 +545,8 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     name_lbl->setObjectName("srvCardName");
     top->addWidget(name_lbl);
 
-    auto* status_pill =
-        new QLabel(running ? tr("● RUNNING")
-                           : (starting ? tr("⟳ STARTING") : (error ? tr("● ERROR") : tr("○ STOPPED"))));
+    auto* status_pill = new QLabel(running ? tr("● RUNNING")
+                                           : (starting ? tr("⟳ STARTING") : (error ? tr("● ERROR") : tr("○ STOPPED"))));
     status_pill->setObjectName(running ? "pillRunning"
                                        : (starting ? "pillRunning" : (error ? "pillError" : "pillStopped")));
     top->addWidget(status_pill);
@@ -557,8 +557,7 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     const QString sid = s.id;
     QPointer<McpServersScreen> self = this;
 
-    auto* toggle_btn = new QPushButton(running ? tr("● ENABLED")
-                                                : (starting ? tr("⟳ STARTING...") : tr("○ DISABLED")));
+    auto* toggle_btn = new QPushButton(running ? tr("● ENABLED") : (starting ? tr("⟳ STARTING...") : tr("○ DISABLED")));
     toggle_btn->setObjectName(running ? "cardToggleOn" : "cardToggleOff");
     toggle_btn->setCursor(Qt::PointingHandCursor);
     toggle_btn->setFixedWidth(110);
@@ -618,10 +617,14 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     // Category — translate the known API keys, fall back to toUpper() for
     // user-added custom categories.
     QString cat_text;
-    if (s.category == "utilities")      cat_text = tr("UTILITIES");
-    else if (s.category == "developer") cat_text = tr("DEVELOPER");
-    else if (s.category == "database")  cat_text = tr("DATABASE");
-    else                                cat_text = s.category.toUpper();
+    if (s.category == "utilities")
+        cat_text = tr("UTILITIES");
+    else if (s.category == "developer")
+        cat_text = tr("DEVELOPER");
+    else if (s.category == "database")
+        cat_text = tr("DATABASE");
+    else
+        cat_text = s.category.toUpper();
     auto* cat_lbl = new QLabel(cat_text);
     cat_lbl->setObjectName("srvCardCat");
     meta->addWidget(cat_lbl);

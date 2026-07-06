@@ -1,7 +1,5 @@
 #include "core/layout/DockLayoutSelftest.h"
 
-#include <cstdio>
-
 #include <QByteArray>
 #include <QList>
 #include <QRegularExpression>
@@ -13,6 +11,7 @@
 #include <DockAreaWidget.h>
 #include <DockManager.h>
 #include <DockWidget.h>
+#include <cstdio>
 
 namespace fincept::layout {
 
@@ -72,11 +71,10 @@ ads::CDockWidget* make_widget(ads::CDockManager* mgr, const QString& id) {
 // All screen ids the real app registers via ensure_all_registered(). The bug
 // is sensitive to the parking-area population, so we mirror a realistic set.
 const QStringList& all_ids() {
-    static const QStringList ids = {
-        "dashboard", "markets", "portfolio", "news",     "report_builder",
-        "settings",  "profile", "about",     "support",  "fno",
-        "watchlist", "forum",   "economics", "ai_chat",  "crypto_trading",
-        "equity_trading", "backtesting", "algo_trading", "node_editor", "code_editor"};
+    static const QStringList ids = {"dashboard",      "markets",     "portfolio",    "news",        "report_builder",
+                                    "settings",       "profile",     "about",        "support",     "fno",
+                                    "watchlist",      "forum",       "economics",    "ai_chat",     "crypto_trading",
+                                    "equity_trading", "backtesting", "algo_trading", "node_editor", "code_editor"};
     return ids;
 }
 
@@ -104,10 +102,9 @@ int run_dock_layout_selftest() {
         mgr->addDockWidget(ads::CenterDockWidgetArea, make_widget(mgr, "fno"), area);
         tabbed_blob = mgr->saveState();
         LayoutShape s = analyze(tabbed_blob);
-        out() << "[1] raw tab group save: areas=" << s.areas << " tab_groups=" << s.tab_groups
-              << " sets=[" << s.tabbed_sets.join(", ") << "]\n";
-        check(s.tab_groups == 1 && s.tabbed_sets.contains("settings+fno"),
-              "settings+fno saves as ONE tabbed area");
+        out() << "[1] raw tab group save: areas=" << s.areas << " tab_groups=" << s.tab_groups << " sets=["
+              << s.tabbed_sets.join(", ") << "]\n";
+        check(s.tab_groups == 1 && s.tabbed_sets.contains("settings+fno"), "settings+fno saves as ONE tabbed area");
     }
 
     // ── Case 2: parking-area + restore (the ensure_all_registered path) ───────
@@ -130,15 +127,13 @@ int run_dock_layout_selftest() {
         const bool restored = mgr->restoreState(tabbed_blob);
         QByteArray re_saved = mgr->saveState();
         LayoutShape s = analyze(re_saved);
-        out() << "\n[2] parking-area + restore + re-save: restored=" << restored
-              << " areas=" << s.areas << " tab_groups=" << s.tab_groups
-              << " single_areas=" << s.widget_areas << " sets=[" << s.tabbed_sets.join(", ")
-              << "]\n";
+        out() << "\n[2] parking-area + restore + re-save: restored=" << restored << " areas=" << s.areas
+              << " tab_groups=" << s.tab_groups << " single_areas=" << s.widget_areas << " sets=["
+              << s.tabbed_sets.join(", ") << "]\n";
         check(restored, "restoreState() succeeds");
         check(s.tab_groups == 1 && s.tabbed_sets.contains("settings+fno"),
               "settings+fno SURVIVES round-trip as a tab group");
-        check(s.widget_areas == 0,
-              "no phantom closed single-widget areas leak into re-saved blob");
+        check(s.widget_areas == 0, "no phantom closed single-widget areas leak into re-saved blob");
     }
 
     // ── Case 3: the real bug — closed panels accumulate as phantom areas, and ─
@@ -179,10 +174,8 @@ int run_dock_layout_selftest() {
             mgr->removeDockWidget(dw);
 
         LayoutShape after = analyze(mgr->saveState());
-        out() << "    after prune: areas=" << after.areas << " single=[" << after.single_names.join(", ")
-              << "]\n";
-        check(after.areas == 2 && after.widget_areas == 2,
-              "after prune: saved blob holds ONLY the 2 visible panels");
+        out() << "    after prune: areas=" << after.areas << " single=[" << after.single_names.join(", ") << "]\n";
+        check(after.areas == 2 && after.widget_areas == 2, "after prune: saved blob holds ONLY the 2 visible panels");
         check(after.single_names.contains("fno") && after.single_names.contains("equity_trading"),
               "after prune: the fno | equity_trading grid is preserved");
         check(!after.single_names.contains("dashboard") && !after.single_names.contains("markets"),
@@ -221,8 +214,7 @@ int run_dock_layout_selftest() {
         mgr->addDockWidget(ads::RightDockWidgetArea, make_widget(mgr, "news"), bl);
 
         LayoutShape rt = analyze(parking_restore_resave(mgr->saveState()));
-        out() << "\n[4] 2x2 grid round-trip: areas=" << rt.areas << " single=[" << rt.single_names.join(", ")
-              << "]\n";
+        out() << "\n[4] 2x2 grid round-trip: areas=" << rt.areas << " single=[" << rt.single_names.join(", ") << "]\n";
         const QStringList want = {"fno", "equity_trading", "markets", "news"};
         bool all_present = true;
         for (const QString& w : want)
@@ -242,15 +234,14 @@ int run_dock_layout_selftest() {
         LayoutShape s = analyze(rt);
         const QString xml = QString::fromUtf8(rt.startsWith("<?xml") ? rt : qUncompress(rt));
         const int containers = static_cast<int>(xml.count("<Container "));
-        out() << "\n[5] floating panel round-trip: containers=" << containers << " areas=" << s.areas
-              << " single=[" << s.single_names.join(", ") << "]\n";
+        out() << "\n[5] floating panel round-trip: containers=" << containers << " areas=" << s.areas << " single=["
+              << s.single_names.join(", ") << "]\n";
         check(containers >= 2, "floating panel restores as its own (2nd) container");
         check(s.single_names.contains("fno") && s.single_names.contains("equity_trading"),
               "both docked and floating panels survive");
     }
 
-    out() << "\n=== " << (failures == 0 ? "ALL PASS" : QString("%1 FAILURE(S)").arg(failures))
-          << " ===\n";
+    out() << "\n=== " << (failures == 0 ? "ALL PASS" : QString("%1 FAILURE(S)").arg(failures)) << " ===\n";
     out().flush();
     return failures == 0 ? 0 : 1;
 }

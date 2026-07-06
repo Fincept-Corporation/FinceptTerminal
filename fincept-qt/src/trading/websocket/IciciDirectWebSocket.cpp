@@ -78,8 +78,7 @@ IciciDirectWebSocket::~IciciDirectWebSocket() = default;
 void IciciDirectWebSocket::open() {
     sio_connected_ = false;
     // Engine.IO v4 over WebSocket; auth is sent later in the SIO CONNECT packet.
-    const QString url =
-        QStringLiteral("wss://livestream.icicidirect.com/socket.io/?EIO=4&transport=websocket");
+    const QString url = QStringLiteral("wss://livestream.icicidirect.com/socket.io/?EIO=4&transport=websocket");
     LOG_INFO(TAG_ICICI_WS, "Connecting to ICICI Breeze Socket.IO");
     ws_->connect_to(url);
     start_health_check();
@@ -201,8 +200,7 @@ void IciciDirectWebSocket::handle_engineio(const QString& packet) {
     switch (type.toLatin1()) {
         case '0': { // Engine.IO open → Socket.IO CONNECT with auth payload.
             QJsonObject auth{{"user", user_}, {"token", session_key_}};
-            ws_->send(QStringLiteral("40") +
-                      QString::fromUtf8(QJsonDocument(auth).toJson(QJsonDocument::Compact)));
+            ws_->send(QStringLiteral("40") + QString::fromUtf8(QJsonDocument(auth).toJson(QJsonDocument::Compact)));
             break;
         }
         case '2': // ping → pong

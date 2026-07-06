@@ -5,8 +5,6 @@
 //
 // Part of the partial-class split of CryptoTradingScreen.cpp.
 
-#include "screens/crypto_trading/CryptoTradingScreen.h"
-
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "core/symbol/SymbolContext.h"
@@ -16,6 +14,7 @@
 #include "screens/crypto_trading/CryptoOrderBook.h"
 #include "screens/crypto_trading/CryptoOrderEntry.h"
 #include "screens/crypto_trading/CryptoTickerBar.h"
+#include "screens/crypto_trading/CryptoTradingScreen.h"
 #include "screens/crypto_trading/CryptoWatchlist.h"
 #include "trading/ExchangeService.h"
 #include "trading/ExchangeSession.h"

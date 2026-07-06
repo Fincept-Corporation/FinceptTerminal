@@ -93,8 +93,8 @@ void OrderBookMiniWidget::ensure_stream_running() {
 
 bool OrderBookMiniWidget::is_working(const QString& status) {
     const QString s = status.toUpper();
-    return s != "COMPLETE" && s != "COMPLETED" && s != "FILLED" && s != "CANCELLED" &&
-           s != "CANCELED" && s != "REJECTED";
+    return s != "COMPLETE" && s != "COMPLETED" && s != "FILLED" && s != "CANCELLED" && s != "CANCELED" &&
+           s != "REJECTED";
 }
 
 void OrderBookMiniWidget::hub_resubscribe() {
@@ -143,9 +143,8 @@ void OrderBookMiniWidget::populate(const QVector<trading::BrokerOrderInfo>& rows
         const auto& o = working[i];
         auto* sym = new QTableWidgetItem(o.symbol);
         auto* side = new QTableWidgetItem(o.side);
-        side->setForeground(QColor(o.side.compare("BUY", Qt::CaseInsensitive) == 0
-                                       ? ui::colors::POSITIVE()
-                                       : ui::colors::NEGATIVE()));
+        side->setForeground(
+            QColor(o.side.compare("BUY", Qt::CaseInsensitive) == 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
         auto* qty = new QTableWidgetItem(QString::number(o.quantity, 'f', 0));
         auto* price = new QTableWidgetItem(o.price > 0 ? QString::number(o.price, 'f', 2) : tr("MKT"));
         auto* status = new QTableWidgetItem(o.status);
@@ -161,11 +160,11 @@ void OrderBookMiniWidget::populate(const QVector<trading::BrokerOrderInfo>& rows
         cancel_btn->setToolTip(tr("Cancel order %1").arg(o.order_id));
         cancel_btn->setCursor(Qt::PointingHandCursor);
         cancel_btn->setFixedHeight(18);
-        cancel_btn->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:1px solid %2;"
-                                          "border-radius:2px;font-size:11px;font-weight:bold;}"
-                                          "QPushButton:hover{color:%3;border-color:%3;}")
-                                      .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(),
-                                           ui::colors::NEGATIVE()));
+        cancel_btn->setStyleSheet(
+            QString("QPushButton{color:%1;background:transparent;border:1px solid %2;"
+                    "border-radius:2px;font-size:11px;font-weight:bold;}"
+                    "QPushButton:hover{color:%3;border-color:%3;}")
+                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
         const QString oid = o.order_id;
         connect(cancel_btn, &QPushButton::clicked, this, [this, oid]() { cancel_order(oid); });
         table_->setCellWidget(i, 5, cancel_btn);
@@ -176,8 +175,7 @@ void OrderBookMiniWidget::populate(const QVector<trading::BrokerOrderInfo>& rows
 void OrderBookMiniWidget::cancel_order(const QString& order_id) {
     if (account_id_.isEmpty() || order_id.isEmpty())
         return;
-    if (QMessageBox::question(this, tr("Cancel Order"),
-                              tr("Cancel order %1?").arg(order_id),
+    if (QMessageBox::question(this, tr("Cancel Order"), tr("Cancel order %1?").arg(order_id),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
 
@@ -231,15 +229,14 @@ void OrderBookMiniWidget::on_theme_changed() {
 
 void OrderBookMiniWidget::apply_styles() {
     header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;")
-            .arg(ui::colors::TEXT_TERTIARY()));
-    table_->setStyleSheet(QString(
-        "QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
-        "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-        "padding:2px 4px;font-size:9px;font-weight:bold;}"
-        "QTableWidget::item{padding:2px 4px;}")
-        .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::TEXT_TERTIARY()));
+        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    table_->setStyleSheet(
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+                "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
+                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "QTableWidget::item{padding:2px 4px;}")
+            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
+                 ui::colors::TEXT_TERTIARY()));
 }
 
 void OrderBookMiniWidget::retranslateUi() {

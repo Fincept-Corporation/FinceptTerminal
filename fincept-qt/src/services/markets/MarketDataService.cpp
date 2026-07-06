@@ -1,14 +1,13 @@
 #include "services/markets/MarketDataService.h"
 
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
+#include "datahub/TopicPolicy.h"
 #include "python/PythonRunner.h"
 #include "python/PythonWorker.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/SettingsRepository.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
-#    include "datahub/TopicPolicy.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -28,12 +27,10 @@ MarketDataService& MarketDataService::instance() {
 
 MarketDataService::MarketDataService() {}
 
-
 // ── DataHub Producer integration ────────────────────────────────────────────
 
 QStringList MarketDataService::topic_patterns() const {
-    return {QStringLiteral("market:quote:*"), QStringLiteral("market:sparkline:*"),
-            QStringLiteral("market:history:*")};
+    return {QStringLiteral("market:quote:*"), QStringLiteral("market:sparkline:*"), QStringLiteral("market:history:*")};
 }
 
 int MarketDataService::max_requests_per_sec() const {
@@ -53,13 +50,18 @@ void MarketDataService::refresh(const QStringList& topics) {
     // — they're still used by report builder and other one-shot paths.
     static const QString kQuote = QStringLiteral("market:quote:");
     static const QString kSpark = QStringLiteral("market:sparkline:");
-    static const QString kHist  = QStringLiteral("market:history:");
+    static const QString kHist = QStringLiteral("market:history:");
 
     const qint64 refresh_t0 = QDateTime::currentMSecsSinceEpoch();
 
     QStringList quote_syms;
     QStringList spark_syms;
-    struct HistReq { QString topic; QString symbol; QString period; QString interval; };
+    struct HistReq {
+        QString topic;
+        QString symbol;
+        QString period;
+        QString interval;
+    };
     QVector<HistReq> hist_reqs;
     for (const auto& t : topics) {
         if (t.startsWith(kQuote)) {
@@ -83,12 +85,14 @@ void MarketDataService::refresh(const QStringList& topics) {
     QJsonObject payload;
     if (!quote_syms.isEmpty()) {
         QJsonArray arr;
-        for (const auto& s : quote_syms) arr.append(s);
+        for (const auto& s : quote_syms)
+            arr.append(s);
         payload["quotes"] = arr;
     }
     if (!spark_syms.isEmpty()) {
         QJsonArray arr;
-        for (const auto& s : spark_syms) arr.append(s);
+        for (const auto& s : spark_syms)
+            arr.append(s);
         payload["sparklines"] = arr;
     }
     if (!hist_reqs.isEmpty()) {
@@ -104,7 +108,7 @@ void MarketDataService::refresh(const QStringList& topics) {
     }
 
     if (payload.isEmpty()) {
-        return;  // Nothing to fetch — hub guarantees this won't happen in practice.
+        return; // Nothing to fetch — hub guarantees this won't happen in practice.
     }
 
     QPointer<MarketDataService> self = this;
@@ -121,16 +125,13 @@ void MarketDataService::refresh(const QStringList& topics) {
             const qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - refresh_t0;
 
             if (!ok) {
-                LOG_WARN("MarketData",
-                         QString("batch_all failed in %1ms: %2").arg(elapsed).arg(err.left(200)));
+                LOG_WARN("MarketData", QString("batch_all failed in %1ms: %2").arg(elapsed).arg(err.left(200)));
                 // Notify hub so subscribers can react (clear spinner / show
                 // error) and so the scheduler clears the in_flight flag for
                 // retry on the next pass. Without this widgets that depend
                 // on these topics would spin forever on producer failure.
                 auto& hub = datahub::DataHub::instance();
-                const QString msg = err.isEmpty()
-                                        ? QStringLiteral("Market data refresh failed")
-                                        : err.left(200);
+                const QString msg = err.isEmpty() ? QStringLiteral("Market data refresh failed") : err.left(200);
                 for (const auto& s : quote_syms)
                     hub.publish_error(QStringLiteral("market:quote:") + s, msg);
                 for (const auto& s : spark_syms)
@@ -168,22 +169,19 @@ void MarketDataService::refresh(const QStringList& topics) {
                     quotes_seen.insert(sym);
                 if (q.isEmpty() || q.contains("error")) {
                     if (!sym.isEmpty()) {
-                        const QString errstr =
-                            q.value("error").toString(QStringLiteral("no data"));
-                        hub.publish_error(QStringLiteral("market:quote:") + sym,
-                                          errstr.left(200));
+                        const QString errstr = q.value("error").toString(QStringLiteral("no data"));
+                        hub.publish_error(QStringLiteral("market:quote:") + sym, errstr.left(200));
                     }
                     continue;
                 }
-                QuoteData qd{
-                    sym,
-                    q["name"].toString(sym),
-                    q["price"].toDouble(),
-                    q["change"].toDouble(),
-                    q["change_percent"].toDouble(),
-                    q["high"].toDouble(),
-                    q["low"].toDouble(),
-                    q["volume"].toDouble()};
+                QuoteData qd{sym,
+                             q["name"].toString(sym),
+                             q["price"].toDouble(),
+                             q["change"].toDouble(),
+                             q["change_percent"].toDouble(),
+                             q["high"].toDouble(),
+                             q["low"].toDouble(),
+                             q["volume"].toDouble()};
 
                 // Cache write — mirrors store_quote() in flush_batch.
                 QJsonObject co;
@@ -197,8 +195,8 @@ void MarketDataService::refresh(const QStringList& topics) {
                 co["volume"] = qd.volume;
                 fincept::CacheManager::instance().put(
                     "market:" + qd.symbol,
-                    QVariant(QString::fromUtf8(QJsonDocument(co).toJson(QJsonDocument::Compact))),
-                    kQuoteCacheTtlSec, "market_data");
+                    QVariant(QString::fromUtf8(QJsonDocument(co).toJson(QJsonDocument::Compact))), kQuoteCacheTtlSec,
+                    "market_data");
 
                 self->publish_quote_to_hub(qd);
                 ++quotes_ok;
@@ -219,8 +217,7 @@ void MarketDataService::refresh(const QStringList& topics) {
                 sparks_seen.insert(it.key());
                 const QJsonArray closes = it.value().toArray();
                 if (closes.isEmpty()) {
-                    hub.publish_error(QStringLiteral("market:sparkline:") + it.key(),
-                                      QStringLiteral("no data"));
+                    hub.publish_error(QStringLiteral("market:sparkline:") + it.key(), QStringLiteral("no data"));
                     continue;
                 }
                 QVector<double> prices;
@@ -245,14 +242,12 @@ void MarketDataService::refresh(const QStringList& topics) {
                 const QString sym = h.value("symbol").toString();
                 const QString per = h.value("period").toString();
                 const QString ivl = h.value("interval").toString();
-                const QString topic = QStringLiteral("market:history:") + sym +
-                                      QLatin1Char(':') + per +
-                                      QLatin1Char(':') + ivl;
+                const QString topic =
+                    QStringLiteral("market:history:") + sym + QLatin1Char(':') + per + QLatin1Char(':') + ivl;
                 if (!sym.isEmpty() && !per.isEmpty() && !ivl.isEmpty())
                     hists_seen.insert(topic);
                 if (h.contains("error")) {
-                    const QString errstr =
-                        h.value("error").toString(QStringLiteral("no data"));
+                    const QString errstr = h.value("error").toString(QStringLiteral("no data"));
                     hub.publish_error(topic, errstr.left(200));
                     continue;
                 }
@@ -275,36 +270,33 @@ void MarketDataService::refresh(const QStringList& topics) {
             }
             for (const auto& h : hist_reqs) {
                 if (!hists_seen.contains(h.topic))
-                    hub.publish_error(h.topic,
-                                      QStringLiteral("missing from batch response"));
+                    hub.publish_error(h.topic, QStringLiteral("missing from batch response"));
             }
 
-            LOG_INFO("MarketData",
-                     QString("batch_all OK in %1ms: quotes=%2/%3 sparks=%4/%5 hists=%6/%7")
-                         .arg(elapsed)
-                         .arg(quotes_ok).arg(quote_syms.size())
-                         .arg(sparks_ok).arg(spark_syms.size())
-                         .arg(hists_ok).arg(hist_reqs.size()));
+            LOG_INFO("MarketData", QString("batch_all OK in %1ms: quotes=%2/%3 sparks=%4/%5 hists=%6/%7")
+                                       .arg(elapsed)
+                                       .arg(quotes_ok)
+                                       .arg(quote_syms.size())
+                                       .arg(sparks_ok)
+                                       .arg(spark_syms.size())
+                                       .arg(hists_ok)
+                                       .arg(hist_reqs.size()));
         });
 }
 
 void MarketDataService::publish_quote_to_hub(const QuoteData& q) {
-    datahub::DataHub::instance().publish(
-        QStringLiteral("market:quote:") + q.symbol,
-        QVariant::fromValue(q));
+    datahub::DataHub::instance().publish(QStringLiteral("market:quote:") + q.symbol, QVariant::fromValue(q));
 }
 
-void MarketDataService::publish_history_to_hub(const QString& symbol, const QString& period,
-                                               const QString& interval,
+void MarketDataService::publish_history_to_hub(const QString& symbol, const QString& period, const QString& interval,
                                                const QVector<HistoryPoint>& points) {
-    const QString topic = QStringLiteral("market:history:") + symbol + QLatin1Char(':') + period +
-                          QLatin1Char(':') + interval;
+    const QString topic =
+        QStringLiteral("market:history:") + symbol + QLatin1Char(':') + period + QLatin1Char(':') + interval;
     datahub::DataHub::instance().publish(topic, QVariant::fromValue(points));
 }
 
 void MarketDataService::publish_sparkline_to_hub(const QString& symbol, const QVector<double>& points) {
-    datahub::DataHub::instance().publish(QStringLiteral("market:sparkline:") + symbol,
-                                         QVariant::fromValue(points));
+    datahub::DataHub::instance().publish(QStringLiteral("market:sparkline:") + symbol, QVariant::fromValue(points));
 }
 
 void MarketDataService::ensure_registered_with_hub() {
@@ -355,7 +347,6 @@ void MarketDataService::ensure_registered_with_hub() {
     LOG_INFO("DataHub",
              "MarketDataService registered as producer for market:quote:*, market:sparkline:*, market:history:*");
 }
-
 
 // ── Batched + Cached fetch_quotes ───────────────────────────────────────────
 
@@ -835,12 +826,9 @@ QString MarketDataService::currency_prefix(const QString& symbol) {
         return {};
 
     static const QHash<QString, QString> kSymbols = {
-        {"USD", "$"},   {"EUR", "€"},   {"GBP", "£"},    {"JPY", "¥"},
-        {"CNY", "CN¥"}, {"INR", "₹"},   {"HKD", "HK$"},  {"AUD", "A$"},
-        {"CAD", "C$"},  {"NZD", "NZ$"}, {"SGD", "S$"},   {"KRW", "₩"},
-        {"BRL", "R$"},  {"ZAR", "R"},   {"CHF", "CHF "}, {"RUB", "₽"},
-        {"TWD", "NT$"}, {"THB", "฿"},   {"IDR", "Rp"},   {"MYR", "RM"},
-        {"AED", "AED "},
+        {"USD", "$"},    {"EUR", "€"},  {"GBP", "£"},   {"JPY", "¥"},  {"CNY", "CN¥"}, {"INR", "₹"},  {"HKD", "HK$"},
+        {"AUD", "A$"},   {"CAD", "C$"}, {"NZD", "NZ$"}, {"SGD", "S$"}, {"KRW", "₩"},   {"BRL", "R$"}, {"ZAR", "R"},
+        {"CHF", "CHF "}, {"RUB", "₽"},  {"TWD", "NT$"}, {"THB", "฿"},  {"IDR", "Rp"},  {"MYR", "RM"}, {"AED", "AED "},
     };
     auto it = kSymbols.find(code.toUpper());
     return it != kSymbols.end() ? it.value() : (code + QLatin1Char(' '));
@@ -875,14 +863,13 @@ void MarketDataService::resolve_names(const QStringList& symbols, NamesCallback 
 
     QPointer<MarketDataService> self = this;
     python::PythonRunner::instance().run(
-        "yfinance_data.py", args,
-        [self, symbols, cb, subset_for](python::PythonResult result) {
+        "yfinance_data.py", args, [self, symbols, cb, subset_for](python::PythonResult result) {
             if (!self)
                 return;
             if (result.success && !result.output.trimmed().isEmpty()) {
                 auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
                 if (doc.isObject()) {
-                    const QJsonObject root  = doc.object();
+                    const QJsonObject root = doc.object();
                     const QJsonObject names = root.value("names").toObject();
                     const QJsonObject currs = root.value("currencies").toObject();
                     bool changed = false;

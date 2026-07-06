@@ -56,15 +56,13 @@ void LatencyTracker::mark_broker_response_received(const QString& tracking_id) {
     it->broker_rtt_ms = static_cast<double>(it->stage.restart());
 }
 
-void LatencyTracker::mark_complete(const QString& tracking_id, const QString& order_id,
-                                   const QString& account_id, const QString& broker,
-                                   const QString& symbol, const QString& order_type,
+void LatencyTracker::mark_complete(const QString& tracking_id, const QString& order_id, const QString& account_id,
+                                   const QString& broker, const QString& symbol, const QString& order_type,
                                    const QString& status, const QString& error) {
     QMutexLocker lock(&mutex_);
     auto it = in_flight_.find(tracking_id);
     if (it == in_flight_.end()) {
-        LOG_WARN("LatencyTracker",
-                 QString("mark_complete for unknown tracking_id: %1").arg(tracking_id));
+        LOG_WARN("LatencyTracker", QString("mark_complete for unknown tracking_id: %1").arg(tracking_id));
         return;
     }
 
@@ -89,8 +87,7 @@ void LatencyTracker::mark_complete(const QString& tracking_id, const QString& or
         history_.removeFirst();
 }
 
-QVector<LatencyTracker::OrderLatency> LatencyTracker::get_history(const QString& account_id,
-                                                                  int limit) const {
+QVector<LatencyTracker::OrderLatency> LatencyTracker::get_history(const QString& account_id, int limit) const {
     QMutexLocker lock(&mutex_);
     QVector<OrderLatency> out;
     if (limit <= 0)
@@ -107,14 +104,12 @@ QVector<LatencyTracker::OrderLatency> LatencyTracker::get_history(const QString&
     return out;
 }
 
-LatencyTracker::LatencyStats LatencyTracker::get_stats(const QString& broker,
-                                                       int last_n_hours) const {
+LatencyTracker::LatencyStats LatencyTracker::get_stats(const QString& broker, int last_n_hours) const {
     QMutexLocker lock(&mutex_);
     LatencyStats stats;
 
     const QDateTime cutoff =
-        (last_n_hours > 0) ? QDateTime::currentDateTime().addSecs(-qint64(last_n_hours) * 3600)
-                           : QDateTime();
+        (last_n_hours > 0) ? QDateTime::currentDateTime().addSecs(-qint64(last_n_hours) * 3600) : QDateTime();
 
     QVector<double> rtts;
     double sum_rtt = 0;

@@ -33,8 +33,8 @@ class NotesCloudAdapter : public QObject, public CloudDomainAdapter {
     void push_delete(const OutboxRow& row, PushDone done);
     void push_toggle(const OutboxRow& row, const QString& sub, PushDone done); // "favorite" | "archive"
 
-    void apply_remote_note(const QJsonObject& o);                // under ApplyGuard
-    void reconcile_deletes(const QSet<QString>& remote_ids);     // under ApplyGuard
+    void apply_remote_note(const QJsonObject& o);            // under ApplyGuard
+    void reconcile_deletes(const QSet<QString>& remote_ids); // under ApplyGuard
 };
 
 } // namespace fincept::services::cloud

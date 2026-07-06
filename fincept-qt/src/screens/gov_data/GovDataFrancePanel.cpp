@@ -1,9 +1,9 @@
 // src/screens/gov_data/GovDataFrancePanel.cpp
 // France data.gouv.fr panel — Data Services | Datasets (search) | Geo Search
 #include "screens/gov_data/GovDataFrancePanel.h"
-#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
@@ -211,12 +211,18 @@ QWidget* GovDataFrancePanel::build_toolbar() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void GovDataFrancePanel::retranslateUi() {
-    if (back_btn_)     back_btn_->setText(tr("← BACK"));
-    if (services_btn_) services_btn_->setText(tr("DATA SERVICES"));
-    if (datasets_btn_) datasets_btn_->setText(tr("DATASETS"));
-    if (geo_btn_)      geo_btn_->setText(tr("GEO SEARCH"));
-    if (fetch_btn_)    fetch_btn_->setText(tr("FETCH"));
-    if (export_btn_)   export_btn_->setText(tr("CSV"));
+    if (back_btn_)
+        back_btn_->setText(tr("← BACK"));
+    if (services_btn_)
+        services_btn_->setText(tr("DATA SERVICES"));
+    if (datasets_btn_)
+        datasets_btn_->setText(tr("DATASETS"));
+    if (geo_btn_)
+        geo_btn_->setText(tr("GEO SEARCH"));
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)
+        export_btn_->setText(tr("CSV"));
 
     if (search_input_) {
         // Per-view placeholders: pick the one that matches the active tab so
@@ -230,8 +236,7 @@ void GovDataFrancePanel::retranslateUi() {
     }
 
     if (services_table_)
-        services_table_->setHorizontalHeaderLabels(
-            {tr("NAME"), tr("VIEWS"), tr("FOLLOWERS"), tr("CREATED")});
+        services_table_->setHorizontalHeaderLabels({tr("NAME"), tr("VIEWS"), tr("FOLLOWERS"), tr("CREATED")});
     if (datasets_table_)
         datasets_table_->setHorizontalHeaderLabels(
             {tr("TITLE"), tr("ORG"), tr("LICENSE"), tr("FILES"), tr("MODIFIED")});

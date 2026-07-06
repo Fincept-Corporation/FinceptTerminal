@@ -30,14 +30,13 @@ LanguageSwitcher::LanguageSwitcher(QWidget* parent) : QPushButton(parent) {
                           "QPushButton:pressed {"
                           "  background: rgba(217,119,6,0.18);"
                           "}")
-                      .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(),
-                           colors::AMBER(), colors::BORDER_BRIGHT()));
+                      .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::AMBER(), colors::BORDER_BRIGHT()));
 
     rebuild_label();
 
     connect(this, &QPushButton::clicked, this, &LanguageSwitcher::show_menu);
-    connect(&i18n::LanguageManager::instance(), &i18n::LanguageManager::language_changed,
-            this, [this](const QString&) { rebuild_label(); });
+    connect(&i18n::LanguageManager::instance(), &i18n::LanguageManager::language_changed, this,
+            [this](const QString&) { rebuild_label(); });
 }
 
 void LanguageSwitcher::changeEvent(QEvent* event) {
@@ -76,8 +75,7 @@ void LanguageSwitcher::show_menu() {
                                "QMenu::item:checked {"
                                "  color: %4;"
                                "}")
-                           .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(),
-                                colors::BORDER_DIM(), colors::AMBER()));
+                           .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::AMBER()));
 
     auto* group = new QActionGroup(&menu);
     const QString current_code = i18n::LanguageManager::instance().current_language();
@@ -89,9 +87,7 @@ void LanguageSwitcher::show_menu() {
         action->setChecked(code == current_code);
         group->addAction(action);
         // Capture by value — the action outlives this loop iteration.
-        connect(action, &QAction::triggered, this, [code]() {
-            i18n::LanguageManager::instance().set_language(code);
-        });
+        connect(action, &QAction::triggered, this, [code]() { i18n::LanguageManager::instance().set_language(code); });
     }
 
     // Right-align the menu under the button so it doesn't overflow off-screen

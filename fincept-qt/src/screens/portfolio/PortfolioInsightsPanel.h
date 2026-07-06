@@ -53,7 +53,7 @@ class PortfolioInsightsPanel : public QWidget {
     void render_empty(QTextBrowser* target, const QString& hint);
     QString build_portfolio_context() const;
     void retranslateUi();
-    void retranslate_ai_run_label();   // re-applies "RUN/RE-RUN <type> ANALYSIS" from cache state
+    void retranslate_ai_run_label(); // re-applies "RUN/RE-RUN <type> ANALYSIS" from cache state
 
     // Durable result persistence (survives tab switches, panel recreation, and
     // app restarts). Keyed by portfolio id so each portfolio keeps its own
@@ -96,12 +96,12 @@ class PortfolioInsightsPanel : public QWidget {
     QString ai_type_ = "full";
     bool ai_busy_ = false;
     bool agent_busy_ = false;
-    QString ai_pending_type_;       // analysis_type in flight (for result routing)
-    QString agent_pending_req_id_;  // run_agent_streaming request id in flight
-    QString agent_pending_id_;      // agent_id matching that request
-    QString agent_streaming_text_;  // accumulated tokens for live rendering
-    QHash<QString, QString> ai_cache_;    // type -> markdown
-    QHash<QString, QString> agent_cache_; // agent_id -> markdown
+    QString ai_pending_type_;                  // analysis_type in flight (for result routing)
+    QString agent_pending_req_id_;             // run_agent_streaming request id in flight
+    QString agent_pending_id_;                 // agent_id matching that request
+    QString agent_streaming_text_;             // accumulated tokens for live rendering
+    QHash<QString, QString> ai_cache_;         // type -> markdown
+    QHash<QString, QString> agent_cache_;      // agent_id -> markdown
     QHash<QString, QString> ai_meta_cache_;    // type -> "Last run …" label
     QHash<QString, QString> agent_meta_cache_; // agent_id -> "Last run …" label
 };

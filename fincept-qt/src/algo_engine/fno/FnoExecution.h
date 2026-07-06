@@ -35,8 +35,7 @@ namespace fincept::algo::fno {
 // function sorts internally.
 //
 // Returns "" when the list is empty or no expiry satisfies the rule.
-QString resolve_expiry(const QString& mode, const QString& value,
-                       const QStringList& available_expiries,
+QString resolve_expiry(const QString& mode, const QString& value, const QStringList& available_expiries,
                        const QDate& today);
 
 // ---------------------------------------------------------------------------
@@ -51,9 +50,8 @@ QString resolve_expiry(const QString& mode, const QString& value,
 // current LTP from the chain (entry reference for the paper simulator / P&L
 // marking). Invalid/FUT legs and legs whose chain row cannot be found are
 // silently skipped.
-QVector<fincept::algo::AlgoOrderLeg>
-resolve_entry_legs(const fincept::services::options::OptionChain& chain,
-                   const QJsonArray& strategy_legs);
+QVector<fincept::algo::AlgoOrderLeg> resolve_entry_legs(const fincept::services::options::OptionChain& chain,
+                                                        const QJsonArray& strategy_legs);
 
 // ---------------------------------------------------------------------------
 // build_exit_legs
@@ -61,8 +59,7 @@ resolve_entry_legs(const fincept::services::options::OptionChain& chain,
 // Build exit order legs from open AlgoLegPosition entries by flipping the
 // side (long BUY → exit SELL; short SELL → exit BUY). symbol, token, and
 // quantity are preserved; price is taken from the leg's current_price mark.
-QVector<fincept::algo::AlgoOrderLeg>
-build_exit_legs(const QVector<fincept::algo::AlgoLegPosition>& open_legs);
+QVector<fincept::algo::AlgoOrderLeg> build_exit_legs(const QVector<fincept::algo::AlgoLegPosition>& open_legs);
 
 // ---------------------------------------------------------------------------
 // build_basket_request
@@ -72,9 +69,8 @@ build_exit_legs(const QVector<fincept::algo::AlgoLegPosition>& open_legs);
 // maps "CNC"/"delivery" -> Delivery, anything else (NRML/MIS/"") -> Margin
 // (F&O is always margin/NRML). Used only on the live branch of
 // AlgoEngine::execute_basket; the paper branch never touches the broker.
-fincept::trading::BasketOrderRequest
-build_basket_request(const QVector<fincept::algo::AlgoOrderLeg>& legs,
-                     const QString& product_type);
+fincept::trading::BasketOrderRequest build_basket_request(const QVector<fincept::algo::AlgoOrderLeg>& legs,
+                                                          const QString& product_type);
 
 // ---------------------------------------------------------------------------
 // leg_positions_to_json / leg_positions_from_json
@@ -84,11 +80,9 @@ build_basket_request(const QVector<fincept::algo::AlgoOrderLeg>& legs,
 // restart. Round-trips symbol, instrument_token, is_call, strike, side_sign,
 // quantity, entry_price. On parse, current_price seeds to entry_price and
 // unrealized_pnl to 0 (re-marked live on the next tick).
-QJsonArray
-leg_positions_to_json(const QVector<fincept::algo::AlgoLegPosition>& legs);
+QJsonArray leg_positions_to_json(const QVector<fincept::algo::AlgoLegPosition>& legs);
 
-QVector<fincept::algo::AlgoLegPosition>
-leg_positions_from_json(const QJsonArray& arr);
+QVector<fincept::algo::AlgoLegPosition> leg_positions_from_json(const QJsonArray& arr);
 
 // ---------------------------------------------------------------------------
 // leg_marks_from_chain
@@ -97,8 +91,7 @@ leg_positions_from_json(const QJsonArray& arr);
 // instrument token (ce_token for calls, pe_token for puts). Returns symbol->ltp
 // for every leg whose contract is found with a positive LTP; legs not present in
 // the snapshot (or with ltp<=0) are omitted so a stale 0 never overwrites a mark.
-QHash<QString, double>
-leg_marks_from_chain(const QVector<fincept::algo::AlgoLegPosition>& legs,
-                     const fincept::services::options::OptionChain& chain);
+QHash<QString, double> leg_marks_from_chain(const QVector<fincept::algo::AlgoLegPosition>& legs,
+                                            const fincept::services::options::OptionChain& chain);
 
 } // namespace fincept::algo::fno

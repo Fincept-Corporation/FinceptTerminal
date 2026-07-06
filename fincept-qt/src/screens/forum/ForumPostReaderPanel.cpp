@@ -74,8 +74,8 @@ void ForumPostReaderPanel::build_ui() {
         empty_title_ = new QLabel(tr("SELECT A POST"));
         empty_title_->setAlignment(Qt::AlignCenter);
         empty_title_->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;letter-spacing:2px;"
-                                   "background:transparent;%2")
-                               .arg(ui::colors::TEXT_TERTIARY(), M(14)));
+                                            "background:transparent;%2")
+                                        .arg(ui::colors::TEXT_TERTIARY(), M(14)));
 
         empty_sub_ = new QLabel(tr("Click any post from the feed to read it"));
         empty_sub_->setAlignment(Qt::AlignCenter);
@@ -230,12 +230,12 @@ void ForumPostReaderPanel::build_ui() {
     up_btn_->setFixedHeight(26);
     up_btn_->setCursor(Qt::PointingHandCursor);
     up_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.06);"
-                                  "color:%1;border:1px solid rgba(217,119,6,0.2);"
-                                  "font-size:10px;font-weight:700;padding:0 12px;"
-                                  "border-radius:13px;%2}"
-                                  "QPushButton:hover{background:rgba(217,119,6,0.12);"
-                                  "color:%3;border-color:rgba(217,119,6,0.5);}")
-                              .arg(ui::colors::TEXT_SECONDARY(), M(10), ui::colors::AMBER()));
+                                   "color:%1;border:1px solid rgba(217,119,6,0.2);"
+                                   "font-size:10px;font-weight:700;padding:0 12px;"
+                                   "border-radius:13px;%2}"
+                                   "QPushButton:hover{background:rgba(217,119,6,0.12);"
+                                   "color:%3;border-color:rgba(217,119,6,0.5);}")
+                               .arg(ui::colors::TEXT_SECONDARY(), M(10), ui::colors::AMBER()));
     connect(up_btn_, &QPushButton::clicked, this, [this]() {
         if (!current_detail_.post.post_uuid.isEmpty())
             emit vote_post(current_detail_.post.post_uuid, "up");
@@ -272,8 +272,8 @@ void ForumPostReaderPanel::build_ui() {
     com_dot->setStyleSheet(QString("color:%1;font-size:7px;background:transparent;").arg(ui::colors::CYAN()));
     replies_hdr_ = new QLabel(tr("REPLIES"));
     replies_hdr_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1.5px;"
-                                       "background:transparent;%2")
-                                   .arg(ui::colors::TEXT_TERTIARY(), M(10)));
+                                        "background:transparent;%2")
+                                    .arg(ui::colors::TEXT_TERTIARY(), M(10)));
     com_hdr_hl->addWidget(com_dot);
     com_hdr_hl->addWidget(replies_hdr_);
     com_hdr_hl->addStretch();
@@ -316,11 +316,11 @@ void ForumPostReaderPanel::build_ui() {
     send_btn_->setFixedSize(72, 32);
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.1);color:%1;"
-                                    "border:1px solid rgba(217,119,6,0.25);font-size:11px;"
-                                    "font-weight:700;border-radius:4px;%2}"
-                                    "QPushButton:hover{background:rgba(217,119,6,0.2);"
-                                    "color:%3;border-color:rgba(217,119,6,0.5);}")
-                                .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
+                                     "border:1px solid rgba(217,119,6,0.25);font-size:11px;"
+                                     "font-weight:700;border-radius:4px;%2}"
+                                     "QPushButton:hover{background:rgba(217,119,6,0.2);"
+                                     "color:%3;border-color:rgba(217,119,6,0.5);}")
+                                 .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
 
     auto submit = [this]() {
         QString text = reply_input_->text().trimmed();
@@ -397,7 +397,7 @@ void ForumPostReaderPanel::show_post(const services::ForumPostDetail& detail) {
                                     .arg(lc, M(11)));
 
     replies_label_->setText(detail.total_comments == 1 ? tr("◆ %1 reply").arg(detail.total_comments)
-                                                        : tr("◆ %1 replies").arg(detail.total_comments));
+                                                       : tr("◆ %1 replies").arg(detail.total_comments));
 
     views_label_->setText(tr("◉ %1 views").arg(detail.post.views));
 
@@ -542,13 +542,20 @@ void ForumPostReaderPanel::changeEvent(QEvent* event) {
 }
 
 void ForumPostReaderPanel::retranslateUi() {
-    if (empty_title_)   empty_title_->setText(tr("SELECT A POST"));
-    if (empty_sub_)     empty_sub_->setText(tr("Click any post from the feed to read it"));
-    if (loading_text_)  loading_text_->setText(tr("Loading..."));
-    if (up_btn_)        up_btn_->setText(tr("▲  Upvote"));
-    if (replies_hdr_)   replies_hdr_->setText(tr("REPLIES"));
-    if (reply_input_)   reply_input_->setPlaceholderText(tr("Write a reply..."));
-    if (send_btn_)      send_btn_->setText(tr("Reply"));
+    if (empty_title_)
+        empty_title_->setText(tr("SELECT A POST"));
+    if (empty_sub_)
+        empty_sub_->setText(tr("Click any post from the feed to read it"));
+    if (loading_text_)
+        loading_text_->setText(tr("Loading..."));
+    if (up_btn_)
+        up_btn_->setText(tr("▲  Upvote"));
+    if (replies_hdr_)
+        replies_hdr_->setText(tr("REPLIES"));
+    if (reply_input_)
+        reply_input_->setPlaceholderText(tr("Write a reply..."));
+    if (send_btn_)
+        send_btn_->setText(tr("Reply"));
     // Post header/body, counters and comments are live data; re-show the
     // current post so they re-render in the new language.
     if (!current_detail_.post.post_uuid.isEmpty() && stack_ && stack_->currentIndex() == 2)

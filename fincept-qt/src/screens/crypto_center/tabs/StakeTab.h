@@ -6,7 +6,7 @@ namespace fincept::screens::panels {
 class LockPanel;
 class ActiveLocksPanel;
 class TierPanel;
-}
+} // namespace fincept::screens::panels
 
 namespace fincept::screens {
 
@@ -29,9 +29,9 @@ class StakeTab : public QWidget {
     void build_ui();
     void apply_theme();
 
-    panels::LockPanel*        lock_panel_   = nullptr;
+    panels::LockPanel* lock_panel_ = nullptr;
     panels::ActiveLocksPanel* active_locks_ = nullptr;
-    panels::TierPanel*        tier_panel_   = nullptr;
+    panels::TierPanel* tier_panel_ = nullptr;
 };
 
 } // namespace fincept::screens

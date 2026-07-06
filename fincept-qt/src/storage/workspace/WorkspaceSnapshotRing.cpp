@@ -11,14 +11,10 @@ namespace {
 constexpr const char* kSnapshotRingTag = "SnapshotRing";
 } // namespace
 
-WorkspaceSnapshotRing::WorkspaceSnapshotRing(WorkspaceDb* db,
-                                             int max_auto,
-                                             qint64 min_interval_ms)
+WorkspaceSnapshotRing::WorkspaceSnapshotRing(WorkspaceDb* db, int max_auto, qint64 min_interval_ms)
     : db_(db), max_auto_(max_auto), min_interval_ms_(min_interval_ms) {}
 
-Result<qint64> WorkspaceSnapshotRing::add(const QByteArray& payload,
-                                          const QString& kind,
-                                          bool force) {
+Result<qint64> WorkspaceSnapshotRing::add(const QByteArray& payload, const QString& kind, bool force) {
     if (!db_ || !db_->is_open())
         return Result<qint64>::err("WorkspaceDb not open");
     if (payload.isEmpty())
@@ -36,9 +32,8 @@ Result<qint64> WorkspaceSnapshotRing::add(const QByteArray& payload,
         }
     }
 
-    auto r = db_->execute(
-        "INSERT INTO workspace_snapshot(created_at, kind, payload, name) VALUES(?, ?, ?, NULL)",
-        {now_ms, kind, payload});
+    auto r = db_->execute("INSERT INTO workspace_snapshot(created_at, kind, payload, name) VALUES(?, ?, ?, NULL)",
+                          {now_ms, kind, payload});
     if (r.is_err())
         return Result<qint64>::err(r.error());
 
@@ -52,8 +47,7 @@ Result<qint64> WorkspaceSnapshotRing::add(const QByteArray& payload,
         // until the next attempt.
         auto trim = trim_auto();
         if (trim.is_err()) {
-            LOG_WARN(kSnapshotRingTag, QString("trim_auto failed: %1")
-                                  .arg(QString::fromStdString(trim.error())));
+            LOG_WARN(kSnapshotRingTag, QString("trim_auto failed: %1").arg(QString::fromStdString(trim.error())));
         }
     }
     return Result<qint64>::ok(id);
@@ -63,9 +57,9 @@ Result<qint64> WorkspaceSnapshotRing::add_named(const QByteArray& payload, const
     if (!db_ || !db_->is_open())
         return Result<qint64>::err("WorkspaceDb not open");
     const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
-    auto r = db_->execute(
-        "INSERT INTO workspace_snapshot(created_at, kind, payload, name) VALUES(?, 'named_save', ?, ?)",
-        {now_ms, payload, name});
+    auto r =
+        db_->execute("INSERT INTO workspace_snapshot(created_at, kind, payload, name) VALUES(?, 'named_save', ?, ?)",
+                     {now_ms, payload, name});
     if (r.is_err())
         return Result<qint64>::err(r.error());
     return Result<qint64>::ok(r.value().lastInsertId().toLongLong());
@@ -75,14 +69,12 @@ Result<qint64> WorkspaceSnapshotRing::add_crash_recovery(const QByteArray& paylo
     return add(payload, "crash_recovery", /*force=*/true);
 }
 
-Result<QList<WorkspaceSnapshotRing::Entry>>
-WorkspaceSnapshotRing::latest(int limit) const {
+Result<QList<WorkspaceSnapshotRing::Entry>> WorkspaceSnapshotRing::latest(int limit) const {
     if (!db_ || !db_->is_open())
         return Result<QList<Entry>>::err("WorkspaceDb not open");
-    auto r = db_->execute(
-        "SELECT snapshot_id, created_at, kind, COALESCE(name, '') "
-        "FROM workspace_snapshot ORDER BY created_at DESC LIMIT ?",
-        {limit});
+    auto r = db_->execute("SELECT snapshot_id, created_at, kind, COALESCE(name, '') "
+                          "FROM workspace_snapshot ORDER BY created_at DESC LIMIT ?",
+                          {limit});
     if (r.is_err())
         return Result<QList<Entry>>::err(r.error());
 
@@ -99,15 +91,13 @@ WorkspaceSnapshotRing::latest(int limit) const {
     return Result<QList<Entry>>::ok(out);
 }
 
-Result<QList<WorkspaceSnapshotRing::Entry>>
-WorkspaceSnapshotRing::latest_auto(int limit) const {
+Result<QList<WorkspaceSnapshotRing::Entry>> WorkspaceSnapshotRing::latest_auto(int limit) const {
     if (!db_ || !db_->is_open())
         return Result<QList<Entry>>::err("WorkspaceDb not open");
-    auto r = db_->execute(
-        "SELECT snapshot_id, created_at, kind, COALESCE(name, '') "
-        "FROM workspace_snapshot WHERE kind = 'auto' "
-        "ORDER BY created_at DESC LIMIT ?",
-        {limit});
+    auto r = db_->execute("SELECT snapshot_id, created_at, kind, COALESCE(name, '') "
+                          "FROM workspace_snapshot WHERE kind = 'auto' "
+                          "ORDER BY created_at DESC LIMIT ?",
+                          {limit});
     if (r.is_err())
         return Result<QList<Entry>>::err(r.error());
 
@@ -127,8 +117,7 @@ WorkspaceSnapshotRing::latest_auto(int limit) const {
 Result<QByteArray> WorkspaceSnapshotRing::load_payload(qint64 snapshot_id) const {
     if (!db_ || !db_->is_open())
         return Result<QByteArray>::err("WorkspaceDb not open");
-    auto r = db_->execute("SELECT payload FROM workspace_snapshot WHERE snapshot_id = ?",
-                          {snapshot_id});
+    auto r = db_->execute("SELECT payload FROM workspace_snapshot WHERE snapshot_id = ?", {snapshot_id});
     if (r.is_err())
         return Result<QByteArray>::err(r.error());
 
@@ -154,8 +143,7 @@ Result<void> WorkspaceSnapshotRing::rename(qint64 snapshot_id, const QString& na
     // timestamp label. Trimming protects against whitespace-only renames.
     const QString trimmed = name.trimmed();
     QVariant value = trimmed.isEmpty() ? QVariant() : QVariant(trimmed);
-    auto r = db_->execute("UPDATE workspace_snapshot SET name = ? WHERE snapshot_id = ?",
-                          {value, snapshot_id});
+    auto r = db_->execute("UPDATE workspace_snapshot SET name = ? WHERE snapshot_id = ?", {value, snapshot_id});
     if (r.is_err())
         return Result<void>::err(r.error());
     return Result<void>::ok();
@@ -175,13 +163,12 @@ Result<void> WorkspaceSnapshotRing::trim_auto() {
     // Single statement: delete auto rows whose created_at falls below the
     // (max_auto_)th newest. Subquery approach is portable and lets SQLite
     // index-walk the (kind, created_at) idx without temp table.
-    auto r = db_->execute(
-        "DELETE FROM workspace_snapshot "
-        "WHERE kind = 'auto' AND snapshot_id NOT IN ("
-        "  SELECT snapshot_id FROM workspace_snapshot "
-        "  WHERE kind = 'auto' ORDER BY created_at DESC LIMIT ?"
-        ")",
-        {max_auto_});
+    auto r = db_->execute("DELETE FROM workspace_snapshot "
+                          "WHERE kind = 'auto' AND snapshot_id NOT IN ("
+                          "  SELECT snapshot_id FROM workspace_snapshot "
+                          "  WHERE kind = 'auto' ORDER BY created_at DESC LIMIT ?"
+                          ")",
+                          {max_auto_});
     if (r.is_err())
         return Result<void>::err(r.error());
 

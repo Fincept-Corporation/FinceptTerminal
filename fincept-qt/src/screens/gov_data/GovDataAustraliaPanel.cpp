@@ -1,8 +1,8 @@
 // src/screens/gov_data/GovDataAustraliaPanel.cpp
 #include "screens/gov_data/GovDataAustraliaPanel.h"
-#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
@@ -232,13 +232,20 @@ QWidget* GovDataAustraliaPanel::build_toolbar() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void GovDataAustraliaPanel::retranslateUi() {
-    if (back_btn_)     back_btn_->setText(tr("← BACK"));
-    if (agencies_btn_) agencies_btn_->setText(tr("AGENCIES"));
-    if (datasets_btn_) datasets_btn_->setText(tr("DATASETS"));
-    if (recent_btn_)   recent_btn_->setText(tr("RECENT"));
-    if (fetch_btn_)    fetch_btn_->setText(tr("FETCH"));
-    if (export_btn_)   export_btn_->setText(tr("CSV"));
-    if (search_input_) search_input_->setPlaceholderText(tr("Search datasets…"));
+    if (back_btn_)
+        back_btn_->setText(tr("← BACK"));
+    if (agencies_btn_)
+        agencies_btn_->setText(tr("AGENCIES"));
+    if (datasets_btn_)
+        datasets_btn_->setText(tr("DATASETS"));
+    if (recent_btn_)
+        recent_btn_->setText(tr("RECENT"));
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)
+        export_btn_->setText(tr("CSV"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search datasets…"));
 
     if (agencies_table_)
         agencies_table_->setHorizontalHeaderLabels({tr("NAME"), tr("DESCRIPTION"), tr("CREATED")});
@@ -609,8 +616,7 @@ void GovDataAustraliaPanel::update_breadcrumb() {
             break;
         case Resources:
             if (!selected_agency_.isEmpty()) {
-                text = tr("All Agencies  ›  %1  ›  Datasets  ›  %2")
-                           .arg(selected_agency_, selected_dataset_title_);
+                text = tr("All Agencies  ›  %1  ›  Datasets  ›  %2").arg(selected_agency_, selected_dataset_title_);
             } else {
                 text = tr("Datasets  ›  %1  ›  Resources").arg(selected_dataset_title_);
             }

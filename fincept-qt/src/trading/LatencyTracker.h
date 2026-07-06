@@ -53,9 +53,9 @@ class LatencyTracker {
     void mark_validation_done(const QString& tracking_id);
     void mark_broker_request_sent(const QString& tracking_id);
     void mark_broker_response_received(const QString& tracking_id);
-    void mark_complete(const QString& tracking_id, const QString& order_id,
-                       const QString& account_id, const QString& broker, const QString& symbol,
-                       const QString& order_type, const QString& status, const QString& error = {});
+    void mark_complete(const QString& tracking_id, const QString& order_id, const QString& account_id,
+                       const QString& broker, const QString& symbol, const QString& order_type, const QString& status,
+                       const QString& error = {});
 
     QVector<OrderLatency> get_history(const QString& account_id = {}, int limit = 100) const;
 

@@ -119,10 +119,8 @@ Result<QJsonObject> TabSessionStore::load_screen_state(const QString& key, int e
 
 // ── Phase 4b: instance-UUID-keyed screen state ───────────────────────────────
 
-Result<void> TabSessionStore::save_screen_state_by_uuid(const QString& instance_uuid,
-                                                        const QString& screen_key,
-                                                        const QJsonObject& state,
-                                                        int state_version,
+Result<void> TabSessionStore::save_screen_state_by_uuid(const QString& instance_uuid, const QString& screen_key,
+                                                        const QJsonObject& state, int state_version,
                                                         const QString& session_id) {
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
@@ -147,31 +145,26 @@ Result<void> TabSessionStore::save_screen_state_by_uuid(const QString& instance_
     QJsonObject augmented = state;
     if (!screen_key.isEmpty())
         augmented.insert("__screen_type__", screen_key);
-    const QString augmented_json =
-        QString::fromUtf8(QJsonDocument(augmented).toJson(QJsonDocument::Compact));
+    const QString augmented_json = QString::fromUtf8(QJsonDocument(augmented).toJson(QJsonDocument::Compact));
 
-    auto r = cdb.execute(
-        "INSERT OR REPLACE INTO screen_state "
-        "(screen_key, state_version, state_json, updated_at, session_id, instance_uuid) "
-        "VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?)",
-        {synthesised_key, state_version, augmented_json, session_id, instance_uuid});
+    auto r = cdb.execute("INSERT OR REPLACE INTO screen_state "
+                         "(screen_key, state_version, state_json, updated_at, session_id, instance_uuid) "
+                         "VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), ?, ?)",
+                         {synthesised_key, state_version, augmented_json, session_id, instance_uuid});
 
     if (r.is_err())
         return Result<void>::err(r.error());
     return Result<void>::ok();
 }
 
-Result<QJsonObject> TabSessionStore::load_screen_state_by_uuid(const QString& instance_uuid,
-                                                                int expected_version) {
+Result<QJsonObject> TabSessionStore::load_screen_state_by_uuid(const QString& instance_uuid, int expected_version) {
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
         return Result<QJsonObject>::err("Cache database not open");
     if (instance_uuid.isEmpty())
         return Result<QJsonObject>::ok(QJsonObject{}); // not an error — just no state
 
-    auto r = cdb.execute(
-        "SELECT state_version, state_json FROM screen_state WHERE instance_uuid = ?",
-        {instance_uuid});
+    auto r = cdb.execute("SELECT state_version, state_json FROM screen_state WHERE instance_uuid = ?", {instance_uuid});
 
     if (r.is_err())
         return Result<QJsonObject>::err(r.error());

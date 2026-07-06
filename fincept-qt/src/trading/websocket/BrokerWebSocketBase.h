@@ -12,11 +12,11 @@
 
 #include "trading/TradingTypes.h"
 
+#include <QDateTime>
+#include <QHash>
 #include <QObject>
 #include <QTimer>
-#include <QHash>
 #include <QVector>
-#include <QDateTime>
 
 namespace fincept::trading {
 

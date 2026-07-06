@@ -22,8 +22,6 @@
 #include "services/report_builder/ReportBuilderService.h"
 #include "storage/repositories/SettingsRepository.h"
 
-#include <QUndoStack>
-
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QJsonArray>
@@ -33,6 +31,7 @@
 #include <QString>
 #include <QStringList>
 #include <QThread>
+#include <QUndoStack>
 
 namespace fincept::mcp::tools {
 
@@ -72,9 +71,8 @@ void maybe_request_navigation() {
     if (!last_nav_ms.compare_exchange_strong(prev, now))
         return;
     LOG_INFO(RB_TOOLS_TAG, "Auto-navigate: publishing nav.switch_screen → report_builder");
-    fincept::EventBus::instance().publish(
-        "nav.switch_screen",
-        QVariantMap{{"screen_id", "report_builder"}, {"tab_index", 8}});
+    fincept::EventBus::instance().publish("nav.switch_screen",
+                                          QVariantMap{{"screen_id", "report_builder"}, {"tab_index", 8}});
 }
 
 // ── Chat → report linkage ────────────────────────────────────────────────────
@@ -122,8 +120,7 @@ void on_llm_mutation_start() {
     if (!get_linked_report_for(chat_id).isEmpty())
         return; // already linked
     QString current;
-    QMetaObject::invokeMethod(svc, [svc, &current]() { current = svc->current_file(); },
-                              Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(svc, [svc, &current]() { current = svc->current_file(); }, Qt::BlockingQueuedConnection);
     set_linked_report_for(chat_id, current.isEmpty() ? QStringLiteral("<unsaved>") : current);
 }
 
@@ -175,9 +172,9 @@ QJsonObject metadata_to_json(const rep::ReportMetadata& m) {
 }
 
 bool valid_component_type(const QString& t) {
-    static const QStringList valid = {"heading",   "text",     "table",       "image",   "chart",
-                                      "sparkline", "stats_block", "callout", "code",    "divider",
-                                      "quote",     "list",     "market_data", "page_break", "toc"};
+    static const QStringList valid = {"heading",   "text",        "table",       "image",      "chart",
+                                      "sparkline", "stats_block", "callout",     "code",       "divider",
+                                      "quote",     "list",        "market_data", "page_break", "toc"};
     return valid.contains(t);
 }
 
@@ -259,22 +256,20 @@ std::vector<ToolDef> get_report_builder_tools() {
                          {"description",
                           "Component type: heading, text, table, image, chart, sparkline, stats_block, callout, "
                           "code, divider, quote, list, market_data, page_break, toc"}}},
-            {"content",
-             QJsonObject{{"type", "string"},
-                         {"description", "Text content (used by heading/text/quote/code/list/callout)"}}},
+            {"content", QJsonObject{{"type", "string"},
+                                    {"description", "Text content (used by heading/text/quote/code/list/callout)"}}},
             {"config",
              QJsonObject{{"type", "object"},
                          {"description", "Type-specific config (rows/cols, chart_type/title/data/labels, symbol, "
                                          "style, width/caption/align, …)"}}},
-            {"insert_at",
-             QJsonObject{{"type", "integer"},
-                         {"description", "Zero-based index to insert at; omit to append at the end"}}},
+            {"insert_at", QJsonObject{{"type", "integer"},
+                                      {"description", "Zero-based index to insert at; omit to append at the end"}}},
         };
         t.input_schema.required = {"type"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            LOG_INFO(RB_TOOLS_TAG, QString("report_add_component called args=%1")
-                                       .arg(QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact))
-                                                .left(300)));
+            LOG_INFO(RB_TOOLS_TAG,
+                     QString("report_add_component called args=%1")
+                         .arg(QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)).left(300)));
             QString type = args.value("type").toString().trimmed();
             if (type.isEmpty())
                 return ToolResult::fail("Missing 'type'");
@@ -297,8 +292,8 @@ std::vector<ToolDef> get_report_builder_tools() {
                 idx = svc.index_of(new_id);
             });
 
-            LOG_INFO(RB_TOOLS_TAG, QString("report_add_component done id=%1 index=%2 type=%3")
-                                       .arg(new_id).arg(idx).arg(type));
+            LOG_INFO(RB_TOOLS_TAG,
+                     QString("report_add_component done id=%1 index=%2 type=%3").arg(new_id).arg(idx).arg(type));
             return ToolResult::ok(QString("Added %1 (id=%2)").arg(type).arg(new_id),
                                   QJsonObject{{"id", new_id}, {"index", idx}, {"type", type}});
         };
@@ -318,12 +313,12 @@ std::vector<ToolDef> get_report_builder_tools() {
             "the full config reference. Returns success and the resulting component.";
         t.category = "report-builder";
         t.input_schema.properties = QJsonObject{
-            {"id", QJsonObject{{"type", "integer"}, {"description", "Stable component id from report_add_component "
-                                                                    "or report_get_state"}}},
+            {"id", QJsonObject{{"type", "integer"},
+                               {"description", "Stable component id from report_add_component "
+                                               "or report_get_state"}}},
             {"content", QJsonObject{{"type", "string"}, {"description", "New content (omit to keep existing)"}}},
-            {"config",
-             QJsonObject{{"type", "object"},
-                         {"description", "Keys to merge into existing config (omit to keep existing)"}}},
+            {"config", QJsonObject{{"type", "object"},
+                                   {"description", "Keys to merge into existing config (omit to keep existing)"}}},
         };
         t.input_schema.required = {"id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
@@ -362,7 +357,7 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.name = "report_remove_component";
         t.description = "Remove a component by stable id.";
         t.category = "report-builder";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"id", QJsonObject{{"type", "integer"}, {"description", "Stable component id"}}}};
         t.input_schema.required = {"id"};
@@ -410,7 +405,7 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.name = "report_clear";
         t.description = "Clear the entire report — remove all components and reset metadata to defaults.";
         t.category = "report-builder";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             run_on_service_thread([]() { Service::instance().clear_document(); });
@@ -454,16 +449,26 @@ std::vector<ToolDef> get_report_builder_tools() {
             run_on_service_thread([&]() {
                 auto& svc = Service::instance();
                 rep::ReportMetadata m = svc.metadata();
-                if (args.contains("title")) m.title = args.value("title").toString();
-                if (args.contains("author")) m.author = args.value("author").toString();
-                if (args.contains("company")) m.company = args.value("company").toString();
-                if (args.contains("date")) m.date = args.value("date").toString();
-                if (args.contains("header_left")) m.header_left = args.value("header_left").toString();
-                if (args.contains("header_center")) m.header_center = args.value("header_center").toString();
-                if (args.contains("header_right")) m.header_right = args.value("header_right").toString();
-                if (args.contains("footer_left")) m.footer_left = args.value("footer_left").toString();
-                if (args.contains("footer_center")) m.footer_center = args.value("footer_center").toString();
-                if (args.contains("footer_right")) m.footer_right = args.value("footer_right").toString();
+                if (args.contains("title"))
+                    m.title = args.value("title").toString();
+                if (args.contains("author"))
+                    m.author = args.value("author").toString();
+                if (args.contains("company"))
+                    m.company = args.value("company").toString();
+                if (args.contains("date"))
+                    m.date = args.value("date").toString();
+                if (args.contains("header_left"))
+                    m.header_left = args.value("header_left").toString();
+                if (args.contains("header_center"))
+                    m.header_center = args.value("header_center").toString();
+                if (args.contains("header_right"))
+                    m.header_right = args.value("header_right").toString();
+                if (args.contains("footer_left"))
+                    m.footer_left = args.value("footer_left").toString();
+                if (args.contains("footer_center"))
+                    m.footer_center = args.value("footer_center").toString();
+                if (args.contains("footer_right"))
+                    m.footer_right = args.value("footer_right").toString();
                 if (args.contains("show_page_numbers"))
                     m.show_page_numbers = args.value("show_page_numbers").toBool();
                 svc.set_metadata(m);
@@ -499,24 +504,23 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_apply_template";
-        t.description =
-            "Replace the report with a generic built-in scaffold. **PREFER `report_add_component` for "
-            "ticker- or topic-specific research** — templates are rigid skeletons designed for user-facing "
-            "quick-starts, not for analyst-quality output. Each real research report should have a "
-            "ticker-specific structure: a Tesla EV report differs from a JPM credit note differs from a "
-            "TLT duration play. When the user asks for research on a specific name/sector, do NOT call "
-            "this — call `report_set_metadata` then build the structure with `report_add_component` calls "
-            "tailored to what actually matters for that subject. Use this tool only when (a) the user "
-            "explicitly asks for a template, or (b) the user wants a generic scaffold (Meeting Notes, "
-            "Trade Journal, Pre-Market Checklist) where uniformity is desirable. "
-            "Available names: 'Blank Report', 'Meeting Notes', 'Investment Memo', 'Stock Research', "
-            "'Portfolio Review', 'Watchlist Report', 'Dividend Income Report', 'Daily Market Brief', "
-            "'Trade Journal', 'Technical Analysis', 'Pre-Market Checklist', 'Equity Research Report', "
-            "'Earnings Review', 'M&A Deal Summary', 'Sector Deep Dive', 'Macro Economic Summary', "
-            "'Country Risk Report', 'Central Bank Monitor', 'Crypto Research Report', "
-            "'DeFi Protocol Analysis', 'Crypto Portfolio Review', 'Bond Research Report', "
-            "'Yield Curve Analysis', 'Quant Strategy Report', 'Risk Management Report', "
-            "'Business Performance', 'Project Status Report', 'Financial Statement'.";
+        t.description = "Replace the report with a generic built-in scaffold. **PREFER `report_add_component` for "
+                        "ticker- or topic-specific research** — templates are rigid skeletons designed for user-facing "
+                        "quick-starts, not for analyst-quality output. Each real research report should have a "
+                        "ticker-specific structure: a Tesla EV report differs from a JPM credit note differs from a "
+                        "TLT duration play. When the user asks for research on a specific name/sector, do NOT call "
+                        "this — call `report_set_metadata` then build the structure with `report_add_component` calls "
+                        "tailored to what actually matters for that subject. Use this tool only when (a) the user "
+                        "explicitly asks for a template, or (b) the user wants a generic scaffold (Meeting Notes, "
+                        "Trade Journal, Pre-Market Checklist) where uniformity is desirable. "
+                        "Available names: 'Blank Report', 'Meeting Notes', 'Investment Memo', 'Stock Research', "
+                        "'Portfolio Review', 'Watchlist Report', 'Dividend Income Report', 'Daily Market Brief', "
+                        "'Trade Journal', 'Technical Analysis', 'Pre-Market Checklist', 'Equity Research Report', "
+                        "'Earnings Review', 'M&A Deal Summary', 'Sector Deep Dive', 'Macro Economic Summary', "
+                        "'Country Risk Report', 'Central Bank Monitor', 'Crypto Research Report', "
+                        "'DeFi Protocol Analysis', 'Crypto Portfolio Review', 'Bond Research Report', "
+                        "'Yield Curve Analysis', 'Quant Strategy Report', 'Risk Management Report', "
+                        "'Business Performance', 'Project Status Report', 'Financial Statement'.";
         t.category = "report-builder";
         t.input_schema.properties = QJsonObject{{"name", QJsonObject{{"type", "string"}}}};
         t.input_schema.required = {"name"};
@@ -603,18 +607,16 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_bulk_add_components";
-        t.description =
-            "Append many components in one atomic call. Provide a `components` array of "
-            "{type, content?, config?} objects — same shape as report_add_component. Use this when "
-            "designing the initial structure of a report so you don't burn one round-trip per section. "
-            "All components are appended at the end in order. Returns the assigned ids in order.";
+        t.description = "Append many components in one atomic call. Provide a `components` array of "
+                        "{type, content?, config?} objects — same shape as report_add_component. Use this when "
+                        "designing the initial structure of a report so you don't burn one round-trip per section. "
+                        "All components are appended at the end in order. Returns the assigned ids in order.";
         t.category = "report-builder";
         t.input_schema.properties = QJsonObject{
             {"components",
              QJsonObject{{"type", "array"},
-                         {"description",
-                          "Array of {type, content, config} objects. type is required per element; "
-                          "content and config follow report_add_component semantics."}}},
+                         {"description", "Array of {type, content, config} objects. type is required per element; "
+                                         "content and config follow report_add_component semantics."}}},
         };
         t.input_schema.required = {"components"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
@@ -661,35 +663,28 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_list_component_types";
-        t.description =
-            "Enumerate every component type the report builder accepts, along with its content "
-            "semantics and config keys. Returns: {types:[{name, accepts_content, content_format, "
-            "config_keys:[…], example}]}. Call this once if you're unsure which type to use; the "
-            "result is small and fully self-describing.";
+        t.description = "Enumerate every component type the report builder accepts, along with its content "
+                        "semantics and config keys. Returns: {types:[{name, accepts_content, content_format, "
+                        "config_keys:[…], example}]}. Call this once if you're unsure which type to use; the "
+                        "result is small and fully self-describing.";
         t.category = "report-builder";
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
-            auto entry = [](const char* name, bool accepts_content, const char* fmt,
-                            QJsonArray keys, const char* example) {
+            auto entry = [](const char* name, bool accepts_content, const char* fmt, QJsonArray keys,
+                            const char* example) {
                 return QJsonObject{
-                    {"name", name},
-                    {"accepts_content", accepts_content},
-                    {"content_format", fmt},
-                    {"config_keys", std::move(keys)},
+                    {"name", name},          {"accepts_content", accepts_content},
+                    {"content_format", fmt}, {"config_keys", std::move(keys)},
                     {"example", example},
                 };
             };
             QJsonArray types{
-                entry("heading", true, "plain",  {},
-                      "{type:'heading', content:'Investment Thesis'}"),
-                entry("text", true, "markdown", {},
-                      "{type:'text', content:'Revenue grew **22% YoY**.'}"),
+                entry("heading", true, "plain", {}, "{type:'heading', content:'Investment Thesis'}"),
+                entry("text", true, "markdown", {}, "{type:'text', content:'Revenue grew **22% YoY**.'}"),
                 entry("list", true, "markdown (one item per line)", {},
                       "{type:'list', content:'EV scale\\nFSD optionality\\nEnergy storage'}"),
-                entry("quote", true, "markdown", {},
-                      "{type:'quote', content:'For internal use only.'}"),
-                entry("callout", true, "markdown",
-                      QJsonArray{"style", "heading"},
+                entry("quote", true, "markdown", {}, "{type:'quote', content:'For internal use only.'}"),
+                entry("callout", true, "markdown", QJsonArray{"style", "heading"},
                       "{type:'callout', content:'Margin compression risk', "
                       "config:{style:'warning', heading:'Risk'}}"),
                 entry("code", true, "plain", QJsonArray{"language"},
@@ -699,27 +694,22 @@ std::vector<ToolDef> get_report_builder_tools() {
                 entry("toc", false, "(auto-generated from headings)", {}, "{type:'toc'}"),
                 entry("table", false, "(via config.csv)", QJsonArray{"csv"},
                       "{type:'table', config:{csv:'Metric,FY23,FY24|Revenue,96.8B,97.7B'}}"),
-                entry("chart", false, "(via config)",
-                      QJsonArray{"chart_type", "title", "data", "labels", "width"},
+                entry("chart", false, "(via config)", QJsonArray{"chart_type", "title", "data", "labels", "width"},
                       "{type:'chart', config:{chart_type:'bar', title:'Revenue', "
                       "data:'10,20,30', labels:'Q1,Q2,Q3'}}"),
-                entry("sparkline", false, "(via config)",
-                      QJsonArray{"title", "data", "current", "change_pct"},
+                entry("sparkline", false, "(via config)", QJsonArray{"title", "data", "current", "change_pct"},
                       "{type:'sparkline', config:{title:'TSLA', data:'10,12,11,15', "
                       "current:'15.2', change_pct:'+8.4'}}"),
-                entry("stats_block", false, "(via config.data: Label:Value lines)",
-                      QJsonArray{"title", "data"},
+                entry("stats_block", false, "(via config.data: Label:Value lines)", QJsonArray{"title", "data"},
                       "{type:'stats_block', config:{title:'Key Stats', "
                       "data:'P/E:42.1\\nMkt Cap:$890B'}}"),
                 entry("market_data", false, "(via config.symbol)", QJsonArray{"symbol"},
                       "{type:'market_data', config:{symbol:'TSLA'}}"),
-                entry("image", false, "(via config.path)",
-                      QJsonArray{"path", "width", "caption", "align"},
+                entry("image", false, "(via config.path)", QJsonArray{"path", "width", "caption", "align"},
                       "{type:'image', config:{path:'/abs/path.png', width:'400', "
                       "caption:'Fig. 1', align:'center'}}"),
             };
-            return ToolResult::ok(QString("%1 component types").arg(types.size()),
-                                  QJsonObject{{"types", types}});
+            return ToolResult::ok(QString("%1 component types").arg(types.size()), QJsonObject{{"types", types}});
         };
         tools.push_back(std::move(t));
     }
@@ -729,41 +719,22 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_list_templates";
-        t.description =
-            "Return every built-in template name available to report_apply_template. "
-            "REMEMBER: for ticker- or topic-specific research, prefer designing a unique structure "
-            "with report_bulk_add_components instead of applying a generic template.";
+        t.description = "Return every built-in template name available to report_apply_template. "
+                        "REMEMBER: for ticker- or topic-specific research, prefer designing a unique structure "
+                        "with report_bulk_add_components instead of applying a generic template.";
         t.category = "report-builder";
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             static const QStringList names = {
-                "Blank Report",
-                "Meeting Notes",
-                "Investment Memo",
-                "Stock Research",
-                "Portfolio Review",
-                "Watchlist Report",
-                "Dividend Income Report",
-                "Daily Market Brief",
-                "Trade Journal",
-                "Technical Analysis",
-                "Pre-Market Checklist",
-                "Equity Research Report",
-                "Earnings Review",
-                "M&A Deal Summary",
-                "Sector Deep Dive",
-                "Macro Economic Summary",
-                "Country Risk Report",
-                "Central Bank Monitor",
-                "Crypto Research Report",
-                "DeFi Protocol Analysis",
-                "Crypto Portfolio Review",
-                "Bond Research Report",
-                "Yield Curve Analysis",
-                "Quant Strategy Report",
-                "Risk Management Report",
-                "Business Performance",
-                "Project Status Report",
+                "Blank Report",           "Meeting Notes",          "Investment Memo",
+                "Stock Research",         "Portfolio Review",       "Watchlist Report",
+                "Dividend Income Report", "Daily Market Brief",     "Trade Journal",
+                "Technical Analysis",     "Pre-Market Checklist",   "Equity Research Report",
+                "Earnings Review",        "M&A Deal Summary",       "Sector Deep Dive",
+                "Macro Economic Summary", "Country Risk Report",    "Central Bank Monitor",
+                "Crypto Research Report", "DeFi Protocol Analysis", "Crypto Portfolio Review",
+                "Bond Research Report",   "Yield Curve Analysis",   "Quant Strategy Report",
+                "Risk Management Report", "Business Performance",   "Project Status Report",
                 "Financial Statement",
             };
             return ToolResult::ok(QString("%1 templates").arg(names.size()),
@@ -776,14 +747,13 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_export_pdf";
-        t.description =
-            "Export the current report to a PDF at the given absolute path. The Report Builder "
-            "screen must be loaded (any prior mutation auto-navigates to it, so this normally just "
-            "works). Uses A4, with headers/footers if metadata defines them.";
+        t.description = "Export the current report to a PDF at the given absolute path. The Report Builder "
+                        "screen must be loaded (any prior mutation auto-navigates to it, so this normally just "
+                        "works). Uses A4, with headers/footers if metadata defines them.";
         t.category = "report-builder";
         t.input_schema.properties = QJsonObject{
-            {"path", QJsonObject{{"type", "string"},
-                                 {"description", "Absolute output path, e.g. /Users/x/Desktop/TSLA.pdf"}}},
+            {"path",
+             QJsonObject{{"type", "string"}, {"description", "Absolute output path, e.g. /Users/x/Desktop/TSLA.pdf"}}},
         };
         t.input_schema.required = {"path"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
@@ -795,15 +765,18 @@ std::vector<ToolDef> get_report_builder_tools() {
 
             QString err;
             bool dispatched = false;
-            QMetaObject::invokeMethod(QCoreApplication::instance(), [&]() {
-                auto* scr = ::fincept::screens::ReportBuilderScreen::current();
-                if (!scr) {
-                    err = "Report Builder screen not loaded — navigate to it first";
-                    return;
-                }
-                scr->export_pdf_to(path);
-                dispatched = true;
-            }, Qt::BlockingQueuedConnection);
+            QMetaObject::invokeMethod(
+                QCoreApplication::instance(),
+                [&]() {
+                    auto* scr = ::fincept::screens::ReportBuilderScreen::current();
+                    if (!scr) {
+                        err = "Report Builder screen not loaded — navigate to it first";
+                        return;
+                    }
+                    scr->export_pdf_to(path);
+                    dispatched = true;
+                },
+                Qt::BlockingQueuedConnection);
 
             if (!err.isEmpty())
                 return ToolResult::fail(err);
@@ -835,8 +808,7 @@ std::vector<ToolDef> get_report_builder_tools() {
                 can_r = stk && stk->canRedo();
             });
             return ToolResult::ok(undone ? "Undid last action" : "Nothing to undo",
-                                  QJsonObject{{"undone", undone}, {"can_undo", can_u},
-                                              {"can_redo", can_r}});
+                                  QJsonObject{{"undone", undone}, {"can_undo", can_u}, {"can_redo", can_r}});
         };
         tools.push_back(std::move(t));
     }
@@ -858,8 +830,7 @@ std::vector<ToolDef> get_report_builder_tools() {
                 can_r = stk && stk->canRedo();
             });
             return ToolResult::ok(redone ? "Redid last action" : "Nothing to redo",
-                                  QJsonObject{{"redone", redone}, {"can_undo", can_u},
-                                              {"can_redo", can_r}});
+                                  QJsonObject{{"redone", redone}, {"can_undo", can_u}, {"can_redo", can_r}});
         };
         tools.push_back(std::move(t));
     }
@@ -871,17 +842,16 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_session_context";
-        t.description =
-            "Returns the chat→report linkage for the current chat session, plus a snapshot of "
-            "what's already on the canvas. **Call this FIRST whenever the user asks you to build, "
-            "edit, or work on a report**, then decide:\n"
-            "• If `linked_report` is set and `component_count` > 0: this chat is already authoring "
-            "  this report — continue editing it. Do NOT call report_clear.\n"
-            "• If `linked_report` is null and `component_count` > 0: a previous (different) chat "
-            "  left content on the canvas. Unless the user explicitly said 'add to this report' "
-            "  or 'edit this report', call report_clear before starting your new report.\n"
-            "• If both are empty: blank canvas, just start adding.\n"
-            "Returns: {chat_session_id, linked_report, current_file, component_count, title}.";
+        t.description = "Returns the chat→report linkage for the current chat session, plus a snapshot of "
+                        "what's already on the canvas. **Call this FIRST whenever the user asks you to build, "
+                        "edit, or work on a report**, then decide:\n"
+                        "• If `linked_report` is set and `component_count` > 0: this chat is already authoring "
+                        "  this report — continue editing it. Do NOT call report_clear.\n"
+                        "• If `linked_report` is null and `component_count` > 0: a previous (different) chat "
+                        "  left content on the canvas. Unless the user explicitly said 'add to this report' "
+                        "  or 'edit this report', call report_clear before starting your new report.\n"
+                        "• If both are empty: blank canvas, just start adding.\n"
+                        "Returns: {chat_session_id, linked_report, current_file, component_count, title}.";
         t.category = "report-builder";
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
@@ -893,18 +863,20 @@ std::vector<ToolDef> get_report_builder_tools() {
             QString title = svc.metadata().title;
             QJsonObject data{
                 {"chat_session_id", chat_id.isEmpty() ? QJsonValue::Null : QJsonValue(chat_id)},
-                {"linked_report",   linked.isEmpty()  ? QJsonValue::Null : QJsonValue(linked)},
-                {"current_file",    cur.isEmpty()     ? QJsonValue::Null : QJsonValue(cur)},
+                {"linked_report", linked.isEmpty() ? QJsonValue::Null : QJsonValue(linked)},
+                {"current_file", cur.isEmpty() ? QJsonValue::Null : QJsonValue(cur)},
                 {"component_count", n},
-                {"title",           title.isEmpty()   ? QJsonValue::Null : QJsonValue(title)},
+                {"title", title.isEmpty() ? QJsonValue::Null : QJsonValue(title)},
             };
-            QString msg = chat_id.isEmpty()
-                ? QStringLiteral("No chat session bound; canvas has %1 components").arg(n)
-                : (linked.isEmpty()
-                       ? QStringLiteral("New chat — canvas has %1 components from a prior session").arg(n)
-                       : QStringLiteral("Chat is editing %1 (canvas has %2 components)")
-                             .arg(linked == QLatin1String("<unsaved>") ? QStringLiteral("an unsaved report") : linked)
-                             .arg(n));
+            QString msg =
+                chat_id.isEmpty()
+                    ? QStringLiteral("No chat session bound; canvas has %1 components").arg(n)
+                    : (linked.isEmpty()
+                           ? QStringLiteral("New chat — canvas has %1 components from a prior session").arg(n)
+                           : QStringLiteral("Chat is editing %1 (canvas has %2 components)")
+                                 .arg(linked == QLatin1String("<unsaved>") ? QStringLiteral("an unsaved report")
+                                                                           : linked)
+                                 .arg(n));
             return ToolResult::ok(msg, data);
         };
         tools.push_back(std::move(t));

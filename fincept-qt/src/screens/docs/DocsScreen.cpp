@@ -8,8 +8,8 @@
 //   - DocsScreen_Pages_Data.cpp     — data sources, geopolitics, tools, settings
 // Shared QSS helpers live in DocsScreen_internal.h.
 #include "screens/docs/DocsScreen.h"
-#include "screens/docs/DocsScreen_internal.h"
 
+#include "screens/docs/DocsScreen_internal.h"
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
@@ -18,7 +18,6 @@
 #include <QScrollArea>
 #include <QSplitter>
 #include <QTreeWidgetItemIterator>
-
 
 namespace fincept::screens {
 
@@ -44,8 +43,9 @@ static QString SIDEBAR_SS() {
                    "QScrollBar::handle:vertical { background: %7; }"
                    "QScrollBar::handle:vertical:hover { background: %8; }"
                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-             ui::colors::BG_HOVER(), ui::colors::AMBER(), ui::colors::BORDER_MED(), ui::colors::BORDER_BRIGHT());
+        .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(),
+             ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::AMBER(), ui::colors::BORDER_MED(),
+             ui::colors::BORDER_BRIGHT());
 }
 
 // SCROLL_SS lives in DocsScreen_internal.h so the page-builder TUs can reuse it.
@@ -140,7 +140,8 @@ QWidget* DocsScreen::make_skill_panel(const QString& beginner, const QString& in
 
     for (const auto& lvl : levels) {
         auto* row = new QWidget(this);
-        row->setStyleSheet(QString("background: transparent; border-bottom: 1px solid %1;").arg(ui::colors::BG_RAISED()));
+        row->setStyleSheet(
+            QString("background: transparent; border-bottom: 1px solid %1;").arg(ui::colors::BG_RAISED()));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(12, 8, 12, 8);
         rl->setSpacing(10);
@@ -400,8 +401,8 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
 
     // ── Command bar ──────────────────────────────────────────────────────────
     auto* cmd = new QWidget(this);
-    cmd->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+    cmd->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
+                           .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
     cmd->setFixedHeight(32);
     auto* cmd_hl = new QHBoxLayout(cmd);
     cmd_hl->setContentsMargins(10, 0, 10, 0);
@@ -471,8 +472,10 @@ void DocsScreen::changeEvent(QEvent* event) {
 
 void DocsScreen::retranslateUi() {
     // Command bar
-    if (cmd_title_) cmd_title_->setText(tr("DOCUMENTATION"));
-    if (cmd_count_) cmd_count_->setText(tr("%1 TOPICS  |  %2 CATEGORIES").arg(35).arg(9));
+    if (cmd_title_)
+        cmd_title_->setText(tr("DOCUMENTATION"));
+    if (cmd_count_)
+        cmd_count_->setText(tr("%1 TOPICS  |  %2 CATEGORIES").arg(35).arg(9));
 
     // Rebuild sidebar + content pages so their tr() strings pick up the new
     // language. Preserve the currently displayed section across the rebuild.
@@ -486,7 +489,10 @@ void DocsScreen::retranslateUi() {
         // Fall back to whatever page is on top of the stack.
         const int idx = pages_->currentIndex();
         for (auto it = page_index_.cbegin(); it != page_index_.cend(); ++it)
-            if (it.value() == idx) { current_id = it.key(); break; }
+            if (it.value() == idx) {
+                current_id = it.key();
+                break;
+            }
     }
 
     QTreeWidget* old_sidebar = sidebar_;
@@ -494,8 +500,8 @@ void DocsScreen::retranslateUi() {
     const QList<int> sizes = splitter_->sizes();
 
     page_index_.clear();
-    build_sidebar();        // assigns a fresh sidebar_
-    build_content_pages();  // assigns a fresh pages_
+    build_sidebar();       // assigns a fresh sidebar_
+    build_content_pages(); // assigns a fresh pages_
 
     splitter_->insertWidget(0, sidebar_);
     splitter_->insertWidget(1, pages_);

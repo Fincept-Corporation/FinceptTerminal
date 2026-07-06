@@ -1,30 +1,30 @@
 ﻿#include "app/WindowFrame.h"
 
-#include "screens/ai_chat/AiChatBubble.h"
-#include "screens/ai_chat/AiChatScreen.h"
-#include "services/llm/LlmService.h"
 #include "app/DockScreenRouter.h"
 #include "app/MonitorPickerDialog.h"
+#include "app/TerminalShell.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
 #include "auth/PinManager.h"
 #include "auth/lock/LockOverlayController.h"
-#include "core/symbol/IGroupLinked.h"
-#include "core/symbol/SymbolGroup.h"
-#include "screens/common/IStatefulScreen.h"
-#include "core/config/ProfileManager.h"
-#include "core/events/EventBus.h"
-#include "app/TerminalShell.h"
 #include "core/actions/ActionRegistry.h"
 #include "core/actions/builtin_actions.h"
+#include "core/config/ProfileManager.h"
+#include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/keys/WindowCycler.h"
-#include "core/window/WindowRegistry.h"
+#include "core/layout/LayoutCatalog.h"
+#include "core/layout/WorkspaceShell.h"
 #include "core/logging/Logger.h"
+#include "core/panel/PanelMaterialiser.h"
 #include "core/session/SessionManager.h"
-#include "screens/common/ComingSoonScreen.h"
+#include "core/symbol/IGroupLinked.h"
+#include "core/symbol/SymbolGroup.h"
+#include "core/window/WindowRegistry.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
+#include "screens/ai_chat/AiChatBubble.h"
+#include "screens/ai_chat/AiChatScreen.h"
 #include "screens/ai_quant_lab/AIQuantLabScreen.h"
 #include "screens/akshare/AkShareScreen.h"
 #include "screens/algo_trading/AlgoTradingScreen.h"
@@ -39,20 +39,22 @@
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "screens/code_editor/CodeEditorScreen.h"
+#include "screens/common/ComingSoonScreen.h"
+#include "screens/common/IStatefulScreen.h"
+#include "screens/crypto_center/CryptoCenterScreen.h"
 #include "screens/crypto_trading/CryptoTradingScreen.h"
 #include "screens/dashboard/DashboardScreen.h"
 #include "screens/data_mapping/DataMappingScreen.h"
 #include "screens/data_sources/DataSourcesScreen.h"
 #include "screens/dbnomics/DBnomicsScreen.h"
 #include "screens/derivatives/DerivativesScreen.h"
-#include "screens/fno/FnoScreen.h"
 #include "screens/docs/DocsScreen.h"
-#include "screens/crypto_center/CryptoCenterScreen.h"
 #include "screens/economics/EconomicsScreen.h"
 #include "screens/equity_research/EquityResearchScreen.h"
 #include "screens/equity_trading/EquityTradingScreen.h"
 #include "screens/excel/ExcelScreen.h"
 #include "screens/file_manager/FileManagerScreen.h"
+#include "screens/fno/FnoScreen.h"
 #include "screens/forum/ForumScreen.h"
 #include "screens/geopolitics/GeopoliticsScreen.h"
 #include "screens/gov_data/GovDataScreen.h"
@@ -79,19 +81,17 @@
 #include "screens/surface_analytics/SurfaceAnalyticsScreen.h"
 #include "screens/trade_viz/TradeVizScreen.h"
 #include "screens/watchlist/WatchlistScreen.h"
-#include "core/layout/LayoutCatalog.h"
-#include "core/layout/WorkspaceShell.h"
-#include "core/panel/PanelMaterialiser.h"
+#include "services/llm/LlmService.h"
 #include "services/updater/UpdateService.h"
-#include "trading/instruments/InstrumentService.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "trading/instruments/InstrumentService.h"
+#include "ui/command/CommandPalette.h"
+#include "ui/command/QuickCommandBar.h"
+#include "ui/components/ComponentBrowserDialog.h"
+#include "ui/debug/DebugOverlay.h"
 #include "ui/navigation/DockStatusBar.h"
 #include "ui/navigation/DockToolBar.h"
 #include "ui/navigation/FKeyBar.h"
-#include "ui/command/QuickCommandBar.h"
-#include "ui/command/CommandPalette.h"
-#include "ui/components/ComponentBrowserDialog.h"
-#include "ui/debug/DebugOverlay.h"
 #include "ui/navigation/NavigationBar.h"
 #include "ui/navigation/StatusBar.h"
 #include "ui/navigation/ToolBar.h"
@@ -107,14 +107,14 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QMessageBox>
 #include <QPalette>
 #include <QScreen>
 #include <QSet>
 #include <QShortcut>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonValue>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -124,7 +124,6 @@
 #include <DockManager.h>
 #include <DockWidget.h>
 #include <FloatingDockContainer.h>
-
 #include <algorithm>
 
 namespace fincept {
@@ -161,12 +160,14 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // first show — queue the connect via QMetaObject::invokeMethod with
     // QueuedConnection so it runs after the event loop has had a chance
     // to construct the window handle.
-    QMetaObject::invokeMethod(this, [this]() {
-        if (auto* wh = windowHandle()) {
-            connect(wh, &QWindow::screenChanged, this,
-                    [this](QScreen* scr) { emit screen_changed(scr); });
-        }
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [this]() {
+            if (auto* wh = windowHandle()) {
+                connect(wh, &QWindow::screenChanged, this, [this](QScreen* scr) { emit screen_changed(scr); });
+            }
+        },
+        Qt::QueuedConnection);
 
     // Show active profile in title bar when using a non-default profile.
     // "Fincept Terminal" is the product brand and is intentionally not
@@ -271,9 +272,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // a redundant PIN re-entry. The singleton flag is the source of truth for
     // "user has cleared the PIN gate this session"; the per-window field is
     // a cache so on_auth_state_changed() can skip re-prompting.
-    pin_gate_cleared_ = !auth::InactivityGuard::instance().is_terminal_locked()
-                        && auth::AuthManager::instance().is_authenticated()
-                        && auth::PinManager::instance().has_pin();
+    pin_gate_cleared_ = !auth::InactivityGuard::instance().is_terminal_locked() &&
+                        auth::AuthManager::instance().is_authenticated() && auth::PinManager::instance().has_pin();
 
     auto* master_stack = new QStackedWidget;
 
@@ -319,8 +319,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // behind the back of the lock screen on the primary.
     connect(&auth::InactivityGuard::instance(), &auth::InactivityGuard::lock_requested, this,
             &WindowFrame::show_lock_screen);
-    connect(&auth::InactivityGuard::instance(), &auth::InactivityGuard::terminal_locked_changed,
-            this, &WindowFrame::apply_lock_state);
+    connect(&auth::InactivityGuard::instance(), &auth::InactivityGuard::terminal_locked_changed, this,
+            &WindowFrame::apply_lock_state);
 
     setCentralWidget(master_stack);
 
@@ -344,8 +344,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // layout name from WorkspaceShell::current_name() inside
     // update_window_title(), so no signal wiring is needed here.
     WindowCycler::instance().register_window(this);
-    connect(this, &QObject::destroyed, this,
-            [this]() { WindowCycler::instance().unregister_window(this); });
+    connect(this, &QObject::destroyed, this, [this]() { WindowCycler::instance().unregister_window(this); });
 
     dock_router_ = new DockScreenRouter(dock_manager_, this);
     setup_dock_screens();
@@ -354,7 +353,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // panels and fills the full area. Each tab is a fresh independent screen,
     // not nested into whatever was previously open.
     connect(tab_bar_, &ui::TabBar::tab_changed, this, [this](const QString& id) {
-        if (!locked_) dock_router_->navigate(id, true);
+        if (!locked_)
+            dock_router_->navigate(id, true);
     });
     connect(dock_router_, &DockScreenRouter::screen_changed, tab_bar_, &ui::TabBar::set_active);
 
@@ -393,7 +393,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
 
     connect(toolbar, &ui::ToolBar::chat_mode_toggled, this, &WindowFrame::toggle_chat_mode);
     connect(toolbar, &ui::ToolBar::navigate_to, this, [this](const QString& id) {
-        if (!locked_) dock_router_->navigate(id, true);
+        if (!locked_)
+            dock_router_->navigate(id, true);
     });
 
     // Debounced dock-layout save: ADS emits a burst of signals during
@@ -422,7 +423,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
 
     connect(toolbar, &ui::ToolBar::dock_command, this,
             [this](const QString& action, const QString& primary, const QString& secondary) {
-                if (locked_) return;
+                if (locked_)
+                    return;
                 if (action == "add")
                     dock_router_->add_alongside(primary, secondary);
                 else if (action == "remove")
@@ -440,9 +442,12 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         const bool exclusive = nav_data.value("exclusive", false).toBool();
         if (!screen_id.isEmpty())
             QMetaObject::invokeMethod(
-                dock_router_, [this, screen_id, exclusive]() {
-                    if (!locked_) dock_router_->navigate(screen_id, exclusive);
-                }, Qt::QueuedConnection);
+                dock_router_,
+                [this, screen_id, exclusive]() {
+                    if (!locked_)
+                        dock_router_->navigate(screen_id, exclusive);
+                },
+                Qt::QueuedConnection);
     });
 
     // Equity Research "BUY/SELL" → reuse the Equity Trading order ticket without
@@ -489,10 +494,10 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     for (KeyAction a : km.all_actions()) {
         const QString action_id = actions::action_id_for(a);
         if (action_id.isEmpty())
-            continue;                                  // per-screen action; handled elsewhere
+            continue; // per-screen action; handled elsewhere
         if (!reg.contains(action_id)) {
-            LOG_WARN("WindowFrame", QString("KeyAction → action_id mapping references unregistered id: %1")
-                                        .arg(action_id));
+            LOG_WARN("WindowFrame",
+                     QString("KeyAction → action_id mapping references unregistered id: %1").arg(action_id));
             continue;
         }
         auto* act = km.action(a);
@@ -501,8 +506,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         // LockNow runs even when this frame isn't focused (e.g. user pressed
         // it from a dialog) — it's a global "secure my session" command.
         // Everything else is window-scoped so only the focused frame fires.
-        act->setShortcutContext(a == KeyAction::LockNow ? Qt::ApplicationShortcut
-                                                        : Qt::WindowShortcut);
+        act->setShortcutContext(a == KeyAction::LockNow ? Qt::ApplicationShortcut : Qt::WindowShortcut);
         addAction(act);
         connect(act, &QAction::triggered, this, [action_id]() {
             // Build a fresh context every invocation so the focused frame
@@ -515,15 +519,16 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             // focused-panel lookup once panels are UUID-keyed.
             auto r = ActionRegistry::instance().invoke(action_id, ctx);
             if (r.is_err()) {
-                LOG_DEBUG("WindowFrame", QString("Action %1 returned error: %2")
-                                             .arg(action_id, QString::fromStdString(r.error())));
+                LOG_DEBUG("WindowFrame",
+                          QString("Action %1 returned error: %2").arg(action_id, QString::fromStdString(r.error())));
             }
         });
     }
 
     // Toolbar actions
     connect(toolbar, &ui::ToolBar::action_triggered, this, [this](const QString& action) {
-        if (locked_) return;
+        if (locked_)
+            return;
         if (action == "browse_components") {
             // Same path as the keyboard shortcut so the behavior stays in one
             // place — the KeyConfigManager action will be triggered directly.
@@ -601,8 +606,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         } else if (action == "perspective_save") {
             if (dock_manager_) {
                 bool ok = false;
-                const QString name =
-                    QInputDialog::getText(this, tr("Save Layout"), tr("Layout name:"), QLineEdit::Normal, QString(), &ok);
+                const QString name = QInputDialog::getText(this, tr("Save Layout"), tr("Layout name:"),
+                                                           QLineEdit::Normal, QString(), &ok);
                 if (ok && !name.trimmed().isEmpty()) {
                     dock_manager_->addPerspective(name.trimmed());
                     LOG_INFO("WindowFrame", QString("Saved perspective: %1").arg(name.trimmed()));
@@ -656,7 +661,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 showFullScreen();
         } else if (action == "focus_mode") {
             // Auth screens must never reveal the shell via focus-mode toggle.
-            if (stack_ && stack_->currentIndex() == 0) return;
+            if (stack_ && stack_->currentIndex() == 0)
+                return;
             focus_mode_ = !focus_mode_;
             if (dock_toolbar_)
                 dock_toolbar_->setVisible(!focus_mode_);
@@ -680,12 +686,11 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 ctx.shell = &TerminalShell::instance();
                 ctx.focused_frame = this;
                 ctx.args.insert(QStringLiteral("name"), dlg.name());
-                const QString action_id = (action == "layout_new")
-                    ? QStringLiteral("layout.new") : QStringLiteral("layout.save_as");
+                const QString action_id =
+                    (action == "layout_new") ? QStringLiteral("layout.new") : QStringLiteral("layout.save_as");
                 auto r = ActionRegistry::instance().invoke(action_id, ctx);
                 if (r.is_err())
-                    LOG_WARN("WindowFrame", QString("%1 failed: %2")
-                                                .arg(action_id, QString::fromStdString(r.error())));
+                    LOG_WARN("WindowFrame", QString("%1 failed: %2").arg(action_id, QString::fromStdString(r.error())));
             }
         } else if (action == "layout_open") {
             ui::LayoutOpenDialog dlg(this);
@@ -696,8 +701,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 ctx.args.insert(QStringLiteral("name"), dlg.selected_id().to_string());
                 auto r = ActionRegistry::instance().invoke(QStringLiteral("layout.switch"), ctx);
                 if (r.is_err())
-                    LOG_WARN("WindowFrame", QString("layout.switch failed: %1")
-                                                .arg(QString::fromStdString(r.error())));
+                    LOG_WARN("WindowFrame", QString("layout.switch failed: %1").arg(QString::fromStdString(r.error())));
             }
         } else if (action == "layout_save") {
             // If a layout is currently loaded, save under its name. Otherwise
@@ -717,33 +721,26 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             ctx.args.insert(QStringLiteral("name"), target);
             auto r = ActionRegistry::instance().invoke(QStringLiteral("layout.save"), ctx);
             if (r.is_err())
-                LOG_WARN("WindowFrame", QString("layout.save failed: %1")
-                                            .arg(QString::fromStdString(r.error())));
+                LOG_WARN("WindowFrame", QString("layout.save failed: %1").arg(QString::fromStdString(r.error())));
         } else if (action == "import_data") {
-            QString path = QFileDialog::getOpenFileName(
-                this, tr("Import Layout"), QDir::homePath(),
-                tr("Fincept Layout (*.flayout *.fwsp);;All Files (*)"));
+            QString path = QFileDialog::getOpenFileName(this, tr("Import Layout"), QDir::homePath(),
+                                                        tr("Fincept Layout (*.flayout *.fwsp);;All Files (*)"));
             if (!path.isEmpty()) {
                 auto r = LayoutCatalog::instance().import_from(path);
                 if (r.is_err())
-                    QMessageBox::warning(this, tr("Import Failed"),
-                                         QString::fromStdString(r.error()));
+                    QMessageBox::warning(this, tr("Import Failed"), QString::fromStdString(r.error()));
             }
         } else if (action == "export_data") {
             const LayoutId cur_id = layout::WorkspaceShell::current_id();
             if (cur_id.is_null()) {
-                QMessageBox::information(
-                    this, tr("Export Layout"),
-                    tr("Open or save a layout first, then export it."));
+                QMessageBox::information(this, tr("Export Layout"), tr("Open or save a layout first, then export it."));
             } else {
-                QString path = QFileDialog::getSaveFileName(
-                    this, tr("Export Layout"), QDir::homePath(),
-                    tr("Fincept Layout (*.flayout)"));
+                QString path = QFileDialog::getSaveFileName(this, tr("Export Layout"), QDir::homePath(),
+                                                            tr("Fincept Layout (*.flayout)"));
                 if (!path.isEmpty()) {
                     auto r = LayoutCatalog::instance().export_to(cur_id, path);
                     if (r.is_err())
-                        QMessageBox::warning(this, tr("Export Failed"),
-                                             QString::fromStdString(r.error()));
+                        QMessageBox::warning(this, tr("Export Failed"), QString::fromStdString(r.error()));
                 }
             }
         } else if (action == "screenshot") {
@@ -837,14 +834,14 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 // visible-panel count, so this is only a backstop for true bloat.
                 if (dock_restored && dock_manager_->openedDockAreas().size() > 16) {
                     LOG_WARN("WindowFrame", QString("Dock layout corrupt: %1 open areas — resetting")
-                                               .arg(dock_manager_->openedDockAreas().size()));
+                                                .arg(dock_manager_->openedDockAreas().size()));
                     dock_restored = false;
                 }
             }
         } else if (saved_version != 0) {
             LOG_INFO("WindowFrame", QString("Dock layout version mismatch (saved %1, expected %2) — resetting")
-                                       .arg(saved_version)
-                                       .arg(kDockLayoutVersion));
+                                        .arg(saved_version)
+                                        .arg(kDockLayoutVersion));
         }
 
         if (!dock_restored) {
@@ -871,16 +868,14 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         // InactivityGuard flag (which is the single source of truth for
         // "is the terminal locked?"); skipping the prompt here just
         // mirrors the unlocked state into the new frame.
-        if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()
-            && !pin_gate_cleared_) {
+        if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin() && !pin_gate_cleared_) {
             LOG_INFO("WindowFrame", "Session restored — showing PIN unlock");
             lock_screen_->show_unlock();
             locked_ = true;
             set_shell_visible(false);
             stack_->setCurrentIndex(3);
         } else if (auth_mgr.is_authenticated() && auth::PinManager::instance().has_pin()) {
-            LOG_INFO("WindowFrame",
-                     "Session already unlocked — skipping PIN prompt for additional window");
+            LOG_INFO("WindowFrame", "Session already unlocked — skipping PIN prompt for additional window");
             set_shell_visible(true);
             stack_->setCurrentIndex(1);
         } else if (auth_mgr.is_authenticated()) {
@@ -904,14 +899,12 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             // tab bar, status bar) before the first screen factory runs.
             // DashboardScreen construction can take 200-500ms; without this
             // the user sees a blank frame for that entire duration.
-            QTimer::singleShot(0, this, [this]() {
-                dock_router_->navigate("dashboard");
-            });
+            QTimer::singleShot(0, this, [this]() { dock_router_->navigate("dashboard"); });
             LOG_INFO("WindowFrame", "Deferred default dashboard navigate to after first paint");
         } else if (!dock_restored) {
-            LOG_INFO("WindowFrame",
-                     QString("Deferring default navigate — frame spawned with adopted uuid %1 "
-                             "(apply_layout will populate)").arg(adopted_uuid.to_string()));
+            LOG_INFO("WindowFrame", QString("Deferring default navigate — frame spawned with adopted uuid %1 "
+                                            "(apply_layout will populate)")
+                                        .arg(adopted_uuid.to_string()));
         } else {
             // Dock layout restored — tabs are positioned but screens are
             // still placeholders (materialize was suppressed above). Defer
@@ -919,7 +912,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             // sees content quickly, then fill in remaining visible panels.
             const QString last = SessionManager::instance().last_screen(window_id_);
             QTimer::singleShot(0, this, [this, last]() {
-                if (!dock_router_ || !dock_manager_) return;
+                if (!dock_router_ || !dock_manager_)
+                    return;
                 // Active panel first — user sees populated content immediately
                 if (!last.isEmpty()) {
                     dock_router_->materialize_now(last);
@@ -934,9 +928,11 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 // Remaining visible panels on the next tick so the active
                 // panel's paint completes before we block again.
                 QTimer::singleShot(0, this, [this, last]() {
-                    if (!dock_router_ || !dock_manager_) return;
+                    if (!dock_router_ || !dock_manager_)
+                        return;
                     for (const auto& entry : dock_manager_->dockWidgetsMap().toStdMap()) {
-                        if (entry.first == last) continue;
+                        if (entry.first == last)
+                            continue;
                         if (entry.second && !entry.second->isClosed())
                             dock_router_->materialize_now(entry.first);
                     }
@@ -1042,8 +1038,7 @@ void WindowFrame::set_always_on_top(bool on) {
     if (isVisible() || true) // always re-show; isVisible is false after the flag change
         show();
     SessionManager::instance().save_window_flag(window_id_, "always_on_top", on);
-    LOG_INFO("WindowFrame",
-             QString("Window %1 always-on-top = %2").arg(window_id_).arg(on ? "on" : "off"));
+    LOG_INFO("WindowFrame", QString("Window %1 always-on-top = %2").arg(window_id_).arg(on ? "on" : "off"));
 }
 
 void WindowFrame::move_to_screen(QScreen* target) {
@@ -1070,8 +1065,7 @@ void WindowFrame::move_to_screen(QScreen* target) {
     else if (was_maximised)
         showMaximized();
 
-    LOG_INFO("WindowFrame", QString("Moved window %1 to monitor '%2'")
-                               .arg(window_id_).arg(target->name()));
+    LOG_INFO("WindowFrame", QString("Moved window %1 to monitor '%2'").arg(window_id_).arg(target->name()));
 }
 
 WindowId WindowFrame::frame_uuid() const {
@@ -1089,9 +1083,8 @@ void WindowFrame::adopt_frame_uuid(const WindowId& id) {
         // The frame already minted (or adopted) a different UUID — too late,
         // any panels created so far carry the old frame_id. Log and bail
         // rather than corrupting the PanelRegistry view.
-        LOG_WARN("WindowFrame",
-                 QString("adopt_frame_uuid: refusing to overwrite existing %1 with %2")
-                     .arg(frame_uuid_.to_string(), id.to_string()));
+        LOG_WARN("WindowFrame", QString("adopt_frame_uuid: refusing to overwrite existing %1 with %2")
+                                    .arg(frame_uuid_.to_string(), id.to_string()));
         return;
     }
     frame_uuid_ = id;

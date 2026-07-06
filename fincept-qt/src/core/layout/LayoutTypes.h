@@ -58,12 +58,12 @@ inline size_t qHash(const MonitorTopologyKey& k, size_t seed = 0) noexcept {
 // Phase 0 ships the type only; persistence is wired up in Phase 4 (UUID
 // keying) and Phase 6 (the workspace pipeline).
 struct PanelState {
-    PanelInstanceId instance_id;     ///< Stable UUID owned by PanelHandle.
-    QString type_id;                 ///< e.g. "watchlist", "crypto_trading".
-    QString title;                   ///< User-renameable display title.
-    QString link_group;              ///< Empty = unlinked. e.g. "red", "green".
-    QByteArray state_blob;           ///< Opaque IStatefulScreen state (CBOR/JSON).
-    int state_version = 0;           ///< IStatefulScreen::state_version() at save time.
+    PanelInstanceId instance_id; ///< Stable UUID owned by PanelHandle.
+    QString type_id;             ///< e.g. "watchlist", "crypto_trading".
+    QString title;               ///< User-renameable display title.
+    QString link_group;          ///< Empty = unlinked. e.g. "red", "green".
+    QByteArray state_blob;       ///< Opaque IStatefulScreen state (CBOR/JSON).
+    int state_version = 0;       ///< IStatefulScreen::state_version() at save time.
     int schema_version = kPanelStateVersion;
 
     QJsonObject to_json() const;
@@ -81,10 +81,10 @@ struct PanelState {
 // internal format (that's handled by the existing kDockLayoutVersion).
 struct FrameLayout {
     WindowId window_id;
-    QString name;                              ///< Optional user label ("Risk", "Macro").
+    QString name; ///< Optional user label ("Risk", "Macro").
     QList<PanelState> panels;
-    QByteArray dock_state;                     ///< ADS CDockManager::saveState().
-    PanelInstanceId active_panel;              ///< Which tab/area is focused.
+    QByteArray dock_state;        ///< ADS CDockManager::saveState().
+    PanelInstanceId active_panel; ///< Which tab/area is focused.
     bool focus_mode = false;
     bool always_on_top = false;
     int schema_version = kFrameLayoutVersion;
@@ -103,8 +103,8 @@ struct FrameLayout {
 // the same frame *contents* but differ in *placement*.
 struct WorkspaceVariant {
     MonitorTopologyKey topology;
-    QHash<WindowId, QRect> frame_geometries;   ///< Position/size per frame.
-    QHash<WindowId, QString> frame_screens;    ///< StableScreenId per frame.
+    QHash<WindowId, QRect> frame_geometries; ///< Position/size per frame.
+    QHash<WindowId, QString> frame_screens;  ///< StableScreenId per frame.
 
     QJsonObject to_json() const;
     static WorkspaceVariant from_json(const QJsonObject& obj);
@@ -125,13 +125,13 @@ struct Workspace {
     QString name;
     QString kind = "auto";
     QString description;
-    QString author;                            ///< For shared/exported layouts.
+    QString author; ///< For shared/exported layouts.
     qint64 created_at_unix = 0;
     qint64 updated_at_unix = 0;
-    QString thumbnail_path;                    ///< Relative to layouts/ dir.
+    QString thumbnail_path; ///< Relative to layouts/ dir.
 
     QList<FrameLayout> frames;
-    QList<WorkspaceVariant> variants;          ///< One per saved monitor topology.
+    QList<WorkspaceVariant> variants; ///< One per saved monitor topology.
 
     /// Per-link-group last context. Restored on workspace load so AAPL stays
     /// red after a restart. Stored opaquely; LinkManager owns the schema.

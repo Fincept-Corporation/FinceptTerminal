@@ -24,9 +24,9 @@
 // Shared helpers (JSON converters, run_on_ui) live in WorkspaceTools_internal.h.
 
 #include "mcp/tools/WorkspaceTools.h"
-#include "mcp/tools/WorkspaceTools_internal.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/tools/WorkspaceTools_internal.h"
 
 #include <QString>
 

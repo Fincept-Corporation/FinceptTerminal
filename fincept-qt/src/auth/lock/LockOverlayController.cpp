@@ -68,15 +68,13 @@ void LockOverlayController::initialise() {
     // Subscribe once to the process-wide locked flag. Replaces the
     // pre-Phase-1c per-frame connections (which still exist as a
     // belt-and-braces; apply_lock_state is idempotent).
-    connect(&InactivityGuard::instance(), &InactivityGuard::terminal_locked_changed,
-            this, &LockOverlayController::on_terminal_locked_changed);
+    connect(&InactivityGuard::instance(), &InactivityGuard::terminal_locked_changed, this,
+            &LockOverlayController::on_terminal_locked_changed);
 
-    LOG_INFO(kLockTag,
-             QString("Initialised; tracking %1 frame(s)").arg(tracked_frames_.size()));
+    LOG_INFO(kLockTag, QString("Initialised; tracking %1 frame(s)").arg(tracked_frames_.size()));
 }
 
-fincept::screens::LockScreen*
-LockOverlayController::lock_screen_for(fincept::WindowFrame* frame) {
+fincept::screens::LockScreen* LockOverlayController::lock_screen_for(fincept::WindowFrame* frame) {
     if (!frame)
         return nullptr;
 
@@ -97,10 +95,9 @@ LockOverlayController::lock_screen_for(fincept::WindowFrame* frame) {
     t.lock_screen = QPointer<fincept::screens::LockScreen>(ls);
     tracked_frames_.insert(frame, t);
 
-    LOG_DEBUG(kLockTag,
-              QString("Minted LockScreen for frame %1 (tracking %2)")
-                  .arg(reinterpret_cast<quintptr>(frame), 0, 16)
-                  .arg(tracked_frames_.size()));
+    LOG_DEBUG(kLockTag, QString("Minted LockScreen for frame %1 (tracking %2)")
+                            .arg(reinterpret_cast<quintptr>(frame), 0, 16)
+                            .arg(tracked_frames_.size()));
     return ls;
 }
 
@@ -119,14 +116,13 @@ void LockOverlayController::on_frame_removing(fincept::WindowFrame* w) {
     if (!w)
         return;
     tracked_frames_.remove(w);
-    LOG_DEBUG(kLockTag,
-              QString("Frame removed; tracking %1").arg(tracked_frames_.size()));
+    LOG_DEBUG(kLockTag, QString("Frame removed; tracking %1").arg(tracked_frames_.size()));
 }
 
 void LockOverlayController::on_terminal_locked_changed(bool locked) {
-    LOG_INFO(kLockTag,
-             QString("Terminal lock state: %1 (broadcasting to %2 frames)")
-                 .arg(locked ? "locked" : "unlocked").arg(tracked_frames_.size()));
+    LOG_INFO(kLockTag, QString("Terminal lock state: %1 (broadcasting to %2 frames)")
+                           .arg(locked ? "locked" : "unlocked")
+                           .arg(tracked_frames_.size()));
     // The actual UI flip happens through the frame's own subscription
     // to InactivityGuard::terminal_locked_changed → apply_lock_state.
     // Every tracked frame runs apply_lock_state idempotently.

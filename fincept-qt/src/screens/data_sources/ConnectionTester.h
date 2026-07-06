@@ -12,6 +12,7 @@
 #include <QPointer>
 #include <QString>
 #include <QWidget>
+
 #include <functional>
 
 namespace fincept::screens::datasources {

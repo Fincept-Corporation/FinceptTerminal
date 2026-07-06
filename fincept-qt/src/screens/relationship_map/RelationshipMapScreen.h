@@ -112,7 +112,7 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     relmap::LayoutMode layout_mode_ = relmap::LayoutMode::Layered;
     relmap::RelationshipData current_data_;
     bool has_data_ = false;
-    QString loaded_ticker_;       // ticker currently shown in the graph
+    QString loaded_ticker_;             // ticker currently shown in the graph
     bool search_input_focused_ = false; // only show dropdown when user is actively typing
 };
 

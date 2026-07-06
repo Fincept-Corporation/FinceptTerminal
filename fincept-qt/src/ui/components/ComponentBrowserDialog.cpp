@@ -25,11 +25,15 @@ bool matches_query(const ComponentMeta& m, const QString& query) {
     if (query.isEmpty())
         return true;
     const QString q = query.toLower();
-    if (m.title.toLower().contains(q)) return true;
-    if (m.description.toLower().contains(q)) return true;
-    if (m.id.toLower().contains(q)) return true;
+    if (m.title.toLower().contains(q))
+        return true;
+    if (m.description.toLower().contains(q))
+        return true;
+    if (m.id.toLower().contains(q))
+        return true;
     for (const QString& tag : m.tags) {
-        if (tag.toLower().contains(q)) return true;
+        if (tag.toLower().contains(q))
+            return true;
     }
     return false;
 }
@@ -56,9 +60,8 @@ void ComponentBrowserDialog::build_ui() {
     // Header bar — title + search.
     auto* header = new QWidget(this);
     header->setFixedHeight(56);
-    header->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                              .arg(colors::BG_RAISED())
-                              .arg(colors::BORDER_MED()));
+    header->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_RAISED()).arg(colors::BORDER_MED()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(16, 8, 16, 8);
     hl->setSpacing(12);
@@ -73,14 +76,13 @@ void ComponentBrowserDialog::build_ui() {
     search_ = new QLineEdit(header);
     search_->setPlaceholderText(tr("Search components…"));
     search_->setClearButtonEnabled(true);
-    search_->setStyleSheet(
-        QString("QLineEdit{background:%1;border:1px solid %2;border-radius:2px;"
-                "color:%3;padding:6px 10px;min-width:280px;}"
-                "QLineEdit:focus{border-color:%4;}")
-            .arg(colors::BG_SURFACE())
-            .arg(colors::BORDER_MED())
-            .arg(colors::TEXT_PRIMARY())
-            .arg(colors::AMBER()));
+    search_->setStyleSheet(QString("QLineEdit{background:%1;border:1px solid %2;border-radius:2px;"
+                                   "color:%3;padding:6px 10px;min-width:280px;}"
+                                   "QLineEdit:focus{border-color:%4;}")
+                               .arg(colors::BG_SURFACE())
+                               .arg(colors::BORDER_MED())
+                               .arg(colors::TEXT_PRIMARY())
+                               .arg(colors::AMBER()));
     connect(search_, &QLineEdit::textChanged, this, &ComponentBrowserDialog::on_search_changed);
     hl->addWidget(search_);
 
@@ -100,17 +102,16 @@ void ComponentBrowserDialog::build_ui() {
 
     category_list_ = new QListWidget(split);
     category_list_->setFixedWidth(180);
-    category_list_->setStyleSheet(
-        QString("QListWidget{background:%1;border:none;border-right:1px solid %2;color:%3;}"
-                "QListWidget::item{padding:8px 14px;border:none;}"
-                "QListWidget::item:selected{background:%4;color:%5;border-left:3px solid %5;}"
-                "QListWidget::item:hover{background:%6;}")
-            .arg(colors::BG_SURFACE())
-            .arg(colors::BORDER_MED())
-            .arg(colors::TEXT_SECONDARY())
-            .arg(colors::BG_HOVER())
-            .arg(colors::AMBER())
-            .arg(colors::BG_RAISED()));
+    category_list_->setStyleSheet(QString("QListWidget{background:%1;border:none;border-right:1px solid %2;color:%3;}"
+                                          "QListWidget::item{padding:8px 14px;border:none;}"
+                                          "QListWidget::item:selected{background:%4;color:%5;border-left:3px solid %5;}"
+                                          "QListWidget::item:hover{background:%6;}")
+                                      .arg(colors::BG_SURFACE())
+                                      .arg(colors::BORDER_MED())
+                                      .arg(colors::TEXT_SECONDARY())
+                                      .arg(colors::BG_HOVER())
+                                      .arg(colors::AMBER())
+                                      .arg(colors::BG_RAISED()));
     // Row 0 is the "All" sentinel: translated display text, empty UserRole.
     // Other rows store the real (non-translated) category id in UserRole so
     // filtering stays stable regardless of the active locale.
@@ -121,8 +122,7 @@ void ComponentBrowserDialog::build_ui() {
         item->setData(Qt::UserRole, c);
     }
     category_list_->setCurrentRow(0);
-    connect(category_list_, &QListWidget::currentRowChanged, this,
-            &ComponentBrowserDialog::on_category_changed);
+    connect(category_list_, &QListWidget::currentRowChanged, this, &ComponentBrowserDialog::on_category_changed);
     sl->addWidget(category_list_);
 
     scroll_ = new QScrollArea(split);
@@ -164,9 +164,7 @@ void ComponentBrowserDialog::rebuild_cards() {
             emit component_chosen(id);
             accept();
         });
-        connect(card, &ComponentCard::selected_changed, this, [this](const QString& id) {
-            selected_id_ = id;
-        });
+        connect(card, &ComponentCard::selected_changed, this, [this](const QString& id) { selected_id_ = id; });
         grid_layout_->addWidget(card, row, col);
         if (++col >= kCardsPerRow) {
             col = 0;
@@ -208,8 +206,10 @@ void ComponentBrowserDialog::changeEvent(QEvent* event) {
 
 void ComponentBrowserDialog::retranslateUi() {
     setWindowTitle(tr("Component Browser"));
-    if (title_label_) title_label_->setText(tr("COMPONENT BROWSER"));
-    if (search_)      search_->setPlaceholderText(tr("Search components…"));
+    if (title_label_)
+        title_label_->setText(tr("COMPONENT BROWSER"));
+    if (search_)
+        search_->setPlaceholderText(tr("Search components…"));
     // Row 0 is the "All" sentinel — only its display text is translatable.
     // Category-id rows carry data values (their UserRole id) and are left as-is.
     if (category_list_ && category_list_->count() > 0)

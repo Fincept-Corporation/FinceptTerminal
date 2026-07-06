@@ -38,8 +38,8 @@ class MaxPainChart : public QChartView {
 
     QChart* chart_ = nullptr;
     QBarSeries* series_ = nullptr;
-    QBarSet* min_set_ = nullptr;        // single-bar amber marker
-    QBarSet* others_set_ = nullptr;     // dim grey for non-min strikes
+    QBarSet* min_set_ = nullptr;    // single-bar amber marker
+    QBarSet* others_set_ = nullptr; // dim grey for non-min strikes
     QBarCategoryAxis* axis_x_ = nullptr;
     QValueAxis* axis_y_ = nullptr;
     int strike_window_ = 10;

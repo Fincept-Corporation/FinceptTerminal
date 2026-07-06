@@ -36,7 +36,7 @@ struct VesselData {
 struct TradeRoute {
     QString name;
     QString value;
-    QString status;  // active, delayed, critical (left empty when not derivable)
+    QString status; // active, delayed, critical (left empty when not derivable)
     int vessels = 0;
     double start_lat = 0, start_lng = 0;
     double end_lat = 0, end_lng = 0;
@@ -60,9 +60,9 @@ inline QColor route_status_color(const QString& status) {
 
 struct VesselsPage {
     QVector<VesselData> vessels;
-    int total_count = 0;       // server-reported total ("vessel_count" / "found_count")
-    int found_count = 0;       // multi-vessel only
-    QStringList not_found;     // multi-vessel only — IMOs missing from DB
+    int total_count = 0;   // server-reported total ("vessel_count" / "found_count")
+    int found_count = 0;   // multi-vessel only
+    QStringList not_found; // multi-vessel only — IMOs missing from DB
     double credits_used = 0.0;
     int remaining_credits = -1; // -1 = unknown / not reported
 };
@@ -83,7 +83,7 @@ struct AreaSearchParams {
     double min_lng = 0;
     double max_lng = 0;
     int days_ago = 0;
-    int limit = 0;  // server-side result cap; 0 = no limit (omitted from request)
+    int limit = 0; // server-side result cap; 0 = no limit (omitted from request)
 };
 
 } // namespace fincept::services::maritime

@@ -40,8 +40,7 @@ class SolanaRpcClient : public QObject {
     SolanaRpcClient& operator=(const SolanaRpcClient&) = delete;
 
     using BalanceCallback = std::function<void(Result<quint64>)>;
-    using TokenBalancesCallback =
-        std::function<void(Result<std::vector<SplTokenBalance>>)>;
+    using TokenBalancesCallback = std::function<void(Result<std::vector<SplTokenBalance>>)>;
 
     /// `getLatestBlockhash` result. `last_valid_block_height` is the slot at
     /// which a transaction signed against `blockhash` becomes invalid.
@@ -55,23 +54,21 @@ class SolanaRpcClient : public QObject {
     struct SignatureStatus {
         QString signature;
         bool found = false;
-        QString confirmation_status;  ///< "processed" | "confirmed" | "finalized"
-        QString err;                  ///< empty if no error
+        QString confirmation_status; ///< "processed" | "confirmed" | "finalized"
+        QString err;                 ///< empty if no error
         quint64 slot = 0;
     };
-    using SignatureStatusesCallback =
-        std::function<void(Result<std::vector<SignatureStatus>>)>;
+    using SignatureStatusesCallback = std::function<void(Result<std::vector<SignatureStatus>>)>;
 
     /// One row of `getSignaturesForAddress`.
     struct SignatureRow {
         QString signature;
         quint64 slot = 0;
-        qint64 block_time = 0;        ///< unix seconds, 0 if unknown
-        QString err;                  ///< empty if confirmed
+        qint64 block_time = 0; ///< unix seconds, 0 if unknown
+        QString err;           ///< empty if confirmed
         QString memo;
     };
-    using SignaturesForAddressCallback =
-        std::function<void(Result<std::vector<SignatureRow>>)>;
+    using SignaturesForAddressCallback = std::function<void(Result<std::vector<SignatureRow>>)>;
 
     /// Result of `simulateTransaction`. `err` is the JSON-RPC `err` field
     /// stringified — empty if simulation succeeded; non-empty (e.g.
@@ -86,9 +83,9 @@ class SolanaRpcClient : public QObject {
     /// SOL/wSOL/$FNCPT change hands) is a Phase 2.5 polish — this gate
     /// catches the structural-error class of attacks.
     struct SimulationResult {
-        bool ok = false;          ///< true iff err is empty
-        QString err;              ///< stringified JSON-RPC err; empty on success
-        QStringList logs;         ///< program log output, for diagnostics
+        bool ok = false;  ///< true iff err is empty
+        QString err;      ///< stringified JSON-RPC err; empty on success
+        QStringList logs; ///< program log output, for diagnostics
         quint64 units_consumed = 0;
     };
     using SimulateTransactionCallback = std::function<void(Result<SimulationResult>)>;
@@ -97,16 +94,13 @@ class SolanaRpcClient : public QObject {
     void get_sol_balance(const QString& pubkey_b58, BalanceCallback callback);
 
     /// `getTokenAccountsByOwner` filtered by mint, parsed for amount + decimals.
-    void get_token_balance(const QString& owner_b58,
-                           const QString& mint_b58,
-                           TokenBalancesCallback callback);
+    void get_token_balance(const QString& owner_b58, const QString& mint_b58, TokenBalancesCallback callback);
 
     /// `getTokenAccountsByOwner` with no mint filter — returns every SPL
     /// token account the wallet owns under the standard SPL Token Program
     /// (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA). One RPC call per
     /// wallet; cheap. Used by the multi-token holdings path (Phase 2 §2A.5).
-    void get_all_token_balances(const QString& owner_b58,
-                                TokenBalancesCallback callback);
+    void get_all_token_balances(const QString& owner_b58, TokenBalancesCallback callback);
 
     /// `getLatestBlockhash` (commitment = `confirmed`).
     /// Used by transaction-building paths to stamp a fresh recent blockhash
@@ -116,18 +110,14 @@ class SolanaRpcClient : public QObject {
     /// `sendTransaction` with a base64-encoded signed transaction.
     /// Returns the transaction signature (base58). The caller is responsible
     /// for polling `get_signature_statuses` to confirm landing.
-    void send_transaction(const QString& tx_base64,
-                          std::function<void(Result<QString>)> callback);
+    void send_transaction(const QString& tx_base64, std::function<void(Result<QString>)> callback);
 
     /// `getSignatureStatuses` — batched. Order of `out` matches `signatures`.
-    void get_signature_statuses(const QStringList& signatures,
-                                SignatureStatusesCallback callback);
+    void get_signature_statuses(const QStringList& signatures, SignatureStatusesCallback callback);
 
     /// `getSignaturesForAddress` — paged. `before` is optional (empty = newest).
     /// `limit` is clamped to [1, 1000].
-    void get_signatures_for_address(const QString& address_b58,
-                                    int limit,
-                                    const QString& before_signature,
+    void get_signatures_for_address(const QString& address_b58, int limit, const QString& before_signature,
                                     SignaturesForAddressCallback callback);
 
     /// `simulateTransaction` — runs the unsigned transaction against the
@@ -144,8 +134,7 @@ class SolanaRpcClient : public QObject {
     ///     **freshness gate** (Phase 2 §2) immediately before `sign_and_send`,
     ///     so a stale tx that has been sitting in the confirm dialog is
     ///     caught before the wallet pops.
-    void simulate_transaction(const QString& tx_base64,
-                              SimulateTransactionCallback callback,
+    void simulate_transaction(const QString& tx_base64, SimulateTransactionCallback callback,
                               bool replace_recent_blockhash = true);
 
     /// Refresh the resolved endpoint from KeyConfigManager. Cheap; safe to call.
@@ -160,9 +149,7 @@ class SolanaRpcClient : public QObject {
 
   private:
     QString resolve_endpoint() const;
-    void post_rpc(const QString& method,
-                  const QJsonObject& params,
-                  std::function<void(Result<QJsonObject>)> callback);
+    void post_rpc(const QString& method, const QJsonObject& params, std::function<void(Result<QJsonObject>)> callback);
 
     QNetworkAccessManager* nam_ = nullptr;
     QString endpoint_;

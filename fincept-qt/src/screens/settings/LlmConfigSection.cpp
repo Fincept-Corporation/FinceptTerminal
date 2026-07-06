@@ -8,9 +8,9 @@
 //   - LlmConfigSection_Profiles.cpp  — profile panel + CRUD handlers
 #include "screens/settings/LlmConfigSection.h"
 
+#include "core/logging/Logger.h"
 #include "services/llm/LlmService.h"
 #include "services/llm/ProviderCatalog.h"
-#include "core/logging/Logger.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -19,8 +19,8 @@
 
 #include <QFormLayout>
 #include <QFrame>
-#include <QHash>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QScrollArea>
@@ -34,7 +34,6 @@
 namespace fincept::screens {
 
 [[maybe_unused]] static constexpr const char* TAG = "LlmConfigSection";
-
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = fincept::ai_chat::ProviderCatalog::known_providers();
 
@@ -119,7 +118,6 @@ void LlmConfigSection::build_ui() {
     root->addWidget(tab_widget_, 1);
 }
 
-
 void LlmConfigSection::show_status(const QString& msg, bool error) {
     status_lbl_->setText(msg);
     status_lbl_->setStyleSheet(error ? "color:" + QString(ui::colors::NEGATIVE()) + ";"
@@ -143,72 +141,112 @@ void LlmConfigSection::changeEvent(QEvent* event) {
 
 void LlmConfigSection::retranslateUi() {
     // Title bar + tabs.
-    if (title_lbl_) title_lbl_->setText(tr("LLM CONFIGURATION"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("LLM CONFIGURATION"));
     if (tab_widget_) {
         tab_widget_->setTabText(0, tr("PROVIDERS"));
         tab_widget_->setTabText(1, tr("PROFILES"));
     }
 
     // ── Providers tab ─────────────────────────────────────────────────────────
-    if (provider_list_title_) provider_list_title_->setText(tr("Providers"));
-    if (add_btn_)             add_btn_->setText(tr("+ Add"));
-    if (delete_btn_)          delete_btn_->setText(tr("Remove"));
+    if (provider_list_title_)
+        provider_list_title_->setText(tr("Providers"));
+    if (add_btn_)
+        add_btn_->setText(tr("+ Add"));
+    if (delete_btn_)
+        delete_btn_->setText(tr("Remove"));
 
-    if (form_title_)          form_title_->setText(tr("Provider Configuration"));
-    if (provider_field_lbl_)  provider_field_lbl_->setText(tr("Provider"));
-    if (api_key_field_lbl_)   api_key_field_lbl_->setText(tr("API Key"));
-    if (model_field_lbl_)     model_field_lbl_->setText(tr("Model"));
-    if (base_url_field_lbl_)  base_url_field_lbl_->setText(tr("Base URL"));
+    if (form_title_)
+        form_title_->setText(tr("Provider Configuration"));
+    if (provider_field_lbl_)
+        provider_field_lbl_->setText(tr("Provider"));
+    if (api_key_field_lbl_)
+        api_key_field_lbl_->setText(tr("API Key"));
+    if (model_field_lbl_)
+        model_field_lbl_->setText(tr("Model"));
+    if (base_url_field_lbl_)
+        base_url_field_lbl_->setText(tr("Base URL"));
 
-    if (provider_edit_)       provider_edit_->setPlaceholderText(tr("e.g. openai"));
+    if (provider_edit_)
+        provider_edit_->setPlaceholderText(tr("e.g. openai"));
     if (model_combo_ && model_combo_->lineEdit())
         model_combo_->lineEdit()->setPlaceholderText(tr("Select or type model..."));
-    if (base_url_edit_)       base_url_edit_->setPlaceholderText(tr("Optional — leave empty for default"));
+    if (base_url_edit_)
+        base_url_edit_->setPlaceholderText(tr("Optional — leave empty for default"));
 
-    if (fetch_btn_) fetch_btn_->setText(tr("Fetch"));
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("Fetch"));
     if (tools_check_) {
         tools_check_->setText(tr("Enable MCP Tools (navigation, market data, portfolio, etc.)"));
-        tools_check_->setToolTip(tr("When enabled, the AI can interact with the terminal: navigate screens, fetch market "
-                                    "data, manage watchlists, etc."));
+        tools_check_->setToolTip(
+            tr("When enabled, the AI can interact with the terminal: navigate screens, fetch market "
+               "data, manage watchlists, etc."));
     }
-    if (save_btn_) save_btn_->setText(tr("Save & Set Active"));
-    if (test_btn_) test_btn_->setText(tr("Test Connection"));
+    if (save_btn_)
+        save_btn_->setText(tr("Save & Set Active"));
+    if (test_btn_)
+        test_btn_->setText(tr("Test Connection"));
 
     // Global settings panel.
-    if (global_title_)      global_title_->setText(tr("GLOBAL SETTINGS"));
-    if (temp_lbl_)          temp_lbl_->setText(tr("Temperature"));
-    if (tokens_lbl_)        tokens_lbl_->setText(tr("Max Tokens"));
+    if (global_title_)
+        global_title_->setText(tr("GLOBAL SETTINGS"));
+    if (temp_lbl_)
+        temp_lbl_->setText(tr("Temperature"));
+    if (tokens_lbl_)
+        tokens_lbl_->setText(tr("Max Tokens"));
     if (tool_rounds_lbl_) {
         tool_rounds_lbl_->setText(tr("Max Tool Rounds"));
-        tool_rounds_lbl_->setToolTip(tr("Ceiling on tool-call rounds per chat turn. Default 40.\n"
-                                        "Range 1-200. Raise for long workflows (e.g. populating multi-section reports)."));
+        tool_rounds_lbl_->setToolTip(
+            tr("Ceiling on tool-call rounds per chat turn. Default 40.\n"
+               "Range 1-200. Raise for long workflows (e.g. populating multi-section reports)."));
     }
-    if (system_prompt_lbl_) system_prompt_lbl_->setText(tr("System Prompt"));
-    if (system_prompt_)     system_prompt_->setPlaceholderText(tr("Optional system prompt for the LLM..."));
-    if (save_global_btn_)   save_global_btn_->setText(tr("Save Global Settings"));
+    if (system_prompt_lbl_)
+        system_prompt_lbl_->setText(tr("System Prompt"));
+    if (system_prompt_)
+        system_prompt_->setPlaceholderText(tr("Optional system prompt for the LLM..."));
+    if (save_global_btn_)
+        save_global_btn_->setText(tr("Save Global Settings"));
 
     // ── Profiles tab ──────────────────────────────────────────────────────────
-    if (profile_list_title_) profile_list_title_->setText(tr("PROFILES"));
-    if (profile_list_hint_)  profile_list_hint_->setText(tr("A profile = named LLM config you can assign to any agent or team."));
-    if (profile_add_btn_)    profile_add_btn_->setText(tr("+ New"));
-    if (profile_delete_btn_) profile_delete_btn_->setText(tr("Delete"));
+    if (profile_list_title_)
+        profile_list_title_->setText(tr("PROFILES"));
+    if (profile_list_hint_)
+        profile_list_hint_->setText(tr("A profile = named LLM config you can assign to any agent or team."));
+    if (profile_add_btn_)
+        profile_add_btn_->setText(tr("+ New"));
+    if (profile_delete_btn_)
+        profile_delete_btn_->setText(tr("Delete"));
 
-    if (profile_name_field_lbl_)     profile_name_field_lbl_->setText(tr("PROFILE NAME"));
-    if (profile_provider_field_lbl_) profile_provider_field_lbl_->setText(tr("PROVIDER"));
-    if (profile_model_field_lbl_)    profile_model_field_lbl_->setText(tr("MODEL"));
-    if (profile_api_key_field_lbl_)  profile_api_key_field_lbl_->setText(tr("API KEY"));
-    if (profile_base_url_field_lbl_) profile_base_url_field_lbl_->setText(tr("BASE URL (custom endpoint)"));
-    if (profile_temp_field_lbl_)     profile_temp_field_lbl_->setText(tr("TEMPERATURE"));
-    if (profile_tokens_field_lbl_)   profile_tokens_field_lbl_->setText(tr("MAX TOKENS"));
-    if (profile_prompt_field_lbl_)   profile_prompt_field_lbl_->setText(tr("SYSTEM PROMPT OVERRIDE (optional)"));
+    if (profile_name_field_lbl_)
+        profile_name_field_lbl_->setText(tr("PROFILE NAME"));
+    if (profile_provider_field_lbl_)
+        profile_provider_field_lbl_->setText(tr("PROVIDER"));
+    if (profile_model_field_lbl_)
+        profile_model_field_lbl_->setText(tr("MODEL"));
+    if (profile_api_key_field_lbl_)
+        profile_api_key_field_lbl_->setText(tr("API KEY"));
+    if (profile_base_url_field_lbl_)
+        profile_base_url_field_lbl_->setText(tr("BASE URL (custom endpoint)"));
+    if (profile_temp_field_lbl_)
+        profile_temp_field_lbl_->setText(tr("TEMPERATURE"));
+    if (profile_tokens_field_lbl_)
+        profile_tokens_field_lbl_->setText(tr("MAX TOKENS"));
+    if (profile_prompt_field_lbl_)
+        profile_prompt_field_lbl_->setText(tr("SYSTEM PROMPT OVERRIDE (optional)"));
 
-    if (profile_name_edit_)     profile_name_edit_->setPlaceholderText(tr("e.g. Fast Groq, Careful Claude, Coding minimax"));
-    if (profile_api_key_edit_)  profile_api_key_edit_->setPlaceholderText(tr("Leave blank to inherit from provider"));
-    if (profile_base_url_edit_) profile_base_url_edit_->setPlaceholderText(tr("Leave blank to use provider default"));
-    if (profile_prompt_edit_)   profile_prompt_edit_->setPlaceholderText(tr("Leave blank to use global system prompt"));
+    if (profile_name_edit_)
+        profile_name_edit_->setPlaceholderText(tr("e.g. Fast Groq, Careful Claude, Coding minimax"));
+    if (profile_api_key_edit_)
+        profile_api_key_edit_->setPlaceholderText(tr("Leave blank to inherit from provider"));
+    if (profile_base_url_edit_)
+        profile_base_url_edit_->setPlaceholderText(tr("Leave blank to use provider default"));
+    if (profile_prompt_edit_)
+        profile_prompt_edit_->setPlaceholderText(tr("Leave blank to use global system prompt"));
 
-    if (profile_save_btn_)    profile_save_btn_->setText(tr("SAVE PROFILE"));
-    if (profile_default_btn_) profile_default_btn_->setText(tr("SET AS DEFAULT"));
+    if (profile_save_btn_)
+        profile_save_btn_->setText(tr("SAVE PROFILE"));
+    if (profile_default_btn_)
+        profile_default_btn_->setText(tr("SET AS DEFAULT"));
 }
 
 } // namespace fincept::screens

@@ -75,8 +75,8 @@ static QString rev_product(const QString& exchange_or_seg, const QString& produc
     if (product == "I")
         return "Intraday";
     const QString s = exchange_or_seg.toUpper();
-    const bool is_deriv = s == "NSE_FO" || s == "BSE_FO" || s == "MCX_FO" || s == "NSE_CD" ||
-                          s == "NFO" || s == "BFO" || s == "MCX" || s == "CDS";
+    const bool is_deriv = s == "NSE_FO" || s == "BSE_FO" || s == "MCX_FO" || s == "NSE_CD" || s == "NFO" ||
+                          s == "BFO" || s == "MCX" || s == "CDS";
     return is_deriv ? "NRML" : "Delivery";
 }
 
@@ -536,7 +536,8 @@ ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredent
             candle.low = c[3].toDouble();
             candle.close = c[4].toDouble();
             candle.volume = c[5].toDouble();
-            if (c.size() > 6) candle.oi = c[6].toDouble();
+            if (c.size() > 6)
+                candle.oi = c[6].toDouble();
             all_candles.append(candle);
         }
 
@@ -555,9 +556,8 @@ ApiResponse<QVector<BrokerCandle>> UpstoxBroker::get_history(const BrokerCredent
 // GET /v2/market-quote/quotes?instrument_key=NSE_EQ|INE002A01018,BSE_EQ|...
 // Full quote endpoint returns last_price, ohlc, volume, net_change, depth.
 // Batches in chunks of 500 (Upstox limit).
-ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_multi_quotes(
-    const BrokerCredentials& creds,
-    const QVector<QPair<QString, QString>>& symbols) {
+ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_multi_quotes(const BrokerCredentials& creds,
+                                                                 const QVector<QPair<QString, QString>>& symbols) {
 
     QVector<BrokerQuote> all_quotes;
     constexpr int kBatchSize = 500;
@@ -630,9 +630,8 @@ ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_multi_quotes(
 // ── Market Depth ─────────────────────────────────────────────────────────────
 // GET /v2/market-quote/quotes?instrument_key=... — parse the depth field
 // Returns 5 levels of bid/ask with price, quantity, orders.
-ApiResponse<MarketDepth> UpstoxBroker::get_market_depth(
-    const BrokerCredentials& creds,
-    const QString& symbol, const QString& exchange) {
+ApiResponse<MarketDepth> UpstoxBroker::get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                                        const QString& exchange) {
 
     const QString exch = exchange.isEmpty() ? "NSE" : exchange;
     const QString ikey = instrument_key(symbol, exch, creds.broker_id);
@@ -705,8 +704,8 @@ ApiResponse<OrderMargin> UpstoxBroker::get_order_margins(const BrokerCredentials
 
     QJsonObject payload{{"instruments", QJsonArray{leg}}};
 
-    auto resp = BrokerHttp::instance().post_json("https://api.upstox.com/v2/charges/margin", payload,
-                                                 auth_headers(creds));
+    auto resp =
+        BrokerHttp::instance().post_json("https://api.upstox.com/v2/charges/margin", payload, auth_headers(creds));
     if (!resp.success)
         return {false, std::nullopt, checked_error(resp, "Network error"), ts};
     if (is_token_expired(resp))
@@ -731,8 +730,8 @@ ApiResponse<OrderMargin> UpstoxBroker::get_order_margins(const BrokerCredentials
         span += mo.value("span_margin").toDouble();
         exposure += mo.value("exposure_margin").toDouble();
     }
-    m.var_margin = span;       // SPAN (F&O); 0 for cash
-    m.elm = exposure;          // Exposure margin
+    m.var_margin = span; // SPAN (F&O); 0 for cash
+    m.elm = exposure;    // Exposure margin
     m.cash = m.total - span - exposure;
     if (m.cash < 0.0)
         m.cash = 0.0;

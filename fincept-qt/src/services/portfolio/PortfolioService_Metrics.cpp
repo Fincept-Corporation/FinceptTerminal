@@ -5,10 +5,9 @@
 //
 // Part of the partial-class split of PortfolioService.cpp.
 
-#include "services/portfolio/PortfolioService.h"
-
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/portfolio/PortfolioService.h"
 #include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -40,10 +39,10 @@ namespace {
 // considered maximally risky and saturates its sub-score at 1.0), then weighted.
 // Caps are expressed in the same units as the inputs (annualised % for vol,
 // weight % for concentration, % for drawdown, unitless for beta).
-constexpr double kVolCapPct = 40.0;          // 40% annualised vol → max vol risk
+constexpr double kVolCapPct = 40.0;           // 40% annualised vol → max vol risk
 constexpr double kConcentrationCapPct = 80.0; // top-3 weight 80% → max concentration risk
-constexpr double kDrawdownCapPct = 50.0;     // 50% max drawdown → max drawdown risk
-constexpr double kBetaCap = 2.0;             // |beta| 2.0 → max market-sensitivity risk
+constexpr double kDrawdownCapPct = 50.0;      // 50% max drawdown → max drawdown risk
+constexpr double kBetaCap = 2.0;              // |beta| 2.0 → max market-sensitivity risk
 
 // Sub-score weights when ALL four signals are available (time-series path).
 // They sum to 100.
@@ -161,13 +160,20 @@ print(json.dumps(matrix))
 
 QString PortfolioService::default_benchmark_for_currency(const QString& currency) {
     const QString c = currency.trimmed().toUpper();
-    if (c == "CAD") return QStringLiteral("^GSPTSE");
-    if (c == "GBP") return QStringLiteral("^FTSE");
-    if (c == "EUR") return QStringLiteral("^STOXX50E");
-    if (c == "AUD") return QStringLiteral("^AXJO");
-    if (c == "INR") return QStringLiteral("^NSEI");
-    if (c == "JPY") return QStringLiteral("^N225");
-    if (c == "HKD") return QStringLiteral("^HSI");
+    if (c == "CAD")
+        return QStringLiteral("^GSPTSE");
+    if (c == "GBP")
+        return QStringLiteral("^FTSE");
+    if (c == "EUR")
+        return QStringLiteral("^STOXX50E");
+    if (c == "AUD")
+        return QStringLiteral("^AXJO");
+    if (c == "INR")
+        return QStringLiteral("^NSEI");
+    if (c == "JPY")
+        return QStringLiteral("^N225");
+    if (c == "HKD")
+        return QStringLiteral("^HSI");
     return QStringLiteral("SPY"); // USD and unknown
 }
 
@@ -208,8 +214,7 @@ except Exception as e:
         QStringList dates;
         QVector<double> closes;
         if (!result.success || result.output.trimmed().isEmpty()) {
-            LOG_WARN("PortfolioSvc",
-                     QString("Benchmark %1 fetch failed: %2").arg(sym, result.error.left(200)));
+            LOG_WARN("PortfolioSvc", QString("Benchmark %1 fetch failed: %2").arg(sym, result.error.left(200)));
         } else {
             QJsonParseError err;
             const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
@@ -289,7 +294,8 @@ else:
         print(json.dumps({"rate": rate if rate is not None else DEFAULT_RATE}))
     except Exception as e:
         print(json.dumps({"rate": DEFAULT_RATE, "error": str(e)}))
-)python").arg(QString::number(kDefaultRiskFreeRate));
+)python")
+                             .arg(QString::number(kDefaultRiskFreeRate));
 
     QPointer<PortfolioService> self = this;
     python::PythonRunner::instance().run_code(code, [self, now_secs](python::PythonResult result) {
@@ -303,7 +309,8 @@ else:
                 rate = doc.object()["rate"].toDouble(kDefaultRiskFreeRate);
                 const QString note = doc.object().value("error").toString();
                 if (!note.isEmpty())
-                    LOG_WARN("PortfolioSvc", "Risk-free rate: " + note + " (using " + QString::number(rate * 100, 'f', 2) + "%)");
+                    LOG_WARN("PortfolioSvc",
+                             "Risk-free rate: " + note + " (using " + QString::number(rate * 100, 'f', 2) + "%)");
             }
         }
         // Persist to 24h cache
@@ -352,9 +359,13 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
             backfill_attempted_.insert(summary.portfolio.id);
             QPointer<PortfolioService> self = this;
             const QString pid = summary.portfolio.id;
-            QMetaObject::invokeMethod(this, [self, pid]() {
-                if (self) self->backfill_history(pid, "1y");
-            }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                this,
+                [self, pid]() {
+                    if (self)
+                        self->backfill_history(pid, "1y");
+                },
+                Qt::QueuedConnection);
         }
         // Fallback: derive volatility from cross-sectional day changes only
         double sum = 0, sum_sq = 0;
@@ -511,8 +522,7 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
                 // window; annualise by *252 and convert % → decimal.
                 const double port_ann = port_mean / 100.0 * 252.0;
                 const double mkt_ann = spy_mean / 100.0 * 252.0;
-                const double alpha_dec =
-                    port_ann - (rf_rate_ + beta_val * (mkt_ann - rf_rate_));
+                const double alpha_dec = port_ann - (rf_rate_ + beta_val * (mkt_ann - rf_rate_));
                 metrics.alpha = alpha_dec * 100.0; // store as %
             }
         }
@@ -551,7 +561,6 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
 }
 
 // ── Import / Export ──────────────────────────────────────────────────────────
-
 
 void PortfolioService::load_snapshots(const QString& portfolio_id, int days) {
     auto r = PortfolioRepository::instance().get_snapshots(portfolio_id, days);
@@ -598,9 +607,7 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
     const QString tmp_dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
     QDir().mkpath(tmp_dir);
     const QString tmp_path = QDir(tmp_dir).filePath(
-        QString("fincept_replay_%1_%2.json")
-            .arg(portfolio_id.left(16))
-            .arg(QDateTime::currentMSecsSinceEpoch()));
+        QString("fincept_replay_%1_%2.json").arg(portfolio_id.left(16)).arg(QDateTime::currentMSecsSinceEpoch()));
 
     QFile f(tmp_path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -615,64 +622,63 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
     args << "portfolio_nav_history_replay" << tmp_path;
 
     QPointer<PortfolioService> self = this;
-    python::PythonRunner::instance().run("yfinance_data.py", args,
-                                         [self, portfolio_id, tmp_path](python::PythonResult result) {
-        // Always remove the temp file when we're done with it, regardless of
-        // success — leaks add up if a user re-imports often.
-        QFile::remove(tmp_path);
+    python::PythonRunner::instance().run(
+        "yfinance_data.py", args, [self, portfolio_id, tmp_path](python::PythonResult result) {
+            // Always remove the temp file when we're done with it, regardless of
+            // success — leaks add up if a user re-imports often.
+            QFile::remove(tmp_path);
 
-        if (!self)
-            return;
-        if (!result.success || result.output.trimmed().isEmpty()) {
-            LOG_WARN("PortfolioSvc",
-                     QString("backfill_history failed for %1: %2").arg(portfolio_id, result.error.left(200)));
-            emit self->history_backfilled(portfolio_id, 0);
-            return;
-        }
-        QJsonParseError err;
-        const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
-        if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-            LOG_WARN("PortfolioSvc", "backfill_history: bad JSON: " + err.errorString());
-            emit self->history_backfilled(portfolio_id, 0);
-            return;
-        }
-        const auto obj = doc.object();
-        if (obj.contains("error")) {
-            LOG_WARN("PortfolioSvc", "backfill_history: " + obj["error"].toString());
-            emit self->history_backfilled(portfolio_id, 0);
-            return;
-        }
-        const auto dates = obj["dates"].toArray();
-        const auto navs = obj["navs"].toArray();
-        const auto costs = obj["costs"].toArray();
-        if (dates.isEmpty() || dates.size() != navs.size()) {
-            emit self->history_backfilled(portfolio_id, 0);
-            return;
-        }
-        const bool have_costs = (costs.size() == dates.size());
+            if (!self)
+                return;
+            if (!result.success || result.output.trimmed().isEmpty()) {
+                LOG_WARN("PortfolioSvc",
+                         QString("backfill_history failed for %1: %2").arg(portfolio_id, result.error.left(200)));
+                emit self->history_backfilled(portfolio_id, 0);
+                return;
+            }
+            QJsonParseError err;
+            const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
+            if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+                LOG_WARN("PortfolioSvc", "backfill_history: bad JSON: " + err.errorString());
+                emit self->history_backfilled(portfolio_id, 0);
+                return;
+            }
+            const auto obj = doc.object();
+            if (obj.contains("error")) {
+                LOG_WARN("PortfolioSvc", "backfill_history: " + obj["error"].toString());
+                emit self->history_backfilled(portfolio_id, 0);
+                return;
+            }
+            const auto dates = obj["dates"].toArray();
+            const auto navs = obj["navs"].toArray();
+            const auto costs = obj["costs"].toArray();
+            if (dates.isEmpty() || dates.size() != navs.size()) {
+                emit self->history_backfilled(portfolio_id, 0);
+                return;
+            }
+            const bool have_costs = (costs.size() == dates.size());
 
-        // Upsert each row. INSERT OR REPLACE keyed by (portfolio_id, snapshot_date)
-        // so re-running backfill corrects existing rows in place. Per-day cost
-        // basis comes from the replay (BUY adds, SELL reduces by WAC); falls
-        // back to NAV if the Python side didn't return a costs array.
-        auto& repo = PortfolioRepository::instance();
-        int written = 0;
-        for (int i = 0; i < dates.size(); ++i) {
-            const QString d = dates[i].toString();
-            const double nav = navs[i].toDouble();
-            const double cost_basis = have_costs ? costs[i].toDouble() : 0.0;
-            const double pnl = nav - cost_basis;
-            const double pnl_pct = cost_basis > 0 ? (pnl / cost_basis) * 100.0 : 0.0;
-            auto wr = repo.save_snapshot(portfolio_id, nav, cost_basis, pnl, pnl_pct, d);
-            if (wr.is_ok())
-                ++written;
-        }
+            // Upsert each row. INSERT OR REPLACE keyed by (portfolio_id, snapshot_date)
+            // so re-running backfill corrects existing rows in place. Per-day cost
+            // basis comes from the replay (BUY adds, SELL reduces by WAC); falls
+            // back to NAV if the Python side didn't return a costs array.
+            auto& repo = PortfolioRepository::instance();
+            int written = 0;
+            for (int i = 0; i < dates.size(); ++i) {
+                const QString d = dates[i].toString();
+                const double nav = navs[i].toDouble();
+                const double cost_basis = have_costs ? costs[i].toDouble() : 0.0;
+                const double pnl = nav - cost_basis;
+                const double pnl_pct = cost_basis > 0 ? (pnl / cost_basis) * 100.0 : 0.0;
+                auto wr = repo.save_snapshot(portfolio_id, nav, cost_basis, pnl, pnl_pct, d);
+                if (wr.is_ok())
+                    ++written;
+            }
 
-        LOG_INFO("PortfolioSvc",
-                 QString("Replayed %1 historical snapshots for %2").arg(written).arg(portfolio_id));
-        self->invalidate_cache(portfolio_id);
-        emit self->history_backfilled(portfolio_id, written);
-    });
+            LOG_INFO("PortfolioSvc", QString("Replayed %1 historical snapshots for %2").arg(written).arg(portfolio_id));
+            self->invalidate_cache(portfolio_id);
+            emit self->history_backfilled(portfolio_id, written);
+        });
 }
 
 // ── Cache control ────────────────────────────────────────────────────────────

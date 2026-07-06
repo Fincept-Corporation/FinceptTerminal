@@ -36,15 +36,15 @@ class GeneralSection : public QWidget {
     QComboBox* currency_combo_ = nullptr;
 
     // Section titles + row labels/descriptions (cached for retranslateUi).
-    QLabel* window_title_   = nullptr;
-    QLabel* lang_title_     = nullptr;
+    QLabel* window_title_ = nullptr;
+    QLabel* lang_title_ = nullptr;
     QLabel* currency_title_ = nullptr;
     QLabel* on_close_label_ = nullptr;
-    QLabel* on_close_desc_  = nullptr;
+    QLabel* on_close_desc_ = nullptr;
     QLabel* language_label_ = nullptr;
-    QLabel* language_desc_  = nullptr;
+    QLabel* language_desc_ = nullptr;
     QLabel* currency_label_ = nullptr;
-    QLabel* currency_desc_  = nullptr;
+    QLabel* currency_desc_ = nullptr;
 };
 
 } // namespace fincept::screens

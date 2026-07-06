@@ -53,7 +53,7 @@ class TradeVizScreen : public QWidget, public IStatefulScreen {
     QComboBox* year_combo_ = nullptr;
 
     // Text-bearing widgets cached for retranslateUi.
-    QList<QLabel*> tab_labels_;   // Table / Settings / Export / Notes
+    QList<QLabel*> tab_labels_; // Table / Settings / Export / Notes
     QLabel* flow_title_ = nullptr;
     QLabel* browse_label_ = nullptr;
     QLabel* order_caption_ = nullptr;

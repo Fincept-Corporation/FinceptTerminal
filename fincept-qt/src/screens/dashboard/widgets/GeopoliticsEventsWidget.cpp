@@ -78,9 +78,8 @@ GeopoliticsEventsWidget::GeopoliticsEventsWidget(const QJsonObject& cfg, QWidget
     scroll_area_->setWidget(list_widget);
     vl->addWidget(scroll_area_, 1);
 
-    connect(this, &BaseWidget::refresh_requested, this, []() {
-        datahub::DataHub::instance().request(QStringLiteral("geopolitics:events"), /*force=*/true);
-    });
+    connect(this, &BaseWidget::refresh_requested, this,
+            []() { datahub::DataHub::instance().request(QStringLiteral("geopolitics:events"), /*force=*/true); });
 
     set_configurable(true);
     apply_styles();
@@ -103,8 +102,7 @@ void GeopoliticsEventsWidget::apply_config(const QJsonObject& cfg) {
 void GeopoliticsEventsWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
-    hub.subscribe(this, QStringLiteral("geopolitics:events"),
-                  [this](const QVariant& v) { populate(v); });
+    hub.subscribe(this, QStringLiteral("geopolitics:events"), [this](const QVariant& v) { populate(v); });
 
     // Seed from cache so the widget never shows blank while waiting.
     const QVariant cached = hub.peek(QStringLiteral("geopolitics:events"));
@@ -148,8 +146,8 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         clear_rows();
         status_label_ = new QLabel(tr("Awaiting events…"));
         status_label_->setAlignment(Qt::AlignCenter);
-        status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:16px;background:transparent;")
-                                         .arg(ui::colors::TEXT_TERTIARY()));
+        status_label_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         list_layout_->addWidget(status_label_);
         list_layout_->addStretch();
         return;
@@ -161,8 +159,8 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
     if (page.events.isEmpty()) {
         status_label_ = new QLabel(tr("No events available"));
         status_label_->setAlignment(Qt::AlignCenter);
-        status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:16px;background:transparent;")
-                                         .arg(ui::colors::TEXT_TERTIARY()));
+        status_label_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         list_layout_->addWidget(status_label_);
         list_layout_->addStretch();
         set_loading(false);
@@ -202,8 +200,7 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
         auto* cat_lbl = new QLabel(QStringLiteral("●"));
         cat_lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         cat_lbl->setToolTip(cat_label);
-        cat_lbl->setStyleSheet(
-            QString("color:%1;font-size:12px;background:transparent;").arg(cat_col.name()));
+        cat_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(cat_col.name()));
         rl->addWidget(cat_lbl, 1);
 
         // Title
@@ -212,14 +209,13 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
             display_title = display_title.left(58) + QStringLiteral("…");
         auto* title_lbl = new QLabel(display_title);
         title_lbl->setToolTip(title);
-        title_lbl->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;")
-                                     .arg(ui::colors::TEXT_PRIMARY()));
+        title_lbl->setStyleSheet(
+            QString("color:%1;font-size:10px;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(title_lbl, 5);
 
         // Location
         auto* loc_lbl = new QLabel(location);
-        loc_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                   .arg(ui::colors::CYAN()));
+        loc_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::CYAN()));
         rl->addWidget(loc_lbl, 2);
 
         // Source
@@ -228,8 +224,8 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
             src = src.left(8);
         auto* src_lbl = new QLabel(src.toUpper());
         src_lbl->setToolTip(ev.source);
-        src_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                   .arg(ui::colors::TEXT_SECONDARY()));
+        src_lbl->setStyleSheet(
+            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(src_lbl, 1);
 
         // Age
@@ -237,8 +233,8 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
             !ev.created_at.isEmpty() ? format_relative(ev.created_at) : format_relative(ev.extracted_date);
         auto* age_lbl = new QLabel(age);
         age_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        age_lbl->setStyleSheet(QString("color:%1;font-size:9px;background:transparent;")
-                                   .arg(ui::colors::TEXT_TERTIARY()));
+        age_lbl->setStyleSheet(
+            QString("color:%1;font-size:9px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
         rl->addWidget(age_lbl, 1);
 
         list_layout_->addWidget(row);
@@ -286,15 +282,14 @@ void GeopoliticsEventsWidget::apply_styles() {
         lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:bold;background:transparent;")
                                .arg(ui::colors::TEXT_TERTIARY()));
     header_sep_->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
-    scroll_area_->setStyleSheet(
-        QString("QScrollArea{border:none;background:transparent;}"
-                "QScrollBar:vertical{width:4px;background:transparent;}"
-                "QScrollBar::handle:vertical{background:%1;border-radius:2px;min-height:20px;}"
-                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-            .arg(ui::colors::BORDER_MED()));
+    scroll_area_->setStyleSheet(QString("QScrollArea{border:none;background:transparent;}"
+                                        "QScrollBar:vertical{width:4px;background:transparent;}"
+                                        "QScrollBar::handle:vertical{background:%1;border-radius:2px;min-height:20px;}"
+                                        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
+                                    .arg(ui::colors::BORDER_MED()));
     if (status_label_)
-        status_label_->setStyleSheet(QString("color:%1;font-size:10px;padding:16px;background:transparent;")
-                                         .arg(ui::colors::TEXT_TERTIARY()));
+        status_label_->setStyleSheet(
+            QString("color:%1;font-size:10px;padding:16px;background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
 }
 
 void GeopoliticsEventsWidget::retranslateUi() {

@@ -12,10 +12,13 @@ namespace fincept::screens::devtools {
 
 namespace {
 QString format_age(qint64 ms_since_epoch) {
-    if (ms_since_epoch <= 0) return QStringLiteral("—");
+    if (ms_since_epoch <= 0)
+        return QStringLiteral("—");
     const qint64 age = QDateTime::currentMSecsSinceEpoch() - ms_since_epoch;
-    if (age < 1000) return QStringLiteral("%1 ms").arg(age);
-    if (age < 60000) return QStringLiteral("%1 s").arg(age / 1000);
+    if (age < 1000)
+        return QStringLiteral("%1 ms").arg(age);
+    if (age < 60000)
+        return QStringLiteral("%1 s").arg(age / 1000);
     return QStringLiteral("%1 m").arg(age / 60000);
 }
 } // namespace
@@ -83,14 +86,16 @@ void DataHubInspector::refresh() {
     // setItem / setText would trigger a viewport repaint, dominating cost.
     table_->setUpdatesEnabled(false);
     const bool prev_sort = table_->isSortingEnabled();
-    if (prev_sort) table_->setSortingEnabled(false);
+    if (prev_sort)
+        table_->setSortingEnabled(false);
 
     if (table_->rowCount() != n)
         table_->setRowCount(n);
 
     auto set_cell = [this](int row, int col, const QString& text) {
         if (auto* it = table_->item(row, col)) {
-            if (it->text() != text) it->setText(text);
+            if (it->text() != text)
+                it->setText(text);
         } else {
             table_->setItem(row, col, new QTableWidgetItem(text));
         }
@@ -104,13 +109,17 @@ void DataHubInspector::refresh() {
         set_cell(row, 3, format_age(s.last_publish_ms));
         set_cell(row, 4, format_age(s.last_refresh_request_ms));
         QString state_label;
-        if (s.push_only) state_label = tr("push");
-        else if (s.in_flight) state_label = tr("in-flight");
-        else state_label = tr("idle");
+        if (s.push_only)
+            state_label = tr("push");
+        else if (s.in_flight)
+            state_label = tr("in-flight");
+        else
+            state_label = tr("idle");
         set_cell(row, 5, state_label);
     }
 
-    if (prev_sort) table_->setSortingEnabled(true);
+    if (prev_sort)
+        table_->setSortingEnabled(true);
     table_->setUpdatesEnabled(true);
 }
 

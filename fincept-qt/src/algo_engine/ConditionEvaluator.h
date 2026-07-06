@@ -27,27 +27,21 @@ namespace fincept::algo {
 /// by N bars. `crosses_*` / `rising` / `falling` read the operand one extra bar
 /// back.
 class ConditionEvaluator {
-public:
-    static ConditionResult evaluate_single(
-        const fincept::services::algo::ConditionDef& condition,
-        const QVector<OhlcvCandle>& candles);
+  public:
+    static ConditionResult evaluate_single(const fincept::services::algo::ConditionDef& condition,
+                                           const QVector<OhlcvCandle>& candles);
 
-    static GroupEvalResult evaluate_group(
-        const QJsonArray& children,
-        const QString& logic,
-        const QVector<OhlcvCandle>& candles);
+    static GroupEvalResult evaluate_group(const QJsonArray& children, const QString& logic,
+                                          const QVector<OhlcvCandle>& candles);
 
-private:
+  private:
     static fincept::services::algo::ConditionDef parse_condition(const QJsonObject& obj);
     static bool is_group_node(const QJsonObject& node);
     static bool apply_comparison(double lhs, const QString& op, double rhs);
-    static bool apply_crossing(double curr, double prev,
-                               double target_curr, double target_prev,
-                               const QString& op);
+    static bool apply_crossing(double curr, double prev, double target_curr, double target_prev, const QString& op);
     /// Resolves an indicator operand `offset` bars back. Returns NaN and sets
     /// `*error` (when non-null) on failure / insufficient data.
-    static double operand_value(const QString& indicator, const QJsonObject& params,
-                                const QString& field, int offset,
+    static double operand_value(const QString& indicator, const QJsonObject& params, const QString& field, int offset,
                                 const QVector<OhlcvCandle>& candles, QString* error);
 };
 

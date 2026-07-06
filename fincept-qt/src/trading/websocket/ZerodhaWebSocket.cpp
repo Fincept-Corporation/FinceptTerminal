@@ -28,8 +28,16 @@ quint16 ZerodhaWebSocket::read_u16(const uchar* p) {
     return quint16((quint16(p[0]) << 8) | quint16(p[1]));
 }
 
-double ZerodhaWebSocket::paise_to_rupees(qint32 paise) {
-    return paise / 100.0;
+double ZerodhaWebSocket::price_from_wire(qint32 raw, quint32 instrument_token) {
+    // Divisor per pykiteconnect ticker.py: segment = token & 0xFF;
+    // CDS (3) prices are scaled 1e7, BCD (6) 1e4, all others are paise.
+    const quint32 segment = instrument_token & 0xFF;
+    double divisor = 100.0;
+    if (segment == 3) // CDS currency derivatives
+        divisor = 10000000.0;
+    else if (segment == 6) // BCD (BSE currency derivatives)
+        divisor = 10000.0;
+    return raw / divisor;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -258,8 +266,8 @@ void ZerodhaWebSocket::resubscribe_all() {
 
 ZerodhaTick ZerodhaWebSocket::parse_ltp_packet(const uchar* p) const {
     ZerodhaTick t;
-    t.instrument_token = read_u32(p);         // bytes 0-3
-    t.ltp = paise_to_rupees(read_i32(p + 4)); // bytes 4-7
+    t.instrument_token = read_u32(p);                             // bytes 0-3
+    t.ltp = price_from_wire(read_i32(p + 4), t.instrument_token); // bytes 4-7
     return t;
 }
 
@@ -278,16 +286,16 @@ ZerodhaTick ZerodhaWebSocket::parse_quote_packet(const uchar* p) const {
     // 40-43 close
     ZerodhaTick t;
     t.instrument_token = read_u32(p);
-    t.ltp = paise_to_rupees(read_i32(p + 4));
+    t.ltp = price_from_wire(read_i32(p + 4), t.instrument_token);
     t.last_quantity = read_i32(p + 8);
-    t.average_price = paise_to_rupees(read_i32(p + 12));
+    t.average_price = price_from_wire(read_i32(p + 12), t.instrument_token);
     t.volume = read_i32(p + 16);
     t.buy_quantity = read_i32(p + 20);
     t.sell_quantity = read_i32(p + 24);
-    t.open = paise_to_rupees(read_i32(p + 28));
-    t.high = paise_to_rupees(read_i32(p + 32));
-    t.low = paise_to_rupees(read_i32(p + 36));
-    t.close = paise_to_rupees(read_i32(p + 40));
+    t.open = price_from_wire(read_i32(p + 28), t.instrument_token);
+    t.high = price_from_wire(read_i32(p + 32), t.instrument_token);
+    t.low = price_from_wire(read_i32(p + 36), t.instrument_token);
+    t.close = price_from_wire(read_i32(p + 40), t.instrument_token);
     return t;
 }
 
@@ -316,13 +324,13 @@ ZerodhaTick ZerodhaWebSocket::parse_full_packet(const uchar* p) const {
     for (int i = 0; i < 5; ++i) {
         int base = 64 + i * 12;
         t.bids[i].quantity = read_i32(p + base);
-        t.bids[i].price = paise_to_rupees(read_i32(p + base + 4));
+        t.bids[i].price = price_from_wire(read_i32(p + base + 4), t.instrument_token);
         t.bids[i].orders = int(read_u16(p + base + 8));
     }
     for (int i = 0; i < 5; ++i) {
         int base = 64 + (5 + i) * 12;
         t.asks[i].quantity = read_i32(p + base);
-        t.asks[i].price = paise_to_rupees(read_i32(p + base + 4));
+        t.asks[i].price = price_from_wire(read_i32(p + base + 4), t.instrument_token);
         t.asks[i].orders = int(read_u16(p + base + 8));
     }
 

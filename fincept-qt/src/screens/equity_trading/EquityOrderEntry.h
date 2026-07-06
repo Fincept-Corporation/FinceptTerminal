@@ -96,9 +96,9 @@ class EquityOrderEntry : public QWidget {
     QLineEdit* tp_edit_ = nullptr;
     QPushButton* submit_btn_ = nullptr;
     QPushButton* broadcast_btn_ = nullptr;
-    QToolButton* brokers_btn_ = nullptr;  // inline multi-broker selector
-    QMenu* brokers_menu_ = nullptr;       // checkable account list (stays open)
-    QSet<QString> broadcast_ids_;         // checked account_ids; empty = focused only
+    QToolButton* brokers_btn_ = nullptr; // inline multi-broker selector
+    QMenu* brokers_menu_ = nullptr;      // checkable account list (stays open)
+    QSet<QString> broadcast_ids_;        // checked account_ids; empty = focused only
     QWidget* advanced_section_ = nullptr;
     QPushButton* advanced_toggle_ = nullptr;
 

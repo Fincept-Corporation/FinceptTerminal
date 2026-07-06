@@ -100,18 +100,30 @@ void NewsSidePanel::changeEvent(QEvent* event) {
 }
 
 void NewsSidePanel::retranslateUi() {
-    if (drawer_title_)      drawer_title_->setText(tr("INTELLIGENCE"));
-    if (top_stories_title_) top_stories_title_->setText(tr("TOP STORIES"));
-    if (categories_title_)  categories_title_->setText(tr("CATEGORIES"));
-    if (monitors_title_)    monitors_title_->setText(tr("KEYWORD MONITORS"));
-    if (deviations_title_)  deviations_title_->setText(tr("DEVIATIONS"));
-    if (entities_title_)    entities_title_->setText(tr("ENTITIES"));
-    if (locations_title_)   locations_title_->setText(tr("LOCATIONS"));
-    if (signals_title_)     signals_title_->setText(tr("SIGNALS"));
-    if (cii_title_)         cii_title_->setText(tr("INSTABILITY"));
-    if (predictions_title_) predictions_title_->setText(tr("PREDICTIONS"));
-    if (saved_title_)       saved_title_->setText(tr("BOOKMARKS"));
-    if (monitor_input_)     monitor_input_->setPlaceholderText(tr("label: kw1, kw2"));
+    if (drawer_title_)
+        drawer_title_->setText(tr("INTELLIGENCE"));
+    if (top_stories_title_)
+        top_stories_title_->setText(tr("TOP STORIES"));
+    if (categories_title_)
+        categories_title_->setText(tr("CATEGORIES"));
+    if (monitors_title_)
+        monitors_title_->setText(tr("KEYWORD MONITORS"));
+    if (deviations_title_)
+        deviations_title_->setText(tr("DEVIATIONS"));
+    if (entities_title_)
+        entities_title_->setText(tr("ENTITIES"));
+    if (locations_title_)
+        locations_title_->setText(tr("LOCATIONS"));
+    if (signals_title_)
+        signals_title_->setText(tr("SIGNALS"));
+    if (cii_title_)
+        cii_title_->setText(tr("INSTABILITY"));
+    if (predictions_title_)
+        predictions_title_->setText(tr("PREDICTIONS"));
+    if (saved_title_)
+        saved_title_->setText(tr("BOOKMARKS"));
+    if (monitor_input_)
+        monitor_input_->setPlaceholderText(tr("label: kw1, kw2"));
     // Per-item rows (categories, monitors, entities, etc.) are rebuilt from
     // live data on the next update — not re-applied here.
 }

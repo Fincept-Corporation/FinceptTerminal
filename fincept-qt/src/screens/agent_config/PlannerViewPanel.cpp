@@ -129,8 +129,9 @@ QWidget* PlannerViewPanel::build_templates_panel() {
     vl->addWidget(template_list_);
 
     custom_query_title_ = new QLabel(tr("CUSTOM PLAN QUERY"));
-    custom_query_title_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
-                                           .arg(ui::colors::TEXT_SECONDARY()));
+    custom_query_title_->setStyleSheet(
+        QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;padding-top:8px;")
+            .arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(custom_query_title_);
 
     custom_query_ = new QPlainTextEdit;
@@ -261,7 +262,8 @@ QWidget* PlannerViewPanel::build_plan_editor() {
         QString("QPushButton{background:%1;color:%2;border:none;padding:10px;"
                 "font-size:11px;font-weight:700;letter-spacing:1px;}QPushButton:hover{background:%1;}"
                 "QPushButton:disabled{background:%3;color:%4;}")
-            .arg(ui::colors::POSITIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
+            .arg(ui::colors::POSITIVE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_RAISED(),
+                 ui::colors::TEXT_TERTIARY()));
     vl->addWidget(execute_btn_);
     return p;
 }
@@ -298,7 +300,8 @@ QWidget* PlannerViewPanel::build_results_panel() {
         QString("QTextEdit{background:%1;color:%2;border:1px solid %3;padding:8px;font-size:12px;}"
                 "QScrollBar:vertical{background:%1;width:6px;}"
                 "QScrollBar::handle:vertical{background:%4;min-height:20px;}")
-            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                 ui::colors::BORDER_BRIGHT()));
     vl->addWidget(result_display_, 1);
     return p;
 }
@@ -619,24 +622,38 @@ void PlannerViewPanel::changeEvent(QEvent* event) {
 
 void PlannerViewPanel::retranslateUi() {
     // Left column.
-    if (templates_title_)    templates_title_->setText(tr("PLAN TEMPLATES"));
-    if (llm_profile_title_)  llm_profile_title_->setText(tr("LLM PROFILE:"));
-    if (portfolio_title_)    portfolio_title_->setText(tr("PORTFOLIO:"));
-    if (custom_query_title_) custom_query_title_->setText(tr("CUSTOM PLAN QUERY"));
-    if (custom_query_)       custom_query_->setPlaceholderText(tr("Describe what you want to plan..."));
-    if (history_header_)     history_header_->setText(tr("PLAN HISTORY"));
-    if (history_search_)     history_search_->setPlaceholderText(tr("Search history..."));
-    if (generate_btn_ && !generating_) generate_btn_->setText(tr("GENERATE PLAN"));
+    if (templates_title_)
+        templates_title_->setText(tr("PLAN TEMPLATES"));
+    if (llm_profile_title_)
+        llm_profile_title_->setText(tr("LLM PROFILE:"));
+    if (portfolio_title_)
+        portfolio_title_->setText(tr("PORTFOLIO:"));
+    if (custom_query_title_)
+        custom_query_title_->setText(tr("CUSTOM PLAN QUERY"));
+    if (custom_query_)
+        custom_query_->setPlaceholderText(tr("Describe what you want to plan..."));
+    if (history_header_)
+        history_header_->setText(tr("PLAN HISTORY"));
+    if (history_search_)
+        history_search_->setPlaceholderText(tr("Search history..."));
+    if (generate_btn_ && !generating_)
+        generate_btn_->setText(tr("GENERATE PLAN"));
 
     // Center column.
-    if (plan_editor_title_) plan_editor_title_->setText(tr("EXECUTION PLAN"));
+    if (plan_editor_title_)
+        plan_editor_title_->setText(tr("EXECUTION PLAN"));
     if (steps_table_)
         steps_table_->setHorizontalHeaderLabels({tr("#"), tr("Step"), tr("Type"), tr("Status")});
-    if (add_step_btn_)    add_step_btn_->setText(tr("+ ADD"));
-    if (remove_step_btn_) remove_step_btn_->setText(tr("- REMOVE"));
-    if (move_up_btn_)     move_up_btn_->setText(tr("UP"));
-    if (move_down_btn_)   move_down_btn_->setText(tr("DOWN"));
-    if (execute_btn_ && !executing_) execute_btn_->setText(tr("EXECUTE PLAN"));
+    if (add_step_btn_)
+        add_step_btn_->setText(tr("+ ADD"));
+    if (remove_step_btn_)
+        remove_step_btn_->setText(tr("- REMOVE"));
+    if (move_up_btn_)
+        move_up_btn_->setText(tr("UP"));
+    if (move_down_btn_)
+        move_down_btn_->setText(tr("DOWN"));
+    if (execute_btn_ && !executing_)
+        execute_btn_->setText(tr("EXECUTE PLAN"));
 
     // Right column. result_header_ / plan_status_ / progress_label_ hold live
     // state — not re-applied here. The COPY button only when not mid "COPIED!".

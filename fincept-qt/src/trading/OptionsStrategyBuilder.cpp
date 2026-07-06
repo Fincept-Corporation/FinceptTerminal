@@ -20,8 +20,7 @@ constexpr const char* kDefaultFnoExchange = "NFO";
 
 // Compact an expiry into the form used in tradingsymbols: "2025-03-28" -> "28MAR25".
 // Falls back to the digits/letters of the input string when it is not an ISO date.
-QString compact_expiry(const QString& expiry)
-{
+QString compact_expiry(const QString& expiry) {
     QDate d = QDate::fromString(expiry, "yyyy-MM-dd");
     if (d.isValid()) {
         // Fixed English month abbreviations — QDate::toString("MMM") uses the
@@ -30,10 +29,7 @@ QString compact_expiry(const QString& expiry)
         static const char* const kMonths[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                                               "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
         const QString month = QString::fromLatin1(kMonths[d.month() - 1]);
-        return QString("%1%2%3")
-            .arg(d.day(), 2, 10, QChar('0'))
-            .arg(month)
-            .arg(d.year() % 100, 2, 10, QChar('0'));
+        return QString("%1%2%3").arg(d.day(), 2, 10, QChar('0')).arg(month).arg(d.year() % 100, 2, 10, QChar('0'));
     }
     // Not an ISO date — strip separators so the symbol stays readable.
     QString compact = expiry;
@@ -44,17 +40,15 @@ QString compact_expiry(const QString& expiry)
 }
 
 // Format a strike without a trailing ".0" for whole-number strikes.
-QString strike_str(double strike)
-{
+QString strike_str(double strike) {
     if (std::floor(strike) == strike)
         return QString::number(static_cast<long long>(strike));
     return QString::number(strike, 'g', 10);
 }
 
 // Build a single leg with its placeholder symbol filled in.
-OptionsLeg make_leg(const QString& underlying, const QString& expiry, double strike,
-                    const QString& opt_type, OrderSide side, double quantity)
-{
+OptionsLeg make_leg(const QString& underlying, const QString& expiry, double strike, const QString& opt_type,
+                    OrderSide side, double quantity) {
     OptionsLeg leg;
     leg.symbol = OptionsStrategyBuilder::build_option_symbol(underlying, expiry, strike, opt_type);
     leg.exchange = QString::fromLatin1(kDefaultFnoExchange);
@@ -73,8 +67,7 @@ OptionsLeg make_leg(const QString& underlying, const QString& expiry, double str
 // back to the human-readable placeholder (leg.symbol) so behaviour never
 // regresses (a warning is logged). Runs at order-build time, so it also covers
 // strategies reloaded from storage.
-QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id)
-{
+QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id) {
     if (broker_id.isEmpty() || leg.underlying.isEmpty())
         return leg.symbol;
 
@@ -82,13 +75,12 @@ QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id)
     if (!svc.is_loaded(broker_id))
         return leg.symbol;
 
-    const InstrumentType want =
-        (leg.option_type.compare(QLatin1String("PE"), Qt::CaseInsensitive) == 0) ? InstrumentType::PE
-                                                                                 : InstrumentType::CE;
+    const InstrumentType want = (leg.option_type.compare(QLatin1String("PE"), Qt::CaseInsensitive) == 0)
+                                    ? InstrumentType::PE
+                                    : InstrumentType::CE;
     const QString expiry_disp = norm::expiry_display(leg.expiry);
 
-    const auto candidates =
-        svc.find_options_for_underlying(broker_id, leg.underlying, expiry_disp, leg.exchange);
+    const auto candidates = svc.find_options_for_underlying(broker_id, leg.underlying, expiry_disp, leg.exchange);
     for (const auto& inst : candidates) {
         if (inst.instrument_type == want && qFuzzyCompare(inst.strike + 1.0, leg.strike + 1.0))
             return inst.symbol;
@@ -104,10 +96,8 @@ QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id)
 
 } // namespace
 
-QString OptionsStrategyBuilder::build_option_symbol(const QString& underlying,
-                                                    const QString& expiry, double strike,
-                                                    const QString& opt_type)
-{
+QString OptionsStrategyBuilder::build_option_symbol(const QString& underlying, const QString& expiry, double strike,
+                                                    const QString& opt_type) {
     // TODO: Replace with InstrumentService lookup. Real broker tradingsymbols
     // (e.g. Zerodha "NIFTY25MAR24500CE", Dhan numeric security IDs) must be
     // resolved from the instrument master — this placeholder is a human-readable
@@ -115,10 +105,8 @@ QString OptionsStrategyBuilder::build_option_symbol(const QString& underlying,
     return underlying.toUpper() + compact_expiry(expiry) + strike_str(strike) + opt_type.toUpper();
 }
 
-OptionsStrategy OptionsStrategyBuilder::straddle(const QString& underlying, const QString& expiry,
-                                                 double atm_strike, double lot_size,
-                                                 OrderSide direction)
-{
+OptionsStrategy OptionsStrategyBuilder::straddle(const QString& underlying, const QString& expiry, double atm_strike,
+                                                 double lot_size, OrderSide direction) {
     OptionsStrategy s;
     s.name = (direction == OrderSide::Buy) ? "Long Straddle" : "Short Straddle";
     s.legs.append(make_leg(underlying, expiry, atm_strike, "CE", direction, lot_size));
@@ -130,10 +118,8 @@ OptionsStrategy OptionsStrategyBuilder::straddle(const QString& underlying, cons
     return s;
 }
 
-OptionsStrategy OptionsStrategyBuilder::strangle(const QString& underlying, const QString& expiry,
-                                                 double atm_strike, double width, double lot_size,
-                                                 OrderSide direction)
-{
+OptionsStrategy OptionsStrategyBuilder::strangle(const QString& underlying, const QString& expiry, double atm_strike,
+                                                 double width, double lot_size, OrderSide direction) {
     OptionsStrategy s;
     s.name = (direction == OrderSide::Buy) ? "Long Strangle" : "Short Strangle";
     const double call_strike = atm_strike + width; // OTM call
@@ -147,11 +133,8 @@ OptionsStrategy OptionsStrategyBuilder::strangle(const QString& underlying, cons
     return s;
 }
 
-OptionsStrategy OptionsStrategyBuilder::iron_condor(const QString& underlying,
-                                                    const QString& expiry, double atm_strike,
-                                                    double near_width, double far_width,
-                                                    double lot_size)
-{
+OptionsStrategy OptionsStrategyBuilder::iron_condor(const QString& underlying, const QString& expiry, double atm_strike,
+                                                    double near_width, double far_width, double lot_size) {
     OptionsStrategy s;
     s.name = "Iron Condor";
     const double sell_ce = atm_strike + near_width; // short near call
@@ -173,10 +156,8 @@ OptionsStrategy OptionsStrategyBuilder::iron_condor(const QString& underlying,
     return s;
 }
 
-OptionsStrategy OptionsStrategyBuilder::bull_call_spread(const QString& underlying,
-                                                         const QString& expiry, double lower_strike,
-                                                         double upper_strike, double lot_size)
-{
+OptionsStrategy OptionsStrategyBuilder::bull_call_spread(const QString& underlying, const QString& expiry,
+                                                         double lower_strike, double upper_strike, double lot_size) {
     OptionsStrategy s;
     s.name = "Bull Call Spread";
     s.legs.append(make_leg(underlying, expiry, lower_strike, "CE", OrderSide::Buy, lot_size));
@@ -194,10 +175,8 @@ OptionsStrategy OptionsStrategyBuilder::bull_call_spread(const QString& underlyi
     return s;
 }
 
-OptionsStrategy OptionsStrategyBuilder::bear_put_spread(const QString& underlying,
-                                                        const QString& expiry, double upper_strike,
-                                                        double lower_strike, double lot_size)
-{
+OptionsStrategy OptionsStrategyBuilder::bear_put_spread(const QString& underlying, const QString& expiry,
+                                                        double upper_strike, double lower_strike, double lot_size) {
     OptionsStrategy s;
     s.name = "Bear Put Spread";
     s.legs.append(make_leg(underlying, expiry, upper_strike, "PE", OrderSide::Buy, lot_size));
@@ -214,10 +193,8 @@ OptionsStrategy OptionsStrategyBuilder::bear_put_spread(const QString& underlyin
     return s;
 }
 
-BasketOrderRequest OptionsStrategyBuilder::to_basket_order(const OptionsStrategy& strategy,
-                                                           ProductType product,
-                                                           const QString& broker_id)
-{
+BasketOrderRequest OptionsStrategyBuilder::to_basket_order(const OptionsStrategy& strategy, ProductType product,
+                                                           const QString& broker_id) {
     BasketOrderRequest request;
     request.strategy_name = strategy.name;
 

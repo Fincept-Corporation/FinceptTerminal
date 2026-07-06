@@ -20,8 +20,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
   public:
     using QStyledItemDelegate::QStyledItemDelegate;
 
-    void paint(QPainter* painter, const QStyleOptionViewItem& option,
-               const QModelIndex& index) const override {
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         painter->save();
 
         // ── Background — ATM > ITM > base ──────────────────────────────────
@@ -37,7 +36,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
             bg = QColor(colors::AMBER());
             bg.setAlpha(45);
         } else if (is_ce_side && is_call_itm) {
-            bg = QColor(0xfb, 0xc2, 0x4d);  // soft amber tint = ITM call
+            bg = QColor(0xfb, 0xc2, 0x4d); // soft amber tint = ITM call
             bg.setAlpha(30);
         } else if (is_pe_side && is_put_itm) {
             bg = QColor(0xfb, 0xc2, 0x4d);
@@ -51,7 +50,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
             if (r > 0) {
                 QRect bar = option.rect;
                 bar.setLeft(option.rect.right() - int(option.rect.width() * r));
-                QColor bar_col(0x16, 0xa3, 0x4a);  // green for CE OI
+                QColor bar_col(0x16, 0xa3, 0x4a); // green for CE OI
                 bar_col.setAlpha(70);
                 painter->fillRect(bar, bar_col);
             }
@@ -60,7 +59,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
             if (r > 0) {
                 QRect bar = option.rect;
                 bar.setRight(option.rect.left() + int(option.rect.width() * r));
-                QColor bar_col(0xdc, 0x26, 0x26);  // red for PE OI
+                QColor bar_col(0xdc, 0x26, 0x26); // red for PE OI
                 bar_col.setAlpha(70);
                 painter->fillRect(bar, bar_col);
             }
@@ -100,7 +99,7 @@ class ChainCellDelegate : public QStyledItemDelegate {
     }
 };
 
-}  // namespace
+} // namespace
 
 OptionChainTable::OptionChainTable(QWidget* parent) : QTableView(parent) {
     model_ = new OptionChainModel(this);
@@ -125,20 +124,21 @@ OptionChainTable::OptionChainTable(QWidget* parent) : QTableView(parent) {
     connect(model_, &QAbstractItemModel::modelReset, this, [this]() {
         for (int row = 0; row < model_->rowCount(); ++row) {
             if (model_->index(row, 0).data(OptionChainModel::IsAtmRole).toBool()) {
-                scrollTo(model_->index(row, OptionChainModel::ColStrike),
-                         QAbstractItemView::PositionAtCenter);
+                scrollTo(model_->index(row, OptionChainModel::ColStrike), QAbstractItemView::PositionAtCenter);
                 break;
             }
         }
     });
 
-    setStyleSheet(QStringLiteral(
-        "QTableView { background:%1; color:%2; border:1px solid %3; gridline-color:%3; selection-background-color:%4; }"
-        "QHeaderView::section { background:%5; color:%6; border:none; border-bottom:1px solid %3; padding:4px 6px; "
-        "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }"
-        "QTableView::item { padding:0; }")
-                      .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(),
-                           colors::BG_HOVER(), colors::BG_RAISED(), colors::TEXT_SECONDARY()));
+    setStyleSheet(
+        QStringLiteral(
+            "QTableView { background:%1; color:%2; border:1px solid %3; gridline-color:%3; "
+            "selection-background-color:%4; }"
+            "QHeaderView::section { background:%5; color:%6; border:none; border-bottom:1px solid %3; padding:4px 6px; "
+            "                       font-size:9px; font-weight:700; letter-spacing:0.4px; }"
+            "QTableView::item { padding:0; }")
+            .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_HOVER(),
+                 colors::BG_RAISED(), colors::TEXT_SECONDARY()));
 }
 
 void OptionChainTable::mousePressEvent(QMouseEvent* e) {
@@ -172,7 +172,7 @@ void OptionChainTable::contextMenuEvent(QContextMenuEvent* e) {
     const int col = idx.column();
     const bool ce_side = (col >= OptionChainModel::ColCeOi && col <= OptionChainModel::ColCeLtp);
     const bool pe_side = (col >= OptionChainModel::ColPeLtp && col <= OptionChainModel::ColPeOi);
-    if (!ce_side && !pe_side) {  // strike pivot — nothing to trade
+    if (!ce_side && !pe_side) { // strike pivot — nothing to trade
         QTableView::contextMenuEvent(e);
         return;
     }

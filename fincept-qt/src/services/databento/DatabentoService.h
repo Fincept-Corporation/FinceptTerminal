@@ -52,19 +52,19 @@ struct DbCostResult {
 // (symbol, spot, days, root_symbol, ...) overloads. The screen builds one
 // of these from the SurfaceControlPanel state and passes it to fetch_with_params().
 struct DatabentoFetchParams {
-    QString chart_type;     // String form of ChartType, e.g. "Volatility"
-    QString symbol;         // Underlying for option/futures surfaces
-    QStringList basket;     // Multi-symbol basket for risk surfaces
-    QString dataset;        // Optional override; capability default if empty
-    QString schema;         // Optional override; capability default if empty
+    QString chart_type; // String form of ChartType, e.g. "Volatility"
+    QString symbol;     // Underlying for option/futures surfaces
+    QStringList basket; // Multi-symbol basket for risk surfaces
+    QString dataset;    // Optional override; capability default if empty
+    QString schema;     // Optional override; capability default if empty
     QDate start_date;
     QDate end_date;
     int strike_window_pct = 20;
     int dte_min = 7;
     int dte_max = 365;
-    QStringList venues;     // Optional OPRA-venue filter
+    QStringList venues; // Optional OPRA-venue filter
     QString iv_method = "Brent";
-    float spot_override = 0.0f;  // 0 = lookup via DataHub::peek
+    float spot_override = 0.0f; // 0 = lookup via DataHub::peek
 };
 
 // Result of a Databento fetch — emitted via signals
@@ -124,8 +124,7 @@ class DatabentoService : public QObject {
     void list_publishers(const QString& dataset, std::function<void(QList<DbPublisher>)> cb);
     void get_dataset_range(const QString& dataset, std::function<void(DbDatasetRange)> cb);
     void get_cost(const DbCostQuery& q, std::function<void(DbCostResult)> cb);
-    void search_symbols(const QString& query, const QString& dataset,
-                        std::function<void(QStringList)> cb);
+    void search_symbols(const QString& query, const QString& dataset, std::function<void(QStringList)> cb);
 
     // ── Unified surface fetch ───────────────────────────────────────────────
     // Routes to the right Python command based on params.chart_type.
@@ -193,7 +192,7 @@ class DatabentoService : public QObject {
 
     // Metadata caches — populated lazily on first request, valid for app session
     QStringList cached_datasets_;
-    QHash<QString, QStringList> cached_schemas_;     // dataset → schemas
+    QHash<QString, QStringList> cached_schemas_; // dataset → schemas
     QHash<QString, QList<DbPublisher>> cached_publishers_;
     QHash<QString, DbDatasetRange> cached_ranges_;
 

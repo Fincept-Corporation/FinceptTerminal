@@ -1,7 +1,8 @@
 #include "trading/TradingNotificationBridge.h"
-#include "trading/TradingEvents.h"
+
 #include "core/events/EventBus.h"
 #include "services/notifications/NotificationService.h"
+#include "trading/TradingEvents.h"
 
 namespace fincept::trading {
 
@@ -26,12 +27,9 @@ void TradingNotificationBridge::install() {
         NotificationRequest req;
         req.title = "Order Placed";
         req.message = QString("%1 %2 %3 %4 (%5) — %6")
-                          .arg(d.value("action").toString(),
-                               QString::number(d.value("quantity").toDouble()),
-                               d.value("symbol").toString(),
-                               d.value("exchange").toString(),
-                               d.value("order_type").toString(),
-                               d.value("mode").toString());
+                          .arg(d.value("action").toString(), QString::number(d.value("quantity").toDouble()),
+                               d.value("symbol").toString(), d.value("exchange").toString(),
+                               d.value("order_type").toString(), d.value("mode").toString());
         req.level = NotifLevel::Info;
         req.trigger = NotifTrigger::OrderFill;
         NotificationService::instance().send(req);
@@ -40,10 +38,9 @@ void TradingNotificationBridge::install() {
     sub_failed_ = bus.subscribe(events::kOrderFailed, [](const QVariantMap& d) {
         NotificationRequest req;
         req.title = "Order Failed";
-        req.message = QString("%1 %2 — %3")
-                          .arg(d.value("order_type").toString(),
-                               d.value("symbol").toString(),
-                               d.value("error").toString());
+        req.message =
+            QString("%1 %2 — %3")
+                .arg(d.value("order_type").toString(), d.value("symbol").toString(), d.value("error").toString());
         req.level = NotifLevel::Warning;
         req.trigger = NotifTrigger::OrderFill;
         NotificationService::instance().send(req);

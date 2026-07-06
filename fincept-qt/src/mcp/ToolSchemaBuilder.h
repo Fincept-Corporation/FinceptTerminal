@@ -42,8 +42,7 @@ class ToolSchemaBuilder {
     ToolSchemaBuilder& boolean(const QString& name, const QString& description = {}) {
         return add(name, "boolean", description);
     }
-    ToolSchemaBuilder& array(const QString& name, const QString& description = {},
-                              const QJsonObject& items = {}) {
+    ToolSchemaBuilder& array(const QString& name, const QString& description = {}, const QJsonObject& items = {}) {
         add(name, "array", description);
         if (!items.isEmpty())
             current().items = items;

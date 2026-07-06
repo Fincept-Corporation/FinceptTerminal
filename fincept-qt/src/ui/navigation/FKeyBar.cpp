@@ -20,11 +20,11 @@ TabBar::TabBar(QWidget* parent) : QWidget(parent) {
     tab_layout_->setSpacing(2);
 
     tab_defs_ = {
-        {"dashboard", "DASHBOARD"}, {"markets", "MARKETS"},   {"crypto_trading", "CRYPTO"},  {"equity_trading", "EQUITY"},
-        {"portfolio", "PORTFOLIO"}, {"news", "NEWS"},         {"ai_chat", "AI CHAT"},        {"backtesting", "BACKTEST"},
-        {"algo_trading", "ALGO"},
-        {"node_editor", "NODES"},   {"code_editor", "CODE"},  {"ai_quant_lab", "QUANT LAB"}, {"quantlib", "QUANTLIB"},
-        {"settings", "SETTINGS"},   {"profile", "PROFILE"},
+        {"dashboard", "DASHBOARD"},   {"markets", "MARKETS"},      {"crypto_trading", "CRYPTO"},
+        {"equity_trading", "EQUITY"}, {"portfolio", "PORTFOLIO"},  {"news", "NEWS"},
+        {"ai_chat", "AI CHAT"},       {"backtesting", "BACKTEST"}, {"algo_trading", "ALGO"},
+        {"node_editor", "NODES"},     {"code_editor", "CODE"},     {"ai_quant_lab", "QUANT LAB"},
+        {"quantlib", "QUANTLIB"},     {"settings", "SETTINGS"},    {"profile", "PROFILE"},
     };
     for (const auto& def : tab_defs_)
         add_tab(def);
@@ -80,7 +80,8 @@ void TabBar::set_active(const QString& tab_id) {
 }
 
 void TabBar::refresh_theme() {
-    setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
+    setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
     update_styles();
 }
 

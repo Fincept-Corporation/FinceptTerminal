@@ -1,10 +1,10 @@
 // src/screens/agent_config/AgentChatPanel.cpp
 #include "screens/agent_config/AgentChatPanel.h"
 
-#include "services/llm/LlmService.h"
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -113,7 +113,8 @@ void AgentChatPanel::build_ui() {
     // ── Header ────────────────────────────────────────────────────────────────
     auto* header = new QWidget(this);
     header->setFixedHeight(52);
-    header->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED(), col::BORDER_DIM()));
+    header->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED(), col::BORDER_DIM()));
     auto* hl = new QHBoxLayout(header);
     hl->setContentsMargins(14, 0, 12, 0);
     hl->setSpacing(10);
@@ -157,12 +158,13 @@ void AgentChatPanel::build_ui() {
         completer->setFilterMode(Qt::MatchContains); // match anywhere in name
         completer->setCaseSensitivity(Qt::CaseInsensitive);
         completer->setMaxVisibleItems(12);
-        completer->popup()->setStyleSheet(QString("QAbstractItemView{"
-                                                  "background:%1;color:%2;border:1px solid %3;"
-                                                  "selection-background-color:%4;"
-                                                  "font-size:11px;padding:2px;outline:none;}"
-                                                  "QAbstractItemView::item{padding:4px 10px;min-height:22px;}")
-                                              .arg(col::BG_RAISED(), col::TEXT_PRIMARY(), col::AMBER(), col::AMBER_DIM()));
+        completer->popup()->setStyleSheet(
+            QString("QAbstractItemView{"
+                    "background:%1;color:%2;border:1px solid %3;"
+                    "selection-background-color:%4;"
+                    "font-size:11px;padding:2px;outline:none;}"
+                    "QAbstractItemView::item{padding:4px 10px;min-height:22px;}")
+                .arg(col::BG_RAISED(), col::TEXT_PRIMARY(), col::AMBER(), col::AMBER_DIM()));
         agent_selector_->setCompleter(completer);
     }
 
@@ -232,7 +234,8 @@ void AgentChatPanel::build_ui() {
     run_as_task_toggle_->setCheckable(true);
     run_as_task_toggle_->setCursor(Qt::PointingHandCursor);
     run_as_task_toggle_->setFixedHeight(28);
-    run_as_task_toggle_->setToolTip(tr("When ON, this query runs as a durable background task with per-step progress."));
+    run_as_task_toggle_->setToolTip(
+        tr("When ON, this query runs as a durable background task with per-step progress."));
     run_as_task_toggle_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
@@ -246,10 +249,11 @@ void AgentChatPanel::build_ui() {
     clear_btn_ = new QPushButton(tr("CLEAR"));
     clear_btn_->setCursor(Qt::PointingHandCursor);
     clear_btn_->setFixedHeight(28);
-    clear_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                      "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
-                                      "QPushButton:hover{background:%3;color:%4;border-color:%4;}")
-                                  .arg(col::TEXT_TERTIARY(), col::BORDER_DIM(), col::BG_HOVER(), col::TEXT_SECONDARY()));
+    clear_btn_->setStyleSheet(
+        QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                "padding:3px 10px;font-size:9px;font-weight:600;border-radius:3px;}"
+                "QPushButton:hover{background:%3;color:%4;border-color:%4;}")
+            .arg(col::TEXT_TERTIARY(), col::BORDER_DIM(), col::BG_HOVER(), col::TEXT_SECONDARY()));
     hl->addWidget(clear_btn_);
     root->addWidget(header);
 
@@ -417,11 +421,12 @@ void AgentChatPanel::build_ui() {
     send_btn_ = new QPushButton(tr("Send"));
     send_btn_->setFixedSize(76, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
-    send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;border-radius:6px;"
-                                     "font-size:12px;font-weight:700;}"
-                                     "QPushButton:hover:enabled{background:%3;}"
-                                     "QPushButton:disabled{background:%4;color:%5;}")
-                                 .arg(col::AMBER(), col::BG_BASE(), col::ORANGE(), col::BG_RAISED(), col::TEXT_TERTIARY()));
+    send_btn_->setStyleSheet(
+        QString("QPushButton{background:%1;color:%2;border:none;border-radius:6px;"
+                "font-size:12px;font-weight:700;}"
+                "QPushButton:hover:enabled{background:%3;}"
+                "QPushButton:disabled{background:%4;color:%5;}")
+            .arg(col::AMBER(), col::BG_BASE(), col::ORANGE(), col::BG_RAISED(), col::TEXT_TERTIARY()));
     il->addWidget(send_btn_);
     root->addWidget(ib);
 
@@ -466,8 +471,8 @@ void AgentChatPanel::setup_connections() {
 
     // Visibility of the "RUN AS TASK" toggle follows the Agentic Mode setting.
     auto apply_agentic_visibility = [this]() {
-        auto r = fincept::SettingsRepository::instance().get(
-            QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
+        auto r = fincept::SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"),
+                                                             QStringLiteral("false"));
         const bool on = r.is_ok() && r.value() == QStringLiteral("true");
         run_as_task_toggle_->setVisible(on);
         if (!on) {
@@ -617,8 +622,7 @@ void AgentChatPanel::setup_connections() {
         const QString pf = portfolio_combo_->currentText();
         if (portfolio_combo_->currentData().toString().isEmpty())
             return;
-        input_edit_->setPlainText(
-            tr("Perform risk analysis on portfolio '%1' — VaR, drawdown, stress test.").arg(pf));
+        input_edit_->setPlainText(tr("Perform risk analysis on portfolio '%1' — VaR, drawdown, stress test.").arg(pf));
         send_message();
     });
 }
@@ -704,8 +708,7 @@ void AgentChatPanel::send_message() {
             config["agent_id"] = agent_id;
         pending_request_id_ = services::AgentService::instance().start_task(last_query_, config);
         if (streaming_bubble_widget_) {
-            streaming_bubble_widget_->setPlainText(
-                tr("Task started. Open the AGENTIC tab to watch progress."));
+            streaming_bubble_widget_->setPlainText(tr("Task started. Open the AGENTIC tab to watch progress."));
             streaming_bubble_widget_->setReadOnly(true);
             streaming_bubble_widget_ = nullptr;
         }
@@ -1067,8 +1070,10 @@ void AgentChatPanel::changeEvent(QEvent* event) {
 
 void AgentChatPanel::retranslateUi() {
     // Header.
-    if (header_title_)  header_title_->setText(tr("AGENT CHAT"));
-    if (agent_caption_) agent_caption_->setText(tr("AGENT:"));
+    if (header_title_)
+        header_title_->setText(tr("AGENT CHAT"));
+    if (agent_caption_)
+        agent_caption_->setText(tr("AGENT:"));
     if (agent_selector_) {
         agent_selector_->setToolTip(tr("Select a configured agent, or Default to use the global LLM."));
         if (agent_selector_->lineEdit())
@@ -1087,27 +1092,36 @@ void AgentChatPanel::retranslateUi() {
     if (run_as_task_toggle_)
         run_as_task_toggle_->setToolTip(
             tr("When ON, this query runs as a durable background task with per-step progress."));
-    if (clear_btn_)      clear_btn_->setText(tr("CLEAR"));
-    if (hdr_model_lbl_)  hdr_model_lbl_->setToolTip(tr("Active LLM — configure in Settings > LLM Configuration"));
+    if (clear_btn_)
+        clear_btn_->setText(tr("CLEAR"));
+    if (hdr_model_lbl_)
+        hdr_model_lbl_->setToolTip(tr("Active LLM — configure in Settings > LLM Configuration"));
 
     // Portfolio context bar.
-    if (portfolio_caption_) portfolio_caption_->setText(tr("PORTFOLIO:"));
+    if (portfolio_caption_)
+        portfolio_caption_->setText(tr("PORTFOLIO:"));
     // Item 0 is the fixed "None" entry (no data role).
-    if (portfolio_combo_ && portfolio_combo_->count() > 0 &&
-        portfolio_combo_->itemData(0).toString().isEmpty())
+    if (portfolio_combo_ && portfolio_combo_->count() > 0 && portfolio_combo_->itemData(0).toString().isEmpty())
         portfolio_combo_->setItemText(0, tr("None"));
-    if (analyze_btn_)   analyze_btn_->setText(tr("ANALYZE"));
-    if (rebalance_btn_) rebalance_btn_->setText(tr("REBALANCE"));
-    if (risk_btn_)      risk_btn_->setText(tr("RISK"));
+    if (analyze_btn_)
+        analyze_btn_->setText(tr("ANALYZE"));
+    if (rebalance_btn_)
+        rebalance_btn_->setText(tr("REBALANCE"));
+    if (risk_btn_)
+        risk_btn_->setText(tr("RISK"));
 
     // Welcome panel.
-    if (welcome_title_)    welcome_title_->setText(tr("How can I help you?"));
-    if (welcome_subtitle_) welcome_subtitle_->setText(tr("Ask about markets, portfolios, or any financial topic.\n"
-                                                         "Select an agent above, or use Auto-Route to let the system decide."));
+    if (welcome_title_)
+        welcome_title_->setText(tr("How can I help you?"));
+    if (welcome_subtitle_)
+        welcome_subtitle_->setText(tr("Ask about markets, portfolios, or any financial topic.\n"
+                                      "Select an agent above, or use Auto-Route to let the system decide."));
 
     // Input bar (send_btn_ flips to "..." while executing — leave that state).
-    if (input_edit_) input_edit_->setPlaceholderText(tr("Message agent... (Shift+Enter for new line, Enter to send)"));
-    if (send_btn_ && !executing_) send_btn_->setText(tr("Send"));
+    if (input_edit_)
+        input_edit_->setPlaceholderText(tr("Message agent... (Shift+Enter for new line, Enter to send)"));
+    if (send_btn_ && !executing_)
+        send_btn_->setText(tr("Send"));
 
     // Header status pill + live status bar hold runtime state. Refresh the LLM
     // status (it re-derives Ready / model / Unconfigured text from current config).

@@ -31,8 +31,8 @@ namespace fincept::screens::datasources {
 
 namespace col = fincept::ui::colors;
 
-QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& config,
-                                      const QString& edit_id, bool duplicate) {
+QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& config, const QString& edit_id,
+                                      bool duplicate) {
     const bool editing = !edit_id.isEmpty() && !duplicate;
 
     DataSource existing;
@@ -66,8 +66,8 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
                 "QCheckBox { color:%2; font-size:13px; font-family:'Consolas','Courier New',monospace; }"
                 "QPushButton { padding:7px 18px; font-size:12px; font-weight:700;"
                 "  font-family:'Consolas','Courier New',monospace; }")
-            .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::TEXT_SECONDARY(),
-                 col::BG_BASE(), col::BORDER_DIM(), col::AMBER()));
+            .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::TEXT_SECONDARY(), col::BG_BASE(), col::BORDER_DIM(),
+                 col::AMBER()));
 
     auto* root_vl = new QVBoxLayout(&dlg);
     root_vl->setContentsMargins(0, 0, 0, 0);
@@ -76,8 +76,8 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     // Dialog header
     auto* dlg_hdr = new QWidget(&dlg);
     dlg_hdr->setFixedHeight(56);
-    dlg_hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                               .arg(col::BG_RAISED(), col::BORDER_DIM()));
+    dlg_hdr->setStyleSheet(
+        QString("background:%1;border-bottom:1px solid %2;").arg(col::BG_RAISED(), col::BORDER_DIM()));
     auto* dlg_hdr_hl = new QHBoxLayout(dlg_hdr);
     dlg_hdr_hl->setContentsMargins(16, 0, 16, 0);
     dlg_hdr_hl->setSpacing(12);
@@ -133,8 +133,9 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
     auto* name_edit = new QLineEdit;
     name_edit->setPlaceholderText(QObject::tr("%1 Connection").arg(config.name));
-    name_edit->setText(
-        existing_loaded ? (duplicate ? QObject::tr("Copy of %1").arg(existing.display_name) : existing.display_name) : "");
+    name_edit->setText(existing_loaded
+                           ? (duplicate ? QObject::tr("Copy of %1").arg(existing.display_name) : existing.display_name)
+                           : "");
     name_edit->setFixedHeight(34);
     form->addWidget(name_edit, row, 1);
     ++row;
@@ -166,11 +167,11 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
             auto* combo = new QComboBox;
             for (const auto& option : field.options)
                 combo->addItem(option.label, option.value);
-            const QString current = existing_cfg.contains(field.name)
-                                        ? existing_cfg.value(field.name).toString()
-                                        : field.default_value;
+            const QString current =
+                existing_cfg.contains(field.name) ? existing_cfg.value(field.name).toString() : field.default_value;
             const int index = combo->findData(current);
-            if (index >= 0) combo->setCurrentIndex(index);
+            if (index >= 0)
+                combo->setCurrentIndex(index);
             input = combo;
         } else if (field.type == FieldType::Textarea) {
             auto* edit = new QTextEdit;
@@ -183,8 +184,10 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
             auto* edit = new QLineEdit;
             edit->setPlaceholderText(field.placeholder);
             edit->setFixedHeight(34);
-            if (field.type == FieldType::Password) edit->setEchoMode(QLineEdit::Password);
-            if (field.type == FieldType::Number)   edit->setValidator(new QIntValidator(0, 999999999, edit));
+            if (field.type == FieldType::Password)
+                edit->setEchoMode(QLineEdit::Password);
+            if (field.type == FieldType::Number)
+                edit->setValidator(new QIntValidator(0, 999999999, edit));
             const QString text = existing_cfg.contains(field.name)
                                      ? existing_cfg.value(field.name).toVariant().toString()
                                      : field.default_value;
@@ -286,18 +289,17 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
         }
 
         DataSource ds = (existing_loaded && !duplicate) ? existing : DataSource{};
-        ds.id    = (existing_loaded && !duplicate) ? existing.id : QUuid::createUuid().toString(QUuid::WithoutBraces);
-        ds.alias = (existing_loaded && !duplicate) && !existing.alias.isEmpty()
-                       ? existing.alias
-                       : (config.id + "_" + ds.id.left(8));
+        ds.id = (existing_loaded && !duplicate) ? existing.id : QUuid::createUuid().toString(QUuid::WithoutBraces);
+        ds.alias = (existing_loaded && !duplicate) && !existing.alias.isEmpty() ? existing.alias
+                                                                                : (config.id + "_" + ds.id.left(8));
         ds.display_name = name_edit->text().trimmed().isEmpty() ? config.name : name_edit->text().trimmed();
-        ds.description  = config.description;
-        ds.type         = persistence_type(config);
-        ds.provider     = config.id;
-        ds.category     = category_str(config.category);
-        ds.config       = QJsonDocument(cfg_json).toJson(QJsonDocument::Compact);
-        ds.enabled      = enabled_check->isChecked();
-        ds.tags         = tags_edit->text().trimmed();
+        ds.description = config.description;
+        ds.type = persistence_type(config);
+        ds.provider = config.id;
+        ds.category = category_str(config.category);
+        ds.config = QJsonDocument(cfg_json).toJson(QJsonDocument::Compact);
+        ds.enabled = enabled_check->isChecked();
+        ds.tags = tags_edit->text().trimmed();
 
         const auto result = DataSourceRepository::instance().save(ds);
         if (result.is_err()) {

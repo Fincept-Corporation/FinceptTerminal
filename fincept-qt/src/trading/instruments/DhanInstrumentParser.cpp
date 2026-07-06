@@ -1,8 +1,7 @@
 #include "trading/instruments/DhanInstrumentParser.h"
 
-#include "trading/instruments/InstrumentNormalize.h"
-
 #include "core/logging/Logger.h"
+#include "trading/instruments/InstrumentNormalize.h"
 
 #include <QDate>
 #include <QMap>
@@ -109,7 +108,7 @@ Instrument DhanInstrumentParser::parse_row(const QStringList& cols) {
     if (cols.size() < 16)
         return {};
 
-    const QString exch = cols[0].trimmed();           // NSE/BSE/MCX
+    const QString exch = cols[0].trimmed();            // NSE/BSE/MCX
     const QString segment = cols[1].trimmed();         // E/D/C/M/I
     const QString security_id = cols[2].trimmed();     // numeric
     const QString instrument_name = cols[3].trimmed(); // EQUITY/INDEX/OPTSTK...
@@ -132,12 +131,24 @@ Instrument DhanInstrumentParser::parse_row(const QStringList& cols) {
     const InstrumentType type = map_dhan_type(instrument_name, option_type);
     QString itype_str;
     switch (type) {
-    case InstrumentType::EQ:    itype_str = "EQ"; break;
-    case InstrumentType::FUT:   itype_str = "FUT"; break;
-    case InstrumentType::CE:    itype_str = "CE"; break;
-    case InstrumentType::PE:    itype_str = "PE"; break;
-    case InstrumentType::INDEX: itype_str = "INDEX"; break;
-    default:                    itype_str = "UNKNOWN"; break;
+        case InstrumentType::EQ:
+            itype_str = "EQ";
+            break;
+        case InstrumentType::FUT:
+            itype_str = "FUT";
+            break;
+        case InstrumentType::CE:
+            itype_str = "CE";
+            break;
+        case InstrumentType::PE:
+            itype_str = "PE";
+            break;
+        case InstrumentType::INDEX:
+            itype_str = "INDEX";
+            break;
+        default:
+            itype_str = "UNKNOWN";
+            break;
     }
 
     inst.brsymbol = trading_symbol;

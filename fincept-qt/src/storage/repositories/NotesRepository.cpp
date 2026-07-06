@@ -80,13 +80,13 @@ Result<QVector<FinancialNote>> NotesRepository::search(const QString& query) {
 }
 
 Result<void> NotesRepository::update(const FinancialNote& n) {
-    auto r = exec_write("UPDATE financial_notes SET title = ?, content = ?, category = ?, priority = ?, "
-                        "tags = ?, tickers = ?, sentiment = ?, is_favorite = ?, is_archived = ?, "
-                        "color_code = ?, reminder_date = ?, word_count = ?, updated_at = datetime('now') "
-                        "WHERE id = ?",
-                        {n.title, n.content, n.category, n.priority, n.tags, n.tickers, n.sentiment,
-                         n.is_favorite ? 1 : 0, n.is_archived ? 1 : 0, n.color_code, n.reminder_date, n.word_count,
-                         n.id});
+    auto r =
+        exec_write("UPDATE financial_notes SET title = ?, content = ?, category = ?, priority = ?, "
+                   "tags = ?, tickers = ?, sentiment = ?, is_favorite = ?, is_archived = ?, "
+                   "color_code = ?, reminder_date = ?, word_count = ?, updated_at = datetime('now') "
+                   "WHERE id = ?",
+                   {n.title, n.content, n.category, n.priority, n.tags, n.tickers, n.sentiment, n.is_favorite ? 1 : 0,
+                    n.is_archived ? 1 : 0, n.color_code, n.reminder_date, n.word_count, n.id});
     if (r.is_ok())
         SyncOutbox::record("note", QString::number(n.id), "update");
     return r;

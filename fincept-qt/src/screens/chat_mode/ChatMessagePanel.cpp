@@ -102,8 +102,8 @@ QWidget* ChatMessagePanel::build_header() {
     hl->addWidget(hdr_credits_lbl_);
 
     hdr_tools_lbl_ = new QLabel;
-    hdr_tools_lbl_->setStyleSheet(
-        QString("color:%1;font-size:12px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_TERTIARY(), FONT));
+    hdr_tools_lbl_->setStyleSheet(QString("color:%1;font-size:12px;font-family:%2;background:transparent;")
+                                      .arg(ui::colors::TEXT_TERTIARY(), FONT));
     hl->addWidget(hdr_tools_lbl_);
 
     // "LITE"/"DEEP" are fixed mode identifiers (also used in logic) — not translated.
@@ -172,16 +172,16 @@ QWidget* ChatMessagePanel::build_welcome() {
     welcome_logo_lbl_ = new QLabel(tr("FINCEPT AGENT"));
     welcome_logo_lbl_->setAlignment(Qt::AlignCenter);
     welcome_logo_lbl_->setStyleSheet(QString("color:%1;font-size:20px;font-weight:700;letter-spacing:1px;"
-                                "font-family:%2;background:transparent;")
-                            .arg(ui::colors::AMBER(), FONT));
+                                             "font-family:%2;background:transparent;")
+                                         .arg(ui::colors::AMBER(), FONT));
     vl->addWidget(welcome_logo_lbl_);
 
     welcome_sub_lbl_ = new QLabel(tr("AI-powered financial intelligence.\n"
                                      "Markets, equities, portfolio, macro insights."));
     welcome_sub_lbl_->setAlignment(Qt::AlignCenter);
     welcome_sub_lbl_->setWordWrap(true);
-    welcome_sub_lbl_->setStyleSheet(
-        QString("color:%1;font-size:13px;font-family:%2;background:transparent;").arg(ui::colors::TEXT_TERTIARY(), FONT));
+    welcome_sub_lbl_->setStyleSheet(QString("color:%1;font-size:13px;font-family:%2;background:transparent;")
+                                        .arg(ui::colors::TEXT_TERTIARY(), FONT));
     vl->addWidget(welcome_sub_lbl_);
 
     const QStringList chips = {tr("Outlook for AAPL?"), tr("Today's market news"), tr("Portfolio risk analysis"),
@@ -198,8 +198,8 @@ QWidget* ChatMessagePanel::build_welcome() {
                                    "border-radius:0px;padding:6px 12px;font-size:12px;"
                                    "font-family:%4;}"
                                    "QPushButton:hover{background:%5;color:%6;border-color:%7;}")
-                               .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), FONT,
-                                    ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
+                               .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                                    FONT, ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER()));
         connect(btn, &QPushButton::clicked, this, [this, btn]() {
             input_box_->setPlainText(btn->text());
             on_send_clicked();
@@ -222,8 +222,8 @@ QWidget* ChatMessagePanel::build_typing_indicator() {
 
     typing_label_ = new QLabel(tr("Agent"));
     typing_label_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;"
-                               "font-family:%2;background:transparent;")
-                           .arg(ui::colors::AMBER(), FONT));
+                                         "font-family:%2;background:transparent;")
+                                     .arg(ui::colors::AMBER(), FONT));
     hl->addWidget(typing_label_);
 
     typing_dots_lbl_ = new QLabel(".");
@@ -261,8 +261,8 @@ QWidget* ChatMessagePanel::build_input_area() {
                                       "QScrollBar:vertical{background:%1;width:4px;}"
                                       "QScrollBar::handle:vertical{background:%6;}"
                                       "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}")
-                                  .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), FONT,
-                                       ui::colors::BORDER_BRIGHT(), ui::colors::BORDER_MED()));
+                                  .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                       FONT, ui::colors::BORDER_BRIGHT(), ui::colors::BORDER_MED()));
     input_box_->installEventFilter(this);
     vl->addWidget(input_box_);
 
@@ -299,8 +299,9 @@ QWidget* ChatMessagePanel::build_input_area() {
                                          "border-radius:0px;font-size:12px;padding:0 10px;font-family:%4;}"
                                          "QPushButton:hover{background:%5;color:%6;border-color:%6;}"
                                          "QPushButton:disabled{color:%7;border-color:%1;}")
-                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
-                                          FONT, ui::colors::BG_HOVER(), ui::colors::AMBER(), ui::colors::BORDER_BRIGHT()));
+                                     .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(),
+                                          ui::colors::BORDER_DIM(), FONT, ui::colors::BG_HOVER(), ui::colors::AMBER(),
+                                          ui::colors::BORDER_BRIGHT()));
     connect(optimize_btn_, &QPushButton::clicked, this, &ChatMessagePanel::on_optimize_clicked);
     bottom->addWidget(optimize_btn_);
 
@@ -695,32 +696,44 @@ void ChatMessagePanel::changeEvent(QEvent* event) {
 
 void ChatMessagePanel::retranslateUi() {
     // Header
-    if (mode_btn_)       mode_btn_->setToolTip(tr("Toggle Lite / Deep mode"));
-    if (hdr_tokens_lbl_) hdr_tokens_lbl_->setText(tr("%1 tokens").arg(total_tokens_));
-    if (hdr_tools_lbl_)  hdr_tools_lbl_->setText(last_tools_ > 0 ? tr("%1 tools").arg(last_tools_) : QString());
+    if (mode_btn_)
+        mode_btn_->setToolTip(tr("Toggle Lite / Deep mode"));
+    if (hdr_tokens_lbl_)
+        hdr_tokens_lbl_->setText(tr("%1 tokens").arg(total_tokens_));
+    if (hdr_tools_lbl_)
+        hdr_tools_lbl_->setText(last_tools_ > 0 ? tr("%1 tools").arg(last_tools_) : QString());
     if (hdr_credits_lbl_)
         hdr_credits_lbl_->setText(last_credits_ > 0
                                       ? tr("%1 credits").arg(QLocale(QLocale::English).toString(last_credits_))
                                       : tr("0 credits"));
 
     // Welcome panel
-    if (welcome_logo_lbl_) welcome_logo_lbl_->setText(tr("FINCEPT AGENT"));
+    if (welcome_logo_lbl_)
+        welcome_logo_lbl_->setText(tr("FINCEPT AGENT"));
     if (welcome_sub_lbl_)
         welcome_sub_lbl_->setText(tr("AI-powered financial intelligence.\n"
                                      "Markets, equities, portfolio, macro insights."));
     const QStringList chips = {tr("Outlook for AAPL?"), tr("Today's market news"), tr("Portfolio risk analysis"),
                                tr("Key indicators this week")};
     for (int i = 0; i < welcome_chips_.size() && i < chips.size(); ++i)
-        if (welcome_chips_[i]) welcome_chips_[i]->setText(chips[i]);
+        if (welcome_chips_[i])
+            welcome_chips_[i]->setText(chips[i]);
 
     // Typing indicator
-    if (typing_label_) typing_label_->setText(tr("Agent"));
+    if (typing_label_)
+        typing_label_->setText(tr("Agent"));
 
     // Input area
-    if (input_box_)    input_box_->setPlaceholderText(tr("Ask anything... (Enter to send, Shift+Enter for new line)"));
-    if (optimize_btn_) { optimize_btn_->setText(tr("Optimize")); optimize_btn_->setToolTip(tr("Optimize prompt with AI")); }
-    if (stop_btn_)     stop_btn_->setText(tr("Stop"));
-    if (send_btn_)     send_btn_->setText(tr("Send"));
+    if (input_box_)
+        input_box_->setPlaceholderText(tr("Ask anything... (Enter to send, Shift+Enter for new line)"));
+    if (optimize_btn_) {
+        optimize_btn_->setText(tr("Optimize"));
+        optimize_btn_->setToolTip(tr("Optimize prompt with AI"));
+    }
+    if (stop_btn_)
+        stop_btn_->setText(tr("Stop"));
+    if (send_btn_)
+        send_btn_->setText(tr("Send"));
     // hdr_title_lbl_ holds the live session name; message bubbles and stream
     // status reflect live data and update on the next message/stream event.
 }

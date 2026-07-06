@@ -1,8 +1,7 @@
 #include "trading/instruments/IciciInstrumentParser.h"
 
-#include "trading/instruments/InstrumentNormalize.h"
-
 #include "core/logging/Logger.h"
+#include "trading/instruments/InstrumentNormalize.h"
 
 #include <QString>
 #include <QTextStream>
@@ -55,14 +54,14 @@ Instrument IciciInstrumentParser::parse_row(const QStringList& cols) {
     // theory contain a comma in this unquoted CSV. Anchor the structured fields:
     // SC from the front, everything else from the end so a comma in the name
     // never shifts the columns we rely on.
-    const QString sc = cols[0].trimmed();          // ICICI stock code
-    const QString ec = cols[n - 11].trimmed();     // exchange (NSE/BSE/NFO/BFO/MCX)
-    const QString sm = cols[n - 10].trimmed();     // short mnemonic / contract encoding
-    const QString sg = cols[n - 9].trimmed();      // segment
-    const QString tk = cols[n - 8].trimmed();      // numeric token
-    const QString ls = cols[n - 7].trimmed();      // lot size
-    const QString ns = cols[n - 5].trimmed();      // exchange ticker symbol
-    const QString ts = cols[n - 4].trimmed();      // tick size
+    const QString sc = cols[0].trimmed();      // ICICI stock code
+    const QString ec = cols[n - 11].trimmed(); // exchange (NSE/BSE/NFO/BFO/MCX)
+    const QString sm = cols[n - 10].trimmed(); // short mnemonic / contract encoding
+    const QString sg = cols[n - 9].trimmed();  // segment
+    const QString tk = cols[n - 8].trimmed();  // numeric token
+    const QString ls = cols[n - 7].trimmed();  // lot size
+    const QString ns = cols[n - 5].trimmed();  // exchange ticker symbol
+    const QString ts = cols[n - 4].trimmed();  // tick size
 
     if (sc.isEmpty() || ec.isEmpty())
         return {};
@@ -126,7 +125,7 @@ Instrument IciciInstrumentParser::parse_row(const QStringList& cols) {
             return {};
         const QString right = parts[1].trimmed().toUpper();
         const double strike = parts[2].trimmed().toDouble() / 100.0;
-        inst.instrument_type = (right == "CE") ? InstrumentType::CE
+        inst.instrument_type = (right == "CE")   ? InstrumentType::CE
                                : (right == "PE") ? InstrumentType::PE
                                                  : InstrumentType::UNKNOWN;
         if (inst.instrument_type == InstrumentType::UNKNOWN)

@@ -54,7 +54,7 @@ class LlmConfigSection : public QWidget {
   private:
     // ── Tab widget ────────────────────────────────────────────────────────────
     QTabWidget* tab_widget_ = nullptr;
-    QLabel*     title_lbl_   = nullptr; // "LLM CONFIGURATION" title-bar label
+    QLabel* title_lbl_ = nullptr; // "LLM CONFIGURATION" title-bar label
 
     // ── Provider tab widgets ──────────────────────────────────────────────────
     QListWidget* provider_list_ = nullptr;

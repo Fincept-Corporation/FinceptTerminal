@@ -10,7 +10,6 @@
 
 #include <QDateTime>
 #include <QEvent>
-
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
@@ -56,8 +55,7 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
     });
 
     net_meter_ = new fincept::net::NetSpeedMeter(this);
-    connect(net_meter_, &fincept::net::NetSpeedMeter::speed_changed,
-            this, &SetupScreen::on_net_speed);
+    connect(net_meter_, &fincept::net::NetSpeedMeter::speed_changed, this, &SetupScreen::on_net_speed);
 
     elapsed_timer_ = new QTimer(this);
     elapsed_timer_->setInterval(1000);
@@ -160,8 +158,8 @@ void SetupScreen::build_ui() {
     live_hl->setContentsMargins(0, 4, 0, 0);
     live_hl->setSpacing(12);
 
-    const QString stat_css = QString("color:%1; font-family:%2; font-size:10px;")
-                                 .arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY);
+    const QString stat_css =
+        QString("color:%1; font-family:%2; font-size:10px;").arg(colors::TEXT_SECONDARY(), fonts::DATA_FAMILY);
     elapsed_lbl_ = new QLabel(live_row_);
     elapsed_lbl_->setStyleSheet(stat_css);
     elapsed_lbl_->setFixedWidth(120);
@@ -208,8 +206,8 @@ void SetupScreen::build_ui() {
 
     install_dir_lbl_ = new QLabel(center);
     install_dir_lbl_->setAlignment(Qt::AlignCenter);
-    install_dir_lbl_->setStyleSheet(
-        QString("color:%1; font-family:%2; font-size:9px; margin-top:6px;").arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
+    install_dir_lbl_->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px; margin-top:6px;")
+                                        .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
     cl->addWidget(install_dir_lbl_);
 
     auto* hcenter = new QHBoxLayout();
@@ -298,25 +296,30 @@ void SetupScreen::retranslateUi() {
                                "This only happens the first time — future launches are instant."));
 
     // Step labels + sublabels.
-    struct StepCopy { const char* key; QString label; QString sublabel; };
+    struct StepCopy {
+        const char* key;
+        QString label;
+        QString sublabel;
+    };
     const StepCopy copy[] = {
-        {"uv",              tr("Download Installer"),
-                            tr("Downloads the tool that manages everything else (~13 MB)")},
-        {"python",          tr("Install Python Runtime"),
-                            tr("The programming language engine used for all analytics")},
-        {"venv",            tr("Create Isolated Workspaces"),
-                            tr("Two sandboxed environments to keep library versions conflict-free")},
+        {"uv", tr("Download Installer"), tr("Downloads the tool that manages everything else (~13 MB)")},
+        {"python", tr("Install Python Runtime"), tr("The programming language engine used for all analytics")},
+        {"venv", tr("Create Isolated Workspaces"),
+         tr("Two sandboxed environments to keep library versions conflict-free")},
         {"packages-numpy1", tr("Install Trading Libraries"),
-                            tr("Backtesting, portfolio optimization and legacy quant tools")},
+         tr("Backtesting, portfolio optimization and legacy quant tools")},
         {"packages-numpy2", tr("Install Analytics Libraries"),
-                            tr("Machine learning, data science and AI agent frameworks")},
+         tr("Machine learning, data science and AI agent frameworks")},
     };
     for (const auto& c : copy) {
         const QString k = QString::fromLatin1(c.key);
-        if (!steps_.contains(k)) continue;
+        if (!steps_.contains(k))
+            continue;
         auto& s = steps_[k];
-        if (s.label)    s.label->setText(c.label);
-        if (s.sublabel) s.sublabel->setText(c.sublabel);
+        if (s.label)
+            s.label->setText(c.label);
+        if (s.sublabel)
+            s.sublabel->setText(c.sublabel);
         update_step_status(k);
     }
 
@@ -328,61 +331,82 @@ void SetupScreen::retranslateUi() {
     update_begin_button();
     update_status_label();
     update_elapsed_label();
-    if (skip_btn_) skip_btn_->setText(tr("SKIP & CONTINUE"));
+    if (skip_btn_)
+        skip_btn_->setText(tr("SKIP & CONTINUE"));
 }
 
 void SetupScreen::update_subtitle() {
-    if (!subtitle_lbl_) return;
+    if (!subtitle_lbl_)
+        return;
     switch (subtitle_state_) {
-        case SubtitleState::Ready:             subtitle_lbl_->setText(tr("Getting your workspace ready")); break;
-        case SubtitleState::AlreadyConfigured: subtitle_lbl_->setText(tr("Your workspace is fully configured")); break;
-        case SubtitleState::Finishing:         subtitle_lbl_->setText(tr("Finishing your workspace setup")); break;
+        case SubtitleState::Ready:
+            subtitle_lbl_->setText(tr("Getting your workspace ready"));
+            break;
+        case SubtitleState::AlreadyConfigured:
+            subtitle_lbl_->setText(tr("Your workspace is fully configured"));
+            break;
+        case SubtitleState::Finishing:
+            subtitle_lbl_->setText(tr("Finishing your workspace setup"));
+            break;
     }
 }
 
 void SetupScreen::update_begin_button() {
-    if (!begin_btn_) return;
+    if (!begin_btn_)
+        return;
     switch (begin_btn_state_) {
-        case BeginBtnState::Begin:           begin_btn_->setText(tr("BEGIN SETUP")); break;
-        case BeginBtnState::SettingUp:       begin_btn_->setText(tr("SETTING UP...")); break;
-        case BeginBtnState::Retry:           begin_btn_->setText(tr("RETRY SETUP")); break;
-        case BeginBtnState::Launch:          begin_btn_->setText(tr("LAUNCH")); break;
-        case BeginBtnState::Continue:        begin_btn_->setText(tr("CONTINUE SETUP")); break;
-        case BeginBtnState::AlreadyComplete: begin_btn_->setText(tr("ALREADY COMPLETE")); break;
+        case BeginBtnState::Begin:
+            begin_btn_->setText(tr("BEGIN SETUP"));
+            break;
+        case BeginBtnState::SettingUp:
+            begin_btn_->setText(tr("SETTING UP..."));
+            break;
+        case BeginBtnState::Retry:
+            begin_btn_->setText(tr("RETRY SETUP"));
+            break;
+        case BeginBtnState::Launch:
+            begin_btn_->setText(tr("LAUNCH"));
+            break;
+        case BeginBtnState::Continue:
+            begin_btn_->setText(tr("CONTINUE SETUP"));
+            break;
+        case BeginBtnState::AlreadyComplete:
+            begin_btn_->setText(tr("ALREADY COMPLETE"));
+            break;
     }
 }
 
 void SetupScreen::update_status_label() {
-    if (!status_label_) return;
+    if (!status_label_)
+        return;
     QString text;
     QString color = colors::TEXT_TERTIARY();
     switch (status_state_) {
         case StatusState::Idle:
-            text  = tr("Takes about 3–5 minutes. Needs an internet connection.");
+            text = tr("Takes about 3–5 minutes. Needs an internet connection.");
             break;
         case StatusState::InProgress:
-            text  = tr("Setup in progress — please keep the application open");
+            text = tr("Setup in progress — please keep the application open");
             color = kAccent;
             break;
         case StatusState::AllDone:
-            text  = tr("Everything is ready! Launching Fincept Terminal...");
+            text = tr("Everything is ready! Launching Fincept Terminal...");
             color = colors::GREEN();
             break;
         case StatusState::AnyDone:
-            text  = tr("Only the missing pieces will be downloaded. Needs an internet connection.");
+            text = tr("Only the missing pieces will be downloaded. Needs an internet connection.");
             break;
         case StatusState::Failed:
-            text  = tr("Setup failed: %1").arg(status_detail_.isEmpty()
-                                                    ? tr("Unknown error — see logs for details.")
-                                                    : status_detail_);
+            text = tr("Setup failed: %1")
+                       .arg(status_detail_.isEmpty() ? tr("Unknown error — see logs for details.") : status_detail_);
             color = colors::RED();
             break;
         case StatusState::Timeout:
-            text  = tr("Setup is taking longer than expected — possibly a slow internet connection.\n"
-                       "You can wait or skip and continue with limited functionality.");
+            text = tr("Setup is taking longer than expected — possibly a slow internet connection.\n"
+                      "You can wait or skip and continue with limited functionality.");
             break;
         case StatusState::Custom:
-            text  = status_detail_;
+            text = status_detail_;
             break;
     }
     status_label_->setText(text);
@@ -391,41 +415,44 @@ void SetupScreen::update_status_label() {
 }
 
 void SetupScreen::update_step_status(const QString& key) {
-    if (!steps_.contains(key)) return;
+    if (!steps_.contains(key))
+        return;
     auto& s = steps_[key];
-    if (!s.status) return;
+    if (!s.status)
+        return;
     switch (s.status_state) {
         case StepStatus::Waiting:
             s.status->setText(tr("Waiting"));
-            s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;")
-                                        .arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
+            s.status->setStyleSheet(
+                QString("color:%1; font-family:%2; font-size:9px;").arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY));
             break;
         case StepStatus::Working:
             s.status->setText(tr("Working..."));
-            s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;")
-                                        .arg(kAccent, fonts::DATA_FAMILY));
+            s.status->setStyleSheet(
+                QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
             break;
         case StepStatus::Done:
             s.status->setText(tr("DONE"));
-            s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;")
-                                        .arg(colors::GREEN(), fonts::DATA_FAMILY));
+            s.status->setStyleSheet(
+                QString("color:%1; font-family:%2; font-size:9px;").arg(colors::GREEN(), fonts::DATA_FAMILY));
             break;
         case StepStatus::Failed:
             s.status->setText(tr("FAILED"));
-            s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;")
-                                        .arg(colors::RED(), fonts::DATA_FAMILY));
+            s.status->setStyleSheet(
+                QString("color:%1; font-family:%2; font-size:9px;").arg(colors::RED(), fonts::DATA_FAMILY));
             break;
         case StepStatus::Percent:
             // "%1%" is a locale-neutral numeric format — no translation needed.
             s.status->setText(QStringLiteral("%1%").arg(s.percent));
-            s.status->setStyleSheet(QString("color:%1; font-family:%2; font-size:9px;")
-                                        .arg(kAccent, fonts::DATA_FAMILY));
+            s.status->setStyleSheet(
+                QString("color:%1; font-family:%2; font-size:9px;").arg(kAccent, fonts::DATA_FAMILY));
             break;
     }
 }
 
 void SetupScreen::update_elapsed_label() {
-    if (!elapsed_lbl_) return;
+    if (!elapsed_lbl_)
+        return;
     if (elapsed_secs_ < 60)
         elapsed_lbl_->setText(tr("Elapsed: %1s").arg(elapsed_secs_));
     else
@@ -617,50 +644,53 @@ void SetupScreen::prefill_completed_steps() {
     QPointer<SetupScreen> self = this;
     (void)QtConcurrent::run([self]() {
         const auto status = python::PythonSetupManager::instance().check_status();
-        QMetaObject::invokeMethod(self, [self, status]() {
-            if (!self)
-                return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, status]() {
+                if (!self)
+                    return;
 
-            if (status.uv_installed)
-                self->mark_step_done("uv");
-            if (status.python_installed)
-                self->mark_step_done("python");
-            if (status.venv_numpy1_created && status.venv_numpy2_created)
-                self->mark_step_done("venv");
-            if (status.venv_numpy1_ready)
-                self->mark_step_done("packages-numpy1");
-            if (status.venv_numpy2_ready)
-                self->mark_step_done("packages-numpy2");
+                if (status.uv_installed)
+                    self->mark_step_done("uv");
+                if (status.python_installed)
+                    self->mark_step_done("python");
+                if (status.venv_numpy1_created && status.venv_numpy2_created)
+                    self->mark_step_done("venv");
+                if (status.venv_numpy1_ready)
+                    self->mark_step_done("packages-numpy1");
+                if (status.venv_numpy2_ready)
+                    self->mark_step_done("packages-numpy2");
 
-            const bool any_done = status.uv_installed || status.python_installed ||
-                                  status.venv_numpy1_created || status.venv_numpy2_created ||
-                                  status.venv_numpy1_ready || status.venv_numpy2_ready;
-            const bool all_done = status.uv_installed && status.python_installed &&
-                                  status.venv_numpy1_ready && status.venv_numpy2_ready;
+                const bool any_done = status.uv_installed || status.python_installed || status.venv_numpy1_created ||
+                                      status.venv_numpy2_created || status.venv_numpy1_ready ||
+                                      status.venv_numpy2_ready;
+                const bool all_done = status.uv_installed && status.python_installed && status.venv_numpy1_ready &&
+                                      status.venv_numpy2_ready;
 
-            self->summary_lbl_->setText({});
+                self->summary_lbl_->setText({});
 
-            if (all_done) {
-                self->subtitle_state_ = SubtitleState::AlreadyConfigured;
-                self->begin_btn_state_ = BeginBtnState::AlreadyComplete;
-                self->begin_btn_->setEnabled(false);
-                self->status_state_ = StatusState::Custom;
-                self->status_detail_ = self->tr("Everything is installed and ready to go.");
-            } else if (any_done) {
-                self->subtitle_state_ = SubtitleState::Finishing;
-                self->begin_btn_state_ = BeginBtnState::Continue;
-                self->status_state_ = StatusState::AnyDone;
-                self->status_detail_.clear();
-            } else {
-                self->subtitle_state_ = SubtitleState::Ready;
-                self->begin_btn_state_ = BeginBtnState::Begin;
-                self->status_state_ = StatusState::Idle;
-                self->status_detail_.clear();
-            }
-            self->update_subtitle();
-            self->update_begin_button();
-            self->update_status_label();
-        }, Qt::QueuedConnection);
+                if (all_done) {
+                    self->subtitle_state_ = SubtitleState::AlreadyConfigured;
+                    self->begin_btn_state_ = BeginBtnState::AlreadyComplete;
+                    self->begin_btn_->setEnabled(false);
+                    self->status_state_ = StatusState::Custom;
+                    self->status_detail_ = self->tr("Everything is installed and ready to go.");
+                } else if (any_done) {
+                    self->subtitle_state_ = SubtitleState::Finishing;
+                    self->begin_btn_state_ = BeginBtnState::Continue;
+                    self->status_state_ = StatusState::AnyDone;
+                    self->status_detail_.clear();
+                } else {
+                    self->subtitle_state_ = SubtitleState::Ready;
+                    self->begin_btn_state_ = BeginBtnState::Begin;
+                    self->status_state_ = StatusState::Idle;
+                    self->status_detail_.clear();
+                }
+                self->update_subtitle();
+                self->update_begin_button();
+                self->update_status_label();
+            },
+            Qt::QueuedConnection);
     });
 }
 

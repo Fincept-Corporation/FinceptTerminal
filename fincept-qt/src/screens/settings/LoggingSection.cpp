@@ -147,7 +147,7 @@ void LoggingSection::build_ui() {
     tag_desc_->setWordWrap(true);
     vl->addWidget(tag_desc_);
 
-    log_tag_list_   = new QWidget(this);
+    log_tag_list_ = new QWidget(this);
     log_tag_layout_ = new QVBoxLayout(log_tag_list_);
     log_tag_layout_->setContentsMargins(0, 0, 0, 0);
     log_tag_layout_->setSpacing(6);
@@ -185,9 +185,10 @@ void LoggingSection::build_ui() {
     };
 
     for (int i = 0; i < count; ++i) {
-        const QString tag   = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
+        const QString tag = cfg.get(QString("log/tag_%1_name").arg(i)).toString();
         const QString level = cfg.get(QString("log/tag_%1_level").arg(i)).toString();
-        if (!tag.isEmpty()) add_tag_row(tag, level);
+        if (!tag.isEmpty())
+            add_tag_row(tag, level);
     }
 
     vl->addWidget(log_tag_list_);
@@ -213,7 +214,7 @@ void LoggingSection::build_ui() {
         const QString gl = log_global_level_->currentText();
         cfg.set("log/global_level", gl);
         const QHash<QString, LogLevel> lvl_map = {{"Trace", LogLevel::Trace}, {"Debug", LogLevel::Debug},
-                                                  {"Info",  LogLevel::Info},  {"Warn",  LogLevel::Warn},
+                                                  {"Info", LogLevel::Info},   {"Warn", LogLevel::Warn},
                                                   {"Error", LogLevel::Error}, {"Fatal", LogLevel::Fatal}};
         log.set_level(lvl_map.value(gl, LogLevel::Info));
 
@@ -225,12 +226,14 @@ void LoggingSection::build_ui() {
         const auto rows = log_tag_list_->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
         int saved = 0;
         for (auto* row : rows) {
-            auto* tag_edit  = row->findChild<QLineEdit*>();
+            auto* tag_edit = row->findChild<QLineEdit*>();
             auto* lvl_combo = row->findChild<QComboBox*>();
-            if (!tag_edit || !lvl_combo) continue;
-            const QString tag   = tag_edit->text().trimmed();
+            if (!tag_edit || !lvl_combo)
+                continue;
+            const QString tag = tag_edit->text().trimmed();
             const QString level = lvl_combo->currentText();
-            if (tag.isEmpty()) continue;
+            if (tag.isEmpty())
+                continue;
             cfg.set(QString("log/tag_%1_name").arg(saved), tag);
             cfg.set(QString("log/tag_%1_level").arg(saved), level);
             log.set_tag_level(tag, lvl_map.value(level, LogLevel::Info));
@@ -254,22 +257,33 @@ void LoggingSection::changeEvent(QEvent* event) {
 }
 
 void LoggingSection::retranslateUi() {
-    if (section_title_) section_title_->setText(tr("LOGGING"));
-    if (global_lbl_)    global_lbl_->setText(tr("Global Log Level"));
-    if (global_desc_)   global_desc_->setText(tr("Minimum level for all tags unless overridden."));
-    if (fmt_title_)     fmt_title_->setText(tr("Output Format"));
+    if (section_title_)
+        section_title_->setText(tr("LOGGING"));
+    if (global_lbl_)
+        global_lbl_->setText(tr("Global Log Level"));
+    if (global_desc_)
+        global_desc_->setText(tr("Minimum level for all tags unless overridden."));
+    if (fmt_title_)
+        fmt_title_->setText(tr("Output Format"));
     if (fmt_desc_)
-        fmt_desc_->setText(
-            tr("Plain text is human-readable; JSON emits one structured object per line (easier to parse with tooling)."));
-    if (log_json_mode_) log_json_mode_->setText(tr("Emit structured JSON lines"));
-    if (path_title_)    path_title_->setText(tr("Log File"));
-    if (open_folder_btn_) open_folder_btn_->setText(tr("Open Log Folder"));
-    if (copy_path_btn_)   copy_path_btn_->setText(tr("Copy Path"));
-    if (tag_title_)     tag_title_->setText(tr("Per-Tag Overrides"));
+        fmt_desc_->setText(tr(
+            "Plain text is human-readable; JSON emits one structured object per line (easier to parse with tooling)."));
+    if (log_json_mode_)
+        log_json_mode_->setText(tr("Emit structured JSON lines"));
+    if (path_title_)
+        path_title_->setText(tr("Log File"));
+    if (open_folder_btn_)
+        open_folder_btn_->setText(tr("Open Log Folder"));
+    if (copy_path_btn_)
+        copy_path_btn_->setText(tr("Copy Path"));
+    if (tag_title_)
+        tag_title_->setText(tr("Per-Tag Overrides"));
     if (tag_desc_)
         tag_desc_->setText(tr("Override the log level for a specific tag (e.g. ExchangeService, AgentService)."));
-    if (add_btn_)       add_btn_->setText(tr("+ Add Tag Override"));
-    if (save_btn_)      save_btn_->setText(tr("Apply & Save"));
+    if (add_btn_)
+        add_btn_->setText(tr("+ Add Tag Override"));
+    if (save_btn_)
+        save_btn_->setText(tr("Apply & Save"));
 
     // Re-apply text on dynamically-created per-tag rows: the "Tag name"
     // placeholder and the "Remove" button. The tag text and level are user data.

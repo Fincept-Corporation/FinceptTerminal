@@ -1,19 +1,16 @@
 // src/services/relationship_map/RelationshipMapService.h
 #pragma once
 
+#include "datahub/Producer.h"
 #include "screens/relationship_map/RelationshipMapTypes.h"
 
 #include <QObject>
-
-#    include "datahub/Producer.h"
 
 namespace fincept::services {
 
 /// Fetches corporate relationship data via Python/yfinance.
 /// Emits progress signals for progressive UI updates.
-class RelationshipMapService : public QObject
-    , public fincept::datahub::Producer
-{
+class RelationshipMapService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static RelationshipMapService& instance();

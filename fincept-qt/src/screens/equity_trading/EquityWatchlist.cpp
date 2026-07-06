@@ -1,9 +1,9 @@
 // EquityWatchlist.cpp — compact watchlist with live quote updates
 #include "screens/equity_trading/EquityWatchlist.h"
 
-#include "screens/equity_trading/EquityTypes.h"
 #include "core/symbol/SymbolDragSource.h"
 #include "core/symbol/SymbolRef.h"
+#include "screens/equity_trading/EquityTypes.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/instruments/InstrumentNormalize.h"
@@ -69,8 +69,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     wl_combo_->setObjectName("eqWatchlistCombo");
     wl_combo_->setToolTip(tr("Active watchlist"));
     wl_combo_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-    connect(wl_combo_, qOverload<int>(&QComboBox::activated), this,
-            &EquityWatchlist::on_watchlist_combo_activated);
+    connect(wl_combo_, qOverload<int>(&QComboBox::activated), this, &EquityWatchlist::on_watchlist_combo_activated);
     h_layout->addWidget(wl_combo_, 1);
 
     wl_menu_btn_ = new QToolButton;
@@ -132,15 +131,14 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     // popups, e.g. #eqOeCombo QAbstractItemView, are styled the same way.)
     if (auto* popup = completer_->popup()) {
         popup->setObjectName("eqWatchlistCompleterPopup");
-        popup->setStyleSheet(
-            QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
-                    " font-family:%4; font-size:%5px; }"
-                    "QListView::item { padding:4px 8px; border:none; }"
-                    "QListView::item:selected { background:%6; color:%2; }")
-                .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
-                     fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
-                .arg(fincept::ui::fonts::SMALL)
-                .arg(fincept::ui::colors::BG_HOVER()));
+        popup->setStyleSheet(QString("QListView { background:%1; color:%2; border:1px solid %3; outline:none;"
+                                     " font-family:%4; font-size:%5px; }"
+                                     "QListView::item { padding:4px 8px; border:none; }"
+                                     "QListView::item:selected { background:%6; color:%2; }")
+                                 .arg(fincept::ui::colors::BG_SURFACE(), fincept::ui::colors::TEXT_PRIMARY(),
+                                      fincept::ui::colors::BORDER_MED(), fincept::ui::fonts::DATA_FAMILY())
+                                 .arg(fincept::ui::fonts::SMALL)
+                                 .arg(fincept::ui::colors::BG_HOVER()));
     }
 
     // Picking a suggestion (mouse click, Enter, or Arrow+Enter) must add the
@@ -205,11 +203,10 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
                 "QTableWidget::item:selected { background:%6; color:%2; }"
                 "QHeaderView::section { background:%7; color:%8; font-size:%4px; font-weight:700;"
                 " font-family:%5; border:none; border-bottom:1px solid %3; padding:2px 4px; }")
-            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::TEXT_PRIMARY(),
-                 fincept::ui::colors::BORDER_DIM())
+            .arg(fincept::ui::colors::BG_BASE(), fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BORDER_DIM())
             .arg(fincept::ui::fonts::SMALL)
-            .arg(fincept::ui::fonts::DATA_FAMILY(), fincept::ui::colors::BG_HOVER(),
-                 fincept::ui::colors::BG_RAISED(), fincept::ui::colors::TEXT_TERTIARY()));
+            .arg(fincept::ui::fonts::DATA_FAMILY(), fincept::ui::colors::BG_HOVER(), fincept::ui::colors::BG_RAISED(),
+                 fincept::ui::colors::TEXT_TERTIARY()));
     table_->setColumnCount(3);
     table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
     table_->verticalHeader()->setVisible(false);
@@ -235,8 +232,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
 
     connect(table_, &QTableWidget::cellClicked, this, &EquityWatchlist::on_cell_clicked);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(table_, &QTableWidget::customContextMenuRequested, this,
-            &EquityWatchlist::on_table_context_menu);
+    connect(table_, &QTableWidget::customContextMenuRequested, this, &EquityWatchlist::on_table_context_menu);
     layout->addWidget(table_, 1);
 
     // Drag-out: hold-and-drag a symbol row to ship the ticker to any drop
@@ -260,8 +256,7 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     });
 }
 
-void EquityWatchlist::set_watchlists(const QVector<QPair<QString, QString>>& lists,
-                                     const QString& active_id) {
+void EquityWatchlist::set_watchlists(const QVector<QPair<QString, QString>>& lists, const QString& active_id) {
     if (!wl_combo_)
         return;
     QSignalBlocker block(wl_combo_); // programmatic — don't emit watchlist_selected
@@ -303,20 +298,18 @@ void EquityWatchlist::on_watchlist_menu() {
     if (chosen == new_act) {
         bool ok = false;
         const QString name =
-            QInputDialog::getText(this, tr("New Watchlist"), tr("Name:"), QLineEdit::Normal, {}, &ok)
-                .trimmed();
+            QInputDialog::getText(this, tr("New Watchlist"), tr("Name:"), QLineEdit::Normal, {}, &ok).trimmed();
         if (ok && !name.isEmpty())
             emit watchlist_create_requested(name);
     } else if (chosen == rename_act && !cur_id.isEmpty()) {
         bool ok = false;
-        const QString name = QInputDialog::getText(this, tr("Rename Watchlist"), tr("Name:"),
-                                                   QLineEdit::Normal, cur_name, &ok)
-                                 .trimmed();
+        const QString name =
+            QInputDialog::getText(this, tr("Rename Watchlist"), tr("Name:"), QLineEdit::Normal, cur_name, &ok)
+                .trimmed();
         if (ok && !name.isEmpty())
             emit watchlist_rename_requested(cur_id, name);
     } else if (chosen == delete_act && !cur_id.isEmpty()) {
-        const auto btn = QMessageBox::question(this, tr("Delete Watchlist"),
-                                               tr("Delete \"%1\"?").arg(cur_name));
+        const auto btn = QMessageBox::question(this, tr("Delete Watchlist"), tr("Delete \"%1\"?").arg(cur_name));
         if (btn == QMessageBox::Yes)
             emit watchlist_delete_requested(cur_id);
     }
@@ -346,10 +339,14 @@ void EquityWatchlist::changeEvent(QEvent* event) {
 }
 
 void EquityWatchlist::retranslateUi() {
-    if (title_label_)  title_label_->setText(tr("WATCHLIST"));
-    if (filter_edit_)  filter_edit_->setPlaceholderText(tr("Filter..."));
-    if (add_edit_)     add_edit_->setPlaceholderText(tr("Add symbol..."));
-    if (table_)        table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
+    if (title_label_)
+        title_label_->setText(tr("WATCHLIST"));
+    if (filter_edit_)
+        filter_edit_->setPlaceholderText(tr("Filter..."));
+    if (add_edit_)
+        add_edit_->setPlaceholderText(tr("Add symbol..."));
+    if (table_)
+        table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("LTP"), tr("CHG%")});
 }
 
 void EquityWatchlist::set_symbols(const QStringList& symbols) {

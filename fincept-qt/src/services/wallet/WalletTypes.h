@@ -9,13 +9,11 @@ namespace fincept::wallet {
 
 /// $FNCPT canonical mint. Used by the back-compat accessors on `WalletBalance`
 /// and by the price-topic alias mapping.
-inline constexpr const char* kFncptMint =
-    "9LUqJ5aQTjQiUCL93gi33LZcscUoSBJNhVCYpPzEpump";
+inline constexpr const char* kFncptMint = "9LUqJ5aQTjQiUCL93gi33LZcscUoSBJNhVCYpPzEpump";
 
 /// Wrapped-SOL mint. SOL itself isn't an SPL token (it's the native asset),
 /// but most pricing APIs key it by the wSOL mint.
-inline constexpr const char* kWrappedSolMint =
-    "So11111111111111111111111111111111111111112";
+inline constexpr const char* kWrappedSolMint = "So11111111111111111111111111111111111111112";
 
 /// Display metadata for a single SPL token. Provided by `TokenMetadataService`
 /// (2A.5.2). Cached daily; persisted to SecureStorage between runs.
@@ -23,9 +21,9 @@ struct TokenMetadata {
     QString mint;
     QString symbol;
     QString name;
-    int     decimals = 0;
+    int decimals = 0;
     QString icon_url;
-    bool    verified = false; ///< present in Jupiter's verified tagged list
+    bool verified = false; ///< present in Jupiter's verified tagged list
 };
 
 /// One asset held by a wallet — SOL or any SPL token. SOL is represented
@@ -34,13 +32,13 @@ struct TokenMetadata {
 /// via the dedicated `sol_lamports` field for callers that want native SOL
 /// distinct from a wrapped-SOL holding.
 struct TokenHolding {
-    QString mint;          ///< base58 SPL mint
-    QString symbol;        ///< resolved via TokenMetadataService; truncated mint if unknown
-    QString name;          ///< full name; "" if unknown
-    QString amount_raw;    ///< integer string (atomic, not decimal-shifted)
-    int     decimals = 0;  ///< from on-chain parsed token-account info
-    bool    verified = false;
-    QString icon_url;      ///< empty if unknown
+    QString mint;       ///< base58 SPL mint
+    QString symbol;     ///< resolved via TokenMetadataService; truncated mint if unknown
+    QString name;       ///< full name; "" if unknown
+    QString amount_raw; ///< integer string (atomic, not decimal-shifted)
+    int decimals = 0;   ///< from on-chain parsed token-account info
+    bool verified = false;
+    QString icon_url; ///< empty if unknown
 
     /// `amount_raw / 10^decimals`. 0.0 if amount_raw is empty / unparseable.
     double ui_amount() const noexcept;
@@ -53,10 +51,10 @@ struct TokenHolding {
 /// `fncpt_*` fields are gone; existing callers should use the back-compat
 /// accessors `fncpt_holding()` / `fncpt_ui()` / `fncpt_decimals()`.
 struct WalletBalance {
-    QString               pubkey_b58;
-    quint64               sol_lamports = 0;
+    QString pubkey_b58;
+    quint64 sol_lamports = 0;
     QVector<TokenHolding> tokens; ///< sorted by USD value desc at publish time
-    qint64                ts_ms = 0;
+    qint64 ts_ms = 0;
 
     double sol() const noexcept { return static_cast<double>(sol_lamports) / 1e9; }
 
@@ -69,7 +67,7 @@ struct WalletBalance {
 
     /// Convenience: returns the on-chain decimals if FNCPT is held; otherwise
     /// the canonical FNCPT decimals (6, pump.fun standard).
-    int    fncpt_decimals() const noexcept;
+    int fncpt_decimals() const noexcept;
 };
 
 /// Price snapshot for a single token mint. Published to
@@ -77,10 +75,10 @@ struct WalletBalance {
 /// canonical FNCPT mint, deprecated for one phase).
 struct TokenPrice {
     QString mint;
-    double  usd = 0.0;
-    double  sol = 0.0;
-    qint64  ts_ms = 0;
-    bool    valid = false;
+    double usd = 0.0;
+    double sol = 0.0;
+    qint64 ts_ms = 0;
+    bool valid = false;
 };
 
 /// Back-compat alias. Existing call sites that read `FncptPrice` continue to
@@ -96,13 +94,13 @@ using FncptPrice = TokenPrice;
 /// the threshold (or the balance topic emits anew at the same eligibility
 /// state — consumers re-render either way; cheap).
 struct FncptDiscount {
-    bool        eligible = false;
-    quint64     threshold_raw = 0;     ///< from FeeDiscountConfig::kThresholdRaw
-    int         threshold_decimals = 6;
-    int         discount_pct = 0;
-    QStringList applied_skus;          ///< stable SKU ids; panel maps to labels
-    QString     pubkey_b58;            ///< for diagnostics; the topic also encodes it
-    qint64      ts_ms = 0;
+    bool eligible = false;
+    quint64 threshold_raw = 0; ///< from FeeDiscountConfig::kThresholdRaw
+    int threshold_decimals = 6;
+    int discount_pct = 0;
+    QStringList applied_skus; ///< stable SKU ids; panel maps to labels
+    QString pubkey_b58;       ///< for diagnostics; the topic also encodes it
+    qint64 ts_ms = 0;
 };
 
 /// One parsed on-chain operation involving the wallet. Published as part of
@@ -117,19 +115,19 @@ struct FncptDiscount {
 ///     are empty in that case.
 struct ParsedActivity {
     enum class Kind {
-        Swap,     ///< token-for-token (or SOL) swap on a DEX
-        Receive,  ///< incoming transfer
-        Send,     ///< outgoing transfer
-        Other     ///< Helius didn't classify, or fallback path
+        Swap,    ///< token-for-token (or SOL) swap on a DEX
+        Receive, ///< incoming transfer
+        Send,    ///< outgoing transfer
+        Other    ///< Helius didn't classify, or fallback path
     };
 
-    qint64  ts_ms = 0;         ///< unix ms; 0 if Helius didn't include block time
-    Kind    kind = Kind::Other;
-    QString asset;             ///< e.g. "SOL → $FNCPT" or just "SOL"
-    QString amount_ui;         ///< pre-formatted amount string, e.g. "0.50 → 12,304"
-    QString signature;         ///< base58 tx signature (clickable to Solscan)
-    QString status;            ///< "confirmed" / "failed" / "" if unknown
-    QString counterparty;      ///< for SEND/RECEIVE; empty otherwise
+    qint64 ts_ms = 0; ///< unix ms; 0 if Helius didn't include block time
+    Kind kind = Kind::Other;
+    QString asset;        ///< e.g. "SOL → $FNCPT" or just "SOL"
+    QString amount_ui;    ///< pre-formatted amount string, e.g. "0.50 → 12,304"
+    QString signature;    ///< base58 tx signature (clickable to Solscan)
+    QString status;       ///< "confirmed" / "failed" / "" if unknown
+    QString counterparty; ///< for SEND/RECEIVE; empty otherwise
 };
 
 // ── Phase 5 types (ROADMAP tab — buyback & burn dashboard) ──────────────
@@ -154,56 +152,56 @@ struct ParsedActivity {
 /// The split percentages aren't enforced — the worker can choose any
 /// distribution; the dashboard just displays whatever the worker reports.
 struct BuybackEpoch {
-    int     epoch_no = 0;
-    qint64  start_ts_ms = 0;
-    qint64  end_ts_ms = 0;
-    double  revenue_total_usd = 0.0;        ///< end-of-epoch tally
-    double  revenue_subs_usd = 0.0;         ///< subscriptions
-    double  revenue_predmkt_usd = 0.0;      ///< prediction-market fees
-    double  revenue_misc_usd = 0.0;         ///< everything else
-    double  buyback_usd = 0.0;              ///< actually spent on buying $FNCPT (50%)
-    double  staker_yield_usd = 0.0;         ///< paid out to veFNCPT lockers (25%)
-    double  treasury_topup_usd = 0.0;       ///< retained as USDC in treasury (25%)
-    QString fncpt_bought_raw;               ///< integer string (atomic)
-    QString fncpt_burned_raw;               ///< usually == bought; may diverge briefly
-    int     fncpt_decimals = 6;             ///< pump.fun standard
-    double  avg_buy_price_usd = 0.0;        ///< buyback_usd / fncpt_bought_ui
-    QString burn_signature;                 ///< base58 tx sig of the burn (Solscan-clickable)
-    qint64  ts_ms = 0;
-    bool    is_mock = false;                ///< true if the worker endpoint isn't configured
+    int epoch_no = 0;
+    qint64 start_ts_ms = 0;
+    qint64 end_ts_ms = 0;
+    double revenue_total_usd = 0.0;   ///< end-of-epoch tally
+    double revenue_subs_usd = 0.0;    ///< subscriptions
+    double revenue_predmkt_usd = 0.0; ///< prediction-market fees
+    double revenue_misc_usd = 0.0;    ///< everything else
+    double buyback_usd = 0.0;         ///< actually spent on buying $FNCPT (50%)
+    double staker_yield_usd = 0.0;    ///< paid out to veFNCPT lockers (25%)
+    double treasury_topup_usd = 0.0;  ///< retained as USDC in treasury (25%)
+    QString fncpt_bought_raw;         ///< integer string (atomic)
+    QString fncpt_burned_raw;         ///< usually == bought; may diverge briefly
+    int fncpt_decimals = 6;           ///< pump.fun standard
+    double avg_buy_price_usd = 0.0;   ///< buyback_usd / fncpt_bought_ui
+    QString burn_signature;           ///< base58 tx sig of the burn (Solscan-clickable)
+    qint64 ts_ms = 0;
+    bool is_mock = false; ///< true if the worker endpoint isn't configured
 };
 
 /// All-time totals. Published on `treasury:burn_total`.
 struct BurnTotal {
-    QString total_burned_raw;               ///< integer string (atomic)
-    QString supply_remaining_raw;           ///< current circulating + uncirculated, minus burned
-    int     decimals = 6;
-    double  spent_on_buyback_usd = 0.0;
-    qint64  ts_ms = 0;
-    bool    is_mock = false;
+    QString total_burned_raw;     ///< integer string (atomic)
+    QString supply_remaining_raw; ///< current circulating + uncirculated, minus burned
+    int decimals = 6;
+    double spent_on_buyback_usd = 0.0;
+    qint64 ts_ms = 0;
+    bool is_mock = false;
 };
 
 /// One sample of supply over time. The supply chart subscribes
 /// `treasury:supply_history` which carries a `QVector<SupplyHistoryPoint>`.
 struct SupplyHistoryPoint {
-    qint64  ts_ms = 0;                      ///< sample time (unix ms, weekly bucket)
-    QString total_raw;                      ///< total supply at sample time (atomic)
-    QString circulating_raw;                ///< circulating only (excludes vesting/locked)
-    QString burned_raw;                     ///< cumulative burned to date
-    int     decimals = 6;
+    qint64 ts_ms = 0;        ///< sample time (unix ms, weekly bucket)
+    QString total_raw;       ///< total supply at sample time (atomic)
+    QString circulating_raw; ///< circulating only (excludes vesting/locked)
+    QString burned_raw;      ///< cumulative burned to date
+    int decimals = 6;
 };
 
 /// Treasury reserves snapshot. Published on `treasury:reserves`.
 struct TreasuryReserves {
-    QString pubkey_b58;                     ///< treasury multisig pubkey (Squads vault)
-    quint64 sol_lamports = 0;               ///< native SOL
-    double  usdc_amount = 0.0;              ///< already decimal-shifted (UI-ready)
-    double  sol_usd_price = 0.0;            ///< spot at sample time
-    double  total_usd = 0.0;                ///< (sol_lamports/1e9 * sol_usd_price) + usdc_amount
-    QString multisig_label;                 ///< "3-of-5" / "2-of-3" — for the chip
-    QString multisig_url;                   ///< deeplink (squads.so/...) — for the chip click
-    qint64  ts_ms = 0;
-    bool    is_mock = false;
+    QString pubkey_b58;         ///< treasury multisig pubkey (Squads vault)
+    quint64 sol_lamports = 0;   ///< native SOL
+    double usdc_amount = 0.0;   ///< already decimal-shifted (UI-ready)
+    double sol_usd_price = 0.0; ///< spot at sample time
+    double total_usd = 0.0;     ///< (sol_lamports/1e9 * sol_usd_price) + usdc_amount
+    QString multisig_label;     ///< "3-of-5" / "2-of-3" — for the chip
+    QString multisig_url;       ///< deeplink (squads.so/...) — for the chip click
+    qint64 ts_ms = 0;
+    bool is_mock = false;
 };
 
 /// Treasury runway. Published on `treasury:runway`.
@@ -211,11 +209,11 @@ struct TreasuryReserves {
 /// SecureStorage (`fincept.treasury_monthly_opex_usd`) until the worker
 /// publishes a tracked figure.
 struct TreasuryRunway {
-    double  total_usd = 0.0;                ///< snapshot from TreasuryReserves
-    double  monthly_opex_usd = 0.0;         ///< current burn rate
-    double  months = 0.0;                   ///< total_usd / monthly_opex_usd
-    qint64  ts_ms = 0;
-    bool    is_mock = false;
+    double total_usd = 0.0;        ///< snapshot from TreasuryReserves
+    double monthly_opex_usd = 0.0; ///< current burn rate
+    double months = 0.0;           ///< total_usd / monthly_opex_usd
+    qint64 ts_ms = 0;
+    bool is_mock = false;
 };
 
 // ── Phase 3 types (STAKE tab — veFNCPT lock + tier system) ──────────────
@@ -237,15 +235,15 @@ struct TreasuryRunway {
 /// fincept_lock program; `position_id` is the on-chain account address
 /// (base58) that uniquely identifies it.
 struct LockPosition {
-    QString position_id;                    ///< base58 PDA / position NFT mint
-    QString amount_raw;                     ///< $FNCPT escrowed (atomic)
-    int     decimals = 6;                   ///< $FNCPT decimals
-    qint64  lock_start_ts = 0;              ///< unix ms — when the lock was created
-    qint64  unlock_ts = 0;                  ///< unix ms — `lock_start + duration`
-    qint64  duration_secs = 0;              ///< original lock duration
-    QString weight_raw;                     ///< veFNCPT weight (atomic, decimals match $FNCPT)
-    double  lifetime_yield_usdc = 0.0;      ///< total USDC paid to this position
-    bool    is_mock = false;
+    QString position_id;              ///< base58 PDA / position NFT mint
+    QString amount_raw;               ///< $FNCPT escrowed (atomic)
+    int decimals = 6;                 ///< $FNCPT decimals
+    qint64 lock_start_ts = 0;         ///< unix ms — when the lock was created
+    qint64 unlock_ts = 0;             ///< unix ms — `lock_start + duration`
+    qint64 duration_secs = 0;         ///< original lock duration
+    QString weight_raw;               ///< veFNCPT weight (atomic, decimals match $FNCPT)
+    double lifetime_yield_usdc = 0.0; ///< total USDC paid to this position
+    bool is_mock = false;
 };
 
 /// Aggregate veFNCPT view per pubkey. Published on `wallet:vefncpt:<pubkey>`.
@@ -253,12 +251,12 @@ struct LockPosition {
 /// for the next epoch's distribution.
 struct VeFncptAggregate {
     QString pubkey_b58;
-    QString total_weight_raw;               ///< sum of `LockPosition.weight_raw`
-    int     decimals = 6;
-    int     position_count = 0;
-    double  projected_next_period_yield_usdc = 0.0; ///< weight share × next-epoch revenue × 25%
-    qint64  ts_ms = 0;
-    bool    is_mock = false;
+    QString total_weight_raw; ///< sum of `LockPosition.weight_raw`
+    int decimals = 6;
+    int position_count = 0;
+    double projected_next_period_yield_usdc = 0.0; ///< weight share × next-epoch revenue × 25%
+    qint64 ts_ms = 0;
+    bool is_mock = false;
 };
 
 /// Yield earned by a wallet. Published on `wallet:yield:<pubkey>`.
@@ -267,11 +265,11 @@ struct VeFncptAggregate {
 /// realised is a sum of past on-chain distribution events.
 struct YieldSnapshot {
     QString pubkey_b58;
-    double  lifetime_usdc = 0.0;            ///< all-time
-    double  last_period_usdc = 0.0;         ///< most recent epoch distribution
-    qint64  last_period_end_ts = 0;         ///< unix ms — settlement time
-    qint64  ts_ms = 0;
-    bool    is_mock = false;
+    double lifetime_usdc = 0.0;    ///< all-time
+    double last_period_usdc = 0.0; ///< most recent epoch distribution
+    qint64 last_period_end_ts = 0; ///< unix ms — settlement time
+    qint64 ts_ms = 0;
+    bool is_mock = false;
 };
 
 /// Terminal-wide weekly revenue aggregate. Published on `treasury:revenue`.
@@ -279,11 +277,11 @@ struct YieldSnapshot {
 /// consumed by the Phase 5 buyback dashboard. Bucketed weekly to match
 /// the buyback worker's epoch cadence.
 struct TreasuryRevenue {
-    qint64  period_start_ts = 0;
-    qint64  period_end_ts = 0;
-    double  total_usd = 0.0;
-    qint64  ts_ms = 0;
-    bool    is_mock = false;
+    qint64 period_start_ts = 0;
+    qint64 period_end_ts = 0;
+    double total_usd = 0.0;
+    qint64 ts_ms = 0;
+    bool is_mock = false;
 };
 
 /// Billing tier derived from a wallet's veFNCPT weight. Published on
@@ -300,19 +298,19 @@ struct TreasuryRevenue {
 /// Silver+ via a `tier_changed` signal.
 struct TierStatus {
     enum class Tier {
-        Free,    ///< no veFNCPT
-        Bronze,  ///< 100+
-        Silver,  ///< 1k+
-        Gold     ///< 10k+
+        Free,   ///< no veFNCPT
+        Bronze, ///< 100+
+        Silver, ///< 1k+
+        Gold    ///< 10k+
     };
 
     QString pubkey_b58;
-    Tier    tier = Tier::Free;
-    QString weight_raw;                     ///< current veFNCPT weight (atomic)
-    QString next_threshold_raw;             ///< raw amount needed to reach next tier; empty at Gold
-    int     decimals = 6;
-    qint64  ts_ms = 0;
-    bool    is_mock = false;
+    Tier tier = Tier::Free;
+    QString weight_raw;         ///< current veFNCPT weight (atomic)
+    QString next_threshold_raw; ///< raw amount needed to reach next tier; empty at Gold
+    int decimals = 6;
+    qint64 ts_ms = 0;
+    bool is_mock = false;
 };
 
 } // namespace fincept::wallet

@@ -5,32 +5,31 @@
 //
 // Part of the partial-class split of AltInvestmentsScreen.cpp.
 
-#include "screens/alt_investments/AltInvestmentsScreen.h"
-
 #include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/alt_investments/AltInvestmentsScreen.h"
 #include "services/python_cli/PythonCliService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
+#include <QComboBox>
 #include <QCoreApplication>
+#include <QDoubleSpinBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLabel>
+#include <QLineEdit>
 #include <QPointer>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QShowEvent>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QVBoxLayout>
-#include <QLabel>
-#include <QComboBox>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QSpinBox>
-#include <QDoubleSpinBox>
 
 namespace fincept::screens {
 
@@ -384,7 +383,6 @@ static QList<AltField> fields_for(const QString& id) {
     return {text_field("name", alt_tr("NAME"), "")};
 }
 
-
 void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
     for (auto* w : field_widgets_)
         w->deleteLater();
@@ -589,8 +587,7 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
     QPointer<AltInvestmentsScreen> self = this;
 
     services::python_cli::PythonCliService::instance().run(
-        QStringLiteral("Analytics/alternateInvestment/cli.py"),
-        {command, QStringLiteral("--data"), data_json},
+        QStringLiteral("Analytics/alternateInvestment/cli.py"), {command, QStringLiteral("--data"), data_json},
         [self, command, cache_key](const services::python_cli::CliResult& r) {
             if (!self)
                 return;
@@ -604,9 +601,8 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
             const QJsonObject obj = r.data;
 
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                10 * 60, "alt_investments");
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 10 * 60,
+                "alt_investments");
 
             self->display_verdict(obj, command);
             LOG_INFO("AltInvestments", "Analysis complete: " + command);

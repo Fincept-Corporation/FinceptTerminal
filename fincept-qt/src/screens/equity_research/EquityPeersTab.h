@@ -36,11 +36,11 @@ class EquityPeersTab : public QWidget {
 
     QString current_symbol_;
     QLineEdit* peers_edit_ = nullptr;
-    QLabel* peers_caption_ = nullptr;     ///< "PEERS (comma-separated):"
+    QLabel* peers_caption_ = nullptr; ///< "PEERS (comma-separated):"
     QLabel* status_label_ = nullptr;
     QTableWidget* peer_table_ = nullptr;
     QPushButton* load_btn_ = nullptr;
-    QList<QLabel*> legend_text_lbls_;     ///< Legend captions for retranslate
+    QList<QLabel*> legend_text_lbls_; ///< Legend captions for retranslate
     QVector<services::equity::PeerData> cached_peers_;
     bool peers_loaded_ = false;
 

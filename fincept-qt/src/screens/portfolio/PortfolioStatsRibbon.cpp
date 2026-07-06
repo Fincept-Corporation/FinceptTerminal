@@ -74,8 +74,8 @@ QWidget* PortfolioStatsRibbon::build_hero(HeroCell& c, const QString& label_text
     v->addWidget(c.value);
 
     c.sub = new QLabel;
-    c.sub->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; background:transparent;")
-                             .arg(ui::colors::TEXT_TERTIARY()));
+    c.sub->setStyleSheet(
+        QString("color:%1; font-size:11px; font-weight:600; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
     v->addWidget(c.sub);
 
     return c.container;
@@ -110,11 +110,11 @@ QWidget* PortfolioStatsRibbon::build_risk_grid() {
     // Layout: label TEXT_TERTIARY 10px on left, value 13px / 700 on right.
     // 2 columns × 3 rows. Left column: SHARPE / BETA / MDD. Right: CONC / VOL30 / RISK.
     sharpe_ = add_grid_chip(g, 0, 0, tr("SHARPE"));
-    conc_   = add_grid_chip(g, 0, 1, tr("CONC"));
-    beta_   = add_grid_chip(g, 1, 0, tr("BETA"));
-    vol_    = add_grid_chip(g, 1, 1, tr("VOL 30D"));
-    mdd_    = add_grid_chip(g, 2, 0, tr("MDD"));
-    risk_   = add_grid_chip(g, 2, 1, tr("RISK"));
+    conc_ = add_grid_chip(g, 0, 1, tr("CONC"));
+    beta_ = add_grid_chip(g, 1, 0, tr("BETA"));
+    vol_ = add_grid_chip(g, 1, 1, tr("VOL 30D"));
+    mdd_ = add_grid_chip(g, 2, 0, tr("MDD"));
+    risk_ = add_grid_chip(g, 2, 1, tr("RISK"));
 
     outer->addLayout(g, 1);
 
@@ -122,7 +122,7 @@ QWidget* PortfolioStatsRibbon::build_risk_grid() {
 }
 
 PortfolioStatsRibbon::GridChip PortfolioStatsRibbon::add_grid_chip(QGridLayout* g, int row, int col,
-                                                                    const QString& label_text) {
+                                                                   const QString& label_text) {
     GridChip c;
 
     // Each chip occupies 2 grid sub-columns within its parent cell so we can
@@ -172,18 +172,16 @@ void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
     pnl_cell_.value->setText(
         QString("%1%2").arg(s.total_unrealized_pnl >= 0 ? "+" : "").arg(fmt(s.total_unrealized_pnl)));
     apply_hero_value_color(pnl_cell_, color_tok(s.total_unrealized_pnl), 20);
-    pnl_cell_.sub->setText(
-        QString("%1%2%   ▲ %3   ▼ %4")
-            .arg(s.total_unrealized_pnl_percent >= 0 ? "+" : "")
-            .arg(QString::number(s.total_unrealized_pnl_percent, 'f', 2))
-            .arg(s.gainers)
-            .arg(s.losers));
+    pnl_cell_.sub->setText(QString("%1%2%   ▲ %3   ▼ %4")
+                               .arg(s.total_unrealized_pnl_percent >= 0 ? "+" : "")
+                               .arg(QString::number(s.total_unrealized_pnl_percent, 'f', 2))
+                               .arg(s.gainers)
+                               .arg(s.losers));
     pnl_cell_.sub->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; background:transparent;")
                                      .arg(color_tok(s.total_unrealized_pnl)));
 
     // ── Cell 3: TODAY ────────────────────────────────────────────────────────
-    day_cell_.value->setText(
-        QString("%1%2").arg(s.total_day_change >= 0 ? "+" : "").arg(fmt(s.total_day_change)));
+    day_cell_.value->setText(QString("%1%2").arg(s.total_day_change >= 0 ? "+" : "").arg(fmt(s.total_day_change)));
     apply_hero_value_color(day_cell_, color_tok(s.total_day_change), 20);
     day_cell_.sub->setText(QString("%1%2%")
                                .arg(s.total_day_change_percent >= 0 ? "+" : "")
@@ -223,18 +221,16 @@ void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
 
     // MDD always negative — semantic NEGATIVE color.
     mdd_.value->setText(fmt_pct_opt(m.max_drawdown));
-    mdd_.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
-                                  .arg(ui::colors::NEGATIVE()));
+    mdd_.value->setStyleSheet(
+        QString("color:%1; font-size:13px; font-weight:700; background:transparent;").arg(ui::colors::NEGATIVE()));
 
     // RISK score: threshold-driven semantic color.
     if (m.risk_score.has_value()) {
         const double rs = *m.risk_score;
-        const char* rs_color = rs < 30 ? ui::colors::POSITIVE
-                              : rs < 60 ? ui::colors::WARNING
-                                        : ui::colors::NEGATIVE;
+        const char* rs_color = rs < 30 ? ui::colors::POSITIVE : rs < 60 ? ui::colors::WARNING : ui::colors::NEGATIVE;
         risk_.value->setText(QString::number(rs, 'f', 0));
-        risk_.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
-                                       .arg(rs_color));
+        risk_.value->setStyleSheet(
+            QString("color:%1; font-size:13px; font-weight:700; background:transparent;").arg(rs_color));
     } else {
         risk_.value->setText("--");
         risk_.value->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; background:transparent;")
@@ -249,17 +245,27 @@ void PortfolioStatsRibbon::changeEvent(QEvent* event) {
 }
 
 void PortfolioStatsRibbon::retranslateUi() {
-    if (value_cell_.label) value_cell_.label->setText(tr("PORTFOLIO VALUE"));
-    if (pnl_cell_.label)   pnl_cell_.label->setText(tr("UNREALIZED P&L"));
-    if (day_cell_.label)   day_cell_.label->setText(tr("TODAY"));
-    if (risk_header_)      risk_header_->setText(tr("RISK & POSITIONING"));
+    if (value_cell_.label)
+        value_cell_.label->setText(tr("PORTFOLIO VALUE"));
+    if (pnl_cell_.label)
+        pnl_cell_.label->setText(tr("UNREALIZED P&L"));
+    if (day_cell_.label)
+        day_cell_.label->setText(tr("TODAY"));
+    if (risk_header_)
+        risk_header_->setText(tr("RISK & POSITIONING"));
 
-    if (sharpe_.label) sharpe_.label->setText(tr("SHARPE"));
-    if (conc_.label)   conc_.label->setText(tr("CONC"));
-    if (beta_.label)   beta_.label->setText(tr("BETA"));
-    if (vol_.label)    vol_.label->setText(tr("VOL 30D"));
-    if (mdd_.label)    mdd_.label->setText(tr("MDD"));
-    if (risk_.label)   risk_.label->setText(tr("RISK"));
+    if (sharpe_.label)
+        sharpe_.label->setText(tr("SHARPE"));
+    if (conc_.label)
+        conc_.label->setText(tr("CONC"));
+    if (beta_.label)
+        beta_.label->setText(tr("BETA"));
+    if (vol_.label)
+        vol_.label->setText(tr("VOL 30D"));
+    if (mdd_.label)
+        mdd_.label->setText(tr("MDD"));
+    if (risk_.label)
+        risk_.label->setText(tr("RISK"));
 
     if (last_summary_.has_value()) {
         // Re-render the "▲ %1 positions" sub-line under PORTFOLIO VALUE.

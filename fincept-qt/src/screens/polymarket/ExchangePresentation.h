@@ -22,30 +22,30 @@ namespace fincept::screens::polymarket {
 /// for_adapter() to route by adapter id.
 struct ExchangePresentation {
     enum class PriceStyle {
-        ProbabilityCents,  // 0.52 → "52¢"      (Polymarket: raw prob × 100 with cents suffix)
-        Dollars,           // 0.52 → "$0.52"    (Kalshi: dollar-denominated contract price)
+        ProbabilityCents, // 0.52 → "52¢"      (Polymarket: raw prob × 100 with cents suffix)
+        Dollars,          // 0.52 → "$0.52"    (Kalshi: dollar-denominated contract price)
     };
 
     enum class CategoryMode {
-        Chips,       // flat chip row (Polymarket: ~20 tags fits fine)
-        ComboBox,    // dropdown (Kalshi: 100+ series tickers)
+        Chips,    // flat chip row (Polymarket: ~20 tags fits fine)
+        ComboBox, // dropdown (Kalshi: 100+ series tickers)
     };
 
-    QString exchange_id;           // "polymarket" | "kalshi"
-    QString display_name;          // "Polymarket" | "Kalshi"
+    QString exchange_id;  // "polymarket" | "kalshi"
+    QString display_name; // "Polymarket" | "Kalshi"
 
     // Visual identity — a single accent color is the clearest "different
     // screen" signal without a full theme fork.
-    QColor accent;                 // active pill / underline / bar color
-    QColor accent_dim;             // subtle tint for backgrounds
+    QColor accent;     // active pill / underline / bar color
+    QColor accent_dim; // subtle tint for backgrounds
 
     // Currency + number formatting.
-    QString currency_symbol;       // "$" | "USDC"
+    QString currency_symbol; // "$" | "USDC"
     PriceStyle price_style = PriceStyle::ProbabilityCents;
-    int price_decimal_places = 4;  // ActivityFeed raw price column
+    int price_decimal_places = 4; // ActivityFeed raw price column
 
     // Top command bar.
-    QStringList view_names;        // ["TRENDING","MARKETS","EVENTS","SPORTS","RESOLVED"] / ["MARKETS","EVENTS","SETTLED"]
+    QStringList view_names; // ["TRENDING","MARKETS","EVENTS","SPORTS","RESOLVED"] / ["MARKETS","EVENTS","SETTLED"]
     QString default_view;
     CategoryMode category_mode = CategoryMode::Chips;
     int category_visible_cap = 12; // Chips mode: hide overflow
@@ -55,13 +55,13 @@ struct ExchangePresentation {
 
     // Feature flags (mirror the detail-panel tab visibility decisions).
     bool has_open_interest = true;
-    bool has_polymarket_extras = true;   // Holders / Comments / Related tabs
+    bool has_polymarket_extras = true; // Holders / Comments / Related tabs
     bool has_leaderboard = true;
 
     // Formatters — helpers that bake the profile's units into rendered text.
-    QString format_price(double prob_0_to_1) const;   // 0.52 → "52¢" or "$0.52"
-    QString format_volume(double v) const;            // 1_234_567 → "$1.2M"
-    QString format_liquidity(double v) const;         // same as volume today; kept as a separate slot for future divergence
+    QString format_price(double prob_0_to_1) const; // 0.52 → "52¢" or "$0.52"
+    QString format_volume(double v) const;          // 1_234_567 → "$1.2M"
+    QString format_liquidity(double v) const; // same as volume today; kept as a separate slot for future divergence
 
     /// Translate the prediction::PredictionMarket.active/closed pair (+ any
     /// exchange-specific hints in extras) into a status badge tuple:

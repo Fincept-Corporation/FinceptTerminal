@@ -6,20 +6,18 @@
 //
 // Part of the partial-class split of AgentService.cpp.
 
-#include "services/agents/AgentService.h"
-
-#include "services/llm/LlmService.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/TopicPolicy.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpTypes.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "python/PythonRunner.h"
+#include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
-
-#include "datahub/DataHub.h"
-#include "datahub/TopicPolicy.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -344,6 +342,5 @@ QString AgentService::create_portfolio_plan(const QJsonObject& goals, const QJso
 }
 
 // ── Memory & Knowledge ───────────────────────────────────────────────────────
-
 
 } // namespace fincept::services

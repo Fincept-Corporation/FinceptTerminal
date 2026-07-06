@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
+
 #include <algorithm>
 
 namespace fincept::services {
@@ -34,8 +35,8 @@ QList<MarketSearchService::Item> parse_items(const QJsonDocument& doc) {
         const QString sym = obj["symbol"].toString();
         if (sym.isEmpty())
             continue;
-        out.push_back({sym, obj["name"].toString(), obj["exchange"].toString(),
-                       obj["type"].toString(), obj["country"].toString()});
+        out.push_back({sym, obj["name"].toString(), obj["exchange"].toString(), obj["type"].toString(),
+                       obj["country"].toString()});
     }
     return out;
 }
@@ -49,8 +50,7 @@ MarketSearchService& MarketSearchService::instance() {
 
 MarketSearchService::MarketSearchService() = default;
 
-void MarketSearchService::search(const QString& query, const QString& type, int limit,
-                                 const QString& request_id) {
+void MarketSearchService::search(const QString& query, const QString& type, int limit, const QString& request_id) {
     const QString q = query.trimmed();
     if (q.isEmpty()) {
         emit results_ready(request_id, query, {});

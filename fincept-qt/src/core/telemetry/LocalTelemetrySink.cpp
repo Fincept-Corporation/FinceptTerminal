@@ -41,17 +41,15 @@ void LocalTelemetrySink::record(const QString& event_id, const QVariantMap& payl
     const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
     const QString session = TerminalShell::instance().session_id();
 
-    auto r = db->execute(
-        "INSERT INTO telemetry_events(ts_ms, event_id, payload_json, session_id) "
-        "VALUES (?, ?, ?, ?)",
-        {now_ms, event_id, json, session});
+    auto r = db->execute("INSERT INTO telemetry_events(ts_ms, event_id, payload_json, session_id) "
+                         "VALUES (?, ?, ?, ?)",
+                         {now_ms, event_id, json, session});
 
     if (r.is_err()) {
         // Mark unhealthy; future record() calls still try (transient
         // disk full / busy timeout shouldn't permanently kill telemetry).
         healthy_ = false;
-        LOG_WARN("LocalTelemetry", QString("record failed: %1")
-                                       .arg(QString::fromStdString(r.error())));
+        LOG_WARN("LocalTelemetry", QString("record failed: %1").arg(QString::fromStdString(r.error())));
     } else if (!healthy_) {
         healthy_ = true;
         LOG_INFO("LocalTelemetry", "Recovered from previous write failure");
@@ -71,16 +69,14 @@ void LocalTelemetrySink::ensure_schema() {
                       "  session_id   TEXT"
                       ")");
     if (r.is_err()) {
-        LOG_ERROR("LocalTelemetry",
-                  QString("schema create failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR("LocalTelemetry", QString("schema create failed: %1").arg(QString::fromStdString(r.error())));
         healthy_ = false;
         return;
     }
     auto idx = db->exec("CREATE INDEX IF NOT EXISTS idx_telemetry_ts "
                         "ON telemetry_events(ts_ms)");
     if (idx.is_err()) {
-        LOG_WARN("LocalTelemetry",
-                 QString("idx create failed: %1").arg(QString::fromStdString(idx.error())));
+        LOG_WARN("LocalTelemetry", QString("idx create failed: %1").arg(QString::fromStdString(idx.error())));
     }
     LOG_INFO("LocalTelemetry", "Schema ensured");
 }

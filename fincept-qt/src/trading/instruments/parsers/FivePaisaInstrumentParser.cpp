@@ -16,8 +16,7 @@ namespace {
 
 QByteArray download_fivepaisa(const BrokerCredentials&) {
     // Public ScripMaster CSV (all segments) — no auth.
-    return http_get_blocking("https://openapi.5paisa.com/VendorsAPI/Service1.svc/ScripMaster/segment/all", {},
-                             120000);
+    return http_get_blocking("https://openapi.5paisa.com/VendorsAPI/Service1.svc/ScripMaster/segment/all", {}, 120000);
 }
 
 // Map the 5paisa (Exch,ExchType) tuple to a canonical exchange. Returns "" if
@@ -85,9 +84,8 @@ QVector<Instrument> parse_fivepaisa(const QByteArray& payload) {
             canonExch = "BSE_INDEX";
 
         const bool is_index = (canonExch == "NSE_INDEX" || canonExch == "BSE_INDEX");
-        const bool is_deriv =
-            (canonExch == "NFO" || canonExch == "BFO" || canonExch == "CDS" || canonExch == "BCD" ||
-             canonExch == "MCX");
+        const bool is_deriv = (canonExch == "NFO" || canonExch == "BFO" || canonExch == "CDS" || canonExch == "BCD" ||
+                               canonExch == "MCX");
 
         InstrumentType t;
         if (is_index)

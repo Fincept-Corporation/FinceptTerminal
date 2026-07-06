@@ -2,8 +2,6 @@
 
 #include "app/TerminalShell.h"
 #include "app/WindowFrame.h"
-#include "screens/launchpad/OnboardingTour.h"
-#include "storage/workspace/WorkspaceDb.h"
 #include "core/config/ProfileManager.h"
 #include "core/keys/WindowCycler.h"
 #include "core/layout/LayoutCatalog.h"
@@ -12,7 +10,9 @@
 #include "core/logging/Logger.h"
 #include "core/profile/ProfilePaths.h"
 #include "core/window/WindowRegistry.h"
+#include "screens/launchpad/OnboardingTour.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "storage/workspace/WorkspaceDb.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 
 #include <QApplication>
@@ -80,12 +80,11 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     crash_banner_->setVisible(false);
     crash_banner_->setWordWrap(true);
     crash_banner_->setObjectName("launchpadCrashBanner");
-    crash_banner_->setStyleSheet(
-        "QLabel#launchpadCrashBanner {"
-        "  background: #422006; color: #fbbf24;"
-        "  border: 1px solid #d97706; border-radius: 4px;"
-        "  padding: 8px 10px; font-size: 11px; font-weight: 600;"
-        "}");
+    crash_banner_->setStyleSheet("QLabel#launchpadCrashBanner {"
+                                 "  background: #422006; color: #fbbf24;"
+                                 "  border: 1px solid #d97706; border-radius: 4px;"
+                                 "  padding: 8px 10px; font-size: 11px; font-weight: 600;"
+                                 "}");
     vl->addWidget(crash_banner_);
 
     // "Continue from last session" — the most-common user intent on relaunch.
@@ -94,13 +93,12 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     btn_continue_ = new QPushButton;
     btn_continue_->setMinimumHeight(48);
     btn_continue_->setObjectName("launchpadContinueBtn");
-    btn_continue_->setStyleSheet(
-        "QPushButton#launchpadContinueBtn {"
-        "  background: #d97706; color: #fff;"
-        "  font-weight: 700; font-size: 13px;"
-        "  border: none; border-radius: 4px;"
-        "}"
-        "QPushButton#launchpadContinueBtn:hover { background: #b45309; }");
+    btn_continue_->setStyleSheet("QPushButton#launchpadContinueBtn {"
+                                 "  background: #d97706; color: #fff;"
+                                 "  font-weight: 700; font-size: 13px;"
+                                 "  border: none; border-radius: 4px;"
+                                 "}"
+                                 "QPushButton#launchpadContinueBtn:hover { background: #b45309; }");
     connect(btn_continue_, &QPushButton::clicked, this, &LaunchpadScreen::on_continue);
     vl->addWidget(btn_continue_);
 
@@ -132,17 +130,16 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     filter_edit_ = new QLineEdit;
     filter_edit_->setPlaceholderText(tr("Type to filter layouts…"));
     filter_edit_->setClearButtonEnabled(true);
-    filter_edit_->setStyleSheet(
-        "QLineEdit { background: #111827; border: 1px solid #374151;"
-        "            color: #e5e7eb; padding: 4px 6px; }"
-        "QLineEdit:focus { border-color: #d97706; }");
+    filter_edit_->setStyleSheet("QLineEdit { background: #111827; border: 1px solid #374151;"
+                                "            color: #e5e7eb; padding: 4px 6px; }"
+                                "QLineEdit:focus { border-color: #d97706; }");
     filter_edit_->installEventFilter(this);
     connect(filter_edit_, &QLineEdit::textChanged, this, [this](const QString& q) {
-        if (!recent_layouts_) return;
+        if (!recent_layouts_)
+            return;
         for (int i = 0; i < recent_layouts_->count(); ++i) {
             auto* it = recent_layouts_->item(i);
-            const bool match = q.isEmpty() ||
-                               it->text().contains(q, Qt::CaseInsensitive);
+            const bool match = q.isEmpty() || it->text().contains(q, Qt::CaseInsensitive);
             it->setHidden(!match);
         }
         // Auto-select the first visible match so Enter Just Works.
@@ -156,11 +153,10 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     vl->addWidget(filter_edit_);
 
     recent_layouts_ = new QListWidget;
-    recent_layouts_->setStyleSheet(
-        "QListWidget { background: #111827; border: 1px solid #374151; color: #e5e7eb; }"
-        "QListWidget::item { padding: 6px 8px; }"
-        "QListWidget::item:hover { background: #1f2937; }"
-        "QListWidget::item:selected { background: #1f2937; color: #d97706; }");
+    recent_layouts_->setStyleSheet("QListWidget { background: #111827; border: 1px solid #374151; color: #e5e7eb; }"
+                                   "QListWidget::item { padding: 6px 8px; }"
+                                   "QListWidget::item:hover { background: #1f2937; }"
+                                   "QListWidget::item:selected { background: #1f2937; color: #d97706; }");
     vl->addWidget(recent_layouts_, /*stretch=*/1);
     refresh_recent_layouts();
 
@@ -187,14 +183,12 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
         auto* card = new QPushButton;
         card->setText(QString("%1\n\n%2").arg(p.display_name, p.description));
         card->setMinimumHeight(80);
-        card->setStyleSheet(
-            "QPushButton { background: #111827; border: 1px solid #374151;"
-            "             color: #e5e7eb; padding: 10px; text-align: left;"
-            "             font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { border-color: #d97706; color: #d97706; }");
+        card->setStyleSheet("QPushButton { background: #111827; border: 1px solid #374151;"
+                            "             color: #e5e7eb; padding: 10px; text-align: left;"
+                            "             font-size: 12px; font-weight: 600; }"
+                            "QPushButton:hover { border-color: #d97706; color: #d97706; }");
         const QString persona_id = p.id;
-        connect(card, &QPushButton::clicked, this,
-                [this, persona_id]() { on_template_picked(persona_id); });
+        connect(card, &QPushButton::clicked, this, [this, persona_id]() { on_template_picked(persona_id); });
         grid->addWidget(card, i / 2, i % 2);
     }
     picker_root->addLayout(grid);
@@ -240,17 +234,22 @@ void LaunchpadScreen::retranslateUi() {
     if (sub_label_)
         sub_label_->setText(tr("All windows closed. Open a new window or pick a layout below."));
     if (crash_banner_)
-        crash_banner_->setText(
-            tr("Last session ended unexpectedly — your work was auto-saved. "
-               "Click \"Continue from last session\" to restore."));
+        crash_banner_->setText(tr("Last session ended unexpectedly — your work was auto-saved. "
+                                  "Click \"Continue from last session\" to restore."));
 
-    if (btn_continue_)       btn_continue_->setText(tr("Continue from last session"));
-    if (btn_new_window_)     btn_new_window_->setText(tr("New Window"));
-    if (btn_open_layout_)    btn_open_layout_->setText(tr("Open Saved Layout…"));
-    if (btn_switch_profile_) btn_switch_profile_->setText(tr("Switch Profile…"));
+    if (btn_continue_)
+        btn_continue_->setText(tr("Continue from last session"));
+    if (btn_new_window_)
+        btn_new_window_->setText(tr("New Window"));
+    if (btn_open_layout_)
+        btn_open_layout_->setText(tr("Open Saved Layout…"));
+    if (btn_switch_profile_)
+        btn_switch_profile_->setText(tr("Switch Profile…"));
 
-    if (recent_label_) recent_label_->setText(tr("Recent Layouts"));
-    if (filter_edit_)  filter_edit_->setPlaceholderText(tr("Type to filter layouts…"));
+    if (recent_label_)
+        recent_label_->setText(tr("Recent Layouts"));
+    if (filter_edit_)
+        filter_edit_->setPlaceholderText(tr("Type to filter layouts…"));
     if (template_picker_label_)
         template_picker_label_->setText(tr("Pick a starting template:"));
 }
@@ -295,7 +294,8 @@ bool LaunchpadScreen::eventFilter(QObject* obj, QEvent* event) {
             // Walk visible rows only — hidden rows are filtered out so
             // arrow keys must skip them.
             const int n = recent_layouts_->count();
-            if (n == 0) return true;
+            if (n == 0)
+                return true;
             int row = recent_layouts_->currentRow();
             const int step = (key == Qt::Key_Down) ? 1 : -1;
             for (int i = 0; i < n; ++i) {
@@ -359,21 +359,21 @@ void LaunchpadScreen::on_switch_profile() {
 
     const QString current = ProfileManager::instance().active();
     int current_idx = items.indexOf(current);
-    if (current_idx < 0) current_idx = 0;
+    if (current_idx < 0)
+        current_idx = 0;
 
     bool ok = false;
-    const QString picked = QInputDialog::getItem(
-        this, tr("Switch Profile"), tr("Pick a profile or create one:"),
-        items, current_idx, /*editable=*/false, &ok);
+    const QString picked = QInputDialog::getItem(this, tr("Switch Profile"), tr("Pick a profile or create one:"), items,
+                                                 current_idx, /*editable=*/false, &ok);
     if (!ok)
         return;
 
     QString target = picked;
     if (picked == create_new_label) {
         bool name_ok = false;
-        target = QInputDialog::getText(
-            this, tr("Create Profile"), tr("New profile name:"),
-            QLineEdit::Normal, QString(), &name_ok).trimmed();
+        target = QInputDialog::getText(this, tr("Create Profile"), tr("New profile name:"), QLineEdit::Normal,
+                                       QString(), &name_ok)
+                     .trimmed();
         if (!name_ok || target.isEmpty())
             return;
     }
@@ -405,8 +405,7 @@ void LaunchpadScreen::on_open_layout() {
     LayoutId id = LayoutId::from_string(id_str);
     auto r = LayoutCatalog::instance().load_workspace(id);
     if (r.is_err()) {
-        LOG_WARN(kLaunchpadTag,
-                 QString("Open Layout failed: %1").arg(QString::fromStdString(r.error())));
+        LOG_WARN(kLaunchpadTag, QString("Open Layout failed: %1").arg(QString::fromStdString(r.error())));
         return;
     }
     const layout::Workspace ws = r.value();
@@ -416,14 +415,17 @@ void LaunchpadScreen::on_open_layout() {
     // Defer apply via queued connection so the spawned WindowFrame is fully
     // materialised before WorkspaceShell::apply walks WindowRegistry. If
     // there are no frames yet (Launchpad-only state), spawn one first.
-    QMetaObject::invokeMethod(this, [ws]() {
-        if (fincept::WindowRegistry::instance().frames().isEmpty()) {
-            auto* fr = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
-            fr->setAttribute(Qt::WA_DeleteOnClose);
-            fr->show();
-        }
-        layout::WorkspaceShell::apply(ws);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [ws]() {
+            if (fincept::WindowRegistry::instance().frames().isEmpty()) {
+                auto* fr = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
+                fr->setAttribute(Qt::WA_DeleteOnClose);
+                fr->show();
+            }
+            layout::WorkspaceShell::apply(ws);
+        },
+        Qt::QueuedConnection);
 }
 
 void LaunchpadScreen::refresh_recent_layouts() {
@@ -436,8 +438,8 @@ void LaunchpadScreen::refresh_recent_layouts() {
     // user wants to see saved/named layouts here, not the snapshot.
     auto r = LayoutCatalog::instance().recent_layouts(/*limit=*/8, /*include_auto=*/false);
     if (r.is_err() || r.value().isEmpty()) {
-        auto* item = new QListWidgetItem(
-            tr("(No saved layouts yet — use 'layout save \"<name>\"' to save the current state)"));
+        auto* item =
+            new QListWidgetItem(tr("(No saved layouts yet — use 'layout save \"<name>\"' to save the current state)"));
         item->setFlags(Qt::NoItemFlags);
         recent_layouts_->addItem(item);
         // Enable the "Open Saved Layout" button if there are any layouts
@@ -470,16 +472,19 @@ void LaunchpadScreen::on_continue() {
     // Defer the actual restore so the Launchpad's hide animation completes
     // first and so any frame WorkspaceShell::apply spawns lands cleanly on
     // the event loop.
-    QMetaObject::invokeMethod(this, []() {
-        const int n = layout::WorkspaceShell::load_last_or_default();
-        if (n == 0) {
-            // Fallback: nothing was restored (bad state, deleted files).
-            // Spawn an empty frame so the user isn't left with no window.
-            auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
-            w->setAttribute(Qt::WA_DeleteOnClose);
-            w->show();
-        }
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        []() {
+            const int n = layout::WorkspaceShell::load_last_or_default();
+            if (n == 0) {
+                // Fallback: nothing was restored (bad state, deleted files).
+                // Spawn an empty frame so the user isn't left with no window.
+                auto* w = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
+                w->setAttribute(Qt::WA_DeleteOnClose);
+                w->show();
+            }
+        },
+        Qt::QueuedConnection);
 }
 
 void LaunchpadScreen::on_template_picked(const QString& persona_id) {
@@ -488,8 +493,7 @@ void LaunchpadScreen::on_template_picked(const QString& persona_id) {
     auto sr = LayoutCatalog::instance().save_workspace(ws);
     if (sr.is_err()) {
         LOG_WARN(kLaunchpadTag,
-                 QString("Failed to save template '%1': %2")
-                     .arg(persona_id, QString::fromStdString(sr.error())));
+                 QString("Failed to save template '%1': %2").arg(persona_id, QString::fromStdString(sr.error())));
         return;
     }
     // save_workspace mints a fresh id if one wasn't set; pull the saved id
@@ -498,33 +502,41 @@ void LaunchpadScreen::on_template_picked(const QString& persona_id) {
 
     hide();
     const bool first_run_tour = !OnboardingTour::has_been_seen();
-    QMetaObject::invokeMethod(this, [ws, first_run_tour]() {
-        fincept::WindowFrame* anchor = nullptr;
-        if (fincept::WindowRegistry::instance().frames().isEmpty()) {
-            anchor = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
-            anchor->setAttribute(Qt::WA_DeleteOnClose);
-            anchor->show();
-        } else {
-            anchor = fincept::WindowRegistry::instance().frames().first();
-        }
-        layout::WorkspaceShell::apply(ws);
+    QMetaObject::invokeMethod(
+        this,
+        [ws, first_run_tour]() {
+            fincept::WindowFrame* anchor = nullptr;
+            if (fincept::WindowRegistry::instance().frames().isEmpty()) {
+                anchor = new fincept::WindowFrame(fincept::WindowFrame::next_window_id());
+                anchor->setAttribute(Qt::WA_DeleteOnClose);
+                anchor->show();
+            } else {
+                anchor = fincept::WindowRegistry::instance().frames().first();
+            }
+            layout::WorkspaceShell::apply(ws);
 
-        // Phase 9 / decision 10.10: kick off the tour after a fresh
-        // template pick on first run. Defer one tick so the frame's
-        // panels have laid out first — the tour parents itself to
-        // `anchor` so it appears centred over the frame, not behind it.
-        if (first_run_tour && anchor) {
-            QPointer<fincept::WindowFrame> guard(anchor);
-            QMetaObject::invokeMethod(anchor, [guard]() {
-                if (!guard) return;
-                OnboardingTour::show_for(guard.data());
-            }, Qt::QueuedConnection);
-        }
-    }, Qt::QueuedConnection);
+            // Phase 9 / decision 10.10: kick off the tour after a fresh
+            // template pick on first run. Defer one tick so the frame's
+            // panels have laid out first — the tour parents itself to
+            // `anchor` so it appears centred over the frame, not behind it.
+            if (first_run_tour && anchor) {
+                QPointer<fincept::WindowFrame> guard(anchor);
+                QMetaObject::invokeMethod(
+                    anchor,
+                    [guard]() {
+                        if (!guard)
+                            return;
+                        OnboardingTour::show_for(guard.data());
+                    },
+                    Qt::QueuedConnection);
+            }
+        },
+        Qt::QueuedConnection);
 }
 
 void LaunchpadScreen::refresh_first_run_picker() {
-    if (!template_picker_) return;
+    if (!template_picker_)
+        return;
 
     // Show the picker iff the user has nothing to come back to:
     //   - no saved/builtin layouts in the catalog, AND
@@ -544,12 +556,15 @@ void LaunchpadScreen::refresh_first_run_picker() {
 
     const bool first_run = !has_anything;
     template_picker_->setVisible(first_run);
-    if (recent_layouts_) recent_layouts_->setVisible(!first_run);
-    if (recent_label_)   recent_label_->setVisible(!first_run);
+    if (recent_layouts_)
+        recent_layouts_->setVisible(!first_run);
+    if (recent_label_)
+        recent_label_->setVisible(!first_run);
 }
 
 void LaunchpadScreen::refresh_crash_banner() {
-    if (!crash_banner_) return;
+    if (!crash_banner_)
+        return;
     // The shell latches the answer at boot — using needs_recovery() directly
     // would false-positive within the first minute (latest auto-snapshot
     // catches up to the marker).
@@ -557,7 +572,8 @@ void LaunchpadScreen::refresh_crash_banner() {
 }
 
 void LaunchpadScreen::refresh_continue_visibility() {
-    if (!btn_continue_) return;
+    if (!btn_continue_)
+        return;
 
     // Show the button iff something restorable exists. Two sources of truth:
     //   1. last_loaded_uuid pin (set by every successful WorkspaceShell::apply

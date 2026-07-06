@@ -10,7 +10,7 @@ namespace fincept::ui::algo {
 
 class RiskManagementPanel : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit RiskManagementPanel(QWidget* parent = nullptr);
 
     double stop_loss() const;
@@ -22,21 +22,21 @@ public:
 
     void set_values(double sl, double tp, double ts, double qty, double mov, double capital_pct = 100.0);
 
-signals:
+  signals:
     void values_changed();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     struct SliderRow {
         QLabel* label = nullptr;
         QSlider* slider = nullptr;
         QDoubleSpinBox* spin = nullptr;
     };
 
-    SliderRow create_row(const QString& label_text, double min_val, double max_val,
-                         double default_val, int decimals, QWidget* parent);
+    SliderRow create_row(const QString& label_text, double min_val, double max_val, double default_val, int decimals,
+                         QWidget* parent);
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.

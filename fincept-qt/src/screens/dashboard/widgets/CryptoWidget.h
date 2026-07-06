@@ -13,8 +13,8 @@ inline QuoteTableWidget* create_crypto_widget(QWidget* parent = nullptr) {
         {"ADA-USD", "ADA"}, {"DOGE-USD", "DOGE"}, {"DOT-USD", "DOT"}, {"LTC-USD", "LTC"},
     };
     const QString title = QCoreApplication::translate("fincept::screens::widgets::QuoteTableWidget", "CRYPTOCURRENCY");
-    return new QuoteTableWidget(title, services::MarketDataService::crypto_symbols(), labels, 2,
-                                ui::colors::AMBER(), parent);
+    return new QuoteTableWidget(title, services::MarketDataService::crypto_symbols(), labels, 2, ui::colors::AMBER(),
+                                parent);
 }
 
 } // namespace fincept::screens::widgets

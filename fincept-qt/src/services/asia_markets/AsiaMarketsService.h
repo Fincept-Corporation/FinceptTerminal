@@ -23,14 +23,14 @@ namespace fincept::services::asia_markets {
 /// Result of an endpoint-list query.
 struct EndpointsResult {
     bool success = false;
-    QJsonObject data;  // raw script JSON (expected to contain "categories" or "available_endpoints")
+    QJsonObject data; // raw script JSON (expected to contain "categories" or "available_endpoints")
     QString error;
 };
 
 /// Result of a market-data query (data[] rows from the connector script).
 struct QueryResult {
     bool success = false;
-    QJsonArray rows;   // normalized data array
+    QJsonArray rows; // normalized data array
     QString error;
 };
 
@@ -50,8 +50,7 @@ class AsiaMarketsService : public QObject {
 
     /// Runs `<script> <endpoint> [extra_args...]` and normalizes the result to
     /// a QJsonArray of rows.
-    void query(const QString& script, const QString& endpoint,
-               const QStringList& extra_args, QueryCallback cb);
+    void query(const QString& script, const QString& endpoint, const QStringList& extra_args, QueryCallback cb);
 
   private:
     AsiaMarketsService() = default;

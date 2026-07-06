@@ -13,7 +13,7 @@ namespace fincept::ui {
 
 class ChartOverlayManager : public QObject {
     Q_OBJECT
-public:
+  public:
     explicit ChartOverlayManager(QObject* parent = nullptr);
     ~ChartOverlayManager() override;
 
@@ -37,11 +37,11 @@ public:
     // Charts should expand their Y axis to include these values.
     bool overlay_price_range(double& out_min, double& out_max) const;
 
-signals:
+  signals:
     void layer_added(const QString& id);
     void layer_removed(const QString& id);
 
-private:
+  private:
     QVector<OverlayLayer*> layers_;
     QVector<CandleData> candles_;
     QGraphicsScene* scene_ = nullptr;

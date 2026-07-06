@@ -5,20 +5,17 @@
 //
 // Part of the partial-class split of NewsService.cpp.
 
-#include "services/news/NewsService.h"
-
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "network/http/HttpClient.h"
+#include "services/news/NewsService.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/RssFeedRepository.h"
 
-#include "datahub/DataHub.h"
-#include "datahub/DataHubMetaTypes.h"
-
-#include <QHash>
-
 #include <QAtomicInt>
 #include <QDateTime>
+#include <QHash>
 #include <QJsonDocument>
 #include <QMutex>
 #include <QMutexLocker>
@@ -345,8 +342,7 @@ fincept::RssFeedRow to_row(const fincept::services::RSSFeed& f, bool is_builtin,
     return r;
 }
 
-fincept::services::RSSFeed apply_overlay(const fincept::services::RSSFeed& base,
-                                          const fincept::RssFeedRow& patch) {
+fincept::services::RSSFeed apply_overlay(const fincept::services::RSSFeed& base, const fincept::RssFeedRow& patch) {
     fincept::services::RSSFeed merged = base;
     merged.name = patch.name;
     merged.url = patch.url;
@@ -363,8 +359,9 @@ QVector<RSSFeed> NewsService::list_effective_feeds() const {
     const auto defaults = default_feeds();
     auto repo_res = fincept::RssFeedRepository::instance().list_all();
     if (repo_res.is_err()) {
-        LOG_WARN("NewsService", QString("rss_feeds query failed; using built-ins only: %1")
-                                    .arg(QString::fromStdString(repo_res.error())));
+        LOG_WARN(
+            "NewsService",
+            QString("rss_feeds query failed; using built-ins only: %1").arg(QString::fromStdString(repo_res.error())));
         return defaults;
     }
 
@@ -524,8 +521,7 @@ bool NewsService::set_feed_enabled(const QString& id, bool enabled) {
     if (exists) {
         auto r = repo.set_enabled(id, enabled);
         if (r.is_err()) {
-            LOG_ERROR("NewsService",
-                      QString("set_feed_enabled failed: %1").arg(QString::fromStdString(r.error())));
+            LOG_ERROR("NewsService", QString("set_feed_enabled failed: %1").arg(QString::fromStdString(r.error())));
             return false;
         }
     } else if (default_ptr) {

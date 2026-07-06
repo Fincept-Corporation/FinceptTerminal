@@ -19,8 +19,7 @@ class WorkspaceMatcher {
     /// Walk `workspace.variants` and return the best match, or nullptr
     /// if no variant is suitable. The returned pointer aliases into the
     /// workspace argument; do not store across mutations.
-    static const WorkspaceVariant* match(const Workspace& workspace,
-                                         const MonitorTopologyKey& current_topology);
+    static const WorkspaceVariant* match(const Workspace& workspace, const MonitorTopologyKey& current_topology);
 
     /// How many monitors the topology key represents — counts comma-
     /// separated entries. Used by the matcher's tier-2 nearest-by-count

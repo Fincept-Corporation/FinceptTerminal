@@ -8,7 +8,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
@@ -59,19 +58,20 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Local LOAD SAMPLE helper — same shape as the other panels.
-    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
-                                  const QString& tip) -> QPushButton* {
+    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed, const QString& tip) -> QPushButton* {
         auto* btn = new QPushButton(tr("LOAD SAMPLE"), parent);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
         btn->setToolTip(tip);
-        btn->setStyleSheet(QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
-                                   "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
-                                   "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
-                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
+        btn->setStyleSheet(
+            QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
+                    "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
+                    "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
+                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
         QPointer<QLineEdit> guard(edit);
         connect(btn, &QPushButton::clicked, this, [guard, seed]() {
-            if (guard) guard->setText(sample_returns(seed));
+            if (guard)
+                guard->setText(sample_returns(seed));
         });
         return btn;
     };
@@ -87,16 +87,14 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     ic_preds->setStyleSheet(input_ss());
     text_inputs_["rp_ic_preds"] = ic_preds;
     icvl->addWidget(build_input_row(tr("Predictions"), ic_preds, ic_tab));
-    icvl->addWidget(add_sample_btn(ic_preds, ic_tab, 211,
-                                    tr("252 synthetic predictions (mu=0.05%, sigma=1.2%)")));
+    icvl->addWidget(add_sample_btn(ic_preds, ic_tab, 211, tr("252 synthetic predictions (mu=0.05%, sigma=1.2%)")));
 
     auto* ic_rets = new QLineEdit(ic_tab);
     ic_rets->setPlaceholderText(tr("Realized returns (decimals, same length as predictions)"));
     ic_rets->setStyleSheet(input_ss());
     text_inputs_["rp_ic_rets"] = ic_rets;
     icvl->addWidget(build_input_row(tr("Returns"), ic_rets, ic_tab));
-    icvl->addWidget(add_sample_btn(ic_rets, ic_tab, 212,
-                                    tr("252 synthetic realized returns")));
+    icvl->addWidget(add_sample_btn(ic_rets, ic_tab, 212, tr("252 synthetic realized returns")));
 
     auto* ic_method = new QComboBox(ic_tab);
     ic_method->addItems({"both", "pearson", "spearman"});
@@ -128,8 +126,8 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
             return;
         }
         if (preds.size() != rets.size()) {
-            display_error(tr("Predictions (%1) and returns (%2) must have the same length.")
-                              .arg(preds.size()).arg(rets.size()));
+            display_error(
+                tr("Predictions (%1) and returns (%2) must have the same length.").arg(preds.size()).arg(rets.size()));
             return;
         }
         show_loading(tr("Computing IC + rolling IC on %1 observations...").arg(preds.size()));
@@ -155,16 +153,14 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     cr_rets->setStyleSheet(input_ss());
     text_inputs_["rp_cr_rets"] = cr_rets;
     crvl->addWidget(build_input_row(tr("Returns"), cr_rets, cr_tab));
-    crvl->addWidget(add_sample_btn(cr_rets, cr_tab, 221,
-                                    tr("252 synthetic portfolio returns")));
+    crvl->addWidget(add_sample_btn(cr_rets, cr_tab, 221, tr("252 synthetic portfolio returns")));
 
     auto* cr_bench = new QLineEdit(cr_tab);
     cr_bench->setPlaceholderText(tr("Benchmark returns (optional; same length as portfolio if provided)"));
     cr_bench->setStyleSheet(input_ss());
     text_inputs_["rp_cr_bench"] = cr_bench;
     crvl->addWidget(build_input_row(tr("Benchmark Returns (optional)"), cr_bench, cr_tab));
-    crvl->addWidget(add_sample_btn(cr_bench, cr_tab, 222,
-                                    tr("252 synthetic benchmark returns")));
+    crvl->addWidget(add_sample_btn(cr_bench, cr_tab, 222, tr("252 synthetic benchmark returns")));
 
     auto* cr_title = new QLineEdit(cr_tab);
     cr_title->setPlaceholderText(tr("Chart title (e.g. Strategy vs S&P 500)"));
@@ -196,7 +192,8 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
             }
             if (bench.size() != rets.size()) {
                 display_error(tr("Benchmark (%1) and returns (%2) must have the same length.")
-                                  .arg(bench.size()).arg(rets.size()));
+                                  .arg(bench.size())
+                                  .arg(rets.size()));
                 return;
             }
             params["benchmark_returns"] = bench;
@@ -221,8 +218,7 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     rk_rets->setStyleSheet(input_ss());
     text_inputs_["rp_rk_rets"] = rk_rets;
     rkvl->addWidget(build_input_row(tr("Returns"), rk_rets, rk_tab));
-    rkvl->addWidget(add_sample_btn(rk_rets, rk_tab, 231,
-                                    tr("252 synthetic daily returns")));
+    rkvl->addWidget(add_sample_btn(rk_rets, rk_tab, 231, tr("252 synthetic daily returns")));
 
     auto* rk_window = new QSpinBox(rk_tab);
     rk_window->setRange(5, 100);
@@ -231,9 +227,10 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     int_inputs_["rp_rk_window"] = rk_window;
     rkvl->addWidget(build_input_row(tr("Rolling Volatility Window (days)"), rk_window, rk_tab));
 
-    auto* rk_hint = new QLabel(
-        tr("Computes max drawdown with peak/trough/recovery markers, daily VaR + CVaR at 5% and 1%, "
-        "and rolling annualized volatility."), rk_tab);
+    auto* rk_hint =
+        new QLabel(tr("Computes max drawdown with peak/trough/recovery markers, daily VaR + CVaR at 5% and 1%, "
+                      "and rolling annualized volatility."),
+                   rk_tab);
     rk_hint->setWordWrap(true);
     rk_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     rkvl->addWidget(rk_hint);
@@ -271,16 +268,14 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     mp_preds->setStyleSheet(input_ss());
     text_inputs_["rp_mp_preds"] = mp_preds;
     mpvl->addWidget(build_input_row(tr("Predictions"), mp_preds, mp_tab));
-    mpvl->addWidget(add_sample_btn(mp_preds, mp_tab, 241,
-                                    tr("252 synthetic model predictions")));
+    mpvl->addWidget(add_sample_btn(mp_preds, mp_tab, 241, tr("252 synthetic model predictions")));
 
     auto* mp_rets = new QLineEdit(mp_tab);
     mp_rets->setPlaceholderText(tr("Realized returns (same length as predictions)"));
     mp_rets->setStyleSheet(input_ss());
     text_inputs_["rp_mp_rets"] = mp_rets;
     mpvl->addWidget(build_input_row(tr("Returns"), mp_rets, mp_tab));
-    mpvl->addWidget(add_sample_btn(mp_rets, mp_tab, 242,
-                                    tr("252 synthetic realized returns")));
+    mpvl->addWidget(add_sample_btn(mp_rets, mp_tab, 242, tr("252 synthetic realized returns")));
 
     auto* mp_name = new QLineEdit(mp_tab);
     mp_name->setPlaceholderText(tr("Model label (e.g. LightGBM, LSTM)"));
@@ -313,8 +308,8 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
             return;
         }
         if (preds.size() != rets.size()) {
-            display_error(tr("Predictions (%1) and returns (%2) must have the same length.")
-                              .arg(preds.size()).arg(rets.size()));
+            display_error(
+                tr("Predictions (%1) and returns (%2) must have the same length.").arg(preds.size()).arg(rets.size()));
             return;
         }
         QJsonObject params;
@@ -341,16 +336,14 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     fq_preds->setStyleSheet(input_ss());
     text_inputs_["rp_fq_preds"] = fq_preds;
     fqvl->addWidget(build_input_row(tr("Factor Signal"), fq_preds, fq_tab));
-    fqvl->addWidget(add_sample_btn(fq_preds, fq_tab, 251,
-                                    tr("252 synthetic factor values")));
+    fqvl->addWidget(add_sample_btn(fq_preds, fq_tab, 251, tr("252 synthetic factor values")));
 
     auto* fq_rets = new QLineEdit(fq_tab);
     fq_rets->setPlaceholderText(tr("Realized returns (same length as factor)"));
     fq_rets->setStyleSheet(input_ss());
     text_inputs_["rp_fq_rets"] = fq_rets;
     fqvl->addWidget(build_input_row(tr("Realized Returns"), fq_rets, fq_tab));
-    fqvl->addWidget(add_sample_btn(fq_rets, fq_tab, 252,
-                                    tr("252 synthetic realized returns")));
+    fqvl->addWidget(add_sample_btn(fq_rets, fq_tab, 252, tr("252 synthetic realized returns")));
 
     auto* fq_q = new QSpinBox(fq_tab);
     fq_q->setRange(2, 10);
@@ -359,9 +352,10 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     int_inputs_["rp_fq_n_quantiles"] = fq_q;
     fqvl->addWidget(build_input_row(tr("Quantile Buckets"), fq_q, fq_tab));
 
-    auto* fq_hint = new QLabel(
-        tr("Sorts observations into N buckets by signal strength and reports realized return per bucket. "
-        "A monotone Q1→Q5 progression indicates a clean factor; non-monotone hints at noise."), fq_tab);
+    auto* fq_hint =
+        new QLabel(tr("Sorts observations into N buckets by signal strength and reports realized return per bucket. "
+                      "A monotone Q1→Q5 progression indicates a clean factor; non-monotone hints at noise."),
+                   fq_tab);
     fq_hint->setWordWrap(true);
     fq_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     fqvl->addWidget(fq_hint);
@@ -383,8 +377,8 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
             return;
         }
         if (preds.size() != rets.size()) {
-            display_error(tr("Factor (%1) and returns (%2) must have the same length.")
-                              .arg(preds.size()).arg(rets.size()));
+            display_error(
+                tr("Factor (%1) and returns (%2) must have the same length.").arg(preds.size()).arg(rets.size()));
             return;
         }
         QJsonObject params;
@@ -392,7 +386,8 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
         params["returns"] = rets;
         params["n_quantiles"] = int_inputs_["rp_fq_n_quantiles"]->value();
         show_loading(tr("Bucketing %1 obs into %2 quantiles...")
-                         .arg(preds.size()).arg(int_inputs_["rp_fq_n_quantiles"]->value()));
+                         .arg(preds.size())
+                         .arg(int_inputs_["rp_fq_n_quantiles"]->value()));
         AIQuantLabService::instance().reporting_factor_quantiles(params);
     });
     fqvl->addWidget(fq_run);
@@ -420,8 +415,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         const QString err = payload.value("error").toString(tr("Unknown error"));
         const QString kind = payload.value("error_kind").toString();
         const QString prefix = kind == "validation" ? tr("Input error: ")
-                              : kind == "runtime"    ? tr("Computation failed: ")
-                                                     : QString();
+                               : kind == "runtime"  ? tr("Computation failed: ")
+                                                    : QString();
         display_error(prefix + err);
         return;
     }
@@ -446,8 +441,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
             bool_card(tr("SCIPY"), d.value("scipy").toBool()),
             bool_card(tr("PANDAS"), d.value("pandas").toBool()),
             gs_make_card(tr("BACKEND"), d.value("backend").toString().toUpper(), this),
-            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()),
-                         this, ui::colors::INFO()),
+            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()), this,
+                         ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(deps, this));
         status_label_->setText(tr("Quant Reporting backend ready"));
@@ -475,10 +470,14 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         results_layout_->addWidget(hdr);
 
         auto verdict_color = [](const QString& v) {
-            if (v == "STRONG") return ui::colors::POSITIVE();
-            if (v == "MODERATE") return ui::colors::POSITIVE();
-            if (v == "WEAK") return ui::colors::WARNING();
-            if (v == "VERY WEAK") return ui::colors::WARNING();
+            if (v == "STRONG")
+                return ui::colors::POSITIVE();
+            if (v == "MODERATE")
+                return ui::colors::POSITIVE();
+            if (v == "WEAK")
+                return ui::colors::WARNING();
+            if (v == "VERY WEAK")
+                return ui::colors::WARNING();
             return ui::colors::NEGATIVE();
         };
 
@@ -498,8 +497,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
             gs_make_card(tr("ROLLING IC σ"), gs_fmt_num(d.value("ic_std").toDouble(), 4), this),
             gs_make_card(tr("ICIR"), gs_fmt_num(icir, 3), this,
                          icir >= 0.5 ? ui::colors::POSITIVE()
-                                    : icir >= 0  ? ui::colors::WARNING()
-                                                 : ui::colors::NEGATIVE()),
+                         : icir >= 0 ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
             gs_make_card(tr("IC VERDICT"), ic_verdict, this, verdict_color(ic_verdict)),
         };
         results_layout_->addWidget(gs_card_row(ic_card, this));
@@ -510,20 +509,19 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
             gs_make_card(tr("RANK IC σ"), gs_fmt_num(d.value("rank_ic_std").toDouble(), 4), this),
             gs_make_card(tr("RANK ICIR"), gs_fmt_num(rank_icir, 3), this,
                          rank_icir >= 0.5 ? ui::colors::POSITIVE()
-                                          : rank_icir >= 0  ? ui::colors::WARNING()
-                                                            : ui::colors::NEGATIVE()),
+                         : rank_icir >= 0 ? ui::colors::WARNING()
+                                          : ui::colors::NEGATIVE()),
             gs_make_card(tr("RANK VERDICT"), rank_verdict, this, verdict_color(rank_verdict)),
         };
         results_layout_->addWidget(gs_card_row(rank_card, this));
 
         QList<QWidget*> hit = {
-            gs_make_card(tr("IC POSITIVE %"), QString::number(d.value("ic_positive_pct").toDouble(), 'f', 1) + "%", this,
-                         d.value("ic_positive_pct").toDouble() > 60 ? ui::colors::POSITIVE()
-                                                                       : ui::colors::WARNING()),
-            gs_make_card(tr("RANK IC POS %"),
-                         QString::number(d.value("rank_ic_positive_pct").toDouble(), 'f', 1) + "%", this,
-                         d.value("rank_ic_positive_pct").toDouble() > 60 ? ui::colors::POSITIVE()
-                                                                           : ui::colors::WARNING()),
+            gs_make_card(tr("IC POSITIVE %"), QString::number(d.value("ic_positive_pct").toDouble(), 'f', 1) + "%",
+                         this,
+                         d.value("ic_positive_pct").toDouble() > 60 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+            gs_make_card(
+                tr("RANK IC POS %"), QString::number(d.value("rank_ic_positive_pct").toDouble(), 'f', 1) + "%", this,
+                d.value("rank_ic_positive_pct").toDouble() > 60 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("OBSERVATIONS"), QString::number(d.value("n_observations").toInt()), this),
             gs_make_card(tr("WINDOW SIZE"), tr("%1 obs").arg(d.value("window").toInt()), this),
         };
@@ -558,8 +556,10 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         }
 
         status_label_->setText(tr("IC: pearson=%1 spearman=%2  ICIR=%3 → %4")
-                                   .arg(pearson, 0, 'f', 3).arg(spearman, 0, 'f', 3)
-                                   .arg(icir, 0, 'f', 3).arg(ic_verdict));
+                                   .arg(pearson, 0, 'f', 3)
+                                   .arg(spearman, 0, 'f', 3)
+                                   .arg(icir, 0, 'f', 3)
+                                   .arg(ic_verdict));
         return;
     }
 
@@ -573,8 +573,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         const double win_pct = d.value("win_rate_pct").toDouble();
         const bool has_bench = d.value("has_benchmark").toBool();
 
-        auto* hdr = new QLabel(tr("%1   |   %2 OBS").arg(d.value("title").toString())
-                                   .arg(d.value("n_observations").toInt()));
+        auto* hdr =
+            new QLabel(tr("%1   |   %2 OBS").arg(d.value("title").toString()).arg(d.value("n_observations").toInt()));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
@@ -588,8 +588,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
             gs_make_card(tr("ANN. VOLATILITY"), QString::number(ann_vol_pct, 'f', 2) + "%", this),
             gs_make_card(tr("SHARPE RATIO"), gs_fmt_num(sharpe, 3), this,
                          sharpe >= 1.0 ? ui::colors::POSITIVE()
-                                      : sharpe >= 0  ? ui::colors::TEXT_PRIMARY()
-                                                     : ui::colors::NEGATIVE()),
+                         : sharpe >= 0 ? ui::colors::TEXT_PRIMARY()
+                                       : ui::colors::NEGATIVE()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
@@ -608,16 +608,15 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         if (has_bench) {
             QList<QWidget*> bench = {
                 gs_make_card(tr("BENCH TOTAL"),
-                             QString::number(d.value("benchmark_total_return_pct").toDouble(), 'f', 2) + "%",
-                             this, gs_pos_neg_color(d.value("benchmark_total_return_pct").toDouble())),
+                             QString::number(d.value("benchmark_total_return_pct").toDouble(), 'f', 2) + "%", this,
+                             gs_pos_neg_color(d.value("benchmark_total_return_pct").toDouble())),
                 gs_make_card(tr("ALPHA"), QString::number(d.value("alpha_pct").toDouble(), 'f', 2) + "%", this,
                              gs_pos_neg_color(d.value("alpha_pct").toDouble())),
                 gs_make_card(tr("TRACKING ERROR"),
                              QString::number(d.value("tracking_error_pct").toDouble(), 'f', 2) + "%", this),
-                gs_make_card(tr("INFORMATION RATIO"),
-                             gs_fmt_num(d.value("information_ratio").toDouble(), 3), this,
+                gs_make_card(tr("INFORMATION RATIO"), gs_fmt_num(d.value("information_ratio").toDouble(), 3), this,
                              d.value("information_ratio").toDouble() > 0.5 ? ui::colors::POSITIVE()
-                                                                              : ui::colors::WARNING()),
+                                                                           : ui::colors::WARNING()),
             };
             results_layout_->addWidget(gs_card_row(bench, this));
         }
@@ -630,7 +629,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
             const int step = std::max<int>(1, curve.size() / rows);
             auto* table = new QTableWidget(rows, has_bench ? 4 : 3, this);
             QStringList headers = {tr("Index"), tr("Portfolio"), tr("Cum Return")};
-            if (has_bench) headers << tr("Benchmark");
+            if (has_bench)
+                headers << tr("Benchmark");
             table->setHorizontalHeaderLabels(headers);
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -661,7 +661,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
 
         status_label_->setText(tr("%1: total %2%  Sharpe %3  MaxDD %4%")
                                    .arg(d.value("title").toString())
-                                   .arg(total_ret_pct, 0, 'f', 2).arg(sharpe, 0, 'f', 2)
+                                   .arg(total_ret_pct, 0, 'f', 2)
+                                   .arg(sharpe, 0, 'f', 2)
                                    .arg(mdd_pct, 0, 'f', 2));
         return;
     }
@@ -687,9 +688,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
             gs_make_card(tr("CURRENT DD"), QString::number(cur_dd, 'f', 2) + "%", this,
                          cur_dd < -5.0 ? ui::colors::WARNING() : ui::colors::TEXT_PRIMARY()),
             gs_make_card(tr("DURATION"), tr("%1 days").arg(duration), this),
-            gs_make_card(tr("RECOVERED"),
-                         recovered ? tr("YES") : tr("NOT YET"),
-                         this, recovered ? ui::colors::POSITIVE() : ui::colors::WARNING()),
+            gs_make_card(tr("RECOVERED"), recovered ? tr("YES") : tr("NOT YET"), this,
+                         recovered ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(dd, this));
 
@@ -706,18 +706,14 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         results_layout_->addWidget(gs_card_row(vol, this));
 
         QList<QWidget*> tail = {
-            gs_make_card(tr("VaR 5%"),
-                         QString::number(d.value("var_5pct_daily").toDouble() * 100, 'f', 3) + "%", this,
+            gs_make_card(tr("VaR 5%"), QString::number(d.value("var_5pct_daily").toDouble() * 100, 'f', 3) + "%", this,
                          ui::colors::WARNING()),
-            gs_make_card(tr("CVaR 5%"),
-                         QString::number(d.value("cvar_5pct_daily").toDouble() * 100, 'f', 3) + "%", this,
-                         ui::colors::NEGATIVE()),
-            gs_make_card(tr("VaR 1%"),
-                         QString::number(d.value("var_1pct_daily").toDouble() * 100, 'f', 3) + "%", this,
+            gs_make_card(tr("CVaR 5%"), QString::number(d.value("cvar_5pct_daily").toDouble() * 100, 'f', 3) + "%",
+                         this, ui::colors::NEGATIVE()),
+            gs_make_card(tr("VaR 1%"), QString::number(d.value("var_1pct_daily").toDouble() * 100, 'f', 3) + "%", this,
                          ui::colors::WARNING()),
-            gs_make_card(tr("CVaR 1%"),
-                         QString::number(d.value("cvar_1pct_daily").toDouble() * 100, 'f', 3) + "%", this,
-                         ui::colors::NEGATIVE()),
+            gs_make_card(tr("CVaR 1%"), QString::number(d.value("cvar_1pct_daily").toDouble() * 100, 'f', 3) + "%",
+                         this, ui::colors::NEGATIVE()),
         };
         results_layout_->addWidget(gs_card_row(tail, this));
 
@@ -725,12 +721,12 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         const int peak_i = d.value("max_drawdown_peak_index").toInt();
         const int trough_i = d.value("max_drawdown_trough_index").toInt();
         const int recov_i = d.value("max_drawdown_recovery_index").toInt();
-        auto* timeline = new QLabel(tr(
-            "Drawdown timeline:  peak @ obs %1  →  trough @ obs %2 (Δ %3 days)  →  %4")
-                                        .arg(peak_i).arg(trough_i).arg(trough_i - peak_i)
-                                        .arg(recov_i >= 0
-                                                 ? tr("recovered @ obs %1").arg(recov_i)
-                                                 : tr("not yet recovered")));
+        auto* timeline =
+            new QLabel(tr("Drawdown timeline:  peak @ obs %1  →  trough @ obs %2 (Δ %3 days)  →  %4")
+                           .arg(peak_i)
+                           .arg(trough_i)
+                           .arg(trough_i - peak_i)
+                           .arg(recov_i >= 0 ? tr("recovered @ obs %1").arg(recov_i) : tr("not yet recovered")));
         timeline->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
                                         "padding:6px 10px; background:%2; border-left:3px solid %3;")
                                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
@@ -738,8 +734,10 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         results_layout_->addWidget(timeline);
 
         status_label_->setText(tr("MaxDD %1%  Cur %2%  Vol %3%  Recovered: %4")
-                                   .arg(mdd_pct, 0, 'f', 2).arg(cur_dd, 0, 'f', 2)
-                                   .arg(cur_vol * 100, 0, 'f', 2).arg(recovered ? tr("YES") : tr("NO")));
+                                   .arg(mdd_pct, 0, 'f', 2)
+                                   .arg(cur_dd, 0, 'f', 2)
+                                   .arg(cur_vol * 100, 0, 'f', 2)
+                                   .arg(recovered ? tr("YES") : tr("NO")));
         return;
     }
 
@@ -755,7 +753,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         const QString verdict = d.value("verdict").toString();
 
         auto* hdr = new QLabel(tr("MODEL: %1   |   %2 QUANTILES   |   %3")
-                                   .arg(model.toUpper()).arg(d.value("n_quantiles").toInt())
+                                   .arg(model.toUpper())
+                                   .arg(d.value("n_quantiles").toInt())
                                    .arg(verdict));
         const bool good = verdict.contains("STRONG") || verdict.contains("MODERATE");
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
@@ -777,8 +776,7 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
                          dir_acc > 55 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("HIT RATE"), QString::number(hit_rate, 'f', 1) + "%", this,
                          hit_rate > 55 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-            gs_make_card(tr("LONG-SHORT SPREAD"),
-                         QString::number(ls_bps, 'f', 1) + tr(" bps"), this,
+            gs_make_card(tr("LONG-SHORT SPREAD"), QString::number(ls_bps, 'f', 1) + tr(" bps"), this,
                          gs_pos_neg_color(ls_bps)),
             gs_make_card(tr("MONOTONIC"), monotonic ? tr("YES") : tr("NO"), this,
                          monotonic ? ui::colors::POSITIVE() : ui::colors::WARNING()),
@@ -789,7 +787,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         const QJsonArray quants = d.value("quantile_table").toArray();
         if (!quants.isEmpty()) {
             auto* table = new QTableWidget(quants.size(), 6, this);
-            table->setHorizontalHeaderLabels({tr("Q"), tr("N"), tr("Pred Range"), tr("Mean Return"), tr("Median Return"), tr("Win Rate")});
+            table->setHorizontalHeaderLabels(
+                {tr("Q"), tr("N"), tr("Pred Range"), tr("Mean Return"), tr("Median Return"), tr("Win Rate")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -800,19 +799,19 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
                 const double mr = q.value("mean_return").toDouble();
                 table->setItem(i, 0, new QTableWidgetItem(QString::number(q.value("quantile").toInt())));
                 table->setItem(i, 1, new QTableWidgetItem(QString::number(q.value("n").toInt())));
-                table->setItem(i, 2, new QTableWidgetItem(
-                    QString("[%1, %2]").arg(q.value("pred_min").toDouble(), 0, 'f', 4)
-                                       .arg(q.value("pred_max").toDouble(), 0, 'f', 4)));
+                table->setItem(i, 2,
+                               new QTableWidgetItem(QString("[%1, %2]")
+                                                        .arg(q.value("pred_min").toDouble(), 0, 'f', 4)
+                                                        .arg(q.value("pred_max").toDouble(), 0, 'f', 4)));
                 auto* mri = new QTableWidgetItem(QString::number(mr * 100, 'f', 4) + "%");
                 mri->setForeground(QColor(gs_pos_neg_color(mr)));
                 mri->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 3, mri);
-                auto* mei = new QTableWidgetItem(
-                    QString::number(q.value("median_return").toDouble() * 100, 'f', 4) + "%");
+                auto* mei =
+                    new QTableWidgetItem(QString::number(q.value("median_return").toDouble() * 100, 'f', 4) + "%");
                 mei->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 4, mei);
-                auto* wi = new QTableWidgetItem(
-                    QString::number(q.value("win_rate_pct").toDouble(), 'f', 1) + "%");
+                auto* wi = new QTableWidgetItem(QString::number(q.value("win_rate_pct").toDouble(), 'f', 1) + "%");
                 wi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 5, wi);
                 table->setRowHeight(i, 24);
@@ -821,8 +820,10 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         }
 
         status_label_->setText(tr("%1: IC=%2  Spread=%3 bps  → %4")
-                                   .arg(model).arg(spearman, 0, 'f', 3)
-                                   .arg(ls_bps, 0, 'f', 1).arg(verdict));
+                                   .arg(model)
+                                   .arg(spearman, 0, 'f', 3)
+                                   .arg(ls_bps, 0, 'f', 1)
+                                   .arg(verdict));
         return;
     }
 
@@ -847,8 +848,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
                          gs_pos_neg_color(spread_bps)),
             gs_make_card(tr("L/S SHARPE (ANN)"), gs_fmt_num(ls_sharpe, 3), this,
                          ls_sharpe >= 1.0 ? ui::colors::POSITIVE()
-                                          : ls_sharpe > 0 ? ui::colors::WARNING()
-                                                          : ui::colors::NEGATIVE()),
+                         : ls_sharpe > 0  ? ui::colors::WARNING()
+                                          : ui::colors::NEGATIVE()),
             gs_make_card(tr("MONOTONIC"), monotone ? tr("YES") : tr("NO"), this,
                          monotone ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("OBSERVATIONS"), QString::number(d.value("n_observations").toInt()), this),
@@ -859,7 +860,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         const QJsonArray quants = d.value("quantiles").toArray();
         if (!quants.isEmpty()) {
             auto* table = new QTableWidget(quants.size(), 7, this);
-            table->setHorizontalHeaderLabels({tr("Q"), tr("N"), tr("Pred Mean"), tr("Ret Mean"), tr("Ret Median"), tr("Ret σ"), tr("Win Rate")});
+            table->setHorizontalHeaderLabels(
+                {tr("Q"), tr("N"), tr("Pred Mean"), tr("Ret Mean"), tr("Ret Median"), tr("Ret σ"), tr("Win Rate")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -870,14 +872,17 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
                 const int qid = q.value("quantile").toInt();
                 const double rm = q.value("ret_mean").toDouble();
                 QString tag = QString::number(qid);
-                if (qid == 1) tag += tr(" (low)");
-                if (qid == n_q) tag += tr(" (high)");
+                if (qid == 1)
+                    tag += tr(" (low)");
+                if (qid == n_q)
+                    tag += tr(" (high)");
                 table->setItem(i, 0, new QTableWidgetItem(tag));
                 table->setItem(i, 1, new QTableWidgetItem(QString::number(q.value("n").toInt())));
                 auto add_n = [&](int col, double v, int dec, bool color = false) {
                     auto* it = new QTableWidgetItem(QString::number(v, 'f', dec));
                     it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    if (color) it->setForeground(QColor(gs_pos_neg_color(v)));
+                    if (color)
+                        it->setForeground(QColor(gs_pos_neg_color(v)));
                     table->setItem(i, col, it);
                 };
                 add_n(2, q.value("pred_mean").toDouble(), 4);
@@ -885,13 +890,11 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
                 rmi->setForeground(QColor(gs_pos_neg_color(rm)));
                 rmi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 3, rmi);
-                auto* rmd = new QTableWidgetItem(
-                    QString::number(q.value("ret_median").toDouble() * 100, 'f', 4) + "%");
+                auto* rmd = new QTableWidgetItem(QString::number(q.value("ret_median").toDouble() * 100, 'f', 4) + "%");
                 rmd->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 4, rmd);
                 add_n(5, q.value("ret_std").toDouble() * 100, 4);
-                auto* wi = new QTableWidgetItem(
-                    QString::number(q.value("win_rate_pct").toDouble(), 'f', 1) + "%");
+                auto* wi = new QTableWidgetItem(QString::number(q.value("win_rate_pct").toDouble(), 'f', 1) + "%");
                 wi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 table->setItem(i, 6, wi);
                 table->setRowHeight(i, 26);
@@ -899,8 +902,8 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
             results_layout_->addWidget(table);
         }
 
-        status_label_->setText(tr("Spread %1 bps  Sharpe %2  → %3")
-                                   .arg(spread_bps, 0, 'f', 1).arg(ls_sharpe, 0, 'f', 2).arg(verdict));
+        status_label_->setText(
+            tr("Spread %1 bps  Sharpe %2  → %3").arg(spread_bps, 0, 'f', 1).arg(ls_sharpe, 0, 'f', 2).arg(verdict));
         return;
     }
 

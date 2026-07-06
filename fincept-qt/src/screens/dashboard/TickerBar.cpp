@@ -16,11 +16,11 @@
 
 namespace fincept::screens {
 
-static constexpr int    kItemSpacing      = 40;
-static constexpr int    kSegmentGap       = 8;
-static constexpr int    kEditBarHeight    = 24;
-static const char*      kSettingsKey      = "ticker_bar_symbols";
-static const char*      kSettingsCategory = "dashboard";
+static constexpr int kItemSpacing = 40;
+static constexpr int kSegmentGap = 8;
+static constexpr int kEditBarHeight = 24;
+static const char* kSettingsKey = "ticker_bar_symbols";
+static const char* kSettingsCategory = "dashboard";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor
@@ -30,9 +30,7 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(kEditBarHeight);
     setContextMenuPolicy(Qt::DefaultContextMenu);
 
-    auto apply_bg = [this]() {
-        setStyleSheet(QString("background-color: %1;").arg(ui::colors::BG_BASE()));
-    };
+    auto apply_bg = [this]() { setStyleSheet(QString("background-color: %1;").arg(ui::colors::BG_BASE())); };
     apply_bg();
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this, apply_bg](const ui::ThemeTokens&) {
@@ -58,8 +56,8 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     hl->setSpacing(4);
 
     edit_label_ = new QLabel(tr("SYMBOLS:"), edit_bar_);
-    edit_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:bold; background:transparent;")
-                           .arg(ui::colors::TEXT_TERTIARY()));
+    edit_label_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:bold; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
     hl->addWidget(edit_label_);
 
     edit_input_ = new QLineEdit(edit_bar_);
@@ -68,28 +66,25 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
                 " font-size:10px; padding:1px 6px; font-family:Consolas; }"
                 "QLineEdit:focus { border-color:%4; }")
-            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+            .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     connect(edit_input_, &QLineEdit::returnPressed, this, &TickerBar::commit_edit);
     hl->addWidget(edit_input_, 1);
 
     edit_ok_ = new QPushButton(tr("OK"), edit_bar_);
     edit_ok_->setFixedWidth(32);
-    edit_ok_->setStyleSheet(
-        QString("QPushButton { background:%1; color:%2; border:none;"
-                " font-size:9px; font-weight:bold; padding:2px; }"
-                "QPushButton:hover { background:%3; }")
-            .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER()));
+    edit_ok_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:none;"
+                                    " font-size:9px; font-weight:bold; padding:2px; }"
+                                    "QPushButton:hover { background:%3; }")
+                                .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER()));
     connect(edit_ok_, &QPushButton::clicked, this, &TickerBar::commit_edit);
     hl->addWidget(edit_ok_);
 
     edit_cancel_ = new QPushButton("✕", edit_bar_);
     edit_cancel_->setFixedWidth(24);
-    edit_cancel_->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:none;"
-                " font-size:11px; padding:2px; }"
-                "QPushButton:hover { color:%2; }")
-            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::RED()));
+    edit_cancel_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
+                                        " font-size:11px; padding:2px; }"
+                                        "QPushButton:hover { color:%2; }")
+                                    .arg(ui::colors::TEXT_TERTIARY(), ui::colors::RED()));
     connect(edit_cancel_, &QPushButton::clicked, this, &TickerBar::hide_edit_bar);
     hl->addWidget(edit_cancel_);
 
@@ -103,8 +98,8 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
 
 void TickerBar::load_symbols() {
     // Build default list: indices + movers
-    const QStringList defaults = services::MarketDataService::indices_symbols()
-                                 + services::MarketDataService::mover_symbols();
+    const QStringList defaults =
+        services::MarketDataService::indices_symbols() + services::MarketDataService::mover_symbols();
 
     // Attempt to load from settings on a background thread; fall back to defaults
     // immediately so the ticker isn't blank while the DB read is in flight.
@@ -121,19 +116,22 @@ void TickerBar::load_symbols() {
                     loaded << t;
             }
         }
-        QMetaObject::invokeMethod(self, [self, loaded, defaults]() {
-            if (!self) return;
-            self->symbols_ = loaded.isEmpty() ? defaults : loaded;
-            emit self->symbols_changed(self->symbols_);
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            self,
+            [self, loaded, defaults]() {
+                if (!self)
+                    return;
+                self->symbols_ = loaded.isEmpty() ? defaults : loaded;
+                emit self->symbols_changed(self->symbols_);
+            },
+            Qt::QueuedConnection);
     });
 }
 
 void TickerBar::save_symbols() {
     const QString value = symbols_.join(",");
-    (void)QtConcurrent::run([value]() {
-        fincept::SettingsRepository::instance().set(kSettingsKey, value, kSettingsCategory);
-    });
+    (void)QtConcurrent::run(
+        [value]() { fincept::SettingsRepository::instance().set(kSettingsKey, value, kSettingsCategory); });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,7 +140,7 @@ void TickerBar::save_symbols() {
 
 void TickerBar::set_data(const QVector<Entry>& entries) {
     entries_ = entries;
-    offset_  = 0;
+    offset_ = 0;
 
     // Cache total width — paintEvent runs every 50ms, no per-frame allocation.
     QFont font(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
@@ -150,9 +148,8 @@ void TickerBar::set_data(const QVector<Entry>& entries) {
     total_width_ = 0;
     for (const auto& e : entries_) {
         const int symbol_w = fm.horizontalAdvance(e.symbol);
-        const int price_w  = fm.horizontalAdvance(QString::number(e.price, 'f', 2));
-        const QString change_str =
-            QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
+        const int price_w = fm.horizontalAdvance(QString::number(e.price, 'f', 2));
+        const QString change_str = QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
         const int change_w = fm.horizontalAdvance(change_str);
         total_width_ += symbol_w + kSegmentGap + price_w + kSegmentGap + change_w + kItemSpacing;
     }
@@ -191,11 +188,10 @@ void TickerBar::resizeEvent(QResizeEvent* event) {
 
 void TickerBar::contextMenuEvent(QContextMenuEvent* event) {
     QMenu menu(this);
-    menu.setStyleSheet(
-        QString("QMenu { background:%1; color:%2; border:1px solid %3; font-size:11px; }"
-                "QMenu::item:selected { background:%4; color:%5; }")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
-                 ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_BASE()));
+    menu.setStyleSheet(QString("QMenu { background:%1; color:%2; border:1px solid %3; font-size:11px; }"
+                               "QMenu::item:selected { background:%4; color:%5; }")
+                           .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
+                                ui::colors::AMBER(), ui::colors::BG_BASE()));
 
     auto* edit_action = menu.addAction(tr("Edit Symbols..."));
     connect(edit_action, &QAction::triggered, this, &TickerBar::show_edit_bar);
@@ -210,9 +206,12 @@ void TickerBar::changeEvent(QEvent* event) {
 }
 
 void TickerBar::retranslateUi() {
-    if (edit_label_) edit_label_->setText(tr("SYMBOLS:"));
-    if (edit_input_) edit_input_->setPlaceholderText(tr("AAPL, MSFT, ^GSPC, BTC-USD ..."));
-    if (edit_ok_)    edit_ok_->setText(tr("OK"));
+    if (edit_label_)
+        edit_label_->setText(tr("SYMBOLS:"));
+    if (edit_input_)
+        edit_input_->setPlaceholderText(tr("AAPL, MSFT, ^GSPC, BTC-USD ..."));
+    if (edit_ok_)
+        edit_ok_->setText(tr("OK"));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -268,9 +267,9 @@ void TickerBar::paintEvent(QPaintEvent*) {
     p.setFont(font);
     QFontMetrics fm(font);
 
-    const int text_y  = (height() + fm.ascent() - fm.descent()) / 2;
-    double    x       = -offset_;
-    const int passes  = (width() / total_width_) + 2;
+    const int text_y = (height() + fm.ascent() - fm.descent()) / 2;
+    double x = -offset_;
+    const int passes = (width() / total_width_) + 2;
 
     for (int pass = 0; pass < passes; ++pass) {
         for (const auto& e : entries_) {
@@ -286,8 +285,7 @@ void TickerBar::paintEvent(QPaintEvent*) {
             x += fm.horizontalAdvance(price_str) + kSegmentGap;
 
             // Change — green / red
-            const QString change_str =
-                QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
+            const QString change_str = QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
             p.setPen(QColor(ui::change_color(e.change)));
             p.drawText(QPointF(x, text_y), change_str);
             x += fm.horizontalAdvance(change_str) + kItemSpacing;

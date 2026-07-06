@@ -22,8 +22,8 @@ class BacktestBrokerData {
     using Callback = std::function<void(QJsonObject candles, QString broker_id)>;
 
     /// Non-blocking. Fetches on a worker thread, then marshals `cb` onto `context`.
-    static void fetch(QObject* context, const QStringList& symbols, const QString& start_date,
-                      const QString& end_date, const QString& interval, Callback cb);
+    static void fetch(QObject* context, const QStringList& symbols, const QString& start_date, const QString& end_date,
+                      const QString& interval, Callback cb);
 
     /// True when at least one *active* account belongs to an Indian broker.
     static bool has_active_indian_broker();

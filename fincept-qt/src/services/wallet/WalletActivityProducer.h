@@ -44,8 +44,7 @@ class WalletActivityProducer : public QObject, public fincept::datahub::Producer
 
     /// Helius parsed-tx path. Calls `api.helius.xyz/v0/addresses/<pk>/transactions`
     /// and publishes a vector of fully-classified activities.
-    void refresh_via_helius(const QString& topic, const QString& pubkey,
-                            const QString& helius_key);
+    void refresh_via_helius(const QString& topic, const QString& pubkey, const QString& helius_key);
 
     /// Fallback path. Uses our existing RPC wrapper to fetch raw signatures.
     /// Each row carries `kind=Other`, the signature, and a unix block_time.

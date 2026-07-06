@@ -2,7 +2,6 @@
 // Method definition split from MAModulePanel.cpp.
 
 #include "screens/ma_analytics/MAModulePanel.h"
-
 #include "services/ma_analytics/MAAnalyticsService.h"
 #include "ui/theme/Theme.h"
 
@@ -443,6 +442,5 @@ QWidget* MAModulePanel::build_merger_panel() {
 
     return w;
 }
-
 
 } // namespace fincept::screens

@@ -8,8 +8,7 @@
 
 namespace fincept::ui {
 
-SeriesLayer::SeriesLayer(const QString& id, const QString& name,
-                         const QColor& color, int width, QObject* parent)
+SeriesLayer::SeriesLayer(const QString& id, const QString& name, const QColor& color, int width, QObject* parent)
     : OverlayLayer(parent), id_(id), name_(name), color_(color), width_(width) {}
 
 void SeriesLayer::set_color(const QColor& c) {

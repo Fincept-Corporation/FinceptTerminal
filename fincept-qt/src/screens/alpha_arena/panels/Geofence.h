@@ -15,14 +15,14 @@ namespace fincept::screens::alpha_arena {
 
 inline bool is_jurisdiction_blocked(QLocale::Territory territory) {
     switch (territory) {
-    case QLocale::UnitedStates:
-    case QLocale::NorthKorea:
-    case QLocale::Iran:
-    case QLocale::Syria:
-    case QLocale::Cuba:
-        return true;
-    default:
-        return false;
+        case QLocale::UnitedStates:
+        case QLocale::NorthKorea:
+        case QLocale::Iran:
+        case QLocale::Syria:
+        case QLocale::Cuba:
+            return true;
+        default:
+            return false;
     }
 }
 

@@ -33,12 +33,12 @@ enum class TradingBackend { Paper, EquityBroker, CryptoExchange };
 
 inline QString backend_to_string(TradingBackend b) {
     switch (b) {
-    case TradingBackend::Paper:
-        return QStringLiteral("paper");
-    case TradingBackend::EquityBroker:
-        return QStringLiteral("equity_broker");
-    case TradingBackend::CryptoExchange:
-        return QStringLiteral("crypto_exchange");
+        case TradingBackend::Paper:
+            return QStringLiteral("paper");
+        case TradingBackend::EquityBroker:
+            return QStringLiteral("equity_broker");
+        case TradingBackend::CryptoExchange:
+            return QStringLiteral("crypto_exchange");
     }
     return QStringLiteral("paper");
 }
@@ -57,11 +57,11 @@ struct AlgoStrategy {
     QString id;
     QString name;
     QString description;
-    QString timeframe; // live, 1m, 5m, 15m, 1h, 4h, 1d
+    QString timeframe;                  // live, 1m, 5m, 15m, 1h, 4h, 1d
     QString instrument_type = "equity"; // equity | option | future
     QJsonArray entry_conditions;
     QJsonArray exit_conditions;
-    QJsonArray legs; // F&O leg-rule definitions (see fno::fno_legs_to_json); empty for equity
+    QJsonArray legs;             // F&O leg-rule definitions (see fno::fno_legs_to_json); empty for equity
     QString entry_logic = "AND"; // AND, OR
     QString exit_logic = "AND";
     double stop_loss = 0;
@@ -82,27 +82,27 @@ struct AlgoDeployment {
     QString id;
     QString strategy_id;
     QString strategy_name;
-    QString strategy_kind = "dsl";              // 'dsl' | 'qc' — cached from strategy_id prefix at deploy time
+    QString strategy_kind = "dsl"; // 'dsl' | 'qc' — cached from strategy_id prefix at deploy time
     QString symbol;
-    QString exchange;                            // e.g. "NSE", "NASDAQ" — from broker profile
-    QString instrument_type = "equity";          // equity | option | future
-    QString underlying;                          // F&O underlying, e.g. "NIFTY" (option/future only)
-    QString resolved_expiry;                     // concrete expiry chosen at entry, "DD-MMM-YY"
-    QJsonArray resolved_legs;                    // concrete contracts placed at entry (restart reattach)
-    QString product_type;                        // e.g. "MIS", "CNC" — broker-specific
-    QString mode;                                // paper | live
-    QString entry_side = "BUY";                 // BUY | SELL — direction of the entry signal
-    QString backend = "paper";                   // paper | equity_broker | crypto_exchange
-    QString broker_id;                           // BrokerRegistry id; empty for paper
-    QString broker_account_id;                   // AccountManager id; empty for paper or single-account brokers
-    QString paper_portfolio_id;                  // PtPortfolio id (paper backend only)
-    QString status;                              // pending | starting | running | stopped | error | crashed
+    QString exchange;                   // e.g. "NSE", "NASDAQ" — from broker profile
+    QString instrument_type = "equity"; // equity | option | future
+    QString underlying;                 // F&O underlying, e.g. "NIFTY" (option/future only)
+    QString resolved_expiry;            // concrete expiry chosen at entry, "DD-MMM-YY"
+    QJsonArray resolved_legs;           // concrete contracts placed at entry (restart reattach)
+    QString product_type;               // e.g. "MIS", "CNC" — broker-specific
+    QString mode;                       // paper | live
+    QString entry_side = "BUY";         // BUY | SELL — direction of the entry signal
+    QString backend = "paper";          // paper | equity_broker | crypto_exchange
+    QString broker_id;                  // BrokerRegistry id; empty for paper
+    QString broker_account_id;          // AccountManager id; empty for paper or single-account brokers
+    QString paper_portfolio_id;         // PtPortfolio id (paper backend only)
+    QString status;                     // pending | starting | running | stopped | error | crashed
     QString timeframe;
     double quantity = 1.0;
-    double max_order_value = 0;                  // 0 = no limit
-    double max_daily_loss = 0;                   // 0 = no limit
+    double max_order_value = 0; // 0 = no limit
+    double max_daily_loss = 0;  // 0 = no limit
     QString error_message;
-    qint64 pid = 0;                              // OS pid of runner process; 0 if not running
+    qint64 pid = 0; // OS pid of runner process; 0 if not running
     QString created_at;
     QString updated_at;
 
@@ -142,7 +142,7 @@ struct ConditionDef {
     QString field;
     QString op; // >, <, >=, <=, ==, crosses_above, crosses_below, rising, falling, between
     double value = 0;
-    double value2 = 0; // upper bound for the `between` operator (value = lower)
+    double value2 = 0;              // upper bound for the `between` operator (value = lower)
     QString compare_mode = "value"; // value, indicator
     QString compare_indicator;
     QJsonObject compare_params;
@@ -189,30 +189,45 @@ inline QVector<IndicatorDef> algo_indicators() {
         {"TEMA", "TEMA", "ma", {{"period", 1, 500, 20, 1, 0}}, {"value"}},
         // Momentum
         {"RSI", "RSI", "momentum", {{"period", 2, 100, 14, 1, 0}}, {"value"}},
-        {"MACD", "MACD", "momentum",
+        {"MACD",
+         "MACD",
+         "momentum",
          {{"fast", 1, 100, 12, 1, 0}, {"slow", 1, 200, 26, 1, 0}, {"signal", 1, 100, 9, 1, 0}},
          {"line", "signal_line", "histogram"}},
-        {"STOCHASTIC", "Stochastic", "momentum",
-         {{"k_period", 1, 100, 14, 1, 0}, {"d_period", 1, 100, 3, 1, 0}}, {"k", "d"}},
+        {"STOCHASTIC",
+         "Stochastic",
+         "momentum",
+         {{"k_period", 1, 100, 14, 1, 0}, {"d_period", 1, 100, 3, 1, 0}},
+         {"k", "d"}},
         {"CCI", "CCI", "momentum", {{"period", 1, 100, 20, 1, 0}}, {"value"}},
         {"WILLIAMS_R", "Williams %R", "momentum", {{"period", 1, 100, 14, 1, 0}}, {"value"}},
         {"MFI", "MFI", "momentum", {{"period", 1, 100, 14, 1, 0}}, {"value"}},
         {"ROC", "Rate of Change", "momentum", {{"period", 1, 100, 12, 1, 0}}, {"value"}},
         // Trend
         {"ADX", "ADX", "trend", {{"period", 1, 100, 14, 1, 0}}, {"value", "plus_di", "minus_di"}},
-        {"SUPERTREND", "SuperTrend", "trend",
-         {{"period", 1, 100, 10, 1, 0}, {"multiplier", 0.5, 10, 3, 0.5, 1}}, {"value", "direction"}},
+        {"SUPERTREND",
+         "SuperTrend",
+         "trend",
+         {{"period", 1, 100, 10, 1, 0}, {"multiplier", 0.5, 10, 3, 0.5, 1}},
+         {"value", "direction"}},
         {"AROON", "Aroon", "trend", {{"period", 1, 100, 14, 1, 0}}, {"up", "down"}},
-        {"ICHIMOKU", "Ichimoku", "trend",
+        {"ICHIMOKU",
+         "Ichimoku",
+         "trend",
          {{"tenkan", 1, 100, 9, 1, 0}, {"kijun", 1, 100, 26, 1, 0}, {"senkou", 1, 200, 52, 1, 0}},
          {"tenkan_sen", "kijun_sen", "senkou_a", "senkou_b"}},
         // Volatility
         {"ATR", "ATR", "volatility", {{"period", 1, 100, 14, 1, 0}}, {"value"}},
-        {"BOLLINGER", "Bollinger Bands", "volatility",
+        {"BOLLINGER",
+         "Bollinger Bands",
+         "volatility",
          {{"period", 1, 100, 20, 1, 0}, {"std_dev", 0.5, 5, 2, 0.5, 1}},
          {"upper", "middle", "lower", "width", "pct_b"}},
-        {"KELTNER", "Keltner Channel", "volatility",
-         {{"period", 1, 100, 20, 1, 0}, {"multiplier", 0.5, 10, 2, 0.5, 1}}, {"upper", "middle", "lower"}},
+        {"KELTNER",
+         "Keltner Channel",
+         "volatility",
+         {{"period", 1, 100, 20, 1, 0}, {"multiplier", 0.5, 10, 2, 0.5, 1}},
+         {"upper", "middle", "lower"}},
         {"DONCHIAN", "Donchian Channel", "volatility", {{"period", 1, 100, 20, 1, 0}}, {"upper", "lower"}},
         // Volume
         {"OBV", "On Balance Volume", "volume", {}, {"value"}},
@@ -222,8 +237,7 @@ inline QVector<IndicatorDef> algo_indicators() {
 }
 
 inline QStringList algo_operators() {
-    return {">",  "<",  ">=",            "<=",            "==",     "crosses_above",
-            "crosses_below", "rising", "falling", "between"};
+    return {">", "<", ">=", "<=", "==", "crosses_above", "crosses_below", "rising", "falling", "between"};
 }
 
 inline QStringList algo_timeframes() {
@@ -234,10 +248,14 @@ inline QStringList algo_timeframes() {
 // indicators (SMA200, EMA200) have valid history; intraday must stay under
 // Yahoo's history caps (≈60 days for 5–30m, 7 for 1m).
 inline int algo_default_lookback_days(const QString& tf) {
-    if (tf == "1d") return 365 * 3;
-    if (tf == "4h" || tf == "1h") return 365;
-    if (tf == "1m") return 7;
-    if (tf == "live") return 365;
+    if (tf == "1d")
+        return 365 * 3;
+    if (tf == "4h" || tf == "1h")
+        return 365;
+    if (tf == "1m")
+        return 7;
+    if (tf == "live")
+        return 365;
     return 55; // 3m / 5m / 10m / 15m / 30m — just under Yahoo's ~60-day cap
 }
 
@@ -258,8 +276,7 @@ struct StrategyTemplate {
 
 inline QVector<StrategyTemplate> algo_strategy_templates() {
     // value-comparison leaf
-    auto cv = [](const QString& ind, const QJsonObject& p, const QString& field,
-                 const QString& op, double value) {
+    auto cv = [](const QString& ind, const QJsonObject& p, const QString& field, const QString& op, double value) {
         QJsonObject c;
         c["indicator"] = ind;
         c["params"] = p;
@@ -308,10 +325,10 @@ inline QVector<StrategyTemplate> algo_strategy_templates() {
     macd.name = "MACD Cross";
     macd.description = "MACD line crosses above signal";
     macd.timeframe = "15m";
-    macd.entry = {ci("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "line", "crosses_above",
-                     "MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "signal_line")};
-    macd.exit = {ci("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "line", "crosses_below",
-                    "MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "signal_line")};
+    macd.entry = {ci("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "line", "crosses_above", "MACD",
+                     {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "signal_line")};
+    macd.exit = {ci("MACD", {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "line", "crosses_below", "MACD",
+                    {{"fast", 12}, {"slow", 26}, {"signal", 9}}, "signal_line")};
     t.append(macd);
 
     StrategyTemplate boll;

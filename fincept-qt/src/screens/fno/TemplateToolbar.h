@@ -1,5 +1,6 @@
 #pragma once
 #include "services/options/StrategyTemplates.h"
+
 #include <QComboBox>
 #include <QEvent>
 #include <QLabel>
@@ -11,21 +12,21 @@ namespace fincept::screens::fno {
 
 class TemplateToolbar : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit TemplateToolbar(QWidget* parent = nullptr);
 
-signals:
+  signals:
     void template_chosen(const QString& template_id,
                          const fincept::services::options::StrategyInstantiationOptions& opts);
     void add_leg_requested();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private slots:
+  private slots:
     void on_use_clicked();
 
-private:
+  private:
     void retranslateUi();
 
     QLabel* template_label_ = nullptr;

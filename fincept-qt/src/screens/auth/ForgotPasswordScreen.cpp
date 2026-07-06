@@ -43,8 +43,8 @@ static QString btn_primary() {
                    "}"
                    "QPushButton:hover { background: %1; color: %3; }"
                    "QPushButton:disabled { color: %4; background: %5; border-color: %6; }")
-        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::BORDER_DIM());
+        .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE(), ui::colors::TEXT_DIM(),
+             ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
 }
 
 static QString link_style() {
@@ -116,11 +116,15 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
     });
     connect(&auth, &auth::AuthManager::password_reset_succeeded, this, [this]() {
         for (QLineEdit* w : {email_input_, otp_input_, new_password_, confirm_password_}) {
-            if (w) w->clear();
+            if (w)
+                w->clear();
         }
-        if (new_password_) new_password_->setEchoMode(QLineEdit::Password);
-        if (confirm_password_) confirm_password_->setEchoMode(QLineEdit::Password);
-        if (error_label_) error_label_->hide();
+        if (new_password_)
+            new_password_->setEchoMode(QLineEdit::Password);
+        if (confirm_password_)
+            confirm_password_->setEchoMode(QLineEdit::Password);
+        if (error_label_)
+            error_label_->hide();
         pages_->setCurrentIndex(3);
     });
     connect(&auth, &auth::AuthManager::password_reset_failed, this, [this](const QString& err) {
@@ -404,31 +408,53 @@ void ForgotPasswordScreen::build_success_page() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void ForgotPasswordScreen::retranslateUi() {
-    if (email_title_)    email_title_->setText(tr("RESET PASSWORD"));
-    if (email_sub_)      email_sub_->setText(tr("Enter your email and we'll send a verification code."));
-    if (email_lbl_)      email_lbl_->setText(tr("EMAIL"));
-    if (email_input_)    email_input_->setPlaceholderText(tr("user@domain.com"));
-    if (send_btn_)       send_btn_->setText(tr("  SEND CODE  "));
-    if (back_login_btn_) back_login_btn_->setText(tr("REMEMBER YOUR PASSWORD? SIGN IN"));
+    if (email_title_)
+        email_title_->setText(tr("RESET PASSWORD"));
+    if (email_sub_)
+        email_sub_->setText(tr("Enter your email and we'll send a verification code."));
+    if (email_lbl_)
+        email_lbl_->setText(tr("EMAIL"));
+    if (email_input_)
+        email_input_->setPlaceholderText(tr("user@domain.com"));
+    if (send_btn_)
+        send_btn_->setText(tr("  SEND CODE  "));
+    if (back_login_btn_)
+        back_login_btn_->setText(tr("REMEMBER YOUR PASSWORD? SIGN IN"));
 
-    if (sent_title_)        sent_title_->setText(tr("CHECK YOUR EMAIL"));
-    if (sent_sub_)          sent_sub_->setText(tr("We've sent a verification code. Enter it on the next screen to reset your password."));
-    if (sent_continue_btn_) sent_continue_btn_->setText(tr("  I HAVE THE CODE  "));
-    if (sent_resend_btn_)   sent_resend_btn_->setText(tr("DIDN'T RECEIVE? RESEND"));
+    if (sent_title_)
+        sent_title_->setText(tr("CHECK YOUR EMAIL"));
+    if (sent_sub_)
+        sent_sub_->setText(tr("We've sent a verification code. Enter it on the next screen to reset your password."));
+    if (sent_continue_btn_)
+        sent_continue_btn_->setText(tr("  I HAVE THE CODE  "));
+    if (sent_resend_btn_)
+        sent_resend_btn_->setText(tr("DIDN'T RECEIVE? RESEND"));
 
-    if (reset_title_)       reset_title_->setText(tr("RESET PASSWORD"));
-    if (reset_code_lbl_)    reset_code_lbl_->setText(tr("VERIFICATION CODE"));
-    if (reset_new_lbl_)     reset_new_lbl_->setText(tr("NEW PASSWORD"));
-    if (reset_confirm_lbl_) reset_confirm_lbl_->setText(tr("CONFIRM PASSWORD"));
-    if (otp_input_)         otp_input_->setPlaceholderText(tr("enter code from email"));
-    if (new_password_)      new_password_->setPlaceholderText(tr("min 8 characters"));
-    if (confirm_password_)  confirm_password_->setPlaceholderText(tr("re-enter password"));
-    if (reset_btn_)         reset_btn_->setText(tr("  RESET PASSWORD  "));
+    if (reset_title_)
+        reset_title_->setText(tr("RESET PASSWORD"));
+    if (reset_code_lbl_)
+        reset_code_lbl_->setText(tr("VERIFICATION CODE"));
+    if (reset_new_lbl_)
+        reset_new_lbl_->setText(tr("NEW PASSWORD"));
+    if (reset_confirm_lbl_)
+        reset_confirm_lbl_->setText(tr("CONFIRM PASSWORD"));
+    if (otp_input_)
+        otp_input_->setPlaceholderText(tr("enter code from email"));
+    if (new_password_)
+        new_password_->setPlaceholderText(tr("min 8 characters"));
+    if (confirm_password_)
+        confirm_password_->setPlaceholderText(tr("re-enter password"));
+    if (reset_btn_)
+        reset_btn_->setText(tr("  RESET PASSWORD  "));
 
-    if (success_title_)        success_title_->setText(tr("PASSWORD RESET"));
-    if (success_status_)       success_status_->setText(tr("SUCCESS"));
-    if (success_sub_)          success_sub_->setText(tr("Your password has been reset. You can now sign in with your new password."));
-    if (success_continue_btn_) success_continue_btn_->setText(tr("  CONTINUE TO LOGIN  "));
+    if (success_title_)
+        success_title_->setText(tr("PASSWORD RESET"));
+    if (success_status_)
+        success_status_->setText(tr("SUCCESS"));
+    if (success_sub_)
+        success_sub_->setText(tr("Your password has been reset. You can now sign in with your new password."));
+    if (success_continue_btn_)
+        success_continue_btn_->setText(tr("  CONTINUE TO LOGIN  "));
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────

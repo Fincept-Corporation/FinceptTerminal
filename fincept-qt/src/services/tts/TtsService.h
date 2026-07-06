@@ -82,7 +82,7 @@ class TtsService : public QObject {
     void teardown_provider();
 
     std::unique_ptr<TtsProvider> provider_;
-    std::atomic<bool>            speaking_{false};
+    std::atomic<bool> speaking_{false};
 };
 
 } // namespace fincept::services

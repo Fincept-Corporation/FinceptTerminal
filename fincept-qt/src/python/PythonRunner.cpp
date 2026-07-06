@@ -22,6 +22,9 @@
 #include <QThread>
 #include <QUuid>
 
+#include <atomic>
+#include <memory>
+
 namespace fincept::python {
 
 // ── yfinance_data.py CLI → daemon dispatch translation ───────────────────────
@@ -32,8 +35,7 @@ namespace fincept::python {
 // but not yet wired into the daemon dispatch table).
 //
 // Action names match scripts/yfinance_data.py::_daemon_dispatch.
-static bool route_yfinance_to_daemon(const QStringList& args,
-                                     std::function<void(PythonResult)> cb) {
+static bool route_yfinance_to_daemon(const QStringList& args, std::function<void(PythonResult)> cb) {
     if (args.isEmpty())
         return false;
     const QString action = args[0];
@@ -47,8 +49,8 @@ static bool route_yfinance_to_daemon(const QStringList& args,
         return a;
     };
 
-    if (action == "quote" || action == "info" || action == "financials" ||
-        action == "company_profile" || action == "financial_ratios") {
+    if (action == "quote" || action == "info" || action == "financials" || action == "company_profile" ||
+        action == "financial_ratios") {
         if (args.size() < 2)
             return false;
         payload["symbol"] = sym(1);
@@ -99,8 +101,8 @@ static bool route_yfinance_to_daemon(const QStringList& args,
         return false; // unknown action — let subprocess path handle it
     }
 
-    PythonWorker::instance().submit(action, payload,
-        [cb = std::move(cb), action](bool ok, QJsonObject result, QString error) {
+    PythonWorker::instance().submit(
+        action, payload, [cb = std::move(cb), action](bool ok, QJsonObject result, QString error) {
             // Daemon may legitimately not know an action; fail cleanly so caller
             // sees a structured error instead of a silent hang.
             if (!ok) {
@@ -146,12 +148,16 @@ static bool route_yfinance_to_daemon(const QStringList& args,
 // (Binance/Kraken/Polymarket) are listed too — injection is harmless when no
 // Python script reads them, and it future-proofs new scripts.
 static const QStringList kManagedCredentialKeys = {
-    "ALPHA_VANTAGE_API_KEY", "POLYGON_API_KEY",      "DATABENTO_API_KEY",
-    "FRED_API_KEY",          "NEWSAPI_KEY",          "BINANCE_API_KEY",
-    "BINANCE_SECRET_KEY",    "KRAKEN_API_KEY",       "KRAKEN_SECRET_KEY",
-    "IEX_CLOUD_TOKEN",       "FINNHUB_API_KEY",      "TIINGO_API_KEY",
-    "QUANDL_API_KEY",        "POLYMARKET_API_KEY",   "POLYMARKET_SECRET",
+    "ALPHA_VANTAGE_API_KEY", "POLYGON_API_KEY",    "DATABENTO_API_KEY", "FRED_API_KEY",       "NEWSAPI_KEY",
+    "BINANCE_API_KEY",       "BINANCE_SECRET_KEY", "KRAKEN_API_KEY",    "KRAKEN_SECRET_KEY",  "IEX_CLOUD_TOKEN",
+    "FINNHUB_API_KEY",       "TIINGO_API_KEY",     "QUANDL_API_KEY",    "POLYMARKET_API_KEY", "POLYMARKET_SECRET",
     "POLYMARKET_PASSPHRASE", "POLYMARKET_WALLET",
+// Keyed data-connector provider keys (auto-generated; see MCP data_* tools /
+// Settings › Credentials). Kept in sync with CredentialsSection.cpp CRED_KEYS
+// via the same shared X-macro include.
+#define FINCEPT_KEYED_CRED(KEY, NAME) KEY, // NOLINT(cppcoreguidelines-macro-usage) — X-macro list expansion
+#include "config/KeyedConnectorCredentials.inc"
+#undef FINCEPT_KEYED_CRED
 };
 
 // ── Sensitive shell-env stripping ────────────────────────────────────────────
@@ -165,11 +171,9 @@ static const QStringList kManagedCredentialKeys = {
 // non-credential vars use it (CSRF_TOKEN, GITHUB_TOKEN for tooling). The
 // kManagedCredentialKeys allow-list is checked first so any key the user
 // configured in Settings is preserved, regardless of suffix.
-static void strip_unmanaged_credentials(QProcessEnvironment& env,
-                                        const QStringList& managed) {
+static void strip_unmanaged_credentials(QProcessEnvironment& env, const QStringList& managed) {
     static const QStringList kSuffixes = {
-        "_API_KEY", "_SECRET", "_SECRET_KEY", "_ACCESS_TOKEN",
-        "_AUTH_TOKEN", "_PASSWORD", "_PRIVATE_KEY",
+        "_API_KEY", "_SECRET", "_SECRET_KEY", "_ACCESS_TOKEN", "_AUTH_TOKEN", "_PASSWORD", "_PRIVATE_KEY",
     };
     const QStringList all_keys = env.keys();
     for (const QString& k : all_keys) {
@@ -252,8 +256,7 @@ QProcessEnvironment PythonRunner::build_python_env() const {
     const QChar kPathSep = ':';
 #endif
     const QString existing_pypath = env.value("PYTHONPATH");
-    QString new_pypath =
-        existing_pypath.isEmpty() ? scripts_dir_ : (scripts_dir_ + kPathSep + existing_pypath);
+    QString new_pypath = existing_pypath.isEmpty() ? scripts_dir_ : (scripts_dir_ + kPathSep + existing_pypath);
     env.insert("PYTHONPATH", new_pypath);
 
     // Inject credentials stored via SettingsScreen → SecureStorage. SecureStorage
@@ -367,6 +370,10 @@ void PythonRunner::find_python_async() {
         proc->deleteLater();
         LOG_WARN("Python", "No Python interpreter found (process error)");
         python_init_done_ = true;
+
+        // Drain requests queued during detection so they fail fast
+        // ("Python not available") instead of sitting in the queue forever.
+        start_next();
     });
 
     proc->start(sys_python, {"--version"});
@@ -382,7 +389,7 @@ QString PythonRunner::find_scripts_dir() const {
     // Contents/Resources/ (not Contents/MacOS/) — anything other than
     // Mach-Os in MacOS/ makes codesign reject the bundle as malformed.
     QStringList candidates = {
-        exe_dir + "/../Resources/scripts",  // macOS canonical (.app/Contents/Resources/scripts)
+        exe_dir + "/../Resources/scripts", // macOS canonical (.app/Contents/Resources/scripts)
         exe_dir + "/scripts",
         exe_dir + "/../scripts",
         exe_dir + "/../../scripts",
@@ -475,10 +482,7 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
     if (QThread::currentThread() != this->thread()) {
         Callback cb_copy = std::move(cb);
         QMetaObject::invokeMethod(
-            this,
-            [this, code, cb_copy = std::move(cb_copy)]() mutable {
-                run_code(code, std::move(cb_copy));
-            },
+            this, [this, code, cb_copy = std::move(cb_copy)]() mutable { run_code(code, std::move(cb_copy)); },
             Qt::QueuedConnection);
         return;
     }
@@ -594,8 +598,8 @@ void PythonRunner::start_next() {
             for (const QString& arg : req.args) {
                 if (arg.size() > kArgSpillThreshold) {
                     QString temp_dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-                    QString temp_path = temp_dir + "/fincept_arg_" +
-                                       QUuid::createUuid().toString(QUuid::WithoutBraces) + ".json";
+                    QString temp_path =
+                        temp_dir + "/fincept_arg_" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".json";
                     QFile tf(temp_path);
                     if (tf.open(QIODevice::WriteOnly | QIODevice::Text)) {
                         tf.write(arg.toUtf8());
@@ -655,15 +659,18 @@ void PythonRunner::start_next() {
         // partial line (no \n yet) stays in the buffer for the next read.
         auto drain_lines = [this, proc](bool is_stderr) {
             auto& bufs = proc_buffers_[proc];
-            if (!bufs.on_line) return;
+            if (!bufs.on_line)
+                return;
             QByteArray& buf = is_stderr ? bufs.stderr_buf : bufs.stdout_buf;
             int& off = is_stderr ? bufs.stderr_streamed : bufs.stdout_streamed;
             while (true) {
                 int nl = buf.indexOf('\n', off);
-                if (nl < 0) break;
+                if (nl < 0)
+                    break;
                 // Line is buf[off..nl) — exclude the trailing \n; also trim \r for CRLF
                 QByteArray line = buf.mid(off, nl - off);
-                if (line.endsWith('\r')) line.chop(1);
+                if (line.endsWith('\r'))
+                    line.chop(1);
                 off = nl + 1;
                 bufs.on_line(QString::fromUtf8(line), is_stderr);
             }
@@ -672,29 +679,35 @@ void PythonRunner::start_next() {
         // Buffer stdout/stderr incrementally. After each append, drain complete lines
         // to the optional stream callback. The full buffer is still available for the
         // `finished` handler's authoritative parse.
-        connect(proc, &QProcess::readyReadStandardOutput, this,
-                [this, proc, drain_lines]() {
-                    proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput());
-                    drain_lines(false);
-                });
-        connect(proc, &QProcess::readyReadStandardError, this,
-                [this, proc, drain_lines]() {
-                    proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError());
-                    drain_lines(true);
-                });
+        connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc, drain_lines]() {
+            proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput());
+            drain_lines(false);
+        });
+        connect(proc, &QProcess::readyReadStandardError, this, [this, proc, drain_lines]() {
+            proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError());
+            drain_lines(true);
+        });
 
-        auto cb = std::move(req.cb);
+        // Share cb across both slots and gate on a once-flag so exactly one of
+        // finished/errorOccurred runs cleanup + cb. (cb was previously MOVED into
+        // the finished lambda, leaving errorOccurred holding an empty std::function
+        // → std::bad_function_call → app crash on any subprocess FailedToStart or
+        // Crash, e.g. a broken venv python or a segfault in numpy/torch/faiss.)
+        auto cb = std::make_shared<Callback>(std::move(req.cb));
+        auto handled = std::make_shared<std::atomic_bool>(false);
         auto script_name = std::move(req.script);
 
         connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-                [this, proc, cb = std::move(cb), script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
+                [this, proc, cb, handled, script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
+                    if (handled->exchange(true))
+                        return; // errorOccurred already handled this proc
                     // Collect any remaining buffered data
                     auto& bufs = proc_buffers_[proc];
                     bufs.stdout_buf.append(proc->readAllStandardOutput());
                     bufs.stderr_buf.append(proc->readAllStandardError());
 
-                    const qint64 duration_ms = bufs.start_ms > 0
-                        ? QDateTime::currentMSecsSinceEpoch() - bufs.start_ms : 0;
+                    const qint64 duration_ms =
+                        bufs.start_ms > 0 ? QDateTime::currentMSecsSinceEpoch() - bufs.start_ms : 0;
 
                     QString stdout_str = QString::fromUtf8(bufs.stdout_buf);
                     QString stderr_str = QString::fromUtf8(bufs.stderr_buf);
@@ -730,32 +743,33 @@ void PythonRunner::start_next() {
                                                 .arg(exit_code)
                                                 .arg(result.error.left(200)));
                     } else if (!is_code) {
-                        LOG_DEBUG("Python", QString("Script %1 finished in %2ms")
-                                                .arg(script_name)
-                                                .arg(duration_ms));
+                        LOG_DEBUG("Python", QString("Script %1 finished in %2ms").arg(script_name).arg(duration_ms));
                     }
 
-                    cb(std::move(result));
+                    (*cb)(std::move(result));
 
                     --active_count_;
                     start_next(); // drain queue
                 });
 
-        connect(proc, &QProcess::errorOccurred, this, [this, proc, cb, is_code, temp_file](QProcess::ProcessError) {
-            QString error_msg = proc->errorString();
-            proc_buffers_.remove(proc);
-            // Clean up any spilled arg temp files
-            auto spilled = proc->property("spilled_files").toStringList();
-            for (const QString& f : spilled)
-                QFile::remove(f);
-            proc->deleteLater();
-            if (is_code && !temp_file.isEmpty())
-                QFile::remove(temp_file);
-            cb({false, {}, "Process error: " + error_msg, -1});
+        connect(proc, &QProcess::errorOccurred, this,
+                [this, proc, cb, handled, is_code, temp_file](QProcess::ProcessError) {
+                    if (handled->exchange(true))
+                        return; // finished already handled this proc
+                    QString error_msg = proc->errorString();
+                    proc_buffers_.remove(proc);
+                    // Clean up any spilled arg temp files
+                    auto spilled = proc->property("spilled_files").toStringList();
+                    for (const QString& f : spilled)
+                        QFile::remove(f);
+                    proc->deleteLater();
+                    if (is_code && !temp_file.isEmpty())
+                        QFile::remove(temp_file);
+                    (*cb)({false, {}, "Process error: " + error_msg, -1});
 
-            --active_count_;
-            start_next(); // drain queue
-        });
+                    --active_count_;
+                    start_next(); // drain queue
+                });
 
         LOG_INFO("Python", QString("Running (%1/%2 active, %3 queued): %4 %5")
                                .arg(active_count_)
@@ -764,6 +778,11 @@ void PythonRunner::start_next() {
                                .arg(python_exe)
                                .arg(script_path));
         proc->start(python_exe, full_args);
+        // NOTE: no runaway-kill watchdog here on purpose — several scripts run
+        // legitimately for minutes (vision_quant/setup_index.py CNN training,
+        // long backtests, some analytics). Reaping a hung subprocess needs a
+        // per-script timeout policy (e.g. driven by ToolDef::default_timeout_ms),
+        // not a blanket kill. Tracked as deferred in docs/RELEASE_BUGS_2026-07-06.md.
     }
 }
 

@@ -28,26 +28,29 @@ namespace {
 namespace pr = fincept::services::prediction;
 
 QString font_stack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 QString format_volume(double v) {
-    if (v >= 1e9) return QStringLiteral("%1B").arg(QLocale::system().toString(v / 1e9, 'f', 1));
-    if (v >= 1e6) return QStringLiteral("%1M").arg(QLocale::system().toString(v / 1e6, 'f', 1));
-    if (v >= 1e3) return QStringLiteral("%1k").arg(QLocale::system().toString(v / 1e3, 'f', 0));
+    if (v >= 1e9)
+        return QStringLiteral("%1B").arg(QLocale::system().toString(v / 1e9, 'f', 1));
+    if (v >= 1e6)
+        return QStringLiteral("%1M").arg(QLocale::system().toString(v / 1e6, 'f', 1));
+    if (v >= 1e3)
+        return QStringLiteral("%1k").arg(QLocale::system().toString(v / 1e3, 'f', 0));
     return QLocale::system().toString(v, 'f', 0);
 }
 
 QString format_price(double p) {
-    if (p < 0.0) p = 0.0;
-    if (p > 1.0) p = 1.0;
+    if (p < 0.0)
+        p = 0.0;
+    if (p > 1.0)
+        p = 1.0;
     return QStringLiteral("%1").arg(QLocale::system().toString(p, 'f', 2));
 }
 
 pr::fincept_internal::FinceptInternalAdapter* fincept_adapter() {
-    auto* base = pr::PredictionExchangeRegistry::instance().adapter(
-        QStringLiteral("fincept"));
+    auto* base = pr::PredictionExchangeRegistry::instance().adapter(QStringLiteral("fincept"));
     return dynamic_cast<pr::fincept_internal::FinceptInternalAdapter*>(base);
 }
 
@@ -88,9 +91,7 @@ void MarketsListPanel::build_ui() {
     table_ = new QTableWidget(this);
     table_->setObjectName(QStringLiteral("marketsListTable"));
     table_->setColumnCount(5);
-    table_->setHorizontalHeaderLabels({
-        tr("MARKET"), tr("YES"), tr("NO"), tr("24h VOL"), tr("EXPIRES")
-    });
+    table_->setHorizontalHeaderLabels({tr("MARKET"), tr("YES"), tr("NO"), tr("24h VOL"), tr("EXPIRES")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -105,8 +106,7 @@ void MarketsListPanel::build_ui() {
         h->setSectionResizeMode(i, QHeaderView::ResizeToContents);
     }
 
-    connect(table_, &QTableWidget::cellDoubleClicked, this,
-            &MarketsListPanel::on_row_double_clicked);
+    connect(table_, &QTableWidget::cellDoubleClicked, this, &MarketsListPanel::on_row_double_clicked);
 
     root->addWidget(table_, 1);
 
@@ -114,9 +114,8 @@ void MarketsListPanel::build_ui() {
     footer_note_->setObjectName(QStringLiteral("marketsListFooter"));
     footer_note_->setWordWrap(true);
     footer_note_->setContentsMargins(12, 8, 12, 12);
-    footer_note_->setText(tr(
-        "Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
-        "deploy the fincept_market Anchor program for live trading."));
+    footer_note_->setText(tr("Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
+                             "deploy the fincept_market Anchor program for live trading."));
     root->addWidget(footer_note_);
 }
 
@@ -124,37 +123,35 @@ void MarketsListPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral(
-        "QWidget#marketsListPanel { background:%1; }"
-        "QWidget#marketsListHead { background:%2; border-bottom:1px solid %3; }"
-        "QLabel#marketsListTitle { color:%4; font-family:%5; font-size:11px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#marketsListStatusLive { color:%6; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#marketsListStatusDemo { color:%7; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QLabel#marketsListStatusError { color:%8; font-family:%5; font-size:10px;"
-        "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-        "QTableWidget#marketsListTable { background:%1; color:%9;"
-        "  font-family:%5; font-size:11px; gridline-color:%3; border:none; }"
-        "QTableWidget#marketsListTable::item { padding:6px 10px; }"
-        "QTableWidget#marketsListTable::item:selected { background:rgba(217,119,6,0.10);"
-        "  color:%4; }"
-        "QHeaderView::section { background:%2; color:%7; font-family:%5;"
-        "  font-size:10px; font-weight:700; letter-spacing:1.2px; padding:6px 10px;"
-        "  border:none; border-bottom:1px solid %3; }"
-        "QLabel#marketsListFooter { color:%7; font-family:%5; font-size:10px;"
-        "  background:transparent; }"
-    )
-        .arg(BG_BASE(),         // %1
-             BG_SURFACE(),      // %2 (panel chrome bg lives outside; this matches table header)
-             BORDER_DIM(),      // %3
-             AMBER(),           // %4
-             font,              // %5
-             POSITIVE(),        // %6
-             TEXT_TERTIARY(),   // %7
-             NEGATIVE(),        // %8
-             TEXT_PRIMARY());   // %9
+    const QString ss = QStringLiteral("QWidget#marketsListPanel { background:%1; }"
+                                      "QWidget#marketsListHead { background:%2; border-bottom:1px solid %3; }"
+                                      "QLabel#marketsListTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                                      "QLabel#marketsListStatusLive { color:%6; font-family:%5; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                                      "QLabel#marketsListStatusDemo { color:%7; font-family:%5; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                                      "QLabel#marketsListStatusError { color:%8; font-family:%5; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                                      "QTableWidget#marketsListTable { background:%1; color:%9;"
+                                      "  font-family:%5; font-size:11px; gridline-color:%3; border:none; }"
+                                      "QTableWidget#marketsListTable::item { padding:6px 10px; }"
+                                      "QTableWidget#marketsListTable::item:selected { background:rgba(217,119,6,0.10);"
+                                      "  color:%4; }"
+                                      "QHeaderView::section { background:%2; color:%7; font-family:%5;"
+                                      "  font-size:10px; font-weight:700; letter-spacing:1.2px; padding:6px 10px;"
+                                      "  border:none; border-bottom:1px solid %3; }"
+                                      "QLabel#marketsListFooter { color:%7; font-family:%5; font-size:10px;"
+                                      "  background:transparent; }")
+                           .arg(BG_BASE(),       // %1
+                                BG_SURFACE(),    // %2 (panel chrome bg lives outside; this matches table header)
+                                BORDER_DIM(),    // %3
+                                AMBER(),         // %4
+                                font,            // %5
+                                POSITIVE(),      // %6
+                                TEXT_TERTIARY(), // %7
+                                NEGATIVE(),      // %8
+                                TEXT_PRIMARY()); // %9
 
     setStyleSheet(ss);
 }
@@ -163,26 +160,26 @@ void MarketsListPanel::apply_theme() {
 
 void MarketsListPanel::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    if (subscribed_) return;
+    if (subscribed_)
+        return;
     auto* adapter = fincept_adapter();
     if (!adapter) {
         set_status_error(tr("FinceptInternalAdapter not registered"));
         return;
     }
     set_status_demo(adapter->is_demo_mode());
-    connect(adapter,
-            &fincept::services::prediction::PredictionExchangeAdapter::markets_ready,
-            this, &MarketsListPanel::on_markets_ready);
-    connect(adapter,
-            &fincept::services::prediction::PredictionExchangeAdapter::error_occurred,
-            this, &MarketsListPanel::on_error);
+    connect(adapter, &fincept::services::prediction::PredictionExchangeAdapter::markets_ready, this,
+            &MarketsListPanel::on_markets_ready);
+    connect(adapter, &fincept::services::prediction::PredictionExchangeAdapter::error_occurred, this,
+            &MarketsListPanel::on_error);
     subscribed_ = true;
     adapter->list_markets({}, {}, /*limit=*/50, /*offset=*/0);
 }
 
 void MarketsListPanel::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
-    if (!subscribed_) return;
+    if (!subscribed_)
+        return;
     auto* adapter = fincept_adapter();
     if (adapter) {
         disconnect(adapter, nullptr, this, nullptr);
@@ -197,16 +194,14 @@ void MarketsListPanel::changeEvent(QEvent* event) {
 }
 
 void MarketsListPanel::retranslateUi() {
-    if (title_) title_->setText(tr("MARKETS"));
+    if (title_)
+        title_->setText(tr("MARKETS"));
     if (table_) {
-        table_->setHorizontalHeaderLabels({
-            tr("MARKET"), tr("YES"), tr("NO"), tr("24h VOL"), tr("EXPIRES")
-        });
+        table_->setHorizontalHeaderLabels({tr("MARKET"), tr("YES"), tr("NO"), tr("24h VOL"), tr("EXPIRES")});
     }
     if (footer_note_)
-        footer_note_->setText(tr(
-            "Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
-            "deploy the fincept_market Anchor program for live trading."));
+        footer_note_->setText(tr("Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
+                                 "deploy the fincept_market Anchor program for live trading."));
     // Re-apply the status pill text using its objectName as the state flag so
     // the live DEMO/LIVE/ERROR state survives the locale switch.
     if (status_pill_) {
@@ -222,8 +217,7 @@ void MarketsListPanel::retranslateUi() {
 
 // ── Adapter callbacks ──────────────────────────────────────────────────────
 
-void MarketsListPanel::on_markets_ready(
-    const QVector<pr::PredictionMarket>& markets) {
+void MarketsListPanel::on_markets_ready(const QVector<pr::PredictionMarket>& markets) {
     rebuild_table(markets);
 }
 
@@ -234,11 +228,12 @@ void MarketsListPanel::on_error(const QString& context, const QString& message) 
 
 void MarketsListPanel::on_row_double_clicked(int row, int /*column*/) {
     auto* item = table_->item(row, 0);
-    if (!item) return;
+    if (!item)
+        return;
     const auto market_id = item->data(Qt::UserRole).toString();
-    if (market_id.isEmpty()) return;
-    LOG_INFO("MarketsListPanel",
-             QString("market double-clicked: %1").arg(market_id));
+    if (market_id.isEmpty())
+        return;
+    LOG_INFO("MarketsListPanel", QString("market double-clicked: %1").arg(market_id));
     // The order-entry panel is part of Phase 4 polish — wired via a
     // signal in the next iteration. For now, surface the click via the
     // log so the seam is testable.
@@ -267,8 +262,7 @@ void MarketsListPanel::set_status_error(const QString& message) {
     LOG_WARN("MarketsListPanel", QString("error: %1").arg(message));
 }
 
-void MarketsListPanel::rebuild_table(
-    const QVector<pr::PredictionMarket>& markets) {
+void MarketsListPanel::rebuild_table(const QVector<pr::PredictionMarket>& markets) {
     table_->setRowCount(markets.size());
     int row = 0;
     for (const auto& m : markets) {

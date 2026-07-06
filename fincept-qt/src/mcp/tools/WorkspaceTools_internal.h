@@ -146,12 +146,18 @@ inline QJsonObject panel_to_json(PanelHandle* p) {
 
 inline const char* state_to_str(PanelHandle::State s) {
     switch (s) {
-        case PanelHandle::State::Spawning:     return "spawning";
-        case PanelHandle::State::Materialising:return "materialising";
-        case PanelHandle::State::Active:       return "active";
-        case PanelHandle::State::Suspended:    return "suspended";
-        case PanelHandle::State::Closing:      return "closing";
-        case PanelHandle::State::Closed:       return "closed";
+        case PanelHandle::State::Spawning:
+            return "spawning";
+        case PanelHandle::State::Materialising:
+            return "materialising";
+        case PanelHandle::State::Active:
+            return "active";
+        case PanelHandle::State::Suspended:
+            return "suspended";
+        case PanelHandle::State::Closing:
+            return "closing";
+        case PanelHandle::State::Closed:
+            return "closed";
     }
     return "unknown";
 }

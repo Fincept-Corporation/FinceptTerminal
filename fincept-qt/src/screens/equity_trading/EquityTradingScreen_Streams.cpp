@@ -9,8 +9,6 @@
 //
 // Part of the partial-class split of EquityTradingScreen.cpp.
 
-#include "screens/equity_trading/EquityTradingScreen.h"
-
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
@@ -19,6 +17,7 @@
 #include "screens/equity_trading/EquityOrderBook.h"
 #include "screens/equity_trading/EquityOrderEntry.h"
 #include "screens/equity_trading/EquityTickerBar.h"
+#include "screens/equity_trading/EquityTradingScreen.h"
 #include "screens/equity_trading/EquityWatchlist.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
@@ -81,42 +80,39 @@ void EquityTradingScreen::hub_subscribe_streaming() {
 
     if (!is_paper) {
         // ── Positions ──
-        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("positions")),
-                      [this](const QVariant& v) {
-                          if (!v.canConvert<QVector<BrokerPosition>>())
-                              return;
-                          const auto positions = v.value<QVector<BrokerPosition>>();
-                          bottom_panel_->set_positions(positions);
-                          live_positions_ = positions; // cache for the chart overlay
-                          QStringList ps;
-                          for (const auto& p : positions)
-                              ps << p.symbol;
-                          update_position_symbols(ps); // give held symbols live WS prices
-                          update_chart_position();     // refresh on-chart position card
-                      });
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("positions")), [this](const QVariant& v) {
+            if (!v.canConvert<QVector<BrokerPosition>>())
+                return;
+            const auto positions = v.value<QVector<BrokerPosition>>();
+            bottom_panel_->set_positions(positions);
+            live_positions_ = positions; // cache for the chart overlay
+            QStringList ps;
+            for (const auto& p : positions)
+                ps << p.symbol;
+            update_position_symbols(ps); // give held symbols live WS prices
+            update_chart_position();     // refresh on-chart position card
+        });
 
         // ── Holdings ──
-        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("holdings")),
-                      [this](const QVariant& v) {
-                          if (!v.canConvert<QVector<BrokerHolding>>())
-                              return;
-                          const auto holdings = v.value<QVector<BrokerHolding>>();
-                          bottom_panel_->set_holdings(holdings);
-                          // Give held symbols live WS prices so their LTP updates in
-                          // real time instead of only on the 5-minute REST poll.
-                          QStringList hs;
-                          for (const auto& h : holdings)
-                              hs << h.symbol;
-                          update_holding_symbols(hs);
-                      });
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("holdings")), [this](const QVariant& v) {
+            if (!v.canConvert<QVector<BrokerHolding>>())
+                return;
+            const auto holdings = v.value<QVector<BrokerHolding>>();
+            bottom_panel_->set_holdings(holdings);
+            // Give held symbols live WS prices so their LTP updates in
+            // real time instead of only on the 5-minute REST poll.
+            QStringList hs;
+            for (const auto& h : holdings)
+                hs << h.symbol;
+            update_holding_symbols(hs);
+        });
 
         // ── Orders ──
-        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("orders")),
-                      [this](const QVariant& v) {
-                          if (!v.canConvert<QVector<BrokerOrderInfo>>())
-                              return;
-                          bottom_panel_->set_orders(v.value<QVector<BrokerOrderInfo>>());
-                      });
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("orders")), [this](const QVariant& v) {
+            if (!v.canConvert<QVector<BrokerOrderInfo>>())
+                return;
+            bottom_panel_->set_orders(v.value<QVector<BrokerOrderInfo>>());
+        });
 
         // ── Balance / Funds ──
         // Resolve the broker's currency symbol once (₹/$/…) for the funds cards.
@@ -126,23 +122,22 @@ void EquityTradingScreen::hub_subscribe_streaming() {
             return QStringLiteral("$");
         }();
         bottom_panel_->set_currency(ccy_sym); // so the positions P&L summary formats correctly
-        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("balance")),
-                      [this, ccy_sym](const QVariant& v) {
-                          if (!v.canConvert<BrokerFunds>())
-                              return;
-                          const auto funds = v.value<BrokerFunds>();
-                          EquityFundsView fv;
-                          fv.is_paper = false;
-                          fv.currency = ccy_sym;
-                          fv.available = funds.available_balance;
-                          fv.used_margin = funds.used_margin;
-                          fv.total_equity = funds.total_balance;
-                          fv.collateral = funds.collateral;
-                          const double denom = funds.used_margin + funds.available_balance;
-                          fv.margin_util_pct = denom > 0.0 ? (funds.used_margin / denom) * 100.0 : 0.0;
-                          bottom_panel_->set_funds_view(fv);
-                          order_entry_->set_balance(funds.available_balance);
-                      });
+        hub.subscribe(this, broker_topic(bid, aid, QStringLiteral("balance")), [this, ccy_sym](const QVariant& v) {
+            if (!v.canConvert<BrokerFunds>())
+                return;
+            const auto funds = v.value<BrokerFunds>();
+            EquityFundsView fv;
+            fv.is_paper = false;
+            fv.currency = ccy_sym;
+            fv.available = funds.available_balance;
+            fv.used_margin = funds.used_margin;
+            fv.total_equity = funds.total_balance;
+            fv.collateral = funds.collateral;
+            const double denom = funds.used_margin + funds.available_balance;
+            fv.margin_util_pct = denom > 0.0 ? (funds.used_margin / denom) * 100.0 : 0.0;
+            bottom_panel_->set_funds_view(fv);
+            order_entry_->set_balance(funds.available_balance);
+        });
     }
 
     // ── Quotes (per-symbol subscriptions for ticker + watchlist + paper trading) ──
@@ -171,7 +166,8 @@ void EquityTradingScreen::hub_subscribe_quotes() {
         symbols.insert(s);
 
     LOG_INFO("posdbg", QString("subscribing %1 quote topics for acct=%2: [%3]")
-                           .arg(symbols.size()).arg(aid, QStringList(symbols.begin(), symbols.end()).join(',')));
+                           .arg(symbols.size())
+                           .arg(aid, QStringList(symbols.begin(), symbols.end()).join(',')));
     for (const auto& sym : symbols) {
         const QString topic = broker_topic(bid, aid, QStringLiteral("quote"), sym);
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
@@ -187,9 +183,8 @@ void EquityTradingScreen::hub_subscribe_quotes() {
             // Ticker bar + order entry for selected symbol
             if (sym == selected_symbol_) {
                 current_price_ = quote.ltp;
-                ticker_bar_->update_quote(quote.ltp, quote.change, quote.change_pct,
-                                          quote.high, quote.low, quote.volume,
-                                          quote.bid, quote.ask);
+                ticker_bar_->update_quote(quote.ltp, quote.change, quote.change_pct, quote.high, quote.low,
+                                          quote.volume, quote.bid, quote.ask);
                 order_entry_->set_current_price(quote.ltp);
                 chart_->on_quote(quote);       // roll the tick into the live forming candle
                 chart_->update_pnl(quote.ltp); // live P&L on the chart's position card
@@ -242,8 +237,7 @@ void EquityTradingScreen::route_option_quote(const QString& account_id, const QS
         if (now - s_last > 3000) {
             s_last = now;
             LOG_INFO("posdbg", QString("route_option_quote tick='%1' acct=%2 focused=%3 pos=[%4]")
-                                   .arg(symbol, account_id, focused_account_id_,
-                                        position_symbols_.join(',')));
+                                   .arg(symbol, account_id, focused_account_id_, position_symbols_.join(',')));
         }
     }
     if (account_id != focused_account_id_ || quote.ltp <= 0.0)
@@ -313,8 +307,8 @@ void EquityTradingScreen::update_chart_position() {
         }
         for (const auto& p : pt_get_positions(account.paper_portfolio_id)) {
             if (p.symbol == selected_symbol_ && qAbs(p.quantity) > 0.0) {
-                chart_->set_position(selected_symbol_, p.side, qAbs(p.quantity), p.entry_price,
-                                     selected_exchange_, QString());
+                chart_->set_position(selected_symbol_, p.side, qAbs(p.quantity), p.entry_price, selected_exchange_,
+                                     QString());
                 if (current_price_ > 0.0)
                     chart_->update_pnl(current_price_);
                 return;
@@ -335,8 +329,7 @@ void EquityTradingScreen::update_chart_position() {
             if (side != QLatin1String("long") && side != QLatin1String("short"))
                 side = p.quantity >= 0 ? QStringLiteral("long") : QStringLiteral("short");
             chart_->set_position(selected_symbol_, side, qAbs(p.quantity), p.avg_price,
-                                 p.exchange.isEmpty() ? selected_exchange_ : p.exchange,
-                                 p.product_type, ccy);
+                                 p.exchange.isEmpty() ? selected_exchange_ : p.exchange, p.product_type, ccy);
             if (current_price_ > 0.0)
                 chart_->update_pnl(current_price_);
             return;
@@ -349,36 +342,32 @@ void EquityTradingScreen::update_chart_position() {
 // On-demand legacy signal slots (no hub topic — D4 exception)
 // ============================================================================
 
-void EquityTradingScreen::on_stream_candles_fetched(const QString& account_id,
-                                                     const QVector<BrokerCandle>& candles) {
+void EquityTradingScreen::on_stream_candles_fetched(const QString& account_id, const QVector<BrokerCandle>& candles) {
     if (account_id == focused_account_id_)
         chart_->set_candles(candles);
 }
 
 void EquityTradingScreen::on_stream_orderbook_fetched(const QString& account_id,
-                                                       const QVector<QPair<double, double>>& bids,
-                                                       const QVector<QPair<double, double>>& asks,
-                                                       double spread, double spread_pct,
-                                                       const QVector<int>& bid_orders,
-                                                       const QVector<int>& ask_orders) {
+                                                      const QVector<QPair<double, double>>& bids,
+                                                      const QVector<QPair<double, double>>& asks, double spread,
+                                                      double spread_pct, const QVector<int>& bid_orders,
+                                                      const QVector<int>& ask_orders) {
     if (account_id == focused_account_id_)
         orderbook_->set_data(bids, asks, spread, spread_pct, bid_orders, ask_orders);
 }
 
-void EquityTradingScreen::on_stream_time_sales_fetched(const QString& account_id,
-                                                        const QVector<BrokerTrade>& trades) {
+void EquityTradingScreen::on_stream_time_sales_fetched(const QString& account_id, const QVector<BrokerTrade>& trades) {
     if (account_id == focused_account_id_)
         bottom_panel_->set_time_sales(trades);
 }
 
-void EquityTradingScreen::on_stream_latest_trade_fetched(const QString& account_id,
-                                                          const BrokerTrade& trade) {
+void EquityTradingScreen::on_stream_latest_trade_fetched(const QString& account_id, const BrokerTrade& trade) {
     if (account_id == focused_account_id_)
         bottom_panel_->prepend_trade(trade);
 }
 
 void EquityTradingScreen::on_stream_calendar_fetched(const QString& account_id,
-                                                      const QVector<MarketCalendarDay>& days) {
+                                                     const QVector<MarketCalendarDay>& days) {
     if (account_id == focused_account_id_)
         bottom_panel_->set_calendar(days);
 }

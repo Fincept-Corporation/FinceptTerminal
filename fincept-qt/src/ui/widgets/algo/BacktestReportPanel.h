@@ -21,16 +21,16 @@ namespace fincept::ui::algo {
 /// (equity_curve, trades, sortino, calmar, expectancy, …).
 class BacktestReportPanel : public QWidget {
     Q_OBJECT
-public:
+  public:
     explicit BacktestReportPanel(QWidget* parent = nullptr);
 
     void set_result(const QJsonObject& payload);
     void clear();
 
-protected:
+  protected:
     void changeEvent(QEvent* event) override;
 
-private:
+  private:
     QWidget* build_kpis();
     QWidget* build_charts();
     QWidget* build_heatmap();

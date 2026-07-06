@@ -28,9 +28,8 @@ QByteArray download_upstox(const BrokerCredentials&) {
 // Upstox segment → canonical exchange. Empty result = drop the row (e.g. NSE_COM).
 QString seg_to_exchange(const QString& seg) {
     static const QHash<QString, QString> m = {
-        {"NSE_EQ", "NSE"},   {"NSE_FO", "NFO"},        {"NCD_FO", "CDS"},
-        {"NSE_INDEX", "NSE_INDEX"}, {"BSE_INDEX", "BSE_INDEX"}, {"BSE_EQ", "BSE"},
-        {"BSE_FO", "BFO"},   {"BCD_FO", "BCD"},        {"MCX_FO", "MCX"},
+        {"NSE_EQ", "NSE"}, {"NSE_FO", "NFO"}, {"NCD_FO", "CDS"}, {"NSE_INDEX", "NSE_INDEX"}, {"BSE_INDEX", "BSE_INDEX"},
+        {"BSE_EQ", "BSE"}, {"BSE_FO", "BFO"}, {"BCD_FO", "BCD"}, {"MCX_FO", "MCX"},
     };
     return m.value(seg.trimmed().toUpper(), QString());
 }

@@ -26,7 +26,7 @@
 namespace fincept::ui {
 class LoadingOverlay;
 class WorldMapWidget;
-}
+} // namespace fincept::ui
 
 namespace fincept::screens {
 
@@ -91,8 +91,7 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// area-search for it. Shared by the place-search selection, the raw
     /// bbox button, and (later) the map-draw tool so they all funnel through
     /// one path.
-    void run_area_search(double min_lat, double max_lat, double min_lng, double max_lng,
-                         bool filter_to_shapes = false);
+    void run_area_search(double min_lat, double max_lat, double min_lng, double max_lng, bool filter_to_shapes = false);
     /// Called when the user finalizes / clears drawn shapes on the map.
     /// Computes the union bbox of all shapes and loads vessels for it;
     /// on_vessels_loaded then filters the result to vessels actually inside
@@ -106,7 +105,7 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QLabel* brand_label_ = nullptr;
     QLabel* classified_label_ = nullptr;
     QLabel* credits_label_ = nullptr;
-    QLabel* not_found_label_ = nullptr;  // shown when multi-vessel returns missing IMOs
+    QLabel* not_found_label_ = nullptr; // shown when multi-vessel returns missing IMOs
 
     // Left / right panel roots
     QWidget* left_panel_ = nullptr;
@@ -114,17 +113,17 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QWidget* status_bar_ = nullptr;
 
     // Left panel — fleet stats (all computed from the loaded vessel set).
-    QLabel* stat_vessels_ = nullptr;    // LOADED   — vessels rendered on the map
-    QLabel* stat_displayed_ = nullptr;  // IN REGION — server-reported area total
-    QLabel* stat_moving_ = nullptr;     // MOVING    — speed > 0.5 kn
-    QLabel* stat_speed_ = nullptr;      // AVG SPEED — mean speed of moving vessels
+    QLabel* stat_vessels_ = nullptr;   // LOADED   — vessels rendered on the map
+    QLabel* stat_displayed_ = nullptr; // IN REGION — server-reported area total
+    QLabel* stat_moving_ = nullptr;    // MOVING    — speed > 0.5 kn
+    QLabel* stat_speed_ = nullptr;     // AVG SPEED — mean speed of moving vessels
     QLabel* stat_routes_ = nullptr;
     QLabel* stat_ports_ = nullptr;
 
     // Center
     fincept::ui::WorldMapWidget* map_widget_ = nullptr;
-    QPushButton* refresh_btn_ = nullptr;       // manual refresh
-    QPushButton* auto_refresh_btn_ = nullptr;  // AUTO-refresh toggle (off by default)
+    QPushButton* refresh_btn_ = nullptr;      // manual refresh
+    QPushButton* auto_refresh_btn_ = nullptr; // AUTO-refresh toggle (off by default)
     fincept::ui::LoadingOverlay* map_loader_ = nullptr;
     QTableWidget* vessels_table_ = nullptr;
     QTableWidget* routes_table_ = nullptr;
@@ -143,31 +142,31 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     // Right panel - place search (Nominatim geocoder). Primary area-input UX:
     // user types a place name, picks a suggestion, its bbox fills the spinners
     // and triggers a vessel area-search.
-    QLineEdit*    place_query_edit_ = nullptr;
-    QTableWidget* place_table_      = nullptr;
-    QLabel*       place_status_     = nullptr;
+    QLineEdit* place_query_edit_ = nullptr;
+    QTableWidget* place_table_ = nullptr;
+    QLabel* place_status_ = nullptr;
     QVector<services::maritime::GeoPlace> place_results_;
     // Live typeahead: debounced geocoder search feeds a completer popup.
-    QCompleter*       place_completer_       = nullptr;
+    QCompleter* place_completer_ = nullptr;
     QStringListModel* place_completer_model_ = nullptr;
-    QTimer*           place_debounce_        = nullptr;
+    QTimer* place_debounce_ = nullptr;
 
     // Right panel - area search (raw lat/long). Kept behind an "Advanced"
     // expander; place search / map-draw are the primary inputs now.
-    QWidget*        advanced_area_box_ = nullptr;
+    QWidget* advanced_area_box_ = nullptr;
     QDoubleSpinBox* area_min_lat_ = nullptr;
     QDoubleSpinBox* area_max_lat_ = nullptr;
     QDoubleSpinBox* area_min_lng_ = nullptr;
     QDoubleSpinBox* area_max_lng_ = nullptr;
 
     // Right panel - ports search (Wikidata + Marine Regions + OSM Overpass)
-    QLineEdit*    ports_query_edit_ = nullptr;
-    QTableWidget* ports_table_      = nullptr;
-    QLabel*       ports_status_     = nullptr;
+    QLineEdit* ports_query_edit_ = nullptr;
+    QTableWidget* ports_table_ = nullptr;
+    QLabel* ports_status_ = nullptr;
     QVector<services::maritime::PortRecord> port_results_;
-    QCompleter*       ports_completer_       = nullptr;
+    QCompleter* ports_completer_ = nullptr;
     QStringListModel* ports_completer_model_ = nullptr;
-    QTimer*           ports_debounce_        = nullptr;
+    QTimer* ports_debounce_ = nullptr;
     // Voyage endpoint port resolution: maps the expected PortsCatalog context
     // ("name:<port>") to the pin label to plot when its results arrive, so
     // these lookups don't leak into the user-facing ports table.
@@ -183,8 +182,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     // Status
     QLabel* status_label_ = nullptr;
     QLabel* vessel_count_label_ = nullptr;
-    QLabel* source_value_ = nullptr;     // status-bar SOURCE value (driven by /marine/health)
-    QLabel* records_value_ = nullptr;    // status-bar RECORDS value (db.total_records)
+    QLabel* source_value_ = nullptr;  // status-bar SOURCE value (driven by /marine/health)
+    QLabel* records_value_ = nullptr; // status-bar RECORDS value (db.total_records)
 
     // Timer
     QTimer* refresh_timer_ = nullptr;
@@ -214,8 +213,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QLabel* stat_ports_cap_ = nullptr;
     // Center.
     QLabel* center_title_ = nullptr;
-    QLabel* basemap_cap_ = nullptr;        // "BASEMAP" caption in the map toolbar
-    QComboBox* map_type_combo_ = nullptr;  // basemap selector
+    QLabel* basemap_cap_ = nullptr;       // "BASEMAP" caption in the map toolbar
+    QComboBox* map_type_combo_ = nullptr; // basemap selector
     // Right panel buttons + titles + field captions.
     QLabel* search_title_ = nullptr;
     QLabel* imo_cap_ = nullptr;

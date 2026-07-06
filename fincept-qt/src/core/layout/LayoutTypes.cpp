@@ -21,11 +21,12 @@ QJsonObject rect_to_json(const QRect& r) {
 }
 
 QRect rect_from_json(const QJsonObject& o) {
-    return QRect(o.value("x").toInt(), o.value("y").toInt(),
-                 o.value("w").toInt(), o.value("h").toInt());
+    return QRect(o.value("x").toInt(), o.value("y").toInt(), o.value("w").toInt(), o.value("h").toInt());
 }
 
-[[maybe_unused]] QString uuid_to_string(const QUuid& u) { return u.toString(QUuid::WithoutBraces); }
+[[maybe_unused]] QString uuid_to_string(const QUuid& u) {
+    return u.toString(QUuid::WithoutBraces);
+}
 
 } // namespace
 
@@ -122,7 +123,8 @@ WorkspaceVariant WorkspaceVariant::from_json(const QJsonObject& obj) {
     for (const QJsonValue& jv : geoms) {
         const QJsonObject entry = jv.toObject();
         const WindowId id = WindowId::from_string(entry.value("window_id").toString());
-        if (id.is_null()) continue;
+        if (id.is_null())
+            continue;
         v.frame_geometries.insert(id, rect_from_json(entry.value("rect").toObject()));
     }
 
@@ -130,7 +132,8 @@ WorkspaceVariant WorkspaceVariant::from_json(const QJsonObject& obj) {
     for (const QJsonValue& jv : screens) {
         const QJsonObject entry = jv.toObject();
         const WindowId id = WindowId::from_string(entry.value("window_id").toString());
-        if (id.is_null()) continue;
+        if (id.is_null())
+            continue;
         v.frame_screens.insert(id, entry.value("screen_id").toString());
     }
     return v;
@@ -195,9 +198,9 @@ Workspace Workspace::from_json(const QJsonObject& obj) {
     for (const QJsonValue& jv : link_arr) {
         const QJsonObject entry = jv.toObject();
         const QString group = entry.value("group").toString();
-        if (group.isEmpty()) continue;
-        w.link_state.insert(group,
-                            QByteArray::fromBase64(entry.value("payload_b64").toString().toLatin1()));
+        if (group.isEmpty())
+            continue;
+        w.link_state.insert(group, QByteArray::fromBase64(entry.value("payload_b64").toString().toLatin1()));
     }
 
     w.schema_version = obj.value("schema_version").toInt(kWorkspaceVersion);

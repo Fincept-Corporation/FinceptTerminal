@@ -5,11 +5,9 @@ namespace fincept::trading {
 const QSet<QString>& OrderValidator::valid_exchanges() {
     static const QSet<QString> kExchanges = {
         // India
-        "NSE", "BSE", "NFO", "BFO", "MCX", "CDS", "BCD", "NCDEX",
-        "NSE_INDEX", "BSE_INDEX", "MCX_INDEX",
+        "NSE", "BSE", "NFO", "BFO", "MCX", "CDS", "BCD", "NCDEX", "NSE_INDEX", "BSE_INDEX", "MCX_INDEX",
         // US / global
-        "NYSE", "NASDAQ", "AMEX", "ARCA", "BATS", "CBOE", "LSE", "TSX",
-        "XETRA", "EURONEXT", "XNYS", "XNAS",
+        "NYSE", "NASDAQ", "AMEX", "ARCA", "BATS", "CBOE", "LSE", "TSX", "XETRA", "EURONEXT", "XNYS", "XNAS",
         // crypto / forex
         "CRYPTO", "FOREX"};
     return kExchanges;
@@ -89,9 +87,7 @@ OrderValidator::ValidationResult OrderValidator::validate_basket(const BasketOrd
         auto leg = validate(basket.orders[i]);
         if (!leg.valid) {
             for (const auto& e : leg.errors)
-                r.errors.append(QString("Order %1 (%2): %3")
-                                    .arg(i + 1)
-                                    .arg(basket.orders[i].symbol, e));
+                r.errors.append(QString("Order %1 (%2): %3").arg(i + 1).arg(basket.orders[i].symbol, e));
         }
     }
 

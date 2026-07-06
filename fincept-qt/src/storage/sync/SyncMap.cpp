@@ -39,16 +39,15 @@ Result<void> SyncMap::put(const QString& entity, const QString& local_id, const 
 }
 
 Result<void> SyncMap::remove_by_local(const QString& entity, const QString& local_id) {
-    auto r = Database::instance().execute("DELETE FROM sync_map WHERE entity = ? AND local_id = ?",
-                                          {entity, local_id});
+    auto r = Database::instance().execute("DELETE FROM sync_map WHERE entity = ? AND local_id = ?", {entity, local_id});
     if (r.is_err())
         return Result<void>::err(r.error());
     return Result<void>::ok();
 }
 
 Result<void> SyncMap::remove_by_remote(const QString& entity, const QString& remote_id) {
-    auto r = Database::instance().execute("DELETE FROM sync_map WHERE entity = ? AND remote_id = ?",
-                                          {entity, remote_id});
+    auto r =
+        Database::instance().execute("DELETE FROM sync_map WHERE entity = ? AND remote_id = ?", {entity, remote_id});
     if (r.is_err())
         return Result<void>::err(r.error());
     return Result<void>::ok();

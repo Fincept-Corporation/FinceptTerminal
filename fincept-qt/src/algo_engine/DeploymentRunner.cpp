@@ -1,5 +1,6 @@
 // src/algo_engine/DeploymentRunner.cpp
 #include "algo_engine/DeploymentRunner.h"
+
 #include "algo_engine/CandleDataFetcher.h"
 #include "algo_engine/ConditionEvaluator.h"
 #include "algo_engine/fno/FnoExecution.h"
@@ -29,12 +30,11 @@ using fincept::Database;
 namespace fincept::algo {
 
 DeploymentRunner::DeploymentRunner(const services::algo::AlgoDeployment& deployment,
-                                   const services::algo::AlgoStrategy& strategy,
-                                   QObject* parent)
-    : QObject(parent)
-    , deployment_(deployment)
-    , strategy_(strategy)
-    , timeframe_(timeframe_from_string(deployment.timeframe.isEmpty() ? strategy.timeframe : deployment.timeframe)) {
+                                   const services::algo::AlgoStrategy& strategy, QObject* parent)
+    : QObject(parent),
+      deployment_(deployment),
+      strategy_(strategy),
+      timeframe_(timeframe_from_string(deployment.timeframe.isEmpty() ? strategy.timeframe : deployment.timeframe)) {
 
     // "live" timeframe → evaluate entry/exit on every quote (tick), not on candle
     // close. (timeframe_ itself falls back to M5 for aggregation/warm-up history.)
@@ -43,13 +43,11 @@ DeploymentRunner::DeploymentRunner(const services::algo::AlgoDeployment& deploym
 
     // Capacity 500 so long indicators (SMA200) + a crossover lookback fit.
     aggregator_ = std::make_unique<CandleAggregator>(deployment.symbol, timeframe_, 500, this);
-    connect(aggregator_.get(), &CandleAggregator::candle_closed,
-            this, &DeploymentRunner::on_candle_closed);
+    connect(aggregator_.get(), &CandleAggregator::candle_closed, this, &DeploymentRunner::on_candle_closed);
 
-    position_mgr_ = std::make_unique<PositionManager>(
-        deployment.id,
-        strategy.stop_loss, strategy.take_profit, strategy.trailing_stop,
-        deployment.max_order_value, deployment.max_daily_loss);
+    position_mgr_ = std::make_unique<PositionManager>(deployment.id, strategy.stop_loss, strategy.take_profit,
+                                                      strategy.trailing_stop, deployment.max_order_value,
+                                                      deployment.max_daily_loss);
 
     heartbeat_timer_ = new QTimer(this);
     heartbeat_timer_->setInterval(5000);
@@ -62,7 +60,8 @@ DeploymentRunner::~DeploymentRunner() {
 }
 
 void DeploymentRunner::start() {
-    if (running_.load()) return;
+    if (running_.load())
+        return;
 
     running_ = true;
     paused_ = false;
@@ -90,9 +89,8 @@ void DeploymentRunner::start() {
                                            .arg(self->deployment_.id)
                                            .arg(candles.size()));
             } else {
-                LOG_WARN("AlgoEngine",
-                         QString("Deployment %1 backfill failed (%2) — warming from live ticks only")
-                             .arg(self->deployment_.id, err));
+                LOG_WARN("AlgoEngine", QString("Deployment %1 backfill failed (%2) — warming from live ticks only")
+                                           .arg(self->deployment_.id, err));
             }
             self->start_market_data();
         });
@@ -101,8 +99,8 @@ void DeploymentRunner::start() {
 
     update_deployment_status(QStringLiteral("running"));
     emit status_changed(deployment_.id, QStringLiteral("running"));
-    LOG_INFO("AlgoEngine", QString("Deployment %1 started: %2 on %3")
-             .arg(deployment_.id, strategy_.name, deployment_.symbol));
+    LOG_INFO("AlgoEngine",
+             QString("Deployment %1 started: %2 on %3").arg(deployment_.id, strategy_.name, deployment_.symbol));
 }
 
 void DeploymentRunner::pause() {
@@ -118,7 +116,8 @@ void DeploymentRunner::resume() {
 }
 
 void DeploymentRunner::stop() {
-    if (!running_.load()) return;
+    if (!running_.load())
+        return;
 
     running_ = false;
     paused_ = false;
@@ -132,10 +131,9 @@ void DeploymentRunner::stop() {
 
 void DeploymentRunner::start_market_data() {
     if (deployment_.broker_id.isEmpty() || deployment_.broker_account_id.isEmpty()) {
-        LOG_WARN("AlgoEngine",
-                 QString("Deployment %1: no broker account attached — cannot source live "
-                         "market data (deploy again and pick a connected broker).")
-                     .arg(deployment_.id));
+        LOG_WARN("AlgoEngine", QString("Deployment %1: no broker account attached — cannot source live "
+                                       "market data (deploy again and pick a connected broker).")
+                                   .arg(deployment_.id));
         return;
     }
     LOG_INFO("AlgoEngine", QString("Deployment %1: subscribing to shared %2 feed on '%3'")
@@ -147,8 +145,7 @@ void DeploymentRunner::start_market_data() {
     // (account, symbol) is shared across the Equity watchlist and every algo.
     QPointer<DeploymentRunner> self = this;
     trading::DataStreamManager::instance().open_quote_feed(
-        this, QStringLiteral("algo:") + deployment_.id,
-        deployment_.broker_account_id, deployment_.symbol,
+        this, QStringLiteral("algo:") + deployment_.id, deployment_.broker_account_id, deployment_.symbol,
         [self](const trading::BrokerQuote& q) {
             if (self && self->running_.load() && !self->paused_.load())
                 self->on_tick_data(QVariant::fromValue(q));
@@ -157,25 +154,25 @@ void DeploymentRunner::start_market_data() {
     // F&O basket reattached across a restart: re-establish the chain stream and
     // re-pin the open legs so their LTPs flow for live marking. (On a fresh deploy
     // legs aren't open yet — evaluate_entry does the ensure_chain + pin at entry.)
-    if (deployment_.instrument_type != QLatin1String("equity") && fno_bridge_
-        && position_mgr_->has_legs()) {
+    if (deployment_.instrument_type != QLatin1String("equity") && fno_bridge_ && position_mgr_->has_legs()) {
         fno_bridge_->ensure_chain(deployment_.broker_id, deployment_.underlying, resolved_expiry_);
         QStringList syms;
         for (const auto& l : position_mgr_->legs())
             syms << l.symbol;
         fno_bridge_->pin_legs(deployment_.broker_id, deployment_.underlying, resolved_expiry_, syms);
-        LOG_INFO("AlgoEngine", QString("Deployment %1: re-pinned %2 reattached F&O legs")
-                                   .arg(deployment_.id).arg(syms.size()));
+        LOG_INFO("AlgoEngine",
+                 QString("Deployment %1: re-pinned %2 reattached F&O legs").arg(deployment_.id).arg(syms.size()));
     }
 }
 
 void DeploymentRunner::stop_market_data() {
-    trading::DataStreamManager::instance().close_quote_feed(
-        QStringLiteral("algo:") + deployment_.id, deployment_.broker_account_id);
+    trading::DataStreamManager::instance().close_quote_feed(QStringLiteral("algo:") + deployment_.id,
+                                                            deployment_.broker_account_id);
 }
 
 void DeploymentRunner::on_tick_data(const QVariant& data) {
-    if (!running_.load() || paused_.load()) return;
+    if (!running_.load() || paused_.load())
+        return;
 
     last_heartbeat_ms_ = QDateTime::currentMSecsSinceEpoch();
 
@@ -196,7 +193,8 @@ void DeploymentRunner::on_tick_data(const QVariant& data) {
         return;
     }
 
-    if (price <= 0) return;
+    if (price <= 0)
+        return;
 
     if (!first_tick_logged_) {
         first_tick_logged_ = true;
@@ -210,11 +208,10 @@ void DeploymentRunner::on_tick_data(const QVariant& data) {
     // basket risk (SL/TP/trailing). The single-symbol update_price() must be
     // SKIPPED here — it writes the single-position unrealized P&L (0 for a
     // basket) over the basket marks. ───────────────────────────────────────────
-    const bool fno_basket = deployment_.instrument_type != QLatin1String("equity")
-                            && fno_bridge_ && position_mgr_->has_legs();
+    const bool fno_basket =
+        deployment_.instrument_type != QLatin1String("equity") && fno_bridge_ && position_mgr_->has_legs();
     if (fno_basket) {
-        const auto chain = fno_bridge_->snapshot(deployment_.broker_id,
-                                                 deployment_.underlying, resolved_expiry_);
+        const auto chain = fno_bridge_->snapshot(deployment_.broker_id, deployment_.underlying, resolved_expiry_);
         const auto marks = fincept::algo::fno::leg_marks_from_chain(position_mgr_->legs(), chain);
         for (auto it = marks.constBegin(); it != marks.constEnd(); ++it)
             position_mgr_->update_leg_price(it.key(), it.value());
@@ -222,10 +219,10 @@ void DeploymentRunner::on_tick_data(const QVariant& data) {
         auto risk_signal = position_mgr_->check_risk(price); // basket branch ignores price
         if (risk_signal) {
             risk_signal->account_id = deployment_.broker_account_id;
-            risk_signal->symbol     = deployment_.underlying;
-            risk_signal->exchange   = deployment_.exchange;
+            risk_signal->symbol = deployment_.underlying;
+            risk_signal->exchange = deployment_.exchange;
             risk_signal->product_type = deployment_.product_type;
-            risk_signal->legs       = fincept::algo::fno::build_exit_legs(position_mgr_->legs());
+            risk_signal->legs = fincept::algo::fno::build_exit_legs(position_mgr_->legs());
             emit_order_signal(*risk_signal);
         }
     } else {
@@ -293,11 +290,16 @@ bool DeploymentRunner::in_position() const {
 
 namespace {
 QString pretty_op(const QString& op) {
-    if (op == "crosses_above") return QStringLiteral("crosses above");
-    if (op == "crosses_below") return QStringLiteral("crosses below");
-    if (op == "rising")        return QStringLiteral("rising");
-    if (op == "falling")       return QStringLiteral("falling");
-    if (op == "between")       return QStringLiteral("between");
+    if (op == "crosses_above")
+        return QStringLiteral("crosses above");
+    if (op == "crosses_below")
+        return QStringLiteral("crosses below");
+    if (op == "rising")
+        return QStringLiteral("rising");
+    if (op == "falling")
+        return QStringLiteral("falling");
+    if (op == "between")
+        return QStringLiteral("between");
     return op; // >, <, >=, <=, ==
 }
 } // namespace
@@ -331,11 +333,9 @@ void DeploymentRunner::emit_live_snapshot(double price, const QString& note) {
             cs.computed = d.computed_value;
             cs.target = d.target_value;
             cs.met = d.met;
-            const QString fld = (d.field.isEmpty() || d.field == "value") ? QString()
-                                                                          : (QStringLiteral(".") + d.field);
-            cs.label = QStringLiteral("%1%2 %3 %4")
-                           .arg(d.indicator, fld, pretty_op(d.op))
-                           .arg(d.target_value, 0, 'f', 2);
+            const QString fld = (d.field.isEmpty() || d.field == "value") ? QString() : (QStringLiteral(".") + d.field);
+            cs.label =
+                QStringLiteral("%1%2 %3 %4").arg(d.indicator, fld, pretty_op(d.op)).arg(d.target_value, 0, 'f', 2);
             snap.conditions.append(cs);
         }
     };
@@ -346,12 +346,16 @@ void DeploymentRunner::emit_live_snapshot(double price, const QString& note) {
 }
 
 void DeploymentRunner::on_candle_closed(const OhlcvCandle& /*candle*/) {
-    if (!running_.load() || paused_.load()) return;
-    if (position_mgr_->is_paused()) return;
-    if (live_mode_) return; // live mode evaluates per tick in on_tick_data
+    if (!running_.load() || paused_.load())
+        return;
+    if (position_mgr_->is_paused())
+        return;
+    if (live_mode_)
+        return; // live mode evaluates per tick in on_tick_data
 
     auto candles = aggregator_->closed_candles();
-    if (candles.size() < 20) return;
+    if (candles.size() < 20)
+        return;
 
     if (in_position()) {
         evaluate_exit(candles);
@@ -365,10 +369,10 @@ void DeploymentRunner::on_candle_closed(const OhlcvCandle& /*candle*/) {
 }
 
 void DeploymentRunner::evaluate_entry(const QVector<OhlcvCandle>& candles) {
-    auto result = ConditionEvaluator::evaluate_group(
-        strategy_.entry_conditions, strategy_.entry_logic, candles);
+    auto result = ConditionEvaluator::evaluate_group(strategy_.entry_conditions, strategy_.entry_logic, candles);
 
-    if (!result.triggered) return;
+    if (!result.triggered)
+        return;
 
     AlgoOrderSignal signal;
     signal.deployment_id = deployment_.id;
@@ -390,26 +394,24 @@ void DeploymentRunner::evaluate_entry(const QVector<OhlcvCandle>& candles) {
             const auto rules = fincept::algo::fno::fno_legs_from_json(strategy_.legs);
             if (!rules.isEmpty()) {
                 exp_mode = rules.first().expiry_mode;
-                exp_val  = rules.first().expiry_value;
+                exp_val = rules.first().expiry_value;
             }
         }
 
-        const QString expiry = fincept::algo::fno::resolve_expiry(
-            exp_mode, exp_val,
-            fincept::services::options::OptionChainService::instance().list_expiries(
-                deployment_.broker_id, deployment_.underlying),
-            QDate::currentDate());
+        const QString expiry =
+            fincept::algo::fno::resolve_expiry(exp_mode, exp_val,
+                                               fincept::services::options::OptionChainService::instance().list_expiries(
+                                                   deployment_.broker_id, deployment_.underlying),
+                                               QDate::currentDate());
         resolved_expiry_ = expiry; // keep for live leg marks + restart reattach
 
         fno_bridge_->ensure_chain(deployment_.broker_id, deployment_.underlying, expiry);
-        const auto chain = fno_bridge_->snapshot(deployment_.broker_id,
-                                                  deployment_.underlying, expiry);
+        const auto chain = fno_bridge_->snapshot(deployment_.broker_id, deployment_.underlying, expiry);
         auto legs = fincept::algo::fno::resolve_entry_legs(chain, strategy_.legs);
 
         if (legs.isEmpty()) {
             LOG_WARN("AlgoEngine",
-                     QString("Deployment %1: F&O entry: no resolvable legs (chain not ready?)")
-                         .arg(deployment_.id));
+                     QString("Deployment %1: F&O entry: no resolvable legs (chain not ready?)").arg(deployment_.id));
             return;
         }
 
@@ -420,8 +422,8 @@ void DeploymentRunner::evaluate_entry(const QVector<OhlcvCandle>& candles) {
             syms << l.symbol;
         fno_bridge_->pin_legs(deployment_.broker_id, deployment_.underlying, expiry, syms);
 
-        signal.symbol   = deployment_.underlying; // underlying for bookkeeping
-        signal.legs     = legs;
+        signal.symbol = deployment_.underlying; // underlying for bookkeeping
+        signal.legs = legs;
         emit_order_signal(signal);
         return; // skip the equity single-symbol path below
     }
@@ -432,8 +434,7 @@ void DeploymentRunner::evaluate_entry(const QVector<OhlcvCandle>& candles) {
     signal.quantity = deployment_.quantity;
 
     if (!position_mgr_->validate_order_value(signal.quantity, candles.last().close)) {
-        LOG_WARN("AlgoEngine", QString("Deployment %1: order value exceeds limit, skipping entry")
-                 .arg(deployment_.id));
+        LOG_WARN("AlgoEngine", QString("Deployment %1: order value exceeds limit, skipping entry").arg(deployment_.id));
         return;
     }
 
@@ -441,10 +442,10 @@ void DeploymentRunner::evaluate_entry(const QVector<OhlcvCandle>& candles) {
 }
 
 void DeploymentRunner::evaluate_exit(const QVector<OhlcvCandle>& candles) {
-    auto result = ConditionEvaluator::evaluate_group(
-        strategy_.exit_conditions, strategy_.exit_logic, candles);
+    auto result = ConditionEvaluator::evaluate_group(strategy_.exit_conditions, strategy_.exit_logic, candles);
 
-    if (!result.triggered) return;
+    if (!result.triggered)
+        return;
 
     AlgoOrderSignal signal;
     signal.deployment_id = deployment_.id;
@@ -456,11 +457,9 @@ void DeploymentRunner::evaluate_exit(const QVector<OhlcvCandle>& candles) {
     signal.reason = "exit_signal";
 
     // ── F&O multi-leg exit branch ───────────────────────────────────────────
-    if (deployment_.instrument_type != QLatin1String("equity")
-        && fno_bridge_
-        && position_mgr_->has_legs()) {
+    if (deployment_.instrument_type != QLatin1String("equity") && fno_bridge_ && position_mgr_->has_legs()) {
         signal.symbol = deployment_.underlying;
-        signal.legs   = fincept::algo::fno::build_exit_legs(position_mgr_->legs());
+        signal.legs = fincept::algo::fno::build_exit_legs(position_mgr_->legs());
         emit_order_signal(signal);
         return; // skip the equity single-symbol exit path below
     }
@@ -497,25 +496,24 @@ void DeploymentRunner::emit_order_signal(const AlgoOrderSignal& signal_in) {
     pending_orders_.append(pending);
 
     emit order_requested(signal);
-    emit_live_snapshot(signal.price, QStringLiteral("%1: %2 %3 @ MARKET")
-                                         .arg(signal.reason, signal.side)
-                                         .arg(signal.quantity, 0, 'f', 0));
-    LOG_INFO("AlgoEngine", QString("Deployment %1: %2 %3 %4 @ MARKET (%5)")
-             .arg(deployment_.id, signal.side,
-                  QString::number(signal.quantity), signal.symbol, signal.reason));
+    emit_live_snapshot(
+        signal.price,
+        QStringLiteral("%1: %2 %3 @ MARKET").arg(signal.reason, signal.side).arg(signal.quantity, 0, 'f', 0));
+    LOG_INFO("AlgoEngine",
+             QString("Deployment %1: %2 %3 %4 @ MARKET (%5)")
+                 .arg(deployment_.id, signal.side, QString::number(signal.quantity), signal.symbol, signal.reason));
 }
 
-void DeploymentRunner::on_order_filled(const QString& broker_order_id,
-                                        double fill_price, double fill_qty) {
+void DeploymentRunner::on_order_filled(const QString& broker_order_id, double fill_price, double fill_qty) {
     int idx = -1;
     for (int i = 0; i < pending_orders_.size(); ++i) {
-        if (pending_orders_[i].broker_order_id == broker_order_id ||
-            pending_orders_[i].broker_order_id.isEmpty()) {
+        if (pending_orders_[i].broker_order_id == broker_order_id || pending_orders_[i].broker_order_id.isEmpty()) {
             idx = i;
             break;
         }
     }
-    if (idx < 0) return;
+    if (idx < 0)
+        return;
 
     auto pending = pending_orders_.takeAt(idx);
     int64_t now = QDateTime::currentMSecsSinceEpoch();
@@ -552,12 +550,10 @@ void DeploymentRunner::on_order_filled(const QString& broker_order_id,
                                        .arg(fill_price, 0, 'f', 2));
 }
 
-void DeploymentRunner::on_order_rejected(const QString& /*broker_order_id*/,
-                                          const QString& reason) {
+void DeploymentRunner::on_order_rejected(const QString& /*broker_order_id*/, const QString& reason) {
     if (!pending_orders_.isEmpty())
         pending_orders_.removeFirst();
-    LOG_ERROR("AlgoEngine", QString("Deployment %1: order rejected: %2")
-              .arg(deployment_.id, reason));
+    LOG_ERROR("AlgoEngine", QString("Deployment %1: order rejected: %2").arg(deployment_.id, reason));
 }
 
 // ── Multi-leg F&O basket fills (P3.4) ───────────────────────────────────────
@@ -565,8 +561,7 @@ void DeploymentRunner::on_order_rejected(const QString& /*broker_order_id*/,
 // basket_fills_ / basket_rejected_ until the whole in-flight basket is
 // accounted for, then finalize_basket_if_complete() records or abandons it.
 
-void DeploymentRunner::on_leg_filled(int leg_index, const AlgoOrderLeg& leg,
-                                     double fill_price, double fill_qty) {
+void DeploymentRunner::on_leg_filled(int leg_index, const AlgoOrderLeg& leg, double fill_price, double fill_qty) {
     if (pending_orders_.isEmpty())
         return;
     const PendingOrder& pending = pending_orders_.first();
@@ -576,13 +571,13 @@ void DeploymentRunner::on_leg_filled(int leg_index, const AlgoOrderLeg& leg,
     if (is_entry) {
         // Record the fill as an open leg position; P&L marks come from leg quotes.
         AlgoLegPosition lp;
-        lp.symbol           = leg.symbol;
+        lp.symbol = leg.symbol;
         lp.instrument_token = leg.instrument_token;
-        lp.side_sign        = (leg.side == QLatin1String("BUY")) ? 1 : -1;
-        lp.quantity         = fill_qty;
-        lp.entry_price      = fill_price;
-        lp.current_price    = fill_price;
-        lp.unrealized_pnl   = 0;
+        lp.side_sign = (leg.side == QLatin1String("BUY")) ? 1 : -1;
+        lp.quantity = fill_qty;
+        lp.entry_price = fill_price;
+        lp.current_price = fill_price;
+        lp.unrealized_pnl = 0;
         basket_fills_.append(lp);
     } else {
         // Exit fill: mark the matching open leg at the exit price so the realized
@@ -590,7 +585,7 @@ void DeploymentRunner::on_leg_filled(int leg_index, const AlgoOrderLeg& leg,
         // reflects the exit fills. Count it for completion via basket_fills_.
         position_mgr_->update_leg_price(leg.symbol, fill_price);
         AlgoLegPosition lp;
-        lp.symbol   = leg.symbol;
+        lp.symbol = leg.symbol;
         lp.quantity = fill_qty;
         basket_fills_.append(lp);
     }
@@ -598,20 +593,19 @@ void DeploymentRunner::on_leg_filled(int leg_index, const AlgoOrderLeg& leg,
     // Persist one trade row per leg (symbol = underlying for grouping; leg_symbol
     // = the concrete contract; pnl is attached to the basket at finalize).
     AlgoTradeRecord trade;
-    trade.id             = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    trade.deployment_id  = deployment_.id;
-    trade.symbol         = deployment_.underlying.isEmpty() ? deployment_.symbol
-                                                            : deployment_.underlying;
-    trade.side           = leg.side;
-    trade.quantity       = fill_qty;
-    trade.price          = fill_price;
-    trade.pnl            = 0;
-    trade.reason         = pending.signal.reason;
-    trade.timestamp      = now;
+    trade.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    trade.deployment_id = deployment_.id;
+    trade.symbol = deployment_.underlying.isEmpty() ? deployment_.symbol : deployment_.underlying;
+    trade.side = leg.side;
+    trade.quantity = fill_qty;
+    trade.price = fill_price;
+    trade.pnl = 0;
+    trade.reason = pending.signal.reason;
+    trade.timestamp = now;
     trade.broker_order_id = QString();
-    trade.latency_ms     = now - pending.submitted_ms;
-    trade.leg_symbol     = leg.symbol;
-    trade.leg_index      = leg_index;
+    trade.latency_ms = now - pending.submitted_ms;
+    trade.leg_symbol = leg.symbol;
+    trade.leg_index = leg_index;
     persist_trade(trade);
     emit trade_executed(trade);
 
@@ -620,8 +614,8 @@ void DeploymentRunner::on_leg_filled(int leg_index, const AlgoOrderLeg& leg,
 
 void DeploymentRunner::on_leg_rejected(int leg_index, const QString& reason) {
     basket_rejected_++;
-    LOG_ERROR("AlgoEngine", QString("Deployment %1: basket leg %2 rejected: %3")
-              .arg(deployment_.id).arg(leg_index).arg(reason));
+    LOG_ERROR("AlgoEngine",
+              QString("Deployment %1: basket leg %2 rejected: %3").arg(deployment_.id).arg(leg_index).arg(reason));
     finalize_basket_if_complete();
 }
 
@@ -644,14 +638,15 @@ void DeploymentRunner::finalize_basket_if_complete() {
         if (basket_rejected_ == 0 && !basket_fills_.isEmpty()) {
             position_mgr_->record_entry_legs(basket_fills_, now);
             persist_resolved_legs(); // so a restart reattaches to the open basket
-            emit_live_snapshot(0, QStringLiteral("ENTRY basket filled (%1 legs)")
-                                      .arg(basket_fills_.size()));
+            emit_live_snapshot(0, QStringLiteral("ENTRY basket filled (%1 legs)").arg(basket_fills_.size()));
         } else {
             // Partial entry: the engine has rolled back the filled legs at the
             // broker; record no position so we stay flat.
             LOG_WARN("AlgoEngine",
                      QString("Deployment %1: entry basket aborted (%2 filled, %3 rejected) — no position recorded")
-                         .arg(deployment_.id).arg(basket_fills_.size()).arg(basket_rejected_));
+                         .arg(deployment_.id)
+                         .arg(basket_fills_.size())
+                         .arg(basket_rejected_));
             emit_live_snapshot(0, QStringLiteral("ENTRY basket aborted — rolled back"));
         }
     } else {
@@ -659,8 +654,7 @@ void DeploymentRunner::finalize_basket_if_complete() {
         pnl = position_mgr_->record_exit_legs(now);
         clear_resolved_legs(); // basket closed — nothing to reattach on restart
         resolved_expiry_.clear();
-        emit_live_snapshot(0, QStringLiteral("EXIT basket closed, P&L %1")
-                                  .arg(pnl, 0, 'f', 2));
+        emit_live_snapshot(0, QStringLiteral("EXIT basket closed, P&L %1").arg(pnl, 0, 'f', 2));
     }
 
     basket_fills_.clear();
@@ -669,7 +663,8 @@ void DeploymentRunner::finalize_basket_if_complete() {
 }
 
 void DeploymentRunner::on_heartbeat() {
-    if (!running_.load()) return;
+    if (!running_.load())
+        return;
     int64_t now = QDateTime::currentMSecsSinceEpoch();
 
     // Keep the DB metrics row fresh (~5s) so the summary cards and any structural
@@ -680,20 +675,18 @@ void DeploymentRunner::on_heartbeat() {
     // permanently block new signals (the in-flight guard in emit_order_signal).
     for (int i = pending_orders_.size() - 1; i >= 0; --i) {
         if (now - pending_orders_[i].submitted_ms > 60000) {
-            LOG_WARN("AlgoEngine",
-                     QString("Deployment %1: pending order timed out (no fill/reject in 60s), clearing")
-                         .arg(deployment_.id));
+            LOG_WARN("AlgoEngine", QString("Deployment %1: pending order timed out (no fill/reject in 60s), clearing")
+                                       .arg(deployment_.id));
             pending_orders_.removeAt(i);
         }
     }
 
     if (now - last_heartbeat_ms_ > 30000) {
-        const QString msg =
-            deployment_.broker_id.isEmpty()
-                ? QStringLiteral("No market data in 30s — no broker is attached to this deployment.")
-                : QString("No market data from broker '%1' in 30s — check the broker is connected "
-                          "and the market is open.")
-                      .arg(deployment_.broker_id);
+        const QString msg = deployment_.broker_id.isEmpty()
+                                ? QStringLiteral("No market data in 30s — no broker is attached to this deployment.")
+                                : QString("No market data from broker '%1' in 30s — check the broker is connected "
+                                          "and the market is open.")
+                                      .arg(deployment_.broker_id);
         LOG_ERROR("AlgoEngine", QString("Deployment %1: %2").arg(deployment_.id, msg));
 
         auto db = Database::instance().connection();
@@ -712,10 +705,9 @@ void DeploymentRunner::on_heartbeat() {
 void DeploymentRunner::persist_trade(const AlgoTradeRecord& trade) {
     auto db = Database::instance().connection();
     QSqlQuery q(db);
-    q.prepare(QStringLiteral(
-        "INSERT INTO algo_trades (id, deployment_id, symbol, side, quantity, price, pnl, "
-        "reason, broker_order_id, latency_ms, leg_symbol, leg_index, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"));
+    q.prepare(QStringLiteral("INSERT INTO algo_trades (id, deployment_id, symbol, side, quantity, price, pnl, "
+                             "reason, broker_order_id, latency_ms, leg_symbol, leg_index, created_at) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"));
     q.addBindValue(trade.id);
     q.addBindValue(trade.deployment_id);
     q.addBindValue(trade.symbol);
@@ -736,11 +728,10 @@ void DeploymentRunner::persist_metrics() {
     auto m = position_mgr_->metrics();
     auto db = Database::instance().connection();
     QSqlQuery q(db);
-    q.prepare(QStringLiteral(
-        "INSERT OR REPLACE INTO algo_metrics (deployment_id, total_pnl, unrealized_pnl, "
-        "total_trades, win_rate, max_drawdown, current_position_qty, current_position_side, "
-        "current_position_entry, current_price, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"));
+    q.prepare(QStringLiteral("INSERT OR REPLACE INTO algo_metrics (deployment_id, total_pnl, unrealized_pnl, "
+                             "total_trades, win_rate, max_drawdown, current_position_qty, current_position_side, "
+                             "current_position_entry, current_price, updated_at) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"));
     q.addBindValue(deployment_.id);
     q.addBindValue(m.total_pnl);
     q.addBindValue(m.unrealized_pnl);
@@ -760,9 +751,8 @@ void DeploymentRunner::persist_resolved_legs() {
     const QString json = QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
     auto db = Database::instance().connection();
     QSqlQuery q(db);
-    q.prepare(QStringLiteral(
-        "UPDATE algo_deployments SET resolved_legs_json = ?, resolved_expiry = ?, "
-        "underlying = ?, instrument_type = ?, updated_at = datetime('now') WHERE id = ?"));
+    q.prepare(QStringLiteral("UPDATE algo_deployments SET resolved_legs_json = ?, resolved_expiry = ?, "
+                             "underlying = ?, instrument_type = ?, updated_at = datetime('now') WHERE id = ?"));
     q.addBindValue(json);
     q.addBindValue(resolved_expiry_);
     q.addBindValue(deployment_.underlying);
@@ -775,9 +765,8 @@ void DeploymentRunner::persist_resolved_legs() {
 void DeploymentRunner::clear_resolved_legs() {
     auto db = Database::instance().connection();
     QSqlQuery q(db);
-    q.prepare(QStringLiteral(
-        "UPDATE algo_deployments SET resolved_legs_json = '[]', resolved_expiry = '', "
-        "updated_at = datetime('now') WHERE id = ?"));
+    q.prepare(QStringLiteral("UPDATE algo_deployments SET resolved_legs_json = '[]', resolved_expiry = '', "
+                             "updated_at = datetime('now') WHERE id = ?"));
     q.addBindValue(deployment_.id);
     q.exec();
 }
@@ -791,8 +780,7 @@ void DeploymentRunner::restore_state_from_db() {
     // next tick; metrics (total_pnl etc.) are restored from algo_metrics below.
     if (deployment_.instrument_type != QLatin1String("equity")) {
         QSqlQuery lq(db);
-        lq.prepare(QStringLiteral(
-            "SELECT resolved_legs_json, resolved_expiry FROM algo_deployments WHERE id = ?"));
+        lq.prepare(QStringLiteral("SELECT resolved_legs_json, resolved_expiry FROM algo_deployments WHERE id = ?"));
         lq.addBindValue(deployment_.id);
         if (lq.exec() && lq.next()) {
             const QString legs_json = lq.value("resolved_legs_json").toString();
@@ -804,16 +792,18 @@ void DeploymentRunner::restore_state_from_db() {
                     position_mgr_->record_entry_legs(restored, QDateTime::currentMSecsSinceEpoch());
                     LOG_INFO("AlgoEngine",
                              QString("Deployment %1: reattached open F&O basket (%2 legs, expiry %3) across restart")
-                                 .arg(deployment_.id).arg(restored.size()).arg(resolved_expiry_));
+                                 .arg(deployment_.id)
+                                 .arg(restored.size())
+                                 .arg(resolved_expiry_));
                 }
             }
         }
     }
 
     QSqlQuery q(db);
-    q.prepare(QStringLiteral(
-        "SELECT total_pnl, total_trades, win_rate, max_drawdown, current_position_qty, "
-        "current_position_side, current_position_entry FROM algo_metrics WHERE deployment_id = ?"));
+    q.prepare(
+        QStringLiteral("SELECT total_pnl, total_trades, win_rate, max_drawdown, current_position_qty, "
+                       "current_position_side, current_position_entry FROM algo_metrics WHERE deployment_id = ?"));
     q.addBindValue(deployment_.id);
     if (!q.exec() || !q.next())
         return; // fresh deploy — no prior state
@@ -825,9 +815,8 @@ void DeploymentRunner::restore_state_from_db() {
     const double qty = q.value("current_position_qty").toDouble();
     const double entry = q.value("current_position_entry").toDouble();
 
-    position_mgr_->restore_state(side, qty, entry, q.value("total_pnl").toDouble(),
-                                 q.value("total_trades").toInt(), q.value("win_rate").toDouble(),
-                                 q.value("max_drawdown").toDouble());
+    position_mgr_->restore_state(side, qty, entry, q.value("total_pnl").toDouble(), q.value("total_trades").toInt(),
+                                 q.value("win_rate").toDouble(), q.value("max_drawdown").toDouble());
 
     if (side != PositionSide::None)
         LOG_INFO("AlgoEngine", QString("Deployment %1: restored open %2 %3 @ %4 across restart")
@@ -839,8 +828,7 @@ void DeploymentRunner::restore_state_from_db() {
 void DeploymentRunner::update_deployment_status(const QString& status) {
     auto db = Database::instance().connection();
     QSqlQuery q(db);
-    q.prepare(QStringLiteral(
-        "UPDATE algo_deployments SET status = ?, updated_at = datetime('now') WHERE id = ?"));
+    q.prepare(QStringLiteral("UPDATE algo_deployments SET status = ?, updated_at = datetime('now') WHERE id = ?"));
     q.addBindValue(status);
     q.addBindValue(deployment_.id);
     q.exec();

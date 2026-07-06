@@ -10,7 +10,6 @@
 
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/backtesting/BacktestingScreen_internal.h"
-
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -96,7 +95,8 @@ void BacktestingScreen::rebuild_strategy_params() {
             strategy_params_layout_->addWidget(tl);
             row.type = new QComboBox(strategy_params_container_);
             row.type->setStyleSheet(combo_s);
-            for (const auto& it : ind_types) row.type->addItem(it);
+            for (const auto& it : ind_types)
+                row.type->addItem(it);
             strategy_params_layout_->addWidget(row.type);
 
             auto* pl = new QLabel(tr("PERIOD"), strategy_params_container_);
@@ -113,7 +113,8 @@ void BacktestingScreen::rebuild_strategy_params() {
             strategy_params_layout_->addWidget(cl);
             row.cond = new QComboBox(strategy_params_container_);
             row.cond->setStyleSheet(combo_s);
-            for (const auto& c : cond_types) row.cond->addItem(c);
+            for (const auto& c : cond_types)
+                row.cond->addItem(c);
             strategy_params_layout_->addWidget(row.cond);
 
             auto* vl = new QLabel(tr("THRESHOLD"), strategy_params_container_);
@@ -174,7 +175,8 @@ void BacktestingScreen::rebuild_strategy_params() {
         strategy_params_layout_->addWidget(combo_logic_);
         // Guard dynamically created widgets against accidental wheel changes
         auto* wg = property("_wheel_guard").value<QObject*>();
-        if (wg) backtesting_internal::guard_all_inputs(strategy_params_container_, wg);
+        if (wg)
+            backtesting_internal::guard_all_inputs(strategy_params_container_, wg);
         return;
     }
 
@@ -199,9 +201,8 @@ void BacktestingScreen::rebuild_strategy_params() {
                            .arg(ui::fonts::TINY)
                            .arg(ui::fonts::DATA_FAMILY);
 
-    const bool is_optimize = (active_command_ >= 0
-                              && active_command_ < commands_.size()
-                              && commands_[active_command_].id == "optimize");
+    const bool is_optimize =
+        (active_command_ >= 0 && active_command_ < commands_.size() && commands_[active_command_].id == "optimize");
 
     for (const auto& p : strat->params) {
         auto* lbl = new QLabel(p.label.toUpper(), strategy_params_container_);
@@ -245,9 +246,9 @@ void BacktestingScreen::rebuild_strategy_params() {
         const double span = qMax(p.step, (p.max_val - p.min_val) * 0.1);
         const double min_default = qMax(p.min_val, p.default_val - span);
         const double max_default = qMin(p.max_val, p.default_val + span);
-        auto* min_spin  = build_subspin(tr("MIN"),  min_default,    0);
-        auto* max_spin  = build_subspin(tr("MAX"),  max_default,    1);
-        auto* step_spin = build_subspin(tr("STEP"), p.step,         2);
+        auto* min_spin = build_subspin(tr("MIN"), min_default, 0);
+        auto* max_spin = build_subspin(tr("MAX"), max_default, 1);
+        auto* step_spin = build_subspin(tr("STEP"), p.step, 2);
 
         strategy_params_layout_->addWidget(range_row);
         range_row->setVisible(is_optimize);
@@ -259,7 +260,8 @@ void BacktestingScreen::rebuild_strategy_params() {
     }
 
     auto* wg = property("_wheel_guard").value<QObject*>();
-    if (wg) backtesting_internal::guard_all_inputs(strategy_params_container_, wg);
+    if (wg)
+        backtesting_internal::guard_all_inputs(strategy_params_container_, wg);
 }
 
 } // namespace fincept::screens

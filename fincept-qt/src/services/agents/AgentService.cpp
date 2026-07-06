@@ -11,18 +11,17 @@
 //   - AgentService_Repositories.cpp — memory, sessions, paper trading
 #include "services/agents/AgentService.h"
 
-#include "services/llm/LlmService.h"
 #include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/TopicPolicy.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpTypes.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "python/PythonRunner.h"
+#include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/LlmConfigRepository.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/TopicPolicy.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -51,8 +50,7 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {
     // failure to bind the port is logged but not fatal — agents simply lose
     // terminal-tool access.
     if (mcp::TerminalMcpBridge::instance().start()) {
-        LOG_INFO("AgentService", "Terminal MCP bridge started: " +
-                                     mcp::TerminalMcpBridge::instance().endpoint());
+        LOG_INFO("AgentService", "Terminal MCP bridge started: " + mcp::TerminalMcpBridge::instance().endpoint());
     } else {
         LOG_WARN("AgentService", "Terminal MCP bridge failed to start — agents will run "
                                  "without internal tool access");
@@ -68,15 +66,14 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {
     //   - is_destructive + chat  → allow (matches current advisory behaviour
     //     until the Phase 6.12 modal lands)
     //   - everything else        → allow
-    mcp::McpProvider::instance().set_auth_checker(
-        [](mcp::AuthLevel required, bool is_destructive) -> bool {
-            if (required >= mcp::AuthLevel::Verified)
-                return false;
-            if (is_destructive && mcp::TerminalMcpBridge::is_call_in_progress() &&
-                !mcp::TerminalMcpBridge::is_destructive_allowed())
-                return false;
-            return true;
-        });
+    mcp::McpProvider::instance().set_auth_checker([](mcp::AuthLevel required, bool is_destructive) -> bool {
+        if (required >= mcp::AuthLevel::Verified)
+            return false;
+        if (is_destructive && mcp::TerminalMcpBridge::is_call_in_progress() &&
+            !mcp::TerminalMcpBridge::is_destructive_allowed())
+            return false;
+        return true;
+    });
 }
 
 // ── Cache helpers ────────────────────────────────────────────────────────────
@@ -221,8 +218,7 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
             uid = config["user_id"].toString();
         } else {
             const auto& session = auth::AuthManager::instance().session();
-            uid = session.user_info.id > 0 ? QString::number(session.user_info.id)
-                                           : QStringLiteral("guest");
+            uid = session.user_info.id > 0 ? QString::number(session.user_info.id) : QStringLiteral("guest");
         }
         enriched_params["user_id"] = uid;
     }
@@ -280,13 +276,15 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
                 if (tf.contains("name_patterns")) {
                     for (const auto& v : tf["name_patterns"].toArray()) {
                         const QString p = v.toString().trimmed();
-                        if (!p.isEmpty()) filter.name_patterns.append(p);
+                        if (!p.isEmpty())
+                            filter.name_patterns.append(p);
                     }
                 }
                 if (tf.contains("exclude_name_patterns")) {
                     for (const auto& v : tf["exclude_name_patterns"].toArray()) {
                         const QString p = v.toString().trimmed();
-                        if (!p.isEmpty()) filter.exclude_name_patterns.append(p);
+                        if (!p.isEmpty())
+                            filter.exclude_name_patterns.append(p);
                     }
                 }
                 filter.max_tools = tf.value("max_tools").toInt(0);
@@ -329,15 +327,17 @@ void AgentService::run_python_light(const QString& action, const QJsonObject& pa
                 return;
             }
             LOG_INFO("AgentService", QString("%1: raw output length=%2, first 300 chars: %3")
-                .arg(action).arg(pr.output.size()).arg(pr.output.left(300)));
+                                         .arg(action)
+                                         .arg(pr.output.size())
+                                         .arg(pr.output.left(300)));
             QJsonDocument doc = QJsonDocument::fromJson(pr.output.toUtf8());
             if (doc.isNull()) {
                 LOG_ERROR("AgentService", QString("%1: invalid JSON response").arg(action));
                 on_result(false, QJsonObject{{"error", "Invalid JSON response from Python"}});
                 return;
             }
-            LOG_INFO("AgentService", QString("%1: parsed JSON keys: %2")
-                .arg(action, QStringList(doc.object().keys()).join(", ")));
+            LOG_INFO("AgentService",
+                     QString("%1: parsed JSON keys: %2").arg(action, QStringList(doc.object().keys()).join(", ")));
             on_result(true, doc.object());
         });
 }
@@ -426,7 +426,6 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
 
 // ── Agent discovery ──────────────────────────────────────────────────────────
 
-
 QString AgentService::make_cache_key(const QString& action, const QJsonObject& params) const {
     return action + "|" + QString::fromUtf8(QJsonDocument(params).toJson(QJsonDocument::Compact));
 }
@@ -464,12 +463,8 @@ QStringList AgentService::topic_patterns() const {
     // pull-through `refresh()`. Patterns are declared so set_policy_pattern()
     // entries bind to this producer for introspection/stats.
     return {
-        QStringLiteral("agent:output:*"),
-        QStringLiteral("agent:stream:*"),
-        QStringLiteral("agent:status:*"),
-        QStringLiteral("agent:routing:*"),
-        QStringLiteral("agent:error:*"),
-        QStringLiteral("task:event:*"),
+        QStringLiteral("agent:output:*"),  QStringLiteral("agent:stream:*"), QStringLiteral("agent:status:*"),
+        QStringLiteral("agent:routing:*"), QStringLiteral("agent:error:*"),  QStringLiteral("task:event:*"),
     };
 }
 
@@ -483,7 +478,8 @@ int AgentService::max_requests_per_sec() const {
 }
 
 void AgentService::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 
@@ -533,7 +529,8 @@ void AgentService::ensure_registered_with_hub() {
 }
 
 void AgentService::publish_agent_result(const AgentExecutionResult& r, bool final) {
-    if (!hub_registered_ || r.request_id.isEmpty()) return;
+    if (!hub_registered_ || r.request_id.isEmpty())
+        return;
     QJsonObject obj{
         {"request_id", r.request_id},
         {"success", r.success},
@@ -552,52 +549,49 @@ void AgentService::publish_agent_result(const AgentExecutionResult& r, bool fina
 }
 
 void AgentService::publish_agent_token(const QString& run_id, const QString& token) {
-    if (!hub_registered_ || run_id.isEmpty()) return;
+    if (!hub_registered_ || run_id.isEmpty())
+        return;
     QJsonObject obj{{"request_id", run_id}, {"token", token}};
-    fincept::datahub::DataHub::instance().publish(
-        QStringLiteral("agent:stream:") + run_id, QVariant(obj));
+    fincept::datahub::DataHub::instance().publish(QStringLiteral("agent:stream:") + run_id, QVariant(obj));
 }
 
 void AgentService::publish_agent_status(const QString& run_id, const QString& status) {
-    if (!hub_registered_ || run_id.isEmpty()) return;
+    if (!hub_registered_ || run_id.isEmpty())
+        return;
     QJsonObject obj{{"request_id", run_id}, {"status", status}};
-    fincept::datahub::DataHub::instance().publish(
-        QStringLiteral("agent:status:") + run_id, QVariant(obj));
+    fincept::datahub::DataHub::instance().publish(QStringLiteral("agent:status:") + run_id, QVariant(obj));
 }
 
 void AgentService::publish_routing_result(const RoutingResult& r) {
-    if (!hub_registered_ || r.request_id.isEmpty()) return;
+    if (!hub_registered_ || r.request_id.isEmpty())
+        return;
     QJsonObject obj{
-        {"request_id", r.request_id},
-        {"success", r.success},
-        {"agent_id", r.agent_id},
-        {"intent", r.intent},
-        {"confidence", r.confidence},
+        {"request_id", r.request_id}, {"success", r.success},       {"agent_id", r.agent_id},
+        {"intent", r.intent},         {"confidence", r.confidence},
     };
-    fincept::datahub::DataHub::instance().publish(
-        QStringLiteral("agent:routing:") + r.request_id, QVariant(obj));
+    fincept::datahub::DataHub::instance().publish(QStringLiteral("agent:routing:") + r.request_id, QVariant(obj));
 }
 
 void AgentService::publish_agent_error(const QString& context, const QString& message) {
-    if (!hub_registered_) return;
+    if (!hub_registered_)
+        return;
     QJsonObject obj{{"context", context}, {"message", message}};
-    fincept::datahub::DataHub::instance().publish(
-        QStringLiteral("agent:error:") + context, QVariant(obj));
+    fincept::datahub::DataHub::instance().publish(QStringLiteral("agent:error:") + context, QVariant(obj));
 }
 
 void AgentService::publish_task_event(const QString& task_id, const QJsonObject& event) {
-    if (task_id.isEmpty()) return;
+    if (task_id.isEmpty())
+        return;
     emit task_event(task_id, event);
-    if (!hub_registered_) return;
+    if (!hub_registered_)
+        return;
     const QString topic = QStringLiteral("task:event:") + task_id;
     fincept::datahub::DataHub::instance().publish(topic, QVariant(event));
     const QString kind = event.value(QStringLiteral("kind")).toString();
-    if (kind == QStringLiteral("done") || kind == QStringLiteral("error") ||
-        kind == QStringLiteral("cancelled")) {
+    if (kind == QStringLiteral("done") || kind == QStringLiteral("error") || kind == QStringLiteral("cancelled")) {
         // Disposable per-task topic — drop cached state to bound hub memory.
         fincept::datahub::DataHub::instance().retire_topic(topic);
     }
 }
-
 
 } // namespace fincept::services

@@ -132,7 +132,7 @@ class WorldMapWidget : public QWidget {
     /// Active basemap tile layer(s). Owned by the map once added; replaced
     /// wholesale on set_basemap(). Usually one layer.
     QVector<QGVItem*> tile_layers_;
-    int basemap_index_ = 0;  // index into the basemap catalog; 0 = SATELLITE
+    int basemap_index_ = 0; // index into the basemap catalog; 0 = SATELLITE
     QVector<MapPin> pins_;
     mutable QHash<QString, QImage> marker_cache_;
     bool map_ready_ = false;
@@ -141,8 +141,8 @@ class WorldMapWidget : public QWidget {
     MapDrawMode draw_mode_ = MapDrawMode::None;
     QVector<MapShape> shapes_;
     bool drawing_ = false;
-    double drag_start_lat_ = 0, drag_start_lng_ = 0;  // anchor of in-progress shape
-    MapShape preview_shape_;                           // shape being dragged
+    double drag_start_lat_ = 0, drag_start_lng_ = 0; // anchor of in-progress shape
+    MapShape preview_shape_;                         // shape being dragged
     bool has_preview_ = false;
 };
 

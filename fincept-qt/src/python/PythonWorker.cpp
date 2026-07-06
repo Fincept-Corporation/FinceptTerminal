@@ -40,24 +40,25 @@ PythonWorker::PythonWorker() {
     ready_watchdog_.setSingleShot(true);
     ready_watchdog_.setInterval(kReadyTimeoutMs);
     connect(&ready_watchdog_, &QTimer::timeout, this, [this]() {
-        if (ready_) return;
+        if (ready_)
+            return;
         LOG_WARN("PythonWorker", "Daemon handshake timed out — killing and restarting");
         if (proc_) {
             proc_->kill();
         }
     });
 
-    connect(&PythonRunner::instance(), &PythonRunner::python_ready, this, [this]() {
-        ensure_started();
-    });
+    connect(&PythonRunner::instance(), &PythonRunner::python_ready, this, [this]() { ensure_started(); });
 
-    connect(&PythonSetupManager::instance(), &PythonSetupManager::setup_complete, this, [this](bool success, const QString& /*error*/) {
-        if (success) {
-            LOG_INFO("PythonWorker", "Python/Venv setup completed successfully. Resetting restart budget and starting daemon.");
-            restart_count_ = 0;
-            ensure_started();
-        }
-    });
+    connect(&PythonSetupManager::instance(), &PythonSetupManager::setup_complete, this,
+            [this](bool success, const QString& /*error*/) {
+                if (success) {
+                    LOG_INFO("PythonWorker",
+                             "Python/Venv setup completed successfully. Resetting restart budget and starting daemon.");
+                    restart_count_ = 0;
+                    ensure_started();
+                }
+            });
 }
 
 PythonWorker::~PythonWorker() {
@@ -71,9 +72,9 @@ void PythonWorker::submit(const QString& action, const QJsonObject& payload, Cal
     // from there triggers `QSocketNotifier: cannot be enabled or disabled
     // from another thread` and the daemon stalls. Marshal back if needed.
     if (QThread::currentThread() != this->thread()) {
-        QMetaObject::invokeMethod(this, [this, action, payload, cb = std::move(cb)]() mutable {
-            submit(action, payload, std::move(cb));
-        }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this, [this, action, payload, cb = std::move(cb)]() mutable { submit(action, payload, std::move(cb)); },
+            Qt::QueuedConnection);
         return;
     }
 
@@ -110,7 +111,7 @@ void PythonWorker::stop() {
         req["payload"] = QJsonObject{};
         proc_->write(encode_frame(req));
         proc_->closeWriteChannel();
-        proc_->waitForFinished(2'000);  // destructor-only blocking call (P1 allows)
+        proc_->waitForFinished(2'000); // destructor-only blocking call (P1 allows)
         if (proc_->state() != QProcess::NotRunning)
             proc_->kill();
     }
@@ -134,8 +135,7 @@ void PythonWorker::launch_process() {
 
     // Always use venv-numpy2 — yfinance lives there. Fall back to the
     // PythonRunner's resolved interpreter if the venv isn't present.
-    QString python_exe =
-        PythonSetupManager::instance().python_path(QStringLiteral("venv-numpy2"));
+    QString python_exe = PythonSetupManager::instance().python_path(QStringLiteral("venv-numpy2"));
     if (!QFileInfo::exists(python_exe))
         python_exe = runner.python_path();
     if (python_exe.isEmpty()) {
@@ -154,7 +154,7 @@ void PythonWorker::launch_process() {
 
 #ifdef _WIN32
     proc_->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
-        cpa->flags |= 0x08000000;  // CREATE_NO_WINDOW
+        cpa->flags |= 0x08000000; // CREATE_NO_WINDOW
     });
 #endif
 
@@ -164,7 +164,8 @@ void PythonWorker::launch_process() {
     connect(proc_, &QProcess::errorOccurred, this, &PythonWorker::on_process_error);
     // Drain stderr to the log so Python import/runtime errors surface.
     connect(proc_, &QProcess::readyReadStandardError, this, [this]() {
-        if (!proc_) return;
+        if (!proc_)
+            return;
         const QByteArray err = proc_->readAllStandardError();
         if (!err.isEmpty()) {
             LOG_WARN("PythonWorker", QString("stderr: %1").arg(QString::fromUtf8(err).trimmed()));
@@ -173,8 +174,7 @@ void PythonWorker::launch_process() {
 
     read_buf_.clear();
     ready_ = false;
-    LOG_INFO("PythonWorker", QString("Launching daemon: %1 %2 --daemon")
-                                  .arg(python_exe).arg(script_path));
+    LOG_INFO("PythonWorker", QString("Launching daemon: %1 %2 --daemon").arg(python_exe).arg(script_path));
     proc_->start(python_exe, {script_path, QStringLiteral("--daemon")});
     ready_watchdog_.start();
 }
@@ -188,7 +188,8 @@ void PythonWorker::on_process_finished(int exit_code, QProcess::ExitStatus statu
     // Fail any in-flight requests; queued requests are preserved for the
     // next restart so callers don't observe spurious failures.
     for (auto it = in_flight_.begin(); it != in_flight_.end(); ++it) {
-        if (it.value().cb) it.value().cb(false, {}, reason);
+        if (it.value().cb)
+            it.value().cb(false, {}, reason);
     }
     in_flight_.clear();
 
@@ -198,25 +199,22 @@ void PythonWorker::on_process_finished(int exit_code, QProcess::ExitStatus statu
 
     if (restart_count_ >= kMaxRestarts) {
         LOG_ERROR("PythonWorker",
-                  QString("Restart cap (%1) reached — giving up, pending requests will fail")
-                      .arg(kMaxRestarts));
+                  QString("Restart cap (%1) reached — giving up, pending requests will fail").arg(kMaxRestarts));
         fail_all_pending(QStringLiteral("worker restart cap reached"));
         return;
     }
     ++restart_count_;
-    LOG_INFO("PythonWorker", QString("Restarting daemon (attempt %1/%2)")
-                                  .arg(restart_count_).arg(kMaxRestarts));
+    LOG_INFO("PythonWorker", QString("Restarting daemon (attempt %1/%2)").arg(restart_count_).arg(kMaxRestarts));
     launch_process();
 }
 
 void PythonWorker::on_process_error(QProcess::ProcessError err) {
-    LOG_WARN("PythonWorker", QString("QProcess error: %1 (%2)")
-                                  .arg(err)
-                                  .arg(proc_ ? proc_->errorString() : QString()));
+    LOG_WARN("PythonWorker", QString("QProcess error: %1 (%2)").arg(err).arg(proc_ ? proc_->errorString() : QString()));
 }
 
 void PythonWorker::on_ready_read() {
-    if (!proc_) return;
+    if (!proc_)
+        return;
     read_buf_.append(proc_->readAllStandardOutput());
     try_drain_frames();
 }
@@ -227,17 +225,17 @@ void PythonWorker::try_drain_frames() {
         const quint8 b1 = static_cast<quint8>(read_buf_.at(1));
         const quint8 b2 = static_cast<quint8>(read_buf_.at(2));
         const quint8 b3 = static_cast<quint8>(read_buf_.at(3));
-        const quint32 n =
-            (static_cast<quint32>(b0) << 24) | (static_cast<quint32>(b1) << 16) |
-            (static_cast<quint32>(b2) << 8)  |  static_cast<quint32>(b3);
+        const quint32 n = (static_cast<quint32>(b0) << 24) | (static_cast<quint32>(b1) << 16) |
+                          (static_cast<quint32>(b2) << 8) | static_cast<quint32>(b3);
         if (n > 64u * 1024u * 1024u) {
             LOG_ERROR("PythonWorker", QString("Frame size %1 exceeds 64MB cap — resetting stream").arg(n));
             read_buf_.clear();
-            if (proc_) proc_->kill();
+            if (proc_)
+                proc_->kill();
             return;
         }
         if (static_cast<quint32>(read_buf_.size()) < 4 + n) {
-            return;  // wait for more bytes
+            return; // wait for more bytes
         }
         const QByteArray body = read_buf_.mid(4, static_cast<int>(n));
         read_buf_.remove(0, 4 + static_cast<int>(n));
@@ -245,8 +243,7 @@ void PythonWorker::try_drain_frames() {
         QJsonParseError pe;
         const QJsonDocument doc = QJsonDocument::fromJson(body, &pe);
         if (pe.error != QJsonParseError::NoError || !doc.isObject()) {
-            LOG_WARN("PythonWorker",
-                     QString("Bad JSON frame: %1 (%2 bytes)").arg(pe.errorString()).arg(body.size()));
+            LOG_WARN("PythonWorker", QString("Bad JSON frame: %1 (%2 bytes)").arg(pe.errorString()).arg(body.size()));
             continue;
         }
         const QJsonObject obj = doc.object();
@@ -255,9 +252,8 @@ void PythonWorker::try_drain_frames() {
         if (!ready_ && obj.value("ready").toBool()) {
             ready_ = true;
             ready_watchdog_.stop();
-            restart_count_ = 0;  // clean handshake resets the retry budget
-            LOG_INFO("PythonWorker", QString("Daemon ready (pid=%1)")
-                                          .arg(obj.value("pid").toInt()));
+            restart_count_ = 0; // clean handshake resets the retry budget
+            LOG_INFO("PythonWorker", QString("Daemon ready (pid=%1)").arg(obj.value("pid").toInt()));
             dispatch_queued();
             continue;
         }
@@ -282,7 +278,8 @@ void PythonWorker::try_drain_frames() {
         } else {
             result_obj["_value"] = rv;
         }
-        if (p.cb) p.cb(ok, result_obj, err);
+        if (p.cb)
+            p.cb(ok, result_obj, err);
     }
 }
 
@@ -305,11 +302,13 @@ void PythonWorker::dispatch_queued() {
 
 void PythonWorker::fail_all_pending(const QString& reason) {
     for (auto& entry : queue_) {
-        if (entry.second.cb) entry.second.cb(false, {}, reason);
+        if (entry.second.cb)
+            entry.second.cb(false, {}, reason);
     }
     queue_.clear();
     for (auto it = in_flight_.begin(); it != in_flight_.end(); ++it) {
-        if (it.value().cb) it.value().cb(false, {}, reason);
+        if (it.value().cb)
+            it.value().cb(false, {}, reason);
     }
     in_flight_.clear();
 }

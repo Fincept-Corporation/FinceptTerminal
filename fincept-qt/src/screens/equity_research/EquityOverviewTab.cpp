@@ -4,18 +4,18 @@
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QEvent>
-#include <QFrame>
-#include <QCoreApplication>
 #include <QFile>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QTextStream>
-#include <QHBoxLayout>
 #include <QPainter>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -354,11 +354,11 @@ QWidget* EquityOverviewTab::build_col1() {
 
 QWidget* EquityOverviewTab::build_trading_panel() {
     auto* p = make_panel_(QT_TR_NOOP("TODAY'S TRADING"), ui::colors::AMBER);
-    open_val_       = add_row_(p, QT_TR_NOOP("OPEN"),       CYAN);
-    high_val_       = add_row_(p, QT_TR_NOOP("HIGH"),       ui::colors::POSITIVE);
-    low_val_        = add_row_(p, QT_TR_NOOP("LOW"),        ui::colors::NEGATIVE);
+    open_val_ = add_row_(p, QT_TR_NOOP("OPEN"), CYAN);
+    high_val_ = add_row_(p, QT_TR_NOOP("HIGH"), ui::colors::POSITIVE);
+    low_val_ = add_row_(p, QT_TR_NOOP("LOW"), ui::colors::NEGATIVE);
     prev_close_val_ = add_row_(p, QT_TR_NOOP("PREV CLOSE"), ui::colors::TEXT_PRIMARY);
-    vol_val_        = add_row_(p, QT_TR_NOOP("VOLUME"),     YELLOW);
+    vol_val_ = add_row_(p, QT_TR_NOOP("VOLUME"), YELLOW);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
@@ -366,23 +366,23 @@ QWidget* EquityOverviewTab::build_trading_panel() {
 QWidget* EquityOverviewTab::build_valuation_panel() {
     auto* p = make_panel_(QT_TR_NOOP("VALUATION"), CYAN);
     mktcap_val_ = add_row_(p, QT_TR_NOOP("MARKET CAP"), CYAN);
-    pe_val_     = add_row_(p, QT_TR_NOOP("P/E RATIO"),  YELLOW);
-    fwd_pe_val_ = add_row_(p, QT_TR_NOOP("FWD P/E"),    YELLOW);
-    peg_val_    = add_row_(p, QT_TR_NOOP("PEG RATIO"),  YELLOW);
-    pb_val_     = add_row_(p, QT_TR_NOOP("P/B RATIO"),  CYAN);
-    div_val_    = add_row_(p, QT_TR_NOOP("DIV YIELD"),  ui::colors::POSITIVE);
-    beta_val_   = add_row_(p, QT_TR_NOOP("BETA"),       ui::colors::TEXT_PRIMARY);
+    pe_val_ = add_row_(p, QT_TR_NOOP("P/E RATIO"), YELLOW);
+    fwd_pe_val_ = add_row_(p, QT_TR_NOOP("FWD P/E"), YELLOW);
+    peg_val_ = add_row_(p, QT_TR_NOOP("PEG RATIO"), YELLOW);
+    pb_val_ = add_row_(p, QT_TR_NOOP("P/B RATIO"), CYAN);
+    div_val_ = add_row_(p, QT_TR_NOOP("DIV YIELD"), ui::colors::POSITIVE);
+    beta_val_ = add_row_(p, QT_TR_NOOP("BETA"), ui::colors::TEXT_PRIMARY);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
 
 QWidget* EquityOverviewTab::build_share_stats_panel() {
     auto* p = make_panel_(QT_TR_NOOP("SHARE STATS"), PURPLE);
-    shares_out_val_   = add_row_(p, QT_TR_NOOP("SHARES OUT"),   CYAN);
-    float_val_        = add_row_(p, QT_TR_NOOP("FLOAT"),        CYAN);
-    insiders_val_     = add_row_(p, QT_TR_NOOP("INSIDERS"),     YELLOW);
+    shares_out_val_ = add_row_(p, QT_TR_NOOP("SHARES OUT"), CYAN);
+    float_val_ = add_row_(p, QT_TR_NOOP("FLOAT"), CYAN);
+    insiders_val_ = add_row_(p, QT_TR_NOOP("INSIDERS"), YELLOW);
     institutions_val_ = add_row_(p, QT_TR_NOOP("INSTITUTIONS"), YELLOW);
-    short_pct_val_    = add_row_(p, QT_TR_NOOP("SHORT %"),      ui::colors::NEGATIVE);
+    short_pct_val_ = add_row_(p, QT_TR_NOOP("SHORT %"), ui::colors::NEGATIVE);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
@@ -499,9 +499,9 @@ QWidget* EquityOverviewTab::build_col4() {
 
 QWidget* EquityOverviewTab::build_analyst_panel() {
     auto* p = make_panel_(QT_TR_NOOP("ANALYST TARGETS"), MAGENTA);
-    target_high_val_   = add_row_(p, QT_TR_NOOP("HIGH"),     ui::colors::POSITIVE);
-    target_mean_val_   = add_row_(p, QT_TR_NOOP("MEAN"),     YELLOW);
-    target_low_val_    = add_row_(p, QT_TR_NOOP("LOW"),      ui::colors::NEGATIVE);
+    target_high_val_ = add_row_(p, QT_TR_NOOP("HIGH"), ui::colors::POSITIVE);
+    target_mean_val_ = add_row_(p, QT_TR_NOOP("MEAN"), YELLOW);
+    target_low_val_ = add_row_(p, QT_TR_NOOP("LOW"), ui::colors::NEGATIVE);
     analyst_count_val_ = add_row_(p, QT_TR_NOOP("ANALYSTS"), CYAN);
 
     rec_key_label_ = new QLabel(QString::fromUtf8("\xe2\x80\x94"));
@@ -516,8 +516,8 @@ QWidget* EquityOverviewTab::build_analyst_panel() {
 
 QWidget* EquityOverviewTab::build_52w_panel() {
     auto* p = make_panel_(QT_TR_NOOP("52 WEEK RANGE"), YELLOW);
-    w52h_val_    = add_row_(p, QT_TR_NOOP("HIGH"),    ui::colors::POSITIVE);
-    w52l_val_    = add_row_(p, QT_TR_NOOP("LOW"),     ui::colors::NEGATIVE);
+    w52h_val_ = add_row_(p, QT_TR_NOOP("HIGH"), ui::colors::POSITIVE);
+    w52l_val_ = add_row_(p, QT_TR_NOOP("LOW"), ui::colors::NEGATIVE);
     avg_vol_val_ = add_row_(p, QT_TR_NOOP("AVG VOL"), CYAN);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
@@ -525,18 +525,18 @@ QWidget* EquityOverviewTab::build_52w_panel() {
 
 QWidget* EquityOverviewTab::build_profitability_panel() {
     auto* p = make_panel_(QT_TR_NOOP("PROFITABILITY"), ui::colors::POSITIVE);
-    gross_margin_val_  = add_row_(p, QT_TR_NOOP("GROSS MARGIN"),  ui::colors::POSITIVE);
-    op_margin_val_     = add_row_(p, QT_TR_NOOP("OPER. MARGIN"),  ui::colors::POSITIVE);
+    gross_margin_val_ = add_row_(p, QT_TR_NOOP("GROSS MARGIN"), ui::colors::POSITIVE);
+    op_margin_val_ = add_row_(p, QT_TR_NOOP("OPER. MARGIN"), ui::colors::POSITIVE);
     profit_margin_val_ = add_row_(p, QT_TR_NOOP("PROFIT MARGIN"), ui::colors::POSITIVE);
-    roa_val_           = add_row_(p, QT_TR_NOOP("ROA"),           CYAN);
-    roe_val_           = add_row_(p, QT_TR_NOOP("ROE"),           CYAN);
+    roa_val_ = add_row_(p, QT_TR_NOOP("ROA"), CYAN);
+    roe_val_ = add_row_(p, QT_TR_NOOP("ROE"), CYAN);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
 
 QWidget* EquityOverviewTab::build_growth_panel() {
     auto* p = make_panel_(QT_TR_NOOP("GROWTH RATES"), BLUE);
-    rev_growth_val_      = add_row_(p, QT_TR_NOOP("REVENUE"),  ui::colors::POSITIVE);
+    rev_growth_val_ = add_row_(p, QT_TR_NOOP("REVENUE"), ui::colors::POSITIVE);
     earnings_growth_val_ = add_row_(p, QT_TR_NOOP("EARNINGS"), ui::colors::POSITIVE);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
@@ -578,17 +578,17 @@ QWidget* EquityOverviewTab::build_company_desc_panel() {
 
 QWidget* EquityOverviewTab::build_company_info_panel() {
     auto* p = make_panel_(QT_TR_NOOP("COMPANY INFO"), ui::colors::TEXT_PRIMARY);
-    company_emp_      = add_row_(p, QT_TR_NOOP("EMPLOYEES"), CYAN);
-    company_web_      = add_row_(p, QT_TR_NOOP("WEBSITE"),   BLUE);
-    company_currency_ = add_row_(p, QT_TR_NOOP("CURRENCY"),  CYAN);
+    company_emp_ = add_row_(p, QT_TR_NOOP("EMPLOYEES"), CYAN);
+    company_web_ = add_row_(p, QT_TR_NOOP("WEBSITE"), BLUE);
+    company_currency_ = add_row_(p, QT_TR_NOOP("CURRENCY"), CYAN);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
 
 QWidget* EquityOverviewTab::build_financial_health_panel() {
     auto* p = make_panel_(QT_TR_NOOP("FINANCIAL HEALTH"), ui::colors::AMBER);
-    cash_val_    = add_row_(p, QT_TR_NOOP("CASH"),    ui::colors::POSITIVE);
-    debt_val_    = add_row_(p, QT_TR_NOOP("DEBT"),    ui::colors::NEGATIVE);
+    cash_val_ = add_row_(p, QT_TR_NOOP("CASH"), ui::colors::POSITIVE);
+    debt_val_ = add_row_(p, QT_TR_NOOP("DEBT"), ui::colors::NEGATIVE);
     free_cf_val_ = add_row_(p, QT_TR_NOOP("FREE CF"), CYAN);
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;

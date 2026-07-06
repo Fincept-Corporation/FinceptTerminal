@@ -17,8 +17,7 @@
 
 namespace fincept::screens::widgets {
 
-TradeTapeWidget::TradeTapeWidget(const QJsonObject& cfg, QWidget* parent)
-    : BaseWidget(tr("TRADES"), parent) {
+TradeTapeWidget::TradeTapeWidget(const QJsonObject& cfg, QWidget* parent) : BaseWidget(tr("TRADES"), parent) {
     auto* vl = content_layout();
     vl->setContentsMargins(8, 6, 8, 6);
     vl->setSpacing(4);
@@ -65,8 +64,7 @@ void TradeTapeWidget::apply_config(const QJsonObject& cfg) {
 void TradeTapeWidget::hub_resubscribe() {
     auto& hub = datahub::DataHub::instance();
     hub.unsubscribe(this);
-    const QString topic =
-        QStringLiteral("ws:") + exchange_ + QStringLiteral(":trades:") + pair_;
+    const QString topic = QStringLiteral("ws:") + exchange_ + QStringLiteral(":trades:") + pair_;
     hub.subscribe(this, topic, [this](const QVariant& v) { on_trade(v); });
     hub_active_ = true;
 }
@@ -93,9 +91,7 @@ void TradeTapeWidget::on_trade(const QVariant& v) {
         return;
     const auto td = v.value<fincept::trading::TradeData>();
     Trade t;
-    t.when = (td.timestamp > 0)
-                 ? QDateTime::fromMSecsSinceEpoch(td.timestamp)
-                 : QDateTime::currentDateTime();
+    t.when = (td.timestamp > 0) ? QDateTime::fromMSecsSinceEpoch(td.timestamp) : QDateTime::currentDateTime();
     t.side = td.side;
     t.price = td.price;
     t.amount = td.amount;

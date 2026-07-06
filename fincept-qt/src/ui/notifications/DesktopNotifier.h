@@ -40,8 +40,8 @@ class DesktopNotifier : public QObject {
 
     QSystemTrayIcon* tray_ = nullptr;
     QWidget* toast_ = nullptr;
-    QLabel*  toast_lbl_ = nullptr;
-    QTimer*  toast_timer_ = nullptr;
+    QLabel* toast_lbl_ = nullptr;
+    QTimer* toast_timer_ = nullptr;
 };
 
 } // namespace fincept::ui

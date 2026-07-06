@@ -15,7 +15,7 @@ namespace fincept::algo {
 
 class AlgoEngine : public QObject {
     Q_OBJECT
-public:
+  public:
     static AlgoEngine& instance();
 
     void start_deployment(const fincept::services::algo::AlgoDeployment& deployment,
@@ -38,15 +38,15 @@ public:
     void recover_orphaned();
     // True if a running/starting deployment with the same strategy+symbol+mode+side
     // already exists — used to confirm before deploying an exact duplicate.
-    bool has_active_duplicate(const QString& strategy_id, const QString& symbol,
-                              const QString& mode, const QString& entry_side) const;
+    bool has_active_duplicate(const QString& strategy_id, const QString& symbol, const QString& mode,
+                              const QString& entry_side) const;
 
     // GUI-thread bridge for option-chain data. Created before moveToThread so it
     // stays on the main thread. Accessible to callers that need to check its state
     // from the main thread (e.g. the F&O Algo deploy dialog).
     fincept::algo::fno::FnoDataBridge* fno_bridge() const { return fno_bridge_; }
 
-signals:
+  signals:
     void deployment_started(const QString& deployment_id);
     void deployment_stopped(const QString& deployment_id);
     void deployment_crashed(const QString& deployment_id, const QString& reason);
@@ -57,10 +57,10 @@ signals:
     // Real-time per-tick snapshot relayed from each runner to the Dashboard.
     void live_update(const QString& deployment_id, const fincept::algo::AlgoLiveSnapshot& snap);
 
-private slots:
+  private slots:
     void on_order_requested(const fincept::algo::AlgoOrderSignal& signal);
 
-private:
+  private:
     AlgoEngine();
     ~AlgoEngine() override;
     Q_DISABLE_COPY(AlgoEngine)

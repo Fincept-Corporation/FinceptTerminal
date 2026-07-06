@@ -1,11 +1,10 @@
 // Per-provider chat-completion request shape builders.
 
-#include "services/llm/LlmService.h"
-
-#include "services/llm/LlmRequestPolicy.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
+#include "services/llm/LlmRequestPolicy.h"
+#include "services/llm/LlmService.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -13,7 +12,9 @@
 
 namespace fincept::ai_chat {
 
-namespace { constexpr const char* kLlmBuildersTag = "LlmService"; }
+namespace {
+constexpr const char* kLlmBuildersTag = "LlmService";
+}
 
 QJsonObject LlmService::build_openai_request(const QString& user_message,
                                              const std::vector<ConversationMessage>& history, bool stream,
@@ -33,7 +34,7 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     messages.append(QJsonObject{{"role", "user"}, {"content", user_message}});
 
     QJsonObject req;
-    req["model"]    = model_;
+    req["model"] = model_;
     req["messages"] = messages;
     // Temperature omitted — each provider's default.
     // Token-limit field: OpenAI/xAI native endpoints take max_completion_tokens
@@ -61,21 +62,21 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     // to do_request to execute. Otherwise the model answers from training and tool calling silently breaks.
     const bool tools_effectively_on = detail::effective_tools_enabled(tools_enabled_);
     if (with_tools && tools_effectively_on && !is_ds_reasoner && !groq_no_tools) {
-        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
+        QJsonArray tools =
+            mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
         if (!tools.isEmpty())
             req["tools"] = tools;
         LOG_INFO(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 tools=%3 (count=%4)")
-                          .arg(stream ? "true" : "false", provider_,
-                               tools.isEmpty() ? "none" : "attached")
-                          .arg(tools.size()));
+                                      .arg(stream ? "true" : "false", provider_, tools.isEmpty() ? "none" : "attached")
+                                      .arg(tools.size()));
     } else {
         LOG_WARN(kLlmBuildersTag, QString("OpenAI request: stream=%1 provider=%2 NO TOOLS — "
-                              "with_tools=%3 tools_effectively_on=%4 ds_reasoner=%5 groq_no_tools=%6")
-                          .arg(stream ? "true" : "false", provider_)
-                          .arg(with_tools ? "true" : "false")
-                          .arg(tools_effectively_on ? "true" : "false")
-                          .arg(is_ds_reasoner ? "true" : "false")
-                          .arg(groq_no_tools ? "true" : "false"));
+                                          "with_tools=%3 tools_effectively_on=%4 ds_reasoner=%5 groq_no_tools=%6")
+                                      .arg(stream ? "true" : "false", provider_)
+                                      .arg(with_tools ? "true" : "false")
+                                      .arg(tools_effectively_on ? "true" : "false")
+                                      .arg(is_ds_reasoner ? "true" : "false")
+                                      .arg(groq_no_tools ? "true" : "false"));
     }
     return req;
 }
@@ -90,8 +91,8 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
     messages.append(QJsonObject{{"role", "user"}, {"content", user_message}});
 
     QJsonObject req;
-    req["model"]      = model_;
-    req["messages"]   = messages;
+    req["model"] = model_;
+    req["messages"] = messages;
     req["max_tokens"] = resolved_max_tokens();
     if (!system_prompt_.isEmpty())
         req["system"] = system_prompt_;
@@ -114,11 +115,10 @@ QJsonArray LlmService::build_anthropic_tools() {
         QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
         QJsonObject schema = tool.input_schema;
         if (schema.isEmpty()) {
-            schema["type"]       = "object";
+            schema["type"] = "object";
             schema["properties"] = QJsonObject();
         }
-        ant_tools.append(
-            QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
+        ant_tools.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
     }
     return ant_tools;
 }
@@ -138,7 +138,7 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     gen_cfg["maxOutputTokens"] = resolved_max_tokens();
 
     QJsonObject req;
-    req["contents"]         = contents;
+    req["contents"] = contents;
     req["generationConfig"] = gen_cfg;
     if (!system_prompt_.isEmpty()) {
         req["systemInstruction"] = QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
@@ -161,7 +161,7 @@ QJsonArray LlmService::build_gemini_tools() {
         QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
         QJsonObject schema = tool.input_schema;
         if (schema.isEmpty()) {
-            schema["type"]       = "object";
+            schema["type"] = "object";
             schema["properties"] = QJsonObject();
         }
         fn_decls.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"parameters", schema}});

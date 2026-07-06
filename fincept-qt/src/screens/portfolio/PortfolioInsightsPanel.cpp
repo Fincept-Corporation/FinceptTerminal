@@ -1,9 +1,9 @@
 // src/screens/portfolio/PortfolioInsightsPanel.cpp
 #include "screens/portfolio/PortfolioInsightsPanel.h"
 
-#include "services/llm/LlmService.h"
 #include "core/logging/Logger.h"
 #include "services/agents/AgentService.h"
+#include "services/llm/LlmService.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
@@ -103,46 +103,44 @@ PortfolioInsightsPanel::PortfolioInsightsPanel(QWidget* parent) : QWidget(parent
                 }
             });
 
-    connect(&svc, &services::AgentService::agent_stream_done, this,
-            [this](services::AgentExecutionResult r) {
-                if (r.request_id != agent_pending_req_id_)
-                    return;
-                const QString agent_id = agent_pending_id_;
-                agent_pending_req_id_.clear();
-                agent_pending_id_.clear();
-                agent_busy_ = false;
-                agent_run_->setEnabled(true);
-                header_status_->clear();
+    connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
+        if (r.request_id != agent_pending_req_id_)
+            return;
+        const QString agent_id = agent_pending_id_;
+        agent_pending_req_id_.clear();
+        agent_pending_id_.clear();
+        agent_busy_ = false;
+        agent_run_->setEnabled(true);
+        header_status_->clear();
 
-                // finagent_core emits some agents via the final JSON line
-                // (r.response populated) and others via streamed tokens (where
-                // r.response may come back empty). Mirror AgentChatPanel's
-                // logic: prefer r.response, fall back to accumulated tokens.
-                QString final_text = r.response.trimmed();
-                if (final_text.isEmpty())
-                    final_text = agent_streaming_text_.trimmed();
-                agent_streaming_text_.clear();
+        // finagent_core emits some agents via the final JSON line
+        // (r.response populated) and others via streamed tokens (where
+        // r.response may come back empty). Mirror AgentChatPanel's
+        // logic: prefer r.response, fall back to accumulated tokens.
+        QString final_text = r.response.trimmed();
+        if (final_text.isEmpty())
+            final_text = agent_streaming_text_.trimmed();
+        agent_streaming_text_.clear();
 
-                if (r.success && !final_text.isEmpty()) {
-                    agent_cache_.insert(agent_id, final_text);
-                    const QString meta = tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms);
-                    agent_meta_cache_.insert(agent_id, meta);
-                    agent_meta_->setText(meta);
-                    persist_agent_result(agent_id, final_text, meta);
-                    render_result(agent_content_, final_text);
-                    agent_run_->setText(tr("RE-RUN AGENT"));
-                } else if (r.success) {
-                    // Agent reported success but produced no text — likely a
-                    // config issue (no LLM key in the agent's profile, etc.).
-                    render_error(agent_content_,
-                                 tr("Agent completed but returned no content.\n\n"
-                                    "Check the agent's LLM profile in Agent Config → Agents, "
-                                    "and make sure an API key is set in Settings → LLM Configuration."));
-                } else {
-                    const QString msg = r.error.isEmpty() ? tr("No response received.") : r.error;
-                    render_error(agent_content_, tr("Agent run failed.\n\n") + msg);
-                }
-            });
+        if (r.success && !final_text.isEmpty()) {
+            agent_cache_.insert(agent_id, final_text);
+            const QString meta = tr("Last run %1  •  %2ms").arg(fmt_now()).arg(r.execution_time_ms);
+            agent_meta_cache_.insert(agent_id, meta);
+            agent_meta_->setText(meta);
+            persist_agent_result(agent_id, final_text, meta);
+            render_result(agent_content_, final_text);
+            agent_run_->setText(tr("RE-RUN AGENT"));
+        } else if (r.success) {
+            // Agent reported success but produced no text — likely a
+            // config issue (no LLM key in the agent's profile, etc.).
+            render_error(agent_content_, tr("Agent completed but returned no content.\n\n"
+                                            "Check the agent's LLM profile in Agent Config → Agents, "
+                                            "and make sure an API key is set in Settings → LLM Configuration."));
+        } else {
+            const QString msg = r.error.isEmpty() ? tr("No response received.") : r.error;
+            render_error(agent_content_, tr("Agent run failed.\n\n") + msg);
+        }
+    });
 
     // Refresh the agent dropdown whenever finagent_core discovers agents.
     // This matches the AgentChatPanel wiring so both lists stay in sync.
@@ -183,8 +181,7 @@ void PortfolioInsightsPanel::build_ui() {
     const QString text3 = ui::colors::TEXT_TERTIARY();
 
     // Opaque background — this is the whole fix for the previous overlap bug.
-    setStyleSheet(QString("#PortfolioInsightsPanel { background:%1; border-left:1px solid %2; }")
-                      .arg(bg, border));
+    setStyleSheet(QString("#PortfolioInsightsPanel { background:%1; border-left:1px solid %2; }").arg(bg, border));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -215,7 +212,10 @@ void PortfolioInsightsPanel::build_ui() {
                                              "  font-size:20px; font-weight:300; }"
                                              "QPushButton:hover { color:%2; background:%3; }")
                                          .arg(text2, text1, hover));
-    connect(header_close_btn_, &QPushButton::clicked, this, [this]() { hide(); emit close_requested(); });
+    connect(header_close_btn_, &QPushButton::clicked, this, [this]() {
+        hide();
+        emit close_requested();
+    });
     hl->addWidget(header_close_btn_);
     root->addWidget(header);
 
@@ -279,7 +279,8 @@ QWidget* PortfolioInsightsPanel::build_ai_page() {
     cl->setSpacing(10);
 
     ai_type_label_ = new QLabel(tr("ANALYSIS TYPE"));
-    ai_type_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
+    ai_type_label_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
     cl->addWidget(ai_type_label_);
 
     auto* pill_row = new QHBoxLayout;
@@ -361,7 +362,8 @@ QWidget* PortfolioInsightsPanel::build_agent_page() {
     cl->setSpacing(8);
 
     agent_select_label_ = new QLabel(tr("SELECT AGENT"));
-    agent_select_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
+    agent_select_label_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1.5px;").arg(text3));
     cl->addWidget(agent_select_label_);
 
     agent_cb_ = new QComboBox;
@@ -447,9 +449,9 @@ void PortfolioInsightsPanel::persist_ai_result(const QString& type, const QStrin
     QJsonObject o;
     o["r"] = response;
     o["m"] = meta;
-    SettingsRepository::instance().set(
-        QString("pi.ai.%1.%2").arg(summary_.portfolio.id, type),
-        QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)), kInsightsCategory);
+    SettingsRepository::instance().set(QString("pi.ai.%1.%2").arg(summary_.portfolio.id, type),
+                                       QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)),
+                                       kInsightsCategory);
 }
 
 void PortfolioInsightsPanel::persist_agent_result(const QString& agent_id, const QString& response,
@@ -459,9 +461,9 @@ void PortfolioInsightsPanel::persist_agent_result(const QString& agent_id, const
     QJsonObject o;
     o["r"] = response;
     o["m"] = meta;
-    SettingsRepository::instance().set(
-        QString("pi.agent.%1.%2").arg(summary_.portfolio.id, agent_id),
-        QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)), kInsightsCategory);
+    SettingsRepository::instance().set(QString("pi.agent.%1.%2").arg(summary_.portfolio.id, agent_id),
+                                       QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)),
+                                       kInsightsCategory);
 }
 
 void PortfolioInsightsPanel::load_persisted_results(const QString& portfolio_id) {
@@ -562,8 +564,7 @@ void PortfolioInsightsPanel::set_ai_type(const QString& type) {
     QString upper = type.toUpper();
     if (upper == "OPPORTUNITIES")
         upper = "OPPS";
-    ai_run_->setText(ai_cache_.contains(type) ? tr("RE-RUN %1 ANALYSIS").arg(upper)
-                                              : tr("RUN %1 ANALYSIS").arg(upper));
+    ai_run_->setText(ai_cache_.contains(type) ? tr("RE-RUN %1 ANALYSIS").arg(upper) : tr("RUN %1 ANALYSIS").arg(upper));
 
     if (ai_cache_.contains(type)) {
         render_result(ai_content_, ai_cache_.value(type));
@@ -590,9 +591,7 @@ void PortfolioInsightsPanel::reload_agents() {
     const auto cached = services::AgentService::instance().cached_agents();
     if (!cached.isEmpty()) {
         for (const auto& a : cached) {
-            const QString label = a.category.isEmpty()
-                                      ? a.name
-                                      : QString("[%1] %2").arg(a.category, a.name);
+            const QString label = a.category.isEmpty() ? a.name : QString("[%1] %2").arg(a.category, a.name);
             agent_cb_->addItem(label, a.id);
             agent_cb_->setItemData(agent_cb_->count() - 1, a.description, Qt::UserRole + 1);
         }
@@ -600,8 +599,9 @@ void PortfolioInsightsPanel::reload_agents() {
         // Cache cold — show a disabled "discovering" placeholder and kick
         // off discovery. agents_discovered will repopulate us when it lands.
         agent_cb_->addItem(tr("Discovering agents…"), "");
-        agent_cb_->setItemData(0, tr("Loading agents from finagent_core. If this persists, make sure "
-                                     "Python is installed and open Agent Config for more details."),
+        agent_cb_->setItemData(0,
+                               tr("Loading agents from finagent_core. If this persists, make sure "
+                                  "Python is installed and open Agent Config for more details."),
                                Qt::UserRole + 1);
         services::AgentService::instance().discover_agents();
     }
@@ -695,7 +695,8 @@ void PortfolioInsightsPanel::run_agent(bool force) {
         return;
     const QString agent_id = agent_cb_->currentData().toString();
     if (agent_id.isEmpty()) {
-        render_error(agent_content_, tr("No agent selected.\n\nCreate one in the Agent Config screen, then return here."));
+        render_error(agent_content_,
+                     tr("No agent selected.\n\nCreate one in the Agent Config screen, then return here."));
         return;
     }
     if (!force && agent_cache_.contains(agent_id)) {
@@ -726,8 +727,7 @@ void PortfolioInsightsPanel::run_agent(bool force) {
     // Compose the query that finagent_core will run through the configured
     // agent: portfolio context first, then a task prompt. The agent's own
     // system prompt (configured in Agent Config) shapes the style.
-    const QString query = build_portfolio_context() +
-                          "\n\nTask: Analyze this portfolio as " + agent_name +
+    const QString query = build_portfolio_context() + "\n\nTask: Analyze this portfolio as " + agent_name +
                           ". Provide clear sections, concrete recommendations, and quantify exposures "
                           "where data allows.";
 
@@ -783,16 +783,26 @@ void PortfolioInsightsPanel::retranslate_ai_run_label() {
 }
 
 void PortfolioInsightsPanel::retranslateUi() {
-    if (header_title_)         header_title_->setText(tr("PORTFOLIO INSIGHTS"));
-    if (header_close_btn_)     header_close_btn_->setToolTip(tr("Close  (Esc)"));
-    if (tab_ai_btn_)           tab_ai_btn_->setText(tr("AI ANALYSIS"));
-    if (tab_agent_btn_)        tab_agent_btn_->setText(tr("AGENT RUNNER"));
-    if (ai_type_label_)        ai_type_label_->setText(tr("ANALYSIS TYPE"));
-    if (agent_select_label_)   agent_select_label_->setText(tr("SELECT AGENT"));
-    if (ai_full_)              ai_full_->setText(tr("FULL"));
-    if (ai_risk_)              ai_risk_->setText(tr("RISK"));
-    if (ai_rebal_)             ai_rebal_->setText(tr("REBALANCE"));
-    if (ai_opport_)            ai_opport_->setText(tr("OPPS"));
+    if (header_title_)
+        header_title_->setText(tr("PORTFOLIO INSIGHTS"));
+    if (header_close_btn_)
+        header_close_btn_->setToolTip(tr("Close  (Esc)"));
+    if (tab_ai_btn_)
+        tab_ai_btn_->setText(tr("AI ANALYSIS"));
+    if (tab_agent_btn_)
+        tab_agent_btn_->setText(tr("AGENT RUNNER"));
+    if (ai_type_label_)
+        ai_type_label_->setText(tr("ANALYSIS TYPE"));
+    if (agent_select_label_)
+        agent_select_label_->setText(tr("SELECT AGENT"));
+    if (ai_full_)
+        ai_full_->setText(tr("FULL"));
+    if (ai_risk_)
+        ai_risk_->setText(tr("RISK"));
+    if (ai_rebal_)
+        ai_rebal_->setText(tr("REBALANCE"));
+    if (ai_opport_)
+        ai_opport_->setText(tr("OPPS"));
 
     retranslate_ai_run_label();
 
@@ -800,7 +810,7 @@ void PortfolioInsightsPanel::retranslateUi() {
     if (agent_run_) {
         const QString agent_id = agent_cb_ ? agent_cb_->currentData().toString() : QString();
         agent_run_->setText(agent_id.isEmpty() || !agent_cache_.contains(agent_id) ? tr("RUN AGENT")
-                                                                                    : tr("RE-RUN AGENT"));
+                                                                                   : tr("RE-RUN AGENT"));
     }
 
     // Empty hints inside content browsers — only re-render when there's no

@@ -13,7 +13,9 @@ namespace fincept {
 
 class TerminalShell;
 class WindowFrame;
-namespace ui { class PanelHandle; }
+namespace ui {
+class PanelHandle;
+}
 
 /// Context passed to every action handler. Phase-7 (command bar) and Phase-1
 /// (shell) both want to invoke actions; the context carries everything an
@@ -25,10 +27,10 @@ namespace ui { class PanelHandle; }
 /// so surfaces (palette, command bar) grey out the action when the context
 /// is wrong, rather than the handler defending itself with null checks.
 struct CommandContext {
-    TerminalShell* shell = nullptr;          ///< Always set when invoked through the registry.
-    WindowFrame* focused_frame = nullptr;    ///< nullptr if focus is on no frame (e.g. Launchpad).
-    ui::PanelHandle* focused_panel = nullptr;///< nullptr if focused frame has no panels.
-    QVariantMap args;                        ///< Per-action parameter bag, keyed by ParameterSlot::name.
+    TerminalShell* shell = nullptr;           ///< Always set when invoked through the registry.
+    WindowFrame* focused_frame = nullptr;     ///< nullptr if focus is on no frame (e.g. Launchpad).
+    ui::PanelHandle* focused_panel = nullptr; ///< nullptr if focused frame has no panels.
+    QVariantMap args;                         ///< Per-action parameter bag, keyed by ParameterSlot::name.
 };
 
 /// One declared parameter for a parameterised action.
@@ -39,11 +41,11 @@ struct CommandContext {
 /// ("symbol", "layout_name", "panel_id", etc.) and translates into the right
 /// completion list.
 struct ParameterSlot {
-    QString name;                  ///< Used as key in CommandContext::args.
-    QString display;               ///< Prompt shown in guided picker.
-    QString type;                  ///< "string", "int", "symbol", "layout_id", ...
+    QString name;    ///< Used as key in CommandContext::args.
+    QString display; ///< Prompt shown in guided picker.
+    QString type;    ///< "string", "int", "symbol", "layout_id", ...
     bool required = true;
-    QString suggestion_source;     ///< Empty = no suggestions (free-form input).
+    QString suggestion_source; ///< Empty = no suggestions (free-form input).
     QVariant default_value;
 };
 
@@ -77,13 +79,13 @@ using ActionHandler = std::function<Result<void>(const CommandContext&)>;
 ///       .handler = &handle_cycle_forward,
 ///   });
 struct ActionDef {
-    QString id;                        ///< Stable identifier ("window.cycle_forward"). Persistence + bus key.
-    QString display;                   ///< Human-readable label for menus / palette / help.
-    QString category;                  ///< Top-level grouping ("Window", "Panel", "Layout", ...).
-    QStringList aliases;               ///< Extra search/command-bar tokens.
-    QKeySequence default_hotkey;       ///< Empty = no default hotkey. User can rebind.
-    ActionPredicate predicate;         ///< Empty = always available.
-    ActionHandler handler;             ///< Empty = no-op (placeholder).
+    QString id;                  ///< Stable identifier ("window.cycle_forward"). Persistence + bus key.
+    QString display;             ///< Human-readable label for menus / palette / help.
+    QString category;            ///< Top-level grouping ("Window", "Panel", "Layout", ...).
+    QStringList aliases;         ///< Extra search/command-bar tokens.
+    QKeySequence default_hotkey; ///< Empty = no default hotkey. User can rebind.
+    ActionPredicate predicate;   ///< Empty = always available.
+    ActionHandler handler;       ///< Empty = no-op (placeholder).
     QList<ParameterSlot> parameter_slots;
 };
 

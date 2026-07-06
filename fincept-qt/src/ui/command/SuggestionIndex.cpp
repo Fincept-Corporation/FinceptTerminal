@@ -20,7 +20,8 @@ QList<SuggestionIndex::Match> SuggestionIndex::query(const QString& prefix, int 
     const auto action_matches = ActionRegistry::instance().match(prefix, limit);
     int score = 100;
     for (const ActionDef* def : action_matches) {
-        if (!def) continue;
+        if (!def)
+            continue;
         Match m;
         m.source = SourceKind::Action;
         m.id = def->id;
@@ -28,7 +29,8 @@ QList<SuggestionIndex::Match> SuggestionIndex::query(const QString& prefix, int 
         m.category = def->category;
         m.score = score--;
         out.append(m);
-        if (out.size() >= limit) return out;
+        if (out.size() >= limit)
+            return out;
     }
 
     // Layout source — match by name (case-insensitive contains).
@@ -44,7 +46,8 @@ QList<SuggestionIndex::Match> SuggestionIndex::query(const QString& prefix, int 
                 m.category = "Layout";
                 m.score = 50;
                 out.append(m);
-                if (out.size() >= limit) return out;
+                if (out.size() >= limit)
+                    return out;
             }
         }
     }

@@ -99,8 +99,8 @@ QWidget* ProfilesSection::build_content() {
 
         if (name == pm.active()) {
             auto* badge = new QLabel(tr("ACTIVE"));
-            badge->setStyleSheet(QString("color:%1;font-weight:700;font-size:10px;background:transparent;")
-                                     .arg(ui::colors::AMBER()));
+            badge->setStyleSheet(
+                QString("color:%1;font-weight:700;font-size:10px;background:transparent;").arg(ui::colors::AMBER()));
             hl->addWidget(badge);
         } else {
             auto* switch_btn = new QPushButton(tr("Switch"));
@@ -136,7 +136,8 @@ QWidget* ProfilesSection::build_content() {
     create_btn->setStyleSheet(btn_primary_ss());
     connect(create_btn, &QPushButton::clicked, this, [name_input]() {
         const QString name = name_input->text().trimmed().toLower();
-        if (name.isEmpty()) return;
+        if (name.isEmpty())
+            return;
         ProfileManager::instance().create_profile(name);
         const QString exe = QCoreApplication::applicationFilePath();
         QProcess::startDetached(exe, {"--profile", name});

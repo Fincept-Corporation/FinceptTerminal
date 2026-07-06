@@ -21,7 +21,7 @@ namespace fincept::trading {
 // A saved strategy: a named bundle of legs the user can reload into order entry.
 // ----------------------------------------------------------------------------
 struct SavedStrategy {
-    QString id;         // uuid (generated on save if empty)
+    QString id; // uuid (generated on save if empty)
     QString name;
     QString underlying; // e.g. "NIFTY"
     QString notes;

@@ -10,10 +10,8 @@ namespace fincept::algo {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-void IndicatorEngine::extract_arrays(const QVector<OhlcvCandle>& candles,
-                                     QVector<double>& open, QVector<double>& high,
-                                     QVector<double>& low, QVector<double>& close,
-                                     QVector<double>& volume) {
+void IndicatorEngine::extract_arrays(const QVector<OhlcvCandle>& candles, QVector<double>& open, QVector<double>& high,
+                                     QVector<double>& low, QVector<double>& close, QVector<double>& volume) {
     const int n = candles.size();
     open.resize(n);
     high.resize(n);
@@ -32,7 +30,8 @@ void IndicatorEngine::extract_arrays(const QVector<OhlcvCandle>& candles,
 QVector<double> IndicatorEngine::sma_series(const QVector<double>& src, int period) {
     const int n = src.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
-    if (n < period) return out;
+    if (n < period)
+        return out;
     double sum = 0;
     for (int i = 0; i < period; ++i)
         sum += src[i];
@@ -47,7 +46,8 @@ QVector<double> IndicatorEngine::sma_series(const QVector<double>& src, int peri
 QVector<double> IndicatorEngine::ema_series(const QVector<double>& src, int period) {
     const int n = src.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
-    if (n < period) return out;
+    if (n < period)
+        return out;
     double sum = 0;
     for (int i = 0; i < period; ++i)
         sum += src[i];
@@ -58,12 +58,12 @@ QVector<double> IndicatorEngine::ema_series(const QVector<double>& src, int peri
     return out;
 }
 
-QVector<double> IndicatorEngine::true_range_series(const QVector<double>& high,
-                                                    const QVector<double>& low,
-                                                    const QVector<double>& close) {
+QVector<double> IndicatorEngine::true_range_series(const QVector<double>& high, const QVector<double>& low,
+                                                   const QVector<double>& close) {
     const int n = high.size();
     QVector<double> tr(n, 0);
-    if (n > 0) tr[0] = high[0] - low[0];
+    if (n > 0)
+        tr[0] = high[0] - low[0];
     for (int i = 1; i < n; ++i) {
         double hl = high[i] - low[i];
         double hc = std::abs(high[i] - close[i - 1]);
@@ -89,16 +89,13 @@ static IndicatorResult make_error(const QString& msg) {
 
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
-IndicatorResult IndicatorEngine::compute(const QString& name,
-                                         const QVector<OhlcvCandle>& candles,
-                                         const QJsonObject& params,
-                                         const QString& /*field*/) {
+IndicatorResult IndicatorEngine::compute(const QString& name, const QVector<OhlcvCandle>& candles,
+                                         const QJsonObject& params, const QString& /*field*/) {
     if (candles.size() < 2)
         return make_error(QStringLiteral("Insufficient data"));
 
     // Stock attributes
-    if (name == "CLOSE" || name == "OPEN" || name == "HIGH" ||
-        name == "LOW" || name == "VOLUME" || name == "VWAP")
+    if (name == "CLOSE" || name == "OPEN" || name == "HIGH" || name == "LOW" || name == "VOLUME" || name == "VWAP")
         return compute_stock_attr(candles, name);
 
     QVector<double> open, high, low, close, vol;
@@ -107,14 +104,20 @@ IndicatorResult IndicatorEngine::compute(const QString& name,
     int period = params.value("period").toInt(14);
 
     // Moving averages
-    if (name == "SMA")  return compute_sma(close, period);
-    if (name == "EMA")  return compute_ema(close, period);
-    if (name == "WMA")  return compute_wma(close, period);
-    if (name == "DEMA") return compute_dema(close, period);
-    if (name == "TEMA") return compute_tema(close, period);
+    if (name == "SMA")
+        return compute_sma(close, period);
+    if (name == "EMA")
+        return compute_ema(close, period);
+    if (name == "WMA")
+        return compute_wma(close, period);
+    if (name == "DEMA")
+        return compute_dema(close, period);
+    if (name == "TEMA")
+        return compute_tema(close, period);
 
     // Momentum
-    if (name == "RSI") return compute_rsi(close, period);
+    if (name == "RSI")
+        return compute_rsi(close, period);
     if (name == "MACD") {
         int fast = params.value("fast").toInt(12);
         int slow = params.value("slow").toInt(26);
@@ -126,18 +129,24 @@ IndicatorResult IndicatorEngine::compute(const QString& name,
         int d = params.value("d_period").toInt(3);
         return compute_stochastic(high, low, close, k, d);
     }
-    if (name == "CCI")       return compute_cci(high, low, close, period);
-    if (name == "WILLIAMS_R") return compute_williams_r(high, low, close, period);
-    if (name == "MFI")       return compute_mfi(high, low, close, vol, period);
-    if (name == "ROC")       return compute_roc(close, period);
+    if (name == "CCI")
+        return compute_cci(high, low, close, period);
+    if (name == "WILLIAMS_R")
+        return compute_williams_r(high, low, close, period);
+    if (name == "MFI")
+        return compute_mfi(high, low, close, vol, period);
+    if (name == "ROC")
+        return compute_roc(close, period);
 
     // Trend
-    if (name == "ADX") return compute_adx(high, low, close, period);
+    if (name == "ADX")
+        return compute_adx(high, low, close, period);
     if (name == "SUPERTREND") {
         double mult = params.value("multiplier").toDouble(3.0);
         return compute_supertrend(high, low, close, period, mult);
     }
-    if (name == "AROON") return compute_aroon(high, low, period);
+    if (name == "AROON")
+        return compute_aroon(high, low, period);
     if (name == "ICHIMOKU") {
         int tenkan = params.value("tenkan").toInt(9);
         int kijun = params.value("kijun").toInt(26);
@@ -146,7 +155,8 @@ IndicatorResult IndicatorEngine::compute(const QString& name,
     }
 
     // Volatility
-    if (name == "ATR") return compute_atr(high, low, close, period);
+    if (name == "ATR")
+        return compute_atr(high, low, close, period);
     if (name == "BOLLINGER") {
         double sd = params.value("std_dev").toDouble(2.0);
         return compute_bollinger(close, period, sd);
@@ -155,11 +165,14 @@ IndicatorResult IndicatorEngine::compute(const QString& name,
         double mult = params.value("multiplier").toDouble(1.5);
         return compute_keltner(high, low, close, period, mult);
     }
-    if (name == "DONCHIAN") return compute_donchian(high, low, period);
+    if (name == "DONCHIAN")
+        return compute_donchian(high, low, period);
 
     // Volume
-    if (name == "OBV") return compute_obv(close, vol);
-    if (name == "CMF") return compute_cmf(high, low, close, vol, period);
+    if (name == "OBV")
+        return compute_obv(close, vol);
+    if (name == "CMF")
+        return compute_cmf(high, low, close, vol, period);
     if (name == "VOL_WIN_CHG") {
         int window = params.value("window").toInt(10);
         return compute_vol_win_chg(vol, window);
@@ -170,20 +183,29 @@ IndicatorResult IndicatorEngine::compute(const QString& name,
 
 // ── Stock attributes ────────────────────────────────────────────────────────
 
-IndicatorResult IndicatorEngine::compute_stock_attr(const QVector<OhlcvCandle>& candles,
-                                                     const QString& attr) {
+IndicatorResult IndicatorEngine::compute_stock_attr(const QVector<OhlcvCandle>& candles, const QString& attr) {
     const auto& curr = candles.last();
     const auto& prev = candles[candles.size() - 2];
     IndicatorResult r;
     r.valid = true;
 
     double cv = 0, pv = 0;
-    if (attr == "CLOSE")  { cv = curr.close;  pv = prev.close; }
-    else if (attr == "OPEN")   { cv = curr.open;   pv = prev.open; }
-    else if (attr == "HIGH")   { cv = curr.high;   pv = prev.high; }
-    else if (attr == "LOW")    { cv = curr.low;    pv = prev.low; }
-    else if (attr == "VOLUME") { cv = curr.volume; pv = prev.volume; }
-    else if (attr == "VWAP") {
+    if (attr == "CLOSE") {
+        cv = curr.close;
+        pv = prev.close;
+    } else if (attr == "OPEN") {
+        cv = curr.open;
+        pv = prev.open;
+    } else if (attr == "HIGH") {
+        cv = curr.high;
+        pv = prev.high;
+    } else if (attr == "LOW") {
+        cv = curr.low;
+        pv = prev.low;
+    } else if (attr == "VOLUME") {
+        cv = curr.volume;
+        pv = prev.volume;
+    } else if (attr == "VWAP") {
         // Cumulative VWAP over the provided window: Σ(typical·vol)/Σ(vol).
         // (Per-bar (H+L+C)/3 was just typical price, not a VWAP.)
         const int n = candles.size();
@@ -277,8 +299,10 @@ IndicatorResult IndicatorEngine::compute_rsi(const QVector<double>& close, int p
     QVector<double> gains(n, 0), losses(n, 0);
     for (int i = 1; i < n; ++i) {
         double diff = close[i] - close[i - 1];
-        if (diff > 0) gains[i] = diff;
-        else losses[i] = -diff;
+        if (diff > 0)
+            gains[i] = diff;
+        else
+            losses[i] = -diff;
     }
 
     double avg_gain = 0, avg_loss = 0;
@@ -291,7 +315,8 @@ IndicatorResult IndicatorEngine::compute_rsi(const QVector<double>& close, int p
 
     QVector<double> rsi_vals(n, std::numeric_limits<double>::quiet_NaN());
     auto calc_rsi = [](double ag, double al) -> double {
-        if (al < 1e-10) return 100.0;
+        if (al < 1e-10)
+            return 100.0;
         return 100.0 - 100.0 / (1.0 + ag / al);
     };
     rsi_vals[period] = calc_rsi(avg_gain, avg_loss);
@@ -306,8 +331,7 @@ IndicatorResult IndicatorEngine::compute_rsi(const QVector<double>& close, int p
     return make_result(rsi_vals[n - 1], prev);
 }
 
-IndicatorResult IndicatorEngine::compute_macd(const QVector<double>& close,
-                                               int fast, int slow, int signal_period) {
+IndicatorResult IndicatorEngine::compute_macd(const QVector<double>& close, int fast, int slow, int signal_period) {
     auto ema_fast = ema_series(close, fast);
     auto ema_slow = ema_series(close, slow);
     int n = close.size();
@@ -336,10 +360,8 @@ IndicatorResult IndicatorEngine::compute_macd(const QVector<double>& close,
     return r;
 }
 
-IndicatorResult IndicatorEngine::compute_stochastic(const QVector<double>& high,
-                                                     const QVector<double>& low,
-                                                     const QVector<double>& close,
-                                                     int k_period, int d_period) {
+IndicatorResult IndicatorEngine::compute_stochastic(const QVector<double>& high, const QVector<double>& low,
+                                                    const QVector<double>& close, int k_period, int d_period) {
     int n = close.size();
     if (n < k_period)
         return make_error(QStringLiteral("Insufficient data for Stochastic"));
@@ -368,9 +390,8 @@ IndicatorResult IndicatorEngine::compute_stochastic(const QVector<double>& high,
     return r;
 }
 
-IndicatorResult IndicatorEngine::compute_cci(const QVector<double>& high,
-                                              const QVector<double>& low,
-                                              const QVector<double>& close, int period) {
+IndicatorResult IndicatorEngine::compute_cci(const QVector<double>& high, const QVector<double>& low,
+                                             const QVector<double>& close, int period) {
     int n = close.size();
     if (n < period)
         return make_error(QStringLiteral("Insufficient data for CCI"));
@@ -382,7 +403,8 @@ IndicatorResult IndicatorEngine::compute_cci(const QVector<double>& high,
     auto sma = sma_series(tp, period);
 
     auto calc_cci = [&](int idx) -> double {
-        if (std::isnan(sma[idx])) return 0;
+        if (std::isnan(sma[idx]))
+            return 0;
         double mean_dev = 0;
         for (int j = 0; j < period; ++j)
             mean_dev += std::abs(tp[idx - j] - sma[idx]);
@@ -395,9 +417,8 @@ IndicatorResult IndicatorEngine::compute_cci(const QVector<double>& high,
     return make_result(curr, prev);
 }
 
-IndicatorResult IndicatorEngine::compute_williams_r(const QVector<double>& high,
-                                                     const QVector<double>& low,
-                                                     const QVector<double>& close, int period) {
+IndicatorResult IndicatorEngine::compute_williams_r(const QVector<double>& high, const QVector<double>& low,
+                                                    const QVector<double>& close, int period) {
     int n = close.size();
     if (n < period)
         return make_error(QStringLiteral("Insufficient data for Williams %R"));
@@ -417,10 +438,8 @@ IndicatorResult IndicatorEngine::compute_williams_r(const QVector<double>& high,
     return make_result(curr, prev);
 }
 
-IndicatorResult IndicatorEngine::compute_mfi(const QVector<double>& high,
-                                              const QVector<double>& low,
-                                              const QVector<double>& close,
-                                              const QVector<double>& volume, int period) {
+IndicatorResult IndicatorEngine::compute_mfi(const QVector<double>& high, const QVector<double>& low,
+                                             const QVector<double>& close, const QVector<double>& volume, int period) {
     int n = close.size();
     if (n < period + 1)
         return make_error(QStringLiteral("Insufficient data for MFI"));
@@ -433,8 +452,10 @@ IndicatorResult IndicatorEngine::compute_mfi(const QVector<double>& high,
         double pos = 0, neg = 0;
         for (int i = end - period + 1; i <= end; ++i) {
             double mf = tp[i] * volume[i];
-            if (tp[i] > tp[i - 1]) pos += mf;
-            else if (tp[i] < tp[i - 1]) neg += mf;
+            if (tp[i] > tp[i - 1])
+                pos += mf;
+            else if (tp[i] < tp[i - 1])
+                neg += mf;
         }
         return neg > 1e-10 ? 100.0 - 100.0 / (1.0 + pos / neg) : 100.0;
     };
@@ -457,9 +478,8 @@ IndicatorResult IndicatorEngine::compute_roc(const QVector<double>& close, int p
 
 // ── Trend ───────────────────────────────────────────────────────────────────
 
-IndicatorResult IndicatorEngine::compute_adx(const QVector<double>& high,
-                                              const QVector<double>& low,
-                                              const QVector<double>& close, int period) {
+IndicatorResult IndicatorEngine::compute_adx(const QVector<double>& high, const QVector<double>& low,
+                                             const QVector<double>& close, int period) {
     int n = close.size();
     if (n < period * 2 + 1)
         return make_error(QStringLiteral("Insufficient data for ADX"));
@@ -469,8 +489,10 @@ IndicatorResult IndicatorEngine::compute_adx(const QVector<double>& high,
     for (int i = 1; i < n; ++i) {
         double up = high[i] - high[i - 1];
         double down = low[i - 1] - low[i];
-        if (up > down && up > 0) plus_dm[i] = up;
-        if (down > up && down > 0) minus_dm[i] = down;
+        if (up > down && up > 0)
+            plus_dm[i] = up;
+        if (down > up && down > 0)
+            minus_dm[i] = down;
     }
 
     // Wilder's smoothing
@@ -532,10 +554,8 @@ IndicatorResult IndicatorEngine::compute_adx(const QVector<double>& high,
     return r;
 }
 
-IndicatorResult IndicatorEngine::compute_supertrend(const QVector<double>& high,
-                                                     const QVector<double>& low,
-                                                     const QVector<double>& close,
-                                                     int period, double multiplier) {
+IndicatorResult IndicatorEngine::compute_supertrend(const QVector<double>& high, const QVector<double>& low,
+                                                    const QVector<double>& close, int period, double multiplier) {
     int n = close.size();
     auto atr_s = true_range_series(high, low, close);
     auto atr_ema = ema_series(atr_s, period);
@@ -548,19 +568,25 @@ IndicatorResult IndicatorEngine::compute_supertrend(const QVector<double>& high,
 
     int start = period - 1;
     for (int i = start; i < n; ++i) {
-        if (std::isnan(atr_ema[i])) continue;
+        if (std::isnan(atr_ema[i]))
+            continue;
         double hl2 = (high[i] + low[i]) / 2.0;
         upper[i] = hl2 + multiplier * atr_ema[i];
         lower[i] = hl2 - multiplier * atr_ema[i];
     }
 
     for (int i = start + 1; i < n; ++i) {
-        if (close[i - 1] > upper[i - 1]) lower[i] = std::max(lower[i], lower[i - 1]);
-        if (close[i - 1] < lower[i - 1]) upper[i] = std::min(upper[i], upper[i - 1]);
+        if (close[i - 1] > upper[i - 1])
+            lower[i] = std::max(lower[i], lower[i - 1]);
+        if (close[i - 1] < lower[i - 1])
+            upper[i] = std::min(upper[i], upper[i - 1]);
 
-        if (close[i] > upper[i])      dir[i] = 1;
-        else if (close[i] < lower[i]) dir[i] = -1;
-        else                           dir[i] = dir[i - 1];
+        if (close[i] > upper[i])
+            dir[i] = 1;
+        else if (close[i] < lower[i])
+            dir[i] = -1;
+        else
+            dir[i] = dir[i - 1];
 
         st[i] = dir[i] == 1 ? lower[i] : upper[i];
     }
@@ -576,8 +602,7 @@ IndicatorResult IndicatorEngine::compute_supertrend(const QVector<double>& high,
     return r;
 }
 
-IndicatorResult IndicatorEngine::compute_aroon(const QVector<double>& high,
-                                                const QVector<double>& low, int period) {
+IndicatorResult IndicatorEngine::compute_aroon(const QVector<double>& high, const QVector<double>& low, int period) {
     int n = high.size();
     if (n < period + 1)
         return make_error(QStringLiteral("Insufficient data for Aroon"));
@@ -586,8 +611,14 @@ IndicatorResult IndicatorEngine::compute_aroon(const QVector<double>& high,
         int hi_idx = 0, lo_idx = 0;
         double hh = high[end], ll = low[end];
         for (int j = 1; j <= period; ++j) {
-            if (high[end - j] > hh) { hh = high[end - j]; hi_idx = j; }
-            if (low[end - j] < ll) { ll = low[end - j]; lo_idx = j; }
+            if (high[end - j] > hh) {
+                hh = high[end - j];
+                hi_idx = j;
+            }
+            if (low[end - j] < ll) {
+                ll = low[end - j];
+                lo_idx = j;
+            }
         }
         double up = (static_cast<double>(period - hi_idx) / period) * 100.0;
         double down = (static_cast<double>(period - lo_idx) / period) * 100.0;
@@ -606,9 +637,8 @@ IndicatorResult IndicatorEngine::compute_aroon(const QVector<double>& high,
     return r;
 }
 
-IndicatorResult IndicatorEngine::compute_ichimoku(const QVector<double>& high,
-                                                   const QVector<double>& low,
-                                                   int tenkan, int kijun, int senkou) {
+IndicatorResult IndicatorEngine::compute_ichimoku(const QVector<double>& high, const QVector<double>& low, int tenkan,
+                                                  int kijun, int senkou) {
     int n = high.size();
     if (n < senkou)
         return make_error(QStringLiteral("Insufficient data for Ichimoku"));
@@ -648,9 +678,8 @@ IndicatorResult IndicatorEngine::compute_ichimoku(const QVector<double>& high,
 
 // ── Volatility ──────────────────────────────────────────────────────────────
 
-IndicatorResult IndicatorEngine::compute_atr(const QVector<double>& high,
-                                              const QVector<double>& low,
-                                              const QVector<double>& close, int period) {
+IndicatorResult IndicatorEngine::compute_atr(const QVector<double>& high, const QVector<double>& low,
+                                             const QVector<double>& close, int period) {
     auto tr = true_range_series(high, low, close);
     int n = tr.size();
     if (n < period + 1)
@@ -677,8 +706,7 @@ IndicatorResult IndicatorEngine::compute_atr(const QVector<double>& high,
     return make_result(atr, prev_atr);
 }
 
-IndicatorResult IndicatorEngine::compute_bollinger(const QVector<double>& close,
-                                                    int period, double std_dev_mult) {
+IndicatorResult IndicatorEngine::compute_bollinger(const QVector<double>& close, int period, double std_dev_mult) {
     int n = close.size();
     if (n < period)
         return make_error(QStringLiteral("Insufficient data for Bollinger"));
@@ -720,10 +748,8 @@ IndicatorResult IndicatorEngine::compute_bollinger(const QVector<double>& close,
     return r;
 }
 
-IndicatorResult IndicatorEngine::compute_keltner(const QVector<double>& high,
-                                                  const QVector<double>& low,
-                                                  const QVector<double>& close,
-                                                  int period, double multiplier) {
+IndicatorResult IndicatorEngine::compute_keltner(const QVector<double>& high, const QVector<double>& low,
+                                                 const QVector<double>& close, int period, double multiplier) {
     auto ema = ema_series(close, period);
     auto tr = true_range_series(high, low, close);
     auto atr = ema_series(tr, period);
@@ -745,8 +771,7 @@ IndicatorResult IndicatorEngine::compute_keltner(const QVector<double>& high,
     return r;
 }
 
-IndicatorResult IndicatorEngine::compute_donchian(const QVector<double>& high,
-                                                   const QVector<double>& low, int period) {
+IndicatorResult IndicatorEngine::compute_donchian(const QVector<double>& high, const QVector<double>& low, int period) {
     int n = high.size();
     if (n < period)
         return make_error(QStringLiteral("Insufficient data for Donchian"));
@@ -775,17 +800,19 @@ IndicatorResult IndicatorEngine::compute_donchian(const QVector<double>& high,
 
 // ── Volume ──────────────────────────────────────────────────────────────────
 
-IndicatorResult IndicatorEngine::compute_obv(const QVector<double>& close,
-                                              const QVector<double>& volume) {
+IndicatorResult IndicatorEngine::compute_obv(const QVector<double>& close, const QVector<double>& volume) {
     int n = close.size();
     if (n < 2)
         return make_error(QStringLiteral("Insufficient data for OBV"));
 
     double obv = 0, prev_obv = 0;
     for (int i = 1; i < n; ++i) {
-        if (i == n - 1) prev_obv = obv;
-        if (close[i] > close[i - 1]) obv += volume[i];
-        else if (close[i] < close[i - 1]) obv -= volume[i];
+        if (i == n - 1)
+            prev_obv = obv;
+        if (close[i] > close[i - 1])
+            obv += volume[i];
+        else if (close[i] < close[i - 1])
+            obv -= volume[i];
     }
     return make_result(obv, prev_obv);
 }
@@ -795,8 +822,7 @@ IndicatorResult IndicatorEngine::compute_vol_win_chg(const QVector<double>& volu
         return make_error(QStringLiteral("VOL_WIN_CHG: window must be >= 1"));
     const int n = volume.size();
     if (n < 2 * window)
-        return make_error(QStringLiteral("Insufficient data for VOL_WIN_CHG (need %1 bars)")
-                              .arg(2 * window));
+        return make_error(QStringLiteral("Insufficient data for VOL_WIN_CHG (need %1 bars)").arg(2 * window));
     // Compute the windowed %-change at the current bar and at the previous bar so
     // crossing/rising operators (which re-read the prior sample) stay consistent.
     auto win_pct = [&](int last_index) -> double {
@@ -810,15 +836,12 @@ IndicatorResult IndicatorEngine::compute_vol_win_chg(const QVector<double>& volu
         return (sum_last / sum_prev - 1.0) * 100.0;
     };
     double curr = win_pct(n - 1);
-    double prev = (n >= 2 * window + 1) ? win_pct(n - 2)
-                                        : std::numeric_limits<double>::quiet_NaN();
+    double prev = (n >= 2 * window + 1) ? win_pct(n - 2) : std::numeric_limits<double>::quiet_NaN();
     return make_result(curr, prev);
 }
 
-IndicatorResult IndicatorEngine::compute_cmf(const QVector<double>& high,
-                                              const QVector<double>& low,
-                                              const QVector<double>& close,
-                                              const QVector<double>& volume, int period) {
+IndicatorResult IndicatorEngine::compute_cmf(const QVector<double>& high, const QVector<double>& low,
+                                             const QVector<double>& close, const QVector<double>& volume, int period) {
     int n = close.size();
     if (n < period)
         return make_error(QStringLiteral("Insufficient data for CMF"));

@@ -2,9 +2,8 @@
 // Fincept Notebook — Library view: prebuilt finance notebooks as filterable
 // cards (Marketplace-style), wired to NotebookLibraryService + the editor.
 
-#include "screens/code_editor/CodeEditorScreen.h"
-
 #include "core/logging/Logger.h"
+#include "screens/code_editor/CodeEditorScreen.h"
 #include "services/notebooks/NotebookLibraryService.h"
 #include "ui/theme/Theme.h"
 
@@ -108,9 +107,9 @@ QWidget* CodeEditorScreen::build_library_page() {
         rl->addStretch(1);
         root->addWidget(row);
     };
-    make_chip_row({tr("All"), tr("Finance"), tr("Economics"), tr("Trading"), tr("Investing"), tr("Portfolio"),
-                   tr("Quant")},
-                  cat_chips_, true);
+    make_chip_row(
+        {tr("All"), tr("Finance"), tr("Economics"), tr("Trading"), tr("Investing"), tr("Portfolio"), tr("Quant")},
+        cat_chips_, true);
     make_chip_row({tr("All"), tr("Beginner"), tr("Intermediate"), tr("Hard")}, diff_chips_, false);
 
     // Scrollable card grid.
@@ -231,7 +230,8 @@ void CodeEditorScreen::populate_library() {
         auto* open_btn = static_cast<QPushButton*>(card->property("open_btn_ptr").value<void*>());
         if (open_btn) {
             const int catalog_index = i;
-            connect(open_btn, &QPushButton::clicked, this, [this, catalog_index]() { on_open_library_entry(catalog_index); });
+            connect(open_btn, &QPushButton::clicked, this,
+                    [this, catalog_index]() { on_open_library_entry(catalog_index); });
         }
         cards_layout_->addWidget(card, grid_index / cols, grid_index % cols);
         ++grid_index;
@@ -246,23 +246,19 @@ void CodeEditorScreen::populate_library() {
     }
 
     if (shown == 0) {
-        auto* empty = new QLabel(catalog.isEmpty()
-                                     ? tr("Notebook library not found. Rebuild the app to bundle the notebooks.")
-                                     : tr("No notebooks match your filters."),
-                                 cards_container_);
+        auto* empty =
+            new QLabel(catalog.isEmpty() ? tr("Notebook library not found. Rebuild the app to bundle the notebooks.")
+                                         : tr("No notebooks match your filters."),
+                       cards_container_);
         empty->setObjectName("nbCardSummary");
-        empty->setStyleSheet(QString("font-family:%1; font-size:%2px; padding:24px;")
-                                 .arg(fonts::DATA_FAMILY)
-                                 .arg(fonts::SMALL));
+        empty->setStyleSheet(
+            QString("font-family:%1; font-size:%2px; padding:24px;").arg(fonts::DATA_FAMILY).arg(fonts::SMALL));
         cards_layout_->addWidget(empty, 0, 0);
     }
 
     if (lib_count_lbl_)
-        lib_count_lbl_->setText(tr("%1 notebooks  ·  %2 beginner · %3 intermediate · %4 hard")
-                                    .arg(shown)
-                                    .arg(beg)
-                                    .arg(inter)
-                                    .arg(hard));
+        lib_count_lbl_->setText(
+            tr("%1 notebooks  ·  %2 beginner · %3 intermediate · %4 hard").arg(shown).arg(beg).arg(inter).arg(hard));
 }
 
 void CodeEditorScreen::relayout_library_cards() {

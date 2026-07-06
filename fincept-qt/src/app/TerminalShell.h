@@ -84,7 +84,7 @@ class TerminalShell : public QObject {
     /// without per-singleton patches.
     WindowRegistry& window_registry();
     ActionRegistry& action_registry();
-    PanelRegistry&  panel_registry();
+    PanelRegistry& panel_registry();
     ProfileManager& profile_manager();
 
     /// Workspace persistence + recovery. Exposed as pointers so they stay

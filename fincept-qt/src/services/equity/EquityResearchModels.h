@@ -218,16 +218,16 @@ struct ArticleSentiment {
     QString publisher;
     QString published_date;
     QString url;
-    QString label; // "BULLISH" | "BEARISH" | "NEUTRAL"
+    QString label;      // "BULLISH" | "BEARISH" | "NEUTRAL"
     double score = 0.0; // -1..1
 };
 
 // One contributing signal in the blend (news / price / adanos).
 struct SentimentSource {
-    QString id;    // "news" | "price" | "adanos"
-    QString label; // human-readable
-    double score = 0.0; // -1..1
-    double weight = 0.0; // normalized blend weight actually applied (0..1)
+    QString id;              // "news" | "price" | "adanos"
+    QString label;           // human-readable
+    double score = 0.0;      // -1..1
+    double weight = 0.0;     // normalized blend weight actually applied (0..1)
     double confidence = 0.0; // 0..1
     bool available = false;
 };
@@ -237,7 +237,7 @@ struct EquitySentimentSnapshot {
     bool available = false;
     QString status; // "ok" | "loading" | "unavailable"
     QString message;
-    QString engine; // "vader" | "lexicon"
+    QString engine;             // "vader" | "lexicon"
     double overall_score = 0.0; // -1..1 blended
     QString label;              // "BULLISH" | "BEARISH" | "NEUTRAL"
     double confidence = 0.0;    // 0..1

@@ -26,8 +26,7 @@ class AlgoDeployDialog : public QDialog {
     void set_symbol(const QString& symbol);
 
     // F&O context for option/future deployments (set by the StrategyBuilder before exec()).
-    void set_fno_context(const QString& instrument_type, const QString& underlying,
-                         const QString& expiry_rule);
+    void set_fno_context(const QString& instrument_type, const QString& underlying, const QString& expiry_rule);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -50,29 +49,29 @@ class AlgoDeployDialog : public QDialog {
     QString fno_underlying_;
     QString fno_expiry_rule_;
 
-    QLineEdit*      symbol_edit_        = nullptr;
-    QComboBox*      mode_combo_         = nullptr;
-    QComboBox*      side_combo_         = nullptr;
-    QComboBox*      account_combo_      = nullptr;
-    QComboBox*      exchange_combo_     = nullptr;
-    QComboBox*      product_type_combo_ = nullptr;
-    QComboBox*      timeframe_combo_    = nullptr;
-    QDoubleSpinBox* quantity_spin_      = nullptr;
-    QDoubleSpinBox* max_order_spin_     = nullptr;
-    QDoubleSpinBox* max_loss_spin_      = nullptr;
+    QLineEdit* symbol_edit_ = nullptr;
+    QComboBox* mode_combo_ = nullptr;
+    QComboBox* side_combo_ = nullptr;
+    QComboBox* account_combo_ = nullptr;
+    QComboBox* exchange_combo_ = nullptr;
+    QComboBox* product_type_combo_ = nullptr;
+    QComboBox* timeframe_combo_ = nullptr;
+    QDoubleSpinBox* quantity_spin_ = nullptr;
+    QDoubleSpinBox* max_order_spin_ = nullptr;
+    QDoubleSpinBox* max_loss_spin_ = nullptr;
 
-    QLabel*   title_label_        = nullptr;
-    QLabel*   symbol_label_       = nullptr;
-    QLabel*   mode_label_         = nullptr;
-    QLabel*   side_label_         = nullptr;
-    QLabel*   account_label_      = nullptr;
-    QLabel*   exchange_label_     = nullptr;
-    QLabel*   product_type_label_ = nullptr;
-    QLabel*   timeframe_label_    = nullptr;
-    QLabel*   quantity_label_     = nullptr;
-    QLabel*   max_order_label_    = nullptr;
-    QLabel*   max_loss_label_     = nullptr;
-    QDialogButtonBox* buttons_    = nullptr;
+    QLabel* title_label_ = nullptr;
+    QLabel* symbol_label_ = nullptr;
+    QLabel* mode_label_ = nullptr;
+    QLabel* side_label_ = nullptr;
+    QLabel* account_label_ = nullptr;
+    QLabel* exchange_label_ = nullptr;
+    QLabel* product_type_label_ = nullptr;
+    QLabel* timeframe_label_ = nullptr;
+    QLabel* quantity_label_ = nullptr;
+    QLabel* max_order_label_ = nullptr;
+    QLabel* max_loss_label_ = nullptr;
+    QDialogButtonBox* buttons_ = nullptr;
 
     fincept::services::algo::AlgoDeployment result_;
 };

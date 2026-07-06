@@ -18,7 +18,8 @@ namespace pr = fincept::services::prediction;
 static constexpr int kPingIntervalMs = 20000;
 
 static double kalshi_fp_to_double(const QJsonValue& v) {
-    if (v.isString()) return v.toString().toDouble();
+    if (v.isString())
+        return v.toString().toDouble();
     return v.toDouble();
 }
 
@@ -51,24 +52,29 @@ void KalshiWsClient::set_credentials(const KalshiCredentials& creds) {
     }
 }
 
-bool KalshiWsClient::has_credentials() const { return creds_.is_valid(); }
+bool KalshiWsClient::has_credentials() const {
+    return creds_.is_valid();
+}
 
 // ── Subscribe ───────────────────────────────────────────────────────────────
 
 void KalshiWsClient::subscribe(const QStringList& market_tickers) {
-    for (const auto& t : market_tickers) subscribed_tickers_.insert(t);
+    for (const auto& t : market_tickers)
+        subscribed_tickers_.insert(t);
     if (!creds_.is_valid()) {
-        LOG_INFO("KalshiWS",
-                 "Subscribe deferred — no credentials configured (Phase 7 will enable streaming)");
+        LOG_INFO("KalshiWS", "Subscribe deferred — no credentials configured (Phase 7 will enable streaming)");
         return;
     }
     ensure_connected();
-    if (connected_) send_subscribe(market_tickers);
+    if (connected_)
+        send_subscribe(market_tickers);
 }
 
 void KalshiWsClient::unsubscribe(const QStringList& market_tickers) {
-    for (const auto& t : market_tickers) subscribed_tickers_.remove(t);
-    if (subscribed_tickers_.isEmpty()) disconnect();
+    for (const auto& t : market_tickers)
+        subscribed_tickers_.remove(t);
+    if (subscribed_tickers_.isEmpty())
+        disconnect();
 }
 
 void KalshiWsClient::unsubscribe_all() {
@@ -87,11 +93,12 @@ void KalshiWsClient::ensure_connected() {
     // ws_->connect_to() call live. The connect needs KALSHI-ACCESS-KEY /
     // -SIGNATURE / -TIMESTAMP headers which fincept::WebSocketClient
     // doesn't expose — adding that is also Phase 7 work.
-    if (ws_->is_connected()) return;
-    if (!creds_.is_valid()) return;
-    LOG_DEBUG("KalshiWS",
-              QStringLiteral("Ready to connect to ") + (creds_.use_demo ? kDemoWs : kProdWs) +
-                  QStringLiteral(" (connect deferred to Phase 7)"));
+    if (ws_->is_connected())
+        return;
+    if (!creds_.is_valid())
+        return;
+    LOG_DEBUG("KalshiWS", QStringLiteral("Ready to connect to ") + (creds_.use_demo ? kDemoWs : kProdWs) +
+                              QStringLiteral(" (connect deferred to Phase 7)"));
 }
 
 void KalshiWsClient::send_subscribe(const QStringList& tickers) {
@@ -109,7 +116,8 @@ void KalshiWsClient::send_subscribe(const QStringList& tickers) {
     channels.append("market_lifecycle_v2");
     params.insert("channels", channels);
     QJsonArray tarr;
-    for (const auto& t : tickers) tarr.append(t);
+    for (const auto& t : tickers)
+        tarr.append(t);
     params.insert("market_tickers", tarr);
 
     QJsonObject msg;
@@ -122,7 +130,8 @@ void KalshiWsClient::send_subscribe(const QStringList& tickers) {
 }
 
 void KalshiWsClient::send_ping() {
-    if (!connected_) return;
+    if (!connected_)
+        return;
     QJsonObject ping;
     ping.insert("id", next_msg_id_++);
     ping.insert("cmd", "ping");
@@ -153,57 +162,60 @@ void KalshiWsClient::on_error(const QString& err) {
 }
 
 void KalshiWsClient::on_message(const QString& msg) {
-    if (msg.isEmpty()) return;
+    if (msg.isEmpty())
+        return;
     QJsonParseError perr;
     auto doc = QJsonDocument::fromJson(msg.toUtf8(), &perr);
-    if (doc.isNull()) return;
+    if (doc.isNull())
+        return;
     const auto obj = doc.object();
     const QString type = obj.value("type").toString();
     const auto payload = obj.value("msg").toObject();
     const QString ticker = payload.value("market_ticker").toString();
 
     if (type == QStringLiteral("ticker")) {
-        if (ticker.isEmpty()) return;
+        if (ticker.isEmpty())
+            return;
         const double yes_price = kalshi_fp_to_double(payload.value("yes_bid_dollars"));
-        if (yes_price > 0) publish_price(ticker + QStringLiteral(":yes"), yes_price);
+        if (yes_price > 0)
+            publish_price(ticker + QStringLiteral(":yes"), yes_price);
         const double no_price = kalshi_fp_to_double(payload.value("no_bid_dollars"));
-        if (no_price > 0) publish_price(ticker + QStringLiteral(":no"), no_price);
+        if (no_price > 0)
+            publish_price(ticker + QStringLiteral(":no"), no_price);
         return;
     }
 
     if (type == QStringLiteral("trade")) {
-        if (ticker.isEmpty()) return;
+        if (ticker.isEmpty())
+            return;
         pr::PredictionTrade t;
         t.asset_id = ticker + QStringLiteral(":yes");
         const QString ts_side = payload.value("taker_side").toString().toLower();
-        t.side = (ts_side == QStringLiteral("no")) ? QStringLiteral("SELL")
-                                                   : QStringLiteral("BUY");
+        t.side = (ts_side == QStringLiteral("no")) ? QStringLiteral("SELL") : QStringLiteral("BUY");
         t.price = kalshi_fp_to_double(payload.value("yes_price_dollars"));
         t.size = kalshi_fp_to_double(payload.value("count_fp"));
         const QString iso = payload.value("created_time").toString();
-        t.ts_ms = iso.isEmpty()
-            ? qint64(payload.value("ts").toVariant().toLongLong()) * 1000
-            : QDateTime::fromString(iso, Qt::ISODate).toMSecsSinceEpoch();
+        t.ts_ms = iso.isEmpty() ? qint64(payload.value("ts").toVariant().toLongLong()) * 1000
+                                : QDateTime::fromString(iso, Qt::ISODate).toMSecsSinceEpoch();
         emit trade_received(t);
-        fincept::datahub::DataHub::instance().publish(
-            QStringLiteral("prediction:kalshi:trade:") + ticker,
-            QVariant::fromValue(t));
+        fincept::datahub::DataHub::instance().publish(QStringLiteral("prediction:kalshi:trade:") + ticker,
+                                                      QVariant::fromValue(t));
         return;
     }
 
-    if (type == QStringLiteral("market_lifecycle_v2") ||
-        type == QStringLiteral("market_lifecycle")) {
-        if (ticker.isEmpty()) return;
+    if (type == QStringLiteral("market_lifecycle_v2") || type == QStringLiteral("market_lifecycle")) {
+        if (ticker.isEmpty())
+            return;
         const QString status = payload.value("status").toString();
         emit market_lifecycle_changed(ticker, status);
         return;
     }
 
-    if (type != QStringLiteral("orderbook_snapshot") &&
-        type != QStringLiteral("orderbook_delta")) {
+    if (type != QStringLiteral("orderbook_snapshot") && type != QStringLiteral("orderbook_delta")) {
         return;
     }
-    if (ticker.isEmpty()) return;
+    if (ticker.isEmpty())
+        return;
 
     // Snapshot / delta path — callers should rebuild their local book from
     // the snapshot then apply deltas. Phase 4 ships only the transport;
@@ -244,7 +256,8 @@ void KalshiWsClient::refresh(const QStringList& /*topics*/) {
 }
 
 void KalshiWsClient::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 
@@ -257,8 +270,7 @@ void KalshiWsClient::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("prediction:kalshi:orderbook:*"), push_only);
 
     hub_registered_ = true;
-    LOG_INFO("KalshiWS",
-             "Registered with DataHub (prediction:kalshi:price:*, prediction:kalshi:orderbook:*)");
+    LOG_INFO("KalshiWS", "Registered with DataHub (prediction:kalshi:price:*, prediction:kalshi:orderbook:*)");
 }
 
 } // namespace fincept::services::prediction::kalshi_ns

@@ -5,9 +5,8 @@
 //
 // Part of the partial-class split of LlmConfigSection.cpp.
 
-#include "screens/settings/LlmConfigSection.h"
-
 #include "core/logging/Logger.h"
+#include "screens/settings/LlmConfigSection.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
@@ -16,7 +15,9 @@
 #include "ui/theme/ThemeManager.h"
 
 // Unity-build hygiene: see LlmConfigSection_Providers.cpp for the rationale.
-namespace { constexpr const char* TAG_PROFILES = "LlmConfigSection"; }
+namespace {
+constexpr const char* TAG_PROFILES = "LlmConfigSection";
+}
 
 #include <QFormLayout>
 #include <QFrame>
@@ -61,7 +62,8 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
     vl->setSpacing(6);
 
     profile_list_title_ = new QLabel(tr("PROFILES"));
-    profile_list_title_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) + ";font-weight:700;letter-spacing:1px;");
+    profile_list_title_->setStyleSheet("color:" + QString(ui::colors::TEXT_SECONDARY()) +
+                                       ";font-weight:700;letter-spacing:1px;");
     vl->addWidget(profile_list_title_);
 
     profile_list_hint_ = new QLabel(tr("A profile = named LLM config you can assign to any agent or team."));
@@ -85,11 +87,11 @@ QWidget* LlmConfigSection::build_profile_list_panel() {
     auto* btn_row = new QHBoxLayout;
     profile_add_btn_ = new QPushButton(tr("+ New"));
     profile_add_btn_->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) + ";color:" +
-                           QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
-                           ";"
-                           "border-radius:3px;padding:5px 10px;font-weight:600;}"
-                           "QPushButton:hover{background:" +
-                           QString(ui::colors::BG_RAISED()) + ";}");
+                                    QString(ui::colors::AMBER()) + ";border:1px solid " + QString(ui::colors::AMBER()) +
+                                    ";"
+                                    "border-radius:3px;padding:5px 10px;font-weight:600;}"
+                                    "QPushButton:hover{background:" +
+                                    QString(ui::colors::BG_RAISED()) + ";}");
     connect(profile_add_btn_, &QPushButton::clicked, this, [this]() {
         editing_profile_id_.clear();
         clear_profile_form();
@@ -158,9 +160,8 @@ QWidget* LlmConfigSection::build_profile_form_panel() {
         profile_provider_combo_->addItem(provider_display_name(id), id);
     profile_provider_combo_->setStyleSheet(
         QString("QComboBox{%1}QComboBox::drop-down{border:none;}").arg(field_style()));
-    connect(profile_provider_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
-        on_profile_provider_changed(profile_provider_combo_->currentData().toString());
-    });
+    connect(profile_provider_combo_, &QComboBox::currentIndexChanged, this,
+            [this](int) { on_profile_provider_changed(profile_provider_combo_->currentData().toString()); });
     vl->addWidget(profile_provider_combo_);
 
     profile_model_field_lbl_ = lbl(tr("MODEL"));
@@ -363,22 +364,22 @@ void LlmConfigSection::on_profile_provider_changed(const QString& provider) {
         profile_api_key_edit_->setPlaceholderText(tr("Not required — local provider"));
 
         auto conn = std::make_shared<QMetaObject::Connection>();
-        *conn = connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::models_fetched, this,
-                        [this, conn](const QString& p, const QStringList& models, const QString& err) {
-                            if (p.toLower() != "ollama")
-                                return;
-                            disconnect(*conn);
-                            if (!err.isEmpty()) {
-                                show_profile_status(
-                                    tr("Cannot reach Ollama — is `ollama serve` running locally?"), true);
-                                return;
-                            }
-                            const QString current = profile_model_combo_->currentText();
-                            profile_model_combo_->clear();
-                            profile_model_combo_->addItems(models);
-                            if (!current.isEmpty())
-                                profile_model_combo_->setCurrentText(current);
-                        });
+        *conn =
+            connect(&ai_chat::LlmService::instance(), &ai_chat::LlmService::models_fetched, this,
+                    [this, conn](const QString& p, const QStringList& models, const QString& err) {
+                        if (p.toLower() != "ollama")
+                            return;
+                        disconnect(*conn);
+                        if (!err.isEmpty()) {
+                            show_profile_status(tr("Cannot reach Ollama — is `ollama serve` running locally?"), true);
+                            return;
+                        }
+                        const QString current = profile_model_combo_->currentText();
+                        profile_model_combo_->clear();
+                        profile_model_combo_->addItems(models);
+                        if (!current.isEmpty())
+                            profile_model_combo_->setCurrentText(current);
+                    });
         ai_chat::LlmService::instance().fetch_models("ollama", {}, profile_base_url_edit_->text().trimmed());
         return;
     }
@@ -448,7 +449,7 @@ void LlmConfigSection::on_save_profile() {
     show_profile_status(tr("Profile saved"), false);
     load_profiles();
     emit config_changed();
-    LOG_INFO(TAG_PROFILES,QString("LLM profile saved: %1 (%2 / %3)").arg(name, provider, model));
+    LOG_INFO(TAG_PROFILES, QString("LLM profile saved: %1 (%2 / %3)").arg(name, provider, model));
 }
 
 void LlmConfigSection::on_delete_profile() {
@@ -459,7 +460,7 @@ void LlmConfigSection::on_delete_profile() {
         clear_profile_form();
         load_profiles();
         emit config_changed();
-        LOG_INFO(TAG_PROFILES,"LLM profile deleted: " + editing_profile_id_);
+        LOG_INFO(TAG_PROFILES, "LLM profile deleted: " + editing_profile_id_);
     } else {
         show_profile_status(tr("Delete failed: ") + QString::fromStdString(r.error()), true);
     }
@@ -473,7 +474,7 @@ void LlmConfigSection::on_set_default_profile() {
         profile_default_btn_->setEnabled(false);
         load_profiles();
         emit config_changed();
-        LOG_INFO(TAG_PROFILES,"LLM default profile set: " + editing_profile_id_);
+        LOG_INFO(TAG_PROFILES, "LLM default profile set: " + editing_profile_id_);
     } else {
         show_profile_status(tr("Failed: ") + QString::fromStdString(r.error()), true);
     }

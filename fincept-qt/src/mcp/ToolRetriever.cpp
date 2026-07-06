@@ -40,16 +40,14 @@ void ToolRetriever::invalidate() {
 // they appear across many tools.
 static const QSet<QString>& stop_word_set() {
     static const QSet<QString> kStop = {
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-        "has", "he", "in", "is", "it", "its", "of", "on", "or", "that",
-        "the", "to", "was", "were", "will", "with", "this", "these", "those",
-        "i", "me", "my", "we", "us", "you", "your", "they", "them",
-        "but", "if", "so", "do", "does", "did", "have", "had", "having",
-        "can", "could", "should", "would", "may", "might", "must",
-        "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
-        "all", "any", "both", "each", "few", "more", "most", "other", "some",
-        "such", "no", "not", "only", "own", "same", "than", "too", "very",
-        "just", "also", "now", "then", "here", "there",
+        "a",     "an",   "and",    "are",   "as",    "at",     "be",    "by",   "for",   "from",  "has",
+        "he",    "in",   "is",     "it",    "its",   "of",     "on",    "or",   "that",  "the",   "to",
+        "was",   "were", "will",   "with",  "this",  "these",  "those", "i",    "me",    "my",    "we",
+        "us",    "you",  "your",   "they",  "them",  "but",    "if",    "so",   "do",    "does",  "did",
+        "have",  "had",  "having", "can",   "could", "should", "would", "may",  "might", "must",  "what",
+        "which", "who",  "whom",   "whose", "where", "when",   "why",   "how",  "all",   "any",   "both",
+        "each",  "few",  "more",   "most",  "other", "some",   "such",  "no",   "not",   "only",  "own",
+        "same",  "than", "too",    "very",  "just",  "also",   "now",   "then", "here",  "there",
     };
     return kStop;
 }
@@ -67,39 +65,39 @@ static const QSet<QString>& stop_word_set() {
 static const QHash<QString, QStringList>& query_synonyms() {
     static const QHash<QString, QStringList> kSyn = {
         // Markets / equity
-        {"price",    {"quote"}},
-        {"prices",   {"quote", "historical"}},
-        {"ticker",   {"symbol"}},
-        {"company",  {"symbol", "equity"}},
-        {"chart",    {"ohlc"}},
+        {"price", {"quote"}},
+        {"prices", {"quote", "historical"}},
+        {"ticker", {"symbol"}},
+        {"company", {"symbol", "equity"}},
+        {"chart", {"ohlc"}},
         // Trading
-        {"buy",      {"order", "trade", "place"}},
-        {"sell",     {"order", "trade", "place"}},
-        {"order",    {"trade"}},
-        {"trade",    {"order"}},
+        {"buy", {"order", "trade", "place"}},
+        {"sell", {"order", "trade", "place"}},
+        {"order", {"trade"}},
+        {"trade", {"order"}},
         // Navigation / UI
-        {"tab",      {"navigate", "screen"}},
-        {"screen",   {"navigate", "tab"}},
-        {"page",     {"navigate", "tab"}},
-        {"open",     {"navigate"}},
-        {"switch",   {"navigate"}},
-        {"window",   {"panel"}},
+        {"tab", {"navigate", "screen"}},
+        {"screen", {"navigate", "tab"}},
+        {"page", {"navigate", "tab"}},
+        {"open", {"navigate"}},
+        {"switch", {"navigate"}},
+        {"window", {"panel"}},
         // Portfolio
-        {"pnl",      {"profit", "portfolio"}},
-        {"profit",   {"portfolio", "pnl"}},
+        {"pnl", {"profit", "portfolio"}},
+        {"profit", {"portfolio", "pnl"}},
         {"holdings", {"portfolio", "holding"}},
         // Filings
-        {"filings",  {"edgar"}},
-        {"filing",   {"edgar"}},
-        {"sec",      {"edgar"}},
+        {"filings", {"edgar"}},
+        {"filing", {"edgar"}},
+        {"sec", {"edgar"}},
         {"earnings", {"financials"}},
         // Strategy / analytics
         {"strategy", {"backtest"}},
-        {"sharpe",   {"risk", "metrics"}},
-        {"var",      {"risk"}},
+        {"sharpe", {"risk", "metrics"}},
+        {"var", {"risk"}},
         // Notes
-        {"memo",     {"note"}},
-        {"journal",  {"note"}},
+        {"memo", {"note"}},
+        {"journal", {"note"}},
     };
     return kSyn;
 }
@@ -111,20 +109,16 @@ static const QHash<QString, QStringList>& query_synonyms() {
 // watchlist".
 static const QSet<QString>& read_verbs() {
     static const QSet<QString> kRead = {
-        "show", "list", "view", "find", "get", "fetch", "lookup",
-        "describe", "search", "display", "see", "read", "inspect",
-        "explore", "what", "which", "tell",
+        "show",    "list", "view", "find",    "get",     "fetch", "lookup", "describe", "search",
+        "display", "see",  "read", "inspect", "explore", "what",  "which",  "tell",
     };
     return kRead;
 }
 static const QSet<QString>& mutate_verbs() {
     static const QSet<QString> kMutate = {
-        "delete", "remove", "drop", "clear",
-        "add", "create", "insert", "append", "import",
-        "place", "submit", "send", "post",
-        "set", "update", "modify", "edit", "rename",
-        "cancel", "stop", "kill",
-        "save", "store", "export", "write",
+        "delete", "remove", "drop", "clear", "add",   "create", "insert", "append", "import",
+        "place",  "submit", "send", "post",  "set",   "update", "modify", "edit",   "rename",
+        "cancel", "stop",   "kill", "save",  "store", "export", "write",
     };
     return kMutate;
 }
@@ -136,12 +130,9 @@ static const QSet<QString>& mutate_verbs() {
 // for a specialist, every tool in it is demoted at scoring time.
 static const QHash<QString, QSet<QString>>& specialist_categories() {
     static const QHash<QString, QSet<QString>> kSpec = {
-        {"quant-lab",         {"quant", "factor", "backtest", "alpha", "ic",
-                               "rl", "ml", "ml-ops", "alphalens", "qlib"}},
-        {"surface-analytics", {"surface", "vol", "volatility", "skew",
-                               "databento", "iv"}},
-        {"alt-investments",   {"alt", "junk", "convertible", "preferred",
-                               "private", "venture", "hedge", "yield"}},
+        {"quant-lab", {"quant", "factor", "backtest", "alpha", "ic", "rl", "ml", "ml-ops", "alphalens", "qlib"}},
+        {"surface-analytics", {"surface", "vol", "volatility", "skew", "databento", "iv"}},
+        {"alt-investments", {"alt", "junk", "convertible", "preferred", "private", "venture", "hedge", "yield"}},
     };
     return kSpec;
 }
@@ -216,9 +207,11 @@ QString ToolRetriever::stem(const QString& word) {
         w.chop(6);
         w.append(QLatin1String("tion"));
     } else if (w.endsWith(QLatin1String("ly"))) {
-        if (w.length() > 4) w.chop(2);
+        if (w.length() > 4)
+            w.chop(2);
     } else if (w.endsWith(QLatin1String("ment"))) {
-        if (w.length() > 5) w.chop(4);
+        if (w.length() > 5)
+            w.chop(4);
     }
 
     // 4. Strip trailing silent 'e' to unify tenses (e.g. "create"/"creating" -> "creat", "price"/"pricing" -> "pric")
@@ -232,8 +225,10 @@ QString ToolRetriever::stem(const QString& word) {
 int ToolRetriever::levenshtein_distance(const QString& s1, const QString& s2) {
     const int len1 = s1.length();
     const int len2 = s2.length();
-    if (len1 == 0) return len2;
-    if (len2 == 0) return len1;
+    if (len1 == 0)
+        return len2;
+    if (len2 == 0)
+        return len1;
 
     std::vector<int> col(len2 + 1);
     std::vector<int> prev_col(len2 + 1);
@@ -246,7 +241,7 @@ int ToolRetriever::levenshtein_distance(const QString& s1, const QString& s2) {
         col[0] = i + 1;
         for (int j = 0; j < len2; ++j) {
             const int cost = (s1[i] == s2[j]) ? 0 : 1;
-            col[j + 1] = std::min({ col[j] + 1, prev_col[j + 1] + 1, prev_col[j] + cost });
+            col[j + 1] = std::min({col[j] + 1, prev_col[j + 1] + 1, prev_col[j] + cost});
         }
         col.swap(prev_col);
     }
@@ -255,16 +250,15 @@ int ToolRetriever::levenshtein_distance(const QString& s1, const QString& s2) {
 
 QString ToolRetriever::classify_category(const QStringList& query_stems) {
     static const QHash<QString, QSet<QString>> kCategorySignals = {
-        {"watchlist",      {"watchlist", "watch", "track"}},
-        {"paper-trading",  {"trad", "buy", "sell", "order", "portfolio", "pnl", "hold", "position", "broker"}},
-        {"news",           {"new", "feed", "rss", "headlin", "articl", "file", "edgar"}},
+        {"watchlist", {"watchlist", "watch", "track"}},
+        {"paper-trading", {"trad", "buy", "sell", "order", "portfolio", "pnl", "hold", "position", "broker"}},
+        {"news", {"new", "feed", "rss", "headlin", "articl", "file", "edgar"}},
         {"report-builder", {"report", "builder", "generat", "document", "templat", "pdf"}},
-        {"quant-lab",      {"quant", "factor", "backtest", "alpha", "risk", "metric", "sharp", "var"}},
-        {"markets",        {"market", "quot", "pric", "stock", "equity", "ticker", "chart", "ohlc"}},
-        {"notes",          {"not", "memo", "mind", "journal", "writ"}},
-        {"file_manager",   {"fil", "folder", "directory", "path", "open", "read", "writ"}},
-        {"settings",       {"sett", "config", "setup", "credential", "api", "key"}}
-    };
+        {"quant-lab", {"quant", "factor", "backtest", "alpha", "risk", "metric", "sharp", "var"}},
+        {"markets", {"market", "quot", "pric", "stock", "equity", "ticker", "chart", "ohlc"}},
+        {"notes", {"not", "memo", "mind", "journal", "writ"}},
+        {"file_manager", {"fil", "folder", "directory", "path", "open", "read", "writ"}},
+        {"settings", {"sett", "config", "setup", "credential", "api", "key"}}};
 
     QHash<QString, int> category_scores;
     for (const auto& stem : query_stems) {
@@ -389,8 +383,7 @@ void ToolRetriever::rebuild_index_locked() {
 
 // ── Search ──────────────────────────────────────────────────────────────
 
-std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
-                                              const QString& category_filter) {
+std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k, const QString& category_filter) {
     const QString q = query.trimmed();
     if (q.isEmpty())
         return {};
@@ -422,8 +415,10 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
     bool has_read_verb = false;
     bool has_mutate_verb = false;
     for (const auto& tok : q_tokens) {
-        if (read_verbs().contains(tok))   has_read_verb = true;
-        if (mutate_verbs().contains(tok)) has_mutate_verb = true;
+        if (read_verbs().contains(tok))
+            has_read_verb = true;
+        if (mutate_verbs().contains(tok))
+            has_mutate_verb = true;
     }
     const bool penalize_destructive = has_read_verb && !has_mutate_verb;
 
@@ -443,11 +438,13 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
     QSet<QString> demoted_categories;
     {
         const QSet<QString> q_set(q_tokens.begin(), q_tokens.end());
-        for (auto it = specialist_categories().constBegin();
-             it != specialist_categories().constEnd(); ++it) {
+        for (auto it = specialist_categories().constBegin(); it != specialist_categories().constEnd(); ++it) {
             bool has_cue = false;
             for (const auto& cue : it.value()) {
-                if (q_set.contains(cue)) { has_cue = true; break; }
+                if (q_set.contains(cue)) {
+                    has_cue = true;
+                    break;
+                }
             }
             if (!has_cue)
                 demoted_categories.insert(it.key());
@@ -528,7 +525,10 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
 
     const double N = static_cast<double>(docs_.size());
 
-    struct Scored { int doc_idx; double score; };
+    struct Scored {
+        int doc_idx;
+        double score;
+    };
     std::vector<Scored> scored;
     scored.reserve(candidate_doc_indices.size());
 
@@ -577,7 +577,7 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
             // Check if at least 2 words appear contiguously
             if (q_tokens.size() >= 2) {
                 for (int j = 0; j < q_tokens.size() - 1; ++j) {
-                    QString bigram = q_tokens[j] + " " + q_tokens[j+1];
+                    QString bigram = q_tokens[j] + " " + q_tokens[j + 1];
                     if (d.raw_text.contains(bigram)) {
                         phrase_bonus = std::max(phrase_bonus, 1.5);
                     }
@@ -608,8 +608,7 @@ std::vector<ToolMatch> ToolRetriever::search(const QString& query, int top_k,
                           [](const Scored& a, const Scored& b) { return a.score > b.score; });
         scored.resize(top_k);
     } else {
-        std::sort(scored.begin(), scored.end(),
-                  [](const Scored& a, const Scored& b) { return a.score > b.score; });
+        std::sort(scored.begin(), scored.end(), [](const Scored& a, const Scored& b) { return a.score > b.score; });
     }
 
     // ── Build result ───────────────────────────────────────────────────

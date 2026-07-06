@@ -27,9 +27,8 @@ const QStringList& ExchangeSessionManager::supported_exchange_ids() {
     // present in ccxt.pro with WS support. Use canonical ids (e.g. "gate",
     // not the deprecated "gateio" alias).
     static const QStringList ids = {
-        "kraken", "hyperliquid", "binance", "coinbase", "okx",
-        "bybit",  "kucoin",      "bitget",  "gate",     "mexc",
-        "htx",    "cryptocom",   "bingx",   "bitfinex",
+        "kraken", "hyperliquid", "binance", "coinbase", "okx",       "bybit", "kucoin",
+        "bitget", "gate",        "mexc",    "htx",      "cryptocom", "bingx", "bitfinex",
     };
     return ids;
 }
@@ -96,8 +95,8 @@ SessionPublisher ExchangeSessionManager::build_publisher() {
     p.publish_candle = [](const QString& exchange, const QString& pair, const QString& interval, const Candle& c) {
         if (!hub_supported_exchange(exchange) || pair.isEmpty())
             return;
-        const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":ohlc:") + pair +
-                              QLatin1Char(':') + interval;
+        const QString topic =
+            QStringLiteral("ws:") + exchange + QStringLiteral(":ohlc:") + pair + QLatin1Char(':') + interval;
         fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(c));
     };
     return p;
@@ -146,8 +145,7 @@ void ExchangeSessionManager::ensure_registered_with_hub() {
     }
 
     hub_registered_ = true;
-    LOG_INFO(kMgrTag, QString("Registered with DataHub (%1 exchanges)")
-                          .arg(supported_exchange_ids().size()));
+    LOG_INFO(kMgrTag, QString("Registered with DataHub (%1 exchanges)").arg(supported_exchange_ids().size()));
 }
 
 } // namespace fincept::trading

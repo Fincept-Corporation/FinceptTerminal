@@ -21,8 +21,8 @@ class CryptoCredentials : public QDialog {
     QString wallet_address() const;
     QString private_key() const;
 
-    void set_values(const QString& key, const QString& secret, const QString& password,
-                    const QString& wallet_address, const QString& private_key);
+    void set_values(const QString& key, const QString& secret, const QString& password, const QString& wallet_address,
+                    const QString& private_key);
 
   signals:
     void credentials_saved(const QString& api_key, const QString& api_secret, const QString& password,

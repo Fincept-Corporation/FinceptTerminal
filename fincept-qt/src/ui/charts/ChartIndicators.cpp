@@ -41,9 +41,7 @@ QVector<double> ema(const QVector<double>& values, int period) {
     return out;
 }
 
-QVector<double> vwap(const QVector<double>& highs,
-                     const QVector<double>& lows,
-                     const QVector<double>& closes,
+QVector<double> vwap(const QVector<double>& highs, const QVector<double>& lows, const QVector<double>& closes,
                      const QVector<double>& volumes) {
     const int n = closes.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
@@ -62,11 +60,8 @@ QVector<double> vwap(const QVector<double>& highs,
     return out;
 }
 
-QVector<double> vwap_std_dev(const QVector<double>& highs,
-                             const QVector<double>& lows,
-                             const QVector<double>& closes,
-                             const QVector<double>& volumes,
-                             const QVector<double>& vwap_values) {
+QVector<double> vwap_std_dev(const QVector<double>& highs, const QVector<double>& lows, const QVector<double>& closes,
+                             const QVector<double>& volumes, const QVector<double>& vwap_values) {
     const int n = closes.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
     if (n == 0)
@@ -108,42 +103,42 @@ BollingerResult bollinger(const QVector<double>& closes, int period, double num_
 PivotResult pivot_points(double high, double low, double close, PivotType type) {
     PivotResult r;
     switch (type) {
-    case PivotType::Standard:
-        r.pp = (high + low + close) / 3.0;
-        r.r1 = 2 * r.pp - low;
-        r.s1 = 2 * r.pp - high;
-        r.r2 = r.pp + (high - low);
-        r.s2 = r.pp - (high - low);
-        r.r3 = high + 2 * (r.pp - low);
-        r.s3 = low - 2 * (high - r.pp);
-        break;
-    case PivotType::Camarilla:
-        r.pp = (high + low + close) / 3.0;
-        r.r1 = close + (high - low) * 1.1 / 12;
-        r.s1 = close - (high - low) * 1.1 / 12;
-        r.r2 = close + (high - low) * 1.1 / 6;
-        r.s2 = close - (high - low) * 1.1 / 6;
-        r.r3 = close + (high - low) * 1.1 / 4;
-        r.s3 = close - (high - low) * 1.1 / 4;
-        break;
-    case PivotType::Woodie:
-        r.pp = (high + low + 2 * close) / 4.0;
-        r.r1 = 2 * r.pp - low;
-        r.s1 = 2 * r.pp - high;
-        r.r2 = r.pp + (high - low);
-        r.s2 = r.pp - (high - low);
-        r.r3 = high + 2 * (r.pp - low);
-        r.s3 = low - 2 * (high - r.pp);
-        break;
-    case PivotType::Fibonacci:
-        r.pp = (high + low + close) / 3.0;
-        r.r1 = r.pp + 0.382 * (high - low);
-        r.s1 = r.pp - 0.382 * (high - low);
-        r.r2 = r.pp + 0.618 * (high - low);
-        r.s2 = r.pp - 0.618 * (high - low);
-        r.r3 = r.pp + 1.000 * (high - low);
-        r.s3 = r.pp - 1.000 * (high - low);
-        break;
+        case PivotType::Standard:
+            r.pp = (high + low + close) / 3.0;
+            r.r1 = 2 * r.pp - low;
+            r.s1 = 2 * r.pp - high;
+            r.r2 = r.pp + (high - low);
+            r.s2 = r.pp - (high - low);
+            r.r3 = high + 2 * (r.pp - low);
+            r.s3 = low - 2 * (high - r.pp);
+            break;
+        case PivotType::Camarilla:
+            r.pp = (high + low + close) / 3.0;
+            r.r1 = close + (high - low) * 1.1 / 12;
+            r.s1 = close - (high - low) * 1.1 / 12;
+            r.r2 = close + (high - low) * 1.1 / 6;
+            r.s2 = close - (high - low) * 1.1 / 6;
+            r.r3 = close + (high - low) * 1.1 / 4;
+            r.s3 = close - (high - low) * 1.1 / 4;
+            break;
+        case PivotType::Woodie:
+            r.pp = (high + low + 2 * close) / 4.0;
+            r.r1 = 2 * r.pp - low;
+            r.s1 = 2 * r.pp - high;
+            r.r2 = r.pp + (high - low);
+            r.s2 = r.pp - (high - low);
+            r.r3 = high + 2 * (r.pp - low);
+            r.s3 = low - 2 * (high - r.pp);
+            break;
+        case PivotType::Fibonacci:
+            r.pp = (high + low + close) / 3.0;
+            r.r1 = r.pp + 0.382 * (high - low);
+            r.s1 = r.pp - 0.382 * (high - low);
+            r.r2 = r.pp + 0.618 * (high - low);
+            r.s2 = r.pp - 0.618 * (high - low);
+            r.r3 = r.pp + 1.000 * (high - low);
+            r.s3 = r.pp - 1.000 * (high - low);
+            break;
     }
     return r;
 }

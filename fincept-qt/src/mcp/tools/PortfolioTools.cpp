@@ -112,7 +112,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "remove_holding";
         t.description = "Remove a holding from the portfolio by ID.";
         t.category = "portfolio";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"id", QJsonObject{{"type", "integer"}, {"description", "Holding ID"}}}};
         t.input_schema.required = {"id"};
@@ -229,7 +229,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "delete_portfolio";
         t.description = "Delete a portfolio and all its assets and transactions.";
         t.category = "portfolio";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}}};
         t.input_schema.required = {"portfolio_id"};
@@ -322,7 +322,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "remove_portfolio_asset";
         t.description = "Remove an asset from a named portfolio by symbol.";
         t.category = "portfolio";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
                         {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol to remove"}}}};
@@ -428,7 +428,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "delete_transaction";
         t.description = "Delete a transaction by ID.";
         t.category = "portfolio";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"transaction_id", QJsonObject{{"type", "string"}, {"description", "Transaction ID"}}}};
         t.input_schema.required = {"transaction_id"};

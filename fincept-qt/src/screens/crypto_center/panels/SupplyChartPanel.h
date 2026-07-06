@@ -52,8 +52,8 @@ class SupplyChartPanel : public QWidget {
     void update_demo_chip(bool is_mock);
 
     // Head
-    QLabel* title_ = nullptr;    // "SUPPLY CHART · 12 MONTHS"
-    QLabel* legend_ = nullptr;   // "● TOTAL  ● CIRCULATING  ● BURNED"
+    QLabel* title_ = nullptr;  // "SUPPLY CHART · 12 MONTHS"
+    QLabel* legend_ = nullptr; // "● TOTAL  ● CIRCULATING  ● BURNED"
     QLabel* status_pill_ = nullptr;
 
     // Chart

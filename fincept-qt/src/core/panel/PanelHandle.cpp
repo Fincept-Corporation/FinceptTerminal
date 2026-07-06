@@ -4,10 +4,7 @@
 
 namespace fincept {
 
-PanelHandle::PanelHandle(PanelInstanceId instance_id,
-                         QString type_id,
-                         QString title,
-                         WindowId frame_id,
+PanelHandle::PanelHandle(PanelInstanceId instance_id, QString type_id, QString title, WindowId frame_id,
                          QObject* parent)
     : QObject(parent),
       instance_id_(instance_id),
@@ -16,25 +13,29 @@ PanelHandle::PanelHandle(PanelInstanceId instance_id,
       frame_id_(frame_id) {}
 
 void PanelHandle::set_title(const QString& t) {
-    if (title_ == t) return;
+    if (title_ == t)
+        return;
     title_ = t;
     emit title_changed(t);
 }
 
 void PanelHandle::set_frame_id(WindowId id) {
-    if (frame_id_ == id) return;
+    if (frame_id_ == id)
+        return;
     frame_id_ = id;
     emit frame_id_changed(id);
 }
 
 void PanelHandle::set_link_group(const QString& g) {
-    if (link_group_ == g) return;
+    if (link_group_ == g)
+        return;
     link_group_ = g;
     emit link_group_changed(g);
 }
 
 void PanelHandle::set_state(State s) {
-    if (state_ == s) return;
+    if (state_ == s)
+        return;
     state_ = s;
     emit state_changed(s);
 }

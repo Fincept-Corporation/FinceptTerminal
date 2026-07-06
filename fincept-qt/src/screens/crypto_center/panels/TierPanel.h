@@ -45,10 +45,8 @@ class TierPanel : public QWidget {
     void on_wallet_disconnected();
     void on_tier_update(const QVariant& v);
 
-    void render_state(fincept::wallet::TierStatus::Tier current,
-                      const QString& weight_ui_str,
-                      const QString& next_threshold_ui_str,
-                      bool is_mock);
+    void render_state(fincept::wallet::TierStatus::Tier current, const QString& weight_ui_str,
+                      const QString& next_threshold_ui_str, bool is_mock);
 
     struct TierRow {
         QFrame* host = nullptr;
@@ -59,7 +57,7 @@ class TierPanel : public QWidget {
     };
 
     // Head
-    QLabel* title_ = nullptr;          // "TIER"
+    QLabel* title_ = nullptr; // "TIER"
     QLabel* current_label_ = nullptr;
 
     // Body

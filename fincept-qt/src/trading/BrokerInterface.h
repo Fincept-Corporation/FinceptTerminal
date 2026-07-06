@@ -376,9 +376,8 @@ class IBroker {
             return {false, std::nullopt, orders_resp.error};
         for (const auto& o : orders_resp.data.value_or(QVector<BrokerOrderInfo>{})) {
             auto s = o.status.toLower();
-            if (s == "open" || s == "pending" || s == "new" || s == "trigger pending"
-                || s == "trigger_pending" || s == "ordered" || s == "transit"
-                || s == "accepted" || s == "partially_filled" || s == "working") {
+            if (s == "open" || s == "pending" || s == "new" || s == "trigger pending" || s == "trigger_pending" ||
+                s == "ordered" || s == "transit" || s == "accepted" || s == "partially_filled" || s == "working") {
                 result.total_attempted++;
                 auto r = cancel_order(creds, o.order_id);
                 if (r.success)
@@ -397,7 +396,8 @@ class IBroker {
         if (!pos_resp.success)
             return {false, std::nullopt, pos_resp.error};
         for (const auto& p : pos_resp.data.value_or(QVector<BrokerPosition>{})) {
-            if (p.quantity == 0) continue;
+            if (p.quantity == 0)
+                continue;
             result.total_positions++;
             UnifiedOrder counter;
             counter.symbol = p.symbol;
@@ -405,6 +405,10 @@ class IBroker {
             counter.side = (p.quantity > 0) ? OrderSide::Sell : OrderSide::Buy;
             counter.quantity = std::abs(p.quantity);
             counter.order_type = OrderType::Market;
+            // Preserve the position's product (CNC/NRML/MTF) — otherwise the close
+            // goes out as the default Intraday(MIS) and opens a NEW intraday position
+            // instead of closing the delivery/carry-forward holding.
+            counter.product_type = product_from_broker_str(p.product_type);
             auto r = place_order(creds, counter);
             if (r.success)
                 result.closed_symbols.append(p.symbol);
@@ -415,23 +419,23 @@ class IBroker {
     }
 
     /// Close a single position by symbol/exchange/product.
-    virtual ApiResponse<OrderPlaceResponse> close_position(
-        const BrokerCredentials& creds,
-        const QString& symbol, const QString& exchange, const QString& product_type)
-    {
+    virtual ApiResponse<OrderPlaceResponse> close_position(const BrokerCredentials& creds, const QString& symbol,
+                                                           const QString& exchange, const QString& product_type) {
         auto pos_resp = get_positions(creds);
         if (!pos_resp.success)
             return {false, std::nullopt, pos_resp.error};
         for (const auto& p : pos_resp.data.value_or(QVector<BrokerPosition>{})) {
-            if (p.symbol == symbol && p.exchange == exchange
-                && (product_type.isEmpty() || p.product_type == product_type)
-                && p.quantity != 0) {
+            if (p.symbol == symbol && p.exchange == exchange &&
+                (product_type.isEmpty() || p.product_type == product_type) && p.quantity != 0) {
                 UnifiedOrder counter;
                 counter.symbol = p.symbol;
                 counter.exchange = p.exchange;
                 counter.side = (p.quantity > 0) ? OrderSide::Sell : OrderSide::Buy;
                 counter.quantity = std::abs(p.quantity);
                 counter.order_type = OrderType::Market;
+                // Preserve the position's product (CNC/NRML/MTF) — else the close
+                // goes out as default Intraday(MIS) and opens a new intraday position.
+                counter.product_type = product_from_broker_str(p.product_type);
                 auto opr = place_order(creds, counter);
                 if (!opr.success)
                     return {false, std::nullopt, opr.error};
@@ -442,10 +446,8 @@ class IBroker {
     }
 
     /// Batch quotes for multiple symbols. Default: sequential fallback.
-    virtual ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
-        const BrokerCredentials& creds,
-        const QVector<QPair<QString, QString>>& symbols)
-    {
+    virtual ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const BrokerCredentials& creds,
+                                                               const QVector<QPair<QString, QString>>& symbols) {
         QVector<BrokerQuote> results;
         for (const auto& [sym, exch] : symbols) {
             auto r = get_quotes(creds, {sym});
@@ -456,22 +458,23 @@ class IBroker {
     }
 
     /// Market depth (Level 2 bid/ask). Default: not supported.
-    virtual ApiResponse<MarketDepth> get_market_depth(
-        const BrokerCredentials& creds,
-        const QString& symbol, const QString& exchange)
-    {
-        Q_UNUSED(creds); Q_UNUSED(symbol); Q_UNUSED(exchange);
+    virtual ApiResponse<MarketDepth> get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                                      const QString& exchange) {
+        Q_UNUSED(creds);
+        Q_UNUSED(symbol);
+        Q_UNUSED(exchange);
         return {false, std::nullopt, "Market depth not supported for this broker"};
     }
 
     /// Option chain for an underlying. Default: not supported.
-    virtual ApiResponse<QVector<OptionChainEntry>> get_option_chain(
-        const BrokerCredentials& creds,
-        const QString& underlying, const QString& exchange,
-        const QString& expiry, int strike_count = 0)
-    {
-        Q_UNUSED(creds); Q_UNUSED(underlying); Q_UNUSED(exchange);
-        Q_UNUSED(expiry); Q_UNUSED(strike_count);
+    virtual ApiResponse<QVector<OptionChainEntry>> get_option_chain(const BrokerCredentials& creds,
+                                                                    const QString& underlying, const QString& exchange,
+                                                                    const QString& expiry, int strike_count = 0) {
+        Q_UNUSED(creds);
+        Q_UNUSED(underlying);
+        Q_UNUSED(exchange);
+        Q_UNUSED(expiry);
+        Q_UNUSED(strike_count);
         return {false, std::nullopt, "Option chain not supported for this broker"};
     }
 

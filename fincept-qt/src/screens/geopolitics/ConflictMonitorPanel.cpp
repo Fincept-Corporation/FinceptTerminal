@@ -83,8 +83,8 @@ void ConflictMonitorPanel::build_ui() {
                 "QComboBox QAbstractItemView { background:%1; color:%2; border:1px solid %3;"
                 "selection-background-color:%5; selection-color:%4; outline:0;"
                 "font-family:%6; font-size:%7px; }")
-            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
-                 ui::colors::AMBER(), ui::colors::BG_HOVER())
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER(),
+                 ui::colors::BG_HOVER())
             .arg(ui::fonts::DATA_FAMILY)
             .arg(ui::fonts::SMALL));
     mt_hl->addWidget(map_type_combo_);
@@ -100,7 +100,7 @@ void ConflictMonitorPanel::build_ui() {
     // Default geopolitics to the DARK political basemap (index 1) — preserves
     // the screen's prior look; the selector lets the user pick satellite, etc.
     map_type_combo_->addItems(fincept::ui::WorldMapWidget::basemap_labels());
-    map_type_combo_->setCurrentIndex(1);  // 1 = DARK in basemap_labels()
+    map_type_combo_->setCurrentIndex(1); // 1 = DARK in basemap_labels()
     map_widget_->set_basemap(1);
     connect(map_type_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
         if (map_widget_)
@@ -147,19 +147,20 @@ void ConflictMonitorPanel::build_ui() {
     events_table_->setColumnHidden(6, true);
     events_table_->verticalHeader()->setDefaultSectionSize(26);
 
-    events_table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
-                                         "font-family:%4; font-size:%5px; border:none; }"
-                                         "QTableWidget::item { padding:3px 8px; }"
-                                         "QTableWidget::item:selected { background:rgba(255,0,0,0.15); }"
-                                         "QHeaderView::section { background:%6; color:%7; font-weight:700;"
-                                         "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
-                                         "QTableWidget::item:alternate { background:%8; }")
-                                     .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
-                                     .arg(ui::fonts::DATA_FAMILY)
-                                     .arg(ui::fonts::SMALL)
-                                     .arg(ui::colors::BG_RAISED())
-                                     .arg(ui::colors::TEXT_SECONDARY())
-                                     .arg(ui::colors::ROW_ALT()));
+    events_table_->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"
+                "font-family:%4; font-size:%5px; border:none; }"
+                "QTableWidget::item { padding:3px 8px; }"
+                "QTableWidget::item:selected { background:rgba(255,0,0,0.15); }"
+                "QHeaderView::section { background:%6; color:%7; font-weight:700;"
+                "padding:5px 8px; border:1px solid %3; font-family:%4; font-size:%5px; }"
+                "QTableWidget::item:alternate { background:%8; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
+            .arg(ui::fonts::DATA_FAMILY)
+            .arg(ui::fonts::SMALL)
+            .arg(ui::colors::BG_RAISED())
+            .arg(ui::colors::TEXT_SECONDARY())
+            .arg(ui::colors::ROW_ALT()));
 
     connect(events_table_, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) {
         if (row < 0 || !detail_panel_)
@@ -198,8 +199,7 @@ void ConflictMonitorPanel::build_ui() {
 
         const auto cat_color = category_color(raw_cat);
         const QString cat_hex = cat_color.name();
-        const QString cat_rgb =
-            QString("%1,%2,%3").arg(cat_color.red()).arg(cat_color.green()).arg(cat_color.blue());
+        const QString cat_rgb = QString("%1,%2,%3").arg(cat_color.red()).arg(cat_color.green()).arg(cat_color.blue());
         detail_category_->setStyleSheet(QString("color:%1; background:rgba(%2,0.12);"
                                                 "border:1px solid rgba(%2,0.45);"
                                                 "padding:3px 8px; font-size:%3px; font-weight:700;"
@@ -209,7 +209,8 @@ void ConflictMonitorPanel::build_ui() {
                                             .arg(ui::fonts::TINY)
                                             .arg(ui::fonts::DATA_FAMILY));
 
-        if (empty_state_) empty_state_->setVisible(false);
+        if (empty_state_)
+            empty_state_->setVisible(false);
         detail_panel_->setVisible(true);
     });
     left_splitter->addWidget(events_table_);
@@ -286,8 +287,8 @@ QWidget* ConflictMonitorPanel::make_divider(QWidget* parent) {
 
 QWidget* ConflictMonitorPanel::make_stat_tile(const QString& label, QLabel** value_out, QWidget* parent) {
     auto* tile = new QWidget(parent);
-    tile->setStyleSheet(QString("background:%1; border:1px solid %2;")
-                            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    tile->setStyleSheet(
+        QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* tl = new QVBoxLayout(tile);
     tl->setContentsMargins(8, 6, 8, 6);
     tl->setSpacing(2);
@@ -334,11 +335,14 @@ QWidget* ConflictMonitorPanel::build_overview_section(QWidget* parent) {
     // Capture each tile's caption label (last direct-child QLabel) for retranslate.
     {
         auto labels = tile_events->findChildren<QLabel*>(QString(), Qt::FindDirectChildrenOnly);
-        if (!labels.isEmpty()) tile_events_lbl_ = labels.last();
+        if (!labels.isEmpty())
+            tile_events_lbl_ = labels.last();
         labels = tile_mapped->findChildren<QLabel*>(QString(), Qt::FindDirectChildrenOnly);
-        if (!labels.isEmpty()) tile_mapped_lbl_ = labels.last();
+        if (!labels.isEmpty())
+            tile_mapped_lbl_ = labels.last();
         labels = tile_nations->findChildren<QLabel*>(QString(), Qt::FindDirectChildrenOnly);
-        if (!labels.isEmpty()) tile_nations_lbl_ = labels.last();
+        if (!labels.isEmpty())
+            tile_nations_lbl_ = labels.last();
     }
     tl->addWidget(tile_events, 1);
     tl->addWidget(tile_mapped, 1);
@@ -487,9 +491,9 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
     };
     FieldDef fields[] = {
         {tr("COUNTRY"), &detail_country_, &field_country_lbl_, 0, 0, 1},
-        {tr("CITY"),    &detail_city_,    &field_city_lbl_,    0, 1, 1},
-        {tr("DATE"),    &detail_date_,    &field_date_lbl_,    1, 0, 1},
-        {tr("SOURCE"),  &detail_source_,  &field_source_lbl_,  1, 1, 1},
+        {tr("CITY"), &detail_city_, &field_city_lbl_, 0, 1, 1},
+        {tr("DATE"), &detail_date_, &field_date_lbl_, 1, 0, 1},
+        {tr("SOURCE"), &detail_source_, &field_source_lbl_, 1, 1, 1},
     };
 
     for (const auto& f : fields) {
@@ -502,7 +506,8 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
         auto* l = new QLabel(f.label, cell);
         l->setStyleSheet(field_label_style);
         cl->addWidget(l);
-        if (f.label_target) *f.label_target = l;
+        if (f.label_target)
+            *f.label_target = l;
 
         *f.target = new QLabel(QStringLiteral("—"), cell);
         (*f.target)->setStyleSheet(value_style);
@@ -520,14 +525,14 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
     {
         QColor neg(ui::colors::NEGATIVE());
         detail_open_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2;"
-                                                 "font-family:%3; font-size:%4px; font-weight:700;"
-                                                 "border:none; padding:7px 12px; letter-spacing:1px; }"
-                                                 "QPushButton:hover { background:%5; }")
-                                             .arg(ui::colors::NEGATIVE())
-                                             .arg(ui::colors::BG_BASE())
-                                             .arg(ui::fonts::DATA_FAMILY())
-                                             .arg(ui::fonts::SMALL)
-                                             .arg(neg.darker(120).name()));
+                                                "font-family:%3; font-size:%4px; font-weight:700;"
+                                                "border:none; padding:7px 12px; letter-spacing:1px; }"
+                                                "QPushButton:hover { background:%5; }")
+                                            .arg(ui::colors::NEGATIVE())
+                                            .arg(ui::colors::BG_BASE())
+                                            .arg(ui::fonts::DATA_FAMILY())
+                                            .arg(ui::fonts::SMALL)
+                                            .arg(neg.darker(120).name()));
     }
     connect(detail_open_btn_, &QPushButton::clicked, this, [this]() {
         if (!current_url_.isEmpty())
@@ -580,15 +585,20 @@ void ConflictMonitorPanel::set_events(const QVector<NewsEvent>& events) {
     update_map(events);
 
     // Overview tiles
-    if (stat_total_) stat_total_->setText(QString::number(events.size()));
+    if (stat_total_)
+        stat_total_->setText(QString::number(events.size()));
     int mapped = 0;
     QSet<QString> countries;
     for (const auto& ev : events) {
-        if (ev.has_coords) ++mapped;
-        if (!ev.country.isEmpty()) countries.insert(ev.country);
+        if (ev.has_coords)
+            ++mapped;
+        if (!ev.country.isEmpty())
+            countries.insert(ev.country);
     }
-    if (stat_mapped_) stat_mapped_->setText(QString::number(mapped));
-    if (stat_countries_) stat_countries_->setText(QString::number(countries.size()));
+    if (stat_mapped_)
+        stat_mapped_->setText(QString::number(mapped));
+    if (stat_countries_)
+        stat_countries_->setText(QString::number(countries.size()));
 }
 
 void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
@@ -620,8 +630,7 @@ void ConflictMonitorPanel::update_map(const QVector<NewsEvent>& events) {
 
         // pin.id = event index — lets the click handler scroll/select the
         // matching row in the table (UserRole+1 stamp on column 0).
-        pins.append({lat, lng,
-                     QString("%1 — %2, %3").arg(ev.event_category, ev.city, ev.country),
+        pins.append({lat, lng, QString("%1 — %2, %3").arg(ev.event_category, ev.city, ev.country),
                      category_color(ev.event_category), 5.0, i});
     }
 
@@ -699,10 +708,10 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
 
         auto* cnt = new QLabel(QString::number(count), top);
         cnt->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                    "background:transparent; border:none;")
-                                .arg(ui::colors::TEXT_PRIMARY())
-                                .arg(ui::fonts::SMALL)
-                                .arg(ui::fonts::DATA_FAMILY()));
+                                   "background:transparent; border:none;")
+                               .arg(ui::colors::TEXT_PRIMARY())
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY()));
         tl->addWidget(cnt, 0, Qt::AlignRight);
         rvl->addWidget(top);
 
@@ -726,16 +735,19 @@ void ConflictMonitorPanel::update_stats(const QVector<NewsEvent>& events) {
 }
 
 void ConflictMonitorPanel::update_hotspots(const QVector<NewsEvent>& events) {
-    if (!hotspots_layout_) return;
+    if (!hotspots_layout_)
+        return;
     while (hotspots_layout_->count() > 0) {
         auto* item = hotspots_layout_->takeAt(0);
-        if (item->widget()) item->widget()->deleteLater();
+        if (item->widget())
+            item->widget()->deleteLater();
         delete item;
     }
 
     QHash<QString, int> counts;
     for (const auto& ev : events) {
-        if (ev.country.isEmpty()) continue;
+        if (ev.country.isEmpty())
+            continue;
         counts[ev.country]++;
     }
 
@@ -793,10 +805,10 @@ void ConflictMonitorPanel::update_hotspots(const QVector<NewsEvent>& events) {
 
         auto* cnt = new QLabel(QString::number(count), top);
         cnt->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
-                                    "background:transparent; border:none;")
-                                .arg(ui::colors::NEGATIVE())
-                                .arg(ui::fonts::SMALL)
-                                .arg(ui::fonts::DATA_FAMILY()));
+                                   "background:transparent; border:none;")
+                               .arg(ui::colors::NEGATIVE())
+                               .arg(ui::fonts::SMALL)
+                               .arg(ui::fonts::DATA_FAMILY()));
         tl->addWidget(cnt, 0, Qt::AlignRight);
         rvl->addWidget(top);
 
@@ -831,26 +843,38 @@ void ConflictMonitorPanel::retranslateUi() {
             {tr("Category"), tr("Country"), tr("City"), tr("Title"), tr("Date"), tr("Lat"), tr("Lng")});
 
     // Section headers
-    if (hdr_overview_)       hdr_overview_->setText(tr("OVERVIEW"));
-    if (hdr_top_categories_) hdr_top_categories_->setText(tr("TOP CATEGORIES"));
-    if (hdr_hotspots_)       hdr_hotspots_->setText(tr("HOTSPOTS"));
-    if (hdr_event_details_)  hdr_event_details_->setText(tr("EVENT DETAILS"));
+    if (hdr_overview_)
+        hdr_overview_->setText(tr("OVERVIEW"));
+    if (hdr_top_categories_)
+        hdr_top_categories_->setText(tr("TOP CATEGORIES"));
+    if (hdr_hotspots_)
+        hdr_hotspots_->setText(tr("HOTSPOTS"));
+    if (hdr_event_details_)
+        hdr_event_details_->setText(tr("EVENT DETAILS"));
 
     // Overview tile captions
-    if (tile_events_lbl_)  tile_events_lbl_->setText(tr("EVENTS"));
-    if (tile_mapped_lbl_)  tile_mapped_lbl_->setText(tr("MAPPED"));
-    if (tile_nations_lbl_) tile_nations_lbl_->setText(tr("NATIONS"));
+    if (tile_events_lbl_)
+        tile_events_lbl_->setText(tr("EVENTS"));
+    if (tile_mapped_lbl_)
+        tile_mapped_lbl_->setText(tr("MAPPED"));
+    if (tile_nations_lbl_)
+        tile_nations_lbl_->setText(tr("NATIONS"));
 
     // Detail field captions
-    if (field_country_lbl_) field_country_lbl_->setText(tr("COUNTRY"));
-    if (field_city_lbl_)    field_city_lbl_->setText(tr("CITY"));
-    if (field_date_lbl_)    field_date_lbl_->setText(tr("DATE"));
-    if (field_source_lbl_)  field_source_lbl_->setText(tr("SOURCE"));
+    if (field_country_lbl_)
+        field_country_lbl_->setText(tr("COUNTRY"));
+    if (field_city_lbl_)
+        field_city_lbl_->setText(tr("CITY"));
+    if (field_date_lbl_)
+        field_date_lbl_->setText(tr("DATE"));
+    if (field_source_lbl_)
+        field_source_lbl_->setText(tr("SOURCE"));
 
     // Static placeholders / actions
     if (empty_state_)
         empty_state_->setText(tr("⌖  Select an event from the map or table\n    to inspect details here."));
-    if (detail_open_btn_) detail_open_btn_->setText(tr("OPEN SOURCE  ↗"));
+    if (detail_open_btn_)
+        detail_open_btn_->setText(tr("OPEN SOURCE  ↗"));
 }
 
 } // namespace fincept::screens

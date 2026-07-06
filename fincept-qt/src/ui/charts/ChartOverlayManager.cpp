@@ -1,4 +1,5 @@
 #include "ui/charts/ChartOverlayManager.h"
+
 #include "ui/charts/HorizontalLineLayer.h"
 
 #include <QChart>
@@ -121,7 +122,8 @@ bool ChartOverlayManager::overlay_price_range(double& out_min, double& out_max) 
         if (!layer->visible() || layer->type() != LayerType::HorizontalLine)
             continue;
         const auto* hl = qobject_cast<const HorizontalLineLayer*>(layer);
-        if (!hl) continue;
+        if (!hl)
+            continue;
         for (const auto& level : hl->levels()) {
             if (level.price > 0) {
                 out_min = std::min(out_min, level.price);

@@ -41,7 +41,7 @@ static bool v023_column_exists(QSqlDatabase& db, const QString& table, const QSt
 }
 
 static Result<void> v023_add_column_if_missing(QSqlDatabase& db, const QString& table, const QString& column,
-                                                const QString& decl) {
+                                               const QString& decl) {
     if (v023_column_exists(db, table, column))
         return Result<void>::ok();
     const auto stmt = QString("ALTER TABLE %1 ADD COLUMN %2 %3").arg(table, column, decl).toUtf8();
@@ -117,17 +117,17 @@ Result<void> apply_v023(QSqlDatabase& db) {
         const char* decl;
     };
     const ColumnSpec deployment_cols[] = {
-        {"algo_deployments", "strategy_kind",      "TEXT DEFAULT 'dsl'"},
-        {"algo_deployments", "exchange",           "TEXT DEFAULT ''"},
-        {"algo_deployments", "product_type",       "TEXT DEFAULT ''"},
-        {"algo_deployments", "backend",            "TEXT DEFAULT 'paper'"},
-        {"algo_deployments", "broker_id",          "TEXT DEFAULT ''"},
-        {"algo_deployments", "broker_account_id",  "TEXT DEFAULT ''"},
+        {"algo_deployments", "strategy_kind", "TEXT DEFAULT 'dsl'"},
+        {"algo_deployments", "exchange", "TEXT DEFAULT ''"},
+        {"algo_deployments", "product_type", "TEXT DEFAULT ''"},
+        {"algo_deployments", "backend", "TEXT DEFAULT 'paper'"},
+        {"algo_deployments", "broker_id", "TEXT DEFAULT ''"},
+        {"algo_deployments", "broker_account_id", "TEXT DEFAULT ''"},
         {"algo_deployments", "paper_portfolio_id", "TEXT DEFAULT ''"},
-        {"algo_deployments", "max_order_value",    "REAL DEFAULT 0"},
-        {"algo_deployments", "max_daily_loss",     "REAL DEFAULT 0"},
-        {"algo_deployments", "entry_side",         "TEXT DEFAULT 'BUY'"},
-        {"algo_deployments", "pid",                "INTEGER DEFAULT 0"},
+        {"algo_deployments", "max_order_value", "REAL DEFAULT 0"},
+        {"algo_deployments", "max_daily_loss", "REAL DEFAULT 0"},
+        {"algo_deployments", "entry_side", "TEXT DEFAULT 'BUY'"},
+        {"algo_deployments", "pid", "INTEGER DEFAULT 0"},
     };
     for (const auto& c : deployment_cols) {
         auto r = v023_add_column_if_missing(db, c.table, c.column, c.decl);
@@ -162,13 +162,13 @@ Result<void> apply_v023(QSqlDatabase& db) {
             return r;
     }
     const ColumnSpec signal_cols[] = {
-        {"algo_order_signals", "exchange",        "TEXT DEFAULT ''"},
-        {"algo_order_signals", "product_type",    "TEXT DEFAULT ''"},
-        {"algo_order_signals", "trigger_price",   "REAL DEFAULT NULL"},
+        {"algo_order_signals", "exchange", "TEXT DEFAULT ''"},
+        {"algo_order_signals", "product_type", "TEXT DEFAULT ''"},
+        {"algo_order_signals", "trigger_price", "REAL DEFAULT NULL"},
         {"algo_order_signals", "broker_order_id", "TEXT DEFAULT ''"},
-        {"algo_order_signals", "error",           "TEXT DEFAULT ''"},
-        {"algo_order_signals", "attempt_count",   "INTEGER DEFAULT 0"},
-        {"algo_order_signals", "dispatched_at",   "TEXT DEFAULT NULL"},
+        {"algo_order_signals", "error", "TEXT DEFAULT ''"},
+        {"algo_order_signals", "attempt_count", "INTEGER DEFAULT 0"},
+        {"algo_order_signals", "dispatched_at", "TEXT DEFAULT NULL"},
     };
     for (const auto& c : signal_cols) {
         auto r = v023_add_column_if_missing(db, c.table, c.column, c.decl);

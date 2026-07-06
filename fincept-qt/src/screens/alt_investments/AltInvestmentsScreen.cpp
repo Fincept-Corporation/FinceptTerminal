@@ -129,7 +129,6 @@ using namespace fincept::ui;
 
 // ── Field factory helpers ────────────────────────────────────────────────────
 
-
 static AltField text_field(const QString& key, const QString& label, const QString& def = "") {
     AltField f;
     f.key = key;
@@ -179,17 +178,22 @@ static QList<AltCategory> build_categories() {
          "#3B82F6",
          "B",
          {
-             {"high-yield", alt_tr("High-Yield Bonds"), alt_tr("Spread analysis, default probability, equity-like behavior")},
-             {"em-bonds", alt_tr("Emerging Market Bonds"), alt_tr("Yield spread, sovereign default risk, currency risk")},
-             {"convertible-bonds", alt_tr("Convertible Bonds"), alt_tr("Conversion premium, bond floor, upside participation")},
-             {"preferred-stocks", alt_tr("Preferred Stocks"), alt_tr("Current yield, call risk, dividend safety analysis")},
+             {"high-yield", alt_tr("High-Yield Bonds"),
+              alt_tr("Spread analysis, default probability, equity-like behavior")},
+             {"em-bonds", alt_tr("Emerging Market Bonds"),
+              alt_tr("Yield spread, sovereign default risk, currency risk")},
+             {"convertible-bonds", alt_tr("Convertible Bonds"),
+              alt_tr("Conversion premium, bond floor, upside participation")},
+             {"preferred-stocks", alt_tr("Preferred Stocks"),
+              alt_tr("Current yield, call risk, dividend safety analysis")},
          }},
         {"real_estate",
          alt_tr("Real Estate"),
          "#8B5CF6",
          "RE",
          {
-             {"real-estate", alt_tr("Direct Property / REIT"), alt_tr("NOI, cap rate, DCF valuation, financing analysis")},
+             {"real-estate", alt_tr("Direct Property / REIT"),
+              alt_tr("NOI, cap rate, DCF valuation, financing analysis")},
          }},
         {"hedge_funds",
          alt_tr("Hedge Funds"),
@@ -197,7 +201,8 @@ static QList<AltCategory> build_categories() {
          "HF",
          {
              {"hedge-funds", alt_tr("Long/Short Equity"), alt_tr("Strategy metrics, fee impact, liquidity risk")},
-             {"managed-futures", alt_tr("Managed Futures / CTA"), alt_tr("Fee drag, trend following, crisis alpha analysis")},
+             {"managed-futures", alt_tr("Managed Futures / CTA"),
+              alt_tr("Fee drag, trend following, crisis alpha analysis")},
              {"market-neutral", alt_tr("Market Neutral"), alt_tr("Beta neutrality, factor exposure, leverage risk")},
          }},
         {"commodities",
@@ -205,7 +210,8 @@ static QList<AltCategory> build_categories() {
          "#F97316",
          "C",
          {
-             {"natural-resources", alt_tr("Natural Resources"), alt_tr("Futures basis, contango/backwardation, roll yield")},
+             {"natural-resources", alt_tr("Natural Resources"),
+              alt_tr("Futures basis, contango/backwardation, roll yield")},
              {"pme", alt_tr("Precious Metals Equities"), alt_tr("Correlation to metals, inflation hedge, drawdowns")},
          }},
         {"private_capital",
@@ -213,7 +219,8 @@ static QList<AltCategory> build_categories() {
          "#EC4899",
          "PE",
          {
-             {"private-capital", alt_tr("Private Equity / Venture Capital"), alt_tr("IRR, MOIC, DPI, RVPI, J-curve, fee drag")},
+             {"private-capital", alt_tr("Private Equity / Venture Capital"),
+              alt_tr("IRR, MOIC, DPI, RVPI, J-curve, fee drag")},
          }},
         {"annuities",
          alt_tr("Annuities"),
@@ -221,8 +228,10 @@ static QList<AltCategory> build_categories() {
          "AN",
          {
              {"annuities", alt_tr("Fixed Annuity"), alt_tr("Payout analysis, breakeven years, inflation erosion")},
-             {"variable-annuities", alt_tr("Variable Annuity"), alt_tr("Total fee drag, tax deferral myth, vs. alternatives")},
-             {"eia", alt_tr("Equity-Indexed Annuity"), alt_tr("Crediting rate, upside cap limitations, surrender charges")},
+             {"variable-annuities", alt_tr("Variable Annuity"),
+              alt_tr("Total fee drag, tax deferral myth, vs. alternatives")},
+             {"eia", alt_tr("Equity-Indexed Annuity"),
+              alt_tr("Crediting rate, upside cap limitations, surrender charges")},
              {"inflation-annuity", alt_tr("Inflation-Indexed Annuity"),
               alt_tr("vs. fixed annuity, vs. TIPS ladder, longevity break-even")},
          }},
@@ -231,24 +240,30 @@ static QList<AltCategory> build_categories() {
          "#06B6D4",
          "SP",
          {
-             {"structured-products", alt_tr("Structured Notes"), alt_tr("Complexity score, hidden costs, issuer credit risk")},
-             {"leveraged-funds", alt_tr("Leveraged ETFs (2x/3x)"), alt_tr("Volatility decay, path-dependency, holding cost")},
+             {"structured-products", alt_tr("Structured Notes"),
+              alt_tr("Complexity score, hidden costs, issuer credit risk")},
+             {"leveraged-funds", alt_tr("Leveraged ETFs (2x/3x)"),
+              alt_tr("Volatility decay, path-dependency, holding cost")},
          }},
         {"inflation",
          alt_tr("Inflation Protected"),
          "#FB923C",
          "IP",
          {
-             {"tips", alt_tr("TIPS — Inflation-Linked Treasuries"), alt_tr("Real yield, inflation scenarios, tax efficiency")},
-             {"ibonds", alt_tr("I-Bonds — Series I Savings Bonds"), alt_tr("Composite rate, early redemption penalty, vs. TIPS")},
-             {"stable-value", alt_tr("Stable Value Funds"), alt_tr("Market-to-book ratio, crediting rate, wrap contract risk")},
+             {"tips", alt_tr("TIPS — Inflation-Linked Treasuries"),
+              alt_tr("Real yield, inflation scenarios, tax efficiency")},
+             {"ibonds", alt_tr("I-Bonds — Series I Savings Bonds"),
+              alt_tr("Composite rate, early redemption penalty, vs. TIPS")},
+             {"stable-value", alt_tr("Stable Value Funds"),
+              alt_tr("Market-to-book ratio, crediting rate, wrap contract risk")},
          }},
         {"strategies",
          alt_tr("Strategies & Analysis"),
          "#67E8F9",
          "ST",
          {
-             {"covered-calls", alt_tr("Covered Call Strategy"), alt_tr("Tax consequences, opportunity cost, premium income")},
+             {"covered-calls", alt_tr("Covered Call Strategy"),
+              alt_tr("Tax consequences, opportunity cost, premium income")},
              {"sri", alt_tr("SRI / ESG Funds"), alt_tr("Performance vs. benchmark, screening costs, approaches")},
              {"asset-location", alt_tr("Tax-Efficient Asset Location"),
               alt_tr("Optimal account placement, muni bonds, annual tax drag")},
@@ -258,7 +273,8 @@ static QList<AltCategory> build_categories() {
          "#F87171",
          "DA",
          {
-             {"digital-assets", alt_tr("Cryptocurrency"), alt_tr("Fundamental metrics, NVT ratio, market cap analysis")},
+             {"digital-assets", alt_tr("Cryptocurrency"),
+              alt_tr("Fundamental metrics, NVT ratio, market cap analysis")},
          }},
     };
 }
@@ -486,15 +502,24 @@ void AltInvestmentsScreen::changeEvent(QEvent* e) {
 
 void AltInvestmentsScreen::retranslateUi() {
     // Fixed chrome labels
-    if (header_title_)  header_title_->setText(tr("ALTERNATIVE INVESTMENTS"));
-    if (header_sub_)    header_sub_->setText(tr("27 ANALYZERS  \xB7  10 ASSET CLASSES  \xB7  MULTI-ASSET ANALYTICS"));
-    if (header_badge_)  header_badge_->setText(tr("PYTHON ANALYTICS ENGINE"));
-    if (left_title_)    left_title_->setText(tr("ASSET CLASSES"));
-    if (combo_label_)   combo_label_->setText(tr("ANALYZER"));
-    if (form_title_)    form_title_->setText(tr("INPUT PARAMETERS"));
-    if (right_title_)   right_title_->setText(tr("ANALYSIS RESULTS"));
-    if (status_left_)   status_left_->setText(tr("ALTERNATIVE INVESTMENTS"));
-    if (analyze_btn_ && !loading_) analyze_btn_->setText(tr("ANALYZE"));
+    if (header_title_)
+        header_title_->setText(tr("ALTERNATIVE INVESTMENTS"));
+    if (header_sub_)
+        header_sub_->setText(tr("27 ANALYZERS  \xB7  10 ASSET CLASSES  \xB7  MULTI-ASSET ANALYTICS"));
+    if (header_badge_)
+        header_badge_->setText(tr("PYTHON ANALYTICS ENGINE"));
+    if (left_title_)
+        left_title_->setText(tr("ASSET CLASSES"));
+    if (combo_label_)
+        combo_label_->setText(tr("ANALYZER"));
+    if (form_title_)
+        form_title_->setText(tr("INPUT PARAMETERS"));
+    if (right_title_)
+        right_title_->setText(tr("ANALYSIS RESULTS"));
+    if (status_left_)
+        status_left_->setText(tr("ALTERNATIVE INVESTMENTS"));
+    if (analyze_btn_ && !loading_)
+        analyze_btn_->setText(tr("ANALYZE"));
 
     // Rebuild the data-driven category/analyzer labels (they were translated at
     // construction); re-apply to the left buttons + combo + center via the
@@ -507,7 +532,6 @@ void AltInvestmentsScreen::retranslateUi() {
 }
 
 // ── UI Setup ─────────────────────────────────────────────────────────────────
-
 
 QString AltInvestmentsScreen::format_value(const QJsonValue& v) const {
     if (v.isBool())

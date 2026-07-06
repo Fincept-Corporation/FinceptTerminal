@@ -15,8 +15,7 @@ namespace fincept::trading {
 
 /// Blocking GET. Returns the raw body, or {} on error/timeout. `timeout_ms`
 /// defaults high because masters are large.
-QByteArray http_get_blocking(const QString& url, const QMap<QString, QString>& headers = {},
-                             int timeout_ms = 60000);
+QByteArray http_get_blocking(const QString& url, const QMap<QString, QString>& headers = {}, int timeout_ms = 60000);
 
 /// Blocking POST with a raw body + content type (used by XTS instrument master
 /// and login). Returns the raw body, or {} on error/timeout.

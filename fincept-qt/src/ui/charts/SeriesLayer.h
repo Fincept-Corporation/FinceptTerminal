@@ -11,10 +11,9 @@ namespace fincept::ui {
 
 class SeriesLayer : public OverlayLayer {
     Q_OBJECT
-public:
-    explicit SeriesLayer(const QString& id, const QString& name,
-                         const QColor& color = QColor("#d97706"),
-                         int width = 2, QObject* parent = nullptr);
+  public:
+    explicit SeriesLayer(const QString& id, const QString& name, const QColor& color = QColor("#d97706"), int width = 2,
+                         QObject* parent = nullptr);
 
     QString id() const override { return id_; }
     QString display_name() const override { return name_; }
@@ -27,11 +26,11 @@ public:
     void detach(QGraphicsScene* scene, QChart* chart) override;
     void reposition(QChart* chart) override;
 
-protected:
+  protected:
     void update_series_data(const QVector<int64_t>& timestamps, const QVector<double>& values);
     QLineSeries* series() const { return series_; }
 
-private:
+  private:
     QString id_;
     QString name_;
     QColor color_;

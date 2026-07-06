@@ -73,8 +73,8 @@ class HoldingsTable : public QWidget {
     QString current_pubkey_;
     QString current_balance_topic_;
     fincept::wallet::WalletBalance latest_balance_;
-    QHash<QString, double> price_usd_;     ///< mint → USD price
-    QHash<QString, QString> price_topic_;  ///< mint → topic (so we can unsubscribe)
+    QHash<QString, double> price_usd_;    ///< mint → USD price
+    QHash<QString, QString> price_topic_; ///< mint → topic (so we can unsubscribe)
     bool show_unverified_ = false;
 };
 

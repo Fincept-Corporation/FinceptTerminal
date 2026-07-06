@@ -54,7 +54,7 @@ class CryptoTickerWidget : public BaseWidget {
     QString exchange_;
     QStringList pairs_;
     QHash<QString, Row> rows_;
-    QSet<QString> received_;  // pairs that have published at least once
+    QSet<QString> received_; // pairs that have published at least once
     bool hub_active_ = false;
 };
 

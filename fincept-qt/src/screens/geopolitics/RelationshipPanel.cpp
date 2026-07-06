@@ -69,9 +69,9 @@ void RelationshipPanel::build_ui() {
 
     title_lbl_ = new QLabel(tr("GEOPOLITICAL RELATIONSHIP NETWORK"), header);
     title_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; letter-spacing:1px;")
-                             .arg(ui::colors::INFO())
-                             .arg(ui::fonts::TINY)
-                             .arg(ui::fonts::DATA_FAMILY()));
+                                  .arg(ui::colors::INFO())
+                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::DATA_FAMILY()));
     hhl->addWidget(title_lbl_);
 
     // The network below is illustrative sample data (see build_nodes), not a live
@@ -101,14 +101,13 @@ void RelationshipPanel::build_ui() {
     org_count_ = orgs;
 
     stats_lbl_ = new QLabel(
-        tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3").arg(nodes.size()).arg(conflicts).arg(orgs),
-        header);
+        tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3").arg(nodes.size()).arg(conflicts).arg(orgs), header);
     stats_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:2px 8px;"
-                                 "background:rgba(255,255,255,0.04); border:1px solid %4;")
-                             .arg(ui::colors::TEXT_TERTIARY())
-                             .arg(ui::fonts::TINY)
-                             .arg(ui::fonts::DATA_FAMILY)
-                             .arg(ui::colors::BORDER_DIM()));
+                                      "background:rgba(255,255,255,0.04); border:1px solid %4;")
+                                  .arg(ui::colors::TEXT_TERTIARY())
+                                  .arg(ui::fonts::TINY)
+                                  .arg(ui::fonts::DATA_FAMILY)
+                                  .arg(ui::colors::BORDER_DIM()));
     hhl->addWidget(stats_lbl_);
     root->addWidget(header);
 
@@ -131,10 +130,10 @@ void RelationshipPanel::build_ui() {
     {
         QColor warnc(ui::colors::WARNING());
         const QString warn_rgb = QString("%1,%2,%3").arg(warnc.red()).arg(warnc.green()).arg(warnc.blue());
-        sample_note_ = new QLabel(
-            tr("Sample data — this relationship network is illustrative and is not sourced from a live "
-               "feed. Node counts and connections are placeholders, not real-time conflict metrics."),
-            content);
+        sample_note_ =
+            new QLabel(tr("Sample data — this relationship network is illustrative and is not sourced from a live "
+                          "feed. Node counts and connections are placeholders, not real-time conflict metrics."),
+                       content);
         sample_note_->setWordWrap(true);
         sample_note_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px;"
                                             "background:rgba(%4,0.10); border:1px solid %1;")
@@ -148,7 +147,8 @@ void RelationshipPanel::build_ui() {
     // Helper: add a titled section with a 3-column card grid
     auto add_section = [&](const QString& title, const QString& color, const QString& type, QLabel** out) {
         auto* sec_lbl = new QLabel(title, content);
-        if (out) *out = sec_lbl;
+        if (out)
+            *out = sec_lbl;
         sec_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;"
                                        "letter-spacing:2px; padding-bottom:4px; border-bottom:1px solid rgba(%4,0.3);")
                                    .arg(color)
@@ -316,7 +316,8 @@ void RelationshipPanel::changeEvent(QEvent* event) {
 }
 
 void RelationshipPanel::retranslateUi() {
-    if (title_lbl_) title_lbl_->setText(tr("GEOPOLITICAL RELATIONSHIP NETWORK"));
+    if (title_lbl_)
+        title_lbl_->setText(tr("GEOPOLITICAL RELATIONSHIP NETWORK"));
     if (sample_badge_) {
         sample_badge_->setText(tr("SAMPLE DATA"));
         sample_badge_->setToolTip(tr("Illustrative network — not sourced from a live data feed."));
@@ -330,9 +331,12 @@ void RelationshipPanel::retranslateUi() {
                                 .arg(node_count_)
                                 .arg(conflict_count_)
                                 .arg(org_count_));
-    if (sec_conflicts_) sec_conflicts_->setText(tr("ACTIVE CONFLICTS"));
-    if (sec_crisis_)    sec_crisis_->setText(tr("CRISIS TYPES"));
-    if (sec_orgs_)      sec_orgs_->setText(tr("ORGANIZATIONS"));
+    if (sec_conflicts_)
+        sec_conflicts_->setText(tr("ACTIVE CONFLICTS"));
+    if (sec_crisis_)
+        sec_crisis_->setText(tr("CRISIS TYPES"));
+    if (sec_orgs_)
+        sec_orgs_->setText(tr("ORGANIZATIONS"));
     // Node-card entity names/types/connections are fixed data values (not
     // translated); their "datasets" caption is set per-card at build time.
 }

@@ -21,11 +21,11 @@ class DeveloperSection : public QWidget {
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
 
-    QLabel*    agentic_title_  = nullptr;
-    QLabel*    agentic_desc_   = nullptr;
+    QLabel* agentic_title_ = nullptr;
+    QLabel* agentic_desc_ = nullptr;
     QCheckBox* agentic_toggle_ = nullptr;
-    QLabel*    inspector_title_ = nullptr;
-    QLabel*    inspector_desc_ = nullptr;
+    QLabel* inspector_title_ = nullptr;
+    QLabel* inspector_desc_ = nullptr;
 };
 
 } // namespace fincept::screens

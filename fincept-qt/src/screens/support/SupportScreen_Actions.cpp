@@ -5,10 +5,9 @@
 //
 // Part of the partial-class split of SupportScreen.cpp.
 
+#include "auth/UserApi.h"
 #include "screens/support/SupportScreen.h"
 #include "screens/support/SupportScreen_internal.h"
-
-#include "auth/UserApi.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
@@ -196,8 +195,7 @@ void SupportScreen::load_tickets() {
                                                           "padding:0 10px;letter-spacing:0.5px;%3")
                                                       .arg(status_color(st_c), ui::colors::BG_BASE(), MF));
 
-                detail_meta_lbl_->setText(
-                    tr("%1  ·  %2  ·  Opened %3").arg(cat_c.toLower(), pr_c.toLower(), cr_c));
+                detail_meta_lbl_->setText(tr("%1  ·  %2  ·  Opened %3").arg(cat_c.toLower(), pr_c.toLower(), cr_c));
 
                 detail_body_lbl_->setText(body_c.isEmpty() ? tr("No description provided.") : body_c);
 
@@ -294,9 +292,8 @@ void SupportScreen::load_tickets() {
                         }
 
                         if (msgs.isEmpty()) {
-                            mcl3->insertWidget(
-                                0, lbl(tr("No messages yet — be the first to reply."),
-                                       ui::colors::TEXT_TERTIARY(), 11));
+                            mcl3->insertWidget(0, lbl(tr("No messages yet — be the first to reply."),
+                                                      ui::colors::TEXT_TERTIARY(), 11));
                         }
 
                         // Scroll to bottom
@@ -331,17 +328,16 @@ void SupportScreen::on_create_ticket() {
     const QString cat_key = category_combo_->currentData().toString();
     const QString pri_key = priority_combo_->currentData().toString();
 
-    auth::UserApi::instance().create_ticket(subject, desc, cat_key, pri_key,
-                                            [this](auth::ApiResponse r) {
-                                                set_busy(false);
-                                                create_btn_->setText(tr("Submit Ticket →"));
-                                                if (r.success) {
-                                                    subject_input_->clear();
-                                                    desc_input_->clear();
-                                                    content_stack_->setCurrentIndex(0);
-                                                    load_tickets();
-                                                }
-                                            });
+    auth::UserApi::instance().create_ticket(subject, desc, cat_key, pri_key, [this](auth::ApiResponse r) {
+        set_busy(false);
+        create_btn_->setText(tr("Submit Ticket →"));
+        if (r.success) {
+            subject_input_->clear();
+            desc_input_->clear();
+            content_stack_->setCurrentIndex(0);
+            load_tickets();
+        }
+    });
 }
 
 // ── on_send_message ───────────────────────────────────────────────────────────

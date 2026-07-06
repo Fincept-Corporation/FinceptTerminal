@@ -7,10 +7,9 @@
 // Part of the partial-class split of BacktestingScreen.cpp; helpers shared
 // across split files live in BacktestingScreen_internal.h.
 
+#include "core/logging/Logger.h"
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/backtesting/BacktestingScreen_internal.h"
-
-#include "core/logging/Logger.h"
 #include "services/backtesting/BacktestingService.h"
 #include "ui/theme/Theme.h"
 
@@ -29,8 +28,8 @@
 namespace fincept::screens {
 
 using namespace fincept::services::backtest;
-using fincept::screens::backtesting_internal::fmt_metric;
 using fincept::screens::backtesting_internal::clear_layout;
+using fincept::screens::backtesting_internal::fmt_metric;
 
 // ── Result display ───────────────────────────────────────────────────────────
 
@@ -44,7 +43,8 @@ void BacktestingScreen::clear_results() {
         auto* layout = equity_chart_tab_->layout();
         while (layout->count() > 0) {
             auto* item = layout->takeAt(0);
-            if (item->widget()) item->widget()->deleteLater();
+            if (item->widget())
+                item->widget()->deleteLater();
             delete item;
         }
     }
@@ -73,8 +73,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         return key.toUpper();
     };
 
-    auto add_cards_from = [&](const QJsonObject& obj, const QStringList& ordered_keys,
-                              int cols_per_row = 3) {
+    auto add_cards_from = [&](const QJsonObject& obj, const QStringList& ordered_keys, int cols_per_row = 3) {
         if (obj.isEmpty())
             return;
         auto* cards = new QWidget(summary_container_);
@@ -106,8 +105,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             shown.append(canon);
 
             auto* card = new QWidget(cards);
-            card->setStyleSheet(QString("background:%1; border:1px solid %2;")
-                                    .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            card->setStyleSheet(
+                QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
             auto* cvl = new QVBoxLayout(card);
             cvl->setContentsMargins(10, 8, 10, 8);
             cvl->setSpacing(2);
@@ -124,7 +123,10 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             cvl->addWidget(lbl);
             cvl->addWidget(vlbl);
             gl->addWidget(card, row, col);
-            if (++col >= cols_per_row) { col = 0; row++; }
+            if (++col >= cols_per_row) {
+                col = 0;
+                row++;
+            }
         }
         if (row > 0 || col > 0)
             summary_layout_->addWidget(cards);
@@ -175,14 +177,18 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
     // ── Header (per-command title) ──
     QString cmd_label = command.toUpper();
-    for (const auto& c : commands_) if (c.id == command) { cmd_label = c.label.toUpper(); break; }
+    for (const auto& c : commands_)
+        if (c.id == command) {
+            cmd_label = c.label.toUpper();
+            break;
+        }
     add_section_header(tr("%1 RESULTS").arg(cmd_label));
 
     // ── Synthetic-data warning (Python sets this when yfinance is unavailable) ──
     if (payload.value("usingSyntheticData").toBool()) {
-        auto* warn = new QLabel(
-            tr("Using synthetic price data (yfinance unavailable). Results do not reflect real markets."),
-            summary_container_);
+        auto* warn =
+            new QLabel(tr("Using synthetic price data (yfinance unavailable). Results do not reflect real markets."),
+                       summary_container_);
         warn->setWordWrap(true);
         warn->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px; "
                                     "background:rgba(245,158,11,0.10); border:1px solid %4;")
@@ -197,9 +203,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
     if (command == "backtest") {
         auto perf = payload.value("performance").toObject();
-        add_cards_from(perf, {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio",
-                              "maxDrawdown", "winRate", "profitFactor", "calmarRatio",
-                              "totalTrades", "volatility"});
+        add_cards_from(perf, {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio", "maxDrawdown",
+                              "winRate", "profitFactor", "calmarRatio", "totalTrades", "volatility"});
         if (payload.contains("status")) {
             auto status = payload["status"].toString();
             auto* sl = new QLabel(tr("Status: %1").arg(status), summary_container_);
@@ -211,20 +216,17 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         }
         fill_kv_table(perf);
         auto trades = payload.value("trades").toArray();
-        fill_details_table(trades, {"symbol", "entryDate", "exitDate", "side",
-                                    "entryPrice", "exitPrice", "quantity",
+        fill_details_table(trades, {"symbol", "entryDate", "exitDate", "side", "entryPrice", "exitPrice", "quantity",
                                     "pnl", "pnlPercent", "holdingPeriod", "exitReason", "commission"});
-    }
-    else if (command == "optimize") {
+    } else if (command == "optimize") {
         QJsonObject summary{
-            {"iterations",          payload.value("iterations")},
-            {"totalCombinations",   payload.value("totalCombinations")},
-            {"method",              payload.value("method")},
-            {"objective",           payload.value("objective")},
-            {"bestObjectiveValue",  payload.value("bestObjectiveValue")},
+            {"iterations", payload.value("iterations")},
+            {"totalCombinations", payload.value("totalCombinations")},
+            {"method", payload.value("method")},
+            {"objective", payload.value("objective")},
+            {"bestObjectiveValue", payload.value("bestObjectiveValue")},
         };
-        add_cards_from(summary, {"bestObjectiveValue", "iterations", "totalCombinations",
-                                 "method", "objective"});
+        add_cards_from(summary, {"bestObjectiveValue", "iterations", "totalCombinations", "method", "objective"});
 
         auto best_params = payload.value("bestParameters").toObject();
         if (!best_params.isEmpty()) {
@@ -234,8 +236,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         auto best_perf = payload.value("bestPerformance").toObject();
         if (!best_perf.isEmpty()) {
             add_section_header(tr("BEST PERFORMANCE"));
-            add_cards_from(best_perf, {"totalReturn", "sharpeRatio", "maxDrawdown",
-                                       "winRate", "profitFactor", "totalTrades"});
+            add_cards_from(best_perf,
+                           {"totalReturn", "sharpeRatio", "maxDrawdown", "winRate", "profitFactor", "totalTrades"});
             fill_kv_table(best_perf);
         }
         // Details: top results — flatten params into the row
@@ -250,35 +252,33 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             row["objective"] = o.value("objective_value");
             auto perf = o.value("performance").toObject();
             for (const auto& k : QStringList{"totalReturn", "sharpeRatio", "maxDrawdown", "winRate"}) {
-                if (perf.contains(k)) row[k] = perf.value(k);
+                if (perf.contains(k))
+                    row[k] = perf.value(k);
             }
             flat.append(row);
         }
         fill_details_table(flat);
-    }
-    else if (command == "walk_forward") {
+    } else if (command == "walk_forward") {
         QJsonObject summary{
-            {"nWindows",          payload.value("nWindows")},
-            {"avgOosReturn",      payload.value("avgOosReturn")},
-            {"avgOosSharpe",      payload.value("avgOosSharpe")},
-            {"oosReturnStd",      payload.value("oosReturnStd")},
-            {"robustnessScore",   payload.value("robustnessScore")},
-            {"degradationRatio",  payload.value("degradationRatio")},
+            {"nWindows", payload.value("nWindows")},
+            {"avgOosReturn", payload.value("avgOosReturn")},
+            {"avgOosSharpe", payload.value("avgOosSharpe")},
+            {"oosReturnStd", payload.value("oosReturnStd")},
+            {"robustnessScore", payload.value("robustnessScore")},
+            {"degradationRatio", payload.value("degradationRatio")},
         };
-        add_cards_from(summary, {"nWindows", "avgOosReturn", "avgOosSharpe",
-                                 "robustnessScore", "degradationRatio", "oosReturnStd"});
+        add_cards_from(summary, {"nWindows", "avgOosReturn", "avgOosSharpe", "robustnessScore", "degradationRatio",
+                                 "oosReturnStd"});
         fill_kv_table(summary);
         auto windows = payload.value("windows").toArray();
-        fill_details_table(windows, {"window", "trainStart", "trainEnd", "testStart", "testEnd",
-                                     "inSampleReturn", "inSampleSharpe",
-                                     "outOfSampleReturn", "outOfSampleSharpe"});
-    }
-    else if (command == "indicator") {
+        fill_details_table(windows, {"window", "trainStart", "trainEnd", "testStart", "testEnd", "inSampleReturn",
+                                     "inSampleSharpe", "outOfSampleReturn", "outOfSampleSharpe"});
+    } else if (command == "indicator") {
         QJsonObject summary{
-            {"indicator",  payload.value("indicator")},
-            {"symbol",     payload.value("symbol")},
-            {"period",     payload.value("period")},
-            {"totalBars",  payload.value("totalBars")},
+            {"indicator", payload.value("indicator")},
+            {"symbol", payload.value("symbol")},
+            {"period", payload.value("period")},
+            {"totalBars", payload.value("totalBars")},
         };
         add_cards_from(summary, {"indicator", "symbol", "period", "totalBars"}, 4);
         auto stats = payload.value("stats").toObject();
@@ -287,7 +287,10 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             QJsonObject flat;
             bool nested = false;
             for (auto it = stats.begin(); it != stats.end(); ++it) {
-                if (it.value().isObject()) { nested = true; break; }
+                if (it.value().isObject()) {
+                    nested = true;
+                    break;
+                }
             }
             if (nested) {
                 for (auto it = stats.begin(); it != stats.end(); ++it) {
@@ -317,36 +320,47 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             }
         }
         fill_details_table(sample, {"date", "value"});
-    }
-    else if (command == "indicator_signals") {
-        add_cards_from(payload, {"totalSignals", "winRate", "profitFactor", "avgReturn",
-                                 "medianReturn", "bestTrade", "worstTrade",
-                                 "avgHoldingPeriod", "signalDensity",
-                                 "entryCount", "exitCount", "originalEntryCount", "filteredEntryCount"});
+    } else if (command == "indicator_signals") {
+        add_cards_from(payload, {"totalSignals", "winRate", "profitFactor", "avgReturn", "medianReturn", "bestTrade",
+                                 "worstTrade", "avgHoldingPeriod", "signalDensity", "entryCount", "exitCount",
+                                 "originalEntryCount", "filteredEntryCount"});
         fill_kv_table(payload);
         // Combine entry & exit signals into a single details table with a Type column.
         auto entries = payload.value("entrySignals").toArray();
         auto exits = payload.value("exitSignals").toArray();
         QJsonArray combined;
-        for (const auto& v : entries) { auto o = v.toObject(); o["type"] = "ENTRY"; combined.append(o); }
-        for (const auto& v : exits)   { auto o = v.toObject(); o["type"] = "EXIT";  combined.append(o); }
+        for (const auto& v : entries) {
+            auto o = v.toObject();
+            o["type"] = "ENTRY";
+            combined.append(o);
+        }
+        for (const auto& v : exits) {
+            auto o = v.toObject();
+            o["type"] = "EXIT";
+            combined.append(o);
+        }
         if (combined.isEmpty()) {
             // Some modes only emit plain entries[]/exits[] string arrays
             QJsonArray plain;
             for (const auto& v : payload.value("entries").toArray()) {
-                QJsonObject o; o["type"] = "ENTRY"; o["date"] = v.toString(); plain.append(o);
+                QJsonObject o;
+                o["type"] = "ENTRY";
+                o["date"] = v.toString();
+                plain.append(o);
             }
             for (const auto& v : payload.value("exits").toArray()) {
-                QJsonObject o; o["type"] = "EXIT"; o["date"] = v.toString(); plain.append(o);
+                QJsonObject o;
+                o["type"] = "EXIT";
+                o["date"] = v.toString();
+                plain.append(o);
             }
             combined = plain;
         }
         fill_details_table(combined);
-    }
-    else if (command == "labels") {
+    } else if (command == "labels") {
         QJsonObject summary{
-            {"labelType",   payload.value("labelType")},
-            {"totalBars",   payload.value("totalBars")},
+            {"labelType", payload.value("labelType")},
+            {"totalBars", payload.value("totalBars")},
             {"labeledBars", payload.value("labeledBars")},
         };
         add_cards_from(summary, {"labelType", "totalBars", "labeledBars"}, 3);
@@ -358,9 +372,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             QJsonObject relabeled;
             QStringList ordered;
             QStringList raw_keys = dist.keys();
-            std::sort(raw_keys.begin(), raw_keys.end(), [](const QString& a, const QString& b) {
-                return a.toInt() < b.toInt();
-            });
+            std::sort(raw_keys.begin(), raw_keys.end(),
+                      [](const QString& a, const QString& b) { return a.toInt() < b.toInt(); });
             for (const auto& k : raw_keys) {
                 QString rk = tr("Class %1").arg(k);
                 relabeled[rk] = dist.value(k);
@@ -370,26 +383,21 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             fill_kv_table(relabeled);
         }
         fill_details_table(payload.value("sampleLabels").toArray(), {"date", "label"});
-    }
-    else if (command == "splits") {
+    } else if (command == "splits") {
         QJsonObject summary{
-            {"splitterType", payload.value("splitterType")},
-            {"nSplits",      payload.value("nSplits")},
-            {"totalBars",    payload.value("totalBars")},
-            {"indexStart",   payload.value("indexStart")},
-            {"indexEnd",     payload.value("indexEnd")},
+            {"splitterType", payload.value("splitterType")}, {"nSplits", payload.value("nSplits")},
+            {"totalBars", payload.value("totalBars")},       {"indexStart", payload.value("indexStart")},
+            {"indexEnd", payload.value("indexEnd")},
         };
         add_cards_from(summary, {"splitterType", "nSplits", "totalBars", "indexStart", "indexEnd"}, 3);
         fill_kv_table(summary);
         fill_details_table(payload.value("splits").toArray(),
-                           {"fold", "trainStart", "trainEnd", "trainSize",
-                            "testStart", "testEnd", "testSize"});
-    }
-    else if (command == "returns") {
+                           {"fold", "trainStart", "trainEnd", "trainSize", "testStart", "testEnd", "testSize"});
+    } else if (command == "returns") {
         QJsonObject summary{
             {"analysisType", payload.value("analysisType")},
-            {"totalBars",    payload.value("totalBars")},
-            {"returnBars",   payload.value("returnBars")},
+            {"totalBars", payload.value("totalBars")},
+            {"returnBars", payload.value("returnBars")},
         };
         add_cards_from(summary, {"analysisType", "totalBars", "returnBars"}, 3);
 
@@ -398,18 +406,17 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         auto stats = payload.value("stats").toObject();
         if (!stats.isEmpty()) {
             add_section_header(tr("STATISTICS"));
-            add_cards_from(stats, {"Total Return", "Annualized Return", "Sharpe Ratio",
-                                   "Sortino Ratio", "Calmar Ratio", "Max Drawdown",
-                                   "Annualized Volatility", "Downside Risk"});
+            add_cards_from(stats, {"Total Return", "Annualized Return", "Sharpe Ratio", "Sortino Ratio", "Calmar Ratio",
+                                   "Max Drawdown", "Annualized Volatility", "Downside Risk"});
             fill_kv_table(stats);
         } else {
             // rolling-style payloads expose top-level fields
             QJsonObject topnum;
-            for (const auto& k : QStringList{"metric", "window", "dataPoints", "maxDrawdown",
-                                             "avgDrawdown", "totalDrawdowns", "activeDrawdown",
-                                             "activeDuration", "totalRanges", "avgDuration",
-                                             "maxDuration", "coverage"}) {
-                if (payload.contains(k)) topnum[k] = payload.value(k);
+            for (const auto& k : QStringList{"metric", "window", "dataPoints", "maxDrawdown", "avgDrawdown",
+                                             "totalDrawdowns", "activeDrawdown", "activeDuration", "totalRanges",
+                                             "avgDuration", "maxDuration", "coverage"}) {
+                if (payload.contains(k))
+                    topnum[k] = payload.value(k);
             }
             if (!topnum.isEmpty()) {
                 add_cards_from(topnum, {});
@@ -422,54 +429,62 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         for (const auto& k : QStringList{"records", "cumulativeReturns", "drawdownSeries", "series"}) {
             if (payload.value(k).isArray()) {
                 auto a = payload.value(k).toArray();
-                if (!a.isEmpty()) { detail = a; break; }
+                if (!a.isEmpty()) {
+                    detail = a;
+                    break;
+                }
             }
         }
         fill_details_table(detail);
-    }
-    else if (command == "signals") {
+    } else if (command == "signals") {
         QJsonObject summary{
             {"generatorType", payload.value("generatorType")},
-            {"totalBars",     payload.value("totalBars")},
-            {"entryCount",    payload.value("entryCount")},
-            {"exitCount",     payload.value("exitCount")},
+            {"totalBars", payload.value("totalBars")},
+            {"entryCount", payload.value("entryCount")},
+            {"exitCount", payload.value("exitCount")},
         };
         add_cards_from(summary, {"generatorType", "entryCount", "exitCount", "totalBars"}, 4);
         fill_kv_table(summary);
 
         QJsonArray combined;
         for (const auto& v : payload.value("entries").toArray()) {
-            QJsonObject o; o["type"] = "ENTRY"; o["date"] = v.toString(); combined.append(o);
+            QJsonObject o;
+            o["type"] = "ENTRY";
+            o["date"] = v.toString();
+            combined.append(o);
         }
         for (const auto& v : payload.value("exits").toArray()) {
-            QJsonObject o; o["type"] = "EXIT"; o["date"] = v.toString(); combined.append(o);
+            QJsonObject o;
+            o["type"] = "EXIT";
+            o["date"] = v.toString();
+            combined.append(o);
         }
         fill_details_table(combined, {"type", "date"});
-    }
-    else if (command == "labels_to_signals") {
+    } else if (command == "labels_to_signals") {
         QJsonObject summary{
-            {"labelType",  payload.value("labelType")},
-            {"entryLabel", payload.value("entryLabel")},
-            {"exitLabel",  payload.value("exitLabel")},
-            {"entryCount", payload.value("entryCount")},
-            {"exitCount",  payload.value("exitCount")},
-            {"totalBars",  payload.value("totalBars")},
+            {"labelType", payload.value("labelType")}, {"entryLabel", payload.value("entryLabel")},
+            {"exitLabel", payload.value("exitLabel")}, {"entryCount", payload.value("entryCount")},
+            {"exitCount", payload.value("exitCount")}, {"totalBars", payload.value("totalBars")},
         };
-        add_cards_from(summary, {"labelType", "entryCount", "exitCount", "totalBars",
-                                 "entryLabel", "exitLabel"}, 3);
+        add_cards_from(summary, {"labelType", "entryCount", "exitCount", "totalBars", "entryLabel", "exitLabel"}, 3);
         fill_kv_table(summary);
         QJsonArray combined;
         for (const auto& v : payload.value("entries").toArray()) {
-            QJsonObject o; o["type"] = "ENTRY"; o["date"] = v.toString(); combined.append(o);
+            QJsonObject o;
+            o["type"] = "ENTRY";
+            o["date"] = v.toString();
+            combined.append(o);
         }
         for (const auto& v : payload.value("exits").toArray()) {
-            QJsonObject o; o["type"] = "EXIT"; o["date"] = v.toString(); combined.append(o);
+            QJsonObject o;
+            o["type"] = "EXIT";
+            o["date"] = v.toString();
+            combined.append(o);
         }
         fill_details_table(combined, {"type", "date"});
-    }
-    else if (command == "indicator_sweep") {
+    } else if (command == "indicator_sweep") {
         QJsonObject summary{
-            {"indicator",         payload.value("indicator")},
+            {"indicator", payload.value("indicator")},
             {"totalCombinations", payload.value("totalCombinations")},
         };
         add_cards_from(summary, {"indicator", "totalCombinations"}, 2);
@@ -483,12 +498,12 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             for (auto it = params.begin(); it != params.end(); ++it)
                 row[it.key()] = it.value();
             for (const auto& k : QStringList{"mean", "std", "min", "max", "last"})
-                if (o.contains(k)) row[k] = o.value(k);
+                if (o.contains(k))
+                    row[k] = o.value(k);
             flat.append(row);
         }
         fill_details_table(flat);
-    }
-    else {
+    } else {
         // Unknown command — best-effort: show all scalar fields as cards.
         add_cards_from(payload, {});
         fill_kv_table(payload);
@@ -513,8 +528,10 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             auto equity_val = obj.value("equity").toDouble();
             auto dd_val = obj.value("drawdown").toDouble();
             auto dt = QDateTime::fromString(date_str, "yyyy-MM-dd");
-            if (!dt.isValid()) dt = QDateTime::fromString(date_str, Qt::ISODate);
-            if (!dt.isValid()) continue;
+            if (!dt.isValid())
+                dt = QDateTime::fromString(date_str, Qt::ISODate);
+            if (!dt.isValid())
+                continue;
             qint64 ms = dt.toMSecsSinceEpoch();
             eq_series->append(ms, equity_val);
             dd_series->append(ms, dd_val * 100.0);

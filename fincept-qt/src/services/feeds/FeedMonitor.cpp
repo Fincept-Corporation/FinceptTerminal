@@ -147,8 +147,7 @@ void FeedMonitor::fetch(const FeedSubscription& sub) {
         // Merge newest-first, dedup by id, cap.
         QVector<FeedItem> merged = parsed;
         for (const auto& old : it->items)
-            if (std::none_of(merged.begin(), merged.end(),
-                             [&](const FeedItem& x) { return x.id == old.id; }))
+            if (std::none_of(merged.begin(), merged.end(), [&](const FeedItem& x) { return x.id == old.id; }))
                 merged.append(old);
         std::stable_sort(merged.begin(), merged.end(),
                          [](const FeedItem& a, const FeedItem& b) { return a.sort_ts > b.sort_ts; });
@@ -254,8 +253,9 @@ void FeedMonitor::discover(const FeedSubscription& sub, DiscoverCb cb) {
             return;
         }
         const DiscoveredSchema schema = FeedScraper::discover(data, sub);
-        cb(schema.ok, schema.ok ? QString("%1 tags found").arg(schema.fields.size())
-                                : QStringLiteral("Couldn't read the feed structure"),
+        cb(schema.ok,
+           schema.ok ? QString("%1 tags found").arg(schema.fields.size())
+                     : QStringLiteral("Couldn't read the feed structure"),
            schema);
     });
 }

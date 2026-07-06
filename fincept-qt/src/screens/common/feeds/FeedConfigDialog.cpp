@@ -55,8 +55,7 @@ QString pretty_label(const QString& path) {
 
 } // namespace
 
-FeedConfigDialog::FeedConfigDialog(const FeedSubscription& initial, QWidget* parent)
-    : QDialog(parent), sub_(initial) {
+FeedConfigDialog::FeedConfigDialog(const FeedSubscription& initial, QWidget* parent) : QDialog(parent), sub_(initial) {
     setWindowTitle(initial.id.isEmpty() ? tr("Add Feed") : tr("Edit Feed"));
     setMinimumWidth(520);
 
@@ -148,10 +147,9 @@ FeedConfigDialog::FeedConfigDialog(const FeedSubscription& initial, QWidget* par
         auto* del = bb->addButton(tr("Delete"), QDialogButtonBox::DestructiveRole);
         del->setCursor(Qt::PointingHandCursor);
         connect(del, &QPushButton::clicked, this, [this]() {
-            const auto r = QMessageBox::question(
-                this, tr("Delete feed"),
-                tr("Delete this feed and its stored history? This cannot be undone."),
-                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            const auto r = QMessageBox::question(this, tr("Delete feed"),
+                                                 tr("Delete this feed and its stored history? This cannot be undone."),
+                                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
             if (r == QMessageBox::Yes) {
                 delete_requested_ = true;
                 accept();

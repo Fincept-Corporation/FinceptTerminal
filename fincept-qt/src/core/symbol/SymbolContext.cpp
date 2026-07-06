@@ -39,8 +39,7 @@ bool SymbolContext::has_group_slot_symbol(SymbolGroup g, const QString& slot) co
     return it != slot_symbols_.constEnd() && it.value().is_valid();
 }
 
-void SymbolContext::set_group_slot_symbol(SymbolGroup g, const QString& slot,
-                                          const SymbolRef& ref, QObject* source) {
+void SymbolContext::set_group_slot_symbol(SymbolGroup g, const QString& slot, const SymbolRef& ref, QObject* source) {
     // Update the "active anywhere" symbol regardless of group/slot — this
     // drives the breadcrumb / titlebar even for unlinked panels.
     if (ref.is_valid() && ref != active_) {
@@ -57,10 +56,8 @@ void SymbolContext::set_group_slot_symbol(SymbolGroup g, const QString& slot,
         return; // no-op
 
     slot_symbols_[key] = ref;
-    LOG_DEBUG("SymbolContext", QString("Group %1 slot=%2 → %3")
-                                   .arg(symbol_group_letter(g))
-                                   .arg(slot)
-                                   .arg(ref.display()));
+    LOG_DEBUG("SymbolContext",
+              QString("Group %1 slot=%2 → %3").arg(symbol_group_letter(g)).arg(slot).arg(ref.display()));
 
     // Slot-aware signal first; legacy primary-slot signal second.
     // Order matters for subscribers that bridge from the slot-aware
@@ -106,8 +103,8 @@ void SymbolContext::clear() {
 
 QJsonObject SymbolContext::to_json() const {
     QJsonObject o;
-    QJsonObject grp;        // legacy v1 schema: { "<letter>": SymbolRef }
-    QJsonObject slot_blob;  // v2 schema: { "<letter>": { "<slot>": SymbolRef } }
+    QJsonObject grp;       // legacy v1 schema: { "<letter>": SymbolRef }
+    QJsonObject slot_blob; // v2 schema: { "<letter>": { "<slot>": SymbolRef } }
     for (auto it = slot_symbols_.begin(); it != slot_symbols_.end(); ++it) {
         if (!it.value().is_valid())
             continue;

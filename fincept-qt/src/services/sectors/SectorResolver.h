@@ -54,15 +54,14 @@ class SectorResolver : public QObject {
     SectorResolver& operator=(const SectorResolver&) = delete;
 
     void load_cache();
-    void persist(const QString& symbol, const QString& sector, const QString& industry,
-                 const QString& quote_type);
+    void persist(const QString& symbol, const QString& sector, const QString& industry, const QString& quote_type);
     void resolve_async(const QString& symbol);
     static QString normalize(const QString& symbol);
     static QString fallback_for_unresolvable(const QString& symbol);
 
     mutable QMutex mutex_;
-    QHash<QString, QString> cache_;   // symbol → sector
-    QSet<QString> inflight_;           // symbols currently being fetched
+    QHash<QString, QString> cache_; // symbol → sector
+    QSet<QString> inflight_;        // symbols currently being fetched
 };
 
 } // namespace fincept::services

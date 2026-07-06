@@ -72,8 +72,7 @@ class ChainSubTab : public QWidget {
   private:
     void retranslateUi();
     void rebuild_picker_for_broker(const QString& broker_id, bool keep_selection);
-    void rebuild_expiries_for_underlying(const QString& broker_id, const QString& underlying,
-                                         bool keep_selection);
+    void rebuild_expiries_for_underlying(const QString& broker_id, const QString& underlying, bool keep_selection);
     void resubscribe();
     void show_empty_state(const QString& message);
     void hide_empty_state();
@@ -83,7 +82,7 @@ class ChainSubTab : public QWidget {
     FnoHeaderBar* header_ = nullptr;
     OptionChainTable* table_ = nullptr;
     QLabel* empty_label_ = nullptr;
-    class QStackedLayout* body_stack_ = nullptr;  // owns table_ + empty_label_
+    class QStackedLayout* body_stack_ = nullptr; // owns table_ + empty_label_
 
     /// Topic we're currently subscribed to. Empty when not subscribed.
     QString active_topic_;

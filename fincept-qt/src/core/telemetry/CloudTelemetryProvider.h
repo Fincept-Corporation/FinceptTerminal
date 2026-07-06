@@ -51,8 +51,7 @@ class CloudTelemetryProvider : public QObject, public TelemetryProvider {
     /// Construct. The provider is dormant until `start()` is called.
     /// Pass an inner sink (e.g. LocalTelemetrySink*) to chain durable
     /// local persistence; nullptr = upload-only.
-    explicit CloudTelemetryProvider(TelemetryProvider* inner_sink = nullptr,
-                                    QObject* parent = nullptr);
+    explicit CloudTelemetryProvider(TelemetryProvider* inner_sink = nullptr, QObject* parent = nullptr);
     ~CloudTelemetryProvider() override;
 
     /// Begin periodic flushes. Reads endpoint + api_key from
@@ -104,8 +103,8 @@ class CloudTelemetryProvider : public QObject, public TelemetryProvider {
     /// One-shot POST. Owns the reply via deleteLater. Updates healthy_,
     /// resets or grows backoff. On 4xx, drops the batch; on 5xx/network,
     /// requeues and grows the backoff.
-    void post_batch(const QString& endpoint, const QString& api_key,
-                    const QJsonArray& body, QVector<Event> raw_for_requeue);
+    void post_batch(const QString& endpoint, const QString& api_key, const QJsonArray& body,
+                    QVector<Event> raw_for_requeue);
 
     TelemetryProvider* inner_sink_ = nullptr;
     QNetworkAccessManager* nam_ = nullptr;

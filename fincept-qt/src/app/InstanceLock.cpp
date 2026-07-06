@@ -175,8 +175,7 @@ void InstanceLock::on_new_connection() {
             // socket delivery, and the client's disconnected→deleteLater then frees
             // the socket mid-emit → doActivate crashes (EXC_BAD_ACCESS). Posting the
             // emit lets this slot fully unwind before any nested loop runs.
-            QMetaObject::invokeMethod(
-                this, [this, args]() { emit message_received(args); }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(this, [this, args]() { emit message_received(args); }, Qt::QueuedConnection);
         });
 
         connect(client, &QLocalSocket::disconnected, client, &QLocalSocket::deleteLater);

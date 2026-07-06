@@ -16,9 +16,7 @@ QString thread_label(QThread* t) {
     if (!t)
         return QStringLiteral("?");
     const QString name = t->objectName();
-    return name.isEmpty()
-               ? QStringLiteral("0x%1").arg(reinterpret_cast<quintptr>(t), 0, 16)
-               : name;
+    return name.isEmpty() ? QStringLiteral("0x%1").arg(reinterpret_cast<quintptr>(t), 0, 16) : name;
 }
 } // namespace
 
@@ -88,15 +86,13 @@ QSqlDatabase Database::connection() {
 
         // Unique connection name per thread. Encode pointer + objectName so
         // log messages are debuggable.
-        guard.name = QStringLiteral("fincept_thread_%1_%2")
-                         .arg(thread_label(t))
-                         .arg(reinterpret_cast<quintptr>(t), 0, 16);
+        guard.name =
+            QStringLiteral("fincept_thread_%1_%2").arg(thread_label(t)).arg(reinterpret_cast<quintptr>(t), 0, 16);
 
         QSqlDatabase clone = QSqlDatabase::cloneDatabase(db_, guard.name);
         if (!clone.open()) {
             const QString err = clone.lastError().text();
-            LOG_ERROR(kDbTag, QString("Failed to open per-thread connection on [%1]: %2")
-                                .arg(thread_label(t), err));
+            LOG_ERROR(kDbTag, QString("Failed to open per-thread connection on [%1]: %2").arg(thread_label(t), err));
             // Clean up the registry entry we created via cloneDatabase.
             QSqlDatabase::removeDatabase(guard.name);
             guard.name.clear();
@@ -106,9 +102,7 @@ QSqlDatabase Database::connection() {
         // connection — only re-apply per-connection ones.
         apply_pragmas(clone, /*include_database_wide=*/false);
         const int n = ++per_thread_connections_;
-        LOG_INFO(kDbTag, QString("Opened per-thread connection on [%1] (total=%2)")
-                           .arg(thread_label(t))
-                           .arg(n));
+        LOG_INFO(kDbTag, QString("Opened per-thread connection on [%1] (total=%2)").arg(thread_label(t)).arg(n));
     }
     return QSqlDatabase::database(guard.name, /*open=*/false);
 }
@@ -183,12 +177,8 @@ Result<void> Database::apply_pragmas(QSqlDatabase& conn, bool include_database_w
         "PRAGMA journal_mode = WAL",
     };
     static const char* kPerConnection[] = {
-        "PRAGMA synchronous = NORMAL",
-        "PRAGMA cache_size = -20000",
-        "PRAGMA temp_store = MEMORY",
-        "PRAGMA mmap_size = 268435456",
-        "PRAGMA foreign_keys = ON",
-        "PRAGMA busy_timeout = 5000",
+        "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -20000", "PRAGMA temp_store = MEMORY",
+        "PRAGMA mmap_size = 268435456", "PRAGMA foreign_keys = ON",   "PRAGMA busy_timeout = 5000",
     };
 
     auto run = [&conn](const char* sql) {

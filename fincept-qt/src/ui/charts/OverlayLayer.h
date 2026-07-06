@@ -16,7 +16,7 @@ enum class LayerType { Series, HorizontalLine, Region, Annotation };
 
 class OverlayLayer : public QObject {
     Q_OBJECT
-public:
+  public:
     explicit OverlayLayer(QObject* parent = nullptr);
     ~OverlayLayer() override;
 
@@ -32,10 +32,10 @@ public:
     virtual void detach(QGraphicsScene* scene, QChart* chart) = 0;
     virtual void reposition(QChart* chart) = 0;
 
-signals:
+  signals:
     void visibility_changed(bool visible);
 
-private:
+  private:
     bool visible_ = true;
 };
 

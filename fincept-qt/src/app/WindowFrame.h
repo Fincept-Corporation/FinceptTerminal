@@ -1,7 +1,7 @@
 ﻿#pragma once
-#include "screens/ai_chat/AiChatBubble.h"
 #include "core/identity/Uuid.h"
 #include "core/layout/LayoutTypes.h"
+#include "screens/ai_chat/AiChatBubble.h"
 
 #include <QMainWindow>
 #include <QPointer>
@@ -49,8 +49,7 @@ class WindowFrame : public QMainWindow {
     ///                      dashboard navigate at the end of setup_docking_mode() runs
     ///                      before the ctor returns and would otherwise bind panels
     ///                      to a freshly-minted UUID).
-    explicit WindowFrame(int window_id = 0, QWidget* parent = nullptr,
-                         const WindowId& adopted_uuid = {});
+    explicit WindowFrame(int window_id = 0, QWidget* parent = nullptr, const WindowId& adopted_uuid = {});
 
     int window_id() const { return window_id_; }
 
@@ -244,7 +243,7 @@ class WindowFrame : public QMainWindow {
     bool focus_mode_ = false;
     bool chat_mode_ = false;
     bool always_on_top_ = false;
-    bool locked_ = false; ///< True while lock/PIN screen is active — blocks navigation.
+    bool locked_ = false;           ///< True while lock/PIN screen is active — blocks navigation.
     bool pin_gate_cleared_ = false; ///< Set once the user has passed the PIN gate this session.
                                     ///< Prevents subsequent auth_state_changed events (profile
                                     ///< refresh, subscription fetch, focus refresh) from

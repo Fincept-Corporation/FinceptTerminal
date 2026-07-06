@@ -168,8 +168,7 @@ Result<void> CacheDatabase::create_tables() {
                     LOG_INFO("CacheDB", "screen_state migrated: added instance_uuid column");
                 } else {
                     LOG_WARN("CacheDB",
-                             QString("Failed to add instance_uuid column: %1")
-                                 .arg(alter.lastError().text()));
+                             QString("Failed to add instance_uuid column: %1").arg(alter.lastError().text()));
                 }
             }
         }

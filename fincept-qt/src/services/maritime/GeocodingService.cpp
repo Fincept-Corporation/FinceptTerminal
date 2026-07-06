@@ -45,32 +45,33 @@ QString geo_cache_key_for(const QString& query, int limit) {
 QJsonObject geo_to_json(const GeoPlace& p) {
     QJsonObject o;
     o["display_name"] = p.display_name;
-    o["type"]         = p.type;
-    o["lat"]          = p.latitude;
-    o["lng"]          = p.longitude;
-    o["min_lat"]      = p.min_lat;
-    o["max_lat"]      = p.max_lat;
-    o["min_lng"]      = p.min_lng;
-    o["max_lng"]      = p.max_lng;
+    o["type"] = p.type;
+    o["lat"] = p.latitude;
+    o["lng"] = p.longitude;
+    o["min_lat"] = p.min_lat;
+    o["max_lat"] = p.max_lat;
+    o["min_lng"] = p.min_lng;
+    o["max_lng"] = p.max_lng;
     return o;
 }
 
 GeoPlace geo_from_json(const QJsonObject& o) {
     GeoPlace p;
     p.display_name = o["display_name"].toString();
-    p.type         = o["type"].toString();
-    p.latitude     = o["lat"].toDouble();
-    p.longitude    = o["lng"].toDouble();
-    p.min_lat      = o["min_lat"].toDouble();
-    p.max_lat      = o["max_lat"].toDouble();
-    p.min_lng      = o["min_lng"].toDouble();
-    p.max_lng      = o["max_lng"].toDouble();
+    p.type = o["type"].toString();
+    p.latitude = o["lat"].toDouble();
+    p.longitude = o["lng"].toDouble();
+    p.min_lat = o["min_lat"].toDouble();
+    p.max_lat = o["max_lat"].toDouble();
+    p.min_lng = o["min_lng"].toDouble();
+    p.max_lng = o["max_lng"].toDouble();
     return p;
 }
 
 QByteArray geo_serialize_results(const QVector<GeoPlace>& rows) {
     QJsonArray arr;
-    for (const auto& p : rows) arr.append(geo_to_json(p));
+    for (const auto& p : rows)
+        arr.append(geo_to_json(p));
     return QJsonDocument(arr).toJson(QJsonDocument::Compact);
 }
 
@@ -78,7 +79,8 @@ QVector<GeoPlace> geo_deserialize_results(const QByteArray& blob) {
     QVector<GeoPlace> out;
     const auto arr = QJsonDocument::fromJson(blob).array();
     out.reserve(arr.size());
-    for (const auto& v : arr) out.append(geo_from_json(v.toObject()));
+    for (const auto& v : arr)
+        out.append(geo_from_json(v.toObject()));
     return out;
 }
 
@@ -88,9 +90,9 @@ QVector<GeoPlace> geo_deserialize_results(const QByteArray& blob) {
 GeoPlace parse_nominatim(const QJsonObject& o) {
     GeoPlace p;
     p.display_name = o["display_name"].toString();
-    p.type         = o["type"].toString();
-    p.latitude     = o["lat"].toString().toDouble();
-    p.longitude    = o["lon"].toString().toDouble();
+    p.type = o["type"].toString();
+    p.latitude = o["lat"].toString().toDouble();
+    p.longitude = o["lon"].toString().toDouble();
 
     const QJsonArray bb = o["boundingbox"].toArray();
     if (bb.size() == 4) {
@@ -99,7 +101,7 @@ GeoPlace parse_nominatim(const QJsonObject& o) {
         p.min_lng = bb[2].toString().toDouble();
         p.max_lng = bb[3].toString().toDouble();
     } else {
-        constexpr double kPad = 0.25;  // ~25-30 km half-extent fallback
+        constexpr double kPad = 0.25; // ~25-30 km half-extent fallback
         p.min_lat = p.latitude - kPad;
         p.max_lat = p.latitude + kPad;
         p.min_lng = p.longitude - kPad;
@@ -108,7 +110,7 @@ GeoPlace parse_nominatim(const QJsonObject& o) {
     return p;
 }
 
-}  // namespace
+} // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 GeocodingService& GeocodingService::instance() {
@@ -166,9 +168,8 @@ void GeocodingService::search(const QString& query, int limit) {
         for (const auto& v : arr)
             places.append(parse_nominatim(v.toObject()));
 
-        fincept::CacheManager::instance().put(
-            cache_key, QVariant(QString::fromUtf8(geo_serialize_results(places))),
-            kGeoCacheTtlSec, "maritime");
+        fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(geo_serialize_results(places))),
+                                              kGeoCacheTtlSec, "maritime");
 
         LOG_INFO("Geocoding", QString("Place search '%1': %2 result(s)").arg(context).arg(places.size()));
         emit self->places_found(places, context);

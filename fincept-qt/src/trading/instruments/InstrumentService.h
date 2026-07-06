@@ -50,8 +50,7 @@ class InstrumentService : public QObject {
     /// Load instruments from DB on a worker thread. Non-blocking.
     /// On completion, invokes callback(count) on the UI thread.
     /// If broker already loaded, callback fires immediately with cached count.
-    void load_from_db_async(const QString& broker_id,
-                            std::function<void(int)> callback = nullptr);
+    void load_from_db_async(const QString& broker_id, std::function<void(int)> callback = nullptr);
 
     /// Synchronous DB load safe to call from a QtConcurrent worker thread.
     /// Opens a private named QSqlDatabase connection (does NOT touch the shared
@@ -98,8 +97,7 @@ class InstrumentService : public QObject {
     /// All option-bearing underlyings on a given exchange (default NFO).
     /// Distinct `name` field across CE/PE/FUT entries — typically yields
     /// {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", ...stock symbols...}.
-    QStringList list_underlyings(const QString& broker_id,
-                                 const QString& exchange = "NFO") const;
+    QStringList list_underlyings(const QString& broker_id, const QString& exchange = "NFO") const;
 
     /// Distinct expiries (display format "DD-MMM-YY") for a given underlying,
     /// sorted ascending by date.
@@ -109,10 +107,8 @@ class InstrumentService : public QObject {
     /// All CE+PE+FUT instruments matching (underlying, expiry). Strikes
     /// returned in ascending order. FUT entries (strike==0) are included
     /// last; chain assembly callers should filter by `instrument_type`.
-    QVector<Instrument> find_options_for_underlying(const QString& broker_id,
-                                                    const QString& underlying,
-                                                    const QString& expiry,
-                                                    const QString& exchange = "NFO") const;
+    QVector<Instrument> find_options_for_underlying(const QString& broker_id, const QString& underlying,
+                                                    const QString& expiry, const QString& exchange = "NFO") const;
 
     /// How many instruments are cached for this broker.
     int cached_count(const QString& broker_id) const;

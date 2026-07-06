@@ -50,7 +50,7 @@ class ExchangeSessionManager : public QObject, public fincept::datahub::Producer
     // ── Producer ───────────────────────────────────────────────────────────
     QStringList topic_patterns() const override;
     void refresh(const QStringList& topics) override; // no-op: push_only
-    int max_requests_per_sec() const override;         // 0 (unlimited: WS)
+    int max_requests_per_sec() const override;        // 0 (unlimited: WS)
 
     ExchangeSessionManager(const ExchangeSessionManager&) = delete;
     ExchangeSessionManager& operator=(const ExchangeSessionManager&) = delete;

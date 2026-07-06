@@ -126,8 +126,7 @@ void OpenPositionsWidget::populate(const QVector<trading::BrokerPosition>& rows)
         auto* qty = new QTableWidgetItem(QString::number(p.quantity, 'f', 0));
         auto* avg = new QTableWidgetItem(QString::number(p.avg_price, 'f', 2));
         auto* ltp = new QTableWidgetItem(QString::number(p.ltp, 'f', 2));
-        auto* pnl = new QTableWidgetItem(
-            QString("%1%2").arg(p.pnl >= 0 ? "+" : "").arg(p.pnl, 0, 'f', 2));
+        auto* pnl = new QTableWidgetItem(QString("%1%2").arg(p.pnl >= 0 ? "+" : "").arg(p.pnl, 0, 'f', 2));
         const QColor pnl_color(p.pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
         pnl->setForeground(pnl_color);
         qty->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -181,15 +180,14 @@ void OpenPositionsWidget::on_theme_changed() {
 
 void OpenPositionsWidget::apply_styles() {
     header_hint_->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;")
-            .arg(ui::colors::TEXT_TERTIARY()));
-    table_->setStyleSheet(QString(
-        "QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
-        "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
-        "padding:2px 4px;font-size:9px;font-weight:bold;}"
-        "QTableWidget::item{padding:2px 4px;}")
-        .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-             ui::colors::TEXT_TERTIARY()));
+        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    table_->setStyleSheet(
+        QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
+                "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
+                "padding:2px 4px;font-size:9px;font-weight:bold;}"
+                "QTableWidget::item{padding:2px 4px;}")
+            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
+                 ui::colors::TEXT_TERTIARY()));
 }
 
 void OpenPositionsWidget::retranslateUi() {

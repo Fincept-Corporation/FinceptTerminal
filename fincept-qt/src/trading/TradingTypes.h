@@ -253,14 +253,12 @@ inline const char* product_to_broker_str(ProductType p) {
 /// auto-squared at session close. Treats MIS / INTRADAY as intraday; everything
 /// else (CNC / NRML / delivery / margin / blank) is carry-forward.
 inline bool product_is_intraday(const QString& product) {
-    return product.compare("MIS", Qt::CaseInsensitive) == 0 ||
-           product.compare("intraday", Qt::CaseInsensitive) == 0;
+    return product.compare("MIS", Qt::CaseInsensitive) == 0 || product.compare("intraday", Qt::CaseInsensitive) == 0;
 }
 
 /// True when a broker product string denotes a delivery holding (CNC / delivery).
 inline bool product_is_delivery(const QString& product) {
-    return product.compare("CNC", Qt::CaseInsensitive) == 0 ||
-           product.compare("delivery", Qt::CaseInsensitive) == 0;
+    return product.compare("CNC", Qt::CaseInsensitive) == 0 || product.compare("delivery", Qt::CaseInsensitive) == 0;
 }
 
 /// Parse a broker product mnemonic (MIS/CNC/NRML/MTF) back to a ProductType.
@@ -310,7 +308,7 @@ struct BrokerHolding {
     double quantity = 0;
     double avg_price = 0;
     double ltp = 0;
-    double pnl = 0;          // overall P&L (current_value - invested_value)
+    double pnl = 0; // overall P&L (current_value - invested_value)
     double pnl_pct = 0;
     double invested_value = 0;
     double current_value = 0;
@@ -832,8 +830,7 @@ struct OptionChainEntry {
 /// parity: Synthetic_Future = ATM_Call_LTP - ATM_Put_LTP + ATM_Strike.
 /// Useful for deriving the implied fair-value of the underlying from option
 /// premiums when the spot/futures price is stale or unavailable.
-inline double calculate_synthetic_future(double atm_call_ltp, double atm_put_ltp, double atm_strike)
-{
+inline double calculate_synthetic_future(double atm_call_ltp, double atm_put_ltp, double atm_strike) {
     return atm_call_ltp - atm_put_ltp + atm_strike;
 }
 

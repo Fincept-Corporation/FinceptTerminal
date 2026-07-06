@@ -10,7 +10,9 @@
 // "pending" handle to the real competition id before constructing this venue).
 #include "services/alpha_arena/PaperExchange.h"
 
-namespace fincept::trading::hyperliquid { class HyperliquidVenue; }
+namespace fincept::trading::hyperliquid {
+class HyperliquidVenue;
+}
 
 namespace fincept::arena {
 
@@ -24,7 +26,7 @@ class HyperliquidLiveVenue : public PaperExchange {
   private:
     void mirror_live(const OrderRow& filled);
 
-    fincept::trading::hyperliquid::HyperliquidVenue* hl_ = nullptr;   // owned (no QObject parent)
+    fincept::trading::hyperliquid::HyperliquidVenue* hl_ = nullptr; // owned (no QObject parent)
 };
 
 } // namespace fincept::arena

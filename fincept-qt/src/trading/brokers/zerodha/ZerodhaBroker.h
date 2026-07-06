@@ -58,9 +58,8 @@ class ZerodhaBroker : public IBroker {
 
     /// Runs the full headless TOTP auto-login chain. MUST be called from a
     /// worker thread. Internally uses QEventLoop across 4 HTTP round-trips.
-    TokenExchangeResponse login_with_totp(const QString& user_id, const QString& password,
-                                          const QString& api_key, const QString& api_secret,
-                                          const QString& totp_secret,
+    TokenExchangeResponse login_with_totp(const QString& user_id, const QString& password, const QString& api_key,
+                                          const QString& api_secret, const QString& totp_secret,
                                           std::function<void(const QString&)> progress = {});
 
     // Silent refresh replays the stored TOTP auto-login (Kite has no retail
@@ -84,13 +83,11 @@ class ZerodhaBroker : public IBroker {
                                                    const QString& to_date) override;
 
     // --- Multi-quote & Market Depth ---
-    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(
-        const BrokerCredentials& creds,
-        const QVector<QPair<QString, QString>>& symbols) override;
+    ApiResponse<QVector<BrokerQuote>> get_multi_quotes(const BrokerCredentials& creds,
+                                                       const QVector<QPair<QString, QString>>& symbols) override;
 
-    ApiResponse<MarketDepth> get_market_depth(
-        const BrokerCredentials& creds,
-        const QString& symbol, const QString& exchange) override;
+    ApiResponse<MarketDepth> get_market_depth(const BrokerCredentials& creds, const QString& symbol,
+                                              const QString& exchange) override;
 
     // --- Margin ---
     ApiResponse<OrderMargin> get_order_margins(const BrokerCredentials& creds, const UnifiedOrder& order) override;

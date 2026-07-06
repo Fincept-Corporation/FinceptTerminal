@@ -52,8 +52,7 @@ void WorkspaceFwspImporter::run_once_if_needed() {
         QJsonParseError err{};
         const auto doc = QJsonDocument::fromJson(bytes, &err);
         if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-            LOG_WARN(kTag, QString("Skipping %1: parse error: %2")
-                              .arg(fi.fileName(), err.errorString()));
+            LOG_WARN(kTag, QString("Skipping %1: parse error: %2").arg(fi.fileName(), err.errorString()));
             ++skipped;
             continue;
         }
@@ -69,8 +68,7 @@ void WorkspaceFwspImporter::run_once_if_needed() {
         w.id = LayoutId::generate();
         w.name = name;
         w.kind = QStringLiteral("user");
-        w.description = QStringLiteral(
-            "(Imported from v3 — empty layout, please re-save under this name)");
+        w.description = QStringLiteral("(Imported from v3 — empty layout, please re-save under this name)");
         w.created_at_unix = QDateTime::currentSecsSinceEpoch();
         w.updated_at_unix = w.created_at_unix;
         // No frames / variants / link_state — user must re-save once they
@@ -83,8 +81,7 @@ void WorkspaceFwspImporter::run_once_if_needed() {
     }
 
     LayoutCatalog::instance().set_meta(QStringLiteral("fwsp_import_done"), QStringLiteral("1"));
-    LOG_INFO(kTag, QString("Imported %1 legacy workspace name(s); %2 skipped")
-                       .arg(imported).arg(skipped));
+    LOG_INFO(kTag, QString("Imported %1 legacy workspace name(s); %2 skipped").arg(imported).arg(skipped));
 }
 
 } // namespace fincept

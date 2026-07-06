@@ -15,24 +15,22 @@
 
 namespace fincept::algo {
 
-RealtimeScanRunner::RealtimeScanRunner(QString watch_id, QStringList universe,
-                                       QJsonArray conditions, QString logic, QString timeframe,
-                                       QString broker_id, QString account_id, QString data_source,
+RealtimeScanRunner::RealtimeScanRunner(QString watch_id, QStringList universe, QJsonArray conditions, QString logic,
+                                       QString timeframe, QString broker_id, QString account_id, QString data_source,
                                        int sweep_ms, int cooldown_min, QObject* parent)
-    : QObject(parent)
-    , watch_id_(std::move(watch_id))
-    , universe_(std::move(universe))
-    , conditions_(std::move(conditions))
-    , logic_(std::move(logic))
-    , timeframe_(std::move(timeframe))
-    , tf_enum_(timeframe_from_string(timeframe_ == QStringLiteral("live") ? QStringLiteral("1m")
-                                                                          : timeframe_))
-    , broker_id_(std::move(broker_id))
-    , account_id_(std::move(account_id))
-    , data_source_(std::move(data_source))
-    , sweep_ms_(sweep_ms)
-    , cooldown_min_(cooldown_min)
-    , required_bars_(required_bars(conditions_)) {}
+    : QObject(parent),
+      watch_id_(std::move(watch_id)),
+      universe_(std::move(universe)),
+      conditions_(std::move(conditions)),
+      logic_(std::move(logic)),
+      timeframe_(std::move(timeframe)),
+      tf_enum_(timeframe_from_string(timeframe_ == QStringLiteral("live") ? QStringLiteral("1m") : timeframe_)),
+      broker_id_(std::move(broker_id)),
+      account_id_(std::move(account_id)),
+      data_source_(std::move(data_source)),
+      sweep_ms_(sweep_ms),
+      cooldown_min_(cooldown_min),
+      required_bars_(required_bars(conditions_)) {}
 
 RealtimeScanRunner::~RealtimeScanRunner() {
     qDeleteAll(states_);
@@ -48,11 +46,10 @@ int RealtimeScanRunner::required_bars(const QJsonArray& conditions) {
                 walk(o.value(QStringLiteral("children")).toArray());
                 continue;
             }
-            const int period  = o.value(QStringLiteral("params")).toObject()
-                                     .value(QStringLiteral("period")).toInt(0);
-            const int cperiod = o.value(QStringLiteral("compare_params")).toObject()
-                                     .value(QStringLiteral("period")).toInt(0);
-            const int offset  = o.value(QStringLiteral("offset")).toInt(0);
+            const int period = o.value(QStringLiteral("params")).toObject().value(QStringLiteral("period")).toInt(0);
+            const int cperiod =
+                o.value(QStringLiteral("compare_params")).toObject().value(QStringLiteral("period")).toInt(0);
+            const int offset = o.value(QStringLiteral("offset")).toInt(0);
             const int coffset = o.value(QStringLiteral("compare_offset")).toInt(0);
             const int need = qMax(period, cperiod) + qMax(offset, coffset) + 2;
             if (need > max_need)
@@ -90,9 +87,11 @@ void RealtimeScanRunner::start() {
     sweep_timer_->start();
 
     emit status_changed(watch_id_, QStringLiteral("running"));
-    LOG_INFO("RealtimeScanRunner",
-             QString("watch=%1 started: %2 symbols, sweep=%3ms, req_bars=%4")
-                 .arg(watch_id_).arg(universe_.size()).arg(sweep_ms_).arg(required_bars_));
+    LOG_INFO("RealtimeScanRunner", QString("watch=%1 started: %2 symbols, sweep=%3ms, req_bars=%4")
+                                       .arg(watch_id_)
+                                       .arg(universe_.size())
+                                       .arg(sweep_ms_)
+                                       .arg(required_bars_));
 }
 
 void RealtimeScanRunner::stop() {
@@ -171,8 +170,7 @@ void RealtimeScanRunner::on_sweep() {
             if (st->armed && now - st->last_fired_ms >= cooldown_ms) {
                 QStringList parts;
                 for (const auto& d : eval.details)
-                    parts << QString("%1 %2 %3").arg(d.indicator, d.op,
-                                                      QString::number(d.target_value, 'f', 2));
+                    parts << QString("%1 %2 %3").arg(d.indicator, d.op, QString::number(d.target_value, 'f', 2));
                 emit match_found(watch_id_, it.key(), st->last_price, parts.join(" & "));
                 st->last_fired_ms = now;
                 st->armed = false;

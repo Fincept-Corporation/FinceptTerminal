@@ -36,9 +36,9 @@ QByteArray download_iifl(const BrokerCredentials& creds) {
     for (const QString& seg : kSegments) {
         QJsonObject body;
         body["exchangeSegmentList"] = QJsonArray{seg};
-        const QByteArray resp = http_post_blocking(kMd + "/instruments/master",
-                                                   QJsonDocument(body).toJson(QJsonDocument::Compact),
-                                                   "application/json", headers, 60000);
+        const QByteArray resp =
+            http_post_blocking(kMd + "/instruments/master", QJsonDocument(body).toJson(QJsonDocument::Compact),
+                               "application/json", headers, 60000);
         if (resp.isEmpty())
             continue;
         const QJsonObject o = QJsonDocument::fromJson(resp).object();
@@ -95,8 +95,8 @@ QVector<Instrument> parse_iifl(const QByteArray& payload) {
     const QString text = QString::fromUtf8(payload);
     const QList<QStringView> lines = QStringView(text).split(u'\n');
 
-    QString seg;       // current market-data segment
-    QString idx_seg;   // current index-list segment ("1"/"11")
+    QString seg;     // current market-data segment
+    QString idx_seg; // current index-list segment ("1"/"11")
     for (const QStringView lv : lines) {
         const QString line = lv.trimmed().toString();
         if (line.isEmpty())

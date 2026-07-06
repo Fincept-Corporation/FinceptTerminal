@@ -7,7 +7,6 @@
 
 #include "screens/docs/DocsScreen.h"
 #include "screens/docs/DocsScreen_internal.h"
-
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
@@ -160,28 +159,29 @@ QWidget* DocsScreen::page_getting_started() {
 }
 
 QWidget* DocsScreen::page_keyboard_shortcuts() {
-    return make_page(tr("KEYBOARD SHORTCUTS"), tr("Global shortcuts and navigation keys"),
-                     {
-                         {tr("GLOBAL SHORTCUTS"), tr("F11  — Toggle fullscreen mode\n"
-                                                     "F10  — Toggle focus mode (hides tab bar and status bar)\n"
-                                                     "F5   — Refresh the current screen data\n"
-                                                     "Ctrl+P — Capture screenshot (saved to ~/FinceptScreenshot_*.png)")},
-                         {tr("FILE MENU"), tr("New Workspace — Create a fresh workspace layout\n"
-                                              "Open Workspace — Load a saved workspace\n"
-                                              "Save Workspace — Persist current layout\n"
-                                              "Import Data — Import external data files\n"
-                                              "Export Data — Export current view data\n"
-                                              "Refresh All — Refresh all active data feeds")},
-                         {tr("NAVIGATE MENU"), tr("Access 30+ screens organized in sub-menus:\n"
-                                                  "■  Markets & Data — Screener, Economics, DBnomics, AkShare, Gov Data\n"
-                                                  "■  Trading & Portfolio — Equity Trading, Derivatives, Watchlist\n"
-                                                  "■  Research — Equity Research, M&A, Geopolitics, Surface Analytics\n"
-                                                  "■  Tools — Report Builder, Node Editor, Code Editor, Excel, Notes")},
-                         {tr("VIEW MENU"), tr("Fullscreen (F11) — Use full monitor space\n"
-                                              "Focus Mode (F10) — Hide chrome for maximum content area\n"
-                                              "Refresh (F5) — Reload current screen\n"
-                                              "Screenshot (Ctrl+P) — Capture to file")},
-                     });
+    return make_page(
+        tr("KEYBOARD SHORTCUTS"), tr("Global shortcuts and navigation keys"),
+        {
+            {tr("GLOBAL SHORTCUTS"), tr("F11  — Toggle fullscreen mode\n"
+                                        "F10  — Toggle focus mode (hides tab bar and status bar)\n"
+                                        "F5   — Refresh the current screen data\n"
+                                        "Ctrl+P — Capture screenshot (saved to ~/FinceptScreenshot_*.png)")},
+            {tr("FILE MENU"), tr("New Workspace — Create a fresh workspace layout\n"
+                                 "Open Workspace — Load a saved workspace\n"
+                                 "Save Workspace — Persist current layout\n"
+                                 "Import Data — Import external data files\n"
+                                 "Export Data — Export current view data\n"
+                                 "Refresh All — Refresh all active data feeds")},
+            {tr("NAVIGATE MENU"), tr("Access 30+ screens organized in sub-menus:\n"
+                                     "■  Markets & Data — Screener, Economics, DBnomics, AkShare, Gov Data\n"
+                                     "■  Trading & Portfolio — Equity Trading, Derivatives, Watchlist\n"
+                                     "■  Research — Equity Research, M&A, Geopolitics, Surface Analytics\n"
+                                     "■  Tools — Report Builder, Node Editor, Code Editor, Excel, Notes")},
+            {tr("VIEW MENU"), tr("Fullscreen (F11) — Use full monitor space\n"
+                                 "Focus Mode (F10) — Hide chrome for maximum content area\n"
+                                 "Refresh (F5) — Reload current screen\n"
+                                 "Screenshot (Ctrl+P) — Capture to file")},
+        });
 }
 
 // ============================================================================
@@ -207,12 +207,12 @@ QWidget* DocsScreen::page_dashboard() {
     sep->setStyleSheet(QString("color: %1;").arg(ui::colors::BORDER_DIM()));
     vl->addWidget(sep);
 
-    vl->addWidget(
-        make_section_panel("■", tr("OVERVIEW"),
-                           tr("The Dashboard is your primary workspace. It features a draggable widget grid "
-                              "where you can arrange market widgets, a scrolling ticker bar showing live prices, "
-                              "a market pulse panel with sector performance, and a status bar showing connection state."),
-                           ui::colors::AMBER));
+    vl->addWidget(make_section_panel(
+        "■", tr("OVERVIEW"),
+        tr("The Dashboard is your primary workspace. It features a draggable widget grid "
+           "where you can arrange market widgets, a scrolling ticker bar showing live prices, "
+           "a market pulse panel with sector performance, and a status bar showing connection state."),
+        ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("■", tr("AVAILABLE WIDGETS"),
                                      tr("■  Stock Quote — Real-time price, change, volume for any symbol\n"
@@ -334,26 +334,27 @@ QWidget* DocsScreen::page_news() {
 }
 
 QWidget* DocsScreen::page_watchlist() {
-    return make_page(tr("WATCHLIST"), tr("Track your favorite instruments with live quotes"),
-                     {
-                         {tr("OVERVIEW"), tr("The Watchlist screen lets you create and manage multiple watchlists, each with "
-                                             "live price quotes, change indicators, and quick access to detailed analysis.")},
-                         {tr("KEY FEATURES"), tr("■  Multiple named watchlists (Favorites, Day Trades, Swing, etc.)\n"
-                                                 "■  Live price, change, % change, volume\n"
-                                                 "■  Add/remove symbols easily\n"
-                                                 "■  Color-coded performance (green/red)\n"
-                                                 "■  Click to navigate to detailed chart/analysis\n"
-                                                 "■  Persistent storage — watchlists saved between sessions")},
-                         {tr("REAL-WORLD USAGE"),
-                          tr("■  Organize by strategy: separate watchlists for day trades, swing trades, long-term\n"
-                             "■  Sector watchlists: group symbols by industry for sector rotation\n"
-                             "■  Earnings watchlist: track companies reporting this week\n"
-                             "■  Correlation pairs: group correlated instruments together")},
-                         {tr("SKILL LEVELS"), tr("BEGINNER: Create your first watchlist with 5-10 symbols you know\n"
-                                                 "INTERMEDIATE: Multiple watchlists organized by strategy or sector\n"
-                                                 "ADVANCED: Use watchlists as a pre-screened universe for your scanning\n"
-                                                 "PRO: Dynamic watchlists driven by screener output and quantitative filters")},
-                     });
+    return make_page(
+        tr("WATCHLIST"), tr("Track your favorite instruments with live quotes"),
+        {
+            {tr("OVERVIEW"), tr("The Watchlist screen lets you create and manage multiple watchlists, each with "
+                                "live price quotes, change indicators, and quick access to detailed analysis.")},
+            {tr("KEY FEATURES"), tr("■  Multiple named watchlists (Favorites, Day Trades, Swing, etc.)\n"
+                                    "■  Live price, change, % change, volume\n"
+                                    "■  Add/remove symbols easily\n"
+                                    "■  Color-coded performance (green/red)\n"
+                                    "■  Click to navigate to detailed chart/analysis\n"
+                                    "■  Persistent storage — watchlists saved between sessions")},
+            {tr("REAL-WORLD USAGE"),
+             tr("■  Organize by strategy: separate watchlists for day trades, swing trades, long-term\n"
+                "■  Sector watchlists: group symbols by industry for sector rotation\n"
+                "■  Earnings watchlist: track companies reporting this week\n"
+                "■  Correlation pairs: group correlated instruments together")},
+            {tr("SKILL LEVELS"), tr("BEGINNER: Create your first watchlist with 5-10 symbols you know\n"
+                                    "INTERMEDIATE: Multiple watchlists organized by strategy or sector\n"
+                                    "ADVANCED: Use watchlists as a pre-screened universe for your scanning\n"
+                                    "PRO: Dynamic watchlists driven by screener output and quantitative filters")},
+        });
 }
 
 // ============================================================================

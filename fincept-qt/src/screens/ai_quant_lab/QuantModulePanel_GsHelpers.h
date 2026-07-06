@@ -37,8 +37,9 @@ inline QWidget* gs_make_card(const QString& label, const QString& value, QWidget
     l->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px; background:transparent;")
                          .arg(ui::colors::TEXT_TERTIARY()));
     auto* v = new QLabel(value, card);
-    v->setStyleSheet(QString("color:%1; font-size:13px; font-weight:700; font-family:'Courier New'; background:transparent;")
-                         .arg(value_color.isEmpty() ? QString(ui::colors::TEXT_PRIMARY()) : value_color));
+    v->setStyleSheet(
+        QString("color:%1; font-size:13px; font-weight:700; font-family:'Courier New'; background:transparent;")
+            .arg(value_color.isEmpty() ? QString(ui::colors::TEXT_PRIMARY()) : value_color));
     cvl->addWidget(l);
     cvl->addWidget(v);
     return card;
@@ -73,8 +74,10 @@ inline QString gs_fmt_num(double v, int decimals = 4) {
 }
 
 inline QString gs_pos_neg_color(double v) {
-    if (v > 0) return ui::colors::POSITIVE();
-    if (v < 0) return ui::colors::NEGATIVE();
+    if (v > 0)
+        return ui::colors::POSITIVE();
+    if (v < 0)
+        return ui::colors::NEGATIVE();
     return ui::colors::TEXT_PRIMARY();
 }
 

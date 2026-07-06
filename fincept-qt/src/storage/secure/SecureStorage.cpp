@@ -32,9 +32,9 @@ static constexpr auto TAG = "SecureStorage";
 namespace fincept {
 namespace {
 
-constexpr int kKeyLen = 32;     // AES-256
-constexpr int kIvLen = 12;      // GCM-recommended nonce size (RFC 5116 §5)
-constexpr int kTagLen = 16;     // GCM authentication tag (128 bits)
+constexpr int kKeyLen = 32; // AES-256
+constexpr int kIvLen = 12;  // GCM-recommended nonce size (RFC 5116 §5)
+constexpr int kTagLen = 16; // GCM authentication tag (128 bits)
 
 // Stable per-app salt mixed into the machine-ID hash so a different app
 // on the same machine derives a different key. Bumping this rotates
@@ -77,8 +77,8 @@ QByteArray random_iv() {
 // AES-256-GCM encrypt. Returns ciphertext + the GCM tag through `tag_out`.
 // On any OpenSSL error returns an empty QByteArray and logs — callers must
 // check both isEmpty() AND tag_out.size() == kTagLen before persisting.
-QByteArray aes_gcm_encrypt(const QByteArray& key, const QByteArray& iv,
-                           const QByteArray& plaintext, QByteArray& tag_out) {
+QByteArray aes_gcm_encrypt(const QByteArray& key, const QByteArray& iv, const QByteArray& plaintext,
+                           QByteArray& tag_out) {
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx)
         return {};
@@ -90,8 +90,7 @@ QByteArray aes_gcm_encrypt(const QByteArray& key, const QByteArray& iv,
             break;
         if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, kIvLen, nullptr))
             break;
-        if (1 != EVP_EncryptInit_ex(ctx, nullptr, nullptr,
-                                    reinterpret_cast<const unsigned char*>(key.constData()),
+        if (1 != EVP_EncryptInit_ex(ctx, nullptr, nullptr, reinterpret_cast<const unsigned char*>(key.constData()),
                                     reinterpret_cast<const unsigned char*>(iv.constData())))
             break;
 
@@ -101,16 +100,12 @@ QByteArray aes_gcm_encrypt(const QByteArray& key, const QByteArray& iv,
         // reports cipher block size for compatibility reasons.
         out.resize(plaintext.size() + 16);
         int len = 0;
-        if (1 != EVP_EncryptUpdate(ctx,
-                                   reinterpret_cast<unsigned char*>(out.data()), &len,
-                                   reinterpret_cast<const unsigned char*>(plaintext.constData()),
-                                   plaintext.size()))
+        if (1 != EVP_EncryptUpdate(ctx, reinterpret_cast<unsigned char*>(out.data()), &len,
+                                   reinterpret_cast<const unsigned char*>(plaintext.constData()), plaintext.size()))
             break;
         int written = len;
 
-        if (1 != EVP_EncryptFinal_ex(ctx,
-                                     reinterpret_cast<unsigned char*>(out.data()) + written,
-                                     &len))
+        if (1 != EVP_EncryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(out.data()) + written, &len))
             break;
         written += len;
         out.resize(written);
@@ -124,8 +119,7 @@ QByteArray aes_gcm_encrypt(const QByteArray& key, const QByteArray& iv,
 
     EVP_CIPHER_CTX_free(ctx);
     if (!ok) {
-        LOG_ERROR(TAG, QString("AES-GCM encrypt failed: OpenSSL err 0x%1")
-                           .arg(ERR_get_error(), 0, 16));
+        LOG_ERROR(TAG, QString("AES-GCM encrypt failed: OpenSSL err 0x%1").arg(ERR_get_error(), 0, 16));
         return {};
     }
     return out;
@@ -135,9 +129,8 @@ QByteArray aes_gcm_encrypt(const QByteArray& key, const QByteArray& iv,
 // an empty QByteArray if the tag doesn't verify (tampered ciphertext, wrong
 // machine, corrupted DB row). Callers must NOT use the returned bytes if
 // `ok_out` is false — an empty QByteArray is also a valid plaintext.
-QByteArray aes_gcm_decrypt(const QByteArray& key, const QByteArray& iv,
-                           const QByteArray& ciphertext, const QByteArray& tag,
-                           bool& ok_out) {
+QByteArray aes_gcm_decrypt(const QByteArray& key, const QByteArray& iv, const QByteArray& ciphertext,
+                           const QByteArray& tag, bool& ok_out) {
     ok_out = false;
     if (iv.size() != kIvLen || tag.size() != kTagLen)
         return {};
@@ -152,30 +145,24 @@ QByteArray aes_gcm_decrypt(const QByteArray& key, const QByteArray& iv,
             break;
         if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, kIvLen, nullptr))
             break;
-        if (1 != EVP_DecryptInit_ex(ctx, nullptr, nullptr,
-                                    reinterpret_cast<const unsigned char*>(key.constData()),
+        if (1 != EVP_DecryptInit_ex(ctx, nullptr, nullptr, reinterpret_cast<const unsigned char*>(key.constData()),
                                     reinterpret_cast<const unsigned char*>(iv.constData())))
             break;
 
         out.resize(ciphertext.size() + 16);
         int len = 0;
-        if (1 != EVP_DecryptUpdate(ctx,
-                                   reinterpret_cast<unsigned char*>(out.data()), &len,
-                                   reinterpret_cast<const unsigned char*>(ciphertext.constData()),
-                                   ciphertext.size()))
+        if (1 != EVP_DecryptUpdate(ctx, reinterpret_cast<unsigned char*>(out.data()), &len,
+                                   reinterpret_cast<const unsigned char*>(ciphertext.constData()), ciphertext.size()))
             break;
         int written = len;
 
         // EVP_CTRL_GCM_SET_TAG must be called before EVP_DecryptFinal_ex —
         // Final is what actually verifies the tag and returns 0 on mismatch.
-        if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kTagLen,
-                                     const_cast<char*>(tag.constData())))
+        if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kTagLen, const_cast<char*>(tag.constData())))
             break;
 
-        if (1 != EVP_DecryptFinal_ex(ctx,
-                                     reinterpret_cast<unsigned char*>(out.data()) + written,
-                                     &len))
-            break;  // tag mismatch — leave ok_out=false
+        if (1 != EVP_DecryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(out.data()) + written, &len))
+            break; // tag mismatch — leave ok_out=false
         written += len;
         out.resize(written);
         ok_out = true;
@@ -223,8 +210,7 @@ Result<void> SecureStorage::store(const QString& key, const QString& value) {
     q.addBindValue(iv);
     q.addBindValue(tag);
     if (!q.exec()) {
-        LOG_ERROR(TAG, QString("SQL upsert failed for key %1: %2")
-                           .arg(key, q.lastError().text()));
+        LOG_ERROR(TAG, QString("SQL upsert failed for key %1: %2").arg(key, q.lastError().text()));
         return Result<void>::err("Failed to write credential row");
     }
     return Result<void>::ok();
@@ -242,8 +228,7 @@ Result<QString> SecureStorage::retrieve(const QString& key) {
     q.prepare("SELECT ciphertext, iv, tag FROM secure_credentials WHERE key = ?");
     q.addBindValue(key);
     if (!q.exec()) {
-        LOG_ERROR(TAG, QString("SQL select failed for key %1: %2")
-                           .arg(key, q.lastError().text()));
+        LOG_ERROR(TAG, QString("SQL select failed for key %1: %2").arg(key, q.lastError().text()));
         return Result<QString>::err("Read failed");
     }
     if (!q.next())
@@ -276,8 +261,7 @@ Result<void> SecureStorage::remove(const QString& key) {
     q.prepare("DELETE FROM secure_credentials WHERE key = ?");
     q.addBindValue(key);
     if (!q.exec()) {
-        LOG_ERROR(TAG, QString("SQL delete failed for key %1: %2")
-                           .arg(key, q.lastError().text()));
+        LOG_ERROR(TAG, QString("SQL delete failed for key %1: %2").arg(key, q.lastError().text()));
         return Result<void>::err("Delete failed");
     }
     return Result<void>::ok();

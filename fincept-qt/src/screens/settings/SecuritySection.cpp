@@ -75,14 +75,15 @@ void SecuritySection::build_ui() {
 
     sec_pin_status_ = new QLabel;
     sec_pin_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
-    auto* row_pin_status = make_row(tr("PIN Status"), sec_pin_status_, tr("A 6-digit PIN is required to unlock the terminal."));
+    auto* row_pin_status =
+        make_row(tr("PIN Status"), sec_pin_status_, tr("A 6-digit PIN is required to unlock the terminal."));
     capture_row_labels(row_pin_status, &row_pin_status_lbl_, &row_pin_status_desc_);
     vl->addWidget(row_pin_status);
 
     sec_lockout_status_ = new QLabel;
     sec_lockout_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
-    auto* row_attempts = make_row(tr("Failed Attempts"), sec_lockout_status_,
-                                  tr("PIN lockout engages after 5 consecutive failures."));
+    auto* row_attempts =
+        make_row(tr("Failed Attempts"), sec_lockout_status_, tr("PIN lockout engages after 5 consecutive failures."));
     capture_row_labels(row_attempts, &row_attempts_lbl_, &row_attempts_desc_);
     vl->addWidget(row_attempts);
 
@@ -237,21 +238,23 @@ void SecuritySection::build_ui() {
     sec_autolock_toggle_ = new QCheckBox(tr("Enable auto-lock on inactivity"));
     sec_autolock_toggle_->setChecked(true);
     sec_autolock_toggle_->setStyleSheet(check_ss());
-    auto* row_autolock = make_row(tr("Auto-Lock"), sec_autolock_toggle_, tr("Locks the terminal after a period of inactivity."));
+    auto* row_autolock =
+        make_row(tr("Auto-Lock"), sec_autolock_toggle_, tr("Locks the terminal after a period of inactivity."));
     capture_row_labels(row_autolock, &row_autolock_lbl_, &row_autolock_desc_);
     vl->addWidget(row_autolock);
 
     sec_lock_timeout_ = new QComboBox;
-    sec_lock_timeout_->addItem(tr("1 min"),  1);
-    sec_lock_timeout_->addItem(tr("2 min"),  2);
-    sec_lock_timeout_->addItem(tr("5 min"),  5);
+    sec_lock_timeout_->addItem(tr("1 min"), 1);
+    sec_lock_timeout_->addItem(tr("2 min"), 2);
+    sec_lock_timeout_->addItem(tr("5 min"), 5);
     sec_lock_timeout_->addItem(tr("10 min"), 10);
     sec_lock_timeout_->addItem(tr("15 min"), 15);
     sec_lock_timeout_->addItem(tr("30 min"), 30);
     sec_lock_timeout_->addItem(tr("60 min"), 60);
     sec_lock_timeout_->setCurrentIndex(3);
     sec_lock_timeout_->setStyleSheet(combo_ss());
-    auto* row_timeout = make_row(tr("Lock Timeout"), sec_lock_timeout_, tr("Time of inactivity before the terminal locks."));
+    auto* row_timeout =
+        make_row(tr("Lock Timeout"), sec_lock_timeout_, tr("Time of inactivity before the terminal locks."));
     capture_row_labels(row_timeout, &row_timeout_lbl_, &row_timeout_desc_);
     vl->addWidget(row_timeout);
 
@@ -272,18 +275,17 @@ void SecuritySection::build_ui() {
     save_btn_->setFixedWidth(200);
     save_btn_->setStyleSheet(btn_primary_ss());
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
-        auto& repo  = SettingsRepository::instance();
+        auto& repo = SettingsRepository::instance();
         auto& guard = auth::InactivityGuard::instance();
-        auto& pm    = auth::PinManager::instance();
+        auto& pm = auth::PinManager::instance();
 
         bool autolock = sec_autolock_toggle_->isChecked();
-        int  minutes  = sec_lock_timeout_->currentData().toInt();
+        int minutes = sec_lock_timeout_->currentData().toInt();
 
-        repo.set("security.autolock_enabled",     autolock ? "true" : "false", "security");
-        repo.set("security.lock_timeout_minutes", QString::number(minutes),    "security");
+        repo.set("security.autolock_enabled", autolock ? "true" : "false", "security");
+        repo.set("security.lock_timeout_minutes", QString::number(minutes), "security");
         if (sec_lock_on_minimize_) {
-            repo.set("security.lock_on_minimize",
-                     sec_lock_on_minimize_->isChecked() ? "true" : "false", "security");
+            repo.set("security.lock_on_minimize", sec_lock_on_minimize_->isChecked() ? "true" : "false", "security");
         }
 
         // Always update interval; only flip enabled if a PIN is configured
@@ -292,9 +294,10 @@ void SecuritySection::build_ui() {
         guard.set_timeout_minutes(minutes);
         guard.set_enabled(autolock && pm.has_pin());
 
-        LOG_INFO("Settings",
-                 QString("Security settings saved: autolock=%1, timeout=%2min, has_pin=%3")
-                     .arg(autolock).arg(minutes).arg(pm.has_pin()));
+        LOG_INFO("Settings", QString("Security settings saved: autolock=%1, timeout=%2min, has_pin=%3")
+                                 .arg(autolock)
+                                 .arg(minutes)
+                                 .arg(pm.has_pin()));
     });
     vl->addWidget(save_btn_);
 
@@ -307,8 +310,7 @@ void SecuritySection::build_ui() {
 
     audit_note_ = new QLabel(tr("Recent security events (PIN setup, failed unlocks, inactivity locks)."));
     audit_note_->setWordWrap(true);
-    audit_note_->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;")
-                                  .arg(ui::colors::TEXT_DIM()));
+    audit_note_->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(ui::colors::TEXT_DIM()));
     vl->addWidget(audit_note_);
 
     sec_audit_list_ = new QListWidget;
@@ -332,17 +334,18 @@ void SecuritySection::build_ui() {
 }
 
 void SecuritySection::refresh_audit_log() {
-    if (!sec_audit_list_) return;
+    if (!sec_audit_list_)
+        return;
     sec_audit_list_->clear();
     const auto events = auth::SecurityAuditLog::instance().recent(100);
     for (const auto& e : events) {
         const QString ts = e.timestamp.toString("yyyy-MM-dd hh:mm:ss");
-        const QString line = e.detail.isEmpty()
-                                 ? QString("%1  %2").arg(ts, e.event)
-                                 : QString("%1  %2  (%3)").arg(ts, e.event, e.detail);
+        const QString line = e.detail.isEmpty() ? QString("%1  %2").arg(ts, e.event)
+                                                : QString("%1  %2  (%3)").arg(ts, e.event, e.detail);
         sec_audit_list_->addItem(line);
     }
-    if (events.isEmpty()) sec_audit_list_->addItem(tr("(no events recorded yet)"));
+    if (events.isEmpty())
+        sec_audit_list_->addItem(tr("(no events recorded yet)"));
 }
 
 void SecuritySection::changeEvent(QEvent* event) {
@@ -353,43 +356,69 @@ void SecuritySection::changeEvent(QEvent* event) {
 
 void SecuritySection::retranslateUi() {
     // Section titles.
-    if (title_pin_)    title_pin_->setText(tr("PIN AUTHENTICATION"));
-    if (title_change_) title_change_->setText(tr("CHANGE PIN"));
-    if (title_lock_)   title_lock_->setText(tr("AUTO-LOCK"));
-    if (title_audit_)  title_audit_->setText(tr("AUDIT LOG"));
-    if (audit_note_)   audit_note_->setText(tr("Recent security events (PIN setup, failed unlocks, inactivity locks)."));
+    if (title_pin_)
+        title_pin_->setText(tr("PIN AUTHENTICATION"));
+    if (title_change_)
+        title_change_->setText(tr("CHANGE PIN"));
+    if (title_lock_)
+        title_lock_->setText(tr("AUTO-LOCK"));
+    if (title_audit_)
+        title_audit_->setText(tr("AUDIT LOG"));
+    if (audit_note_)
+        audit_note_->setText(tr("Recent security events (PIN setup, failed unlocks, inactivity locks)."));
 
     // Row labels + descriptions.
-    if (row_pin_status_lbl_)  row_pin_status_lbl_->setText(tr("PIN Status"));
-    if (row_pin_status_desc_) row_pin_status_desc_->setText(tr("A 6-digit PIN is required to unlock the terminal."));
-    if (row_attempts_lbl_)    row_attempts_lbl_->setText(tr("Failed Attempts"));
-    if (row_attempts_desc_)   row_attempts_desc_->setText(tr("PIN lockout engages after 5 consecutive failures."));
-    if (row_current_lbl_)     row_current_lbl_->setText(tr("Current PIN"));
-    if (row_new_lbl_)         row_new_lbl_->setText(tr("New PIN"));
-    if (row_confirm_lbl_)     row_confirm_lbl_->setText(tr("Confirm PIN"));
-    if (row_autolock_lbl_)    row_autolock_lbl_->setText(tr("Auto-Lock"));
-    if (row_autolock_desc_)   row_autolock_desc_->setText(tr("Locks the terminal after a period of inactivity."));
-    if (row_timeout_lbl_)     row_timeout_lbl_->setText(tr("Lock Timeout"));
-    if (row_timeout_desc_)    row_timeout_desc_->setText(tr("Time of inactivity before the terminal locks."));
-    if (row_minimize_lbl_)    row_minimize_lbl_->setText(tr("Lock on Minimize"));
-    if (row_minimize_desc_)   row_minimize_desc_->setText(tr("When on, minimizing the terminal immediately shows the PIN screen."));
+    if (row_pin_status_lbl_)
+        row_pin_status_lbl_->setText(tr("PIN Status"));
+    if (row_pin_status_desc_)
+        row_pin_status_desc_->setText(tr("A 6-digit PIN is required to unlock the terminal."));
+    if (row_attempts_lbl_)
+        row_attempts_lbl_->setText(tr("Failed Attempts"));
+    if (row_attempts_desc_)
+        row_attempts_desc_->setText(tr("PIN lockout engages after 5 consecutive failures."));
+    if (row_current_lbl_)
+        row_current_lbl_->setText(tr("Current PIN"));
+    if (row_new_lbl_)
+        row_new_lbl_->setText(tr("New PIN"));
+    if (row_confirm_lbl_)
+        row_confirm_lbl_->setText(tr("Confirm PIN"));
+    if (row_autolock_lbl_)
+        row_autolock_lbl_->setText(tr("Auto-Lock"));
+    if (row_autolock_desc_)
+        row_autolock_desc_->setText(tr("Locks the terminal after a period of inactivity."));
+    if (row_timeout_lbl_)
+        row_timeout_lbl_->setText(tr("Lock Timeout"));
+    if (row_timeout_desc_)
+        row_timeout_desc_->setText(tr("Time of inactivity before the terminal locks."));
+    if (row_minimize_lbl_)
+        row_minimize_lbl_->setText(tr("Lock on Minimize"));
+    if (row_minimize_desc_)
+        row_minimize_desc_->setText(tr("When on, minimizing the terminal immediately shows the PIN screen."));
 
     // Checkbox texts.
-    if (sec_autolock_toggle_)  sec_autolock_toggle_->setText(tr("Enable auto-lock on inactivity"));
-    if (sec_lock_on_minimize_) sec_lock_on_minimize_->setText(tr("Lock when the window is minimized"));
+    if (sec_autolock_toggle_)
+        sec_autolock_toggle_->setText(tr("Enable auto-lock on inactivity"));
+    if (sec_lock_on_minimize_)
+        sec_lock_on_minimize_->setText(tr("Lock when the window is minimized"));
 
     // PIN field placeholders.
-    if (sec_current_pin_) sec_current_pin_->setPlaceholderText(tr("Current PIN"));
-    if (sec_new_pin_)     sec_new_pin_->setPlaceholderText(tr("New PIN"));
-    if (sec_confirm_pin_) sec_confirm_pin_->setPlaceholderText(tr("Confirm PIN"));
+    if (sec_current_pin_)
+        sec_current_pin_->setPlaceholderText(tr("Current PIN"));
+    if (sec_new_pin_)
+        sec_new_pin_->setPlaceholderText(tr("New PIN"));
+    if (sec_confirm_pin_)
+        sec_confirm_pin_->setPlaceholderText(tr("Confirm PIN"));
 
     // Buttons. The change-PIN button toggles label with form visibility.
     if (sec_change_pin_btn_)
         sec_change_pin_btn_->setText(sec_change_pin_form_ && sec_change_pin_form_->isVisible() ? tr("Cancel")
-                                                                                              : tr("Change PIN"));
-    if (save_pin_btn_)      save_pin_btn_->setText(tr("Update PIN"));
-    if (save_btn_)          save_btn_->setText(tr("Save Security Settings"));
-    if (refresh_audit_btn_) refresh_audit_btn_->setText(tr("Refresh"));
+                                                                                               : tr("Change PIN"));
+    if (save_pin_btn_)
+        save_pin_btn_->setText(tr("Update PIN"));
+    if (save_btn_)
+        save_btn_->setText(tr("Save Security Settings"));
+    if (refresh_audit_btn_)
+        refresh_audit_btn_->setText(tr("Refresh"));
 
     // Lock-timeout combo items are fixed UI labels (data = minutes). Re-apply
     // text per index without disturbing the selection.
@@ -410,7 +439,7 @@ void SecuritySection::retranslateUi() {
 }
 
 void SecuritySection::reload() {
-    auto& pm   = auth::PinManager::instance();
+    auto& pm = auth::PinManager::instance();
     auto& repo = SettingsRepository::instance();
 
     if (sec_pin_status_) {
@@ -427,7 +456,8 @@ void SecuritySection::reload() {
                 .arg(attempts > 0 ? ui::colors::WARNING() : ui::colors::TEXT_SECONDARY()));
     }
 
-    if (sec_change_pin_btn_) sec_change_pin_btn_->setEnabled(pm.has_pin());
+    if (sec_change_pin_btn_)
+        sec_change_pin_btn_->setEnabled(pm.has_pin());
 
     if (sec_autolock_toggle_ && sec_lock_timeout_) {
         const QSignalBlocker b1(sec_autolock_toggle_);

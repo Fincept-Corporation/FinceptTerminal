@@ -76,8 +76,7 @@ class SurfaceControlPanel : public QWidget {
 
     // Update the provider status pill (header). dataset is shown alongside
     // the dot. State is one of "connected", "disconnected", "not configured".
-    void set_provider_status(const QString& provider_name, const QString& state,
-                             const QString& detail = QString());
+    void set_provider_status(const QString& provider_name, const QString& state, const QString& detail = QString());
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -130,7 +129,7 @@ class SurfaceControlPanel : public QWidget {
     // ── Asset section ──────────────────────────────────────────────────────
     QLineEdit* symbol_edit_ = nullptr;
     QComboBox* dataset_combo_ = nullptr;
-    QLabel* dataset_lbl_ = nullptr;   // "Dataset:" (cached for retranslateUi)
+    QLabel* dataset_lbl_ = nullptr; // "Dataset:" (cached for retranslateUi)
     QLabel* spot_label_ = nullptr;
     QLabel* tier_badge_ = nullptr;
     bool synthetic_ = false; // true while the displayed surface is demo/sample data
@@ -143,8 +142,7 @@ class SurfaceControlPanel : public QWidget {
     QLabel* dte_max_lbl_ = nullptr;
     QLabel* iv_method_lbl_ = nullptr;
     // Metric name labels in declared order: count/min/max/mean/median/std/skew/kurt
-    QLabel* metric_name_lbls_[8] = {nullptr, nullptr, nullptr, nullptr,
-                                    nullptr, nullptr, nullptr, nullptr};
+    QLabel* metric_name_lbls_[8] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
     // Symbol search autocomplete (Databento)
     QCompleter* symbol_completer_ = nullptr;
     QStringListModel* symbol_completer_model_ = nullptr;

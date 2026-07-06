@@ -15,8 +15,7 @@ QString AppPaths::root() {
     // Use GenericDataLocation which returns %LOCALAPPDATA% directly on Windows,
     // avoiding the fragile double-cdUp() from AppLocalDataLocation.
     // GenericDataLocation = %LOCALAPPDATA% on Windows (Qt docs: QStandardPaths).
-    const QString local_app_data =
-        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    const QString local_app_data = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
     return local_app_data + "/com.fincept.terminal";
 #elif defined(__APPLE__)
     return QDir::homePath() + "/Library/Application Support/com.fincept.terminal";
@@ -69,9 +68,8 @@ void AppPaths::ensure_all() {
         if (QDir().mkpath(p))
             return;
         const QFileInfo info(p);
-        fprintf(stderr,
-                "[AppPaths] mkpath failed: %s exists=%d isDir=%d writable=%d\n",
-                qUtf8Printable(p), info.exists(), info.isDir(), info.isWritable());
+        fprintf(stderr, "[AppPaths] mkpath failed: %s exists=%d isDir=%d writable=%d\n", qUtf8Printable(p),
+                info.exists(), info.isDir(), info.isWritable());
     };
     try_mkpath(root());
     try_mkpath(data());

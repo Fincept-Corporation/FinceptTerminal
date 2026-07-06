@@ -74,9 +74,8 @@ class AsyncDispatch {
     /// Re-entrancy: `resolve` is no-op after the first call. Useful when
     /// the timeout watchdog races with the service callback.
     template <typename BodyFn>
-    static void callback_to_promise(QObject* target, ToolContext /*ctx*/,
-                                     std::shared_ptr<QPromise<ToolResult>> promise,
-                                     BodyFn&& body) {
+    static void callback_to_promise(QObject* target, ToolContext /*ctx*/, std::shared_ptr<QPromise<ToolResult>> promise,
+                                    BodyFn&& body) {
         // Wrap resolve so it's idempotent — the timeout watchdog and the
         // service callback can race; whichever fires first wins.
         auto resolve = [promise](ToolResult r) {
@@ -92,9 +91,7 @@ class AsyncDispatch {
         }
 
         QMetaObject::invokeMethod(
-            target,
-            [body = std::forward<BodyFn>(body), resolve]() mutable { body(resolve); },
-            Qt::QueuedConnection);
+            target, [body = std::forward<BodyFn>(body), resolve]() mutable { body(resolve); }, Qt::QueuedConnection);
     }
 };
 

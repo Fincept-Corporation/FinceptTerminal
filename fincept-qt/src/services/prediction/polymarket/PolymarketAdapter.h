@@ -69,8 +69,7 @@ class PolymarketAdapter : public fincept::services::prediction::PredictionExchan
     void fetch_user_activity(int limit) override;
     void place_order(const fincept::services::prediction::OrderRequest& req) override;
     void cancel_order(const QString& order_id) override;
-    void cancel_all_for_market(const fincept::services::prediction::MarketKey& key,
-                               const QString& asset_id) override;
+    void cancel_all_for_market(const fincept::services::prediction::MarketKey& key, const QString& asset_id) override;
 
     void ensure_registered_with_hub() override;
 
@@ -106,12 +105,12 @@ class PolymarketAdapter : public fincept::services::prediction::PredictionExchan
     /// error emitted via error_occurred().
     void ensure_api_creds(std::function<void(const fincept::services::prediction::PolymarketCredentials&)> then,
                           const QString& ctx);
-    void run_py(const QString& command, const QJsonObject& payload,
-                std::function<void(const QJsonObject&)> on_ok, const QString& ctx);
+    void run_py(const QString& command, const QJsonObject& payload, std::function<void(const QJsonObject&)> on_ok,
+                const QString& ctx);
     QJsonObject creds_to_json(const fincept::services::prediction::PolymarketCredentials& c) const;
 
-    fincept::services::polymarket::PolymarketService* service_ = nullptr;  // singleton ptr, not owned
-    fincept::services::polymarket::PolymarketWebSocket* ws_ = nullptr;     // singleton ptr, not owned
+    fincept::services::polymarket::PolymarketService* service_ = nullptr; // singleton ptr, not owned
+    fincept::services::polymarket::PolymarketWebSocket* ws_ = nullptr;    // singleton ptr, not owned
 
     // Per-request context kept between service callback and our signal.
     QString last_history_asset_id_;
@@ -120,7 +119,7 @@ class PolymarketAdapter : public fincept::services::prediction::PredictionExchan
 
     // Authenticated-path state.
     std::optional<fincept::services::prediction::PolymarketCredentials> creds_;
-    QString cached_wallet_address_;  // derived once from private key
+    QString cached_wallet_address_; // derived once from private key
 };
 
 } // namespace fincept::services::prediction::polymarket_ns

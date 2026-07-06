@@ -70,9 +70,8 @@ class AccountManagementDialog : public QDialog {
     // MT4 (MetaAPI)-specific form + handlers
     void build_mt4_form();
     void on_connect_mt4();
-    void mt4_provision_async(const QString& meta_token, const QString& mt4_login,
-                              const QString& mt4_password, const QString& mt4_server,
-                              const QString& region);
+    void mt4_provision_async(const QString& meta_token, const QString& mt4_login, const QString& mt4_password,
+                             const QString& mt4_server, const QString& region);
 
     // Left panel — account list
     QLabel* list_label_ = nullptr;
@@ -110,57 +109,57 @@ class AccountManagementDialog : public QDialog {
     QStringList cred_form_keys_;
 
     // Zerodha-specific widgets
-    QLabel*        z_title_ = nullptr;
-    QLabel*        z_status_ = nullptr;
-    QPushButton*   z_setup_toggle_ = nullptr;
-    QWidget*       z_setup_panel_ = nullptr;
-    QRadioButton*  z_mode_totp_ = nullptr;
-    QRadioButton*  z_mode_browser_ = nullptr;
-    QLineEdit*     z_api_key_ = nullptr;
-    QLineEdit*     z_api_secret_ = nullptr;
-    QWidget*       z_totp_group_ = nullptr;
-    QLineEdit*     z_user_id_ = nullptr;
-    QLineEdit*     z_password_ = nullptr;
-    QLineEdit*     z_totp_secret_ = nullptr;
-    QWidget*       z_browser_group_ = nullptr;
-    QPushButton*   z_browser_btn_ = nullptr;
-    QPushButton*   z_manual_toggle_ = nullptr;
-    QWidget*       z_manual_panel_ = nullptr;
-    QLineEdit*     z_manual_token_ = nullptr;
-    QPushButton*   z_manual_connect_btn_ = nullptr;
-    QPushButton*   z_connect_btn_ = nullptr;
-    QPushButton*   z_rename_btn_ = nullptr;
+    QLabel* z_title_ = nullptr;
+    QLabel* z_status_ = nullptr;
+    QPushButton* z_setup_toggle_ = nullptr;
+    QWidget* z_setup_panel_ = nullptr;
+    QRadioButton* z_mode_totp_ = nullptr;
+    QRadioButton* z_mode_browser_ = nullptr;
+    QLineEdit* z_api_key_ = nullptr;
+    QLineEdit* z_api_secret_ = nullptr;
+    QWidget* z_totp_group_ = nullptr;
+    QLineEdit* z_user_id_ = nullptr;
+    QLineEdit* z_password_ = nullptr;
+    QLineEdit* z_totp_secret_ = nullptr;
+    QWidget* z_browser_group_ = nullptr;
+    QPushButton* z_browser_btn_ = nullptr;
+    QPushButton* z_manual_toggle_ = nullptr;
+    QWidget* z_manual_panel_ = nullptr;
+    QLineEdit* z_manual_token_ = nullptr;
+    QPushButton* z_manual_connect_btn_ = nullptr;
+    QPushButton* z_connect_btn_ = nullptr;
+    QPushButton* z_rename_btn_ = nullptr;
 
     trading::auth::RedirectServer* z_redirect_server_ = nullptr;
 
     // Fyers-specific widgets
-    QWidget*       fyers_page_ = nullptr;
-    QLabel*        f_title_ = nullptr;
-    QLabel*        f_status_ = nullptr;
-    QPushButton*   f_setup_toggle_ = nullptr;
-    QWidget*       f_setup_panel_ = nullptr;
-    QLineEdit*     f_client_id_ = nullptr;
-    QLineEdit*     f_api_secret_ = nullptr;
-    QPushButton*   f_browser_btn_ = nullptr;
-    QPushButton*   f_manual_toggle_ = nullptr;
-    QWidget*       f_manual_panel_ = nullptr;
-    QLineEdit*     f_manual_token_ = nullptr;
-    QPushButton*   f_manual_connect_btn_ = nullptr;
-    QPushButton*   f_rename_btn_ = nullptr;
+    QWidget* fyers_page_ = nullptr;
+    QLabel* f_title_ = nullptr;
+    QLabel* f_status_ = nullptr;
+    QPushButton* f_setup_toggle_ = nullptr;
+    QWidget* f_setup_panel_ = nullptr;
+    QLineEdit* f_client_id_ = nullptr;
+    QLineEdit* f_api_secret_ = nullptr;
+    QPushButton* f_browser_btn_ = nullptr;
+    QPushButton* f_manual_toggle_ = nullptr;
+    QWidget* f_manual_panel_ = nullptr;
+    QLineEdit* f_manual_token_ = nullptr;
+    QPushButton* f_manual_connect_btn_ = nullptr;
+    QPushButton* f_rename_btn_ = nullptr;
     trading::auth::RedirectServer* f_redirect_server_ = nullptr;
 
     // MT4 (MetaAPI)-specific widgets
-    QWidget*     mt4_page_ = nullptr;
-    QLabel*      mt4_title_ = nullptr;
-    QLabel*      mt4_status_ = nullptr;
+    QWidget* mt4_page_ = nullptr;
+    QLabel* mt4_title_ = nullptr;
+    QLabel* mt4_status_ = nullptr;
     QPushButton* mt4_setup_toggle_ = nullptr;
-    QWidget*     mt4_setup_panel_ = nullptr;
-    QLineEdit*   mt4_meta_token_ = nullptr;
-    QLineEdit*   mt4_login_ = nullptr;
-    QLineEdit*   mt4_password_ = nullptr;
-    QLineEdit*   mt4_server_ = nullptr;
-    QComboBox*   mt4_region_ = nullptr;
-    QComboBox*   mt4_account_type_ = nullptr;
+    QWidget* mt4_setup_panel_ = nullptr;
+    QLineEdit* mt4_meta_token_ = nullptr;
+    QLineEdit* mt4_login_ = nullptr;
+    QLineEdit* mt4_password_ = nullptr;
+    QLineEdit* mt4_server_ = nullptr;
+    QComboBox* mt4_region_ = nullptr;
+    QComboBox* mt4_account_type_ = nullptr;
     QPushButton* mt4_connect_btn_ = nullptr;
     QPushButton* mt4_rename_btn_ = nullptr;
 

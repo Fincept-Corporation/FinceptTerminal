@@ -32,8 +32,7 @@ class WorkspaceShell {
     /// is provided, its UUID + variants list are preserved (so adding
     /// a new variant for a different monitor topology doesn't lose the
     /// existing variants).
-    static Workspace capture(const QString& name, const QString& kind = "user",
-                             const Workspace* previous = nullptr);
+    static Workspace capture(const QString& name, const QString& kind = "user", const Workspace* previous = nullptr);
 
     /// Apply a saved Workspace to the current shell. Walks the workspace's
     /// frames, reuses existing frames where window UUIDs match, spawns

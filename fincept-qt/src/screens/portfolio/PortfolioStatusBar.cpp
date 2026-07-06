@@ -122,8 +122,10 @@ void PortfolioStatusBar::changeEvent(QEvent* event) {
 }
 
 void PortfolioStatusBar::retranslateUi() {
-    if (version_label_)  version_label_->setText(tr("PORTFOLIO TERMINAL v4.0"));
-    if (live_label_)     live_label_->setText("● " + tr("LIVE"));
+    if (version_label_)
+        version_label_->setText(tr("PORTFOLIO TERMINAL v4.0"));
+    if (live_label_)
+        live_label_->setText("● " + tr("LIVE"));
 
     if (last_summary_.has_value()) {
         // Re-render dynamic strings from cached summary.

@@ -150,8 +150,7 @@ QString status_style() {
 
 // Bounded fetch of the current LTP from the connected broker for deploy-time sanity
 // checks. Runs off-thread with a short timeout so the deploy click never hangs.
-double fetch_quote_ltp(const QString& broker_id, const QString& account_id, const QString& symbol,
-                       int timeout_ms) {
+double fetch_quote_ltp(const QString& broker_id, const QString& account_id, const QString& symbol, int timeout_ms) {
     if (broker_id.isEmpty() || account_id.isEmpty() || symbol.isEmpty())
         return 0.0;
     auto fut = QtConcurrent::run([broker_id, account_id, symbol]() -> double {
@@ -195,21 +194,26 @@ void scan_unreachable(const QJsonArray& conds, const QString& section, double pr
             continue;
         if (op == "crosses_above" && price > val)
             out << QString("• %1 '%2 crosses above %3' — price %4 is already above; it can never cross up.")
-                       .arg(section, ind).arg(val, 0, 'f', 2).arg(price, 0, 'f', 2);
+                       .arg(section, ind)
+                       .arg(val, 0, 'f', 2)
+                       .arg(price, 0, 'f', 2);
         else if (op == "crosses_below" && price < val)
             out << QString("• %1 '%2 crosses below %3' — price %4 is already below; it can never cross down.")
-                       .arg(section, ind).arg(val, 0, 'f', 2).arg(price, 0, 'f', 2);
+                       .arg(section, ind)
+                       .arg(val, 0, 'f', 2)
+                       .arg(price, 0, 'f', 2);
         else if (std::abs(price - val) / price > 0.25)
             out << QString("• %1 '%2 %3 %4' — threshold is %5% away from price %6.")
-                       .arg(section, ind, op).arg(val, 0, 'f', 2)
-                       .arg(std::abs(price - val) / price * 100.0, 0, 'f', 0).arg(price, 0, 'f', 2);
+                       .arg(section, ind, op)
+                       .arg(val, 0, 'f', 2)
+                       .arg(std::abs(price - val) / price * 100.0, 0, 'f', 0)
+                       .arg(price, 0, 'f', 2);
     }
 }
 
 } // namespace
 
-StrategyBuilderPanel::StrategyBuilderPanel(QWidget* parent)
-    : QWidget(parent) {
+StrategyBuilderPanel::StrategyBuilderPanel(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("strategyBuilderPanel"));
     build_ui();
     connect_service();
@@ -250,9 +254,8 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
     auto* toolbar = new QWidget(this);
     toolbar->setObjectName(QStringLiteral("builderToolbar"));
     toolbar->setFixedHeight(48);
-    toolbar->setStyleSheet(
-        QString("QWidget#builderToolbar{background:%1;border-bottom:1px solid %2;}")
-            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    toolbar->setStyleSheet(QString("QWidget#builderToolbar{background:%1;border-bottom:1px solid %2;}")
+                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     auto* layout = new QHBoxLayout(toolbar);
     layout->setContentsMargins(12, 6, 12, 6);
     layout->setSpacing(8);
@@ -298,9 +301,9 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
     // ── Instrument-type selector (P2.3) ──
     instrument_type_combo_ = new QComboBox(this);
     instrument_type_combo_->setObjectName(QStringLiteral("builderInstrumentType"));
-    instrument_type_combo_->addItem(tr("Equity"),  QStringLiteral("equity"));
-    instrument_type_combo_->addItem(tr("Option"),  QStringLiteral("option"));
-    instrument_type_combo_->addItem(tr("Future"),  QStringLiteral("future"));
+    instrument_type_combo_->addItem(tr("Equity"), QStringLiteral("equity"));
+    instrument_type_combo_->addItem(tr("Option"), QStringLiteral("option"));
+    instrument_type_combo_->addItem(tr("Future"), QStringLiteral("future"));
     instrument_type_combo_->setToolTip(tr("Instrument type this strategy trades"));
 
     // ── State chip + primary actions ──
@@ -341,8 +344,7 @@ QWidget* StrategyBuilderPanel::build_top_toolbar() {
 
     connect(save_btn_, &QPushButton::clicked, this, &StrategyBuilderPanel::on_save);
     connect(deploy_btn_, &QPushButton::clicked, this, &StrategyBuilderPanel::on_deploy);
-    connect(template_combo_, QOverload<int>::of(&QComboBox::activated), this,
-            &StrategyBuilderPanel::load_template);
+    connect(template_combo_, QOverload<int>::of(&QComboBox::activated), this, &StrategyBuilderPanel::load_template);
     connect(instrument_type_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &StrategyBuilderPanel::on_instrument_type_changed);
 
@@ -361,10 +363,8 @@ QWidget* StrategyBuilderPanel::build_left_panel() {
     layout->setContentsMargins(10, 10, 6, 10);
     layout->setSpacing(10);
 
-    entry_section_ = new ui::algo::ConditionSection(
-        ui::algo::ConditionSection::Type::Entry, this);
-    exit_section_ = new ui::algo::ConditionSection(
-        ui::algo::ConditionSection::Type::Exit, this);
+    entry_section_ = new ui::algo::ConditionSection(ui::algo::ConditionSection::Type::Entry, this);
+    exit_section_ = new ui::algo::ConditionSection(ui::algo::ConditionSection::Type::Exit, this);
     risk_panel_ = new ui::algo::RiskManagementPanel(this);
 
     // Color-coded cards build an instant visual language: green = entry/buy,
@@ -386,10 +386,10 @@ QWidget* StrategyBuilderPanel::build_right_panel() {
 
     // ── BACKTEST SETUP card — every test input in one place ──────────────────
     auto* setup_card = new QFrame(right);
-    bt_setup_card_ = setup_card;  // store for show/hide in on_instrument_type_changed
+    bt_setup_card_ = setup_card; // store for show/hide in on_instrument_type_changed
     setup_card->setObjectName(QStringLiteral("builderSetupCard"));
     setup_card->setStyleSheet(QString("QFrame#builderSetupCard{background:%1;border:1px solid %2;"
-                                       "border-left:2px solid %3;border-radius:5px;}")
+                                      "border-left:2px solid %3;border-radius:5px;}")
                                   .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM())
                                   .arg(ui::colors::CYAN()));
     auto* setup = new QVBoxLayout(setup_card);
@@ -518,10 +518,10 @@ void StrategyBuilderPanel::build_fno_section() {
     expiry_mode_combo_ = new QComboBox(fno_section_);
     expiry_mode_combo_->setObjectName(QStringLiteral("builderFnoExpiryMode"));
     expiry_mode_combo_->setToolTip(tr("Expiry selection rule"));
-    expiry_mode_combo_->addItem(tr("Weekly"),      QStringLiteral("weekly"));
-    expiry_mode_combo_->addItem(tr("Monthly"),     QStringLiteral("monthly"));
+    expiry_mode_combo_->addItem(tr("Weekly"), QStringLiteral("weekly"));
+    expiry_mode_combo_->addItem(tr("Monthly"), QStringLiteral("monthly"));
     expiry_mode_combo_->addItem(tr("Nearest DTE"), QStringLiteral("nearest_dte"));
-    expiry_mode_combo_->addItem(tr("Absolute"),    QStringLiteral("absolute"));
+    expiry_mode_combo_->addItem(tr("Absolute"), QStringLiteral("absolute"));
 
     header_row->addWidget(field_label(tr("Underlying")));
     header_row->addWidget(underlying_combo_, 1);
@@ -542,17 +542,15 @@ void StrategyBuilderPanel::build_fno_section() {
     layout->addWidget(payoff_chart_, 1);
 
     // Connect all preview-trigger signals to refresh_fno_preview()
-    connect(leg_editor_, &fincept::ui::algo::FnoLegRuleEditor::legs_changed,
-            this, &StrategyBuilderPanel::refresh_fno_preview);
-    connect(underlying_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &StrategyBuilderPanel::refresh_fno_preview);
-    connect(expiry_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &StrategyBuilderPanel::refresh_fno_preview);
+    connect(leg_editor_, &fincept::ui::algo::FnoLegRuleEditor::legs_changed, this,
+            &StrategyBuilderPanel::refresh_fno_preview);
+    connect(underlying_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &StrategyBuilderPanel::refresh_fno_preview);
+    connect(expiry_mode_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &StrategyBuilderPanel::refresh_fno_preview);
     connect(&fincept::services::options::OptionChainService::instance(),
-            &fincept::services::options::OptionChainService::chain_published,
-            this, [this](const fincept::services::options::OptionChain&) {
-                refresh_fno_preview();
-            });
+            &fincept::services::options::OptionChainService::chain_published, this,
+            [this](const fincept::services::options::OptionChain&) { refresh_fno_preview(); });
 }
 
 void StrategyBuilderPanel::populate_underlyings() {
@@ -598,12 +596,17 @@ void StrategyBuilderPanel::on_instrument_type_changed() {
         return;
     const QString type = instrument_type_combo_->currentData().toString();
     if (type == QLatin1String("equity")) {
-        if (bt_setup_card_) bt_setup_card_->setVisible(true);
-        if (fno_section_)   fno_section_->setVisible(false);
+        if (bt_setup_card_)
+            bt_setup_card_->setVisible(true);
+        if (fno_section_)
+            fno_section_->setVisible(false);
     } else {
-        if (bt_setup_card_) bt_setup_card_->setVisible(false);
-        if (fno_section_)   fno_section_->setVisible(true);
-        if (underlying_combo_) populate_underlyings();
+        if (bt_setup_card_)
+            bt_setup_card_->setVisible(false);
+        if (fno_section_)
+            fno_section_->setVisible(true);
+        if (underlying_combo_)
+            populate_underlyings();
         refresh_fno_preview();
     }
 }
@@ -620,14 +623,11 @@ QString StrategyBuilderPanel::fno_broker_id() const {
 
 void StrategyBuilderPanel::connect_service() {
     auto& svc = services::algo::AlgoTradingService::instance();
-    connect(&svc, &services::algo::AlgoTradingService::backtest_result,
-            this, &StrategyBuilderPanel::on_backtest_result);
-    connect(&svc, &services::algo::AlgoTradingService::error_occurred,
-            this, &StrategyBuilderPanel::on_error);
-    connect(&svc, &services::algo::AlgoTradingService::strategy_saved,
-            this, [this](const QString& id) {
-                status_label_->setText(tr("Strategy saved: %1").arg(id));
-            });
+    connect(&svc, &services::algo::AlgoTradingService::backtest_result, this,
+            &StrategyBuilderPanel::on_backtest_result);
+    connect(&svc, &services::algo::AlgoTradingService::error_occurred, this, &StrategyBuilderPanel::on_error);
+    connect(&svc, &services::algo::AlgoTradingService::strategy_saved, this,
+            [this](const QString& id) { status_label_->setText(tr("Strategy saved: %1").arg(id)); });
 }
 
 services::algo::AlgoStrategy StrategyBuilderPanel::build_strategy() {
@@ -648,8 +648,8 @@ services::algo::AlgoStrategy StrategyBuilderPanel::build_strategy() {
     strat.trailing_stop = risk_panel_->trailing_stop();
     strat.position_size_pct = risk_panel_->capital_pct();
     // P2.3: persist instrument type and F&O leg rules
-    strat.instrument_type = instrument_type_combo_ ? instrument_type_combo_->currentData().toString()
-                                                   : QStringLiteral("equity");
+    strat.instrument_type =
+        instrument_type_combo_ ? instrument_type_combo_->currentData().toString() : QStringLiteral("equity");
     if (strat.instrument_type != QLatin1String("equity") && leg_editor_)
         strat.legs = fincept::algo::fno::fno_legs_to_json(leg_editor_->legs());
     return strat;
@@ -685,7 +685,8 @@ void StrategyBuilderPanel::on_backtest() {
     auto strat = build_strategy();
 
     QString symbol = symbol_combo_->currentText().trimmed();
-    if (symbol.isEmpty()) symbol = QStringLiteral("RELIANCE");
+    if (symbol.isEmpty())
+        symbol = QStringLiteral("RELIANCE");
 
     services::algo::AlgoTradingService::instance().run_backtest(
         strat, symbol, bt_start_date_->date().toString(QStringLiteral("yyyy-MM-dd")),
@@ -698,8 +699,7 @@ void StrategyBuilderPanel::on_deploy() {
     // backtest card, far from the Deploy button, so a silent setText() there reads
     // as "Deploy did nothing".
     if (name_edit_->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, tr("Deploy"),
-                             tr("Enter a strategy name before deploying."));
+        QMessageBox::warning(this, tr("Deploy"), tr("Enter a strategy name before deploying."));
         name_edit_->setFocus();
         return;
     }
@@ -727,18 +727,20 @@ void StrategyBuilderPanel::on_deploy() {
 
         // Sanity check (non-blocking, bounded): warn if a rule can't fire at the
         // current price — e.g. 'crosses_above 280.45' on a stock trading at 1204.
-        const double cur_price = fetch_quote_ltp(deployment.broker_id, deployment.broker_account_id,
-                                                 deployment.symbol, 2500);
+        const double cur_price =
+            fetch_quote_ltp(deployment.broker_id, deployment.broker_account_id, deployment.symbol, 2500);
         if (cur_price > 0) {
             QStringList warns;
             scan_unreachable(strat.entry_conditions, tr("Entry"), cur_price, warns);
             scan_unreachable(strat.exit_conditions, tr("Exit"), cur_price, warns);
             if (!warns.isEmpty()) {
-                const auto btn = QMessageBox::warning(
-                    this, tr("Deploy — check conditions"),
-                    tr("%1 is at %2, but some rules may never trigger:\n\n%3\n\nDeploy anyway?")
-                        .arg(deployment.symbol).arg(cur_price, 0, 'f', 2).arg(warns.join("\n\n")),
-                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                const auto btn =
+                    QMessageBox::warning(this, tr("Deploy — check conditions"),
+                                         tr("%1 is at %2, but some rules may never trigger:\n\n%3\n\nDeploy anyway?")
+                                             .arg(deployment.symbol)
+                                             .arg(cur_price, 0, 'f', 2)
+                                             .arg(warns.join("\n\n")),
+                                         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
                 if (btn != QMessageBox::Yes) {
                     dialog->deleteLater();
                     return;
@@ -747,14 +749,13 @@ void StrategyBuilderPanel::on_deploy() {
         }
 
         // Confirm before deploying an exact duplicate of an already-running setup.
-        if (algo_ns::AlgoEngine::instance().has_active_duplicate(
-                deployment.strategy_id, deployment.symbol, deployment.mode, deployment.entry_side)) {
+        if (algo_ns::AlgoEngine::instance().has_active_duplicate(deployment.strategy_id, deployment.symbol,
+                                                                 deployment.mode, deployment.entry_side)) {
             const auto btn = QMessageBox::question(
                 this, tr("Already deployed"),
                 tr("An identical deployment is already running:\n\n%1 · %2 · %3 · %4\n\n"
                    "Deploy another copy anyway?")
-                    .arg(deployment.strategy_name, deployment.symbol, deployment.mode.toUpper(),
-                         deployment.entry_side),
+                    .arg(deployment.strategy_name, deployment.symbol, deployment.mode.toUpper(), deployment.entry_side),
                 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
             if (btn != QMessageBox::Yes) {
                 dialog->deleteLater();
@@ -765,12 +766,11 @@ void StrategyBuilderPanel::on_deploy() {
         // Save strategy first
         services::algo::AlgoTradingService::instance().save_strategy(strat);
 
-        LOG_INFO("AlgoTrading",
-                 QString("Deploy requested: id=%1 strategy='%2' symbol=%3 mode=%4 backend=%5 "
-                         "broker=%6 acct=%7 qty=%8")
-                     .arg(deployment.id, strat.name, deployment.symbol, deployment.mode,
-                          deployment.backend, deployment.broker_id, deployment.broker_account_id)
-                     .arg(deployment.quantity));
+        LOG_INFO("AlgoTrading", QString("Deploy requested: id=%1 strategy='%2' symbol=%3 mode=%4 backend=%5 "
+                                        "broker=%6 acct=%7 qty=%8")
+                                    .arg(deployment.id, strat.name, deployment.symbol, deployment.mode,
+                                         deployment.backend, deployment.broker_id, deployment.broker_account_id)
+                                    .arg(deployment.quantity));
 
         // Deploy via C++ engine (persists the row, then starts the runner). Feedback
         // is the jump to the Dashboard below — NOT a label on the backtest card, which
@@ -798,7 +798,8 @@ void StrategyBuilderPanel::load_template(int index) {
     exit_section_->set_conditions(t.exit, t.exit_logic);
     risk_panel_->set_values(t.stop_loss, t.take_profit, 0.0, 1.0, 0.0);
     report_panel_->clear();
-    if (state_chip_) state_chip_->setText(tr("NEW DRAFT"));
+    if (state_chip_)
+        state_chip_->setText(tr("NEW DRAFT"));
     status_label_->setText(tr("Loaded template: %1").arg(t.name));
     template_combo_->setCurrentIndex(0); // reset to placeholder
 }
@@ -814,8 +815,8 @@ void StrategyBuilderPanel::load_strategy(const services::algo::AlgoStrategy& s) 
                             s.position_size_pct > 0 ? s.position_size_pct : 100.0);
     // P2.3: restore instrument type and F&O leg rules
     if (instrument_type_combo_) {
-        const int idx = instrument_type_combo_->findData(s.instrument_type.isEmpty()
-                                                             ? QStringLiteral("equity") : s.instrument_type);
+        const int idx = instrument_type_combo_->findData(s.instrument_type.isEmpty() ? QStringLiteral("equity")
+                                                                                     : s.instrument_type);
         {
             QSignalBlocker blocker(instrument_type_combo_);
             instrument_type_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
@@ -831,13 +832,13 @@ void StrategyBuilderPanel::load_strategy(const services::algo::AlgoStrategy& s) 
     bt_end_date_->setDate(today);
     report_panel_->clear();
     validation_banner_->setVisible(false);
-    if (state_chip_) state_chip_->setText(tr("EDITING"));
+    if (state_chip_)
+        state_chip_->setText(tr("EDITING"));
     status_label_->setText(tr("Editing: %1").arg(s.name));
 }
 
-void StrategyBuilderPanel::load_and_backtest(const services::algo::AlgoStrategy& s,
-                                             const QString& symbol, const QString& start_date,
-                                             const QString& end_date) {
+void StrategyBuilderPanel::load_and_backtest(const services::algo::AlgoStrategy& s, const QString& symbol,
+                                             const QString& start_date, const QString& end_date) {
     load_strategy(s);
     if (!symbol.isEmpty())
         symbol_combo_->setCurrentText(symbol);
@@ -909,13 +910,10 @@ void StrategyBuilderPanel::restore_draft(const QVariantMap& draft) {
     entry_section_->set_conditions(entry_json, draft.value("entry_logic", "AND").toString());
     exit_section_->set_conditions(exit_json, draft.value("exit_logic", "AND").toString());
 
-    risk_panel_->set_values(
-        draft.value("stop_loss", 2.0).toDouble(),
-        draft.value("take_profit", 5.0).toDouble(),
-        draft.value("trailing_stop", 0.0).toDouble(),
-        draft.value("quantity", 1.0).toDouble(),
-        draft.value("max_order_value", 0.0).toDouble(),
-        draft.value("capital_pct", 100.0).toDouble());
+    risk_panel_->set_values(draft.value("stop_loss", 2.0).toDouble(), draft.value("take_profit", 5.0).toDouble(),
+                            draft.value("trailing_stop", 0.0).toDouble(), draft.value("quantity", 1.0).toDouble(),
+                            draft.value("max_order_value", 0.0).toDouble(),
+                            draft.value("capital_pct", 100.0).toDouble());
 }
 
 // ── Live language switch ──────────────────────────────────────────────────────
@@ -927,23 +925,34 @@ void StrategyBuilderPanel::changeEvent(QEvent* event) {
 }
 
 void StrategyBuilderPanel::retranslateUi() {
-    if (name_edit_) name_edit_->setPlaceholderText(tr("Strategy Name"));
-    if (desc_edit_) desc_edit_->setPlaceholderText(tr("Description (optional)"));
+    if (name_edit_)
+        name_edit_->setPlaceholderText(tr("Strategy Name"));
+    if (desc_edit_)
+        desc_edit_->setPlaceholderText(tr("Description (optional)"));
 
     // template_combo_ item 0 is the "Templates…" placeholder; rest are data names.
     if (template_combo_ && template_combo_->count() > 0)
         template_combo_->setItemText(0, tr("Templates…"));
 
-    if (save_btn_)     save_btn_->setText(tr("Save"));
-    if (backtest_btn_) backtest_btn_->setText(tr("▶  RUN BACKTEST"));
-    if (deploy_btn_)   deploy_btn_->setText(tr("Deploy ▸"));
+    if (save_btn_)
+        save_btn_->setText(tr("Save"));
+    if (backtest_btn_)
+        backtest_btn_->setText(tr("▶  RUN BACKTEST"));
+    if (deploy_btn_)
+        deploy_btn_->setText(tr("Deploy ▸"));
 
-    if (bt_header_)        bt_header_->setText(tr("BACKTEST SETUP"));
-    if (bt_symbol_label_)  bt_symbol_label_->setText(tr("Symbol"));
-    if (bt_capital_label_) bt_capital_label_->setText(tr("Capital"));
-    if (bt_start_label_)   bt_start_label_->setText(tr("From"));
-    if (bt_end_label_)     bt_end_label_->setText(tr("To"));
-    if (results_header_)   results_header_->setText(tr("RESULTS"));
+    if (bt_header_)
+        bt_header_->setText(tr("BACKTEST SETUP"));
+    if (bt_symbol_label_)
+        bt_symbol_label_->setText(tr("Symbol"));
+    if (bt_capital_label_)
+        bt_capital_label_->setText(tr("Capital"));
+    if (bt_start_label_)
+        bt_start_label_->setText(tr("From"));
+    if (bt_end_label_)
+        bt_end_label_->setText(tr("To"));
+    if (results_header_)
+        results_header_->setText(tr("RESULTS"));
     // status_label_ carries transient action feedback — left as-is on language switch.
     // Child widgets (ConditionSection / RiskManagementPanel / BacktestReportPanel)
     // own their own retranslate via their changeEvent overrides.

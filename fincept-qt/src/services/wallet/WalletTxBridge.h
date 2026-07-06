@@ -54,9 +54,7 @@ class WalletTxBridge : public QObject {
     /// browser URL to open in the wallet dialog. Calls `cb` later with the
     /// base58 signature on success, or an error string. UUIDs expire after
     /// 60 s if no result is delivered.
-    Result<QString> request_signature(const QString& tx_base64,
-                                      SignatureCallback cb,
-                                      int timeout_seconds = 60);
+    Result<QString> request_signature(const QString& tx_base64, SignatureCallback cb, int timeout_seconds = 60);
 
     /// Cancel a pending request. Idempotent — the cb fires with err
     /// "user_cancelled" if it hadn't already resolved.
@@ -77,11 +75,9 @@ class WalletTxBridge : public QObject {
     };
 
     void on_new_connection();
-    void handle_request(QTcpSocket* socket, const QByteArray& body,
-                        const QByteArray& path, const QByteArray& method);
+    void handle_request(QTcpSocket* socket, const QByteArray& body, const QByteArray& path, const QByteArray& method);
     QByteArray render_swap_page() const;
-    void write_response(QTcpSocket* socket, int status,
-                        const QByteArray& content_type, const QByteArray& body);
+    void write_response(QTcpSocket* socket, int status, const QByteArray& content_type, const QByteArray& body);
     bool ensure_server_started();
     void stop_server();
     void purge_expired_requests();

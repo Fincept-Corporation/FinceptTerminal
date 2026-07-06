@@ -376,9 +376,12 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
     meta_fmt.setFontPointSize(10);
     meta_fmt.setForeground(QColor(theme.meta_color));
     QStringList meta_parts;
-    if (!metadata.author.trimmed().isEmpty()) meta_parts << metadata.author;
-    if (!metadata.company.trimmed().isEmpty()) meta_parts << metadata.company;
-    if (!metadata.date.trimmed().isEmpty()) meta_parts << metadata.date;
+    if (!metadata.author.trimmed().isEmpty())
+        meta_parts << metadata.author;
+    if (!metadata.company.trimmed().isEmpty())
+        meta_parts << metadata.company;
+    if (!metadata.date.trimmed().isEmpty())
+        meta_parts << metadata.date;
     cursor.insertText(meta_parts.join("  ·  "), meta_fmt);
 
     // Accent-coloured rule under the cover meta — visually separates the
@@ -463,9 +466,8 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             // Heuristic: if content contains common markdown markers, render
             // as markdown; else fall back to plain text. Avoids spurious
             // re-interpretation of ad-hoc punctuation in plain copy.
-            const bool looks_markdown = body.contains("**") || body.contains("__") ||
-                                        body.contains("\n- ") || body.contains("\n* ") ||
-                                        body.contains("\n#");
+            const bool looks_markdown = body.contains("**") || body.contains("__") || body.contains("\n- ") ||
+                                        body.contains("\n* ") || body.contains("\n#");
             if (looks_markdown)
                 cursor.insertMarkdown(body);
             else
@@ -568,10 +570,9 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                         // Right-align numeric-looking cells (helps financials read).
                         bool is_numeric = !cell_text.isEmpty();
                         for (QChar ch : cell_text) {
-                            if (!ch.isDigit() && ch != QChar('.') && ch != QChar(',') &&
-                                ch != QChar('-') && ch != QChar('+') && ch != QChar('%') &&
-                                ch != QChar('$') && ch != QChar(' ') && ch != QChar('(') &&
-                                ch != QChar(')') && ch != QChar('B') && ch != QChar('M') &&
+                            if (!ch.isDigit() && ch != QChar('.') && ch != QChar(',') && ch != QChar('-') &&
+                                ch != QChar('+') && ch != QChar('%') && ch != QChar('$') && ch != QChar(' ') &&
+                                ch != QChar('(') && ch != QChar(')') && ch != QChar('B') && ch != QChar('M') &&
                                 ch != QChar('K') && ch != QChar('T') && ch != QChar('x')) {
                                 is_numeric = false;
                                 break;

@@ -1,10 +1,9 @@
 #include "services/polymarket/PolymarketWebSocket.h"
 
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "network/websocket/WebSocketClient.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -165,11 +164,12 @@ void PolymarketWebSocket::refresh(const QStringList& /*topics*/) {
 }
 
 int PolymarketWebSocket::max_requests_per_sec() const {
-    return 10;  // CLOB REST cap — informational; refresh() is a no-op anyway
+    return 10; // CLOB REST cap — informational; refresh() is a no-op anyway
 }
 
 void PolymarketWebSocket::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 
@@ -182,20 +182,22 @@ void PolymarketWebSocket::ensure_registered_with_hub() {
     hub.set_policy_pattern("prediction:polymarket:orderbook:*", push_only);
 
     hub_registered_ = true;
-    LOG_INFO("Polymarket WS", "Registered with DataHub (prediction:polymarket:price:*, prediction:polymarket:orderbook:*)");
+    LOG_INFO("Polymarket WS",
+             "Registered with DataHub (prediction:polymarket:price:*, prediction:polymarket:orderbook:*)");
 }
 
 void PolymarketWebSocket::publish_price_to_hub(const QString& asset_id, double price) {
-    if (asset_id.isEmpty()) return;
+    if (asset_id.isEmpty())
+        return;
     const QString topic = QStringLiteral("prediction:polymarket:price:") + asset_id;
     fincept::datahub::DataHub::instance().publish(topic, QVariant(price));
 }
 
 void PolymarketWebSocket::publish_orderbook_to_hub(const QString& asset_id, const OrderBook& book) {
-    if (asset_id.isEmpty()) return;
+    if (asset_id.isEmpty())
+        return;
     const QString topic = QStringLiteral("prediction:polymarket:orderbook:") + asset_id;
     fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(book));
 }
 
 } // namespace fincept::services::polymarket
-

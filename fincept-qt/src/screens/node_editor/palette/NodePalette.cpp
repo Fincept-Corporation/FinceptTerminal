@@ -151,16 +151,16 @@ void NodePalette::rebuild_categories(const QString& filter) {
             auto* btn = new QPushButton;
             btn->setFixedHeight(32);
             btn->setCursor(Qt::OpenHandCursor);
-            btn->setStyleSheet(
-                QString("QPushButton {"
-                        "  background: %1; color: %2; border: none;"
-                        "  border-bottom: 1px solid %3; font-family: Consolas;"
-                        "  font-size: 11px; text-align: left; padding: 0 10px;"
-                        "}"
-                        "QPushButton:hover {"
-                        "  background: %4; color: %2;"
-                        "}")
-                    .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::BG_HOVER()));
+            btn->setStyleSheet(QString("QPushButton {"
+                                       "  background: %1; color: %2; border: none;"
+                                       "  border-bottom: 1px solid %3; font-family: Consolas;"
+                                       "  font-size: 11px; text-align: left; padding: 0 10px;"
+                                       "}"
+                                       "QPushButton:hover {"
+                                       "  background: %4; color: %2;"
+                                       "}")
+                                   .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(),
+                                        ui::colors::BG_HOVER()));
 
             btn->setToolTip(n.description);
 
@@ -244,8 +244,10 @@ void NodePalette::changeEvent(QEvent* event) {
 }
 
 void NodePalette::retranslateUi() {
-    if (header_title_) header_title_->setText(tr("NODES"));
-    if (search_input_) search_input_->setPlaceholderText(tr("Search nodes..."));
+    if (header_title_)
+        header_title_->setText(tr("NODES"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search nodes..."));
     // Category headers and node buttons are rebuilt from NodeRegistry data
     // (display names are data, not UI labels) — refresh to pick up any changes.
     rebuild_categories(search_input_ ? search_input_->text() : QString());

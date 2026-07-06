@@ -6,9 +6,6 @@
 //
 // Part of the topic-based split of WorkspaceTools.cpp.
 
-#include "mcp/tools/WorkspaceTools.h"
-#include "mcp/tools/WorkspaceTools_internal.h"
-
 #include "app/DockScreenRouter.h"
 #include "app/TerminalShell.h"
 #include "app/WindowFrame.h"
@@ -29,6 +26,8 @@
 #include "core/window/WindowRegistry.h"
 #include "mcp/AsyncDispatch.h"
 #include "mcp/ToolSchemaBuilder.h"
+#include "mcp/tools/WorkspaceTools.h"
+#include "mcp/tools/WorkspaceTools_internal.h"
 #include "storage/workspace/CrashRecovery.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 
@@ -57,13 +56,16 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.description = "List all saved workspaces (id, name, kind, timestamps, description).";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto r = LayoutCatalog::instance().list_layouts();
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 QJsonArray arr;
-                for (const auto& e : r.value()) arr.append(layout_entry_to_json(e));
+                for (const auto& e : r.value())
+                    arr.append(layout_entry_to_json(e));
                 resolve(ToolResult::ok_data(arr));
             });
         };
@@ -77,17 +79,23 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("limit", "Max rows").default_int(10).between(1, 100)
-            .boolean("include_auto", "Include auto-snapshots").default_bool(false)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("limit", "Max rows")
+                             .default_int(10)
+                             .between(1, 100)
+                             .boolean("include_auto", "Include auto-snapshots")
+                             .default_bool(false)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto r = LayoutCatalog::instance().recent_layouts(args["limit"].toInt(10),
-                                                                    args["include_auto"].toBool(false));
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                                                                  args["include_auto"].toBool(false));
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 QJsonArray arr;
-                for (const auto& e : r.value()) arr.append(layout_entry_to_json(e));
+                for (const auto& e : r.value())
+                    arr.append(layout_entry_to_json(e));
                 resolve(ToolResult::ok_data(arr));
             });
         };
@@ -100,15 +108,15 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.description = "Load a full Workspace by id (frames, panels, dock state, variants).";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("id", "Layout UUID").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().string("id", "Layout UUID").required().length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const LayoutId id = LayoutId::from_string(args["id"].toString());
                 auto r = LayoutCatalog::instance().load_workspace(id);
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok_data(r.value().to_json()));
             });
         };
@@ -123,22 +131,27 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("name", "Display name for the layout").required().length(1, 128)
-            .string("description", "Optional description").default_str("").length(0, 512)
-            .string("kind", "Layout kind: user | auto | builtin | crash_recovery").default_str("user").length(1, 32)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("name", "Display name for the layout")
+                             .required()
+                             .length(1, 128)
+                             .string("description", "Optional description")
+                             .default_str("")
+                             .length(0, 512)
+                             .string("kind", "Layout kind: user | auto | builtin | crash_recovery")
+                             .default_str("user")
+                             .length(1, 32)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
-                auto ws = layout::WorkspaceShell::capture(args["name"].toString(),
-                                                            args["kind"].toString("user"));
+                auto ws = layout::WorkspaceShell::capture(args["name"].toString(), args["kind"].toString("user"));
                 ws.description = args["description"].toString();
                 auto r = LayoutCatalog::instance().save_workspace(ws);
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
-                resolve(ToolResult::ok("Layout saved",
-                                        QJsonObject{{"id", r.value().to_string()},
-                                                    {"name", ws.name},
-                                                    {"kind", ws.kind}}));
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
+                resolve(ToolResult::ok(
+                    "Layout saved", QJsonObject{{"id", r.value().to_string()}, {"name", ws.name}, {"kind", ws.kind}}));
             });
         };
         tools.push_back(std::move(t));
@@ -152,19 +165,18 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("id", "Layout UUID").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().string("id", "Layout UUID").required().length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const LayoutId id = LayoutId::from_string(args["id"].toString());
                 auto r = LayoutCatalog::instance().load_workspace(id);
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 const int n = layout::WorkspaceShell::apply(r.value());
                 resolve(ToolResult::ok(QString("Layout applied (%1 frames)").arg(n),
-                                        QJsonObject{{"id", args["id"].toString()},
-                                                    {"frames_applied", n}}));
+                                       QJsonObject{{"id", args["id"].toString()}, {"frames_applied", n}}));
             });
         };
         tools.push_back(std::move(t));
@@ -178,15 +190,15 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("id", "Layout UUID").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().string("id", "Layout UUID").required().length(1, 64).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const LayoutId id = LayoutId::from_string(args["id"].toString());
                 auto r = LayoutCatalog::instance().remove_layout(id);
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Layout deleted", QJsonObject{{"id", args["id"].toString()}}));
             });
         };
@@ -201,24 +213,36 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("id", "Layout UUID").required().length(1, 64)
-            .string("name", "New name").required().length(1, 128)
-            .string("description", "New description (empty to keep current)").default_str("").length(0, 512)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("id", "Layout UUID")
+                             .required()
+                             .length(1, 64)
+                             .string("name", "New name")
+                             .required()
+                             .length(1, 128)
+                             .string("description", "New description (empty to keep current)")
+                             .default_str("")
+                             .length(0, 512)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const LayoutId id = LayoutId::from_string(args["id"].toString());
                 auto r = LayoutCatalog::instance().load_workspace(id);
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 auto ws = r.value();
                 ws.name = args["name"].toString();
                 const QString desc = args["description"].toString();
-                if (!desc.isEmpty()) ws.description = desc;
+                if (!desc.isEmpty())
+                    ws.description = desc;
                 auto sr = LayoutCatalog::instance().save_workspace(ws);
-                if (sr.is_err()) { resolve(ToolResult::fail(QString::fromStdString(sr.error()))); return; }
-                resolve(ToolResult::ok("Layout renamed",
-                                        QJsonObject{{"id", args["id"].toString()}, {"name", ws.name}}));
+                if (sr.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(sr.error())));
+                    return;
+                }
+                resolve(
+                    ToolResult::ok("Layout renamed", QJsonObject{{"id", args["id"].toString()}, {"name", ws.name}}));
             });
         };
         tools.push_back(std::move(t));
@@ -232,15 +256,21 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("id", "Layout UUID").required().length(1, 64)
-            .string("path", "Output file path (.json)").required().length(1, 1024)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("id", "Layout UUID")
+                             .required()
+                             .length(1, 64)
+                             .string("path", "Output file path (.json)")
+                             .required()
+                             .length(1, 1024)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const LayoutId id = LayoutId::from_string(args["id"].toString());
                 auto r = LayoutCatalog::instance().export_to(id, args["path"].toString());
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Layout exported", QJsonObject{{"path", args["path"].toString()}}));
             });
         };
@@ -254,14 +284,15 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.category = "workspace";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .string("path", "Input file path (.json)").required().length(1, 1024)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema =
+            ToolSchemaBuilder().string("path", "Input file path (.json)").required().length(1, 1024).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto r = LayoutCatalog::instance().import_from(args["path"].toString());
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Layout imported", QJsonObject{{"id", r.value().to_string()}}));
             });
         };
@@ -274,13 +305,12 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.description = "List built-in layout personas (e.g. equity_trader) seeded for new users.";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QJsonArray arr;
                 for (const auto& p : layout::LayoutTemplates::personas()) {
-                    arr.append(QJsonObject{{"id", p.id}, {"display_name", p.display_name},
-                                            {"description", p.description}});
+                    arr.append(
+                        QJsonObject{{"id", p.id}, {"display_name", p.display_name}, {"description", p.description}});
                 }
                 resolve(ToolResult::ok_data(arr));
             });
@@ -297,20 +327,27 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .string("persona_id", "Persona id (use list_layout_templates)").required().length(1, 64)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .string("persona_id", "Persona id (use list_layout_templates)")
+                             .required()
+                             .length(1, 64)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto ws = layout::LayoutTemplates::make(args["persona_id"].toString());
-                if (ws.name.isEmpty()) { resolve(ToolResult::fail("Unknown persona id")); return; }
+                if (ws.name.isEmpty()) {
+                    resolve(ToolResult::fail("Unknown persona id"));
+                    return;
+                }
                 auto sr = LayoutCatalog::instance().save_workspace(ws);
-                if (sr.is_err()) { resolve(ToolResult::fail(QString::fromStdString(sr.error()))); return; }
+                if (sr.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(sr.error())));
+                    return;
+                }
                 const int n = layout::WorkspaceShell::apply(ws);
                 resolve(ToolResult::ok(QString("Template applied (%1 frames)").arg(n),
-                                        QJsonObject{{"id", sr.value().to_string()},
-                                                    {"persona", args["persona_id"].toString()},
-                                                    {"frames_applied", n}}));
+                                       QJsonObject{{"id", sr.value().to_string()},
+                                                   {"persona", args["persona_id"].toString()},
+                                                   {"frames_applied", n}}));
             });
         };
         tools.push_back(std::move(t));
@@ -322,8 +359,7 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.description = "Get the name + id of the currently-applied workspace this session (empty if none).";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 resolve(ToolResult::ok_data(QJsonObject{
                     {"name", layout::WorkspaceShell::current_name()},
@@ -342,12 +378,10 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 const int n = layout::WorkspaceShell::load_last_or_default();
-                resolve(ToolResult::ok(QString("Restored (%1 frames)").arg(n),
-                                        QJsonObject{{"frames_restored", n}}));
+                resolve(ToolResult::ok(QString("Restored (%1 frames)").arg(n), QJsonObject{{"frames_restored", n}}));
             });
         };
         tools.push_back(std::move(t));
@@ -363,18 +397,22 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.description = "List recent workspace snapshots (auto / named / crash_recovery), newest first.";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("limit", "Max rows").default_int(10).between(1, 100)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().integer("limit", "Max rows").default_int(10).between(1, 100).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* ring = TerminalShell::instance().snapshot_ring();
-                if (!ring) { resolve(ToolResult::fail("Snapshot ring unavailable")); return; }
+                if (!ring) {
+                    resolve(ToolResult::fail("Snapshot ring unavailable"));
+                    return;
+                }
                 auto r = ring->latest(args["limit"].toInt(10));
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 QJsonArray arr;
-                for (const auto& e : r.value()) arr.append(snapshot_entry_to_json(e));
+                for (const auto& e : r.value())
+                    arr.append(snapshot_entry_to_json(e));
                 resolve(ToolResult::ok_data(arr));
             });
         };
@@ -388,15 +426,20 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.category = "workspace";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* ring = TerminalShell::instance().snapshot_ring();
-                if (!ring) { resolve(ToolResult::fail("Snapshot ring unavailable")); return; }
+                if (!ring) {
+                    resolve(ToolResult::fail("Snapshot ring unavailable"));
+                    return;
+                }
                 auto ws = layout::WorkspaceShell::capture("auto", "auto");
                 const QByteArray payload = QJsonDocument(ws.to_json()).toJson(QJsonDocument::Compact);
                 auto r = ring->add(payload, "auto", /*force=*/true);
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Snapshot taken", QJsonObject{{"snapshot_id", r.value()}}));
             });
         };
@@ -411,17 +454,20 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("snapshot_id", "Snapshot id").required().min(1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().integer("snapshot_id", "Snapshot id").required().min(1).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* ring = TerminalShell::instance().snapshot_ring();
-                if (!ring) { resolve(ToolResult::fail("Snapshot ring unavailable")); return; }
+                if (!ring) {
+                    resolve(ToolResult::fail("Snapshot ring unavailable"));
+                    return;
+                }
                 const qint64 id = static_cast<qint64>(args["snapshot_id"].toDouble());
                 auto r = ring->erase(id);
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Snapshot deleted", QJsonObject{{"snapshot_id", id}}));
             });
         };
@@ -436,17 +482,26 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
-            .integer("snapshot_id", "Snapshot id").required().min(1)
-            .string("name", "New name (empty to clear)").required().length(0, 128)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+                             .integer("snapshot_id", "Snapshot id")
+                             .required()
+                             .min(1)
+                             .string("name", "New name (empty to clear)")
+                             .required()
+                             .length(0, 128)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* ring = TerminalShell::instance().snapshot_ring();
-                if (!ring) { resolve(ToolResult::fail("Snapshot ring unavailable")); return; }
+                if (!ring) {
+                    resolve(ToolResult::fail("Snapshot ring unavailable"));
+                    return;
+                }
                 const qint64 id = static_cast<qint64>(args["snapshot_id"].toDouble());
                 auto r = ring->rename(id, args["name"].toString());
-                if (r.is_err()) { resolve(ToolResult::fail(QString::fromStdString(r.error()))); return; }
+                if (r.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(r.error())));
+                    return;
+                }
                 resolve(ToolResult::ok("Snapshot renamed", QJsonObject{{"snapshot_id", id}}));
             });
         };
@@ -461,21 +516,24 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema = ToolSchemaBuilder()
-            .integer("snapshot_id", "Snapshot id").required().min(1)
-            .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.input_schema = ToolSchemaBuilder().integer("snapshot_id", "Snapshot id").required().min(1).build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* ring = TerminalShell::instance().snapshot_ring();
-                if (!ring) { resolve(ToolResult::fail("Snapshot ring unavailable")); return; }
+                if (!ring) {
+                    resolve(ToolResult::fail("Snapshot ring unavailable"));
+                    return;
+                }
                 const qint64 id = static_cast<qint64>(args["snapshot_id"].toDouble());
                 auto p = ring->load_payload(id);
-                if (p.is_err()) { resolve(ToolResult::fail(QString::fromStdString(p.error()))); return; }
+                if (p.is_err()) {
+                    resolve(ToolResult::fail(QString::fromStdString(p.error())));
+                    return;
+                }
                 const auto ws = layout::Workspace::from_json(QJsonDocument::fromJson(p.value()).object());
                 const int n = layout::WorkspaceShell::apply(ws);
                 resolve(ToolResult::ok(QString("Snapshot restored (%1 frames)").arg(n),
-                                        QJsonObject{{"snapshot_id", id}, {"frames_applied", n}}));
+                                       QJsonObject{{"snapshot_id", id}, {"frames_applied", n}}));
             });
         };
         tools.push_back(std::move(t));
@@ -487,16 +545,19 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         t.description = "Whether the previous session ended uncleanly and which snapshots are restorable.";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx,
-                              std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* cr = TerminalShell::instance().crash_recovery();
-                if (!cr) { resolve(ToolResult::fail("CrashRecovery unavailable")); return; }
+                if (!cr) {
+                    resolve(ToolResult::fail("CrashRecovery unavailable"));
+                    return;
+                }
                 const bool needs = cr->needs_recovery();
                 auto r = cr->latest_snapshots(5);
                 QJsonArray candidates;
                 if (r.is_ok()) {
-                    for (const auto& e : r.value()) candidates.append(snapshot_entry_to_json(e));
+                    for (const auto& e : r.value())
+                        candidates.append(snapshot_entry_to_json(e));
                 }
                 resolve(ToolResult::ok_data(QJsonObject{
                     {"needs_recovery", needs},
@@ -508,6 +569,5 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
         };
         tools.push_back(std::move(t));
     }
-
 }
 } // namespace fincept::mcp::tools

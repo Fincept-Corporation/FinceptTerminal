@@ -90,8 +90,8 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
     rv->addLayout(name_row);
 
     legs_table_ = new QTableWidget(0, LColCount);
-    legs_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Exch"), tr("Side"), tr("Qty"), tr("Type"),
-                                            tr("Price"), tr("Product"), QString()});
+    legs_table_->setHorizontalHeaderLabels(
+        {tr("Symbol"), tr("Exch"), tr("Side"), tr("Qty"), tr("Type"), tr("Price"), tr("Product"), QString()});
     legs_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     legs_table_->horizontalHeader()->setStretchLastSection(false);
     legs_table_->setColumnWidth(LSymbol, 140);
@@ -129,8 +129,8 @@ BasketOrdersDialog::BasketOrdersDialog(QWidget* parent) : QDialog(parent) {
                            "QPushButton:hover{border-color:#d97706;}");
     connect(add_btn, &QPushButton::clicked, this, &BasketOrdersDialog::on_add_leg);
     connect(leg_symbol_, &QLineEdit::returnPressed, this, &BasketOrdersDialog::on_add_leg);
-    for (QWidget* w : std::initializer_list<QWidget*>{leg_symbol_, leg_exchange_, leg_side_, leg_qty_,
-                                                      leg_type_, leg_price_, leg_product_, add_btn})
+    for (QWidget* w : std::initializer_list<QWidget*>{leg_symbol_, leg_exchange_, leg_side_, leg_qty_, leg_type_,
+                                                      leg_price_, leg_product_, add_btn})
         add_row->addWidget(w);
     rv->addLayout(add_row);
 
@@ -222,8 +222,7 @@ void BasketOrdersDialog::on_delete_basket() {
     auto* b = current_basket();
     if (!b)
         return;
-    if (QMessageBox::question(this, tr("Delete Basket"), tr("Delete basket '%1'?").arg(b->name)) !=
-        QMessageBox::Yes)
+    if (QMessageBox::question(this, tr("Delete Basket"), tr("Delete basket '%1'?").arg(b->name)) != QMessageBox::Yes)
         return;
     OrderBasketRepository::instance().remove(b->id);
     reload_baskets();
@@ -251,22 +250,18 @@ void BasketOrdersDialog::refresh_legs_table() {
     legs_table_->setRowCount(int(b->legs.size()));
     for (int i = 0; i < b->legs.size(); ++i) {
         const UnifiedOrder& leg = b->legs[i];
-        auto set = [&](int col, const QString& text) {
-            legs_table_->setItem(i, col, new QTableWidgetItem(text));
-        };
+        auto set = [&](int col, const QString& text) { legs_table_->setItem(i, col, new QTableWidgetItem(text)); };
         set(LSymbol, leg.symbol);
         set(LExchange, leg.exchange);
         set(LSide, leg.side == OrderSide::Buy ? tr("BUY") : tr("SELL"));
-        legs_table_->item(i, LSide)->setForeground(leg.side == OrderSide::Buy
-                                                       ? QColor(colors::POSITIVE())
-                                                       : QColor(colors::NEGATIVE()));
+        legs_table_->item(i, LSide)->setForeground(leg.side == OrderSide::Buy ? QColor(colors::POSITIVE())
+                                                                              : QColor(colors::NEGATIVE()));
         set(LQty, QString::number(leg.quantity));
         set(LType, leg.order_type == OrderType::Market ? tr("MKT") : tr("LMT"));
-        set(LPrice, leg.order_type == OrderType::Market ? QStringLiteral("—")
-                                                        : QString::number(leg.price, 'f', 2));
-        set(LProduct, leg.product_type == ProductType::Delivery   ? tr("CNC")
-                      : leg.product_type == ProductType::Margin   ? tr("NRML")
-                                                                  : tr("MIS"));
+        set(LPrice, leg.order_type == OrderType::Market ? QStringLiteral("—") : QString::number(leg.price, 'f', 2));
+        set(LProduct, leg.product_type == ProductType::Delivery ? tr("CNC")
+                      : leg.product_type == ProductType::Margin ? tr("NRML")
+                                                                : tr("MIS"));
         auto* rm = new QPushButton(QStringLiteral("✕"));
         rm->setCursor(Qt::PointingHandCursor);
         rm->setStyleSheet("QPushButton{background:transparent;border:none;color:#ef4444;font-size:12px;}");
@@ -342,14 +337,13 @@ void BasketOrdersDialog::on_execute() {
         return;
     }
 
-    const auto ret = QMessageBox::question(
-        this, tr("Execute Basket"),
-        tr("Execute '%1' (%2 leg(s)) on %3 account(s)?\n\n%4")
-            .arg(b->name)
-            .arg(b->legs.size())
-            .arg(selected.size())
-            .arg(labels.join("\n")),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    const auto ret = QMessageBox::question(this, tr("Execute Basket"),
+                                           tr("Execute '%1' (%2 leg(s)) on %3 account(s)?\n\n%4")
+                                               .arg(b->name)
+                                               .arg(b->legs.size())
+                                               .arg(selected.size())
+                                               .arg(labels.join("\n")),
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (ret != QMessageBox::Yes)
         return;
 
@@ -389,9 +383,9 @@ void BasketOrdersDialog::on_execute() {
                     if (tally->fail > 0)
                         msg += tr(" — ✗ %1 failed: %2").arg(tally->fail).arg(tally->errors.join("; "));
                     self->status_label_->setText(msg);
-                    self->status_label_->setStyleSheet(QString("color:%1;font-size:11px;")
-                                                           .arg(tally->fail == 0 ? colors::POSITIVE()
-                                                                                 : colors::NEGATIVE()));
+                    self->status_label_->setStyleSheet(
+                        QString("color:%1;font-size:11px;")
+                            .arg(tally->fail == 0 ? colors::POSITIVE() : colors::NEGATIVE()));
                     self->execute_btn_->setEnabled(true);
                 }
             });

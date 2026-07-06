@@ -59,13 +59,13 @@ class LaunchpadScreen : public QMainWindow {
     void retranslateUi();
 
     QLabel* greeting_ = nullptr;
-    QLabel* sub_label_ = nullptr;        ///< "All windows closed…" sub-headline.
-    QLabel* crash_banner_ = nullptr;     ///< L8: shown when boot detected an unclean prior shutdown.
-    QLineEdit* filter_edit_ = nullptr;    ///< Type-to-filter the recent layouts list.
+    QLabel* sub_label_ = nullptr;      ///< "All windows closed…" sub-headline.
+    QLabel* crash_banner_ = nullptr;   ///< L8: shown when boot detected an unclean prior shutdown.
+    QLineEdit* filter_edit_ = nullptr; ///< Type-to-filter the recent layouts list.
     QListWidget* recent_layouts_ = nullptr;
-    QWidget* template_picker_ = nullptr;  ///< 5-card grid; visible on first run.
-    QLabel* template_picker_label_ = nullptr;  ///< "Pick a starting template:" header.
-    QLabel* recent_label_ = nullptr;      ///< "Recent Layouts" header — hidden on first run.
+    QWidget* template_picker_ = nullptr;      ///< 5-card grid; visible on first run.
+    QLabel* template_picker_label_ = nullptr; ///< "Pick a starting template:" header.
+    QLabel* recent_label_ = nullptr;          ///< "Recent Layouts" header — hidden on first run.
     QPushButton* btn_continue_ = nullptr;
     QPushButton* btn_new_window_ = nullptr;
     QPushButton* btn_switch_profile_ = nullptr;

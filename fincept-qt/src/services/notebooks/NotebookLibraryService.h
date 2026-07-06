@@ -20,12 +20,12 @@ namespace fincept::services {
 struct NotebookCatalogEntry {
     QString id;
     QString title;
-    QString category;     // Finance, Economics, Trading, Investing, Portfolio, Quant
-    QString difficulty;   // "Beginner" | "Intermediate" | "Hard"
+    QString category;   // Finance, Economics, Trading, Investing, Portfolio, Quant
+    QString difficulty; // "Beginner" | "Intermediate" | "Hard"
     int est_minutes = 0;
     QString requirements; // "stdlib" | "pandas + numpy"
     QString summary;
-    QString file;         // bundled filename, e.g. finance_time_value_of_money.ipynb
+    QString file; // bundled filename, e.g. finance_time_value_of_money.ipynb
 };
 
 class NotebookLibraryService : public QObject {

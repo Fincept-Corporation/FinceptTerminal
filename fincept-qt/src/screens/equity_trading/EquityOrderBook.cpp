@@ -100,8 +100,8 @@ void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids, const
 }
 
 void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
-                               double spread, double spread_pct,
-                               const QVector<int>& bid_orders, const QVector<int>& ask_orders) {
+                               double spread, double spread_pct, const QVector<int>& bid_orders,
+                               const QVector<int>& ask_orders) {
     QMutexLocker lock(&mutex_);
     bids_ = bids.mid(0, MAX_LEVELS);
     asks_ = asks.mid(0, MAX_LEVELS);
@@ -148,7 +148,7 @@ bool EquityOrderBook::level_at_y(int widget_y, bool& is_ask, int& index) const {
     const int pix = widget_y - HEADER_H;
     if (pix >= g_ask_top_ && pix < g_ask_top_ + MAX_LEVELS * ROW_H) {
         const int slot = (pix - g_ask_top_) / ROW_H; // 0 = top (worst ask)
-        const int i = MAX_LEVELS - 1 - slot;          // 0 = best ask (on spread)
+        const int i = MAX_LEVELS - 1 - slot;         // 0 = best ask (on spread)
         if (i >= 0 && i < asks_.size()) {
             is_ask = true;
             index = i;
@@ -224,8 +224,8 @@ void EquityOrderBook::paintEvent(QPaintEvent* /*event*/) {
     // Hover highlight — drawn live on top of the cached pixmap so hovering
     // never triggers a full cache rebuild.
     if (hover_index_ >= 0) {
-        const int base = hover_is_ask_ ? g_ask_top_ + (MAX_LEVELS - 1 - hover_index_) * ROW_H
-                                       : g_bid_top_ + hover_index_ * ROW_H;
+        const int base =
+            hover_is_ask_ ? g_ask_top_ + (MAX_LEVELS - 1 - hover_index_) * ROW_H : g_bid_top_ + hover_index_ * ROW_H;
         const int y = HEADER_H + base;
         QColor hl = colors::BG_HOVER();
         hl.setAlpha(60);

@@ -1,9 +1,10 @@
 #pragma once
 
 #include "TradingTypes.h"
+
+#include <QDateTime>
 #include <QMutex>
 #include <QMutexLocker>
-#include <QDateTime>
 #include <QThread>
 
 #include <memory>
@@ -12,14 +13,14 @@
 namespace fincept::trading {
 
 class OrderRateLimiter {
-public:
+  public:
     static OrderRateLimiter& instance();
 
     void acquire(BrokerId broker);
     void set_limit(BrokerId broker, int orders_per_second);
     int get_limit(BrokerId broker) const;
 
-private:
+  private:
     OrderRateLimiter();
 
     struct BrokerLimit {

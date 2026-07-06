@@ -7,7 +7,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
@@ -58,19 +57,20 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Helper: small "load sample" link button next to a CSV input
-    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
-                                  const QString& tip) -> QPushButton* {
+    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed, const QString& tip) -> QPushButton* {
         auto* btn = new QPushButton(tr("LOAD SAMPLE"), parent);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
         btn->setToolTip(tip);
-        btn->setStyleSheet(QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
-                                   "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
-                                   "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
-                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
+        btn->setStyleSheet(
+            QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
+                    "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
+                    "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
+                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
         QPointer<QLineEdit> guard(edit);
         connect(btn, &QPushButton::clicked, this, [guard, seed]() {
-            if (guard) guard->setText(sample_returns(seed));
+            if (guard)
+                guard->setText(sample_returns(seed));
         });
         return btn;
     };
@@ -81,12 +81,13 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     rvl->setContentsMargins(12, 12, 12, 12);
     rvl->setSpacing(8);
     auto* risk_returns = new QLineEdit(risk);
-    risk_returns->setPlaceholderText(tr("Daily returns: comma-, space-, or newline-separated. Need at least 5 values."));
+    risk_returns->setPlaceholderText(
+        tr("Daily returns: comma-, space-, or newline-separated. Need at least 5 values."));
     risk_returns->setStyleSheet(input_ss());
     text_inputs_["gs_risk_returns"] = risk_returns;
     rvl->addWidget(build_input_row(tr("Daily Returns"), risk_returns, risk));
-    rvl->addWidget(add_sample_btn(risk_returns, risk, 11,
-                                   tr("Inserts 252 synthetic daily returns (mu=0.05%, sigma=1.2%)")));
+    rvl->addWidget(
+        add_sample_btn(risk_returns, risk, 11, tr("Inserts 252 synthetic daily returns (mu=0.05%, sigma=1.2%)")));
     auto* risk_rf = make_double_spin(0, 20, 4.5, 2, "%", risk);
     double_inputs_["gs_risk_rf"] = risk_rf;
     rvl->addWidget(build_input_row(tr("Risk-Free Rate"), risk_rf, risk));
@@ -96,13 +97,13 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
         QString bad;
         if (!parse_doubles(text_inputs_["gs_risk_returns"]->text(), rets, &bad)) {
             display_error(tr("Daily Returns: '%1' is not a number. "
-                                  "Use comma-, space-, or newline-separated decimals (e.g. 0.01, -0.02, 0.005).")
+                             "Use comma-, space-, or newline-separated decimals (e.g. 0.01, -0.02, 0.005).")
                               .arg(bad));
             return;
         }
         if (rets.size() < 5) {
             display_error(tr("Need at least 5 daily returns; you provided %1. "
-                                  "Click LOAD SAMPLE to insert 252 synthetic values.")
+                             "Click LOAD SAMPLE to insert 252 synthetic values.")
                               .arg(rets.size()));
             return;
         }
@@ -126,15 +127,14 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     port_ret->setStyleSheet(input_ss());
     text_inputs_["gs_port_returns"] = port_ret;
     pvl->addWidget(build_input_row(tr("Portfolio Returns"), port_ret, port));
-    pvl->addWidget(add_sample_btn(port_ret, port, 21,
-                                   tr("Inserts 252 synthetic portfolio returns (slight outperformance)")));
+    pvl->addWidget(
+        add_sample_btn(port_ret, port, 21, tr("Inserts 252 synthetic portfolio returns (slight outperformance)")));
     auto* bench_ret = new QLineEdit(port);
     bench_ret->setPlaceholderText(tr("Benchmark daily returns (decimals)"));
     bench_ret->setStyleSheet(input_ss());
     text_inputs_["gs_bench_returns"] = bench_ret;
     pvl->addWidget(build_input_row(tr("Benchmark Returns"), bench_ret, port));
-    pvl->addWidget(add_sample_btn(bench_ret, port, 22,
-                                   tr("Inserts 252 synthetic benchmark returns")));
+    pvl->addWidget(add_sample_btn(bench_ret, port, 22, tr("Inserts 252 synthetic benchmark returns")));
     auto* port_rf = make_double_spin(0, 20, 4.5, 2, "%", port);
     double_inputs_["gs_port_rf"] = port_rf;
     pvl->addWidget(build_input_row(tr("Risk-Free Rate"), port_rf, port));
@@ -155,8 +155,8 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
             return;
         }
         if (prets.size() != brets.size()) {
-            display_error(tr("Portfolio (%1) and benchmark (%2) must have the same length.")
-                              .arg(prets.size()).arg(brets.size()));
+            display_error(
+                tr("Portfolio (%1) and benchmark (%2) must have the same length.").arg(prets.size()).arg(brets.size()));
             return;
         }
         show_loading(tr("Analyzing portfolio vs benchmark on %1 observations...").arg(prets.size()));
@@ -237,8 +237,8 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
             return;
         }
         if (rets.size() < 30) {
-            display_error(tr("VaR needs at least 30 observations for a stable estimate; you provided %1.")
-                              .arg(rets.size()));
+            display_error(
+                tr("VaR needs at least 30 observations for a stable estimate; you provided %1.").arg(rets.size()));
             return;
         }
         show_loading(tr("Computing parametric, historical, MC and CVaR on %1 observations...").arg(rets.size()));
@@ -269,9 +269,9 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     auto* st_cm = make_double_spin(0, 100, 10, 1, "%", stress);
     double_inputs_["gs_stress_cm"] = st_cm;
     svl->addWidget(build_input_row(tr("Commodity Allocation"), st_cm, stress));
-    auto* st_hint = new QLabel(
-        tr("Applies 9 historical crisis scenarios (2008, COVID-19, Dot-Com, etc.) to the "
-        "weighted portfolio. Allocations need not sum to 100% — they will be normalized."), stress);
+    auto* st_hint = new QLabel(tr("Applies 9 historical crisis scenarios (2008, COVID-19, Dot-Com, etc.) to the "
+                                  "weighted portfolio. Allocations need not sum to 100% — they will be normalized."),
+                               stress);
     st_hint->setWordWrap(true);
     st_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     svl->addWidget(st_hint);
@@ -363,8 +363,7 @@ QWidget* QuantModulePanel::build_gs_quant_panel() {
     st_vals->setStyleSheet(input_ss());
     text_inputs_["gs_stats_values"] = st_vals;
     stvl->addWidget(build_input_row(tr("Values"), st_vals, stats));
-    stvl->addWidget(add_sample_btn(st_vals, stats, 41,
-                                    tr("Inserts 100 synthetic observations (mean ~50, sd ~5)")));
+    stvl->addWidget(add_sample_btn(st_vals, stats, 41, tr("Inserts 100 synthetic observations (mean ~50, sd ~5)")));
     auto* stats_run = make_run_button(tr("CALCULATE STATISTICS"), stats);
     connect(stats_run, &QPushButton::clicked, this, [this]() {
         QJsonArray vals;
@@ -410,8 +409,8 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         const QString err = payload.value("error").toString(tr("Unknown error"));
         const QString kind = payload.value("error_kind").toString();
         const QString prefix = kind == "validation" ? tr("Input error: ")
-                              : kind == "runtime"    ? tr("Computation failed: ")
-                                                     : QString();
+                               : kind == "runtime"  ? tr("Computation failed: ")
+                                                    : QString();
         display_error(prefix + err);
         return;
     }
@@ -438,8 +437,8 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         QList<QWidget*> ratios = {
             gs_make_card(tr("SHARPE"), gs_fmt_num(sharpe, 3), this,
                          sharpe >= 1.0 ? ui::colors::POSITIVE()
-                                      : sharpe >= 0  ? ui::colors::TEXT_PRIMARY()
-                                                     : ui::colors::NEGATIVE()),
+                         : sharpe >= 0 ? ui::colors::TEXT_PRIMARY()
+                                       : ui::colors::NEGATIVE()),
             gs_make_card(tr("SORTINO"), gs_fmt_num(sortino, 3), this, gs_pos_neg_color(sortino)),
             gs_make_card(tr("CALMAR"), gs_fmt_num(calmar, 3), this, gs_pos_neg_color(calmar)),
             gs_make_card(tr("OMEGA"), gs_fmt_num(d.value("omega_ratio").toDouble(), 3), this),
@@ -469,16 +468,18 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         const QString trough = d.value("trough_date").toString().left(10);
         const QString recov = d.value("recovery_date").toString().left(10);
         if (!peak.isEmpty() && peak != "None") {
-            auto* dd_lbl = new QLabel(tr("Drawdown: peak %1  →  trough %2  →  recovery %3")
-                                          .arg(peak, trough, recov.isEmpty() || recov == "None" ? QStringLiteral("—") : recov));
-            dd_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
-                                          "padding:6px 10px; background:%2; border:1px solid %3;")
-                                      .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
-                                           ui::colors::BORDER_DIM()));
+            auto* dd_lbl =
+                new QLabel(tr("Drawdown: peak %1  →  trough %2  →  recovery %3")
+                               .arg(peak, trough, recov.isEmpty() || recov == "None" ? QStringLiteral("—") : recov));
+            dd_lbl->setStyleSheet(
+                QString("color:%1; font-size:10px; font-family:'Courier New';"
+                        "padding:6px 10px; background:%2; border:1px solid %3;")
+                    .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
             results_layout_->addWidget(dd_lbl);
         }
         status_label_->setText(tr("Sharpe %1  |  MaxDD %2  |  Vol %3")
-                                   .arg(sharpe, 0, 'f', 2).arg(mdd * 100, 0, 'f', 1)
+                                   .arg(sharpe, 0, 'f', 2)
+                                   .arg(mdd * 100, 0, 'f', 1)
                                    .arg(d.value("volatility_annualized").toDouble() * 100, 0, 'f', 1));
         return;
     }
@@ -535,9 +536,8 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         };
         results_layout_->addWidget(gs_card_row(moments, this));
 
-        status_label_->setText(tr("Alpha %1%  |  IR %2  |  R² %3")
-                                   .arg(alpha * 100, 0, 'f', 2).arg(info, 0, 'f', 2)
-                                   .arg(r2, 0, 'f', 3));
+        status_label_->setText(
+            tr("Alpha %1%  |  IR %2  |  R² %3").arg(alpha * 100, 0, 'f', 2).arg(info, 0, 'f', 2).arg(r2, 0, 'f', 3));
         return;
     }
 
@@ -553,14 +553,16 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         // Contract summary strip
         auto* summary = new QLabel(tr("%1  |  Spot %2  →  Strike %3  |  %4 (%5)  |  Vol %6%  |  T %7y")
                                        .arg(opt)
-                                       .arg(spot, 0, 'f', 2).arg(strike, 0, 'f', 2)
-                                       .arg(moneyness_label).arg(moneyness, 0, 'f', 3)
+                                       .arg(spot, 0, 'f', 2)
+                                       .arg(strike, 0, 'f', 2)
+                                       .arg(moneyness_label)
+                                       .arg(moneyness, 0, 'f', 3)
                                        .arg(d.value("vol").toDouble() * 100, 0, 'f', 1)
                                        .arg(d.value("expiry_years").toDouble(), 0, 'f', 3));
-        summary->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
-                                       "padding:8px 10px; background:%2; border:1px solid %3;")
-                                   .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                        ui::colors::BORDER_DIM()));
+        summary->setStyleSheet(
+            QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
+                    "padding:8px 10px; background:%2; border:1px solid %3;")
+                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(summary);
 
         // First-order Greeks (the four every desk watches)
@@ -569,8 +571,7 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
                          opt == "CALL" ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
             gs_make_card(tr("GAMMA"), gs_fmt_num(g.value("gamma").toDouble(), 4), this),
             gs_make_card(tr("VEGA"), gs_fmt_num(g.value("vega").toDouble(), 4), this),
-            gs_make_card(tr("THETA"), gs_fmt_num(g.value("theta").toDouble(), 4), this,
-                         ui::colors::WARNING()),
+            gs_make_card(tr("THETA"), gs_fmt_num(g.value("theta").toDouble(), 4), this, ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(first, this));
 
@@ -591,7 +592,9 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         results_layout_->addWidget(gs_card_row(higher, this));
 
         status_label_->setText(tr("%1 %2 / %3  |  Δ=%4  Γ=%5  ν=%6")
-                                   .arg(opt).arg(spot, 0, 'f', 2).arg(strike, 0, 'f', 2)
+                                   .arg(opt)
+                                   .arg(spot, 0, 'f', 2)
+                                   .arg(strike, 0, 'f', 2)
                                    .arg(g.value("delta").toDouble(), 0, 'f', 3)
                                    .arg(g.value("gamma").toDouble(), 0, 'f', 4)
                                    .arg(g.value("vega").toDouble(), 0, 'f', 3));
@@ -608,19 +611,20 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         const QJsonObject cv = d.value("cvar").toObject();
 
         // Header strip with position + confidence
-        auto* hdr = new QLabel(tr("Position %1  |  Confidence %2%  |  1-day horizon")
-                                   .arg(gs_fmt_money(pos)).arg(conf * 100, 0, 'f', 1));
+        auto* hdr = new QLabel(
+            tr("Position %1  |  Confidence %2%  |  1-day horizon").arg(gs_fmt_money(pos)).arg(conf * 100, 0, 'f', 1));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         // VaR amount cards (loss in $) — color escalates with size
         auto var_color = [pos](double amt) {
             const double pct = pos > 0 ? std::abs(amt) / pos : 0;
-            if (pct > 0.05) return QString(ui::colors::NEGATIVE());
-            if (pct > 0.02) return QString(ui::colors::WARNING());
+            if (pct > 0.05)
+                return QString(ui::colors::NEGATIVE());
+            if (pct > 0.02)
+                return QString(ui::colors::WARNING());
             return QString(ui::colors::TEXT_PRIMARY());
         };
 
@@ -669,7 +673,8 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
             amt_item->setForeground(QColor(ui::colors::NEGATIVE()));
             amt_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, 1, amt_item);
-            auto* pct_item = new QTableWidgetItem(QString::number(obj.value("var_percentage").toDouble(), 'f', 3) + "%");
+            auto* pct_item =
+                new QTableWidgetItem(QString::number(obj.value("var_percentage").toDouble(), 'f', 3) + "%");
             pct_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, 2, pct_item);
             table->setItem(r, 3, new QTableWidgetItem(obj.value("method").toString()));
@@ -698,9 +703,8 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
             parts << QString("%1: %2").arg(it.key(), gs_fmt_money(it.value().toDouble()));
         auto* alloc = new QLabel(tr("Portfolio %1  |  %2").arg(gs_fmt_money(pos), parts.join("  •  ")));
         alloc->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New';"
-                                      "padding:8px 10px; background:%2; border:1px solid %3;")
-                                  .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                       ui::colors::BORDER_DIM()));
+                                     "padding:8px 10px; background:%2; border:1px solid %3;")
+                                 .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(alloc);
 
         if (scenarios.isEmpty()) {
@@ -716,8 +720,14 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         for (const auto& v : scenarios) {
             const auto o = v.toObject();
             const double p = o.value("pnl").toDouble();
-            if (p < worst_pnl) { worst_pnl = p; worst_name = o.value("scenario_name").toString(); }
-            if (p > best_pnl)  { best_pnl  = p; best_name  = o.value("scenario_name").toString(); }
+            if (p < worst_pnl) {
+                worst_pnl = p;
+                worst_name = o.value("scenario_name").toString();
+            }
+            if (p > best_pnl) {
+                best_pnl = p;
+                best_name = o.value("scenario_name").toString();
+            }
         }
         QList<QWidget*> summary_cards = {
             gs_make_card(tr("WORST CASE PnL"), gs_fmt_signed_money(worst_pnl), this, ui::colors::NEGATIVE()),
@@ -733,8 +743,7 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         auto* wb = new QLabel(tr("Worst:  %1   |   Best:  %2").arg(worst_name, best_name));
         wb->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
                                   "padding:6px 10px; background:%2; border-left:3px solid %3;")
-                              .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
-                                   ui::colors::WARNING()));
+                              .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::WARNING()));
         results_layout_->addWidget(wb);
 
         // Full scenario table
@@ -772,7 +781,8 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         results_layout_->addWidget(table);
 
         status_label_->setText(tr("Worst: %1  (%2)  |  %3 scenarios")
-                                   .arg(gs_fmt_signed_money(worst_pnl), worst_name).arg(scenarios.size()));
+                                   .arg(gs_fmt_signed_money(worst_pnl), worst_name)
+                                   .arg(scenarios.size()));
         return;
     }
 
@@ -794,13 +804,12 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         const int trades = m.value("num_trades").toInt();
 
         // Header strip
-        auto* hdr = new QLabel(tr("%1  |  %2  |  %3  →  %4  |  Initial %5")
-                                   .arg(strategy.toUpper().replace('_', ' '), ticker, start, end,
-                                        gs_fmt_money(init_cap)));
+        auto* hdr =
+            new QLabel(tr("%1  |  %2  |  %3  →  %4  |  Initial %5")
+                           .arg(strategy.toUpper().replace('_', ' '), ticker, start, end, gs_fmt_money(init_cap)));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::BORDER_DIM()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> top = {
@@ -809,8 +818,8 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
             gs_make_card(tr("ANN. RETURN"), gs_fmt_pct(ann_ret), this, gs_pos_neg_color(ann_ret)),
             gs_make_card(tr("SHARPE"), gs_fmt_num(sharpe, 3), this,
                          sharpe >= 1.0 ? ui::colors::POSITIVE()
-                                      : sharpe >= 0  ? ui::colors::TEXT_PRIMARY()
-                                                     : ui::colors::NEGATIVE()),
+                         : sharpe >= 0 ? ui::colors::TEXT_PRIMARY()
+                                       : ui::colors::NEGATIVE()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
@@ -841,13 +850,12 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
                 curve_min = std::min(curve_min, val);
                 curve_max = std::max(curve_max, val);
             }
-            auto* curve_lbl = new QLabel(
-                tr("Equity curve: %1 samples  |  Range %2 → %3")
-                    .arg(curve.size()).arg(gs_fmt_money(curve_min), gs_fmt_money(curve_max)));
+            auto* curve_lbl = new QLabel(tr("Equity curve: %1 samples  |  Range %2 → %3")
+                                             .arg(curve.size())
+                                             .arg(gs_fmt_money(curve_min), gs_fmt_money(curve_max)));
             curve_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
                                              "padding:6px 10px; background:%2; border-left:3px solid %3;")
-                                         .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
-                                              accent));
+                                         .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), accent));
             results_layout_->addWidget(curve_lbl);
 
             // Sampled equity table — show 10 evenly-spaced points
@@ -882,7 +890,9 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         }
 
         status_label_->setText(tr("%1 on %2: %3 over %4 trades  (Sharpe %5)")
-                                   .arg(strategy, ticker).arg(gs_fmt_pct(total_ret)).arg(trades)
+                                   .arg(strategy, ticker)
+                                   .arg(gs_fmt_pct(total_ret))
+                                   .arg(trades)
                                    .arg(sharpe, 0, 'f', 2));
         return;
     }

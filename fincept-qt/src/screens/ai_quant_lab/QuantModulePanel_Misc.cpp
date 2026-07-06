@@ -5,12 +5,11 @@
 // Discovery, Model Library, Live Signals, Online Learning, Meta Learning, HFT,
 // Rolling Retraining. Extracted from QuantModulePanel.cpp to keep that file
 // maintainable.
+#include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
-#include "core/logging/Logger.h"
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -21,6 +20,7 @@
 #include <QDate>
 #include <QDateEdit>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QFile>
 #include <QFileInfo>
 #include <QFrame>
@@ -49,7 +49,6 @@
 #include <QTableWidgetItem>
 #include <QTextEdit>
 #include <QUrl>
-#include <QDesktopServices>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -1035,6 +1034,5 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     vl->addLayout(results_layout_);
     return w;
 }
-
 
 } // namespace fincept::screens

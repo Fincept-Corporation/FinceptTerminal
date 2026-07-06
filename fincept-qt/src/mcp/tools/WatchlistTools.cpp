@@ -49,8 +49,8 @@ std::vector<ToolDef> get_watchlist_tools() {
                     QJsonArray symbols;
                     if (stocks.is_ok()) {
                         for (const auto& s : stocks.value()) {
-                            symbols.append(QJsonObject{
-                                {"symbol", s.symbol}, {"name", s.name}, {"added_at", s.added_at}});
+                            symbols.append(
+                                QJsonObject{{"symbol", s.symbol}, {"name", s.name}, {"added_at", s.added_at}});
                         }
                     }
                     result.append(QJsonObject{{"id", wl.id},
@@ -110,7 +110,7 @@ std::vector<ToolDef> get_watchlist_tools() {
         t.name = "delete_watchlist";
         t.description = "Delete a watchlist by ID.";
         t.category = "watchlist";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
             QJsonObject{{"watchlist_id", QJsonObject{{"type", "string"}, {"description", "Watchlist ID"}}}};
         t.input_schema.required = {"watchlist_id"};
@@ -139,16 +139,15 @@ std::vector<ToolDef> get_watchlist_tools() {
     {
         ToolDef t;
         t.name = "add_to_watchlist";
-        t.description =
-            "Add a ticker symbol to a watchlist. The 'symbol' field MUST be the exact "
-            "exchange-suffixed Yahoo ticker (e.g. 'RITES.NS' for RITES Limited on NSE, "
-            "'AAPL' for Apple on NASDAQ, '7203.T' for Toyota on Tokyo). "
-            "If the user gave a company NAME instead of a ticker — or you are uncertain "
-            "about the exchange suffix — call lookup_symbol(query=<company name>) FIRST "
-            "to resolve the correct ticker, then pass that ticker here. "
-            "Do NOT guess tickers from prior knowledge: cross-listed names and Indian/Asian "
-            "tickers are easy to get wrong, and the watchlist stores whatever you pass. "
-            "If watchlist_id is omitted, the first available watchlist is used.";
+        t.description = "Add a ticker symbol to a watchlist. The 'symbol' field MUST be the exact "
+                        "exchange-suffixed Yahoo ticker (e.g. 'RITES.NS' for RITES Limited on NSE, "
+                        "'AAPL' for Apple on NASDAQ, '7203.T' for Toyota on Tokyo). "
+                        "If the user gave a company NAME instead of a ticker — or you are uncertain "
+                        "about the exchange suffix — call lookup_symbol(query=<company name>) FIRST "
+                        "to resolve the correct ticker, then pass that ticker here. "
+                        "Do NOT guess tickers from prior knowledge: cross-listed names and Indian/Asian "
+                        "tickers are easy to get wrong, and the watchlist stores whatever you pass. "
+                        "If watchlist_id is omitted, the first available watchlist is used.";
         t.category = "watchlist";
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol to add"}}},
@@ -211,7 +210,7 @@ std::vector<ToolDef> get_watchlist_tools() {
         t.name = "remove_from_watchlist";
         t.description = "Remove a symbol from a watchlist.";
         t.category = "watchlist";
-        t.is_destructive = true;  // mutation tool — penalise on read-style queries
+        t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol to remove"}}},
             {"watchlist_id", QJsonObject{{"type", "string"},

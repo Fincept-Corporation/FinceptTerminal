@@ -3,9 +3,9 @@
 // Categories use publishers command (normalized string array).
 // HK category_datasets may return empty — fall back to datasets_list + client-side filter.
 #include "screens/gov_data/GovDataHKPanel.h"
-#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
@@ -198,14 +198,21 @@ QWidget* GovDataHKPanel::build_toolbar() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void GovDataHKPanel::retranslateUi() {
-    if (back_btn_)       back_btn_->setText(tr("← BACK"));
-    if (categories_btn_) categories_btn_->setText(tr("CATEGORIES"));
-    if (datasets_btn_)   datasets_btn_->setText(tr("DATASETS"));
-    if (fetch_btn_)      fetch_btn_->setText(tr("FETCH"));
-    if (export_btn_)     export_btn_->setText(tr("CSV"));
-    if (search_input_)   search_input_->setPlaceholderText(tr("Filter datasets…"));
+    if (back_btn_)
+        back_btn_->setText(tr("← BACK"));
+    if (categories_btn_)
+        categories_btn_->setText(tr("CATEGORIES"));
+    if (datasets_btn_)
+        datasets_btn_->setText(tr("DATASETS"));
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)
+        export_btn_->setText(tr("CSV"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Filter datasets…"));
 
-    if (categories_table_) categories_table_->setHorizontalHeaderLabels({tr("CATEGORY")});
+    if (categories_table_)
+        categories_table_->setHorizontalHeaderLabels({tr("CATEGORY")});
     if (datasets_table_)
         datasets_table_->setHorizontalHeaderLabels({tr("TITLE"), tr("RESOURCES"), tr("MODIFIED")});
     if (resources_table_)
@@ -298,7 +305,8 @@ void GovDataHKPanel::filter_datasets_list(const QString& query) {
 
     if (filtered.isEmpty()) {
         show_status(tr("No datasets matched \"%1\" in the HK catalogue.\n"
-                       "HK DATA — Categories may have limited datasets").arg(query));
+                       "HK DATA — Categories may have limited datasets")
+                        .arg(query));
         return;
     }
 
@@ -392,7 +400,8 @@ void GovDataHKPanel::on_result(const QString& request_id, const services::GovDat
             // HK category_datasets frequently returns empty — show note
             show_status(tr("HK DATA — Categories may have limited datasets\n\n"
                            "No datasets found for \"%1\".\n"
-                           "Try searching by name using the search box above.").arg(selected_category_name_));
+                           "Try searching by name using the search box above.")
+                            .arg(selected_category_name_));
             LOG_WARN("GovHK", "Category " + selected_category_id_ + " returned 0 datasets");
             return;
         }

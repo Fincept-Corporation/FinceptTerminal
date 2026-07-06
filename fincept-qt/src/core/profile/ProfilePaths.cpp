@@ -36,8 +36,7 @@ QString ProfilePaths::crashes_dir() {
 void ProfilePaths::ensure_all() {
     const QString root = profile_root();
     if (root.isEmpty()) {
-        LOG_ERROR("ProfilePaths",
-                  "ensure_all() called before ProfileManager::set_active() — skipping");
+        LOG_ERROR("ProfilePaths", "ensure_all() called before ProfileManager::set_active() — skipping");
         return;
     }
 
@@ -47,9 +46,11 @@ void ProfilePaths::ensure_all() {
         if (QDir().mkpath(p))
             return;
         const QFileInfo info(p);
-        LOG_WARN("ProfilePaths",
-                 QString("mkpath failed: %1 exists=%2 isDir=%3 writable=%4")
-                     .arg(p).arg(info.exists()).arg(info.isDir()).arg(info.isWritable()));
+        LOG_WARN("ProfilePaths", QString("mkpath failed: %1 exists=%2 isDir=%3 writable=%4")
+                                     .arg(p)
+                                     .arg(info.exists())
+                                     .arg(info.isDir())
+                                     .arg(info.isWritable()));
     };
 
     try_mkpath(layouts_dir());

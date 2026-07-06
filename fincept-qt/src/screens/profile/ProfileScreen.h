@@ -26,9 +26,9 @@ class ProfileScreen : public QWidget {
     QList<QPushButton*> nav_buttons_;
     /// Source-language keys for each nav button, aligned by index with
     /// nav_buttons_. Used by retranslateUi() to reapply tr() lookups.
-    QList<QString>      nav_source_keys_;
-    QLabel*             header_title_ = nullptr;
-    QPushButton*        header_refresh_btn_ = nullptr;
+    QList<QString> nav_source_keys_;
+    QLabel* header_title_ = nullptr;
+    QPushButton* header_refresh_btn_ = nullptr;
 
     /// Re-translate widgets we keep handles to, and rebuild the section
     /// widgets so tr() calls inside their build_* helpers re-run against the

@@ -26,16 +26,11 @@ QVector<double> sma(const QVector<double>& values, int period);
 /// values (pandas-ta convention). Output[i] is NaN for i < period - 1.
 QVector<double> ema(const QVector<double>& values, int period);
 
-QVector<double> vwap(const QVector<double>& highs,
-                     const QVector<double>& lows,
-                     const QVector<double>& closes,
+QVector<double> vwap(const QVector<double>& highs, const QVector<double>& lows, const QVector<double>& closes,
                      const QVector<double>& volumes);
 
-QVector<double> vwap_std_dev(const QVector<double>& highs,
-                             const QVector<double>& lows,
-                             const QVector<double>& closes,
-                             const QVector<double>& volumes,
-                             const QVector<double>& vwap_values);
+QVector<double> vwap_std_dev(const QVector<double>& highs, const QVector<double>& lows, const QVector<double>& closes,
+                             const QVector<double>& volumes, const QVector<double>& vwap_values);
 
 BollingerResult bollinger(const QVector<double>& closes, int period = 20, double num_std = 2.0);
 

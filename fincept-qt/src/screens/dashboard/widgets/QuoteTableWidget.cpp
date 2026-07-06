@@ -1,9 +1,8 @@
 #include "screens/dashboard/widgets/QuoteTableWidget.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <cmath>
 
@@ -25,7 +24,6 @@ QuoteTableWidget::QuoteTableWidget(const QString& title, const QStringList& symb
 
     apply_styles();
     set_loading(true);
-
 }
 
 void QuoteTableWidget::apply_styles() {
@@ -65,7 +63,6 @@ void QuoteTableWidget::refresh_data() {
         topics.append(QStringLiteral("market:quote:") + sym);
     hub.request(topics, /*force=*/true);
 }
-
 
 void QuoteTableWidget::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
@@ -109,7 +106,6 @@ void QuoteTableWidget::render_from_cache() {
         table_->set_cell_color(row, 3, ui::change_color(q.change_pct));
     }
 }
-
 
 void QuoteTableWidget::populate(const QVector<services::QuoteData>& quotes) {
     table_->clear_data();

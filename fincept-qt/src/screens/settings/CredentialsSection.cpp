@@ -27,22 +27,28 @@ namespace {
 using CredDef = QPair<QString, QString>; // {env_key, display_name}
 const QList<CredDef> CRED_KEYS = {
     {"ALPHA_VANTAGE_API_KEY", "Alpha Vantage"},
-    {"POLYGON_API_KEY",       "Polygon.io"},
-    {"DATABENTO_API_KEY",     "Databento"},
-    {"FRED_API_KEY",          "FRED (Federal Reserve)"},
-    {"NEWSAPI_KEY",           "NewsAPI"},
-    {"BINANCE_API_KEY",       "Binance API Key"},
-    {"BINANCE_SECRET_KEY",    "Binance Secret Key"},
-    {"KRAKEN_API_KEY",        "Kraken API Key"},
-    {"KRAKEN_SECRET_KEY",     "Kraken Secret Key"},
-    {"IEX_CLOUD_TOKEN",       "IEX Cloud Token"},
-    {"FINNHUB_API_KEY",       "Finnhub API Key"},
-    {"TIINGO_API_KEY",        "Tiingo API Key"},
-    {"QUANDL_API_KEY",        "Quandl"},
-    {"POLYMARKET_API_KEY",    "Polymarket API Key"},
-    {"POLYMARKET_SECRET",     "Polymarket Secret"},
+    {"POLYGON_API_KEY", "Polygon.io"},
+    {"DATABENTO_API_KEY", "Databento"},
+    {"FRED_API_KEY", "FRED (Federal Reserve)"},
+    {"NEWSAPI_KEY", "NewsAPI"},
+    {"BINANCE_API_KEY", "Binance API Key"},
+    {"BINANCE_SECRET_KEY", "Binance Secret Key"},
+    {"KRAKEN_API_KEY", "Kraken API Key"},
+    {"KRAKEN_SECRET_KEY", "Kraken Secret Key"},
+    {"IEX_CLOUD_TOKEN", "IEX Cloud Token"},
+    {"FINNHUB_API_KEY", "Finnhub API Key"},
+    {"TIINGO_API_KEY", "Tiingo API Key"},
+    {"QUANDL_API_KEY", "Quandl"},
+    {"POLYMARKET_API_KEY", "Polymarket API Key"},
+    {"POLYMARKET_SECRET", "Polymarket Secret"},
     {"POLYMARKET_PASSPHRASE", "Polymarket Passphrase"},
-    {"POLYMARKET_WALLET",     "Polymarket Wallet Address"},
+    {"POLYMARKET_WALLET", "Polymarket Wallet Address"},
+// Keyed data-connector provider keys (auto-generated; one entry card each).
+// Kept in sync with PythonRunner.cpp kManagedCredentialKeys via the shared
+// X-macro include below.
+#define FINCEPT_KEYED_CRED(KEY, NAME) {KEY, NAME}, // NOLINT(cppcoreguidelines-macro-usage) — X-macro list expansion
+#include "config/KeyedConnectorCredentials.inc"
+#undef FINCEPT_KEYED_CRED
 };
 
 } // namespace
@@ -82,8 +88,7 @@ void CredentialsSection::build_ui() {
     vl->addWidget(title_);
     vl->addSpacing(4);
 
-    info_ = new QLabel(
-        tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
+    info_ = new QLabel(tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
     info_->setWordWrap(true);
     info_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(info_);
@@ -92,7 +97,7 @@ void CredentialsSection::build_ui() {
     vl->addSpacing(16);
 
     for (const auto& def : CRED_KEYS) {
-        const QString& key  = def.first;
+        const QString& key = def.first;
         const QString& name = def.second;
 
         auto* card = new QFrame;
@@ -156,13 +161,11 @@ void CredentialsSection::build_ui() {
                     field->clear();
                     field->setPlaceholderText(tr("•••••••• (saved)"));
                     status_lbl->setText(tr("Saved ✓"));
-                    status_lbl->setStyleSheet(
-                        QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
+                    status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
                     LOG_INFO("Credentials", "Stored key: " + key);
                 } else {
                     status_lbl->setText(tr("Save failed"));
-                    status_lbl->setStyleSheet(
-                        QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
+                    status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("Credentials", "Failed to store " + key);
                 }
             }
@@ -181,9 +184,10 @@ void CredentialsSection::build_ui() {
 void CredentialsSection::reload() {
     for (auto it = cred_fields_.constBegin(); it != cred_fields_.constEnd(); ++it) {
         const QString& key = it.key();
-        auto* field  = it.value();
+        auto* field = it.value();
         auto* status = cred_status_.value(key, nullptr);
-        if (!field || !status) continue;
+        if (!field || !status)
+            continue;
 
         auto r = SecureStorage::instance().retrieve(key);
         if (r.is_ok() && !r.value().isEmpty()) {
@@ -207,15 +211,16 @@ void CredentialsSection::changeEvent(QEvent* event) {
 }
 
 void CredentialsSection::retranslateUi() {
-    if (title_) title_->setText(tr("API CREDENTIALS"));
+    if (title_)
+        title_->setText(tr("API CREDENTIALS"));
     if (info_)
-        info_->setText(
-            tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
+        info_->setText(tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
 
     // Per-credential Save buttons. (Credential names are product/brand names —
     // not translated. Provider name labels stay as-is.)
     for (auto it = cred_save_btns_.constBegin(); it != cred_save_btns_.constEnd(); ++it) {
-        if (it.value()) it.value()->setText(tr("Save"));
+        if (it.value())
+            it.value()->setText(tr("Save"));
     }
 
     // reload() re-applies state-dependent placeholders ("Not configured" /

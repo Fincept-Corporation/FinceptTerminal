@@ -1,11 +1,11 @@
 #pragma once
 
-#include "services/llm/LlmService.h"
 #include "core/events/EventBus.h"
 #include "core/symbol/IGroupLinked.h"
 #include "core/symbol/SymbolGroup.h"
 #include "core/symbol/SymbolRef.h"
 #include "screens/common/IStatefulScreen.h"
+#include "services/llm/LlmService.h"
 
 #include <QLabel>
 #include <QLineEdit>

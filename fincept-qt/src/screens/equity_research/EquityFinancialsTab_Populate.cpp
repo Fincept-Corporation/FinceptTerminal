@@ -6,7 +6,6 @@
 // Part of the partial-class split of EquityFinancialsTab.cpp.
 
 #include "screens/equity_research/EquityFinancialsTab.h"
-
 #include "screens/equity_research/EquityFinancialsTab_internal.h"
 #include "services/equity/EquityResearchService.h"
 #include "services/file_manager/FileManagerService.h"
@@ -31,8 +30,8 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QStackedWidget>
-#include <QTableWidget>
 #include <QTabWidget>
+#include <QTableWidget>
 #include <QTextStream>
 #include <QVBoxLayout>
 #include <QValueAxis>
@@ -40,7 +39,6 @@
 namespace fincept::screens {
 
 using namespace financials_internal;
-
 
 void EquityFinancialsTab::on_financials_loaded(services::equity::FinancialsData payload) {
     if (payload.symbol != current_symbol_)
@@ -105,16 +103,16 @@ void EquityFinancialsTab::populate_income_view(const services::equity::Financial
             l->setText(t);
     };
 
-    set(inc_revenue_val_,   fmt_large(revenue));
-    set(inc_revenue_sub_,   rev_growth != 0.0 ? tr("%1 YoY").arg(fmt_pct(rev_growth)) : QString());
-    set(inc_gross_val_,     fmt_large(gross));
-    set(inc_gross_sub_,     tr("%1 margin").arg(fmt_pct(gross_margin)));
-    set(inc_opincome_val_,  fmt_large(op_income));
-    set(inc_opincome_sub_,  tr("%1 margin").arg(fmt_pct(op_margin)));
+    set(inc_revenue_val_, fmt_large(revenue));
+    set(inc_revenue_sub_, rev_growth != 0.0 ? tr("%1 YoY").arg(fmt_pct(rev_growth)) : QString());
+    set(inc_gross_val_, fmt_large(gross));
+    set(inc_gross_sub_, tr("%1 margin").arg(fmt_pct(gross_margin)));
+    set(inc_opincome_val_, fmt_large(op_income));
+    set(inc_opincome_sub_, tr("%1 margin").arg(fmt_pct(op_margin)));
     set(inc_netincome_val_, fmt_large(net_income));
     set(inc_netincome_sub_, net_growth != 0.0 ? tr("%1 YoY").arg(fmt_pct(net_growth)) : QString());
-    set(inc_ebitda_val_,    fmt_large(ebitda));
-    set(inc_ebitda_sub_,    tr("%1 margin").arg(fmt_pct(ebitda_margin)));
+    set(inc_ebitda_val_, fmt_large(ebitda));
+    set(inc_ebitda_sub_, tr("%1 margin").arg(fmt_pct(ebitda_margin)));
     set(inc_gross_margin_, fmt_pct(gross_margin));
     set(inc_op_margin_, fmt_pct(op_margin));
     set(inc_net_margin_, fmt_pct(net_margin));
@@ -357,10 +355,10 @@ void EquityFinancialsTab::rebuild_margin_chart(const services::equity::Financial
 
     auto* chart = new QChart;
     style_chart(chart);
-    auto* s1 = make_line(tr("Gross"),     kGreen,  gross_v);
-    auto* s2 = make_line(tr("Operating"), kCyan,   op_v);
-    auto* s3 = make_line(tr("Net"),       kOrange, net_v);
-    auto* s4 = make_line(tr("EBITDA"),    kPurple, ebitda_v);
+    auto* s1 = make_line(tr("Gross"), kGreen, gross_v);
+    auto* s2 = make_line(tr("Operating"), kCyan, op_v);
+    auto* s3 = make_line(tr("Net"), kOrange, net_v);
+    auto* s4 = make_line(tr("EBITDA"), kPurple, ebitda_v);
     chart->addSeries(s1);
     chart->addSeries(s2);
     chart->addSeries(s3);

@@ -544,6 +544,20 @@ def main():
     """
     import json
 
+    # Qt bridge: accept (command, {"ticker":..., "fred_api_key":..., "overrides":...})
+    # and expand into the native (ticker, fred_api_key, overrides_json) argv. No effect
+    # on the legacy CLI form (a bare ticker in argv[2] isn't a JSON dict → falls through).
+    if len(sys.argv) == 3:
+        try:
+            _qp = json.loads(sys.argv[2])
+            if isinstance(_qp, dict) and "ticker" in _qp:
+                _qav = [sys.argv[0], str(_qp["ticker"]), str(_qp.get("fred_api_key") or "")]
+                if _qp.get("overrides") is not None:
+                    _qav.append(json.dumps(_qp["overrides"]))
+                sys.argv = _qav
+        except Exception:
+            pass
+
     if len(sys.argv) < 2:
         result = {
             "success": False,

@@ -2,11 +2,10 @@
 #include "services/economics/EconomicsService.h"
 
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "python/PythonRunner.h"
 #include "storage/cache/CacheManager.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QJsonDocument>
 #include <QJsonParseError>
@@ -109,7 +108,8 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
                 const QString error_code = res.data.value("error_code").toString();
                 const QString message = res.data["error"].toString();
                 // Prefix with [CODE] so panels can branch on it without a schema change.
-                res.error = error_code.isEmpty() ? message : (QStringLiteral("[") + error_code + QStringLiteral("] ") + message);
+                res.error = error_code.isEmpty() ? message
+                                                 : (QStringLiteral("[") + error_code + QStringLiteral("] ") + message);
                 emit self->result_ready(request_id, res);
                 return;
             }
@@ -147,8 +147,7 @@ void EconomicsService::refresh(const QStringList& topics) {
     for (const auto& topic : topics) {
         auto it = dispatch_records_.constFind(topic);
         if (it == dispatch_records_.constEnd()) {
-            LOG_DEBUG("EconomicsService",
-                      "refresh() for unknown topic (no prior execute): " + topic);
+            LOG_DEBUG("EconomicsService", "refresh() for unknown topic (no prior execute): " + topic);
             continue;
         }
         const DispatchRecord rec = it.value();
@@ -160,11 +159,12 @@ void EconomicsService::refresh(const QStringList& topics) {
 }
 
 int EconomicsService::max_requests_per_sec() const {
-    return 2;  // Python spawn pacing — upstream rate limits are usually higher
+    return 2; // Python spawn pacing — upstream rate limits are usually higher
 }
 
 void EconomicsService::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 

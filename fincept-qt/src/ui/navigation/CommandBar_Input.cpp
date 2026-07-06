@@ -7,13 +7,12 @@
 //
 // Part of the partial-class split of CommandBar.cpp.
 
-#include "ui/navigation/CommandBar.h"
-#include "ui/navigation/CommandBar_internal.h"
-
 #include "core/events/EventBus.h"
 #include "core/keys/KeyConfigManager.h"
 #include "core/session/ScreenStateManager.h"
 #include "network/http/HttpClient.h"
+#include "ui/navigation/CommandBar.h"
+#include "ui/navigation/CommandBar_internal.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 

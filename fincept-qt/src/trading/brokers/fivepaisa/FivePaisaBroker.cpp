@@ -239,8 +239,8 @@ OrderPlaceResponse FivePaisaBroker::place_order(const BrokerCredentials& creds, 
     body["IsIntraday"] = is_intraday;
     body["AHPlaced"] = order.amo ? "Y" : "N";
     // Per-order UUID-ish — 5Paisa rejects duplicates with the same RemoteOrderID.
-    body["RemoteOrderID"] =
-        "FCPT-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + "-" + QString::number(QRandomGenerator::global()->bounded(10000));
+    body["RemoteOrderID"] = "FCPT-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + "-" +
+                            QString::number(QRandomGenerator::global()->bounded(10000));
     body["AppSource"] = 0; // required: 0 = open API
     body["IOCOrder"] = false;
     body["IsStopLossOrder"] = (order.order_type == OrderType::StopLoss || order.order_type == OrderType::StopLossLimit);

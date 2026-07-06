@@ -62,11 +62,11 @@ class HomeTab : public QWidget {
   private:
     // Wallet panel
     QFrame* wallet_panel_ = nullptr;
-    QLabel* wallet_title_ = nullptr;     // "WALLET" (cached for retranslateUi)
-    QLabel* wallet_status_ = nullptr;    // "● CONNECTED"
-    QLabel* provider_caption_ = nullptr; // "PROVIDER"
-    QLabel* address_caption_ = nullptr;  // "ADDRESS"
-    QLabel* connected_caption_ = nullptr;// "CONNECTED"
+    QLabel* wallet_title_ = nullptr;      // "WALLET" (cached for retranslateUi)
+    QLabel* wallet_status_ = nullptr;     // "● CONNECTED"
+    QLabel* provider_caption_ = nullptr;  // "PROVIDER"
+    QLabel* address_caption_ = nullptr;   // "ADDRESS"
+    QLabel* connected_caption_ = nullptr; // "CONNECTED"
     QLabel* row_label_value_ = nullptr;
     QLabel* row_pubkey_value_ = nullptr;
     QLabel* row_connected_value_ = nullptr;
@@ -75,9 +75,9 @@ class HomeTab : public QWidget {
 
     // Holdings panel — replaces the three stat boxes (Stage 2A.5).
     QFrame* balance_panel_ = nullptr;
-    QLabel* holdings_title_ = nullptr;   // "HOLDINGS"
-    QLabel* mode_label_ = nullptr;       // "MAINNET"
-    QLabel* error_icon_ = nullptr;       // "!"
+    QLabel* holdings_title_ = nullptr; // "HOLDINGS"
+    QLabel* mode_label_ = nullptr;     // "MAINNET"
+    QLabel* error_icon_ = nullptr;     // "!"
     QButtonGroup* mode_group_ = nullptr;
     QPushButton* mode_poll_button_ = nullptr;
     QPushButton* mode_stream_button_ = nullptr;
@@ -88,8 +88,8 @@ class HomeTab : public QWidget {
 
     // Roadmap panel
     QFrame* roadmap_panel_ = nullptr;
-    QLabel* roadmap_title_ = nullptr;    // "$FNCPT ROADMAP"
-    QLabel* roadmap_phase_ = nullptr;    // "PHASE 2"
+    QLabel* roadmap_title_ = nullptr; // "$FNCPT ROADMAP"
+    QLabel* roadmap_phase_ = nullptr; // "PHASE 2"
     QLabel* roadmap_body_ = nullptr;
 
     QString current_pubkey_;

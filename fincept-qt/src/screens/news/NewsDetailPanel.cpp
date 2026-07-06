@@ -202,8 +202,8 @@ QWidget* NewsDetailPanel::build_content_view() {
         b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     }
 
-    QPushButton* action_btns[] = {open_btn_,    copy_btn_, copy_title_btn_, analyze_btn_,
-                                  save_btn_,     bookmark_btn_, translate_btn_};
+    QPushButton* action_btns[] = {open_btn_, copy_btn_,     copy_title_btn_, analyze_btn_,
+                                  save_btn_, bookmark_btn_, translate_btn_};
     constexpr int kCols = 3;
     for (int i = 0; i < 7; ++i)
         action_layout->addWidget(action_btns[i], i / kCols, i % kCols);
@@ -226,9 +226,7 @@ QWidget* NewsDetailPanel::build_content_view() {
 
         // Brief visual confirmation — flip label for ~1 s, then revert.
         copy_title_btn_->setText(tr("COPIED"));
-        QTimer::singleShot(1000, this, [this]() {
-            copy_title_btn_->setText(tr("COPY TITLE"));
-        });
+        QTimer::singleShot(1000, this, [this]() { copy_title_btn_->setText(tr("COPY TITLE")); });
     });
     connect(analyze_btn_, &QPushButton::clicked, this, [this]() {
         if (!has_article_)
@@ -609,23 +607,22 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
 
     // Urgency pill — color tracks severity.
     const QString urg = analysis.market_impact.urgency.toUpper();
-    QString urg_color = urg == "HIGH" ? ui::colors::NEGATIVE
-                                       : (urg == "MEDIUM" ? ui::colors::WARNING : ui::colors::POSITIVE);
+    QString urg_color =
+        urg == "HIGH" ? ui::colors::NEGATIVE : (urg == "MEDIUM" ? ui::colors::WARNING : ui::colors::POSITIVE);
     ai_urgency_->setText(tr("Urgency: %1").arg(urg.isEmpty() ? QStringLiteral("—") : urg));
     ai_urgency_->setStyleSheet(QString("color: %1;").arg(urg_color));
 
     // Prediction pill — directional market impact.
     const QString pred = analysis.market_impact.prediction;
-    QString pred_color = pred.contains("positive") ? ui::colors::POSITIVE
-                                                    : (pred.contains("negative") ? ui::colors::NEGATIVE
-                                                                                  : ui::colors::WARNING);
+    QString pred_color = pred.contains("positive")
+                             ? ui::colors::POSITIVE
+                             : (pred.contains("negative") ? ui::colors::NEGATIVE : ui::colors::WARNING);
     // API sends snake_case (e.g. "moderate_positive"); show it as readable words.
     QString pred_text = pred.isEmpty() ? tr("neutral") : QString(pred).replace('_', ' ');
     ai_prediction_->setText(tr("Outlook: %1").arg(pred_text));
     ai_prediction_->setStyleSheet(QString("color: %1;").arg(pred_color));
 
-    ai_confidence_->setText(
-        tr("Confidence: %1%").arg(static_cast<int>(analysis.sentiment.confidence * 100)));
+    ai_confidence_->setText(tr("Confidence: %1%").arg(static_cast<int>(analysis.sentiment.confidence * 100)));
 
     // Key points
     while (key_points_layout_->count() > 0) {
@@ -769,9 +766,8 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
     // Credits footer — only shown when the backend reported a credit
     // count (zero/zero means the API didn't surface it).
     if (analysis.credits_used > 0 || analysis.credits_remaining > 0) {
-        ai_credits_->setText(tr("Credits used: %1  •  remaining: %2")
-                                 .arg(analysis.credits_used)
-                                 .arg(analysis.credits_remaining));
+        ai_credits_->setText(
+            tr("Credits used: %1  •  remaining: %2").arg(analysis.credits_used).arg(analysis.credits_remaining));
         ai_credits_->show();
     } else {
         ai_credits_->hide();
@@ -888,12 +884,12 @@ void NewsDetailPanel::show_infrastructure(const QVector<services::Infrastructure
     infra_section_->show();
 
     for (const auto& inf : items) {
-        QString type_icon = inf.type == "airport"
-                                ? tr("AIR")
-                                : (inf.type == "military" ? tr("MIL") : (inf.type == "power_plant" ? tr("PWR") : tr("PRT")));
-        auto* lbl =
-            new QLabel(tr("[%1] %2 — %3 km").arg(type_icon, inf.name.left(20)).arg(inf.distance_km, 0, 'f', 1),
-                       infra_section_);
+        QString type_icon =
+            inf.type == "airport"
+                ? tr("AIR")
+                : (inf.type == "military" ? tr("MIL") : (inf.type == "power_plant" ? tr("PWR") : tr("PRT")));
+        auto* lbl = new QLabel(tr("[%1] %2 — %3 km").arg(type_icon, inf.name.left(20)).arg(inf.distance_km, 0, 'f', 1),
+                               infra_section_);
         lbl->setObjectName("newsDetailKeyPoint");
         infra_layout_->addWidget(lbl);
     }
@@ -907,21 +903,34 @@ void NewsDetailPanel::changeEvent(QEvent* event) {
 
 void NewsDetailPanel::retranslateUi() {
     // Static header / empty-state / section titles.
-    if (header_title_)            header_title_->setText(tr("ARTICLE DETAIL"));
-    if (empty_label_)             empty_label_->setText(tr("Select an article"));
-    if (ai_title_)                ai_title_->setText(tr("AI ANALYSIS"));
-    if (key_points_title_)        key_points_title_->setText(tr("KEY POINTS"));
-    if (risk_title_)              risk_title_->setText(tr("RISK SIGNALS"));
-    if (topics_title_)            topics_title_->setText(tr("TOPICS"));
-    if (ai_entities_title_)       ai_entities_title_->setText(tr("ENTITIES"));
-    if (monitor_title_)           monitor_title_->setText(tr("MONITOR MATCHES"));
-    if (related_title_)           related_title_->setText(tr("RELATED"));
-    if (entities_section_title_)  entities_section_title_->setText(tr("ENTITIES"));
-    if (infra_title_)             infra_title_->setText(tr("NEARBY INFRASTRUCTURE"));
+    if (header_title_)
+        header_title_->setText(tr("ARTICLE DETAIL"));
+    if (empty_label_)
+        empty_label_->setText(tr("Select an article"));
+    if (ai_title_)
+        ai_title_->setText(tr("AI ANALYSIS"));
+    if (key_points_title_)
+        key_points_title_->setText(tr("KEY POINTS"));
+    if (risk_title_)
+        risk_title_->setText(tr("RISK SIGNALS"));
+    if (topics_title_)
+        topics_title_->setText(tr("TOPICS"));
+    if (ai_entities_title_)
+        ai_entities_title_->setText(tr("ENTITIES"));
+    if (monitor_title_)
+        monitor_title_->setText(tr("MONITOR MATCHES"));
+    if (related_title_)
+        related_title_->setText(tr("RELATED"));
+    if (entities_section_title_)
+        entities_section_title_->setText(tr("ENTITIES"));
+    if (infra_title_)
+        infra_title_->setText(tr("NEARBY INFRASTRUCTURE"));
 
     // Always-static action buttons (tooltips + labels).
-    if (open_btn_)        open_btn_->setText(tr("OPEN"));
-    if (copy_btn_)        copy_btn_->setText(tr("COPY URL"));
+    if (open_btn_)
+        open_btn_->setText(tr("OPEN"));
+    if (copy_btn_)
+        copy_btn_->setText(tr("COPY URL"));
     if (copy_title_btn_) {
         copy_title_btn_->setText(tr("COPY TITLE"));
         copy_title_btn_->setToolTip(tr("Copy article headline to clipboard"));
@@ -930,8 +939,10 @@ void NewsDetailPanel::retranslateUi() {
         save_btn_->setText(tr("SAVE"));
         save_btn_->setToolTip(tr("Save article to File Manager"));
     }
-    if (translate_btn_)   translate_btn_->setText(tr("TRANSLATE"));
-    if (bookmark_btn_)    bookmark_btn_->setToolTip(tr("Bookmark article"));
+    if (translate_btn_)
+        translate_btn_->setText(tr("TRANSLATE"));
+    if (bookmark_btn_)
+        bookmark_btn_->setToolTip(tr("Bookmark article"));
     // analyze_btn_ / bookmark_btn_ labels are state-dependent and refresh when
     // the next article is shown — intentionally not forced here. Per-row dynamic
     // content (badges, metrics, entities) re-renders from live data.

@@ -21,8 +21,8 @@ struct WalletActionSummary {
     QString lede;
 
     struct Row {
-        QString label;       ///< small-caps label, e.g. "ROUTE"
-        QString value;       ///< monospace value, e.g. "SOL → USDC → $FNCPT"
+        QString label;         ///< small-caps label, e.g. "ROUTE"
+        QString value;         ///< monospace value, e.g. "SOL → USDC → $FNCPT"
         bool monospace = true; ///< false if value should wrap as natural text
     };
     /// One key/value row per fact the user should verify before signing.

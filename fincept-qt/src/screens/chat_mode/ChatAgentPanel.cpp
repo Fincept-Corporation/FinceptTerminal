@@ -519,8 +519,8 @@ void ChatAgentPanel::on_delete_memory() {
 }
 
 void ChatAgentPanel::on_clear_all_memory() {
-    if (QMessageBox::question(this, tr("Clear Memory"), tr("Delete ALL memory entries?"), QMessageBox::Yes | QMessageBox::No) !=
-        QMessageBox::Yes)
+    if (QMessageBox::question(this, tr("Clear Memory"), tr("Delete ALL memory entries?"),
+                              QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
     ChatModeService::instance().clear_all_memory([this](bool ok, QString err) {
         if (!ok)
@@ -537,8 +537,8 @@ void ChatAgentPanel::on_add_schedule() {
     if (!ok || query.trimmed().isEmpty())
         return;
 
-    const QString cron =
-        QInputDialog::getText(this, tr("New Schedule"), tr("Cron (e.g. 0 9 * * 1-5):"), QLineEdit::Normal, "0 9 * * 1-5", &ok);
+    const QString cron = QInputDialog::getText(this, tr("New Schedule"), tr("Cron (e.g. 0 9 * * 1-5):"),
+                                               QLineEdit::Normal, "0 9 * * 1-5", &ok);
     if (!ok || cron.trimmed().isEmpty())
         return;
 
@@ -619,7 +619,8 @@ void ChatAgentPanel::on_send_feedback() {
     if (!item)
         return;
     bool ok = false;
-    const QString feedback = QInputDialog::getText(this, tr("Task Feedback"), tr("Feedback:"), QLineEdit::Normal, {}, &ok);
+    const QString feedback =
+        QInputDialog::getText(this, tr("Task Feedback"), tr("Feedback:"), QLineEdit::Normal, {}, &ok);
     if (!ok || feedback.trimmed().isEmpty())
         return;
 
@@ -748,7 +749,8 @@ void ChatAgentPanel::on_add_monitor() {
     if (!ok || analysis.trimmed().isEmpty())
         return;
 
-    const int interval = QInputDialog::getInt(this, tr("Interval"), tr("Check interval (seconds):"), 300, 60, 86400, 60, &ok);
+    const int interval =
+        QInputDialog::getInt(this, tr("Interval"), tr("Check interval (seconds):"), 300, 60, 86400, 60, &ok);
     if (!ok)
         return;
 
@@ -777,13 +779,13 @@ void ChatAgentPanel::on_add_monitor() {
         return;
     trigger_config["condition"] = cond;
 
-    ChatModeService::instance().create_monitor(name.trimmed(), source_type, source_config, trigger_config,
-                                               analysis.trimmed(), interval, {},
-                                               [this](bool created_ok, AgentMonitor, QString err) {
-                                                   if (!created_ok)
-                                                       QMessageBox::warning(this, tr("Monitor"), tr("Failed: %1").arg(err));
-                                                   refresh_monitors();
-                                               });
+    ChatModeService::instance().create_monitor(
+        name.trimmed(), source_type, source_config, trigger_config, analysis.trimmed(), interval, {},
+        [this](bool created_ok, AgentMonitor, QString err) {
+            if (!created_ok)
+                QMessageBox::warning(this, tr("Monitor"), tr("Failed: %1").arg(err));
+            refresh_monitors();
+        });
 }
 
 void ChatAgentPanel::on_delete_monitor() {
@@ -836,31 +838,86 @@ void ChatAgentPanel::retranslateUi() {
     }
 
     // Section titles + hints
-    if (mem_title_)   mem_title_->setText(tr("AGENT MEMORY"));
-    if (sched_title_) sched_title_->setText(tr("SCHEDULED QUERIES"));
-    if (sched_hint_)  sched_hint_->setText(tr("Cron-based agent queries (e.g. daily 9 AM)."));
-    if (tasks_title_) tasks_title_->setText(tr("BACKGROUND TASKS"));
-    if (mcp_title_)   mcp_title_->setText(tr("MCP SERVERS"));
-    if (mon_title_)   mon_title_->setText(tr("DATA MONITORS"));
-    if (mon_hint_)    mon_hint_->setText(tr("Watch sources, trigger agent analysis."));
+    if (mem_title_)
+        mem_title_->setText(tr("AGENT MEMORY"));
+    if (sched_title_)
+        sched_title_->setText(tr("SCHEDULED QUERIES"));
+    if (sched_hint_)
+        sched_hint_->setText(tr("Cron-based agent queries (e.g. daily 9 AM)."));
+    if (tasks_title_)
+        tasks_title_->setText(tr("BACKGROUND TASKS"));
+    if (mcp_title_)
+        mcp_title_->setText(tr("MCP SERVERS"));
+    if (mon_title_)
+        mon_title_->setText(tr("DATA MONITORS"));
+    if (mon_hint_)
+        mon_hint_->setText(tr("Watch sources, trigger agent analysis."));
 
     // Buttons (text + tooltip)
-    if (mem_add_btn_)     { mem_add_btn_->setText(tr("+ Add"));    mem_add_btn_->setToolTip(tr("Add memory entry")); }
-    if (mem_del_btn_)     { mem_del_btn_->setText(tr("Delete"));   mem_del_btn_->setToolTip(tr("Delete selected")); }
-    if (mem_clear_btn_)   { mem_clear_btn_->setText(tr("Clear"));  mem_clear_btn_->setToolTip(tr("Clear all memory")); }
-    if (sched_add_btn_)   { sched_add_btn_->setText(tr("+ Add"));  sched_add_btn_->setToolTip(tr("Create schedule")); }
-    if (sched_del_btn_)   { sched_del_btn_->setText(tr("Delete")); sched_del_btn_->setToolTip(tr("Delete selected")); }
-    if (sched_toggle_btn_){ sched_toggle_btn_->setText(tr("Pause")); sched_toggle_btn_->setToolTip(tr("Pause/resume")); }
-    if (task_refresh_btn_){ task_refresh_btn_->setText(tr("Refresh")); task_refresh_btn_->setToolTip(tr("Refresh task list")); }
-    if (task_detail_btn_) { task_detail_btn_->setText(tr("Detail")); task_detail_btn_->setToolTip(tr("View task result")); }
-    if (task_feedback_btn_){ task_feedback_btn_->setText(tr("Feedback")); task_feedback_btn_->setToolTip(tr("Send feedback")); }
-    if (task_cancel_btn_) { task_cancel_btn_->setText(tr("Cancel")); task_cancel_btn_->setToolTip(tr("Cancel task")); }
-    if (mcp_add_btn_)     { mcp_add_btn_->setText(tr("+ Add"));    mcp_add_btn_->setToolTip(tr("Add MCP server")); }
-    if (mcp_del_btn_)     { mcp_del_btn_->setText(tr("Delete"));   mcp_del_btn_->setToolTip(tr("Remove selected")); }
-    if (mcp_refresh_btn_) { mcp_refresh_btn_->setText(tr("Refresh")); mcp_refresh_btn_->setToolTip(tr("Refresh all")); }
-    if (mon_add_btn_)     { mon_add_btn_->setText(tr("+ Add"));    mon_add_btn_->setToolTip(tr("Create monitor")); }
-    if (mon_del_btn_)     { mon_del_btn_->setText(tr("Delete"));   mon_del_btn_->setToolTip(tr("Delete selected")); }
-    if (mon_toggle_btn_)  { mon_toggle_btn_->setText(tr("Pause")); mon_toggle_btn_->setToolTip(tr("Pause/resume")); }
+    if (mem_add_btn_) {
+        mem_add_btn_->setText(tr("+ Add"));
+        mem_add_btn_->setToolTip(tr("Add memory entry"));
+    }
+    if (mem_del_btn_) {
+        mem_del_btn_->setText(tr("Delete"));
+        mem_del_btn_->setToolTip(tr("Delete selected"));
+    }
+    if (mem_clear_btn_) {
+        mem_clear_btn_->setText(tr("Clear"));
+        mem_clear_btn_->setToolTip(tr("Clear all memory"));
+    }
+    if (sched_add_btn_) {
+        sched_add_btn_->setText(tr("+ Add"));
+        sched_add_btn_->setToolTip(tr("Create schedule"));
+    }
+    if (sched_del_btn_) {
+        sched_del_btn_->setText(tr("Delete"));
+        sched_del_btn_->setToolTip(tr("Delete selected"));
+    }
+    if (sched_toggle_btn_) {
+        sched_toggle_btn_->setText(tr("Pause"));
+        sched_toggle_btn_->setToolTip(tr("Pause/resume"));
+    }
+    if (task_refresh_btn_) {
+        task_refresh_btn_->setText(tr("Refresh"));
+        task_refresh_btn_->setToolTip(tr("Refresh task list"));
+    }
+    if (task_detail_btn_) {
+        task_detail_btn_->setText(tr("Detail"));
+        task_detail_btn_->setToolTip(tr("View task result"));
+    }
+    if (task_feedback_btn_) {
+        task_feedback_btn_->setText(tr("Feedback"));
+        task_feedback_btn_->setToolTip(tr("Send feedback"));
+    }
+    if (task_cancel_btn_) {
+        task_cancel_btn_->setText(tr("Cancel"));
+        task_cancel_btn_->setToolTip(tr("Cancel task"));
+    }
+    if (mcp_add_btn_) {
+        mcp_add_btn_->setText(tr("+ Add"));
+        mcp_add_btn_->setToolTip(tr("Add MCP server"));
+    }
+    if (mcp_del_btn_) {
+        mcp_del_btn_->setText(tr("Delete"));
+        mcp_del_btn_->setToolTip(tr("Remove selected"));
+    }
+    if (mcp_refresh_btn_) {
+        mcp_refresh_btn_->setText(tr("Refresh"));
+        mcp_refresh_btn_->setToolTip(tr("Refresh all"));
+    }
+    if (mon_add_btn_) {
+        mon_add_btn_->setText(tr("+ Add"));
+        mon_add_btn_->setToolTip(tr("Create monitor"));
+    }
+    if (mon_del_btn_) {
+        mon_del_btn_->setText(tr("Delete"));
+        mon_del_btn_->setToolTip(tr("Delete selected"));
+    }
+    if (mon_toggle_btn_) {
+        mon_toggle_btn_->setText(tr("Pause"));
+        mon_toggle_btn_->setToolTip(tr("Pause/resume"));
+    }
 
     // Re-render lists so placeholders / count labels pick up the new language.
     refresh_memory();

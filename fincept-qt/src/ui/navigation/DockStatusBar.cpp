@@ -12,8 +12,7 @@ DockStatusBar::DockStatusBar(QWidget* parent) : QStatusBar(parent) {
     setSizeGripEnabled(false);
 
     auto apply_style = [this]() {
-        setStyleSheet(QString("QStatusBar{border:none;padding:0;margin:0;background:%1;}")
-                          .arg(colors::BG_BASE()));
+        setStyleSheet(QString("QStatusBar{border:none;padding:0;margin:0;background:%1;}").arg(colors::BG_BASE()));
     };
     apply_style();
     connect(&ThemeManager::instance(), &ThemeManager::theme_changed, this,

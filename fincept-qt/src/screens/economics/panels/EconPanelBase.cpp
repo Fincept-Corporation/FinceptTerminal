@@ -6,13 +6,14 @@
 
 #include <QColor>
 #include <QFile>
-#include <algorithm>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QListWidget>
 #include <QTextStream>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace fincept::screens {
 
@@ -549,15 +550,15 @@ void EconPanelBase::retranslateUi() {
     // re-translated on the next fetch).
     if (empty_lbl_ && stack_ && stack_->currentIndex() == 0) {
         switch (status_kind_) {
-        case StatusKind::Empty:
-            empty_lbl_->setText(status_msg_);
-            break;
-        case StatusKind::Loading:
-            empty_lbl_->setText(status_msg_);
-            break;
-        case StatusKind::Error:
-            empty_lbl_->setText(tr("Error: %1").arg(status_msg_));
-            break;
+            case StatusKind::Empty:
+                empty_lbl_->setText(status_msg_);
+                break;
+            case StatusKind::Loading:
+                empty_lbl_->setText(status_msg_);
+                break;
+            case StatusKind::Error:
+                empty_lbl_->setText(tr("Error: %1").arg(status_msg_));
+                break;
         }
     }
 }

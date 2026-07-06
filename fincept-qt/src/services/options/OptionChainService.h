@@ -151,8 +151,7 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     void stop_ws_stream();
     /// Tick handler — merges a live broker quote into last_chain_ and republishes
     /// the affected leg on `option:tick:*`. Filters by account + symbol map.
-    void on_ws_quote(const QString& account_id, const QString& symbol,
-                     const fincept::trading::BrokerQuote& quote);
+    void on_ws_quote(const QString& account_id, const QString& symbol, const fincept::trading::BrokerQuote& quote);
     /// True when `topic` is the streamed topic and a tick arrived within the
     /// staleness window (so the REST poll should stand down).
     bool ws_feed_fresh(const QString& topic) const;

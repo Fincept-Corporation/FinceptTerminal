@@ -73,21 +73,16 @@ class StakingService : public QObject, public fincept::datahub::Producer {
     /// Build an unsigned `lock` transaction. Async; callback receives the
     /// base64 versioned tx body, or an error if the on-chain program isn't
     /// deployed (mock mode).
-    void build_lock_tx(const QString& pubkey,
-                       const QString& amount_raw,
-                       Duration duration,
+    void build_lock_tx(const QString& pubkey, const QString& amount_raw, Duration duration,
                        std::function<void(Result<QString>)> callback);
 
     /// Build an unsigned `extend` transaction for an existing position.
-    void build_extend_tx(const QString& pubkey,
-                         const QString& position_id,
-                         Duration new_duration,
+    void build_extend_tx(const QString& pubkey, const QString& position_id, Duration new_duration,
                          std::function<void(Result<QString>)> callback);
 
     /// Build an unsigned `withdraw` transaction. Only valid after the
     /// position's `unlock_ts`; the Anchor program rejects early withdrawals.
-    void build_withdraw_tx(const QString& pubkey,
-                           const QString& position_id,
+    void build_withdraw_tx(const QString& pubkey, const QString& position_id,
                            std::function<void(Result<QString>)> callback);
 
     /// True iff the on-chain program ID is configured. UI uses this to
@@ -118,10 +113,8 @@ class StakingService : public QObject, public fincept::datahub::Producer {
     QString resolve_program_id() const;
 
     /// Real-path producers — query `getProgramAccounts` and parse positions.
-    void refresh_locks_real(const QString& topic, const QString& pubkey,
-                            const QString& program_id);
-    void refresh_vefncpt_real(const QString& topic, const QString& pubkey,
-                              const QString& program_id);
+    void refresh_locks_real(const QString& topic, const QString& pubkey, const QString& program_id);
+    void refresh_vefncpt_real(const QString& topic, const QString& pubkey, const QString& program_id);
 
     /// Mock-path producers — publish the 3-position demo from plan §3.2.
     void publish_mock_locks(const QString& topic, const QString& pubkey);

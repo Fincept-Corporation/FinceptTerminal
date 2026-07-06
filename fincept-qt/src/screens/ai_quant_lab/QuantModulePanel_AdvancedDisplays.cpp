@@ -44,7 +44,6 @@
 #include <functional>
 #include <limits>
 
-
 namespace fincept::screens {
 
 using namespace fincept::services::quant;
@@ -65,9 +64,12 @@ void QuantModulePanel::display_hft_result(const QString& command, const QJsonObj
 
     QString header_text = command.toUpper();
     header_text.replace('_', ' ');
-    if (!symbol.isEmpty()) header_text += "  |  " + symbol.toUpper();
-    if (!exchange.isEmpty()) header_text += "  |  " + exchange.toUpper();
-    if (latency > 0.0) header_text += tr("  |  %1 ms").arg(latency, 0, 'f', 1);
+    if (!symbol.isEmpty())
+        header_text += "  |  " + symbol.toUpper();
+    if (!exchange.isEmpty())
+        header_text += "  |  " + exchange.toUpper();
+    if (latency > 0.0)
+        header_text += tr("  |  %1 ms").arg(latency, 0, 'f', 1);
     results_layout_->addWidget(gs_section_header(header_text, accent));
 
     // ── Helper: book-metrics card row ────────────────────────────────────────
@@ -101,7 +103,8 @@ void QuantModulePanel::display_hft_result(const QString& command, const QJsonObj
 
     // ── Helper: bids/asks side-by-side mini tables ───────────────────────────
     auto book_tables = [this](const QJsonArray& bids, const QJsonArray& asks) {
-        if (bids.isEmpty() && asks.isEmpty()) return;
+        if (bids.isEmpty() && asks.isEmpty())
+            return;
         const int rows = std::min<int>(10, std::max(bids.size(), asks.size()));
         auto* table = new QTableWidget(rows, 4, this);
         table->setHorizontalHeaderLabels({tr("Bid Size"), tr("Bid Px"), tr("Ask Px"), tr("Ask Size")});
@@ -169,9 +172,9 @@ void QuantModulePanel::display_hft_result(const QString& command, const QJsonObj
         const QString classification = tx.value("classification").toString();
         QList<QWidget*> top = {
             gs_make_card(tr("TOXICITY SCORE"), QString::number(score, 'f', 2), this,
-                         score >= 70 ? ui::colors::NEGATIVE()
-                                     : score >= 40 ? ui::colors::WARNING()
-                                                   : ui::colors::POSITIVE()),
+                         score >= 70   ? ui::colors::NEGATIVE()
+                         : score >= 40 ? ui::colors::WARNING()
+                                       : ui::colors::POSITIVE()),
             gs_make_card(tr("IS TOXIC"), is_toxic ? tr("YES") : tr("NO"), this,
                          is_toxic ? ui::colors::NEGATIVE() : ui::colors::POSITIVE()),
             gs_make_card(tr("ACTION"), action.isEmpty() ? "—" : action.toUpper(), this, verdict_color_for(action)),
@@ -263,8 +266,9 @@ void QuantModulePanel::display_hft_result(const QString& command, const QJsonObj
     } else if (command == "toxic_flow") {
         book_row(payload.value("book_metrics").toObject());
         tox_row(payload.value("toxic_flow").toObject());
-        status_label_->setText(tr("Toxicity: %1")
-                                   .arg(payload.value("toxic_flow").toObject().value("toxicity_score").toDouble(), 0, 'f', 2));
+        status_label_->setText(
+            tr("Toxicity: %1")
+                .arg(payload.value("toxic_flow").toObject().value("toxicity_score").toDouble(), 0, 'f', 2));
     } else if (command == "slippage") {
         slip_row(payload);
         status_label_->setText(tr("Slippage: %1 bps").arg(payload.value("slippage_bps").toDouble(), 0, 'f', 2));
@@ -294,11 +298,10 @@ void QuantModulePanel::display_rolling_retraining_result(const QString& command,
         const QString event = payload.value("event").toString();
         if (event == "start") {
             clear_results();
-            results_layout_->addWidget(gs_section_header(
-                tr("RETRAIN START: %1  |  %2 windows")
-                    .arg(payload.value("model_id").toString())
-                    .arg(payload.value("total_windows").toInt()),
-                module_.color.name()));
+            results_layout_->addWidget(gs_section_header(tr("RETRAIN START: %1  |  %2 windows")
+                                                             .arg(payload.value("model_id").toString())
+                                                             .arg(payload.value("total_windows").toInt()),
+                                                         module_.color.name()));
             status_label_->setText(tr("Retraining started…"));
             return;
         }
@@ -312,12 +315,10 @@ void QuantModulePanel::display_rolling_retraining_result(const QString& command,
             lbl->setWordWrap(true);
             lbl->setStyleSheet(QString("color:%1; font-family:'Courier New'; font-size:10px;"
                                        "padding:4px 10px; background:%2; border-left:3px solid %3;")
-                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
-                                        module_.color.name()));
+                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), module_.color.name()));
             results_layout_->addWidget(lbl);
-            status_label_->setText(tr("Window %1/%2")
-                                       .arg(payload.value("index").toInt())
-                                       .arg(payload.value("total").toInt()));
+            status_label_->setText(
+                tr("Window %1/%2").arg(payload.value("index").toInt()).arg(payload.value("total").toInt()));
             return;
         }
         if (event == "ensemble") {
@@ -334,8 +335,8 @@ void QuantModulePanel::display_rolling_retraining_result(const QString& command,
                 gs_make_card(tr("MODEL"), payload.value("model_id").toString(), this),
                 gs_make_card(tr("WINDOWS TRAINED"), fmt_int_safe(payload.value("windows_trained")), this,
                              ui::colors::POSITIVE()),
-                gs_make_card(tr("ELAPSED"),
-                             QString::number(payload.value("elapsed_sec").toDouble(), 'f', 1) + tr(" s"), this),
+                gs_make_card(tr("ELAPSED"), QString::number(payload.value("elapsed_sec").toDouble(), 'f', 1) + tr(" s"),
+                             this),
                 gs_make_card(tr("EXPERIMENT"), payload.value("exp_name").toString(), this, ui::colors::INFO()),
             };
             results_layout_->addWidget(gs_card_row(top, this));
@@ -369,7 +370,8 @@ void QuantModulePanel::display_rolling_retraining_result(const QString& command,
 
         if (count > 0) {
             auto* table = new QTableWidget(count, 6, this);
-            table->setHorizontalHeaderLabels({tr("Model ID"), tr("Frequency"), tr("Window"), tr("Step"), tr("Last Status"), tr("Next Run")});
+            table->setHorizontalHeaderLabels(
+                {tr("Model ID"), tr("Frequency"), tr("Window"), tr("Step"), tr("Last Status"), tr("Next Run")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -384,9 +386,12 @@ void QuantModulePanel::display_rolling_retraining_result(const QString& command,
                 table->setItem(r, 3, new QTableWidgetItem(QString::number(sch.value("step").toInt())));
                 const QString status = sch.value("last_status").toString();
                 auto* st = new QTableWidgetItem(status);
-                if (status == "completed") st->setForeground(QColor(ui::colors::POSITIVE()));
-                else if (status == "failed") st->setForeground(QColor(ui::colors::NEGATIVE()));
-                else if (status == "running") st->setForeground(QColor(ui::colors::WARNING()));
+                if (status == "completed")
+                    st->setForeground(QColor(ui::colors::POSITIVE()));
+                else if (status == "failed")
+                    st->setForeground(QColor(ui::colors::NEGATIVE()));
+                else if (status == "running")
+                    st->setForeground(QColor(ui::colors::WARNING()));
                 table->setItem(r, 4, st);
                 table->setItem(r, 5, new QTableWidgetItem(sch.value("next_run").toString()));
                 table->setRowHeight(r, 26);
@@ -479,7 +484,8 @@ void QuantModulePanel::display_data_processors_result(const QString& command, co
 
     if (command == "check_status") {
         QList<QWidget*> top = {
-            gs_make_card(tr("PANDAS"), payload.value("pandas_available").toBool() ? tr("AVAILABLE") : tr("MISSING"), this,
+            gs_make_card(tr("PANDAS"), payload.value("pandas_available").toBool() ? tr("AVAILABLE") : tr("MISSING"),
+                         this,
                          payload.value("pandas_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
             gs_make_card(tr("PROCESSORS"), QString::number(payload.value("processors_available").toInt()), this,
                          ui::colors::POSITIVE()),
@@ -521,7 +527,8 @@ void QuantModulePanel::display_data_processors_result(const QString& command, co
     if (command == "create_pipeline") {
         const auto procs = payload.value("processors").toArray();
         QStringList plist;
-        for (const auto& v : procs) plist << v.toString();
+        for (const auto& v : procs)
+            plist << v.toString();
 
         QList<QWidget*> top = {
             gs_make_card(tr("PIPELINE ID"), payload.value("pipeline_id").toString(), this, ui::colors::POSITIVE()),
@@ -549,7 +556,8 @@ void QuantModulePanel::display_data_processors_result(const QString& command, co
         const auto out_shape = stats.value("output_shape").toArray();
         auto shape_str = [](const QJsonArray& a) {
             QStringList s;
-            for (const auto& v : a) s << QString::number(v.toInt());
+            for (const auto& v : a)
+                s << QString::number(v.toInt());
             return "(" + s.join(", ") + ")";
         };
 
@@ -579,17 +587,19 @@ void QuantModulePanel::display_data_processors_result(const QString& command, co
             gs_make_card(tr("INPUT STD"), QString::number(stats.value("input_std").toDouble(), 'f', 4), this),
             gs_make_card(tr("OUTPUT STD"), QString::number(stats.value("output_std").toDouble(), 'f', 4), this,
                          std::abs(stats.value("output_std").toDouble() - 1.0) < 0.1 ? ui::colors::POSITIVE()
-                                                                                     : ui::colors::TEXT_PRIMARY()),
+                                                                                    : ui::colors::TEXT_PRIMARY()),
             gs_make_card(tr("STD RATIO"),
                          stats.value("input_std").toDouble() > 0
-                             ? QString::number(stats.value("output_std").toDouble() / stats.value("input_std").toDouble(), 'f', 3)
+                             ? QString::number(
+                                   stats.value("output_std").toDouble() / stats.value("input_std").toDouble(), 'f', 3)
                              : "—",
                          this),
-            gs_make_card(tr("DROPPED %"),
-                         in_shape.size() > 0 && in_shape[0].toInt() > 0
-                             ? QString::number((1.0 - double(out_shape[0].toInt()) / in_shape[0].toInt()) * 100, 'f', 2) + "%"
-                             : "—",
-                         this),
+            gs_make_card(
+                tr("DROPPED %"),
+                in_shape.size() > 0 && in_shape[0].toInt() > 0
+                    ? QString::number((1.0 - double(out_shape[0].toInt()) / in_shape[0].toInt()) * 100, 'f', 2) + "%"
+                    : "—",
+                this),
         };
         results_layout_->addWidget(gs_card_row(std_row, this));
         status_label_->setText(tr("Processed: %1 → %2").arg(shape_str(in_shape)).arg(shape_str(out_shape)));
@@ -598,6 +608,5 @@ void QuantModulePanel::display_data_processors_result(const QString& command, co
 
     display_result(payload);
 }
-
 
 } // namespace fincept::screens

@@ -45,7 +45,6 @@
 #include <QTextFrame>
 #include <QVBoxLayout>
 
-
 namespace fincept::screens {
 
 namespace rep = ::fincept::report;
@@ -95,8 +94,7 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
     // ── Component toolbar wiring ─────────────────────────────────────────
     connect(comp_toolbar_, &ComponentToolbar::new_report_requested, this, &ReportBuilderScreen::on_new);
     connect(comp_toolbar_, &ComponentToolbar::open_report_requested, this, &ReportBuilderScreen::on_open);
-    connect(comp_toolbar_, &ComponentToolbar::recent_reports_requested, this,
-            &ReportBuilderScreen::show_recent_dialog);
+    connect(comp_toolbar_, &ComponentToolbar::recent_reports_requested, this, &ReportBuilderScreen::show_recent_dialog);
     connect(comp_toolbar_, &ComponentToolbar::templates_requested, this, &ReportBuilderScreen::show_template_dialog);
     connect(comp_toolbar_, &ComponentToolbar::theme_requested, this, &ReportBuilderScreen::show_theme_dialog);
     connect(comp_toolbar_, &ComponentToolbar::metadata_requested, this, &ReportBuilderScreen::show_metadata_dialog);
@@ -167,27 +165,39 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
                                         return v != 0 ? QString::number(v * 100, 'f', 2) + "%" : "—";
                                     };
                                     auto fmt_mcap = [](double v) -> QString {
-                                        if (v <= 0) return QString("—");
-                                        if (v >= 1e12) return QString::number(v / 1e12, 'f', 2) + "T";
-                                        if (v >= 1e9) return QString::number(v / 1e9, 'f', 2) + "B";
-                                        if (v >= 1e6) return QString::number(v / 1e6, 'f', 2) + "M";
+                                        if (v <= 0)
+                                            return QString("—");
+                                        if (v >= 1e12)
+                                            return QString::number(v / 1e12, 'f', 2) + "T";
+                                        if (v >= 1e9)
+                                            return QString::number(v / 1e9, 'f', 2) + "B";
+                                        if (v >= 1e6)
+                                            return QString::number(v / 1e6, 'f', 2) + "M";
                                         return QString::number(v, 'f', 0);
                                     };
                                     auto fmt_vol = [](double v) -> QString {
-                                        if (v <= 0) return QString("—");
-                                        if (v >= 1e9) return QString::number(v / 1e9, 'f', 2) + "B";
-                                        if (v >= 1e6) return QString::number(v / 1e6, 'f', 2) + "M";
-                                        if (v >= 1e3) return QString::number(v / 1e3, 'f', 1) + "K";
+                                        if (v <= 0)
+                                            return QString("—");
+                                        if (v >= 1e9)
+                                            return QString::number(v / 1e9, 'f', 2) + "B";
+                                        if (v >= 1e6)
+                                            return QString::number(v / 1e6, 'f', 2) + "M";
+                                        if (v >= 1e3)
+                                            return QString::number(v / 1e3, 'f', 1) + "K";
                                         return QString::number(v, 'f', 0);
                                     };
 
                                     if (!ok) {
                                         lines << "Error: Could not fetch data for " + sym;
                                     } else {
-                                        if (!info.name.isEmpty()) lines << "Company: " + info.name;
-                                        if (!info.sector.isEmpty()) lines << "Sector: " + info.sector;
-                                        if (!info.industry.isEmpty()) lines << "Industry: " + info.industry;
-                                        if (!info.country.isEmpty()) lines << "Country: " + info.country;
+                                        if (!info.name.isEmpty())
+                                            lines << "Company: " + info.name;
+                                        if (!info.sector.isEmpty())
+                                            lines << "Sector: " + info.sector;
+                                        if (!info.industry.isEmpty())
+                                            lines << "Industry: " + info.industry;
+                                        if (!info.country.isEmpty())
+                                            lines << "Country: " + info.country;
                                         lines << "Market Cap: " + fmt_mcap(info.market_cap);
                                         lines << "P/E Ratio: " + fmt_dbl(info.pe_ratio);
                                         lines << "Forward P/E: " + fmt_dbl(info.forward_pe);
@@ -203,7 +213,8 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
                                             lines << "Debt/Equity: " + fmt_dbl(info.debt_to_equity);
                                         if (info.current_ratio != 0)
                                             lines << "Current Ratio: " + fmt_dbl(info.current_ratio);
-                                        if (info.eps != 0) lines << "Rev/Share: " + fmt_dbl(info.eps);
+                                        if (info.eps != 0)
+                                            lines << "Rev/Share: " + fmt_dbl(info.eps);
                                     }
                                     auto cfg = comps2[idx2].config;
                                     cfg["data"] = lines.join("\n");
@@ -268,8 +279,7 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
                     }
 
                     hub.subscribe<QVector<fincept::services::HistoryPoint>>(
-                        this, topic,
-                        [self, topic, apply](const QVector<fincept::services::HistoryPoint>& history) {
+                        this, topic, [self, topic, apply](const QVector<fincept::services::HistoryPoint>& history) {
                             if (!self)
                                 return;
                             apply(history);
@@ -318,8 +328,7 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
                         return;
                     }
                     hub.subscribe<fincept::services::QuoteData>(
-                        this, topic,
-                        [self, topic, apply](const fincept::services::QuoteData& q) {
+                        this, topic, [self, topic, apply](const fincept::services::QuoteData& q) {
                             if (!self)
                                 return;
                             apply(q);
@@ -461,7 +470,6 @@ QWidget* ReportBuilderScreen::build_toolbar() {
 
 // ── Side-panel collapse ──────────────────────────────────────────────────────
 
-
 void ReportBuilderScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     // The service runs autosave continuously. We just rebind from current
@@ -471,7 +479,9 @@ void ReportBuilderScreen::showEvent(QShowEvent* e) {
     fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("report"));
 }
 
-void ReportBuilderScreen::hideEvent(QHideEvent* e) { QWidget::hideEvent(e); }
+void ReportBuilderScreen::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+}
 
 // ── Live language switch ─────────────────────────────────────────────────────
 
@@ -482,13 +492,20 @@ void ReportBuilderScreen::changeEvent(QEvent* e) {
 }
 
 void ReportBuilderScreen::retranslateUi() {
-    if (toolbar_title_) toolbar_title_->setText(tr("REPORT BUILDER"));
-    if (undo_btn_) undo_btn_->setText(tr("Undo"));
-    if (redo_btn_) redo_btn_->setText(tr("Redo"));
-    if (open_btn_) open_btn_->setText(tr("Open"));
-    if (save_btn_) save_btn_->setText(tr("Save"));
-    if (pdf_btn_) pdf_btn_->setText(tr("Export PDF"));
-    if (preview_btn_) preview_btn_->setText(tr("Preview"));
+    if (toolbar_title_)
+        toolbar_title_->setText(tr("REPORT BUILDER"));
+    if (undo_btn_)
+        undo_btn_->setText(tr("Undo"));
+    if (redo_btn_)
+        redo_btn_->setText(tr("Redo"));
+    if (open_btn_)
+        open_btn_->setText(tr("Open"));
+    if (save_btn_)
+        save_btn_->setText(tr("Save"));
+    if (pdf_btn_)
+        pdf_btn_->setText(tr("Export PDF"));
+    if (preview_btn_)
+        preview_btn_->setText(tr("Preview"));
     // Re-apply the panel-toggle tooltips for the current collapse state.
     if (left_toggle_btn_)
         left_toggle_btn_->setToolTip(left_collapsed_ ? tr("Expand components panel  (Ctrl+B)")

@@ -93,8 +93,8 @@ void PerformanceRiskView::build_ui() {
     // flat 4% risk-free rate instead of the live 10-year Treasury yield.
     rf_hint_ = new QLabel;
     rf_hint_->setWordWrap(true);
-    rf_hint_->setStyleSheet(QString("color:%1; font-size:9px; padding:2px 12px; background:transparent;")
-                                .arg(ui::colors::WARNING()));
+    rf_hint_->setStyleSheet(
+        QString("color:%1; font-size:9px; padding:2px 12px; background:transparent;").arg(ui::colors::WARNING()));
     rf_hint_->setVisible(false);
     layout->addWidget(rf_hint_);
 
@@ -102,15 +102,21 @@ void PerformanceRiskView::build_ui() {
     cards_layout->setContentsMargins(12, 8, 12, 8);
     cards_layout->setSpacing(8);
 
-    sharpe_card_ = add_metric_card(cards_layout, tr("SHARPE RATIO"), tr("Risk-adjusted return (annualised)"), ui::colors::CYAN);
-    sortino_card_ = add_metric_card(cards_layout, tr("SORTINO RATIO"), tr("Downside risk-adjusted return"), ui::colors::CYAN);
-    beta_card_ = add_metric_card(cards_layout, tr("BETA"), tr("Sensitivity vs SPY (snapshot regression)"), ui::colors::WARNING);
-    alpha_card_ = add_metric_card(cards_layout, tr("ALPHA"), tr("Jensen's alpha vs benchmark (CAPM)"), ui::colors::POSITIVE);
+    sharpe_card_ =
+        add_metric_card(cards_layout, tr("SHARPE RATIO"), tr("Risk-adjusted return (annualised)"), ui::colors::CYAN);
+    sortino_card_ =
+        add_metric_card(cards_layout, tr("SORTINO RATIO"), tr("Downside risk-adjusted return"), ui::colors::CYAN);
+    beta_card_ =
+        add_metric_card(cards_layout, tr("BETA"), tr("Sensitivity vs SPY (snapshot regression)"), ui::colors::WARNING);
+    alpha_card_ =
+        add_metric_card(cards_layout, tr("ALPHA"), tr("Jensen's alpha vs benchmark (CAPM)"), ui::colors::POSITIVE);
     vol_card_ = add_metric_card(cards_layout, tr("VOLATILITY"), tr("Annualised from daily returns"), ui::colors::AMBER);
     drawdown_card_ =
         add_metric_card(cards_layout, tr("MAX DRAWDOWN"), tr("Peak-to-trough from snapshots"), ui::colors::NEGATIVE);
-    var_card_ = add_metric_card(cards_layout, tr("VALUE AT RISK (95%)"), tr("1-day historical VaR"), ui::colors::NEGATIVE);
-    cvar_card_ = add_metric_card(cards_layout, tr("CONDITIONAL VaR"), tr("Expected shortfall (95%)"), ui::colors::NEGATIVE);
+    var_card_ =
+        add_metric_card(cards_layout, tr("VALUE AT RISK (95%)"), tr("1-day historical VaR"), ui::colors::NEGATIVE);
+    cvar_card_ =
+        add_metric_card(cards_layout, tr("CONDITIONAL VaR"), tr("Expected shortfall (95%)"), ui::colors::NEGATIVE);
 
     auto* cards_widget = new QWidget(this);
     cards_widget->setLayout(cards_layout);
@@ -121,8 +127,8 @@ PerformanceRiskView::MetricCard PerformanceRiskView::add_metric_card(QLayout* pa
                                                                      const QString& desc, const char* color) {
 
     auto* card = new QWidget(this);
-    card->setStyleSheet(
-        QString("background:%1; border:1px solid %2; padding:8px;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+    card->setStyleSheet(QString("background:%1; border:1px solid %2; padding:8px;")
+                            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
 
     auto* cl = new QVBoxLayout(card);
     cl->setContentsMargins(10, 8, 10, 8);
@@ -192,27 +198,45 @@ void PerformanceRiskView::changeEvent(QEvent* event) {
 }
 
 void PerformanceRiskView::retranslateUi() {
-    if (chart_title_)    chart_title_->setText(tr("NAV PERFORMANCE (FROM SNAPSHOTS)"));
-    if (metrics_header_) metrics_header_->setText(tr("  RISK METRICS"));
+    if (chart_title_)
+        chart_title_->setText(tr("NAV PERFORMANCE (FROM SNAPSHOTS)"));
+    if (metrics_header_)
+        metrics_header_->setText(tr("  RISK METRICS"));
 
     // Period button labels are unit/time symbols (1M, 3M, 1Y, ALL) — left untranslated.
 
-    if (sharpe_card_.title)   sharpe_card_.title->setText(tr("SHARPE RATIO"));
-    if (sharpe_card_.desc)    sharpe_card_.desc->setText(tr("Risk-adjusted return (annualised)"));
-    if (sortino_card_.title)  sortino_card_.title->setText(tr("SORTINO RATIO"));
-    if (sortino_card_.desc)   sortino_card_.desc->setText(tr("Downside risk-adjusted return"));
-    if (beta_card_.title)     beta_card_.title->setText(tr("BETA"));
-    if (beta_card_.desc)      beta_card_.desc->setText(tr("Sensitivity vs SPY (snapshot regression)"));
-    if (alpha_card_.title)    alpha_card_.title->setText(tr("ALPHA"));
-    if (alpha_card_.desc)     alpha_card_.desc->setText(tr("Jensen's alpha vs benchmark (CAPM)"));
-    if (vol_card_.title)      vol_card_.title->setText(tr("VOLATILITY"));
-    if (vol_card_.desc)       vol_card_.desc->setText(tr("Annualised from daily returns"));
-    if (drawdown_card_.title) drawdown_card_.title->setText(tr("MAX DRAWDOWN"));
-    if (drawdown_card_.desc)  drawdown_card_.desc->setText(tr("Peak-to-trough from snapshots"));
-    if (var_card_.title)      var_card_.title->setText(tr("VALUE AT RISK (95%)"));
-    if (var_card_.desc)       var_card_.desc->setText(tr("1-day historical VaR"));
-    if (cvar_card_.title)     cvar_card_.title->setText(tr("CONDITIONAL VaR"));
-    if (cvar_card_.desc)      cvar_card_.desc->setText(tr("Expected shortfall (95%)"));
+    if (sharpe_card_.title)
+        sharpe_card_.title->setText(tr("SHARPE RATIO"));
+    if (sharpe_card_.desc)
+        sharpe_card_.desc->setText(tr("Risk-adjusted return (annualised)"));
+    if (sortino_card_.title)
+        sortino_card_.title->setText(tr("SORTINO RATIO"));
+    if (sortino_card_.desc)
+        sortino_card_.desc->setText(tr("Downside risk-adjusted return"));
+    if (beta_card_.title)
+        beta_card_.title->setText(tr("BETA"));
+    if (beta_card_.desc)
+        beta_card_.desc->setText(tr("Sensitivity vs SPY (snapshot regression)"));
+    if (alpha_card_.title)
+        alpha_card_.title->setText(tr("ALPHA"));
+    if (alpha_card_.desc)
+        alpha_card_.desc->setText(tr("Jensen's alpha vs benchmark (CAPM)"));
+    if (vol_card_.title)
+        vol_card_.title->setText(tr("VOLATILITY"));
+    if (vol_card_.desc)
+        vol_card_.desc->setText(tr("Annualised from daily returns"));
+    if (drawdown_card_.title)
+        drawdown_card_.title->setText(tr("MAX DRAWDOWN"));
+    if (drawdown_card_.desc)
+        drawdown_card_.desc->setText(tr("Peak-to-trough from snapshots"));
+    if (var_card_.title)
+        var_card_.title->setText(tr("VALUE AT RISK (95%)"));
+    if (var_card_.desc)
+        var_card_.desc->setText(tr("1-day historical VaR"));
+    if (cvar_card_.title)
+        cvar_card_.title->setText(tr("CONDITIONAL VaR"));
+    if (cvar_card_.desc)
+        cvar_card_.desc->setText(tr("Expected shortfall (95%)"));
 
     // No tr() literals in chart/metric values themselves — only formatted numbers + currency.
 }
@@ -366,8 +390,7 @@ void PerformanceRiskView::update_metrics() {
         if (!card.value)
             return;
         card.value->setText(text);
-        card.value->setStyleSheet(
-            QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(color));
+        card.value->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700; border:none;").arg(color));
     };
 
     // ── Sharpe ──────────────────────────────────────────────────────────────

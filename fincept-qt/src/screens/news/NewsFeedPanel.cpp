@@ -1,6 +1,7 @@
 #include "screens/news/NewsFeedPanel.h"
 
 #include "core/logging/Logger.h"
+
 #include <QApplication>
 #include <QDateTime>
 #include <QPushButton>
@@ -55,9 +56,7 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
         empty_state_title_ = new QLabel(tr("No articles available"), empty_state_);
         empty_state_title_->setObjectName("newsEmptyStateTitle");
         empty_state_title_->setAlignment(Qt::AlignCenter);
-        empty_state_hint_ = new QLabel(
-            tr("Check your network connection and click Refresh to retry."),
-            empty_state_);
+        empty_state_hint_ = new QLabel(tr("Check your network connection and click Refresh to retry."), empty_state_);
         empty_state_hint_->setObjectName("newsEmptyStateHint");
         empty_state_hint_->setAlignment(Qt::AlignCenter);
         empty_state_hint_->setWordWrap(true);
@@ -307,8 +306,10 @@ void NewsFeedPanel::changeEvent(QEvent* event) {
 }
 
 void NewsFeedPanel::retranslateUi() {
-    if (empty_state_title_) empty_state_title_->setText(tr("No articles available"));
-    if (empty_state_hint_)  empty_state_hint_->setText(tr("Check your network connection and click Refresh to retry."));
+    if (empty_state_title_)
+        empty_state_title_->setText(tr("No articles available"));
+    if (empty_state_hint_)
+        empty_state_hint_->setText(tr("Check your network connection and click Refresh to retry."));
     // banner_tag_ reflects the live FLASH/BREAKING priority of the current
     // banner and refreshes on the next show_breaking() — not forced here.
 }

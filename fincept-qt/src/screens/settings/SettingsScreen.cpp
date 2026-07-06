@@ -3,9 +3,8 @@
 
 #include "screens/settings/SettingsScreen.h"
 
-#include "core/i18n/LanguageManager.h"
-#include "services/llm/LlmService.h"
 #include "core/events/EventBus.h"
+#include "core/i18n/LanguageManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "screens/settings/AppearanceSection.h"
@@ -25,6 +24,7 @@
 #include "screens/settings/SettingsStyles.h"
 #include "screens/settings/StorageSection.h"
 #include "screens/settings/VoiceConfigSection.h"
+#include "services/llm/LlmService.h"
 #include "services/stt/SpeechService.h"
 #include "services/tts/TtsService.h"
 #include "services/voice_trigger/ClapDetectorService.h"
@@ -64,16 +64,16 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     // change rebuild path so we don't hardcode the type list twice.
     section_factories_.clear();
     section_factories_.resize(16);
-    section_factories_[0]  = [] { return new CredentialsSection; };
-    section_factories_[1]  = [] { return new AppearanceSection; };
-    section_factories_[2]  = [] { return new NotificationsSection; };
-    section_factories_[3]  = [] { return new StorageSection; };
-    section_factories_[4]  = [] { return new DataSourcesSection; };
-    section_factories_[5]  = [] { return new LlmConfigSection; };
-    section_factories_[6]  = [] { return new McpServersSection; };
-    section_factories_[7]  = [] { return new LoggingSection; };
-    section_factories_[8]  = [] { return new SecuritySection; };
-    section_factories_[9]  = [] { return new ProfilesSection; };
+    section_factories_[0] = [] { return new CredentialsSection; };
+    section_factories_[1] = [] { return new AppearanceSection; };
+    section_factories_[2] = [] { return new NotificationsSection; };
+    section_factories_[3] = [] { return new StorageSection; };
+    section_factories_[4] = [] { return new DataSourcesSection; };
+    section_factories_[5] = [] { return new LlmConfigSection; };
+    section_factories_[6] = [] { return new McpServersSection; };
+    section_factories_[7] = [] { return new LoggingSection; };
+    section_factories_[8] = [] { return new SecuritySection; };
+    section_factories_[9] = [] { return new ProfilesSection; };
     section_factories_[10] = [] { return new KeybindingsSection; };
     section_factories_[11] = [] { return new PythonEnvSection; };
     section_factories_[12] = [] { return new DeveloperSection; };
@@ -109,29 +109,29 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
         auto* h = new QLabel;
         h->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;"
                                  "letter-spacing:1.2px;padding:8px 6px 4px 6px;")
-                              .arg(ui::colors::TEXT_DIM()));
+                             .arg(ui::colors::TEXT_DIM()));
         nvl->addWidget(h);
         scope_headers_.append(h);
         scope_header_keys_.append(key);
     };
 
     add_scope_header(QStringLiteral("SHELL"));
-    auto* first = make_btn(QStringLiteral("General"),       14);
-    make_btn(QStringLiteral("Appearance"),      1);
-    make_btn(QStringLiteral("Notifications"),   2);
-    make_btn(QStringLiteral("Keybindings"),    10);
-    make_btn(QStringLiteral("Voice"),          13);
-    make_btn(QStringLiteral("Logging"),         7);
-    make_btn(QStringLiteral("Developer"),      12);
+    auto* first = make_btn(QStringLiteral("General"), 14);
+    make_btn(QStringLiteral("Appearance"), 1);
+    make_btn(QStringLiteral("Notifications"), 2);
+    make_btn(QStringLiteral("Keybindings"), 10);
+    make_btn(QStringLiteral("Voice"), 13);
+    make_btn(QStringLiteral("Logging"), 7);
+    make_btn(QStringLiteral("Developer"), 12);
 
     add_scope_header(QStringLiteral("PROFILE"));
-    make_btn(QStringLiteral("Profiles"),        9);
-    make_btn(QStringLiteral("Credentials"),     0);
-    make_btn(QStringLiteral("Security"),        8);
-    make_btn(QStringLiteral("Data Sources"),    4);
-    make_btn(QStringLiteral("LLM Config"),      5);
-    make_btn(QStringLiteral("MCP Servers"),     6);
-    make_btn(QStringLiteral("Python Env"),     11);
+    make_btn(QStringLiteral("Profiles"), 9);
+    make_btn(QStringLiteral("Credentials"), 0);
+    make_btn(QStringLiteral("Security"), 8);
+    make_btn(QStringLiteral("Data Sources"), 4);
+    make_btn(QStringLiteral("LLM Config"), 5);
+    make_btn(QStringLiteral("MCP Servers"), 6);
+    make_btn(QStringLiteral("Python Env"), 11);
     make_btn(QStringLiteral("Storage & Cache"), 3);
     make_btn(QStringLiteral("Cloud Sync"), 15);
 
@@ -152,8 +152,8 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     // Language changes mean every section needs fresh tr() lookups. We rebuild
     // each section by constructing a new instance via its factory — simpler
     // and more reliable than threading retranslateUi() through every section.
-    connect(&i18n::LanguageManager::instance(), &i18n::LanguageManager::language_changed,
-            this, [this](const QString&) { rebuild_sections_for_language_change(); });
+    connect(&i18n::LanguageManager::instance(), &i18n::LanguageManager::language_changed, this,
+            [this](const QString&) { rebuild_sections_for_language_change(); });
 }
 
 void SettingsScreen::changeEvent(QEvent* e) {
@@ -163,9 +163,11 @@ void SettingsScreen::changeEvent(QEvent* e) {
 }
 
 void SettingsScreen::retranslateUi() {
-    if (nav_title_) nav_title_->setText(tr("SETTINGS"));
+    if (nav_title_)
+        nav_title_->setText(tr("SETTINGS"));
     for (const auto& nb : nav_buttons_) {
-        if (nb.btn) nb.btn->setText(tr(nb.source_key.toUtf8().constData()));
+        if (nb.btn)
+            nb.btn->setText(tr(nb.source_key.toUtf8().constData()));
     }
     for (int i = 0; i < scope_headers_.size() && i < scope_header_keys_.size(); ++i) {
         if (scope_headers_[i])
@@ -174,17 +176,20 @@ void SettingsScreen::retranslateUi() {
 }
 
 void SettingsScreen::rebuild_sections_for_language_change() {
-    if (!sections_) return;
+    if (!sections_)
+        return;
     const int current = sections_->currentIndex();
     // Replace each widget in-place. We insert at the same index first, then
     // remove the old widget — preserves index ordering for nav buttons.
     for (int i = 0; i < section_factories_.size(); ++i) {
-        if (!section_factories_[i]) continue;
+        if (!section_factories_[i])
+            continue;
         QWidget* old = sections_->widget(i);
         QWidget* fresh = section_factories_[i]();
         sections_->insertWidget(i, fresh);
         sections_->removeWidget(old);
-        if (old) old->deleteLater();
+        if (old)
+            old->deleteLater();
     }
     sections_->setCurrentIndex(current);
     // External signals must be re-wired against the fresh section instances.
@@ -192,7 +197,8 @@ void SettingsScreen::rebuild_sections_for_language_change() {
 }
 
 void SettingsScreen::wire_section_signals() {
-    if (!sections_) return;
+    if (!sections_)
+        return;
     // LLM config changes → reload AI chat service.
     if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5))) {
         connect(llm, &LlmConfigSection::config_changed, this,
@@ -226,7 +232,8 @@ void SettingsScreen::refresh_theme() {
         // text-matching, so the headers' style survives translation to
         // languages where the source label no longer literally reads "SHELL".
         for (auto* lbl : scope_headers_) {
-            if (!lbl) continue;
+            if (!lbl)
+                continue;
             lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;"
                                        "letter-spacing:1.2px;padding:8px 6px 4px 6px;")
                                    .arg(ui::colors::TEXT_DIM()));
@@ -245,9 +252,11 @@ void SettingsScreen::hideEvent(QHideEvent* e) {
 }
 
 void SettingsScreen::reload_visible_section() {
-    if (!sections_) return;
+    if (!sections_)
+        return;
     auto* w = sections_->currentWidget();
-    if (!w) return;
+    if (!w)
+        return;
     w->hide();
     w->show();
 }
@@ -255,27 +264,38 @@ void SettingsScreen::reload_visible_section() {
 // ── MCP-driven UI sync ──────────────────────────────────────────────────────
 
 void SettingsScreen::subscribe_mcp_events() {
-    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+    if (!mcp_event_subs_.isEmpty())
+        return; // idempotent
 
     QPointer<SettingsScreen> self = this;
     auto on_settings_changed = [self](const QVariantMap&) {
-        if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self]() {
-            if (!self) return;
-            self->reload_visible_section();
-        }, Qt::QueuedConnection);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self]() {
+                if (!self)
+                    return;
+                self->reload_visible_section();
+            },
+            Qt::QueuedConnection);
     };
     auto on_provider_changed = [self](const QVariantMap&) {
-        if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self]() {
-            if (!self) return;
-            self->reload_visible_section();
-            ai_chat::LlmService::instance().reload_config();
-        }, Qt::QueuedConnection);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self]() {
+                if (!self)
+                    return;
+                self->reload_visible_section();
+                ai_chat::LlmService::instance().reload_config();
+            },
+            Qt::QueuedConnection);
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("settings.changed",     on_settings_changed));
+    mcp_event_subs_.append(bus.subscribe("settings.changed", on_settings_changed));
     mcp_event_subs_.append(bus.subscribe("llm.provider_changed", on_provider_changed));
 }
 
@@ -291,7 +311,8 @@ QVariantMap SettingsScreen::save_state() const {
 }
 
 void SettingsScreen::restore_state(const QVariantMap& state) {
-    if (!sections_) return;
+    if (!sections_)
+        return;
     const int idx = state.value("section", 14).toInt();
     if (idx < 0 || idx >= sections_->count())
         return;

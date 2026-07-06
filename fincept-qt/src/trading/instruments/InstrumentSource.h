@@ -27,11 +27,11 @@ namespace fincept::trading {
 /// A `parse` returning an empty vector is treated as "parse failed".
 struct InstrumentSource {
     using Downloader = std::function<QByteArray(const BrokerCredentials&)>;
-    using Parser     = std::function<QVector<Instrument>(const QByteArray&)>;
+    using Parser = std::function<QVector<Instrument>(const QByteArray&)>;
 
-    QString    broker_id;   ///< Canonical broker id ("zerodha", "angelone", …).
-    Downloader download;    ///< Fetch the raw master payload.
-    Parser     parse;       ///< Normalise into Instrument rows.
+    QString broker_id;   ///< Canonical broker id ("zerodha", "angelone", …).
+    Downloader download; ///< Fetch the raw master payload.
+    Parser parse;        ///< Normalise into Instrument rows.
 };
 
 } // namespace fincept::trading

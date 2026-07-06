@@ -48,7 +48,7 @@ struct PayoffComputeOptions {
 
 struct MaxPnL {
     double max_profit = 0.0;
-    double max_loss = 0.0;          // negative for losing strategies
+    double max_loss = 0.0; // negative for losing strategies
     bool profit_unbounded = false;
     bool loss_unbounded = false;
 };
@@ -82,7 +82,6 @@ OptionGreeks combined_greeks(const Strategy& s, const OptionChain& chain);
 
 /// One-shot bundle — fills in everything `StrategyAnalytics` carries.
 /// Margin stays 0 in Phase 5 (Phase 6 wires IBroker::get_basket_margins).
-StrategyAnalytics compute_all(const Strategy& s, const OptionChain& chain,
-                              const PayoffComputeOptions& opts);
+StrategyAnalytics compute_all(const Strategy& s, const OptionChain& chain, const PayoffComputeOptions& opts);
 
 } // namespace fincept::services::options::analytics

@@ -39,9 +39,12 @@ void IndicatorParamDialog::changeEvent(QEvent* event) {
 
 void IndicatorParamDialog::retranslateUi() {
     setWindowTitle(tr("Indicator Parameters"));
-    if (period_label_) period_label_->setText(tr("Period:"));
-    if (std_label_)    std_label_->setText(tr("Std Dev:"));
-    if (pivot_label_)  pivot_label_->setText(tr("Type:"));
+    if (period_label_)
+        period_label_->setText(tr("Period:"));
+    if (std_label_)
+        std_label_->setText(tr("Std Dev:"));
+    if (pivot_label_)
+        pivot_label_->setText(tr("Type:"));
     if (pivot_combo_ && pivot_combo_->count() == 4) {
         // Preserve the current selection across the relabel.
         const int idx = pivot_combo_->currentIndex();

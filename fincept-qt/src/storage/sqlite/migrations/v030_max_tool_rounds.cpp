@@ -34,23 +34,22 @@ Result<void> apply_v030(QSqlDatabase& db) {
         }
     }
     if (!has_col) {
-        if (auto r = v030_sql(db,
-                "ALTER TABLE llm_global_settings ADD COLUMN max_tool_rounds INTEGER DEFAULT 40");
+        if (auto r = v030_sql(db, "ALTER TABLE llm_global_settings ADD COLUMN max_tool_rounds INTEGER DEFAULT 40");
             r.is_err())
             return r;
     }
     // Backfill the singleton row in case ADD COLUMN ran but DEFAULT wasn't picked up
     // (older SQLite versions populate NULL for existing rows even with a DEFAULT).
-    return v030_sql(db,
-            "UPDATE llm_global_settings SET max_tool_rounds = 40 "
-            "WHERE max_tool_rounds IS NULL");
+    return v030_sql(db, "UPDATE llm_global_settings SET max_tool_rounds = 40 "
+                        "WHERE max_tool_rounds IS NULL");
 }
 
 } // anonymous namespace
 
 void register_migration_v030() {
     static bool done = false;
-    if (done) return;
+    if (done)
+        return;
     done = true;
     MigrationRunner::register_migration({30, "max_tool_rounds", apply_v030});
 }

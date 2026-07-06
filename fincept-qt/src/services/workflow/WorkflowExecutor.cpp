@@ -407,20 +407,20 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
     // Execute asynchronously with QPointer guard (P8)
     QPointer<WorkflowExecutor> self = this;
     try {
-    type_def->execute(
-        nd.parameters, inputs, [self, node_id, node_start](bool success, QJsonValue output, QString error) {
-            if (!self)
-                return;
-            QMetaObject::invokeMethod(
-                self,
-                [self, node_id, success, output = std::move(output), error = std::move(error), node_start]() {
-                    if (!self)
-                        return;
-                    int duration = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - node_start);
-                    self->on_node_done(node_id, success, output, error, duration);
-                },
-                Qt::QueuedConnection);
-        });
+        type_def->execute(
+            nd.parameters, inputs, [self, node_id, node_start](bool success, QJsonValue output, QString error) {
+                if (!self)
+                    return;
+                QMetaObject::invokeMethod(
+                    self,
+                    [self, node_id, success, output = std::move(output), error = std::move(error), node_start]() {
+                        if (!self)
+                            return;
+                        int duration = static_cast<int>(QDateTime::currentMSecsSinceEpoch() - node_start);
+                        self->on_node_done(node_id, success, output, error, duration);
+                    },
+                    Qt::QueuedConnection);
+            });
     } catch (const std::exception& ex) {
         LOG_ERROR("Executor", QString("Node %1 threw exception: %2").arg(node_id, ex.what()));
         on_node_done(node_id, false, {}, QString("Exception: %1").arg(ex.what()));

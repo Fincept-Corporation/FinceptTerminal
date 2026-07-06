@@ -104,15 +104,17 @@ static const QString kStyle =
         .arg(colors::AMBER())          // %3
         .arg(colors::TEXT_PRIMARY())   // %4
         .arg(colors::TEXT_SECONDARY()) // %5
-        .arg(colors::POSITIVE())       // %6  (unused but reserved)
-        .arg(colors::BG_SURFACE())     // %7
-        .arg(colors::BORDER_DIM())     // %8
-        .arg(colors::BORDER_BRIGHT())  // %9
-        .arg(colors::BG_HOVER())       // %10
-        .arg(colors::AMBER_DIM())      // %11
-        .arg(colors::TEXT_DIM())       // %12
-        .arg(colors::CYAN())           // %13
-        .arg(colors::NEGATIVE())       // %14
+        // NB: the stylesheet has no %6 marker; QString::arg fills the lowest
+        // marker PRESENT, so an arg for the absent %6 would shift every color
+        // from %7 on by one (and drop the last). Args map 1:1 to markers below.
+        .arg(colors::BG_SURFACE())    // %7
+        .arg(colors::BORDER_DIM())    // %8
+        .arg(colors::BORDER_BRIGHT()) // %9
+        .arg(colors::BG_HOVER())      // %10
+        .arg(colors::AMBER_DIM())     // %11
+        .arg(colors::TEXT_DIM())      // %12
+        .arg(colors::CYAN())          // %13
+        .arg(colors::NEGATIVE())      // %14
     ;
 } // namespace
 
@@ -165,21 +167,30 @@ void AsiaMarketsScreen::changeEvent(QEvent* event) {
 
 void AsiaMarketsScreen::retranslateUi() {
     // Header
-    if (header_title_) header_title_->setText(tr("ASIA MARKETS TERMINAL"));
-    if (header_sub_)   header_sub_->setText(tr("398+ STOCK ENDPOINTS | CN A/B, HK, US"));
+    if (header_title_)
+        header_title_->setText(tr("ASIA MARKETS TERMINAL"));
+    if (header_sub_)
+        header_sub_->setText(tr("398+ STOCK ENDPOINTS | CN A/B, HK, US"));
 
     // Left panel
-    if (search_input_) search_input_->setPlaceholderText(tr("Search endpoints..."));
-    if (sym_label_)    sym_label_->setText(tr("SYMBOL"));
-    if (symbol_input_) symbol_input_->setPlaceholderText(tr("e.g. 000001"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search endpoints..."));
+    if (sym_label_)
+        sym_label_->setText(tr("SYMBOL"));
+    if (symbol_input_)
+        symbol_input_->setPlaceholderText(tr("e.g. 000001"));
 
     // Data panel toolbar
-    if (exec_btn_)        exec_btn_->setText(tr("EXECUTE"));
-    if (view_toggle_btn_) view_toggle_btn_->setText(is_table_view_ ? tr("JSON") : tr("TABLE"));
-    if (refresh_btn_)     refresh_btn_->setText(tr("REFRESH"));
+    if (exec_btn_)
+        exec_btn_->setText(tr("EXECUTE"));
+    if (view_toggle_btn_)
+        view_toggle_btn_->setText(is_table_view_ ? tr("JSON") : tr("TABLE"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("REFRESH"));
 
     // Status bar — category/region names are data values; only the labels translate.
-    if (status_left_) status_left_->setText(tr("ASIA MARKETS"));
+    if (status_left_)
+        status_left_->setText(tr("ASIA MARKETS"));
     if (status_category_ && active_category_ >= 0 && active_category_ < categories_.size())
         status_category_->setText(tr("CATEGORY: %1").arg(categories_[active_category_].name));
     if (status_region_ && active_region_ >= 0 && active_region_ < regions_.size())
@@ -555,9 +566,8 @@ void AsiaMarketsScreen::load_endpoints(int cat_index) {
 
             const QJsonObject obj = r.data;
             fincept::CacheManager::instance().put(
-                cache_key,
-                QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-                60 * 60, "asia_markets");
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 60 * 60,
+                "asia_markets");
             self->endpoint_cache_[script] = obj;
             self->populate_endpoint_list(obj);
         });
@@ -665,8 +675,7 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
     QPointer<AsiaMarketsScreen> self = this;
 
     services::asia_markets::AsiaMarketsService::instance().query(
-        script, endpoint, extra_args,
-        [self, endpoint, cache_key](const services::asia_markets::QueryResult& r) {
+        script, endpoint, extra_args, [self, endpoint, cache_key](const services::asia_markets::QueryResult& r) {
             if (!self)
                 return;
             self->set_loading(false);
@@ -684,9 +693,7 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 
             if (!data_array.isEmpty()) {
                 fincept::CacheManager::instance().put(
-                    cache_key,
-                    QVariant(QString::fromUtf8(
-                        QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
                     2 * 60, "asia_markets");
             }
 
@@ -795,8 +802,10 @@ QVariantMap AsiaMarketsScreen::save_state() const {
         {"region", active_region_},
         {"endpoint", active_endpoint_},
     };
-    if (search_input_) state["search"] = search_input_->text();
-    if (symbol_input_) state["symbol"] = symbol_input_->text();
+    if (search_input_)
+        state["search"] = search_input_->text();
+    if (symbol_input_)
+        state["symbol"] = symbol_input_->text();
     if (json_view_ && !json_view_->toPlainText().isEmpty()) {
         const QString jt = json_view_->toPlainText();
         if (jt.size() < 300000)

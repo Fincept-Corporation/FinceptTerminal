@@ -1,5 +1,6 @@
 // src/algo_engine/AlgoEngineProducer.cpp
 #include "algo_engine/AlgoEngineProducer.h"
+
 #include "algo_engine/AlgoEngine.h"
 #include "datahub/DataHub.h"
 
@@ -13,7 +14,8 @@ AlgoEngineProducer& AlgoEngineProducer::instance() {
 AlgoEngineProducer::AlgoEngineProducer() = default;
 
 void AlgoEngineProducer::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
 
     auto& hub = datahub::DataHub::instance();
     hub.register_producer(this);

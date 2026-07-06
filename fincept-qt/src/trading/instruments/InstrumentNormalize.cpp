@@ -87,7 +87,7 @@ QString expiry_to_nodash(const QString& raw) {
 
     // Try the most specific / common formats first. Upper-case so month names match.
     const QString up = s.toUpper();
-    static const char* fmts[] = {"yyyy-MM-dd", "ddMMMyyyy", "dd-MMM-yyyy", "dd-MMM-yy",
+    static const char* fmts[] = {"yyyy-MM-dd", "ddMMMyyyy",  "dd-MMM-yyyy", "dd-MMM-yy",
                                  "ddMMMyy",    "dd/MM/yyyy", "dd/MM/yy"};
     for (const char* f : fmts) {
         QDate d = QDate::fromString(up, QString::fromLatin1(f));

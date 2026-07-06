@@ -27,7 +27,7 @@ class OISnapshotsRepository : public BaseRepository<fincept::services::options::
     /// Time-windowed read, ordered ascending — suitable for charting.
     /// Bounds inclusive. `until_minute=0` means "now".
     Result<QVector<fincept::services::options::OISample>> get_window(qint64 token, qint64 since_minute,
-                                                                      qint64 until_minute = 0);
+                                                                     qint64 until_minute = 0);
 
     /// Delete rows older than the given minute floor (epoch seconds).
     /// Returns the number of rows deleted on success.

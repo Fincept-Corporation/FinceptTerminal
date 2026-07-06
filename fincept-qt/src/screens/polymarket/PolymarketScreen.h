@@ -87,7 +87,7 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     void on_adapter_error(const QString& ctx, const QString& msg);
     void on_ws_price_updated(const QString& asset_id, double price);
     void on_ws_orderbook_updated(const QString& asset_id,
-                                  const fincept::services::prediction::PredictionOrderBook& book);
+                                 const fincept::services::prediction::PredictionOrderBook& book);
     void on_ws_connection_changed(bool connected);
 
     // Polymarket-only (PolymarketService) enrichments
@@ -101,8 +101,7 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     void on_kalshi_exchange_schedule(const QJsonObject& schedule);
     void on_kalshi_ws_trade(const fincept::services::prediction::PredictionTrade& trade);
     void on_kalshi_market_lifecycle(const QString& ticker, const QString& status);
-    void on_kalshi_batch_candles(
-        const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
+    void on_kalshi_batch_candles(const QHash<QString, fincept::services::prediction::PriceHistory>& histories);
     void on_kalshi_market_detail(const fincept::services::prediction::PredictionMarket& market);
     void on_kalshi_series_detail(const QString& series_ticker, const QJsonObject& series);
 

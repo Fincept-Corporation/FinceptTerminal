@@ -50,8 +50,7 @@ QString fmt_money(double v, bool signed_pfx = false) {
 }
 
 QString fmt_qty(double v) {
-    return qFuzzyCompare(v, std::round(v)) ? QString::number(qint64(std::llround(v)))
-                                           : QString::number(v, 'f', 2);
+    return qFuzzyCompare(v, std::round(v)) ? QString::number(qint64(std::llround(v))) : QString::number(v, 'f', 2);
 }
 
 void set_pnl_cell(QTreeWidgetItem* item, int col, double pnl, const QString& text) {
@@ -104,8 +103,8 @@ void PortfolioMonitorScreen::showEvent(QShowEvent* event) {
         // Apply the persisted mode BEFORE the first activate so the initial
         // model is built from the right engine. setChecked only emits toggled
         // on a state change, so style/route the paper default explicitly.
-        const auto saved = SettingsRepository::instance().get(QStringLiteral("portfolio_monitor.mode"),
-                                                              QStringLiteral("paper"));
+        const auto saved =
+            SettingsRepository::instance().get(QStringLiteral("portfolio_monitor.mode"), QStringLiteral("paper"));
         const bool live = saved.is_ok() && saved.value() == QLatin1String("live");
         if (live)
             mode_btn_->setChecked(true); // fires on_mode_toggled(true)
@@ -202,10 +201,9 @@ QWidget* PortfolioMonitorScreen::build_summary_bar() {
     connect(refresh, &QPushButton::clicked, this, []() { UnifiedPortfolioService::instance().refresh_all(); });
     connect(new_order, &QPushButton::clicked, this, &PortfolioMonitorScreen::on_new_order);
     connect(square_all, &QPushButton::clicked, this, [this]() {
-        const auto ret = QMessageBox::question(
-            this, tr("Square Off All"),
-            tr("Square off ALL intraday positions across EVERY connected account?"),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        const auto ret = QMessageBox::question(this, tr("Square Off All"),
+                                               tr("Square off ALL intraday positions across EVERY connected account?"),
+                                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (ret == QMessageBox::Yes)
             UnifiedPortfolioService::instance().square_off_all_positions();
     });
@@ -230,17 +228,15 @@ QWidget* PortfolioMonitorScreen::build_summary_bar() {
 void PortfolioMonitorScreen::set_floating(bool floating) {
     floating_ = floating;
     float_btn_->setText(floating ? QStringLiteral("⤓") : QStringLiteral("⧉"));
-    float_btn_->setToolTip(floating ? tr("Dock back into the equity tab")
-                                    : tr("Detach into its own window"));
+    float_btn_->setToolTip(floating ? tr("Dock back into the equity tab") : tr("Detach into its own window"));
 }
 
 void PortfolioMonitorScreen::on_mode_toggled(bool live) {
     mode_btn_->setText(live ? tr("LIVE") : tr("PAPER"));
-    mode_btn_->setStyleSheet(
-        live ? "QPushButton{background:#1a0a0a;border:1px solid #ef4444;color:#ef4444;"
-               "padding:4px 14px;font-size:11px;font-weight:700;}"
-             : "QPushButton{background:#111;border:1px solid #d97706;color:#d97706;"
-               "padding:4px 14px;font-size:11px;font-weight:700;}");
+    mode_btn_->setStyleSheet(live ? "QPushButton{background:#1a0a0a;border:1px solid #ef4444;color:#ef4444;"
+                                    "padding:4px 14px;font-size:11px;font-weight:700;}"
+                                  : "QPushButton{background:#111;border:1px solid #d97706;color:#d97706;"
+                                    "padding:4px 14px;font-size:11px;font-weight:700;}");
     mode_btn_->setToolTip(live ? tr("Showing REAL broker positions — click for paper")
                                : tr("Showing paper portfolios — click for live"));
     UnifiedPortfolioService::instance().set_mode(live ? UnifiedPortfolioService::Mode::Live
@@ -282,12 +278,11 @@ QTreeWidget* PortfolioMonitorScreen::make_tree(bool holdings) {
 }
 
 void PortfolioMonitorScreen::fill_parent(QTreeWidgetItem* item, const AggRow& row, bool holdings) {
-    item->setText(ColSymbol, row.exchange.isEmpty() ? row.symbol
-                                                    : QString("%1  ·  %2").arg(row.symbol, row.exchange));
+    item->setText(ColSymbol, row.exchange.isEmpty() ? row.symbol : QString("%1  ·  %2").arg(row.symbol, row.exchange));
     if (holdings) {
         set_pnl_cell(item, ColProduct, row.day_pnl, fmt_money(row.day_pnl, true));
-        item->setToolTip(ColSymbol, tr("Invested %1   Current %2")
-                                        .arg(fmt_money(row.invested), fmt_money(row.current)));
+        item->setToolTip(ColSymbol,
+                         tr("Invested %1   Current %2").arg(fmt_money(row.invested), fmt_money(row.current)));
     } else {
         item->setText(ColProduct, QString::number(row.children.size()) + tr(" acct"));
     }
@@ -353,8 +348,8 @@ void PortfolioMonitorScreen::rebuild_tree(QTreeWidget* tree, const QVector<AggRo
             exit_btn->setStyleSheet("QPushButton{background:transparent;border:1px solid #5c1f1f;"
                                     "color:#ef4444;font-size:10px;padding:2px 8px;}"
                                     "QPushButton:hover{background:#1a0a0a;}");
-            const QString acct = c.account_id, label = c.broker_label, sym = row.symbol,
-                          exch = row.exchange, product = c.product;
+            const QString acct = c.account_id, label = c.broker_label, sym = row.symbol, exch = row.exchange,
+                          product = c.product;
             const double qty = c.qty;
             connect(exit_btn, &QPushButton::clicked, this, [this, acct, label, sym, exch, product, qty]() {
                 confirm_exit_child(acct, label, sym, exch, product, qty);
@@ -369,13 +364,11 @@ void PortfolioMonitorScreen::rebuild_tree(QTreeWidget* tree, const QVector<AggRo
 // ── Slots ────────────────────────────────────────────────────────────────────
 
 void PortfolioMonitorScreen::rebuild_positions() {
-    rebuild_tree(positions_tree_, UnifiedPortfolioService::instance().positions(), /*holdings=*/false,
-                 pos_index_);
+    rebuild_tree(positions_tree_, UnifiedPortfolioService::instance().positions(), /*holdings=*/false, pos_index_);
 }
 
 void PortfolioMonitorScreen::rebuild_holdings() {
-    rebuild_tree(holdings_tree_, UnifiedPortfolioService::instance().holdings(), /*holdings=*/true,
-                 hold_index_);
+    rebuild_tree(holdings_tree_, UnifiedPortfolioService::instance().holdings(), /*holdings=*/true, hold_index_);
 }
 
 // Tick patch: parent sums AND child cells, in place. Children must repaint with
@@ -456,22 +449,21 @@ void PortfolioMonitorScreen::on_action_finished(bool ok, const QString& message)
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void PortfolioMonitorScreen::confirm_exit_child(const QString& account_id, const QString& broker_label,
-                                                const QString& symbol, const QString& exchange,
-                                                const QString& product, double qty) {
-    const auto ret = QMessageBox::question(
-        this, tr("Exit Position"),
-        tr("Square off %1 × %2 on %3 (%4)?").arg(fmt_qty(qty), symbol, broker_label, product),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                                                const QString& symbol, const QString& exchange, const QString& product,
+                                                double qty) {
+    const auto ret =
+        QMessageBox::question(this, tr("Exit Position"),
+                              tr("Square off %1 × %2 on %3 (%4)?").arg(fmt_qty(qty), symbol, broker_label, product),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (ret == QMessageBox::Yes)
         UnifiedPortfolioService::instance().exit_child(account_id, symbol, exchange, product);
 }
 
-void PortfolioMonitorScreen::confirm_exit_symbol(const QString& symbol, const QString& exchange,
-                                                 bool holdings, int n_accounts) {
-    const auto ret = QMessageBox::question(
-        this, tr("Exit All"),
-        tr("Square off %1 across %2 account(s)?").arg(symbol).arg(n_accounts),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+void PortfolioMonitorScreen::confirm_exit_symbol(const QString& symbol, const QString& exchange, bool holdings,
+                                                 int n_accounts) {
+    const auto ret = QMessageBox::question(this, tr("Exit All"),
+                                           tr("Square off %1 across %2 account(s)?").arg(symbol).arg(n_accounts),
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (ret == QMessageBox::Yes)
         UnifiedPortfolioService::instance().exit_symbol(symbol, exchange, holdings);
 }

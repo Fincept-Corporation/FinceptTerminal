@@ -25,17 +25,15 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     auto* header_bar = new QWidget(this);
     header_bar->setFixedHeight(30);
     header_bar->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;")
-            .arg(colors::BG_RAISED(), colors::BORDER_DIM()));
+        QString("background: %1; border-bottom: 1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
     auto* hbl = new QHBoxLayout(header_bar);
     hbl->setContentsMargins(12, 0, 8, 0);
     hbl->setSpacing(6);
 
     header_ = new QLabel(tr("MARKETS"));
-    header_->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; "
-                "background: transparent;")
-            .arg(colors::TEXT_SECONDARY()));
+    header_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; "
+                                   "background: transparent;")
+                               .arg(colors::TEXT_SECONDARY()));
     hbl->addWidget(header_);
     hbl->addStretch(1);
     vl->addWidget(header_bar);
@@ -47,24 +45,23 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     list_view_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     list_view_->setSelectionMode(QAbstractItemView::SingleSelection);
     list_view_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    list_view_->setStyleSheet(
-        QString("QListView {"
-                "  background: %1;"
-                "  border: none;"
-                "  outline: none;"
-                "}"
-                "QListView::item { border: none; }"
-                "QScrollBar:vertical {"
-                "  background: %2;"
-                "  width: 4px;"
-                "  border: none;"
-                "}"
-                "QScrollBar::handle:vertical {"
-                "  background: %3;"
-                "  min-height: 20px;"
-                "}"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-            .arg(colors::BG_BASE(), colors::BG_SURFACE(), colors::BORDER_BRIGHT()));
+    list_view_->setStyleSheet(QString("QListView {"
+                                      "  background: %1;"
+                                      "  border: none;"
+                                      "  outline: none;"
+                                      "}"
+                                      "QListView::item { border: none; }"
+                                      "QScrollBar:vertical {"
+                                      "  background: %2;"
+                                      "  width: 4px;"
+                                      "  border: none;"
+                                      "}"
+                                      "QScrollBar::handle:vertical {"
+                                      "  background: %3;"
+                                      "  min-height: 20px;"
+                                      "}"
+                                      "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+                                  .arg(colors::BG_BASE(), colors::BG_SURFACE(), colors::BORDER_BRIGHT()));
     connect(list_view_, &QListView::clicked, this, &PolymarketBrowsePanel::on_item_clicked);
     vl->addWidget(list_view_, 1);
 
@@ -72,27 +69,24 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     auto* page_bar = new QWidget(this);
     page_bar->setFixedHeight(32);
     page_bar->setStyleSheet(
-        QString("background: %1; border-top: 1px solid %2;")
-            .arg(colors::BG_RAISED(), colors::BORDER_DIM()));
+        QString("background: %1; border-top: 1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
 
     auto* phl = new QHBoxLayout(page_bar);
     phl->setContentsMargins(8, 0, 8, 0);
     phl->setSpacing(4);
 
-    const QString nav_btn_css =
-        QString("QPushButton {"
-                "  background: transparent;"
-                "  color: %1;"
-                "  border: 1px solid %2;"
-                "  padding: 3px 12px;"
-                "  font-size: 9px;"
-                "  font-weight: 700;"
-                "}"
-                "QPushButton:hover { color: %3; border-color: %4; }"
-                "QPushButton:disabled { color: %5; border-color: %2; }")
-            .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(),
-                 colors::TEXT_PRIMARY(), colors::BORDER_BRIGHT(),
-                 colors::TEXT_DIM());
+    const QString nav_btn_css = QString("QPushButton {"
+                                        "  background: transparent;"
+                                        "  color: %1;"
+                                        "  border: 1px solid %2;"
+                                        "  padding: 3px 12px;"
+                                        "  font-size: 9px;"
+                                        "  font-weight: 700;"
+                                        "}"
+                                        "QPushButton:hover { color: %3; border-color: %4; }"
+                                        "QPushButton:disabled { color: %5; border-color: %2; }")
+                                    .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), colors::TEXT_PRIMARY(),
+                                         colors::BORDER_BRIGHT(), colors::TEXT_DIM());
 
     prev_btn_ = new QPushButton("◀");
     prev_btn_->setStyleSheet(nav_btn_css);
@@ -102,8 +96,7 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
 
     page_label_ = new QLabel("1 / 1");
     page_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: transparent; min-width: 40px;")
-            .arg(colors::TEXT_SECONDARY()));
+        QString("color: %1; font-size: 9px; background: transparent; min-width: 40px;").arg(colors::TEXT_SECONDARY()));
     page_label_->setAlignment(Qt::AlignCenter);
 
     next_btn_ = new QPushButton("▶");
@@ -141,8 +134,7 @@ void PolymarketBrowsePanel::set_loading(bool loading) {
         header_->setText(tr("LOADING..."));
     } else {
         const int total = model_->rowCount();
-        header_->setText(events_mode_ ? tr("EVENTS  %1").arg(total)
-                                      : tr("MARKETS  %1").arg(total));
+        header_->setText(events_mode_ ? tr("EVENTS  %1").arg(total) : tr("MARKETS  %1").arg(total));
     }
 }
 
@@ -155,11 +147,13 @@ void PolymarketBrowsePanel::clear() {
 }
 
 void PolymarketBrowsePanel::set_presentation(const ExchangePresentation& p) {
-    if (model_) model_->set_presentation(p);
+    if (model_)
+        model_->set_presentation(p);
 }
 
 void PolymarketBrowsePanel::update_market_row(const PredictionMarket& market) {
-    if (model_) model_->update_market(market);
+    if (model_)
+        model_->update_market(market);
 }
 
 void PolymarketBrowsePanel::on_item_clicked(const QModelIndex& index) {

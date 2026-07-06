@@ -1,17 +1,16 @@
 #include "screens/dashboard/MarketPulsePanel.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/dashboard/widgets/LoadingOverlay.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
-#    include <QSet>
-
 #include <QDateTime>
 #include <QFrame>
 #include <QPalette>
+#include <QSet>
 #include <QShowEvent>
 
 #include <algorithm>
@@ -202,12 +201,11 @@ void MarketPulsePanel::refresh_theme() {
         fg_gauge_icon_->setStyleSheet(
             QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
     if (fg_gradient_bar_)
-        fg_gradient_bar_->setStyleSheet(
-            QString("QFrame { border-radius: 3px; "
-                    "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-                    "stop:0 %1, stop:0.25 %2, stop:0.5 %3, stop:0.75 %4, stop:1 %5); }")
-                .arg(ui::colors::NEGATIVE(), ui::colors::AMBER(), ui::colors::WARNING(),
-                     ui::colors::POSITIVE_DIM(), ui::colors::POSITIVE()));
+        fg_gradient_bar_->setStyleSheet(QString("QFrame { border-radius: 3px; "
+                                                "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+                                                "stop:0 %1, stop:0.25 %2, stop:0.5 %3, stop:0.75 %4, stop:1 %5); }")
+                                            .arg(ui::colors::NEGATIVE(), ui::colors::AMBER(), ui::colors::WARNING(),
+                                                 ui::colors::POSITIVE_DIM(), ui::colors::POSITIVE()));
     if (fg_score_val_)
         fg_score_val_->setStyleSheet(QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;")
                                          .arg(ui::colors::TEXT_TERTIARY()));
@@ -625,8 +623,8 @@ QWidget* MarketPulsePanel::build_global_snapshot_section() {
         StatRow& row;
     };
     RowDef defs[] = {
-        {"VIX", vix_row_},     {"US 10Y", us10y_row_}, {"DXY", dxy_row_},
-        {"GOLD", gold_row_},   {"OIL WTI", oil_row_},  {"BTC", btc_row_},
+        {"VIX", vix_row_},   {"US 10Y", us10y_row_}, {"DXY", dxy_row_},
+        {"GOLD", gold_row_}, {"OIL WTI", oil_row_},  {"BTC", btc_row_},
     };
 
     for (auto& d : defs) {
@@ -765,7 +763,6 @@ void MarketPulsePanel::refresh_market_hours() {
     }
 }
 
-
 void MarketPulsePanel::rebuild_breadth_from_cache() {
     if (breadth_cache_.isEmpty())
         return;
@@ -777,11 +774,9 @@ void MarketPulsePanel::rebuild_breadth_from_cache() {
     double vix = -1;
     int bullish = 0, bearish = 0, neutral_count = 0;
 
-    const QStringList sp500_set = {"AAPL",  "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA",
-                                   "BRK-B", "JPM",  "UNH",   "V",    "XOM",  "LLY",  "JNJ",
-                                   "WMT",   "MA",   "PG",    "HD",   "CVX",  "MRK"};
-    const QStringList nasdaq_set = {"NFLX", "AMD",  "INTC", "QCOM", "ADBE",
-                                    "CSCO", "ORCL", "CRM",  "AVGO", "TXN"};
+    const QStringList sp500_set = {"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "JPM", "UNH",
+                                   "V",    "XOM",  "LLY",   "JNJ",  "WMT",  "MA",   "PG",   "HD",    "CVX", "MRK"};
+    const QStringList nasdaq_set = {"NFLX", "AMD", "INTC", "QCOM", "ADBE", "CSCO", "ORCL", "CRM", "AVGO", "TXN"};
 
     for (const auto& sym : kBreadthSymbols) {
         if (!breadth_cache_.contains(sym))
@@ -895,8 +890,7 @@ void MarketPulsePanel::rebuild_movers_from_cache() {
         if (movers_cache_.contains(sym))
             quotes.append(movers_cache_.value(sym));
     }
-    std::sort(quotes.begin(), quotes.end(),
-              [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
+    std::sort(quotes.begin(), quotes.end(), [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
 
     auto clear_layout = [](QVBoxLayout* layout) {
         while (layout->count()) {
@@ -1020,7 +1014,6 @@ void MarketPulsePanel::hub_unsubscribe_all() {
     hub_active_ = false;
 }
 
-
 void MarketPulsePanel::refresh_data() {
     // Hub owns cadence. Force a kick so consumers see data immediately
     // (e.g., on theme-triggered refresh while visible).
@@ -1038,7 +1031,7 @@ void MarketPulsePanel::refresh_data() {
     push(kBreadthSymbols);
     push(kMoverSymbols);
     push(kSnapshotSymbols);
-    hub.request(topics, /*force=*/true);  // user-triggered refresh
+    hub.request(topics, /*force=*/true); // user-triggered refresh
 }
 
 void MarketPulsePanel::changeEvent(QEvent* event) {
@@ -1048,17 +1041,25 @@ void MarketPulsePanel::changeEvent(QEvent* event) {
 }
 
 void MarketPulsePanel::retranslateUi() {
-    if (header_title_)    header_title_->setText(tr("MARKET PULSE"));
-    if (fg_header_label_) fg_header_label_->setText(tr("FEAR & GREED INDEX"));
+    if (header_title_)
+        header_title_->setText(tr("MARKET PULSE"));
+    if (fg_header_label_)
+        fg_header_label_->setText(tr("FEAR & GREED INDEX"));
 
     auto set_sh = [](SectionHeader& sh) {
-        if (!sh.title) return;
+        if (!sh.title)
+            return;
         const QString& k = sh.source_key;
-        if      (k == QLatin1String("MARKET BREADTH"))  sh.title->setText(tr("MARKET BREADTH"));
-        else if (k == QLatin1String("TOP GAINERS"))     sh.title->setText(tr("TOP GAINERS"));
-        else if (k == QLatin1String("TOP LOSERS"))      sh.title->setText(tr("TOP LOSERS"));
-        else if (k == QLatin1String("GLOBAL SNAPSHOT")) sh.title->setText(tr("GLOBAL SNAPSHOT"));
-        else if (k == QLatin1String("MARKET HOURS"))    sh.title->setText(tr("MARKET HOURS"));
+        if (k == QLatin1String("MARKET BREADTH"))
+            sh.title->setText(tr("MARKET BREADTH"));
+        else if (k == QLatin1String("TOP GAINERS"))
+            sh.title->setText(tr("TOP GAINERS"));
+        else if (k == QLatin1String("TOP LOSERS"))
+            sh.title->setText(tr("TOP LOSERS"));
+        else if (k == QLatin1String("GLOBAL SNAPSHOT"))
+            sh.title->setText(tr("GLOBAL SNAPSHOT"));
+        else if (k == QLatin1String("MARKET HOURS"))
+            sh.title->setText(tr("MARKET HOURS"));
     };
     set_sh(sh_breadth_);
     set_sh(sh_gainers_);
@@ -1068,22 +1069,34 @@ void MarketPulsePanel::retranslateUi() {
 
     if (fg_sentiment_ && !fg_sentiment_key_.isEmpty()) {
         const QString& k = fg_sentiment_key_;
-        if      (k == QLatin1String("EXTREME FEAR"))  fg_sentiment_->setText(tr("EXTREME FEAR"));
-        else if (k == QLatin1String("FEAR"))          fg_sentiment_->setText(tr("FEAR"));
-        else if (k == QLatin1String("NEUTRAL"))       fg_sentiment_->setText(tr("NEUTRAL"));
-        else if (k == QLatin1String("GREED"))         fg_sentiment_->setText(tr("GREED"));
-        else if (k == QLatin1String("EXTREME GREED")) fg_sentiment_->setText(tr("EXTREME GREED"));
-        else if (k == QLatin1String("LOADING..."))    fg_sentiment_->setText(tr("LOADING..."));
+        if (k == QLatin1String("EXTREME FEAR"))
+            fg_sentiment_->setText(tr("EXTREME FEAR"));
+        else if (k == QLatin1String("FEAR"))
+            fg_sentiment_->setText(tr("FEAR"));
+        else if (k == QLatin1String("NEUTRAL"))
+            fg_sentiment_->setText(tr("NEUTRAL"));
+        else if (k == QLatin1String("GREED"))
+            fg_sentiment_->setText(tr("GREED"));
+        else if (k == QLatin1String("EXTREME GREED"))
+            fg_sentiment_->setText(tr("EXTREME GREED"));
+        else if (k == QLatin1String("LOADING..."))
+            fg_sentiment_->setText(tr("LOADING..."));
     }
 
     for (auto& hr : hours_rows_) {
-        if (!hr.name_lbl) continue;
+        if (!hr.name_lbl)
+            continue;
         const QString& k = hr.name_source_key;
-        if      (k == QLatin1String("NYSE/NASDAQ"))      hr.name_lbl->setText(tr("NYSE/NASDAQ"));
-        else if (k == QLatin1String("LSE"))              hr.name_lbl->setText(tr("LSE"));
-        else if (k == QLatin1String("TSE (TOKYO)"))      hr.name_lbl->setText(tr("TSE (TOKYO)"));
-        else if (k == QLatin1String("SSE (SHANGHAI)"))   hr.name_lbl->setText(tr("SSE (SHANGHAI)"));
-        else if (k == QLatin1String("NSE (INDIA)"))      hr.name_lbl->setText(tr("NSE (INDIA)"));
+        if (k == QLatin1String("NYSE/NASDAQ"))
+            hr.name_lbl->setText(tr("NYSE/NASDAQ"));
+        else if (k == QLatin1String("LSE"))
+            hr.name_lbl->setText(tr("LSE"));
+        else if (k == QLatin1String("TSE (TOKYO)"))
+            hr.name_lbl->setText(tr("TSE (TOKYO)"));
+        else if (k == QLatin1String("SSE (SHANGHAI)"))
+            hr.name_lbl->setText(tr("SSE (SHANGHAI)"));
+        else if (k == QLatin1String("NSE (INDIA)"))
+            hr.name_lbl->setText(tr("NSE (INDIA)"));
     }
     refresh_market_hours();
     if (isVisible())
@@ -1091,4 +1104,3 @@ void MarketPulsePanel::retranslateUi() {
 }
 
 } // namespace fincept::screens
-

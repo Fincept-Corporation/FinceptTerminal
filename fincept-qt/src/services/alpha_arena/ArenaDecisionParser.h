@@ -4,9 +4,9 @@
 namespace fincept::arena {
 struct ParsedDecision {
     QVector<AgentAction> actions;
-    QString error;                       // empty = ok
+    QString error; // empty = ok
     bool ok() const { return error.isEmpty(); }
-    QString actions_json() const;        // canonical re-serialization for storage
+    QString actions_json() const; // canonical re-serialization for storage
 };
 /// instruments + max_leverage gate validation; never throws.
 ParsedDecision parse_decision(const QString& raw, const QStringList& instruments, double max_leverage);

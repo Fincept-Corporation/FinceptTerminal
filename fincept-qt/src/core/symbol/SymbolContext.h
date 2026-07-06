@@ -53,8 +53,7 @@ class SymbolContext : public QObject {
     /// want to push a comparison/currency context use these.
     SymbolRef group_slot_symbol(SymbolGroup g, const QString& slot) const;
     bool has_group_slot_symbol(SymbolGroup g, const QString& slot) const;
-    void set_group_slot_symbol(SymbolGroup g, const QString& slot, const SymbolRef& ref,
-                               QObject* source = nullptr);
+    void set_group_slot_symbol(SymbolGroup g, const QString& slot, const SymbolRef& ref, QObject* source = nullptr);
 
     /// The most recently touched symbol anywhere in the app (group or not).
     SymbolRef active() const { return active_; }
@@ -74,8 +73,7 @@ class SymbolContext : public QObject {
     /// Slot-aware signal — fires for every slot change including primary.
     /// Subscribers that want all slots subscribe here; subscribers that
     /// only care about primary can keep using the legacy signal.
-    void group_slot_symbol_changed(fincept::SymbolGroup g, QString slot,
-                                   fincept::SymbolRef ref, QObject* source);
+    void group_slot_symbol_changed(fincept::SymbolGroup g, QString slot, fincept::SymbolRef ref, QObject* source);
 
     void active_symbol_changed(fincept::SymbolRef ref, QObject* source);
 

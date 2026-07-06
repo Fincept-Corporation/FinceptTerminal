@@ -120,8 +120,8 @@ void NewsScreen::connect_signals() {
 
     // Live-feed badge: state mirrored from NewsService, click toggles
     // connect/disconnect.
-    connect(&services::NewsService::instance(), &services::NewsService::live_state_changed,
-            this, [this](bool connected) {
+    connect(&services::NewsService::instance(), &services::NewsService::live_state_changed, this,
+            [this](bool connected) {
                 if (command_bar_)
                     command_bar_->set_live_state(connected);
             });
@@ -389,26 +389,37 @@ void NewsScreen::hideEvent(QHideEvent* e) {
 // touching the model/panel.
 
 void NewsScreen::subscribe_mcp_events() {
-    if (!mcp_event_subs_.isEmpty()) return; // idempotent
+    if (!mcp_event_subs_.isEmpty())
+        return; // idempotent
 
     QPointer<NewsScreen> self = this;
     auto on_monitors_changed = [self](const QVariantMap&) {
-        if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self]() {
-            if (!self || !self->visible_) return;
-            self->update_monitors();
-        }, Qt::QueuedConnection);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self]() {
+                if (!self || !self->visible_)
+                    return;
+                self->update_monitors();
+            },
+            Qt::QueuedConnection);
     };
     auto on_refresh_requested = [self](const QVariantMap&) {
-        if (!self) return;
-        QMetaObject::invokeMethod(self.data(), [self]() {
-            if (!self || !self->visible_) return;
-            self->refresh_data(/*force=*/true);
-        }, Qt::QueuedConnection);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self.data(),
+            [self]() {
+                if (!self || !self->visible_)
+                    return;
+                self->refresh_data(/*force=*/true);
+            },
+            Qt::QueuedConnection);
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("news.monitor_added",   on_monitors_changed));
+    mcp_event_subs_.append(bus.subscribe("news.monitor_added", on_monitors_changed));
     mcp_event_subs_.append(bus.subscribe("news.monitor_toggled", on_monitors_changed));
     mcp_event_subs_.append(bus.subscribe("news.monitor_deleted", on_monitors_changed));
     mcp_event_subs_.append(bus.subscribe("news.refresh_requested", on_refresh_requested));
@@ -725,8 +736,8 @@ void NewsScreen::apply_filters_async() {
         }
     }
 
-    (void)QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower, sort,
-                       variant, lang_filter]() {
+    (void)QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower,
+                             sort, variant, lang_filter]() {
         int64_t window_sec = 0;
         if (time_range == "1H")
             window_sec = 3600;
@@ -849,12 +860,15 @@ void NewsScreen::apply_filters_async() {
         // When the entire input is filtered to zero, surface why so the cause
         // is visible in logs without users digging into the source.
         if (!articles_copy.isEmpty() && filtered.isEmpty()) {
-            LOG_WARN("NewsScreen",
-                     QString("Filter rejected ALL %1 articles "
-                             "(time=%2 lang=%3 variant=%4 category=%5 search=%6 range=%7)")
-                         .arg(articles_copy.size()).arg(rejected_time).arg(rejected_lang)
-                         .arg(rejected_variant).arg(rejected_category).arg(rejected_search)
-                         .arg(time_range));
+            LOG_WARN("NewsScreen", QString("Filter rejected ALL %1 articles "
+                                           "(time=%2 lang=%3 variant=%4 category=%5 search=%6 range=%7)")
+                                       .arg(articles_copy.size())
+                                       .arg(rejected_time)
+                                       .arg(rejected_lang)
+                                       .arg(rejected_variant)
+                                       .arg(rejected_category)
+                                       .arg(rejected_search)
+                                       .arg(time_range));
         }
 
         QMetaObject::invokeMethod(
@@ -989,14 +1003,13 @@ void NewsScreen::run_enrichment_now() {
 
     // NER → entities sidebar + per-article cache (used by detail panel
     // "key actors" lookup at on_article_clicked).
-    services::NewsNlpService::instance().extract_entities(
-        subset, [self, gen](bool ok, services::NerResult ner) {
-            if (!self || !ok)
-                return;
-            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
-                return;
-            self->side_panel_->update_entities(ner);
-        });
+    services::NewsNlpService::instance().extract_entities(subset, [self, gen](bool ok, services::NerResult ner) {
+        if (!self || !ok)
+            return;
+        if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
+            return;
+        self->side_panel_->update_entities(ner);
+    });
 
     // Geolocation → locations sidebar + feed-row geo dot flag.
     services::NewsNlpService::instance().geolocate_articles(
@@ -1210,7 +1223,7 @@ QVariantMap NewsScreen::save_state() const {
     // on next launch (the search input widget doesn't display restored
     // queries, so users can't see what's hiding articles).
     return {
-        {"category", active_category_}, {"time_range", time_range_}, {"sort_mode", sort_mode_},
+        {"category", active_category_}, {"time_range", time_range_},  {"sort_mode", sort_mode_},
         {"view_mode", view_mode_},      {"variant", active_variant_},
     };
 }

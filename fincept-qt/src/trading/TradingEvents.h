@@ -7,8 +7,8 @@
 // The EventBus carries QVariantMap payloads, so each typed struct provides a
 // to_map() and the publish helpers fan out onto EventBus::publish(name, map).
 
-#include "trading/TradingTypes.h"
 #include "core/events/EventBus.h"
+#include "trading/TradingTypes.h"
 
 #include <QString>
 #include <QVariantMap>
@@ -33,13 +33,18 @@ struct OrderPlacedEvent {
     QString exchange;
     OrderSide action = OrderSide::Buy;
     double quantity = 0;
-    QString order_type;   // "PLACE", "SMART", "BASKET", "SPLIT"
-    QString mode;         // "live" or "paper"
+    QString order_type; // "PLACE", "SMART", "BASKET", "SPLIT"
+    QString mode;       // "live" or "paper"
 
     QVariantMap to_map() const {
-        return {{"account_id", account_id}, {"order_id", order_id}, {"symbol", symbol},
-                {"exchange", exchange}, {"action", action == OrderSide::Buy ? "BUY" : "SELL"},
-                {"quantity", quantity}, {"order_type", order_type}, {"mode", mode}};
+        return {{"account_id", account_id},
+                {"order_id", order_id},
+                {"symbol", symbol},
+                {"exchange", exchange},
+                {"action", action == OrderSide::Buy ? "BUY" : "SELL"},
+                {"quantity", quantity},
+                {"order_type", order_type},
+                {"mode", mode}};
     }
 };
 
@@ -51,8 +56,11 @@ struct OrderFailedEvent {
     QString mode;
 
     QVariantMap to_map() const {
-        return {{"account_id", account_id}, {"order_type", order_type}, {"symbol", symbol},
-                {"error", error_message}, {"mode", mode}};
+        return {{"account_id", account_id},
+                {"order_type", order_type},
+                {"symbol", symbol},
+                {"error", error_message},
+                {"mode", mode}};
     }
 };
 
@@ -62,8 +70,7 @@ struct SmartOrderNoActionEvent {
     QString exchange;
     QString message;
     QVariantMap to_map() const {
-        return {{"account_id", account_id}, {"symbol", symbol}, {"exchange", exchange},
-                {"message", message}};
+        return {{"account_id", account_id}, {"symbol", symbol}, {"exchange", exchange}, {"message", message}};
     }
 };
 
@@ -73,8 +80,10 @@ struct AllOrdersCancelledEvent {
     int failed_count = 0;
     QString mode;
     QVariantMap to_map() const {
-        return {{"account_id", account_id}, {"canceled_count", canceled_count},
-                {"failed_count", failed_count}, {"mode", mode}};
+        return {{"account_id", account_id},
+                {"canceled_count", canceled_count},
+                {"failed_count", failed_count},
+                {"mode", mode}};
     }
 };
 
@@ -84,8 +93,8 @@ struct AllPositionsClosedEvent {
     int failed_count = 0;
     QString mode;
     QVariantMap to_map() const {
-        return {{"account_id", account_id}, {"closed_count", closed_count},
-                {"failed_count", failed_count}, {"mode", mode}};
+        return {
+            {"account_id", account_id}, {"closed_count", closed_count}, {"failed_count", failed_count}, {"mode", mode}};
     }
 };
 
@@ -98,16 +107,28 @@ struct BasketCompletedEvent {
     QString mode;
     QVariantMap to_map() const {
         return {{"account_id", account_id}, {"strategy", strategy}, {"successful", successful},
-                {"failed", failed}, {"total", total}, {"mode", mode}};
+                {"failed", failed},         {"total", total},       {"mode", mode}};
     }
 };
 
 // Publish helpers — fan out a typed event onto the EventBus.
-inline void publish(const OrderPlacedEvent& e) { EventBus::instance().publish(events::kOrderPlaced, e.to_map()); }
-inline void publish(const OrderFailedEvent& e) { EventBus::instance().publish(events::kOrderFailed, e.to_map()); }
-inline void publish(const SmartOrderNoActionEvent& e) { EventBus::instance().publish(events::kSmartOrderNoAction, e.to_map()); }
-inline void publish(const AllOrdersCancelledEvent& e) { EventBus::instance().publish(events::kAllOrdersCancelled, e.to_map()); }
-inline void publish(const AllPositionsClosedEvent& e) { EventBus::instance().publish(events::kAllPositionsClosed, e.to_map()); }
-inline void publish(const BasketCompletedEvent& e) { EventBus::instance().publish(events::kBasketCompleted, e.to_map()); }
+inline void publish(const OrderPlacedEvent& e) {
+    EventBus::instance().publish(events::kOrderPlaced, e.to_map());
+}
+inline void publish(const OrderFailedEvent& e) {
+    EventBus::instance().publish(events::kOrderFailed, e.to_map());
+}
+inline void publish(const SmartOrderNoActionEvent& e) {
+    EventBus::instance().publish(events::kSmartOrderNoAction, e.to_map());
+}
+inline void publish(const AllOrdersCancelledEvent& e) {
+    EventBus::instance().publish(events::kAllOrdersCancelled, e.to_map());
+}
+inline void publish(const AllPositionsClosedEvent& e) {
+    EventBus::instance().publish(events::kAllPositionsClosed, e.to_map());
+}
+inline void publish(const BasketCompletedEvent& e) {
+    EventBus::instance().publish(events::kBasketCompleted, e.to_map());
+}
 
 } // namespace fincept::trading

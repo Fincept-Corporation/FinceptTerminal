@@ -8,7 +8,7 @@ namespace fincept::algo {
 
 class AlgoEngineProducer : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
-public:
+  public:
     static AlgoEngineProducer& instance();
     void ensure_registered_with_hub();
 
@@ -16,7 +16,7 @@ public:
     void refresh(const QStringList& topics) override;
     int max_requests_per_sec() const override;
 
-private:
+  private:
     AlgoEngineProducer();
     bool hub_registered_ = false;
 };

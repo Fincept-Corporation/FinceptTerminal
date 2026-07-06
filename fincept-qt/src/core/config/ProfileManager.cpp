@@ -120,7 +120,8 @@ QList<ProfileManager::Entry> ProfileManager::profile_entries() const {
     if (id_cache_.contains("default"))
         out.append({"default", id_cache_.value("default")});
     for (auto it = id_cache_.constBegin(); it != id_cache_.constEnd(); ++it) {
-        if (it.key() == "default") continue;
+        if (it.key() == "default")
+            continue;
         out.append({it.key(), it.value()});
     }
     return out;
@@ -206,14 +207,16 @@ void ProfileManager::load_id_cache_locked() const {
             // Legacy format: bare string. Mint a UUID for it, flag manifest
             // rewrite so the next save persists the upgraded form.
             const QString name = v.toString();
-            if (name.isEmpty()) continue;
+            if (name.isEmpty())
+                continue;
             if (!id_cache_.contains(name))
                 id_cache_.insert(name, ProfileId::generate());
             needs_rewrite = true;
         } else if (v.isObject()) {
             const QJsonObject obj = v.toObject();
             const QString name = obj.value("name").toString();
-            if (name.isEmpty()) continue;
+            if (name.isEmpty())
+                continue;
             const QString id_str = obj.value("id").toString();
             ProfileId id = ProfileId::from_string(id_str);
             if (id.is_null()) {

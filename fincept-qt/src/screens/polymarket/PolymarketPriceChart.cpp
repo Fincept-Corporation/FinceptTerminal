@@ -23,8 +23,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     auto* toolbar_widget = new QWidget(this);
     toolbar_widget->setFixedHeight(36);
     toolbar_widget->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;")
-            .arg(colors::BG_RAISED(), colors::BORDER_DIM()));
+        QString("background: %1; border-bottom: 1px solid %2;").arg(colors::BG_RAISED(), colors::BORDER_DIM()));
     auto* toolbar = new QHBoxLayout(toolbar_widget);
     toolbar->setContentsMargins(12, 0, 12, 0);
     toolbar->setSpacing(8);
@@ -38,10 +37,9 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     interval_lbl_ = new QLabel(tr("INTERVAL"));
     auto* lbl = interval_lbl_;
-    lbl->setStyleSheet(
-        QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.5px; "
-                "background: transparent;")
-            .arg(colors::TEXT_SECONDARY()));
+    lbl->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: 700; letter-spacing: 0.5px; "
+                               "background: transparent;")
+                           .arg(colors::TEXT_SECONDARY()));
     toolbar->addWidget(lbl);
 
     interval_combo_ = new QComboBox;
@@ -73,8 +71,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
 
     price_label_ = new QLabel;
     price_label_->setStyleSheet(
-        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;")
-            .arg(colors::AMBER()));
+        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(colors::AMBER()));
     toolbar->addWidget(price_label_);
 
     vl->addWidget(toolbar_widget);
@@ -84,8 +81,7 @@ PolymarketPriceChart::PolymarketPriceChart(QWidget* parent) : QWidget(parent) {
     auto* ccl = new QVBoxLayout(chart_container_);
     ccl->setContentsMargins(8, 8, 8, 8);
     auto* empty = new QLabel(tr("Select a market to view its price chart"));
-    empty->setStyleSheet(
-        QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
+    empty->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;").arg(colors::TEXT_DIM()));
     empty->setAlignment(Qt::AlignCenter);
     ccl->addWidget(empty);
     vl->addWidget(chart_container_, 1);
@@ -122,8 +118,7 @@ void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
     }
 
     // Accent-colored series ties the chart back to the active exchange.
-    auto* chart_view = ChartFactory::line_chart(presentation_.chart_y_label, points,
-                                                presentation_.accent.name());
+    auto* chart_view = ChartFactory::line_chart(presentation_.chart_y_label, points, presentation_.accent.name());
     layout->addWidget(chart_view);
 }
 
@@ -136,11 +131,11 @@ void PolymarketPriceChart::set_presentation(const ExchangePresentation& p) {
     // Price readout tracks the exchange accent so the header colour doesn't
     // stay amber after a swap to Kalshi (teal) / vice versa.
     if (price_label_) {
-        price_label_->setStyleSheet(
-            QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;")
-                .arg(presentation_.accent.name()));
+        price_label_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;")
+                                        .arg(presentation_.accent.name()));
     }
-    if (has_last_history_) set_price_history(last_history_);
+    if (has_last_history_)
+        set_price_history(last_history_);
 }
 
 void PolymarketPriceChart::set_outcome_labels(const QStringList& labels) {
@@ -158,8 +153,10 @@ void PolymarketPriceChart::changeEvent(QEvent* event) {
 }
 
 void PolymarketPriceChart::retranslateUi() {
-    if (interval_lbl_) interval_lbl_->setText(tr("INTERVAL"));
-    if (outcome_lbl_)  outcome_lbl_->setText(tr("OUTCOME"));
+    if (interval_lbl_)
+        interval_lbl_->setText(tr("INTERVAL"));
+    if (outcome_lbl_)
+        outcome_lbl_->setText(tr("OUTCOME"));
     if (interval_combo_) {
         const QSignalBlocker block(interval_combo_);
         const int idx = interval_combo_->currentIndex();
@@ -170,7 +167,8 @@ void PolymarketPriceChart::retranslateUi() {
     }
     // Outcome combo items are market outcome names (data) — not retranslated.
     // The empty-state placeholder re-renders via set_price_history().
-    if (has_last_history_) set_price_history(last_history_);
+    if (has_last_history_)
+        set_price_history(last_history_);
 }
 
 } // namespace fincept::screens::polymarket

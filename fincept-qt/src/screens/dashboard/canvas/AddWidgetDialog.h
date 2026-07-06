@@ -48,7 +48,7 @@ class AddWidgetDialog : public QDialog {
     QPushButton* cancel_btn_ = nullptr;
     QButtonGroup* cat_group_ = nullptr;
     QVector<QPushButton*> cat_buttons_;
-    QVector<QString>      cat_source_keys_;
+    QVector<QString> cat_source_keys_;
     QString selected_id_;
     QString active_category_;
 };

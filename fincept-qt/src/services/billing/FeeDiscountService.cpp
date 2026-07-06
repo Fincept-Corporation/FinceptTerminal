@@ -45,7 +45,8 @@ void FeeDiscountService::refresh(const QStringList& topics) {
     wire_balance_listener();
     for (const auto& topic : topics) {
         const auto pubkey = pubkey_from_topic(topic);
-        if (pubkey.isEmpty()) continue;
+        if (pubkey.isEmpty())
+            continue;
         publish_for(topic, pubkey);
     }
 }
@@ -77,23 +78,26 @@ void FeeDiscountService::publish_for(const QString& topic, const QString& pubkey
 }
 
 void FeeDiscountService::wire_balance_listener() {
-    if (listener_wired_) return;
+    if (listener_wired_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     // Listen for *every* wallet:balance:* publish and re-emit any active
     // discount topic that matches. We use the topic_changed signal because
     // it fires once per publish across the family.
     QObject::connect(&hub, &fincept::datahub::DataHub::topic_updated, this,
                      [this](const QString& topic, const QVariant& /*value*/) {
-        const QString prefix = QStringLiteral("wallet:balance:");
-        if (!topic.startsWith(prefix)) return;
-        const auto pubkey = topic.mid(prefix.size());
-        if (pubkey.isEmpty()) return;
-        const auto out_topic = QString::fromLatin1(kFeeDiscountFamilyPrefix) + pubkey;
-        // Only republish if someone is actually listening (cheap check —
-        // if nobody subscribed, the hub will skip the publish anyway,
-        // but we save the QVariant copy).
-        publish_for(out_topic, pubkey);
-    });
+                         const QString prefix = QStringLiteral("wallet:balance:");
+                         if (!topic.startsWith(prefix))
+                             return;
+                         const auto pubkey = topic.mid(prefix.size());
+                         if (pubkey.isEmpty())
+                             return;
+                         const auto out_topic = QString::fromLatin1(kFeeDiscountFamilyPrefix) + pubkey;
+                         // Only republish if someone is actually listening (cheap check —
+                         // if nobody subscribed, the hub will skip the publish anyway,
+                         // but we save the QVariant copy).
+                         publish_for(out_topic, pubkey);
+                     });
     listener_wired_ = true;
     LOG_INFO("FeeDiscount", "balance listener wired");
 }

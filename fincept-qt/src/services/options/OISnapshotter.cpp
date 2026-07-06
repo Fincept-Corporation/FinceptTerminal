@@ -16,10 +16,10 @@ namespace fincept::services::options {
 
 namespace {
 
-constexpr int kFlushIntervalMs = 60'000;       // 60s — minute-aligned writes
+constexpr int kFlushIntervalMs = 60'000;             // 60s — minute-aligned writes
 constexpr int kHousekeepingIntervalMs = 60 * 60'000; // hourly
 constexpr int kRetentionDays = 7;
-constexpr int kHistoryRequestsPerSec = 10;     // SQLite reads — generous
+constexpr int kHistoryRequestsPerSec = 10; // SQLite reads — generous
 
 const QString kHistoryPrefix = QStringLiteral("oi:history:");
 
@@ -28,7 +28,7 @@ qint64 floor_to_minute_secs(qint64 ms) {
     return (secs / 60) * 60;
 }
 
-}  // namespace
+} // namespace
 
 OISnapshotter& OISnapshotter::instance() {
     static OISnapshotter s;
@@ -53,7 +53,7 @@ void OISnapshotter::ensure_registered_with_hub() {
 
     fincept::datahub::TopicPolicy hist_pol;
     hist_pol.ttl_ms = kFlushIntervalMs;
-    hist_pol.min_interval_ms = kFlushIntervalMs / 2;  // 30s — query is cheap, but no point flooding
+    hist_pol.min_interval_ms = kFlushIntervalMs / 2; // 30s — query is cheap, but no point flooding
     hub.set_policy_pattern(QStringLiteral("oi:history:*"), hist_pol);
 
     // Subscribe to every chain publish — feed the in-memory tick map.
@@ -67,9 +67,9 @@ void OISnapshotter::ensure_registered_with_hub() {
     run_housekeeping();
 
     registered_ = true;
-    LOG_INFO("OISnapshotter",
-             QString("Registered with DataHub (oi:history:*) — flush every %1s, retention %2d")
-                 .arg(kFlushIntervalMs / 1000).arg(kRetentionDays));
+    LOG_INFO("OISnapshotter", QString("Registered with DataHub (oi:history:*) — flush every %1s, retention %2d")
+                                  .arg(kFlushIntervalMs / 1000)
+                                  .arg(kRetentionDays));
 }
 
 QString OISnapshotter::history_topic(const QString& broker_id, qint64 token, const QString& window) {
@@ -100,9 +100,8 @@ void OISnapshotter::refresh(const QStringList& topics) {
         const qint64 since = now_secs - qint64(days) * 86400;
         auto r = OISnapshotsRepository::instance().get_window(token, since, now_secs);
         if (r.is_err()) {
-            LOG_WARN("OISnapshotter", QString("get_window failed for %1: %2")
-                                          .arg(topic)
-                                          .arg(QString::fromStdString(r.error())));
+            LOG_WARN("OISnapshotter",
+                     QString("get_window failed for %1: %2").arg(topic).arg(QString::fromStdString(r.error())));
             hub.publish_error(topic, QString::fromStdString(r.error()));
             continue;
         }
@@ -160,9 +159,8 @@ void OISnapshotter::flush_to_disk() {
         batch.append(lt.sample);
         auto r = repo.upsert_batch(it.key(), batch);
         if (r.is_err()) {
-            LOG_WARN("OISnapshotter", QString("upsert failed for token %1: %2")
-                                          .arg(it.key())
-                                          .arg(QString::fromStdString(r.error())));
+            LOG_WARN("OISnapshotter",
+                     QString("upsert failed for token %1: %2").arg(it.key()).arg(QString::fromStdString(r.error())));
             continue;
         }
         lt.dirty = false;
@@ -200,9 +198,12 @@ bool OISnapshotter::parse_history_topic(const QString& topic, QString& broker, q
 }
 
 int OISnapshotter::days_for_window(const QString& window) {
-    if (window == QLatin1String("1d")) return 1;
-    if (window == QLatin1String("5d")) return 5;
-    if (window == QLatin1String("7d")) return 7;
+    if (window == QLatin1String("1d"))
+        return 1;
+    if (window == QLatin1String("5d"))
+        return 5;
+    if (window == QLatin1String("7d"))
+        return 7;
     return 1;
 }
 

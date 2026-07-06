@@ -23,20 +23,22 @@ namespace fincept::screens::panels {
 namespace {
 
 QString font_stack() {
-    return QStringLiteral(
-        "'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
+    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
 }
 
 double atomic_to_ui(const QString& raw, int decimals) {
-    if (raw.isEmpty()) return 0.0;
+    if (raw.isEmpty())
+        return 0.0;
     bool ok = false;
     const auto u = raw.toULongLong(&ok);
-    if (!ok) return 0.0;
+    if (!ok)
+        return 0.0;
     return static_cast<double>(u) / std::pow(10.0, std::max(0, decimals));
 }
 
 QString format_token(double v, int dp = 0) {
-    if (v <= 0.0) return QStringLiteral("0");
+    if (v <= 0.0)
+        return QStringLiteral("0");
     return QLocale::system().toString(v, 'f', dp);
 }
 
@@ -48,10 +50,8 @@ TierPanel::TierPanel(QWidget* parent) : QWidget(parent) {
     apply_theme();
 
     auto& svc = fincept::wallet::WalletService::instance();
-    connect(&svc, &fincept::wallet::WalletService::wallet_connected, this,
-            &TierPanel::on_wallet_connected);
-    connect(&svc, &fincept::wallet::WalletService::wallet_disconnected, this,
-            &TierPanel::on_wallet_disconnected);
+    connect(&svc, &fincept::wallet::WalletService::wallet_connected, this, &TierPanel::on_wallet_connected);
+    connect(&svc, &fincept::wallet::WalletService::wallet_disconnected, this, &TierPanel::on_wallet_disconnected);
 
     if (svc.is_connected()) {
         on_wallet_connected(svc.current_pubkey(), svc.state().label);
@@ -89,9 +89,7 @@ void TierPanel::build_ui() {
     bl->setContentsMargins(14, 14, 14, 14);
     bl->setSpacing(8);
 
-    auto build_row = [body, bl](TierRow& row, const QString& label,
-                                const QString& threshold,
-                                const QString& unlocks) {
+    auto build_row = [body, bl](TierRow& row, const QString& label, const QString& threshold, const QString& unlocks) {
         row.host = new QFrame(body);
         row.host->setObjectName(QStringLiteral("tierRow"));
         auto* row_l = new QHBoxLayout(row.host);
@@ -114,15 +112,9 @@ void TierPanel::build_ui() {
         bl->addWidget(row.host);
     };
 
-    build_row(bronze_row_, tr("BRONZE"),
-              tr("100+ veFNCPT"),
-              tr("basic API quota"));
-    build_row(silver_row_, tr("SILVER"),
-              tr("1,000+ veFNCPT"),
-              tr("premium screens"));
-    build_row(gold_row_, tr("GOLD"),
-              tr("10,000+ veFNCPT"),
-              tr("all agents + arena"));
+    build_row(bronze_row_, tr("BRONZE"), tr("100+ veFNCPT"), tr("basic API quota"));
+    build_row(silver_row_, tr("SILVER"), tr("1,000+ veFNCPT"), tr("premium screens"));
+    build_row(gold_row_, tr("GOLD"), tr("10,000+ veFNCPT"), tr("all agents + arena"));
 
     footer_ = new QLabel(tr("Connect a wallet to see your tier."), body);
     footer_->setObjectName(QStringLiteral("tierFooter"));
@@ -137,43 +129,41 @@ void TierPanel::apply_theme() {
     using namespace ui::colors;
     const QString font = font_stack();
 
-    const QString ss = QStringLiteral(
-        "QWidget#tierPanel { background:%1; }"
-        "QWidget#tierHead { background:%2; border-bottom:1px solid %3; }"
-        "QLabel#tierTitle { color:%4; font-family:%5; font-size:11px;"
-        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-        "QLabel#tierHeadCaption { color:%6; font-family:%5; font-size:10px;"
-        "  font-weight:600; letter-spacing:1.2px; background:transparent; }"
-        "QWidget#tierBody { background:%1; }"
-        "QFrame#tierRow { background:%8; border:1px solid %3; }"
-        "QFrame#tierRowCurrent { background:rgba(217,119,6,0.10); border:1px solid %12; }"
-        "QLabel#tierRowLabel { color:%4; font-family:%5; font-size:11px;"
-        "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
-        "QLabel#tierRowThreshold { color:%7; font-family:%5; font-size:11px;"
-        "  background:transparent; }"
-        "QLabel#tierRowUnlocks { color:%6; font-family:%5; font-size:11px;"
-        "  background:transparent; }"
-        "QLabel#tierRowChipAchieved { color:%4; background:rgba(217,119,6,0.10);"
-        "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
-        "  letter-spacing:1.2px; padding:2px 6px; }"
-        "QLabel#tierRowChipLocked { color:%6; background:transparent;"
-        "  border:1px solid %3; font-family:%5; font-size:9px; font-weight:700;"
-        "  letter-spacing:1.2px; padding:2px 6px; }"
-        "QLabel#tierFooter { color:%6; font-family:%5; font-size:10px;"
-        "  background:transparent; padding-top:6px; }"
-    )
-        .arg(BG_BASE(),         // %1
-             BG_SURFACE(),      // %2
-             BORDER_DIM(),      // %3
-             AMBER(),           // %4
-             font,              // %5
-             TEXT_TERTIARY(),   // %6
-             TEXT_PRIMARY(),    // %7
-             BG_RAISED(),       // %8
-             NEGATIVE())        // %9
-        .arg(BG_HOVER(),                       // %10
-             BORDER_BRIGHT(),                  // %11
-             QStringLiteral("#78350f"));       // %12 darker amber
+    const QString ss = QStringLiteral("QWidget#tierPanel { background:%1; }"
+                                      "QWidget#tierHead { background:%2; border-bottom:1px solid %3; }"
+                                      "QLabel#tierTitle { color:%4; font-family:%5; font-size:11px;"
+                                      "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
+                                      "QLabel#tierHeadCaption { color:%6; font-family:%5; font-size:10px;"
+                                      "  font-weight:600; letter-spacing:1.2px; background:transparent; }"
+                                      "QWidget#tierBody { background:%1; }"
+                                      "QFrame#tierRow { background:%8; border:1px solid %3; }"
+                                      "QFrame#tierRowCurrent { background:rgba(217,119,6,0.10); border:1px solid %12; }"
+                                      "QLabel#tierRowLabel { color:%4; font-family:%5; font-size:11px;"
+                                      "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
+                                      "QLabel#tierRowThreshold { color:%7; font-family:%5; font-size:11px;"
+                                      "  background:transparent; }"
+                                      "QLabel#tierRowUnlocks { color:%6; font-family:%5; font-size:11px;"
+                                      "  background:transparent; }"
+                                      "QLabel#tierRowChipAchieved { color:%4; background:rgba(217,119,6,0.10);"
+                                      "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
+                                      "  letter-spacing:1.2px; padding:2px 6px; }"
+                                      "QLabel#tierRowChipLocked { color:%6; background:transparent;"
+                                      "  border:1px solid %3; font-family:%5; font-size:9px; font-weight:700;"
+                                      "  letter-spacing:1.2px; padding:2px 6px; }"
+                                      "QLabel#tierFooter { color:%6; font-family:%5; font-size:10px;"
+                                      "  background:transparent; padding-top:6px; }")
+                           .arg(BG_BASE(),                  // %1
+                                BG_SURFACE(),               // %2
+                                BORDER_DIM(),               // %3
+                                AMBER(),                    // %4
+                                font,                       // %5
+                                TEXT_TERTIARY(),            // %6
+                                TEXT_PRIMARY(),             // %7
+                                BG_RAISED(),                // %8
+                                NEGATIVE())                 // %9
+                           .arg(BG_HOVER(),                 // %10
+                                BORDER_BRIGHT(),            // %11
+                                QStringLiteral("#78350f")); // %12 darker amber
     setStyleSheet(ss);
 }
 
@@ -184,8 +174,7 @@ void TierPanel::on_wallet_connected(const QString& pubkey, const QString& /*labe
     if (isVisible() && current_topic_.isEmpty()) {
         current_topic_ = QStringLiteral("billing:tier:%1").arg(pubkey);
         auto& hub = fincept::datahub::DataHub::instance();
-        hub.subscribe(this, current_topic_,
-                      [this](const QVariant& v) { on_tier_update(v); });
+        hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_tier_update(v); });
         hub.request(current_topic_, /*force=*/false);
     }
 }
@@ -194,8 +183,7 @@ void TierPanel::on_wallet_disconnected() {
     fincept::datahub::DataHub::instance().unsubscribe(this);
     current_topic_.clear();
     current_pubkey_.clear();
-    render_state(fincept::wallet::TierStatus::Tier::Free,
-                 QString(), QString(), false);
+    render_state(fincept::wallet::TierStatus::Tier::Free, QString(), QString(), false);
     footer_->setText(tr("Connect a wallet to see your tier."));
     footer_->show();
 }
@@ -205,8 +193,7 @@ void TierPanel::showEvent(QShowEvent* e) {
     if (!current_pubkey_.isEmpty() && current_topic_.isEmpty()) {
         current_topic_ = QStringLiteral("billing:tier:%1").arg(current_pubkey_);
         auto& hub = fincept::datahub::DataHub::instance();
-        hub.subscribe(this, current_topic_,
-                      [this](const QVariant& v) { on_tier_update(v); });
+        hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_tier_update(v); });
         hub.request(current_topic_, /*force=*/false);
     }
 }
@@ -224,27 +211,36 @@ void TierPanel::changeEvent(QEvent* event) {
 }
 
 void TierPanel::retranslateUi() {
-    if (title_) title_->setText(tr("TIER"));
+    if (title_)
+        title_->setText(tr("TIER"));
 
     // Static row descriptors (tier name · threshold · unlocks).
-    if (bronze_row_.label)     bronze_row_.label->setText(tr("BRONZE"));
-    if (bronze_row_.threshold) bronze_row_.threshold->setText(tr("100+ veFNCPT"));
-    if (bronze_row_.unlocks)   bronze_row_.unlocks->setText(tr("basic API quota"));
-    if (silver_row_.label)     silver_row_.label->setText(tr("SILVER"));
-    if (silver_row_.threshold) silver_row_.threshold->setText(tr("1,000+ veFNCPT"));
-    if (silver_row_.unlocks)   silver_row_.unlocks->setText(tr("premium screens"));
-    if (gold_row_.label)       gold_row_.label->setText(tr("GOLD"));
-    if (gold_row_.threshold)   gold_row_.threshold->setText(tr("10,000+ veFNCPT"));
-    if (gold_row_.unlocks)     gold_row_.unlocks->setText(tr("all agents + arena"));
+    if (bronze_row_.label)
+        bronze_row_.label->setText(tr("BRONZE"));
+    if (bronze_row_.threshold)
+        bronze_row_.threshold->setText(tr("100+ veFNCPT"));
+    if (bronze_row_.unlocks)
+        bronze_row_.unlocks->setText(tr("basic API quota"));
+    if (silver_row_.label)
+        silver_row_.label->setText(tr("SILVER"));
+    if (silver_row_.threshold)
+        silver_row_.threshold->setText(tr("1,000+ veFNCPT"));
+    if (silver_row_.unlocks)
+        silver_row_.unlocks->setText(tr("premium screens"));
+    if (gold_row_.label)
+        gold_row_.label->setText(tr("GOLD"));
+    if (gold_row_.threshold)
+        gold_row_.threshold->setText(tr("10,000+ veFNCPT"));
+    if (gold_row_.unlocks)
+        gold_row_.unlocks->setText(tr("all agents + arena"));
 
     // Chips: re-apply text using the objectName as the achieved/locked flag
     // (set by render_state) so the live state survives the locale switch.
     auto retr_chip = [](QLabel* chip) {
-        if (!chip) return;
-        const bool achieved =
-            chip->objectName() == QLatin1String("tierRowChipAchieved");
-        chip->setText(achieved ? TierPanel::tr("[achieved]")
-                               : TierPanel::tr("[locked]"));
+        if (!chip)
+            return;
+        const bool achieved = chip->objectName() == QLatin1String("tierRowChipAchieved");
+        chip->setText(achieved ? TierPanel::tr("[achieved]") : TierPanel::tr("[locked]"));
     };
     retr_chip(bronze_row_.chip);
     retr_chip(silver_row_.chip);
@@ -257,31 +253,23 @@ void TierPanel::retranslateUi() {
 }
 
 void TierPanel::on_tier_update(const QVariant& v) {
-    if (!v.canConvert<fincept::wallet::TierStatus>()) return;
+    if (!v.canConvert<fincept::wallet::TierStatus>())
+        return;
     const auto s = v.value<fincept::wallet::TierStatus>();
     const double weight_ui = atomic_to_ui(s.weight_raw, s.decimals);
     const double next_ui = atomic_to_ui(s.next_threshold_raw, s.decimals);
-    render_state(s.tier,
-                 QStringLiteral("%1 veFNCPT").arg(format_token(weight_ui, 1)),
-                 next_ui > 0.0
-                     ? QStringLiteral("%1 veFNCPT").arg(format_token(next_ui, 0))
-                     : QString(),
-                 s.is_mock);
+    render_state(s.tier, QStringLiteral("%1 veFNCPT").arg(format_token(weight_ui, 1)),
+                 next_ui > 0.0 ? QStringLiteral("%1 veFNCPT").arg(format_token(next_ui, 0)) : QString(), s.is_mock);
 }
 
-void TierPanel::render_state(fincept::wallet::TierStatus::Tier current,
-                              const QString& weight_ui_str,
-                              const QString& next_threshold_ui_str,
-                              bool is_mock) {
+void TierPanel::render_state(fincept::wallet::TierStatus::Tier current, const QString& weight_ui_str,
+                             const QString& next_threshold_ui_str, bool is_mock) {
     using Tier = fincept::wallet::TierStatus::Tier;
 
     auto set_row = [](TierRow& row, bool achieved, bool is_current) {
-        row.chip->setText(achieved ? TierPanel::tr("[achieved]")
-                                   : TierPanel::tr("[locked]"));
-        row.chip->setObjectName(achieved ? QStringLiteral("tierRowChipAchieved")
-                                         : QStringLiteral("tierRowChipLocked"));
-        row.host->setObjectName(is_current ? QStringLiteral("tierRowCurrent")
-                                            : QStringLiteral("tierRow"));
+        row.chip->setText(achieved ? TierPanel::tr("[achieved]") : TierPanel::tr("[locked]"));
+        row.chip->setObjectName(achieved ? QStringLiteral("tierRowChipAchieved") : QStringLiteral("tierRowChipLocked"));
+        row.host->setObjectName(is_current ? QStringLiteral("tierRowCurrent") : QStringLiteral("tierRow"));
         row.chip->style()->unpolish(row.chip);
         row.chip->style()->polish(row.chip);
         row.host->style()->unpolish(row.host);
@@ -290,11 +278,11 @@ void TierPanel::render_state(fincept::wallet::TierStatus::Tier current,
 
     set_row(bronze_row_, current >= Tier::Bronze, current == Tier::Bronze);
     set_row(silver_row_, current >= Tier::Silver, current == Tier::Silver);
-    set_row(gold_row_,   current >= Tier::Gold,   current == Tier::Gold);
+    set_row(gold_row_, current >= Tier::Gold, current == Tier::Gold);
 
-    QString head_text = QStringLiteral("current %1")
-                             .arg(fincept::billing::TierConfig::label_for(current));
-    if (is_mock) head_text += QStringLiteral(" · DEMO");
+    QString head_text = QStringLiteral("current %1").arg(fincept::billing::TierConfig::label_for(current));
+    if (is_mock)
+        head_text += QStringLiteral(" · DEMO");
     if (!weight_ui_str.isEmpty()) {
         head_text += QStringLiteral("  ·  %1").arg(weight_ui_str);
     }
@@ -304,8 +292,7 @@ void TierPanel::render_state(fincept::wallet::TierStatus::Tier current,
         footer_->setText(tr("Connect a wallet to see your tier."));
         footer_->show();
     } else if (!next_threshold_ui_str.isEmpty()) {
-        footer_->setText(tr("Next: lock %1 to reach the next tier.")
-                              .arg(next_threshold_ui_str));
+        footer_->setText(tr("Next: lock %1 to reach the next tier.").arg(next_threshold_ui_str));
         footer_->show();
     } else if (current == Tier::Gold) {
         footer_->setText(tr("All Fincept Terminal features unlocked."));

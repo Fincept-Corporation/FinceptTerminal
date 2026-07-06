@@ -11,12 +11,11 @@
 #include "services/news/NewsService.h"
 
 #include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "network/http/HttpClient.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/NewsArticleRepository.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/DataHubMetaTypes.h"
 
 #include <QAtomicInt>
 #include <QDateTime>
@@ -37,16 +36,14 @@
 
 namespace fincept::services {
 
-
 // HTTP timing + browser user agent — used by the RSS fetch paths.
-static constexpr int kFeedTransferTimeoutMs = 4000;   // 4s per RSS feed request
+static constexpr int kFeedTransferTimeoutMs = 4000; // 4s per RSS feed request
 
 // Use a real browser User-Agent — major financial publishers reject
 // "FinceptTerminal/4.0" as scraper traffic. Browser UA gets us 200s on
 // the same endpoints.
-static constexpr const char* kBrowserUserAgent =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+static constexpr const char* kBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                                 "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 NewsService& NewsService::instance() {
     static NewsService s;
@@ -126,8 +123,7 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
         QNetworkRequest req(QUrl(feed.url));
         req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
         req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::NoLessSafeRedirectPolicy);
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
         req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
@@ -143,23 +139,25 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
                 // <feed. HTML error pages (Akamai access-denied, Cloudflare
                 // captcha) start with <html / <!doctype and would pass through
                 // the parser silently producing 0 articles — flag them clearly.
-                const bool looks_like_html =
-                    trimmed.left(20).toLower().contains("<html") ||
-                    trimmed.left(20).toLower().contains("<!doctype html");
+                const bool looks_like_html = trimmed.left(20).toLower().contains("<html") ||
+                                             trimmed.left(20).toLower().contains("<!doctype html");
                 if (looks_like_html) {
-                    LOG_WARN("NewsService",
-                             QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
-                                 .arg(feed.id, feed.source).arg(data.size()));
+                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
+                                                .arg(feed.id, feed.source)
+                                                .arg(data.size()));
                 } else if (trimmed.startsWith('<')) {
                     articles = parse_rss_xml(data, feed);
                 }
                 if (articles.isEmpty() && !looks_like_html) {
                     LOG_WARN("NewsService", QString("Feed %1 (%2) returned %3 bytes but no parsed articles")
-                                                .arg(feed.id, feed.source).arg(data.size()));
+                                                .arg(feed.id, feed.source)
+                                                .arg(data.size()));
                 }
             } else {
                 LOG_WARN("NewsService", QString("Feed %1 (%2) failed: HTTP %3, err=%4")
-                                            .arg(feed.id, feed.source).arg(http_code).arg(reply->errorString()));
+                                            .arg(feed.id, feed.source)
+                                            .arg(http_code)
+                                            .arg(reply->errorString()));
             }
 
             {
@@ -286,8 +284,7 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
         QNetworkRequest req(QUrl(feed.url));
         req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
         req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::NoLessSafeRedirectPolicy);
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
         req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
@@ -299,23 +296,25 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
             if (reply->error() == QNetworkReply::NoError) {
                 QByteArray data = reply->readAll();
                 const QByteArray trimmed = data.trimmed();
-                const bool looks_like_html =
-                    trimmed.left(20).toLower().contains("<html") ||
-                    trimmed.left(20).toLower().contains("<!doctype html");
+                const bool looks_like_html = trimmed.left(20).toLower().contains("<html") ||
+                                             trimmed.left(20).toLower().contains("<!doctype html");
                 if (looks_like_html) {
-                    LOG_WARN("NewsService",
-                             QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
-                                 .arg(feed.id, feed.source).arg(data.size()));
+                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
+                                                .arg(feed.id, feed.source)
+                                                .arg(data.size()));
                 } else if (trimmed.startsWith('<')) {
                     batch = parse_rss_xml(data, feed);
                 }
                 if (batch.isEmpty() && !looks_like_html) {
                     LOG_WARN("NewsService", QString("Feed %1 (%2) returned %3 bytes but no parsed articles")
-                                                .arg(feed.id, feed.source).arg(data.size()));
+                                                .arg(feed.id, feed.source)
+                                                .arg(data.size()));
                 }
             } else {
                 LOG_WARN("NewsService", QString("Feed %1 (%2) failed: HTTP %3, err=%4")
-                                            .arg(feed.id, feed.source).arg(http_code).arg(reply->errorString()));
+                                            .arg(feed.id, feed.source)
+                                            .arg(http_code)
+                                            .arg(reply->errorString()));
             }
 
             QVector<NewsArticle> snapshot;
@@ -461,33 +460,36 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
 
     // context = `this` ensures the callback drops if NewsService ever stops
     // being a singleton — today it always outlives the request.
-    HttpClient::instance().post("/news/analyze", body, [url, cb](Result<QJsonDocument> result) {
-        if (result.is_err()) {
-            LOG_ERROR("NewsService", "Analysis failed: " + QString::fromStdString(result.error()));
-            cb(false, {});
-            return;
-        }
+    HttpClient::instance().post(
+        "/news/analyze", body,
+        [url, cb](Result<QJsonDocument> result) {
+            if (result.is_err()) {
+                LOG_ERROR("NewsService", "Analysis failed: " + QString::fromStdString(result.error()));
+                cb(false, {});
+                return;
+            }
 
-        auto obj = result.value().object();
-        if (!obj["success"].toBool(false)) {
-            LOG_ERROR("NewsService", "API returned failure: " + obj["message"].toString());
-            cb(false, {});
-            return;
-        }
+            auto obj = result.value().object();
+            if (!obj["success"].toBool(false)) {
+                LOG_ERROR("NewsService", "API returned failure: " + obj["message"].toString());
+                cb(false, {});
+                return;
+            }
 
-        auto data = obj["data"].toObject();
-        NewsAnalysis analysis = parse_analysis_data(data);
+            auto data = obj["data"].toObject();
+            NewsAnalysis analysis = parse_analysis_data(data);
 
-        // Persist the raw `data` object keyed by URL so reopening the article
-        // re-shows this result without re-spending credits. Overwrites any
-        // prior cache (re-running ANALYZE refreshes it).
-        const QString json = QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
-        auto wr = fincept::NewsArticleRepository::instance().save_analysis(url, json);
-        if (wr.is_err())
-            LOG_WARN("NewsService", "Failed to persist analysis: " + QString::fromStdString(wr.error()));
+            // Persist the raw `data` object keyed by URL so reopening the article
+            // re-shows this result without re-spending credits. Overwrites any
+            // prior cache (re-running ANALYZE refreshes it).
+            const QString json = QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact));
+            auto wr = fincept::NewsArticleRepository::instance().save_analysis(url, json);
+            if (wr.is_err())
+                LOG_WARN("NewsService", "Failed to persist analysis: " + QString::fromStdString(wr.error()));
 
-        cb(true, analysis);
-    }, this);
+            cb(true, analysis);
+        },
+        this);
 }
 
 // ── AI Headline Summarization ────────────────────────────────────────────────
@@ -555,9 +557,7 @@ void NewsService::stop_auto_refresh() {
 }
 
 QStringList NewsService::topic_patterns() const {
-    return {QStringLiteral("news:general"),
-            QStringLiteral("news:symbol:*"),
-            QStringLiteral("news:category:*"),
+    return {QStringLiteral("news:general"), QStringLiteral("news:symbol:*"), QStringLiteral("news:category:*"),
             QStringLiteral("news:cluster:*")};
 }
 
@@ -565,14 +565,14 @@ void NewsService::refresh(const QStringList& topics) {
     // Cluster topics are push-only — producer never pulls them.
     bool needs_general = false;
     for (const auto& t : topics) {
-        if (t == QLatin1String("news:general") ||
-            t.startsWith(QLatin1String("news:symbol:")) ||
+        if (t == QLatin1String("news:general") || t.startsWith(QLatin1String("news:symbol:")) ||
             t.startsWith(QLatin1String("news:category:"))) {
             needs_general = true;
             break;
         }
     }
-    if (!needs_general) return;
+    if (!needs_general)
+        return;
 
     // Cache-first: prime the hub with last-known-good articles from disk so
     // subscribers (NewsWidget etc.) render in ~50 ms on cold start instead
@@ -615,11 +615,12 @@ void NewsService::refresh(const QStringList& topics) {
 }
 
 int NewsService::max_requests_per_sec() const {
-    return 2;  // RSS aggregator pacing — generous but avoids request storms
+    return 2; // RSS aggregator pacing — generous but avoids request storms
 }
 
 void NewsService::ensure_registered_with_hub() {
-    if (hub_registered_) return;
+    if (hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 
@@ -647,13 +648,13 @@ void NewsService::ensure_registered_with_hub() {
     hub.set_policy_pattern(QStringLiteral("news:cluster:*"), cluster_policy);
 
     hub_registered_ = true;
-    LOG_INFO("NewsService",
-             "Registered with DataHub (news:general, news:symbol:*, "
-             "news:category:*, news:cluster:*)");
+    LOG_INFO("NewsService", "Registered with DataHub (news:general, news:symbol:*, "
+                            "news:category:*, news:cluster:*)");
 }
 
 void NewsService::publish_articles_to_hub(const QVector<NewsArticle>& accumulated) {
-    if (!hub_registered_) return;
+    if (!hub_registered_)
+        return;
     auto& hub = fincept::datahub::DataHub::instance();
 
     // Single canonical publish — the whole accumulated list on news:general.
@@ -677,12 +678,10 @@ void NewsService::publish_articles_to_hub(const QVector<NewsArticle>& accumulate
             by_category[a.category].append(a);
     }
     for (auto it = by_symbol.constBegin(); it != by_symbol.constEnd(); ++it) {
-        hub.publish(QStringLiteral("news:symbol:") + it.key(),
-                    QVariant::fromValue(it.value()));
+        hub.publish(QStringLiteral("news:symbol:") + it.key(), QVariant::fromValue(it.value()));
     }
     for (auto it = by_category.constBegin(); it != by_category.constEnd(); ++it) {
-        hub.publish(QStringLiteral("news:category:") + it.key(),
-                    QVariant::fromValue(it.value()));
+        hub.publish(QStringLiteral("news:category:") + it.key(), QVariant::fromValue(it.value()));
     }
 }
 

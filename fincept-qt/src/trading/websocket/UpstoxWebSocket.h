@@ -86,8 +86,7 @@ class UpstoxWebSocket : public BrokerWebSocketBase {
 
     // Wire senders. method is "sub" / "unsub". The JSON payload is sent as a
     // binary frame (Upstox requirement).
-    void send_subscription(const QStringList& instrument_keys, const QString& method,
-                           const QString& mode);
+    void send_subscription(const QStringList& instrument_keys, const QString& method, const QString& mode);
     void resubscribe_all();
 
     // Protobuf FeedResponse → tick/depth signals.
@@ -106,8 +105,7 @@ class UpstoxWebSocket : public BrokerWebSocketBase {
     // reconnect and groups bulk subscribe messages by mode.
     QHash<QString, QString> subscriptions_;
 
-    static constexpr const char* kAuthEndpoint =
-        "https://api.upstox.com/v3/feed/market-data-feed/authorize";
+    static constexpr const char* kAuthEndpoint = "https://api.upstox.com/v3/feed/market-data-feed/authorize";
     static constexpr int kSubscribeBatch = 100; // instrument keys per sub frame
 };
 

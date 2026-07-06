@@ -59,7 +59,7 @@ void MacroCalendarService::ensure_registered_with_hub() {
     hub.register_producer(this);
 
     fincept::datahub::TopicPolicy policy;
-    policy.ttl_ms = 5 * 60 * 1000;   // 5 min — macro events refresh slowly
+    policy.ttl_ms = 5 * 60 * 1000;      // 5 min — macro events refresh slowly
     policy.min_interval_ms = 60 * 1000; // 60 s
     policy.refresh_timeout_ms = 30 * 1000;
     hub.set_policy(QString::fromLatin1(kTopic), policy);

@@ -145,12 +145,8 @@ Result<void> WorkspaceDb::apply_pragmas() {
     // covers the brief overlap when SessionManager's autosave race-collides
     // with a closeEvent flush.
     const char* pragmas[] = {
-        "PRAGMA journal_mode = WAL",
-        "PRAGMA synchronous = NORMAL",
-        "PRAGMA cache_size = -4000",
-        "PRAGMA temp_store = MEMORY",
-        "PRAGMA mmap_size = 67108864",
-        "PRAGMA busy_timeout = 3000",
+        "PRAGMA journal_mode = WAL",  "PRAGMA synchronous = NORMAL", "PRAGMA cache_size = -4000",
+        "PRAGMA temp_store = MEMORY", "PRAGMA mmap_size = 67108864", "PRAGMA busy_timeout = 3000",
     };
     for (const char* p : pragmas) {
         QSqlQuery q(db_);
@@ -167,7 +163,8 @@ Result<void> WorkspaceDb::create_tables() {
                   "  key   TEXT PRIMARY KEY,"
                   "  value TEXT"
                   ")");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     r = exec("CREATE TABLE IF NOT EXISTS workspace_snapshot ("
              "  snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -176,14 +173,16 @@ Result<void> WorkspaceDb::create_tables() {
              "  payload     BLOB NOT NULL,"
              "  name        TEXT"
              ")");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     // Index on (kind, created_at) makes the ring-trim query (delete oldest
     // 'auto' rows when count > 5) and recovery query (latest non-named
     // snapshot) both index lookups.
     r = exec("CREATE INDEX IF NOT EXISTS idx_snapshot_kind_created "
              "ON workspace_snapshot(kind, created_at)");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     r = exec("CREATE TABLE IF NOT EXISTS session_history ("
              "  session_id  TEXT PRIMARY KEY,"
@@ -194,17 +193,20 @@ Result<void> WorkspaceDb::create_tables() {
              "  frame_count INTEGER DEFAULT 0,"
              "  panel_count INTEGER DEFAULT 0"
              ")");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     r = exec("CREATE INDEX IF NOT EXISTS idx_session_started "
              "ON session_history(started_at)");
-    if (r.is_err()) return r;
+    if (r.is_err())
+        return r;
 
     // Stamp schema version. Idempotent — INSERT OR IGNORE on first run,
     // future migrations bump via UPDATE.
     auto v = execute("INSERT OR IGNORE INTO _meta(key, value) VALUES('schema_version', ?)",
                      {QString::number(kSchemaVersion)});
-    if (v.is_err()) return Result<void>::err(v.error());
+    if (v.is_err())
+        return Result<void>::err(v.error());
 
     LOG_INFO(kWorkspaceDbTag, "Workspace tables initialised");
     return Result<void>::ok();

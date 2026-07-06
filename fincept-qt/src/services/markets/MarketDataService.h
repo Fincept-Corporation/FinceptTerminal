@@ -1,7 +1,6 @@
 #pragma once
 #include "core/result/Result.h"
-
-#    include "datahub/Producer.h"
+#include "datahub/Producer.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -77,9 +76,7 @@ struct RegionalMarket {
 ///   - Quote caching: returns cached data immediately, refreshes in background
 ///   - DataHub producer: owns the `market:quote:*` topic family. Phase 2 —
 ///     see fincept-qt/docs/datahub-phases/phase-02-market-data-pilot.md.
-class MarketDataService : public QObject
-    , public fincept::datahub::Producer
-{
+class MarketDataService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     using QuoteCallback = std::function<void(bool, QVector<QuoteData>)>;
@@ -168,7 +165,7 @@ class MarketDataService : public QObject
     void load_name_cache();
     void persist_name_cache();
     QHash<QString, QString> name_cache_;
-    QHash<QString, QString> currency_cache_;  // symbol → ISO currency code (e.g. "USD")
+    QHash<QString, QString> currency_cache_; // symbol → ISO currency code (e.g. "USD")
     bool name_cache_loaded_ = false;
 
     // ── Batching ──

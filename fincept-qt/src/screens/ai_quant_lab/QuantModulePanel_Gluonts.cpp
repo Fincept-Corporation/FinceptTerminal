@@ -8,7 +8,6 @@
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
-
 #include "services/ai_quant_lab/AIQuantLabService.h"
 #include "ui/theme/Theme.h"
 
@@ -59,19 +58,20 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
     tabs->setStyleSheet(tab_ss(module_.color.name()));
     tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
-    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed,
-                                  const QString& tip) -> QPushButton* {
+    auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed, const QString& tip) -> QPushButton* {
         auto* btn = new QPushButton(tr("LOAD SAMPLE"), parent);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
         btn->setToolTip(tip);
-        btn->setStyleSheet(QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
-                                   "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
-                                   "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
-                               .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
+        btn->setStyleSheet(
+            QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
+                    "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
+                    "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
+                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
         QPointer<QLineEdit> guard(edit);
         connect(btn, &QPushButton::clicked, this, [guard, seed]() {
-            if (guard) guard->setText(sample_series(seed));
+            if (guard)
+                guard->setText(sample_series(seed));
         });
         return btn;
     };
@@ -83,7 +83,8 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
     pfl->setSpacing(8);
 
     auto* pf_vals = new QLineEdit(pf);
-    pf_vals->setPlaceholderText(tr("Series values (>= 30). Bootstrap residual ensemble forecasts the next H steps with quantile bands."));
+    pf_vals->setPlaceholderText(
+        tr("Series values (>= 30). Bootstrap residual ensemble forecasts the next H steps with quantile bands."));
     pf_vals->setStyleSheet(input_ss());
     text_inputs_["gn_pf_values"] = pf_vals;
     pfl->addWidget(build_input_row(tr("Series Values"), pf_vals, pf));
@@ -207,7 +208,8 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
             }
         }
         show_loading(tr("Bootstrapping %1 paths and computing %2 quantiles...")
-                         .arg(int_inputs_["gn_qf_n_paths"]->value()).arg(quants.size()));
+                         .arg(int_inputs_["gn_qf_n_paths"]->value())
+                         .arg(quants.size()));
         QJsonObject params;
         params["values"] = vals;
         params["quantiles"] = quants;
@@ -227,15 +229,17 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
     dfl->setSpacing(8);
 
     auto* df_vals = new QLineEdit(df);
-    df_vals->setPlaceholderText(tr("Numeric values (>= 30). Fits normal, student-t, lognormal (positive only), skewnormal."));
+    df_vals->setPlaceholderText(
+        tr("Numeric values (>= 30). Fits normal, student-t, lognormal (positive only), skewnormal."));
     df_vals->setStyleSheet(input_ss());
     text_inputs_["gn_df_values"] = df_vals;
     dfl->addWidget(build_input_row(tr("Values"), df_vals, df));
     dfl->addWidget(add_sample_btn(df_vals, df, 331, tr("200-pt synthetic series")));
 
-    auto* df_hint = new QLabel(
-        tr("Fits 4 candidate distributions and ranks them by AIC + BIC. KS test reports whether each "
-        "fit can be rejected at the 5% level — useful for picking the right tail model."), df);
+    auto* df_hint =
+        new QLabel(tr("Fits 4 candidate distributions and ranks them by AIC + BIC. KS test reports whether each "
+                      "fit can be rejected at the 5% level — useful for picking the right tail model."),
+                   df);
     df_hint->setWordWrap(true);
     df_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     dfl->addWidget(df_hint);
@@ -328,8 +332,8 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
             return;
         }
         if (actuals.size() != point.size()) {
-            display_error(tr("Actuals (%1) and point (%2) must have the same length.")
-                              .arg(actuals.size()).arg(point.size()));
+            display_error(
+                tr("Actuals (%1) and point (%2) must have the same length.").arg(actuals.size()).arg(point.size()));
             return;
         }
         QJsonObject params;
@@ -404,7 +408,8 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
 
     auto* sn_hint = new QLabel(
         tr("Baseline forecaster everyone compares against. season_length=1 is the pure naive 'repeat last value'. "
-        "Larger values cycle through the most recent N observations."), sn);
+           "Larger values cycle through the most recent N observations."),
+        sn);
     sn_hint->setWordWrap(true);
     sn_hint->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     snl->addWidget(sn_hint);
@@ -423,12 +428,12 @@ QWidget* QuantModulePanel::build_gluonts_panel() {
         }
         const int season = int_inputs_["gn_sn_season"]->value();
         if (season > vals.size()) {
-            display_error(tr("Season length (%1) exceeds series length (%2).")
-                              .arg(season).arg(vals.size()));
+            display_error(tr("Season length (%1) exceeds series length (%2).").arg(season).arg(vals.size()));
             return;
         }
         show_loading(tr("Repeating last %1 obs forward over %2 steps...")
-                         .arg(season).arg(int_inputs_["gn_sn_horizon"]->value()));
+                         .arg(season)
+                         .arg(int_inputs_["gn_sn_horizon"]->value()));
         QJsonObject params;
         params["values"] = vals;
         params["horizon"] = int_inputs_["gn_sn_horizon"]->value();
@@ -460,8 +465,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         const QString err = payload.value("error").toString(tr("Unknown error"));
         const QString kind = payload.value("error_kind").toString();
         const QString prefix = kind == "validation" ? tr("Input error: ")
-                              : kind == "runtime"    ? tr("Computation failed: ")
-                                                     : QString();
+                               : kind == "runtime"  ? tr("Computation failed: ")
+                                                    : QString();
         display_error(prefix + err);
         return;
     }
@@ -485,8 +490,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
             bool_card(tr("SCIPY"), d.value("scipy").toBool()),
             bool_card(tr("SKLEARN"), d.value("sklearn").toBool()),
             gs_make_card(tr("BACKEND"), d.value("backend").toString().toUpper(), this),
-            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()),
-                         this, ui::colors::INFO()),
+            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()), this,
+                         ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(deps, this));
 
@@ -494,10 +499,10 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         if (!note.isEmpty()) {
             auto* lbl = new QLabel(note);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
-                                       "padding:8px 10px; background:%2; border:1px solid %3;")
-                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(),
-                                        ui::colors::BORDER_DIM()));
+            lbl->setStyleSheet(
+                QString("color:%1; font-size:10px; font-family:'Courier New';"
+                        "padding:8px 10px; background:%2; border:1px solid %3;")
+                    .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
             results_layout_->addWidget(lbl);
         }
         status_label_->setText(tr("GluonTS backend ready"));
@@ -517,7 +522,9 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         const double last_w = d.value("last_p80_width").toDouble();
 
         auto* hdr = new QLabel(tr("HORIZON %1 STEPS  |  %2 BOOTSTRAP PATHS  |  LAGS %3")
-                                   .arg(horizon).arg(n_paths).arg(d.value("lags").toInt()));
+                                   .arg(horizon)
+                                   .arg(n_paths)
+                                   .arg(d.value("lags").toInt()));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
@@ -525,8 +532,7 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
 
         QList<QWidget*> top = {
             gs_make_card(tr("LAST ACTUAL"), gs_fmt_num(last_actual, 4), this),
-            gs_make_card(tr("FIRST P50"), gs_fmt_num(first_p50, 4), this,
-                         gs_pos_neg_color(first_p50 - last_actual)),
+            gs_make_card(tr("FIRST P50"), gs_fmt_num(first_p50, 4), this, gs_pos_neg_color(first_p50 - last_actual)),
             gs_make_card(tr("LAST P50"), gs_fmt_num(last_p50, 4), this, gs_pos_neg_color(drift)),
             gs_make_card(tr("HORIZON Δ"), gs_fmt_num(drift, 4), this, gs_pos_neg_color(drift)),
         };
@@ -545,7 +551,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         const QJsonArray forecast = d.value("forecast").toArray();
         if (!forecast.isEmpty()) {
             auto* table = new QTableWidget(forecast.size(), 8, this);
-            table->setHorizontalHeaderLabels({tr("Step"), tr("P10"), tr("P25"), tr("P50"), tr("Mean"), tr("P75"), tr("P90"), tr("P80 Width")});
+            table->setHorizontalHeaderLabels(
+                {tr("Step"), tr("P10"), tr("P25"), tr("P50"), tr("Mean"), tr("P75"), tr("P90"), tr("P80 Width")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->setSelectionMode(QAbstractItemView::NoSelection);
@@ -558,7 +565,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
                 auto add = [&](int col, double v, const QString& col_color = {}) {
                     auto* it = new QTableWidgetItem(QString::number(v, 'f', 4));
                     it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    if (!col_color.isEmpty()) it->setForeground(QColor(col_color));
+                    if (!col_color.isEmpty())
+                        it->setForeground(QColor(col_color));
                     table->setItem(i, col, it);
                 };
                 add(1, o.value("p10").toDouble(), ui::colors::NEGATIVE());
@@ -574,8 +582,10 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         }
 
         status_label_->setText(tr("Forecast: P50 %1 → %2  |  P80 width %3 → %4")
-                                   .arg(first_p50, 0, 'f', 3).arg(last_p50, 0, 'f', 3)
-                                   .arg(first_w, 0, 'f', 3).arg(last_w, 0, 'f', 3));
+                                   .arg(first_p50, 0, 'f', 3)
+                                   .arg(last_p50, 0, 'f', 3)
+                                   .arg(first_w, 0, 'f', 3)
+                                   .arg(last_w, 0, 'f', 3));
         return;
     }
 
@@ -585,7 +595,9 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         const int n_q = d.value("n_quantiles").toInt();
 
         auto* hdr = new QLabel(tr("HORIZON %1 STEPS  |  %2 QUANTILES  |  %3 BOOTSTRAP PATHS")
-                                   .arg(horizon).arg(n_q).arg(d.value("n_paths").toInt()));
+                                   .arg(horizon)
+                                   .arg(n_q)
+                                   .arg(d.value("n_paths").toInt()));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
@@ -607,7 +619,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
                                    .arg(ui::colors::TEXT_TERTIARY()));
             results_layout_->addWidget(lbl);
             auto* table = new QTableWidget(q_summary.size(), 6, this);
-            table->setHorizontalHeaderLabels({tr("Quantile"), tr("Mean"), tr("Min"), tr("Max"), tr("First"), tr("Last")});
+            table->setHorizontalHeaderLabels(
+                {tr("Quantile"), tr("Mean"), tr("Min"), tr("Max"), tr("First"), tr("Last")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -638,7 +651,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
             QStringList headers = {tr("Step")};
             QStringList keys;
             for (auto it = first.begin(); it != first.end(); ++it) {
-                if (it.key() == "step") continue;
+                if (it.key() == "step")
+                    continue;
                 keys << it.key();
                 headers << it.key().toUpper();
             }
@@ -657,8 +671,7 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
                 const auto o = forecast[i].toObject();
                 table->setItem(i, 0, new QTableWidgetItem(QString::number(o.value("step").toInt())));
                 for (int c = 0; c < keys.size(); ++c) {
-                    auto* it = new QTableWidgetItem(
-                        QString::number(o.value(keys[c]).toDouble(), 'f', 4));
+                    auto* it = new QTableWidgetItem(QString::number(o.value(keys[c]).toDouble(), 'f', 4));
                     it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                     table->setItem(i, c + 1, it);
                 }
@@ -675,12 +688,11 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         const QString best_aic = d.value("best_by_aic").toString();
         const QString best_bic = d.value("best_by_bic").toString();
 
-        auto* hdr = new QLabel(tr("BEST BY AIC: %1   |   BEST BY BIC: %2")
-                                   .arg(best_aic.toUpper()).arg(best_bic.toUpper()));
+        auto* hdr =
+            new QLabel(tr("BEST BY AIC: %1   |   BEST BY BIC: %2").arg(best_aic.toUpper()).arg(best_bic.toUpper()));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
-                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(),
-                                    ui::colors::POSITIVE()));
+                               .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), ui::colors::POSITIVE()));
         results_layout_->addWidget(hdr);
 
         QList<QWidget*> stats = {
@@ -696,7 +708,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         const QJsonArray fits = d.value("fits").toArray();
         if (!fits.isEmpty()) {
             auto* table = new QTableWidget(fits.size(), 6, this);
-            table->setHorizontalHeaderLabels({tr("Distribution"), tr("Params"), tr("Log-Lik"), tr("AIC"), tr("BIC"), tr("KS p")});
+            table->setHorizontalHeaderLabels(
+                {tr("Distribution"), tr("Params"), tr("Log-Lik"), tr("AIC"), tr("BIC"), tr("KS p")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -709,23 +722,23 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
                 const auto f = v.toObject();
                 if (!f.value("aic").isNull()) {
                     const double a = f.value("aic").toDouble();
-                    if (a < min_aic) min_aic = a;
+                    if (a < min_aic)
+                        min_aic = a;
                 }
             }
 
             for (int i = 0; i < fits.size(); ++i) {
                 const auto f = fits[i].toObject();
                 const QString name = f.value("distribution").toString();
-                const bool is_best = (!f.value("aic").isNull() &&
-                                      std::abs(f.value("aic").toDouble() - min_aic) < 1e-9);
+                const bool is_best = (!f.value("aic").isNull() && std::abs(f.value("aic").toDouble() - min_aic) < 1e-9);
                 auto* nm = new QTableWidgetItem(is_best ? name + "  ★" : name);
-                if (is_best) nm->setForeground(QColor(ui::colors::POSITIVE()));
+                if (is_best)
+                    nm->setForeground(QColor(ui::colors::POSITIVE()));
                 table->setItem(i, 0, nm);
                 table->setItem(i, 1, new QTableWidgetItem(QString::number(f.value("n_params").toInt())));
                 auto add = [&](int col, const QJsonValue& v, int dec) {
-                    auto* it = v.isNull()
-                                   ? new QTableWidgetItem("—")
-                                   : new QTableWidgetItem(QString::number(v.toDouble(), 'f', dec));
+                    auto* it = v.isNull() ? new QTableWidgetItem("—")
+                                          : new QTableWidgetItem(QString::number(v.toDouble(), 'f', dec));
                     it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                     table->setItem(i, col, it);
                 };
@@ -735,9 +748,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
                 const double ks_p = f.value("ks_p_value").toDouble();
                 auto* ksi = new QTableWidgetItem(QString::number(ks_p, 'f', 4));
                 ksi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                ksi->setForeground(QColor(f.value("cannot_reject_at_5pct").toBool()
-                                              ? ui::colors::POSITIVE()
-                                              : ui::colors::WARNING()));
+                ksi->setForeground(
+                    QColor(f.value("cannot_reject_at_5pct").toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()));
                 table->setItem(i, 5, ksi);
                 table->setRowHeight(i, 26);
             }
@@ -768,20 +780,19 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
 
         QList<QWidget*> pct_row = {
             gs_make_card(tr("MAPE"), QString::number(mape, 'f', 2) + "%", this,
-                         mape < 10 ? ui::colors::POSITIVE()
-                                  : mape < 30 ? ui::colors::WARNING()
-                                              : ui::colors::NEGATIVE()),
+                         mape < 10   ? ui::colors::POSITIVE()
+                         : mape < 30 ? ui::colors::WARNING()
+                                     : ui::colors::NEGATIVE()),
             gs_make_card(tr("SMAPE"), QString::number(smape, 'f', 2) + "%", this,
-                         smape < 10 ? ui::colors::POSITIVE()
-                                   : smape < 30 ? ui::colors::WARNING()
-                                                : ui::colors::NEGATIVE()),
+                         smape < 10   ? ui::colors::POSITIVE()
+                         : smape < 30 ? ui::colors::WARNING()
+                                      : ui::colors::NEGATIVE()),
             gs_make_card(tr("MASE"),
-                         d.value("mase").isNull() ? QStringLiteral("—")
-                                                  : gs_fmt_num(d.value("mase").toDouble(), 3),
+                         d.value("mase").isNull() ? QStringLiteral("—") : gs_fmt_num(d.value("mase").toDouble(), 3),
                          this,
-                         d.value("mase").isNull() ? ui::colors::TEXT_PRIMARY()
-                             : (d.value("mase").toDouble() < 1.0 ? ui::colors::POSITIVE()
-                                                                  : ui::colors::WARNING())),
+                         d.value("mase").isNull()
+                             ? ui::colors::TEXT_PRIMARY()
+                             : (d.value("mase").toDouble() < 1.0 ? ui::colors::POSITIVE() : ui::colors::WARNING())),
             gs_make_card(tr("DIRECTION ACC"), QString::number(dir_acc, 'f', 1) + "%", this,
                          dir_acc > 60 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
@@ -793,12 +804,10 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
             const double cov_gap = cov - target;
             QList<QWidget*> ci_row = {
                 gs_make_card(tr("COVERAGE"), QString::number(cov, 'f', 1) + "%", this,
-                             std::abs(cov_gap) < 5.0 ? ui::colors::POSITIVE()
-                                                      : ui::colors::WARNING()),
+                             std::abs(cov_gap) < 5.0 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
                 gs_make_card(tr("TARGET"), QString::number(target, 'f', 1) + "%", this, ui::colors::INFO()),
                 gs_make_card(tr("AVG WIDTH"), gs_fmt_num(d.value("avg_interval_width").toDouble(), 4), this),
-                gs_make_card(tr("INTERVAL SCORE"),
-                             gs_fmt_num(d.value("interval_score").toDouble(), 4), this,
+                gs_make_card(tr("INTERVAL SCORE"), gs_fmt_num(d.value("interval_score").toDouble(), 4), this,
                              ui::colors::INFO()),
             };
             results_layout_->addWidget(gs_card_row(ci_row, this));
@@ -813,7 +822,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
                 verdict = tr("Over-covered by %1pp — intervals are too wide (conservative).").arg(cov_gap, 0, 'f', 1);
                 verdict_col = ui::colors::WARNING();
             } else {
-                verdict = tr("Under-covered by %1pp — intervals are too narrow (overconfident).").arg(-cov_gap, 0, 'f', 1);
+                verdict =
+                    tr("Under-covered by %1pp — intervals are too narrow (overconfident).").arg(-cov_gap, 0, 'f', 1);
                 verdict_col = ui::colors::NEGATIVE();
             }
             auto* il = new QLabel(verdict);
@@ -823,13 +833,16 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
             results_layout_->addWidget(il);
         }
 
-        status_label_->setText(
-            has_ci
-                ? tr("MAE %1  RMSE %2  MAPE %3%%  Coverage %4%%")
-                      .arg(mae, 0, 'f', 3).arg(rmse, 0, 'f', 3).arg(mape, 0, 'f', 2)
-                      .arg(d.value("coverage_pct").toDouble(), 0, 'f', 1)
-                : tr("MAE %1  RMSE %2  MAPE %3%%  Bias %4")
-                      .arg(mae, 0, 'f', 3).arg(rmse, 0, 'f', 3).arg(mape, 0, 'f', 2).arg(bias, 0, 'f', 4));
+        status_label_->setText(has_ci ? tr("MAE %1  RMSE %2  MAPE %3%%  Coverage %4%%")
+                                            .arg(mae, 0, 'f', 3)
+                                            .arg(rmse, 0, 'f', 3)
+                                            .arg(mape, 0, 'f', 2)
+                                            .arg(d.value("coverage_pct").toDouble(), 0, 'f', 1)
+                                      : tr("MAE %1  RMSE %2  MAPE %3%%  Bias %4")
+                                            .arg(mae, 0, 'f', 3)
+                                            .arg(rmse, 0, 'f', 3)
+                                            .arg(mape, 0, 'f', 2)
+                                            .arg(bias, 0, 'f', 4));
         return;
     }
 
@@ -838,8 +851,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         const int horizon = d.value("horizon").toInt();
         const int season = d.value("season_length").toInt();
 
-        auto* hdr = new QLabel(tr("METHOD: %1   |   HORIZON %2 STEPS")
-                                   .arg(d.value("method").toString().toUpper()).arg(horizon));
+        auto* hdr = new QLabel(
+            tr("METHOD: %1   |   HORIZON %2 STEPS").arg(d.value("method").toString().toUpper()).arg(horizon));
         hdr->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; font-weight:700;"
                                    "padding:8px 10px; background:%2; border-left:3px solid %3;")
                                .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
@@ -851,10 +864,8 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
 
         QList<QWidget*> top = {
             gs_make_card(tr("LAST ACTUAL"), gs_fmt_num(last_actual, 4), this),
-            gs_make_card(tr("FIRST FORECAST"), gs_fmt_num(first_fc, 4), this,
-                         gs_pos_neg_color(first_fc - last_actual)),
-            gs_make_card(tr("LAST FORECAST"), gs_fmt_num(last_fc, 4), this,
-                         gs_pos_neg_color(last_fc - last_actual)),
+            gs_make_card(tr("FIRST FORECAST"), gs_fmt_num(first_fc, 4), this, gs_pos_neg_color(first_fc - last_actual)),
+            gs_make_card(tr("LAST FORECAST"), gs_fmt_num(last_fc, 4), this, gs_pos_neg_color(last_fc - last_actual)),
             gs_make_card(tr("SEASON"), tr("%1 obs").arg(season), this, ui::colors::INFO()),
         };
         results_layout_->addWidget(gs_card_row(top, this));

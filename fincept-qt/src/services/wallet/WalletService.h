@@ -19,9 +19,9 @@ class WalletActivityProducer;
 /// **never** keys, signatures, or session secrets).
 struct WalletState {
     QString pubkey_b58;
-    QString label;       ///< wallet name as reported by the connect page (e.g. "phantom")
+    QString label; ///< wallet name as reported by the connect page (e.g. "phantom")
     qint64 connected_at_ms = 0;
-    bool soft_connected = false;  ///< restored from SecureStorage but not yet re-challenged
+    bool soft_connected = false; ///< restored from SecureStorage but not yet re-challenged
     bool is_connected() const noexcept { return !pubkey_b58.isEmpty(); }
 };
 
@@ -88,11 +88,8 @@ class WalletService : public QObject {
     ///
     /// `cb` resolves with the base58 signature on success, or an error code
     /// on cancel / timeout / wallet error. Always called on the UI thread.
-    void sign_and_send(const QString& tx_base64,
-                       const QString& dialog_title,
-                       const QString& dialog_lede,
-                       QWidget* parent,
-                       std::function<void(Result<QString>)> cb);
+    void sign_and_send(const QString& tx_base64, const QString& dialog_title, const QString& dialog_lede,
+                       QWidget* parent, std::function<void(Result<QString>)> cb);
 
   signals:
     void wallet_connected(QString pubkey_b58, QString label);

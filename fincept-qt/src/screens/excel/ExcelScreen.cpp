@@ -17,7 +17,7 @@
 #include <QVBoxLayout>
 
 #ifdef FINCEPT_HAS_QXLSX
-#include <xlsxdocument.h>
+#    include <xlsxdocument.h>
 #endif
 
 namespace fincept::screens {
@@ -111,7 +111,8 @@ void ExcelScreen::build_ui() {
 QWidget* ExcelScreen::build_toolbar() {
     auto* bar = new QWidget(this);
     bar->setFixedHeight(40);
-    bar->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(colors::BORDER_MED(), colors::TEXT_DIM()));
+    bar->setStyleSheet(
+        QString("background:%1; border-bottom:1px solid %2;").arg(colors::BORDER_MED(), colors::TEXT_DIM()));
 
     auto* hl = new QHBoxLayout(bar);
     hl->setContentsMargins(12, 0, 12, 0);
@@ -119,20 +120,21 @@ QWidget* ExcelScreen::build_toolbar() {
 
     // Title
     toolbar_title_ = new QLabel(tr("EXCEL SPREADSHEET"), bar);
-    toolbar_title_->setStyleSheet(QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
-                                      .arg(kAccent(), fonts::DATA_FAMILY));
+    toolbar_title_->setStyleSheet(
+        QString("color:%1; font-family:%2; font-size:11px; font-weight:700; margin-right:12px;")
+            .arg(kAccent(), fonts::DATA_FAMILY));
     hl->addWidget(toolbar_title_);
 
     // Button factory
     auto make_btn = [&](const QString& text, const QString& tooltip = {}) -> QPushButton* {
         auto* btn = new QPushButton(text, bar);
         btn->setToolTip(tooltip);
-        btn->setStyleSheet(
-            QString("QPushButton { background:%3; color:%4; border:none;"
-                    " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                    "QPushButton:hover { background:%5; }"
-                    "QPushButton:pressed { background:%2; }")
-                .arg(fonts::DATA_FAMILY, kAccent(), colors::TEXT_DIM(), colors::TEXT_PRIMARY(), colors::TEXT_TERTIARY()));
+        btn->setStyleSheet(QString("QPushButton { background:%3; color:%4; border:none;"
+                                   " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
+                                   "QPushButton:hover { background:%5; }"
+                                   "QPushButton:pressed { background:%2; }")
+                               .arg(fonts::DATA_FAMILY, kAccent(), colors::TEXT_DIM(), colors::TEXT_PRIMARY(),
+                                    colors::TEXT_TERTIARY()));
         return btn;
     };
 
@@ -163,10 +165,11 @@ QWidget* ExcelScreen::build_toolbar() {
     hl->addWidget(rename_btn_);
 
     delete_btn_ = make_btn(tr("DELETE"), tr("Delete current sheet"));
-    delete_btn_->setStyleSheet(QString("QPushButton { background:%2; color:%3; border:none;"
-                                       " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
-                                       "QPushButton:hover { background:%4; }")
-                                   .arg(fonts::DATA_FAMILY, colors::TEXT_DIM(), colors::TEXT_PRIMARY(), colors::NEGATIVE()));
+    delete_btn_->setStyleSheet(
+        QString("QPushButton { background:%2; color:%3; border:none;"
+                " font-family:%1; font-size:10px; font-weight:600; padding:6px 12px; }"
+                "QPushButton:hover { background:%4; }")
+            .arg(fonts::DATA_FAMILY, colors::TEXT_DIM(), colors::TEXT_PRIMARY(), colors::NEGATIVE()));
     connect(delete_btn_, &QPushButton::clicked, this, &ExcelScreen::on_delete_sheet);
     hl->addWidget(delete_btn_);
 
@@ -245,9 +248,9 @@ void ExcelScreen::on_import() {
     services::FileManagerService::instance().import_file(path, "excel");
 #else
     QMessageBox::information(this, tr("Excel Import"),
-        tr("Excel (.xlsx) import requires Qt6 private headers.\n"
-           "This build was compiled without QXlsx support.\n\n"
-           "CSV files can still be imported via the toolbar."));
+                             tr("Excel (.xlsx) import requires Qt6 private headers.\n"
+                                "This build was compiled without QXlsx support.\n\n"
+                                "CSV files can still be imported via the toolbar."));
 #endif
 }
 
@@ -312,9 +315,9 @@ void ExcelScreen::on_export() {
     }
 #else
     QMessageBox::information(this, tr("Excel Export"),
-        tr("Excel (.xlsx) export requires Qt6 private headers.\n"
-           "This build was compiled without QXlsx support.\n\n"
-           "CSV export is still available via the toolbar."));
+                             tr("Excel (.xlsx) export requires Qt6 private headers.\n"
+                                "This build was compiled without QXlsx support.\n\n"
+                                "CSV export is still available via the toolbar."));
 #endif
 }
 
@@ -466,7 +469,8 @@ void ExcelScreen::changeEvent(QEvent* event) {
 }
 
 void ExcelScreen::retranslateUi() {
-    if (toolbar_title_) toolbar_title_->setText(tr("EXCEL SPREADSHEET"));
+    if (toolbar_title_)
+        toolbar_title_->setText(tr("EXCEL SPREADSHEET"));
     if (import_btn_) {
         import_btn_->setText(tr("IMPORT"));
         import_btn_->setToolTip(tr("Import XLSX/CSV file"));

@@ -1,14 +1,13 @@
 // src/screens/gov_data/GovDataUKPanel.cpp
 #include "screens/gov_data/GovDataUKPanel.h"
-#include "screens/gov_data/GovDataProviderPanel.h"
 
 #include "core/logging/Logger.h"
+#include "screens/gov_data/GovDataProviderPanel.h"
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
 #include <QEvent>
-#include <algorithm>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
@@ -16,6 +15,8 @@
 #include <QScrollArea>
 #include <QUrl>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace fincept::screens {
 namespace {
@@ -256,21 +257,27 @@ QWidget* GovDataUKPanel::build_toolbar() {
 // ── Re-translation ───────────────────────────────────────────────────────────
 
 void GovDataUKPanel::retranslateUi() {
-    if (back_btn_)       back_btn_->setText(tr("← BACK"));
-    if (publishers_btn_) publishers_btn_->setText(tr("PUBLISHERS"));
-    if (datasets_btn_)   datasets_btn_->setText(tr("DATASETS"));
-    if (popular_btn_)    popular_btn_->setText(tr("POPULAR"));
-    if (fetch_btn_)      fetch_btn_->setText(tr("FETCH"));
-    if (export_btn_)     export_btn_->setText(tr("CSV"));
-    if (search_input_)   search_input_->setPlaceholderText(tr("Search datasets…"));
+    if (back_btn_)
+        back_btn_->setText(tr("← BACK"));
+    if (publishers_btn_)
+        publishers_btn_->setText(tr("PUBLISHERS"));
+    if (datasets_btn_)
+        datasets_btn_->setText(tr("DATASETS"));
+    if (popular_btn_)
+        popular_btn_->setText(tr("POPULAR"));
+    if (fetch_btn_)
+        fetch_btn_->setText(tr("FETCH"));
+    if (export_btn_)
+        export_btn_->setText(tr("CSV"));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search datasets…"));
 
     if (publishers_table_)
         publishers_table_->setHorizontalHeaderLabels({tr("NAME")});
     if (datasets_table_)
         datasets_table_->setHorizontalHeaderLabels({tr("TITLE"), tr("FILES"), tr("MODIFIED"), tr("TAGS")});
     if (resources_table_)
-        resources_table_->setHorizontalHeaderLabels(
-            {tr("NAME"), tr("FORMAT"), tr("SIZE"), tr("MODIFIED"), tr("OPEN")});
+        resources_table_->setHorizontalHeaderLabels({tr("NAME"), tr("FORMAT"), tr("SIZE"), tr("MODIFIED"), tr("OPEN")});
 
     // Re-render the breadcrumb so its current path picks up the new language.
     update_breadcrumb();
@@ -367,9 +374,12 @@ void GovDataUKPanel::render_publishers_page() {
     for (int i = 0; i < count; ++i) {
         const auto obj = current_publishers_[start + i].toObject();
         QString name = obj["display_name"].toString();
-        if (name.isEmpty()) name = obj["title"].toString();
-        if (name.isEmpty()) name = obj["name"].toString();
-        if (name.isEmpty()) name = obj["id"].toString();
+        if (name.isEmpty())
+            name = obj["title"].toString();
+        if (name.isEmpty())
+            name = obj["name"].toString();
+        if (name.isEmpty())
+            name = obj["id"].toString();
         const QString id = obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString();
 
         auto* name_item = new QTableWidgetItem(name);
@@ -396,7 +406,8 @@ void GovDataUKPanel::render_datasets_page() {
     for (int i = 0; i < count; ++i) {
         const auto obj = current_datasets_[start + i].toObject();
         QString title = obj["title"].toString();
-        if (title.isEmpty()) title = obj["name"].toString();
+        if (title.isEmpty())
+            title = obj["name"].toString();
         const QString id = obj["id"].toString().isEmpty() ? obj["name"].toString() : obj["id"].toString();
 
         auto* title_item = new QTableWidgetItem(title);
@@ -410,16 +421,20 @@ void GovDataUKPanel::render_datasets_page() {
         datasets_table_->setItem(i, 1, res_item);
 
         QString modified = obj["metadata_modified"].toString();
-        if (modified.length() > 10) modified = modified.left(10);
+        if (modified.length() > 10)
+            modified = modified.left(10);
         datasets_table_->setItem(i, 2, new QTableWidgetItem(modified));
 
         QStringList tags;
         for (const auto& t : obj["tags"].toArray()) {
-            if (t.isString()) tags << t.toString();
-            else if (t.isObject()) tags << t.toObject()["name"].toString();
+            if (t.isString())
+                tags << t.toString();
+            else if (t.isObject())
+                tags << t.toObject()["name"].toString();
         }
         QString tags_str = tags.mid(0, 3).join(", ");
-        if (tags.size() > 3) tags_str += QString(" +%1").arg(tags.size() - 3);
+        if (tags.size() > 3)
+            tags_str += QString(" +%1").arg(tags.size() - 3);
         auto* tag_item = new QTableWidgetItem(tags_str);
         tag_item->setForeground(QColor(colors::TEXT_SECONDARY()));
         datasets_table_->setItem(i, 3, tag_item);
@@ -442,8 +457,10 @@ void GovDataUKPanel::render_resources_page() {
     for (int i = 0; i < count; ++i) {
         const auto obj = current_resources_[start + i].toObject();
         QString name = obj["name"].toString();
-        if (name.isEmpty()) name = obj["description"].toString().left(60);
-        if (name.isEmpty()) name = obj["id"].toString();
+        if (name.isEmpty())
+            name = obj["description"].toString().left(60);
+        if (name.isEmpty())
+            name = obj["id"].toString();
         resources_table_->setItem(i, 0, new QTableWidgetItem(name));
 
         const QString format = obj["format"].toString().toUpper();
@@ -467,13 +484,15 @@ void GovDataUKPanel::render_resources_page() {
         resources_table_->setItem(i, 2, sz_item);
 
         QString modified = obj["last_modified"].toString();
-        if (modified.length() > 10) modified = modified.left(10);
+        if (modified.length() > 10)
+            modified = modified.left(10);
         resources_table_->setItem(i, 3, new QTableWidgetItem(modified));
 
         const QString url = obj["url"].toString();
         auto* url_item = new QTableWidgetItem(url.isEmpty() ? QStringLiteral("—") : tr("↗ OPEN"));
         url_item->setData(Qt::UserRole, url);
-        if (!url.isEmpty()) url_item->setForeground(QColor(kGovDataUKColor));
+        if (!url.isEmpty())
+            url_item->setForeground(QColor(kGovDataUKColor));
         url_item->setTextAlignment(Qt::AlignCenter);
         resources_table_->setItem(i, 4, url_item);
     }
@@ -564,9 +583,8 @@ void GovDataUKPanel::update_breadcrumb() {
             text = tr("All Publishers");
             break;
         case Datasets:
-            text = selected_publisher_.isEmpty()
-                       ? tr("Search Results")
-                       : tr("All Publishers  ›  %1  ›  Datasets").arg(selected_publisher_);
+            text = selected_publisher_.isEmpty() ? tr("Search Results")
+                                                 : tr("All Publishers  ›  %1  ›  Datasets").arg(selected_publisher_);
             break;
         case Resources:
             text = tr("All Publishers  ›  %1  ›  Datasets  ›  Resources").arg(selected_publisher_);

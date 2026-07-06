@@ -81,7 +81,8 @@ QWidget* PlanningView::build_retirement_tab() {
 
     retire_assump_note_ = new QLabel;
     retire_assump_note_->setWordWrap(true);
-    retire_assump_note_->setStyleSheet(QString("color:%1; font-size:9px; padding:2px 0 4px 0;").arg(ui::colors::CYAN()));
+    retire_assump_note_->setStyleSheet(
+        QString("color:%1; font-size:9px; padding:2px 0 4px 0;").arg(ui::colors::CYAN()));
     input_layout->addWidget(retire_assump_note_);
 
     auto* form = new QFormLayout;
@@ -206,8 +207,8 @@ QWidget* PlanningView::build_retirement_tab() {
         cl->setSpacing(2);
 
         title_label = new QLabel(label);
-        title_label->setStyleSheet(
-            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
+        title_label->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
+                                       .arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(title_label);
 
         val_label = new QLabel("--");
@@ -227,15 +228,17 @@ QWidget* PlanningView::build_retirement_tab() {
     // Monte Carlo outcome (probability + percentile band).
     retire_mc_label_ = new QLabel;
     retire_mc_label_->setWordWrap(true);
-    retire_mc_label_->setStyleSheet(QString("color:%1; font-size:11px; padding:8px 12px 0 12px; background:transparent;")
-                                        .arg(ui::colors::TEXT_PRIMARY()));
+    retire_mc_label_->setStyleSheet(
+        QString("color:%1; font-size:11px; padding:8px 12px 0 12px; background:transparent;")
+            .arg(ui::colors::TEXT_PRIMARY()));
     res_layout->addWidget(retire_mc_label_);
 
     // Drawdown/VaR stress line (real metrics).
     retire_stress_label_ = new QLabel;
     retire_stress_label_->setWordWrap(true);
-    retire_stress_label_->setStyleSheet(QString("color:%1; font-size:11px; padding:2px 12px 0 12px; background:transparent;")
-                                            .arg(ui::colors::NEGATIVE()));
+    retire_stress_label_->setStyleSheet(
+        QString("color:%1; font-size:11px; padding:2px 12px 0 12px; background:transparent;")
+            .arg(ui::colors::NEGATIVE()));
     res_layout->addWidget(retire_stress_label_);
 
     status_label_ = new QLabel;
@@ -382,7 +385,7 @@ QWidget* PlanningView::build_goals_tab() {
                 "QPushButton:hover { background:%2; }")
             .arg(ui::colors::AMBER(), ui::colors::WARNING()));
     connect(goals_calc_btn_, &QPushButton::clicked, this, [this]() {
-        recalculate_goals(); // refresh the projection cards for the typed goal
+        recalculate_goals();  // refresh the projection cards for the typed goal
         add_or_update_goal(); // and persist it into the saved list
     });
     input_layout->addWidget(goals_calc_btn_);
@@ -412,8 +415,8 @@ QWidget* PlanningView::build_goals_tab() {
         cl->setContentsMargins(12, 8, 12, 8);
         cl->setSpacing(2);
         title_label = new QLabel(label);
-        title_label->setStyleSheet(
-            QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;").arg(ui::colors::TEXT_TERTIARY()));
+        title_label->setStyleSheet(QString("color:%1; font-size:8px; font-weight:700; letter-spacing:0.5px;")
+                                       .arg(ui::colors::TEXT_TERTIARY()));
         cl->addWidget(title_label);
         val_label = new QLabel("--");
         val_label->setStyleSheet(QString("color:%1; font-size:18px; font-weight:700;").arg(color));
@@ -434,7 +437,8 @@ QWidget* PlanningView::build_goals_tab() {
 
     goal_status_label_ = new QLabel;
     goal_status_label_->setWordWrap(true);
-    goal_status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::TEXT_SECONDARY()));
+    goal_status_label_->setStyleSheet(
+        QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::TEXT_SECONDARY()));
     res_layout->addWidget(goal_status_label_);
 
     // ── Saved goals list (per-portfolio, with funding %) ─────────────────────
@@ -463,11 +467,16 @@ QWidget* PlanningView::build_goals_tab() {
         if (row < 0 || row >= goals_.size())
             return;
         const Goal& g = goals_[row];
-        if (goal_name_) goal_name_->setText(g.name);
-        if (goal_target_) goal_target_->setValue(g.target);
-        if (goal_years_) goal_years_->setValue(g.years);
-        if (goal_monthly_) goal_monthly_->setValue(g.monthly);
-        if (goal_alloc_pct_) goal_alloc_pct_->setValue(g.alloc_pct);
+        if (goal_name_)
+            goal_name_->setText(g.name);
+        if (goal_target_)
+            goal_target_->setValue(g.target);
+        if (goal_years_)
+            goal_years_->setValue(g.years);
+        if (goal_monthly_)
+            goal_monthly_->setValue(g.monthly);
+        if (goal_alloc_pct_)
+            goal_alloc_pct_->setValue(g.alloc_pct);
         recalculate_goals();
     });
     res_layout->addWidget(goals_list_, 1);
@@ -668,7 +677,8 @@ void PlanningView::recalculate_goals() {
                                         .arg(years)
                                         .arg(QString::number(progress, 'f', 0))
                                         .arg(QString::number(target, 'f', 0)));
-        goal_status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::POSITIVE()));
+        goal_status_label_->setStyleSheet(
+            QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::POSITIVE()));
     } else {
         goal_status_label_->setText(tr("⚠ Short of %1. At %2 %3/month you reach %2 %4 (%5%). "
                                        "Save %2 %6/month to hit the %2 %7 target in %8 years.")
@@ -680,7 +690,8 @@ void PlanningView::recalculate_goals() {
                                         .arg(QString::number(required_monthly, 'f', 0))
                                         .arg(QString::number(target, 'f', 0))
                                         .arg(years));
-        goal_status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::WARNING()));
+        goal_status_label_->setStyleSheet(
+            QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::WARNING()));
     }
 
     // Monte Carlo probability of hitting this goal, calibrated to portfolio vol.
@@ -688,9 +699,9 @@ void PlanningView::recalculate_goals() {
         const double vol = have_history_ ? hist_vol_ : 0.15;
         const McResult mc = monte_carlo(start_capital, monthly, years, ret, vol, target);
         if (mc.valid) {
-            const char* pc = mc.success_prob >= 0.75   ? ui::colors::POSITIVE
-                             : mc.success_prob >= 0.5   ? ui::colors::WARNING
-                                                        : ui::colors::NEGATIVE;
+            const char* pc = mc.success_prob >= 0.75  ? ui::colors::POSITIVE
+                             : mc.success_prob >= 0.5 ? ui::colors::WARNING
+                                                      : ui::colors::NEGATIVE;
             goal_mc_label_->setText(tr("Monte Carlo: <b><span style='color:%1'>%2%% chance</span></b> of reaching "
                                        "%3 %4 — likely %3 %5 – %3 %6.")
                                         .arg(pc)
@@ -752,17 +763,20 @@ void PlanningView::recalculate_savings() {
             return it;
         };
 
-        savings_table_->setItem(i, 0, make_item(QString("%1%%2").arg(QString::number(rate, 'f', 0),
-                                                                     is_base ? tr("  (current)") : QString())));
-        savings_table_->setItem(i, 1, make_item(QString("%1 %2").arg(currency_, QString::number(annual_saved, 'f', 0))));
-        savings_table_->setItem(i, 2, make_item(QString("%1 %2").arg(currency_, QString::number(wealth, 'f', 0))));
-        const char* dcol = diff > 0 ? ui::colors::POSITIVE : diff < 0 ? ui::colors::NEGATIVE : ui::colors::TEXT_TERTIARY();
         savings_table_->setItem(
-            i, 3,
-            make_item(is_base ? QStringLiteral("—")
-                              : QString("%1%2 %3").arg(diff >= 0 ? "+" : "-", currency_,
-                                                       QString::number(std::abs(diff), 'f', 0)),
-                      dcol));
+            i, 0,
+            make_item(QString("%1%%2").arg(QString::number(rate, 'f', 0), is_base ? tr("  (current)") : QString())));
+        savings_table_->setItem(i, 1,
+                                make_item(QString("%1 %2").arg(currency_, QString::number(annual_saved, 'f', 0))));
+        savings_table_->setItem(i, 2, make_item(QString("%1 %2").arg(currency_, QString::number(wealth, 'f', 0))));
+        const char* dcol = diff > 0   ? ui::colors::POSITIVE
+                           : diff < 0 ? ui::colors::NEGATIVE
+                                      : ui::colors::TEXT_TERTIARY();
+        savings_table_->setItem(i, 3,
+                                make_item(is_base ? QStringLiteral("—")
+                                                  : QString("%1%2 %3").arg(diff >= 0 ? "+" : "-", currency_,
+                                                                           QString::number(std::abs(diff), 'f', 0)),
+                                          dcol));
     }
 
     const auto [base_annual, base_proj] = project(base_rate);
@@ -845,15 +859,14 @@ void PlanningView::recompute_assumptions() {
         have_history_ = true;
     }
 
-    const QString note =
-        have_history_
-            ? tr("◉ Calibrated to your portfolio: %1% expected return, %2% volatility "
-                 "(from %3 days of history). Edit any field to override.")
-                  .arg(QString::number(hist_cagr_ * 100, 'f', 1))
-                  .arg(QString::number(hist_vol_ * 100, 'f', 1))
-                  .arg(rets.size())
-            : tr("○ Not enough portfolio history yet to calibrate — using your typed assumptions. "
-                 "Estimates improve as daily snapshots accumulate.");
+    const QString note = have_history_
+                             ? tr("◉ Calibrated to your portfolio: %1% expected return, %2% volatility "
+                                  "(from %3 days of history). Edit any field to override.")
+                                   .arg(QString::number(hist_cagr_ * 100, 'f', 1))
+                                   .arg(QString::number(hist_vol_ * 100, 'f', 1))
+                                   .arg(rets.size())
+                             : tr("○ Not enough portfolio history yet to calibrate — using your typed assumptions. "
+                                  "Estimates improve as daily snapshots accumulate.");
     if (retire_assump_note_)
         retire_assump_note_->setText(note);
     if (sav_assump_note_)
@@ -872,7 +885,7 @@ void PlanningView::recompute_assumptions() {
 }
 
 PlanningView::McResult PlanningView::monte_carlo(double start, double monthly, int years, double mean_annual,
-                                                double vol_annual, double target) const {
+                                                 double vol_annual, double target) const {
     McResult r;
     if (years <= 0)
         return r;
@@ -970,10 +983,11 @@ void PlanningView::refresh_goals_list() {
             return it;
         };
         goals_list_->setItem(i, 0, item(g.name.isEmpty() ? tr("(unnamed)") : g.name, ui::colors::TEXT_PRIMARY));
-        goals_list_->setItem(i, 1, item(QString("%1 %2").arg(currency_, QString::number(g.target, 'f', 0)),
-                                        ui::colors::TEXT_SECONDARY, Qt::AlignRight));
-        goals_list_->setItem(i, 2, item(QString("%1%").arg(QString::number(funded_now, 'f', 0)),
-                                        ui::colors::CYAN, Qt::AlignRight));
+        goals_list_->setItem(i, 1,
+                             item(QString("%1 %2").arg(currency_, QString::number(g.target, 'f', 0)),
+                                  ui::colors::TEXT_SECONDARY, Qt::AlignRight));
+        goals_list_->setItem(
+            i, 2, item(QString("%1%").arg(QString::number(funded_now, 'f', 0)), ui::colors::CYAN, Qt::AlignRight));
         goals_list_->setItem(i, 3,
                              item(QString("%1%").arg(QString::number(std::min(proj_pct, 999.0), 'f', 0)),
                                   on_track ? ui::colors::POSITIVE : ui::colors::WARNING, Qt::AlignRight));
@@ -1026,47 +1040,85 @@ void PlanningView::changeEvent(QEvent* event) {
 
 void PlanningView::retranslateUi() {
     if (tabs_) {
-        if (retirement_tab_index_ >= 0) tabs_->setTabText(retirement_tab_index_, tr("RETIREMENT"));
-        if (goals_tab_index_ >= 0)      tabs_->setTabText(goals_tab_index_, tr("GOALS"));
-        if (savings_tab_index_ >= 0)    tabs_->setTabText(savings_tab_index_, tr("SAVINGS"));
+        if (retirement_tab_index_ >= 0)
+            tabs_->setTabText(retirement_tab_index_, tr("RETIREMENT"));
+        if (goals_tab_index_ >= 0)
+            tabs_->setTabText(goals_tab_index_, tr("GOALS"));
+        if (savings_tab_index_ >= 0)
+            tabs_->setTabText(savings_tab_index_, tr("SAVINGS"));
     }
-    if (input_title_)        input_title_->setText(tr("RETIREMENT CALCULATOR"));
-    if (l_current_age_)      l_current_age_->setText(tr("Current Age:"));
-    if (l_retire_age_)       l_retire_age_->setText(tr("Retire Age:"));
-    if (l_annual_expense_)   l_annual_expense_->setText(tr("Annual Expense:"));
-    if (l_monthly_contrib_)  l_monthly_contrib_->setText(tr("Monthly Savings:"));
-    if (l_expected_return_)  l_expected_return_->setText(tr("Exp. Return:"));
-    if (l_inflation_)        l_inflation_->setText(tr("Inflation:"));
-    if (l_withdrawal_rate_)  l_withdrawal_rate_->setText(tr("Withdrawal Rate:"));
-    if (calc_btn_)           calc_btn_->setText(tr("CALCULATE"));
-    if (res_title_)          res_title_->setText(tr("PROJECTION RESULTS"));
-    if (years_card_label_)     years_card_label_->setText(tr("YEARS TO RETIREMENT"));
-    if (target_card_label_)    target_card_label_->setText(tr("TARGET NEST EGG"));
-    if (projected_card_label_) projected_card_label_->setText(tr("PROJECTED VALUE"));
-    if (gap_card_label_)       gap_card_label_->setText(tr("SURPLUS / GAP"));
-    if (goals_title_)   goals_title_->setText(tr("GOAL-BASED PLANNING"));
-    if (l_goal_name_)    l_goal_name_->setText(tr("Goal:"));
-    if (l_goal_target_)  l_goal_target_->setText(tr("Target Amount:"));
-    if (l_goal_years_)   l_goal_years_->setText(tr("Years to Goal:"));
-    if (l_goal_return_)  l_goal_return_->setText(tr("Exp. Return:"));
-    if (l_goal_monthly_) l_goal_monthly_->setText(tr("Monthly Saving:"));
-    if (l_goal_alloc_)   l_goal_alloc_->setText(tr("% Portfolio Allocated:"));
-    if (goals_calc_btn_) goals_calc_btn_->setText(tr("CALCULATE"));
-    if (goals_res_title_) goals_res_title_->setText(tr("GOAL PROJECTION"));
-    if (goal_target_card_label_)    goal_target_card_label_->setText(tr("TARGET AMOUNT"));
-    if (goal_projected_card_label_) goal_projected_card_label_->setText(tr("PROJECTED VALUE"));
-    if (goal_required_card_label_)  goal_required_card_label_->setText(tr("REQUIRED MONTHLY"));
-    if (goal_progress_card_label_)  goal_progress_card_label_->setText(tr("PROGRESS"));
+    if (input_title_)
+        input_title_->setText(tr("RETIREMENT CALCULATOR"));
+    if (l_current_age_)
+        l_current_age_->setText(tr("Current Age:"));
+    if (l_retire_age_)
+        l_retire_age_->setText(tr("Retire Age:"));
+    if (l_annual_expense_)
+        l_annual_expense_->setText(tr("Annual Expense:"));
+    if (l_monthly_contrib_)
+        l_monthly_contrib_->setText(tr("Monthly Savings:"));
+    if (l_expected_return_)
+        l_expected_return_->setText(tr("Exp. Return:"));
+    if (l_inflation_)
+        l_inflation_->setText(tr("Inflation:"));
+    if (l_withdrawal_rate_)
+        l_withdrawal_rate_->setText(tr("Withdrawal Rate:"));
+    if (calc_btn_)
+        calc_btn_->setText(tr("CALCULATE"));
+    if (res_title_)
+        res_title_->setText(tr("PROJECTION RESULTS"));
+    if (years_card_label_)
+        years_card_label_->setText(tr("YEARS TO RETIREMENT"));
+    if (target_card_label_)
+        target_card_label_->setText(tr("TARGET NEST EGG"));
+    if (projected_card_label_)
+        projected_card_label_->setText(tr("PROJECTED VALUE"));
+    if (gap_card_label_)
+        gap_card_label_->setText(tr("SURPLUS / GAP"));
+    if (goals_title_)
+        goals_title_->setText(tr("GOAL-BASED PLANNING"));
+    if (l_goal_name_)
+        l_goal_name_->setText(tr("Goal:"));
+    if (l_goal_target_)
+        l_goal_target_->setText(tr("Target Amount:"));
+    if (l_goal_years_)
+        l_goal_years_->setText(tr("Years to Goal:"));
+    if (l_goal_return_)
+        l_goal_return_->setText(tr("Exp. Return:"));
+    if (l_goal_monthly_)
+        l_goal_monthly_->setText(tr("Monthly Saving:"));
+    if (l_goal_alloc_)
+        l_goal_alloc_->setText(tr("% Portfolio Allocated:"));
+    if (goals_calc_btn_)
+        goals_calc_btn_->setText(tr("CALCULATE"));
+    if (goals_res_title_)
+        goals_res_title_->setText(tr("GOAL PROJECTION"));
+    if (goal_target_card_label_)
+        goal_target_card_label_->setText(tr("TARGET AMOUNT"));
+    if (goal_projected_card_label_)
+        goal_projected_card_label_->setText(tr("PROJECTED VALUE"));
+    if (goal_required_card_label_)
+        goal_required_card_label_->setText(tr("REQUIRED MONTHLY"));
+    if (goal_progress_card_label_)
+        goal_progress_card_label_->setText(tr("PROGRESS"));
 
-    if (savings_title_) savings_title_->setText(tr("SAVINGS RATE ANALYSIS"));
-    if (savings_desc_)  savings_desc_->setText(tr("Projects wealth accumulation across a range of savings rates, "
-                                                  "starting from your current portfolio value."));
-    if (l_sav_income_)  l_sav_income_->setText(tr("Annual Income:"));
-    if (l_sav_rate_)    l_sav_rate_->setText(tr("Savings Rate:"));
-    if (l_sav_return_)  l_sav_return_->setText(tr("Exp. Return:"));
-    if (l_sav_years_)   l_sav_years_->setText(tr("Years:"));
-    if (savings_calc_btn_) savings_calc_btn_->setText(tr("CALCULATE"));
-    if (savings_res_title_) savings_res_title_->setText(tr("WEALTH BY SAVINGS RATE"));
+    if (savings_title_)
+        savings_title_->setText(tr("SAVINGS RATE ANALYSIS"));
+    if (savings_desc_)
+        savings_desc_->setText(tr("Projects wealth accumulation across a range of savings rates, "
+                                  "starting from your current portfolio value."));
+    if (l_sav_income_)
+        l_sav_income_->setText(tr("Annual Income:"));
+    if (l_sav_rate_)
+        l_sav_rate_->setText(tr("Savings Rate:"));
+    if (l_sav_return_)
+        l_sav_return_->setText(tr("Exp. Return:"));
+    if (l_sav_years_)
+        l_sav_years_->setText(tr("Years:"));
+    if (savings_calc_btn_)
+        savings_calc_btn_->setText(tr("CALCULATE"));
+    if (savings_res_title_)
+        savings_res_title_->setText(tr("WEALTH BY SAVINGS RATE"));
     if (savings_table_)
         savings_table_->setHorizontalHeaderLabels(
             {tr("SAVINGS RATE"), tr("ANNUAL SAVED"), tr("PROJECTED WEALTH"), tr("VS CURRENT RATE")});
@@ -1132,14 +1184,15 @@ void PlanningView::recalculate() {
         status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::WARNING()));
     }
 
-    // \u2500\u2500 Monte Carlo (probabilistic, calibrated to portfolio vol) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    // \u2500\u2500 Monte Carlo (probabilistic, calibrated to portfolio vol)
+    // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     if (retire_mc_label_) {
         const double vol = have_history_ ? hist_vol_ : 0.15; // default 15% if uncalibrated
         const McResult mc = monte_carlo(current_value, monthly, static_cast<int>(years), real_ret, vol, target);
         if (mc.valid) {
-            const char* pc = mc.success_prob >= 0.75   ? ui::colors::POSITIVE
-                             : mc.success_prob >= 0.5   ? ui::colors::WARNING
-                                                        : ui::colors::NEGATIVE;
+            const char* pc = mc.success_prob >= 0.75  ? ui::colors::POSITIVE
+                             : mc.success_prob >= 0.5 ? ui::colors::WARNING
+                                                      : ui::colors::NEGATIVE;
             retire_mc_label_->setText(
                 tr("Monte Carlo (2000 runs, %1% vol): <b><span style='color:%2'>%3%% chance</span></b> "
                    "of reaching your target. Likely range %4 %5 \u2013 %6 %7 (median %4 %8).")
@@ -1155,7 +1208,8 @@ void PlanningView::recalculate() {
         }
     }
 
-    // \u2500\u2500 Drawdown stress (real metric) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    // \u2500\u2500 Drawdown stress (real metric)
+    // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     if (retire_stress_label_) {
         const double dd_pct = metrics_.max_drawdown ? std::abs(*metrics_.max_drawdown) : 30.0;
         const double shocked = projected * (1.0 - dd_pct / 100.0);

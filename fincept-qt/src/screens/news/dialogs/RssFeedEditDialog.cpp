@@ -18,15 +18,13 @@ namespace fincept::screens {
 
 namespace {
 
-constexpr const char* kBrowserUserAgent =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+constexpr const char* kBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 constexpr int kTestTimeoutMs = 6000;
 
 QStringList default_categories() {
-    return {"MARKETS", "GEOPOLITICS", "REGULATORY", "ECONOMIC", "ENERGY",
-            "CRYPTO",  "TECH",        "DEFENSE",    "EARNINGS"};
+    return {"MARKETS", "GEOPOLITICS", "REGULATORY", "ECONOMIC", "ENERGY", "CRYPTO", "TECH", "DEFENSE", "EARNINGS"};
 }
 
 QStringList default_regions() {
@@ -69,13 +67,19 @@ void RssFeedEditDialog::retranslateUi() {
 
     if (id_input_ && is_builtin_id_)
         id_input_->setToolTip(tr("Built-in feed ID is fixed."));
-    if (source_input_) source_input_->setPlaceholderText(tr("e.g. BLOOMBERG"));
-    if (name_input_)   name_input_->setPlaceholderText(tr("e.g. Bloomberg Markets"));
-    if (tier_spin_)    tier_spin_->setToolTip(tr("1=wire, 2=major, 3=specialty, 4=blog"));
+    if (source_input_)
+        source_input_->setPlaceholderText(tr("e.g. BLOOMBERG"));
+    if (name_input_)
+        name_input_->setPlaceholderText(tr("e.g. Bloomberg Markets"));
+    if (tier_spin_)
+        tier_spin_->setToolTip(tr("1=wire, 2=major, 3=specialty, 4=blog"));
 
-    if (test_btn_)   test_btn_->setText(tr("Test URL"));
-    if (cancel_btn_) cancel_btn_->setText(tr("Cancel"));
-    if (ok_btn_)     ok_btn_->setText(tr("Save"));
+    if (test_btn_)
+        test_btn_->setText(tr("Test URL"));
+    if (cancel_btn_)
+        cancel_btn_->setText(tr("Cancel"));
+    if (ok_btn_)
+        ok_btn_->setText(tr("Save"));
     // test_status_ reflects the last async test result — refreshed on next test.
 }
 
@@ -93,8 +97,7 @@ void RssFeedEditDialog::build_ui() {
     id_input_->setObjectName("rssFeedEditId");
     if (initial_.id.isEmpty()) {
         // New feed — auto-generate a user prefix id; user can override.
-        const QString uid =
-            QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+        const QString uid = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
         id_input_->setText("usr-" + uid);
     } else {
         id_input_->setText(initial_.id);
@@ -206,8 +209,7 @@ void RssFeedEditDialog::on_test() {
     QNetworkRequest req((QUrl(url)));
     req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
     req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     req.setTransferTimeout(kTestTimeoutMs);
 
     QPointer<RssFeedEditDialog> self = this;
@@ -225,8 +227,7 @@ void RssFeedEditDialog::on_test() {
         if (reply->error() != QNetworkReply::NoError) {
             const int http = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             self->last_test_ok_ = false;
-            self->test_status_->setText(
-                tr("✗ Request failed: HTTP %1 — %2").arg(http).arg(reply->errorString()));
+            self->test_status_->setText(tr("✗ Request failed: HTTP %1 — %2").arg(http).arg(reply->errorString()));
             self->test_status_->setStyleSheet("color:#dc2626;");
             return;
         }
@@ -234,25 +235,21 @@ void RssFeedEditDialog::on_test() {
         const QByteArray data = reply->readAll();
         const QByteArray trimmed = data.trimmed();
         const QByteArray head = trimmed.left(256).toLower();
-        const bool is_xml = head.startsWith("<?xml") || head.startsWith("<rss") ||
-                            head.startsWith("<feed") || head.startsWith("<rdf");
-        const bool is_html =
-            head.contains("<html") || head.contains("<!doctype html");
+        const bool is_xml =
+            head.startsWith("<?xml") || head.startsWith("<rss") || head.startsWith("<feed") || head.startsWith("<rdf");
+        const bool is_html = head.contains("<html") || head.contains("<!doctype html");
 
         if (is_xml) {
             self->last_test_ok_ = true;
-            self->test_status_->setText(
-                tr("✓ Looks like a valid RSS/Atom feed (%1 bytes).").arg(data.size()));
+            self->test_status_->setText(tr("✓ Looks like a valid RSS/Atom feed (%1 bytes).").arg(data.size()));
             self->test_status_->setStyleSheet("color:#16a34a;");
         } else if (is_html) {
             self->last_test_ok_ = false;
-            self->test_status_->setText(
-                tr("✗ Server returned HTML — likely a login or block page, not RSS."));
+            self->test_status_->setText(tr("✗ Server returned HTML — likely a login or block page, not RSS."));
             self->test_status_->setStyleSheet("color:#dc2626;");
         } else {
             self->last_test_ok_ = false;
-            self->test_status_->setText(
-                tr("⚠ Response doesn't look like RSS/Atom XML (%1 bytes).").arg(data.size()));
+            self->test_status_->setText(tr("⚠ Response doesn't look like RSS/Atom XML (%1 bytes).").arg(data.size()));
             self->test_status_->setStyleSheet("color:#d97706;");
         }
     });
@@ -270,13 +267,11 @@ void RssFeedEditDialog::try_accept() {
     if (f.source.isEmpty())
         missing << tr("Source");
     if (!missing.isEmpty()) {
-        QMessageBox::warning(this, tr("Missing fields"),
-                             tr("Please fill in: %1").arg(missing.join(", ")));
+        QMessageBox::warning(this, tr("Missing fields"), tr("Please fill in: %1").arg(missing.join(", ")));
         return;
     }
     if (!QUrl(f.url).isValid() || !(f.url.startsWith("http://") || f.url.startsWith("https://"))) {
-        QMessageBox::warning(this, tr("Invalid URL"),
-                             tr("URL must start with http:// or https://."));
+        QMessageBox::warning(this, tr("Invalid URL"), tr("URL must start with http:// or https://."));
         return;
     }
 
@@ -293,8 +288,7 @@ void RssFeedEditDialog::try_accept() {
         QNetworkRequest req((QUrl(f.url)));
         req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
         req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::NoLessSafeRedirectPolicy);
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
         req.setTransferTimeout(kTestTimeoutMs);
         QPointer<RssFeedEditDialog> self = this;
         auto* reply = nam->get(req);
@@ -313,8 +307,8 @@ void RssFeedEditDialog::try_accept() {
                 msg = tr("Request failed: %1").arg(reply->errorString());
             } else {
                 const QByteArray head = reply->readAll().trimmed().left(256).toLower();
-                if (head.startsWith("<?xml") || head.startsWith("<rss") ||
-                    head.startsWith("<feed") || head.startsWith("<rdf")) {
+                if (head.startsWith("<?xml") || head.startsWith("<rss") || head.startsWith("<feed") ||
+                    head.startsWith("<rdf")) {
                     ok = true;
                 } else if (head.contains("<html") || head.contains("<!doctype html")) {
                     msg = tr("Server returned HTML, not RSS.");
@@ -329,10 +323,9 @@ void RssFeedEditDialog::try_accept() {
             }
             self->test_status_->setText(tr("⚠ %1 Save anyway?").arg(msg));
             self->test_status_->setStyleSheet("color:#d97706;");
-            auto choice = QMessageBox::question(
-                self, tr("URL didn't validate"),
-                tr("%1\n\nSave the feed anyway?").arg(msg),
-                QMessageBox::Save | QMessageBox::Cancel);
+            auto choice =
+                QMessageBox::question(self, tr("URL didn't validate"), tr("%1\n\nSave the feed anyway?").arg(msg),
+                                      QMessageBox::Save | QMessageBox::Cancel);
             if (choice == QMessageBox::Save)
                 self->accept();
         });
@@ -340,10 +333,9 @@ void RssFeedEditDialog::try_accept() {
     }
 
     if (!last_test_ok_) {
-        auto choice = QMessageBox::question(
-            this, tr("URL didn't validate"),
-            tr("The last URL test didn't return valid RSS. Save anyway?"),
-            QMessageBox::Save | QMessageBox::Cancel);
+        auto choice = QMessageBox::question(this, tr("URL didn't validate"),
+                                            tr("The last URL test didn't return valid RSS. Save anyway?"),
+                                            QMessageBox::Save | QMessageBox::Cancel);
         if (choice != QMessageBox::Save)
             return;
     }

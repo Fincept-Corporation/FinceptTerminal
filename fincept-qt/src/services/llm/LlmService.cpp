@@ -2,21 +2,19 @@
 
 #include "services/llm/LlmService.h"
 
+#include "auth/AuthManager.h"
+#include "core/config/AppConfig.h"
+#include "core/logging/Logger.h"
+#include "datahub/DataHub.h"
+#include "datahub/TopicPolicy.h"
+#include "mcp/McpProvider.h"
+#include "mcp/McpService.h"
 #include "services/llm/LlmContentExtractors.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "services/llm/ModelCatalog.h"
 #include "services/llm/ProviderCatalog.h"
-#include "auth/AuthManager.h"
-
-#include "core/logging/Logger.h"
-#include "core/config/AppConfig.h"
-#include "mcp/McpProvider.h"
-#include "mcp/McpService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/SettingsRepository.h"
-
-#    include "datahub/DataHub.h"
-#    include "datahub/TopicPolicy.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -41,8 +39,6 @@
 namespace fincept::ai_chat {
 
 static constexpr const char* kLlmSvcTag = "LlmService";
-
-
 
 LlmService::LlmService() = default;
 
@@ -202,15 +198,14 @@ void LlmService::ensure_config() const {
             QStringList sorted_cats = cats.values();
             std::sort(sorted_cats.begin(), sorted_cats.end());
 
-            QString hint =
-                "\n\n[Tool discovery] You see only a small subset of tools each turn. "
-                "To find a tool for any action you don't already have, call "
-                "tool_list(query=\"<natural-language description>\"). "
-                "It returns the top 5 most relevant tools (BM25-ranked). "
-                "Then call tool_describe(name) for the full input schema, then invoke it. "
-                "For requests with multiple intents (\"get news AND add to watchlist\"), "
-                "call tool_list MULTIPLE TIMES — once per intent. "
-                "Never decline an action you can fulfil via a discoverable tool.";
+            QString hint = "\n\n[Tool discovery] You see only a small subset of tools each turn. "
+                           "To find a tool for any action you don't already have, call "
+                           "tool_list(query=\"<natural-language description>\"). "
+                           "It returns the top 5 most relevant tools (BM25-ranked). "
+                           "Then call tool_describe(name) for the full input schema, then invoke it. "
+                           "For requests with multiple intents (\"get news AND add to watchlist\"), "
+                           "call tool_list MULTIPLE TIMES — once per intent. "
+                           "Never decline an action you can fulfil via a discoverable tool.";
             if (!sorted_cats.isEmpty()) {
                 hint += "\nAvailable tool categories: " + sorted_cats.join(", ") + ".";
             }
@@ -223,9 +218,11 @@ void LlmService::ensure_config() const {
     const int resolved = resolved_max_tokens();
     const int catalog_cap = ModelCatalog::output_cap(provider_, model_);
     LOG_INFO(kLlmSvcTag, QString("LLM config loaded: provider=%1 model=%2 tools_enabled=%3 "
-                          "max_tokens(user=%4 catalog=%5 resolved=%6)")
-                      .arg(provider_, model_, tools_enabled_ ? "TRUE" : "FALSE")
-                      .arg(max_tokens_).arg(catalog_cap).arg(resolved));
+                                 "max_tokens(user=%4 catalog=%5 resolved=%6)")
+                             .arg(provider_, model_, tools_enabled_ ? "TRUE" : "FALSE")
+                             .arg(max_tokens_)
+                             .arg(catalog_cap)
+                             .arg(resolved));
 }
 
 // ============================================================================
@@ -351,8 +348,7 @@ QString LlmService::get_endpoint_url() const {
         QString base = base_url_;
         while (base.endsWith('/'))
             base.chop(1);
-        const QString suffix = (p == "anthropic") ? QStringLiteral("/messages")
-                                                  : QStringLiteral("/chat/completions");
+        const QString suffix = (p == "anthropic") ? QStringLiteral("/messages") : QStringLiteral("/chat/completions");
 
         // Already a full endpoint — use verbatim.
         if (base.endsWith(suffix))
@@ -424,8 +420,6 @@ QMap<QString, QString> LlmService::get_headers() const {
     }
     return h;
 }
-
-
 
 LlmResponse LlmService::do_request(const QString& user_message, const std::vector<ConversationMessage>& history) {
     LlmResponse resp;
@@ -524,8 +518,8 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             const QJsonArray ant_tools = build_anthropic_tools();
             for (int round = 0; round < kMaxRounds; ++round) {
                 QJsonObject fu;
-                fu["model"]      = model_;
-                fu["messages"]   = loop_msgs;
+                fu["model"] = model_;
+                fu["messages"] = loop_msgs;
                 fu["max_tokens"] = resolved_max_tokens();
                 if (!system_prompt_.isEmpty())
                     fu["system"] = system_prompt_;
@@ -605,11 +599,11 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     if (m.role == "system")
                         continue;
                     const QString role = (m.role == "assistant") ? "model" : "user";
-                    fu_contents.append(QJsonObject{
-                        {"role", role}, {"parts", QJsonArray{QJsonObject{{"text", m.content}}}}});
+                    fu_contents.append(
+                        QJsonObject{{"role", role}, {"parts", QJsonArray{QJsonObject{{"text", m.content}}}}});
                 }
-                fu_contents.append(QJsonObject{
-                    {"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", user_message}}}}});
+                fu_contents.append(
+                    QJsonObject{{"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", user_message}}}}});
 
                 // model_parts = the model turn whose functionCalls we execute this
                 // round; seeded with the initial response's parts.
@@ -626,8 +620,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         const QJsonObject fc = part["functionCall"].toObject();
                         const QString fn_name = fc["name"].toString();
                         LOG_INFO(kLlmSvcTag, QString("Gemini tool loop r%1: %2").arg(round).arg(fn_name));
-                        auto tr =
-                            mcp::McpService::instance().execute_openai_function(fn_name, fc["args"].toObject());
+                        auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fc["args"].toObject());
                         // Gemini requires response to be an object — wrap strings under "result".
                         QJsonObject response_obj;
                         if (!tr.data.isNull() && !tr.data.isUndefined() && tr.data.isObject())
@@ -664,10 +657,9 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         return resp;
                     }
                     const QJsonArray fu_cands = fu_doc.object()["candidates"].toArray();
-                    const QJsonArray resp_parts =
-                        fu_cands.isEmpty()
-                            ? QJsonArray{}
-                            : fu_cands[0].toObject()["content"].toObject()["parts"].toArray();
+                    const QJsonArray resp_parts = fu_cands.isEmpty()
+                                                      ? QJsonArray{}
+                                                      : fu_cands[0].toObject()["content"].toObject()["parts"].toArray();
 
                     bool more_calls = false;
                     for (const auto& pv : resp_parts) {
@@ -692,11 +684,11 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         const QString fn_name = fr["name"].toString();
                         const int sep = fn_name.indexOf("__");
                         const QString short_name = (sep >= 0) ? fn_name.mid(sep + 2) : fn_name;
-                        fallback += "\n**Tool: " + short_name + "**\n" +
-                                    QString::fromUtf8(
-                                        QJsonDocument(fr["response"].toObject()).toJson(QJsonDocument::Compact))
-                                        .left(4000) +
-                                    "\n";
+                        fallback +=
+                            "\n**Tool: " + short_name + "**\n" +
+                            QString::fromUtf8(QJsonDocument(fr["response"].toObject()).toJson(QJsonDocument::Compact))
+                                .left(4000) +
+                            "\n";
                     }
                     resp.content = fallback;
                 }
@@ -749,12 +741,15 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         QJsonDocument::fromJson(tc["function"].toObject()["arguments"].toString("{}").toUtf8())
                             .object();
 
-                    LOG_INFO(kLlmSvcTag, QString("Executing tool: %1 args=%2").arg(fn_name,
-                                  QString::fromUtf8(QJsonDocument(fn_args).toJson(QJsonDocument::Compact)).left(200)));
+                    LOG_INFO(
+                        kLlmSvcTag,
+                        QString("Executing tool: %1 args=%2")
+                            .arg(fn_name,
+                                 QString::fromUtf8(QJsonDocument(fn_args).toJson(QJsonDocument::Compact)).left(200)));
                     auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
-                    LOG_INFO(kLlmSvcTag, QString("Tool %1 -> %2 (msg=%3 err=%4)")
-                                      .arg(fn_name, tr.success ? "OK" : "FAIL",
-                                           tr.message.left(120), tr.error.left(120)));
+                    LOG_INFO(kLlmSvcTag,
+                             QString("Tool %1 -> %2 (msg=%3 err=%4)")
+                                 .arg(fn_name, tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                     const QString bare = mcp::McpProvider::parse_openai_function_name(fn_name).second;
                     detail::note_tool_activations(bare, fn_args, tr, activated);
                     loop_msgs.append(QJsonObject{
@@ -780,7 +775,8 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
     // XML or custom markup in the text response. Detect these patterns and
     // execute the tools, then ask the LLM to summarize the results.
     if (!resp.content.isEmpty()) {
-        LOG_INFO(kLlmSvcTag, "Checking response for text-based tool calls, content starts with: " + resp.content.left(120));
+        LOG_INFO(kLlmSvcTag,
+                 "Checking response for text-based tool calls, content starts with: " + resp.content.left(120));
         auto text_tool_result = try_extract_and_execute_text_tool_calls(resp.content, user_message, url, hdr);
         if (text_tool_result.has_value()) {
             resp = text_tool_result.value();
@@ -972,17 +968,17 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                     if (!choices.isEmpty()) {
                         const QString finish = choices[0].toObject()["finish_reason"].toString();
                         if (finish == "tool_calls") {
-                            LOG_INFO(kLlmSvcTag,
-                                     QString("STREAM: OpenAI-compat finish_reason=tool_calls detected (%1)")
-                                         .arg(provider_));
+                            LOG_INFO(
+                                kLlmSvcTag,
+                                QString("STREAM: OpenAI-compat finish_reason=tool_calls detected (%1)").arg(provider_));
                             tool_call_detected = true;
                             loop.quit();
                             return;
                         }
                         QJsonObject delta = choices[0].toObject()["delta"].toObject();
                         if (!delta["tool_calls"].isUndefined() && !delta["tool_calls"].isNull()) {
-                            LOG_INFO(kLlmSvcTag, QString("STREAM: OpenAI-compat delta.tool_calls detected (%1)")
-                                              .arg(provider_));
+                            LOG_INFO(kLlmSvcTag,
+                                     QString("STREAM: OpenAI-compat delta.tool_calls detected (%1)").arg(provider_));
                             tool_call_detected = true;
                             loop.quit();
                             return;
@@ -1010,8 +1006,8 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
             } else if (!delta.text.isEmpty()) {
                 accumulated += delta.text;
 
-                // Some providers stream tool calls as XML/text markup — detect, suppress output, fall back to do_request.
-                // Patterns covered: <tool_call>, </tool_call>, <minimax:tool_call>, <invoke name=,
+                // Some providers stream tool calls as XML/text markup — detect, suppress output, fall back to
+                // do_request. Patterns covered: <tool_call>, </tool_call>, <minimax:tool_call>, <invoke name=,
                 // ```tool_call code fences, and bare `minimax:tool_call ... /minimax:tool_call`.
                 if (!tool_call_detected) {
                     static const QRegularExpression rx_text_tool(
@@ -1022,7 +1018,8 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
                         QRegularExpression::CaseInsensitiveOption);
                     if (rx_text_tool.match(accumulated).hasMatch()) {
                         tool_call_detected = true;
-                        LOG_INFO(kLlmSvcTag, "Tool call markup detected in streamed text — falling back to non-streaming");
+                        LOG_INFO(kLlmSvcTag,
+                                 "Tool call markup detected in streamed text — falling back to non-streaming");
                         loop.quit();
                         return;
                     }
@@ -1141,13 +1138,11 @@ LlmResponse LlmService::chat(const QString& user_message, const std::vector<Conv
 
 void LlmService::chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
                                 StreamCallback on_chunk, bool use_tools) {
-    chat_streaming(user_message, history, std::move(on_chunk),
-                   use_tools ? ToolPolicy::All : ToolPolicy::None);
+    chat_streaming(user_message, history, std::move(on_chunk), use_tools ? ToolPolicy::All : ToolPolicy::None);
 }
 
 void LlmService::chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
-                                StreamCallback on_chunk, ToolPolicy policy,
-                                const QString& chat_session_id) {
+                                StreamCallback on_chunk, ToolPolicy policy, const QString& chat_session_id) {
     QString p, k, b, m, sp;
     double t;
     int mx;
@@ -1187,9 +1182,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         return true;
     }();
     // Skip on_chunk if LlmService dies before the chunk arrives.
-    StreamCallback guarded_chunk = [self, on_chunk
-        , stream_id, stream_topic
-    ](const QString& chunk, bool done) {
+    StreamCallback guarded_chunk = [self, on_chunk, stream_id, stream_topic](const QString& chunk, bool done) {
         if (!self)
             return;
         on_chunk(chunk, done);
@@ -1206,8 +1199,7 @@ void LlmService::chat_streaming(const QString& user_message, const std::vector<C
         }
     };
     (void)QtConcurrent::run(
-        [self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk, policy,
-         chat_session_id]() {
+        [self, p, k, b, m, sp, t, mx, user_message, history_copy, guarded_chunk, policy, chat_session_id]() {
             if (!self)
                 return;
 

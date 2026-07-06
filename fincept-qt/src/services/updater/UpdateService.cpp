@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDesktopServices>
@@ -10,12 +11,11 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QAbstractButton>
 #include <QMessageBox>
 #include <QNetworkReply>
-#include <QPushButton>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QSysInfo>
@@ -45,10 +45,8 @@ QWidget* UpdateService::dialog_parent() {
 QString UpdateService::current_platform_key() {
     const QString arch = QSysInfo::currentCpuArchitecture();
     // QSysInfo returns "x86_64", "i386", "arm64", "arm" etc.
-    const bool is_arm64 = arch.contains(QLatin1String("arm64")) ||
-                          arch.contains(QLatin1String("aarch64"));
-    const bool is_x64 = arch.contains(QLatin1String("x86_64")) ||
-                        arch.contains(QLatin1String("x64"));
+    const bool is_arm64 = arch.contains(QLatin1String("arm64")) || arch.contains(QLatin1String("aarch64"));
+    const bool is_x64 = arch.contains(QLatin1String("x86_64")) || arch.contains(QLatin1String("x64"));
 
 #if defined(Q_OS_WIN)
     if (is_arm64)
@@ -146,9 +144,8 @@ void UpdateService::check_for_updates(bool silent) {
     }
 
     in_progress_ = true;
-    LOG_INFO("UpdateService",
-             QString("Checking for updates — platform=%1, local=%2, manifest=%3")
-                 .arg(platform_key, local_version, manifest_url_));
+    LOG_INFO("UpdateService", QString("Checking for updates — platform=%1, local=%2, manifest=%3")
+                                  .arg(platform_key, local_version, manifest_url_));
 
     QNetworkRequest req{QUrl(manifest_url_)};
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -190,8 +187,7 @@ void UpdateService::on_manifest_reply_finished() {
     const QJsonObject updates = root.value(QStringLiteral("updates")).toObject();
     const QString key = current_platform_key();
     if (!updates.contains(key)) {
-        LOG_INFO("UpdateService",
-                 QString("Manifest has no entry for '%1' — no update available").arg(key));
+        LOG_INFO("UpdateService", QString("Manifest has no entry for '%1' — no update available").arg(key));
         finish_check(false);
         return;
     }
@@ -218,17 +214,15 @@ void UpdateService::on_manifest_reply_finished() {
         LOG_INFO("UpdateService",
                  QString("Already up to date — local=%1, remote=%2").arg(local_version, remote_version));
         if (!silent_) {
-            QMessageBox::information(
-                dialog_parent(), QStringLiteral("Fincept Terminal"),
-                QStringLiteral("You're running the latest version (%1).").arg(local_version));
+            QMessageBox::information(dialog_parent(), QStringLiteral("Fincept Terminal"),
+                                     QStringLiteral("You're running the latest version (%1).").arg(local_version));
         }
         finish_check(false);
         return;
     }
 
     update_available_ = true;
-    LOG_INFO("UpdateService",
-             QString("Update available: %1 → %2").arg(local_version, remote_version));
+    LOG_INFO("UpdateService", QString("Update available: %1 → %2").arg(local_version, remote_version));
 
     // Prompt the user. Include changelog if present. Always offer a "view release
     // notes" escape hatch via open-url so users can read more before installing.
@@ -248,9 +242,8 @@ void UpdateService::on_manifest_reply_finished() {
     box.setIcon(QMessageBox::Information);
     box.setText(prompt);
     QPushButton* install_btn = box.addButton(QStringLiteral("Download && Install"), QMessageBox::AcceptRole);
-    QPushButton* release_btn = open_url.isEmpty()
-                                   ? nullptr
-                                   : box.addButton(QStringLiteral("View Release Notes"), QMessageBox::HelpRole);
+    QPushButton* release_btn =
+        open_url.isEmpty() ? nullptr : box.addButton(QStringLiteral("View Release Notes"), QMessageBox::HelpRole);
     box.addButton(QMessageBox::Cancel);
     box.setDefaultButton(install_btn);
     box.exec();
@@ -277,17 +270,16 @@ void UpdateService::start_download(const QString& url, const QString& expected_s
     // installer's basename so the user recognises it.
     const QString file_name = QFileInfo(QUrl(url).path()).fileName();
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-    pending_local_path_ = QDir(dir).filePath(file_name.isEmpty()
-                                                 ? QStringLiteral("FinceptTerminal-update.tmp")
-                                                 : file_name);
+    pending_local_path_ =
+        QDir(dir).filePath(file_name.isEmpty() ? QStringLiteral("FinceptTerminal-update.tmp") : file_name);
 
     // Drop any leftover from a previous run — otherwise a partial file could
     // survive and poison sha256 verification.
     QFile::remove(pending_local_path_);
 
-    LOG_INFO("UpdateService",
-             QString("Downloading installer: %1 → %2 (expected sha256=%3)")
-                 .arg(url, pending_local_path_, expected_sha256.isEmpty() ? QStringLiteral("<none>") : expected_sha256));
+    LOG_INFO("UpdateService", QString("Downloading installer: %1 → %2 (expected sha256=%3)")
+                                  .arg(url, pending_local_path_,
+                                       expected_sha256.isEmpty() ? QStringLiteral("<none>") : expected_sha256));
 
     QNetworkRequest req{QUrl(url)};
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -304,8 +296,7 @@ void UpdateService::on_download_progress(qint64 received, qint64 total) {
     static qint64 last_logged = 0;
     if (received - last_logged >= 5 * 1024 * 1024 || received == total) {
         last_logged = received;
-        LOG_DEBUG("UpdateService",
-                  QString("Download progress: %1 / %2 bytes").arg(received).arg(total));
+        LOG_DEBUG("UpdateService", QString("Download progress: %1 / %2 bytes").arg(received).arg(total));
     }
 }
 
@@ -368,10 +359,8 @@ void UpdateService::on_download_reply_finished() {
         }
         LOG_INFO("UpdateService", QString("Sha256 verified: %1").arg(actual));
     } else {
-        LOG_ERROR("UpdateService",
-                "Manifest missing sha256 — refusing to launch installer");
-        show_error(QStringLiteral(
-            "This update cannot be verified (missing checksum). Aborting."));
+        LOG_ERROR("UpdateService", "Manifest missing sha256 — refusing to launch installer");
+        show_error(QStringLiteral("This update cannot be verified (missing checksum). Aborting."));
         QFile::remove(pending_local_path_);
         finish_check(true);
         return;
@@ -401,8 +390,8 @@ void UpdateService::launch_installer(const QString& path) {
     // it to the file manager, which is not what the user expects after
     // clicking "Install".
     QFile f(path);
-    f.setPermissions(f.permissions() | QFileDevice::ExeOwner | QFileDevice::ExeUser |
-                     QFileDevice::ExeGroup | QFileDevice::ExeOther);
+    f.setPermissions(f.permissions() | QFileDevice::ExeOwner | QFileDevice::ExeUser | QFileDevice::ExeGroup |
+                     QFileDevice::ExeOther);
 #endif
 
     // startDetached is the right call here — we want the installer to outlive
@@ -418,11 +407,10 @@ void UpdateService::launch_installer(const QString& path) {
     if (!started) {
         LOG_WARN("UpdateService", "startDetached failed — falling back to reveal-in-file-manager");
         reveal_in_file_manager(path);
-        QMessageBox::information(
-            dialog_parent(), QStringLiteral("Update Downloaded"),
-            QStringLiteral("The installer has been downloaded to:\n%1\n\n"
-                           "Please run it manually to complete the update.")
-                .arg(QDir::toNativeSeparators(path)));
+        QMessageBox::information(dialog_parent(), QStringLiteral("Update Downloaded"),
+                                 QStringLiteral("The installer has been downloaded to:\n%1\n\n"
+                                                "Please run it manually to complete the update.")
+                                     .arg(QDir::toNativeSeparators(path)));
     }
 }
 

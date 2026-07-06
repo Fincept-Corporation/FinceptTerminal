@@ -18,9 +18,7 @@ class Ed25519Verifier {
     /// Returns true iff `signature_b58` is a valid Ed25519 signature of
     /// `message` produced by the private key paired with `pubkey_b58`.
     /// Returns false on any decode error or verification failure — never throws.
-    static bool verify(const QString& pubkey_b58,
-                       const QByteArray& message,
-                       const QString& signature_b58) noexcept;
+    static bool verify(const QString& pubkey_b58, const QByteArray& message, const QString& signature_b58) noexcept;
 
     /// Decodes a base58 string. Returns empty QByteArray on invalid input.
     /// Exposed for tests and for SolanaRpcClient (mint addresses are b58).

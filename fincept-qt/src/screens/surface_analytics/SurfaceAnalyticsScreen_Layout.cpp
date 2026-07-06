@@ -8,9 +8,8 @@
 //
 // Part of the partial-class split of SurfaceAnalyticsScreen.cpp.
 
-#include "SurfaceAnalyticsScreen.h"
-
 #include "Surface3DWidget.h"
+#include "SurfaceAnalyticsScreen.h"
 #include "SurfaceCapabilities.h"
 #include "SurfaceControlPanel.h"
 #include "SurfaceCsvImporter.h"
@@ -34,8 +33,8 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStringList>
-#include <QVariant>
 #include <QVBoxLayout>
+#include <QVariant>
 
 namespace fincept::surface {
 
@@ -155,12 +154,10 @@ void SurfaceAnalyticsScreen::setup_ui() {
     root->addWidget(outer, 1);
 
     // Wire control panel signals
-    connect(control_panel_, &SurfaceControlPanel::controls_changed, this,
-            &SurfaceAnalyticsScreen::on_controls_changed);
+    connect(control_panel_, &SurfaceControlPanel::controls_changed, this, &SurfaceAnalyticsScreen::on_controls_changed);
     connect(control_panel_, &SurfaceControlPanel::symbol_changed, this,
             &SurfaceAnalyticsScreen::on_control_symbol_changed);
-    connect(control_panel_, &SurfaceControlPanel::fetch_requested, this,
-            &SurfaceAnalyticsScreen::on_fetch_requested);
+    connect(control_panel_, &SurfaceControlPanel::fetch_requested, this, &SurfaceAnalyticsScreen::on_fetch_requested);
 
     // Default visibility / capability for active surface
     control_panel_->set_capability(active_chart_);
@@ -317,7 +314,6 @@ QWidget* SurfaceAnalyticsScreen::build_surface_bar() {
     hl->addStretch();
     return bar;
 }
-
 
 void SurfaceAnalyticsScreen::apply_view_mode_buttons() {
     auto active = [&]() {

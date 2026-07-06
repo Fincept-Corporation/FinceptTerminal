@@ -111,7 +111,7 @@ void register_control_flow_nodes(NodeRegistry& registry) {
                 out["_loop"] = true;
                 out["items"] = items;
                 out["count"] = items.size();
-                out["done"]  = QJsonObject{{"count", items.size()}, {"completed", true}};
+                out["done"] = QJsonObject{{"count", items.size()}, {"completed", true}};
                 cb(true, out, {});
             },
     });
