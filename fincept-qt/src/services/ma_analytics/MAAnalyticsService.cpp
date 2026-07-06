@@ -909,6 +909,47 @@ void MAAnalyticsService::skfolio_generate_report(const QJsonObject& params) {
     run_python_json(kSkfolioScript, "generate_report", params, "skfolio_generate_report");
 }
 
+// Options Analytics — each script takes (command, JSON params) and returns JSON.
+// Distinct contexts so results route unambiguously.
+void MAAnalyticsService::options_gamma_exposure(const QJsonObject& params) {
+    run_python_json("Analytics/options/gex_calculator.py", "compute", params, "options_gex");
+}
+
+void MAAnalyticsService::options_iv_smile(const QJsonObject& params) {
+    run_python_json("Analytics/options/iv_smile.py", "compute", params, "options_iv_smile");
+}
+
+void MAAnalyticsService::options_iv_surface(const QJsonObject& params) {
+    run_python_json("Analytics/options/iv_surface.py", "compute", params, "options_iv_surface");
+}
+
+void MAAnalyticsService::options_open_interest(const QJsonObject& params) {
+    run_python_json("Analytics/options/oi_tracker.py", "compute", params, "options_oi");
+}
+
+void MAAnalyticsService::options_straddle_sim(const QJsonObject& params) {
+    run_python_json("Analytics/options/straddle_simulator.py", "simulate", params, "options_straddle");
+}
+
+void MAAnalyticsService::options_strategy_payoff(const QJsonObject& params) {
+    run_python_json("Analytics/options/strategy_chart.py", "compute", params, "options_strategy_payoff");
+}
+
+// Corporate-Finance Valuation Summary — command + JSON target-metrics → JSON.
+static const char* kValuationSummaryScript = "Analytics/corporateFinance/valuation/valuation_summary.py";
+
+void MAAnalyticsService::valuation_comprehensive(const QJsonObject& params) {
+    run_python_json(kValuationSummaryScript, "comprehensive", params, "valuation_comprehensive");
+}
+
+void MAAnalyticsService::valuation_executive_summary(const QJsonObject& params) {
+    run_python_json(kValuationSummaryScript, "executive_summary", params, "valuation_executive_summary");
+}
+
+void MAAnalyticsService::valuation_football_field(const QJsonObject& params) {
+    run_python_json(kValuationSummaryScript, "football_field", params, "valuation_football_field");
+}
+
 // ── Deal Comparison ──────────────────────────────────────────────────────────
 void MAAnalyticsService::compare_deals(const QJsonObject& params) {
     run_python_json("Analytics/corporateFinance/deal_comparison/deal_comparator.py", "compare", params,

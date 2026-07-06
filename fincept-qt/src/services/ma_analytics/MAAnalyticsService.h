@@ -201,6 +201,19 @@ class MAAnalyticsService : public QObject
     void skfolio_scenario_analysis(const QJsonObject& params);
     void skfolio_generate_report(const QJsonObject& params);
 
+    // Options Analytics (each script: command + JSON params → JSON; single op).
+    void options_gamma_exposure(const QJsonObject& params);   // gex_calculator.py
+    void options_iv_smile(const QJsonObject& params);         // iv_smile.py
+    void options_iv_surface(const QJsonObject& params);       // iv_surface.py
+    void options_open_interest(const QJsonObject& params);    // oi_tracker.py
+    void options_straddle_sim(const QJsonObject& params);     // straddle_simulator.py
+    void options_strategy_payoff(const QJsonObject& params);  // strategy_chart.py
+
+    // Corporate-Finance Valuation Summary (valuation_summary.py)
+    void valuation_comprehensive(const QJsonObject& params);
+    void valuation_executive_summary(const QJsonObject& params);
+    void valuation_football_field(const QJsonObject& params);
+
     // ── Deal Comparison ─────────────────────────────────────────────────────
     void compare_deals(const QJsonObject& params);
     void rank_deals(const QJsonObject& params);
