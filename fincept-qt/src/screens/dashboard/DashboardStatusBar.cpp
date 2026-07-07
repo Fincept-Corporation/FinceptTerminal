@@ -19,8 +19,8 @@
 #if defined(Q_OS_WIN)
 // windows.h must come first — psapi.h depends on its types (BOOL, WINAPI, …)
 // and including psapi.h alone yields C2146 / C2086 cascades.
-#    include <psapi.h>
 #    include <windows.h>
+#    include <psapi.h>
 #elif defined(Q_OS_MAC)
 #    include <mach/mach.h>
 #elif defined(Q_OS_LINUX)

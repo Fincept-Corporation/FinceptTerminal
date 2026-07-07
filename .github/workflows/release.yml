@@ -1837,6 +1837,14 @@ jobs:
             fi
             echo "::warning::submit attempt ${SUBMIT_ATTEMPTS} failed:"
             cat "${SUBMIT_JSON}" || true
+            # A 403 "required agreement is missing or has expired" is NOT a
+            # transient/network error — retrying wastes minutes and still fails.
+            # It needs a human to accept Apple's updated agreements. Fail fast.
+            if grep -qi 'agreement' "${SUBMIT_JSON}"; then
+              echo "::error::Apple notary rejected the submission: a required Apple Developer agreement is missing or has expired (HTTP 403). Retrying cannot fix this."
+              echo "::error::FIX (manual, one-time): an Account Holder must sign in at https://developer.apple.com/account, accept the updated Apple Developer Program License Agreement, and check App Store Connect -> Business (Agreements, Tax, and Banking). Then re-run this release."
+              exit 1
+            fi
             sleep $((SUBMIT_ATTEMPTS * 30))
           done
           if [ -z "${SUB_ID}" ]; then
@@ -2052,6 +2060,12 @@ jobs:
             fi
             echo "::warning::DMG submit attempt ${SUBMIT_ATTEMPTS} failed:"
             cat "${SUBMIT_JSON}" || true
+            # See .app notarize step: a 403 agreement error is not transient.
+            if grep -qi 'agreement' "${SUBMIT_JSON}"; then
+              echo "::error::Apple notary rejected the DMG: a required Apple Developer agreement is missing or has expired (HTTP 403). Retrying cannot fix this."
+              echo "::error::FIX (manual, one-time): an Account Holder must accept the updated Apple Developer Program License Agreement at https://developer.apple.com/account, then re-run this release."
+              exit 1
+            fi
             sleep $((SUBMIT_ATTEMPTS * 30))
           done
           if [ -z "${SUB_ID}" ]; then

@@ -7,16 +7,18 @@
 
 #if defined(Q_OS_WIN)
 // The project defines WIN32_LEAN_AND_MEAN globally, which strips winsock from
-// <windows.h>. Pull the pieces we need explicitly in the right order so
-// MIB_IF_ROW2 / GetIfTable2 (declared in netioapi.h) compile cleanly.
+// <windows.h>. Pull the pieces we need explicitly in the right order: the base
+// winsock2 + windows types MUST be defined before iphlpapi.h / netioapi.h are
+// parsed, otherwise MIB_IF_ROW2 / GetIfTable2 drag in ifdef.h / netioapi.h with
+// DWORD / BOOL / SOCKADDR still undefined → C2146 / C3646 cascade.
 #    ifndef _WINSOCKAPI_
 #        define _WINSOCKAPI_ // prevent windows.h from including winsock1
 #    endif
-#    include <iphlpapi.h>
-#    include <netioapi.h>
-#    include <windows.h>
 #    include <winsock2.h>
 #    include <ws2tcpip.h>
+#    include <windows.h>
+#    include <iphlpapi.h>
+#    include <netioapi.h>
 #    pragma comment(lib, "iphlpapi.lib")
 #elif defined(Q_OS_MACOS)
 #    include <ifaddrs.h>
