@@ -494,15 +494,14 @@ jobs:
           $dest = Join-Path $env:RUNNER_TEMP 'fincept-payload-check'
           if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
           Write-Host "Silent-installing $($setup.Name) -> $dest"
-          # IFW unattended install. Match the Qt IFW-documented invocation form:
-          # global options (incl. --root) BEFORE the `install` verb —
+          # IFW unattended install, matching the Qt IFW-documented form:
           #   installer --root <dir> --accept-licenses --default-answer \
           #             --confirm-command install
-          # Suspected cause of the earlier bare "exit 1": with --root placed
-          # AFTER `install`, IFW can ignore it and fall back to config.xml's
-          # @ApplicationsDirX64@ (C:\Program Files), which needs elevation the
-          # non-interactive runner can't grant. controlscript.qs auto-advances
-          # the wizard pages for CLI instances.
+          # Do NOT pass --accept-messages together with --default-answer: IFW
+          # rejects them as "mutually exclusive" and exits 1 before installing
+          # anything. --default-answer alone answers any message query with its
+          # default, which is all a clean install to an empty dir needs.
+          # controlscript.qs auto-advances the wizard pages for CLI instances.
           #
           # IFW's setup.exe is a *windowed* app, so its CLI output never reaches
           # the Actions log on its own — redirect stdout/stderr to files (and add
@@ -514,7 +513,7 @@ jobs:
                  -ArgumentList @(
                    '--verbose',
                    '--root', $dest,
-                   '--accept-licenses', '--accept-messages',
+                   '--accept-licenses',
                    '--default-answer', '--confirm-command',
                    'install' )
           Write-Host "----- installer stdout -----"
