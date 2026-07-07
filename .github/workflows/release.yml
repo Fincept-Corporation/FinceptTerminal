@@ -494,14 +494,36 @@ jobs:
           $dest = Join-Path $env:RUNNER_TEMP 'fincept-payload-check'
           if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
           Write-Host "Silent-installing $($setup.Name) -> $dest"
-          # IFW silent install: controlscript.qs auto-advances for CLI instances.
+          # IFW unattended install. Match the Qt IFW-documented invocation form:
+          # global options (incl. --root) BEFORE the `install` verb —
+          #   installer --root <dir> --accept-licenses --default-answer \
+          #             --confirm-command install
+          # Suspected cause of the earlier bare "exit 1": with --root placed
+          # AFTER `install`, IFW can ignore it and fall back to config.xml's
+          # @ApplicationsDirX64@ (C:\Program Files), which needs elevation the
+          # non-interactive runner can't grant. controlscript.qs auto-advances
+          # the wizard pages for CLI instances.
+          #
+          # IFW's setup.exe is a *windowed* app, so its CLI output never reaches
+          # the Actions log on its own — redirect stdout/stderr to files (and add
+          # --verbose) so a failure is diagnosable instead of an opaque exit 1.
+          $outLog = Join-Path $env:RUNNER_TEMP 'ifw-install.out.log'
+          $errLog = Join-Path $env:RUNNER_TEMP 'ifw-install.err.log'
           $p = Start-Process -FilePath $setup.FullName -PassThru -Wait `
+                 -RedirectStandardOutput $outLog -RedirectStandardError $errLog `
                  -ArgumentList @(
-                   'install', '--default-answer', '--accept-licenses',
-                   '--accept-messages', '--confirm-command',
-                   "--root", $dest )
+                   '--verbose',
+                   '--root', $dest,
+                   '--accept-licenses', '--accept-messages',
+                   '--default-answer', '--confirm-command',
+                   'install' )
+          Write-Host "----- installer stdout -----"
+          if (Test-Path $outLog) { Get-Content $outLog | Write-Host }
+          Write-Host "----- installer stderr -----"
+          if (Test-Path $errLog) { Get-Content $errLog | Write-Host }
           if ($p.ExitCode -ne 0) {
-            Write-Host "::error::Silent install failed (exit $($p.ExitCode))"; exit 1
+            Write-Host "::error::Silent install failed (exit $($p.ExitCode)). See installer stdout/stderr above."
+            exit 1
           }
           # Essential files the installed tree MUST contain. WebEngine entries
           # are conditional: only required if the WebEngine DLL was packaged.
