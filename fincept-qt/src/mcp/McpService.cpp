@@ -6,6 +6,7 @@
 #include "core/logging/Logger.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
+#include "mcp/TerminalMcpBridge.h"
 #include "mcp/ToolRetriever.h"
 
 #include <QCoreApplication>
@@ -475,7 +476,15 @@ QFuture<ToolResult> McpService::execute_openai_function_async(const QString& fun
     // even if each one blocks its own pool thread. Phase 5's dispatcher
     // unification will use these futures with QtFuture::whenAll to join
     // a round of tool calls in parallel.
-    return QtConcurrent::run([server_id, tool_name, args]() -> ToolResult {
+    // Carry the agent-gating flags across the thread hop. execute_tool() runs
+    // the auth check, which reads TerminalMcpBridge's thread_local flags; those
+    // default to false on the pool thread, so without re-establishing them an
+    // agent-originated external call would be mis-classified as a chat call and
+    // skip the destructive-tool gate.
+    const bool call_in_progress = TerminalMcpBridge::is_call_in_progress();
+    const bool destructive_allowed = TerminalMcpBridge::is_destructive_allowed();
+    return QtConcurrent::run([server_id, tool_name, args, call_in_progress, destructive_allowed]() -> ToolResult {
+        TerminalMcpBridge::ScopedCallFlags flags(call_in_progress, destructive_allowed);
         return McpService::instance().execute_tool(server_id, tool_name, args);
     });
 }

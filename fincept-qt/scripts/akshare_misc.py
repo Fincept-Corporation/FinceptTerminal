@@ -54,7 +54,7 @@ class MiscWrapper:
                 else:
                     data = df
 
-                return {"success": True, "data": data, "error": None}
+                return {"success": True, "data": data, "columns": (list(df.columns) if hasattr(df, 'columns') else []), "error": None}
 
             except Exception as e:
                 if attempt == max_retries - 1:
@@ -662,7 +662,10 @@ def main():
         func = getattr(wrapper, function_name)
         # Parse additional arguments if needed
         args = sys.argv[2:] if len(sys.argv) > 2 else []
-        result = func(*args) if args else func()
+        try:
+            result = func(*args)
+        except TypeError:
+            result = func()
         print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
     else:
         print(json.dumps({

@@ -15,6 +15,7 @@
 #include "ui/widgets/NotifToast.h"
 
 #include <QDataStream>
+#include <QJsonDocument>
 #include <QEvent>
 #include <QHideEvent>
 #include <QPalette>
@@ -189,8 +190,21 @@ void DashboardScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     refresh_theme();
 
-    if (ticker_bar_)
-        ticker_bar_->resume();
+    if (ticker_bar_) {
+        // Honour the appearance settings that were previously saved but never
+        // read: "Show Ticker Bar" toggles visibility; "Enable Animations" toggles
+        // the scroll (off → the bar shows its symbols but doesn't animate).
+        auto& repo = SettingsRepository::instance();
+        const auto tr = repo.get("appearance.show_ticker_bar");
+        const bool show_ticker = !tr.is_ok() ? true : tr.value() != "false";
+        const auto ar = repo.get("appearance.animations");
+        const bool animations = !ar.is_ok() ? true : ar.value() != "false";
+        ticker_bar_->setVisible(show_ticker);
+        if (show_ticker && animations)
+            ticker_bar_->resume();
+        else
+            ticker_bar_->pause();
+    }
 
     // Subscribe to current ticker symbols — hub schedules refreshes per TopicPolicy.
     hub_resubscribe_ticker();
@@ -341,20 +355,33 @@ bool DashboardScreen::eventFilter(QObject* obj, QEvent* event) {
 
 // ── Save / Restore layout via SettingsRepository ──────────────────────────────
 
+namespace {
+// Magic + version prefix for the serialized dashboard layout blob. Distinguishes
+// the current config-carrying format from the legacy one (which packed items
+// with no per-item config). `cols` (a small int) never collides with the magic,
+// so legacy blobs are still decoded (with empty per-item config).
+constexpr quint32 kDashLayoutMagic = 0xDA58A101u;
+constexpr quint32 kDashLayoutVersion = 1;
+} // namespace
+
 void DashboardScreen::save_layout() {
     save_timer_->stop();
 
     GridLayout layout = canvas_->current_layout();
 
-    // Serialize: cols, row_h, margin, item count, then each item
+    // Serialize: magic+version, cols, row_h, margin, item count, then each item
+    // (including its per-instance config — dropping it reverted every configured
+    // widget to defaults on restart).
     QByteArray buf;
     QDataStream stream(&buf, QIODevice::WriteOnly);
+    stream << kDashLayoutMagic << kDashLayoutVersion;
     stream << layout.cols << layout.row_h << layout.margin;
     stream << static_cast<int>(layout.items.size());
     for (const auto& item : layout.items) {
         stream << item.id << item.instance_id;
         stream << item.cell.x << item.cell.y << item.cell.w << item.cell.h;
         stream << item.cell.min_w << item.cell.min_h;
+        stream << QJsonDocument(item.config).toJson(QJsonDocument::Compact);
     }
 
     QString encoded = buf.toBase64();
@@ -384,7 +411,19 @@ void DashboardScreen::restore_layout() {
 
                 GridLayout layout;
                 int count = 0;
-                stream >> layout.cols >> layout.row_h >> layout.margin >> count;
+                // Detect the format: a leading magic means the config-carrying
+                // blob; otherwise the 4 bytes we read were the legacy `cols`.
+                quint32 lead = 0;
+                stream >> lead;
+                const bool has_config = (lead == kDashLayoutMagic);
+                if (has_config) {
+                    quint32 version = 0;
+                    stream >> version; // reserved for future migrations
+                    stream >> layout.cols >> layout.row_h >> layout.margin >> count;
+                } else {
+                    layout.cols = static_cast<int>(lead);
+                    stream >> layout.row_h >> layout.margin >> count;
+                }
 
                 if (count <= 0 || count > 100) {
                     self->build_default_layout();
@@ -396,6 +435,13 @@ void DashboardScreen::restore_layout() {
                     stream >> item.id >> item.instance_id;
                     stream >> item.cell.x >> item.cell.y >> item.cell.w >> item.cell.h;
                     stream >> item.cell.min_w >> item.cell.min_h;
+                    if (has_config) {
+                        QByteArray cfg_bytes;
+                        stream >> cfg_bytes;
+                        const auto doc = QJsonDocument::fromJson(cfg_bytes);
+                        if (doc.isObject())
+                            item.config = doc.object();
+                    }
                     layout.items.append(item);
                 }
 

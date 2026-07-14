@@ -277,6 +277,43 @@ std::vector<ToolDef> get_file_manager_tools() {
             QFileInfo fi(src);
             if (!fi.exists() || !fi.isFile())
                 return ToolResult::fail("File not found at source_path");
+
+            // Security: refuse to import files that look like credentials/secrets.
+            // Without this an LLM could import ~/.aws/credentials, a .env, or an
+            // SSH key into managed storage and then read it straight back via
+            // read_file_contents — a secret-exfiltration path.
+            {
+                const QString lp = QDir::fromNativeSeparators(src).toLower();
+                const QString base = fi.fileName().toLower();
+                static const QStringList kSecretDirs = {"/.ssh/",   "/.aws/",   "/.gnupg/",         "/.kube/",
+                                                        "/.docker/", "/.azure/", "/.config/gcloud/"};
+                static const QStringList kSecretNames = {".env",          "credentials", "id_rsa",  "id_ed25519",
+                                                         "id_dsa",        "id_ecdsa",    ".netrc",   ".pgpass",
+                                                         ".git-credentials", ".npmrc"};
+                static const QStringList kSecretExts = {".pem", ".key", ".pfx", ".p12", ".keystore", ".jks", ".ppk"};
+                bool secret = false;
+                for (const auto& d : kSecretDirs)
+                    if (lp.contains(d)) {
+                        secret = true;
+                        break;
+                    }
+                if (!secret)
+                    for (const auto& n : kSecretNames)
+                        if (base == n || base.startsWith(n)) {
+                            secret = true;
+                            break;
+                        }
+                if (!secret)
+                    for (const auto& e : kSecretExts)
+                        if (base.endsWith(e)) {
+                            secret = true;
+                            break;
+                        }
+                if (secret)
+                    return ToolResult::fail("Refusing to import a file that looks like a credential or secret "
+                                            "(SSH/AWS/GPG key, .env, credentials, .pem/.key, etc.).");
+            }
+
             const QString id = services::FileManagerService::instance().import_file(src, screen);
             if (id.isEmpty())
                 return ToolResult::fail("Import failed");
@@ -314,6 +351,15 @@ std::vector<ToolDef> get_file_manager_tools() {
             const QString screen = args["source_screen"].toString().trimmed();
             if (name.isEmpty())
                 return ToolResult::fail("Missing 'name'");
+            // Security (path traversal): `name` is used to build a path under
+            // storage_dir, and QDir::filePath()/QFile::remove()/rename() do NOT
+            // strip ".." or an absolute prefix — a name like "../../secret.txt"
+            // would delete then overwrite an arbitrary file on disk. Require a
+            // plain filename with no path component.
+            const QString safe_name = QFileInfo(name).fileName();
+            if (safe_name.isEmpty() || safe_name != name || safe_name == QLatin1String(".") ||
+                safe_name == QLatin1String(".."))
+                return ToolResult::fail("Invalid 'name': must be a plain filename, not a path");
 
             auto& svc = services::FileManagerService::instance();
             // Stage the content in a temp file inside storage_dir, then import.
@@ -322,7 +368,7 @@ std::vector<ToolDef> get_file_manager_tools() {
                 return ToolResult::fail("Cannot create storage dir");
 
             const QString tmp_path =
-                dir.filePath(QStringLiteral(".incoming_%1_%2").arg(QDateTime::currentMSecsSinceEpoch()).arg(name));
+                dir.filePath(QStringLiteral(".incoming_%1_%2").arg(QDateTime::currentMSecsSinceEpoch()).arg(safe_name));
             QFile f(tmp_path);
             if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
                 return ToolResult::fail("Cannot open temp file for writing");
@@ -335,7 +381,7 @@ std::vector<ToolDef> get_file_manager_tools() {
 
             // Rename to the desired display name so import sees the right
             // original-name (FileManagerService uses QFileInfo::fileName()).
-            const QString staged = dir.filePath(name);
+            const QString staged = dir.filePath(safe_name);
             QFile::remove(staged);
             QFile::rename(tmp_path, staged);
 

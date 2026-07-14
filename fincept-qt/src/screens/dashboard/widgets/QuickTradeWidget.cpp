@@ -296,9 +296,22 @@ void QuickTradeWidget::submit_order() {
     QString price_str = type == "MARKET" ? tr("market price ($%1)").arg(current_price_, 0, 'f', 2)
                                          : QString("$%1").arg(price_input_->text());
 
+    // This dashboard widget has no broker/account binding, so it cannot place a
+    // real or paper order. Previously it popped an "Order sent to trading
+    // engine" success box while sending nothing — a dangerous false confirmation
+    // on a trading terminal. Be honest and point the user at the real order
+    // entry (Equity/Crypto Trading), which has account selection, paper/live
+    // routing and an explicit confirmation. (Wiring Quick Trade to an account is
+    // tracked as a follow-up.)
+    Q_UNUSED(price_str)
     QMessageBox::information(
-        this, tr("Order Submitted"),
-        tr("%1 %2 %3 @ %4\nOrder sent to trading engine.").arg(side).arg(qty, 0, 'f', 0).arg(sym).arg(price_str));
+        this, tr("Quick Trade"),
+        tr("Quick Trade is a preview widget and is not connected to a trading account — no order was placed.\n\n"
+           "To place %1 %2 %3, use the Equity Trading or Crypto Trading screen, which routes the order to your "
+           "selected broker/paper account with confirmation.")
+            .arg(side)
+            .arg(qty, 0, 'f', 0)
+            .arg(sym));
 }
 
 void QuickTradeWidget::retranslateUi() {

@@ -2,6 +2,7 @@
 #include "screens/equity_research/EquityPeersTab.h"
 
 #include "services/equity/EquityResearchService.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
@@ -183,7 +184,13 @@ void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& p
 
     auto set_cell = [&](int row, int col, const QString& text, const QColor& fg = QColor(),
                         Qt::Alignment align = Qt::AlignRight | Qt::AlignVCenter) {
-        auto* item = new QTableWidgetItem(text);
+        // Sort numeric columns by magnitude, not lexically ("15","150","5"…).
+        // Parse the formatted value; non-numeric cells ("—") use a plain item.
+        QString num = text;
+        num.remove('%').remove(',').remove('$');
+        bool ok = false;
+        const double value = num.toDouble(&ok);
+        QTableWidgetItem* item = ok ? new ui::NumericTableWidgetItem(text, value) : new QTableWidgetItem(text);
         item->setTextAlignment(align);
         if (fg.isValid())
             item->setForeground(fg);

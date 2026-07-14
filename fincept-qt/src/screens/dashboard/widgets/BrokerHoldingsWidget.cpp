@@ -17,8 +17,10 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
 #include <QStringList>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens::widgets {
 
@@ -233,14 +235,30 @@ void BrokerHoldingsWidget::square_off_holding(const trading::BrokerHolding& h) {
     if (answer != QMessageBox::Yes)
         return;
 
-    const auto resp = trading::UnifiedTrading::instance().place_order(account_id_, make_square_off_order(h));
-    if (resp.success) {
-        QMessageBox::information(this, tr("Square Off Holding"),
-                                 tr("Sell order placed for %1 (order %2).").arg(h.symbol, resp.order_id));
-    } else {
-        QMessageBox::critical(this, tr("Square Off Holding"),
-                              tr("Failed to square off %1: %2").arg(h.symbol, resp.message));
-    }
+    // place_order blocks on a synchronous broker REST call for a live account —
+    // run it off the UI thread (P1) and marshal the result dialog back.
+    const trading::UnifiedOrder order = make_square_off_order(h);
+    const QString account = account_id_;
+    const QString sym = h.symbol;
+    QPointer<BrokerHoldingsWidget> self = this;
+    (void)QtConcurrent::run([self, account, order, sym]() {
+        const auto resp = trading::UnifiedTrading::instance().place_order(account, order);
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, resp, sym]() {
+                if (!self)
+                    return;
+                if (resp.success)
+                    QMessageBox::information(self, tr("Square Off Holding"),
+                                             tr("Sell order placed for %1 (order %2).").arg(sym, resp.order_id));
+                else
+                    QMessageBox::critical(self, tr("Square Off Holding"),
+                                          tr("Failed to square off %1: %2").arg(sym, resp.message));
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 void BrokerHoldingsWidget::square_off_all() {
@@ -267,25 +285,49 @@ void BrokerHoldingsWidget::square_off_all() {
     if (answer != QMessageBox::Yes)
         return;
 
-    int placed = 0;
-    QStringList failures;
-    for (const auto& h : targets) {
-        const auto resp = trading::UnifiedTrading::instance().place_order(account_id_, make_square_off_order(h));
-        if (resp.success)
-            ++placed;
-        else
-            failures.append(QStringLiteral("%1 (%2)").arg(h.symbol, resp.message));
-    }
+    // Pre-build every order on the UI thread, then place them off the UI thread:
+    // each place_order is a blocking broker REST round-trip for a live account,
+    // so looping synchronously here froze the whole terminal for seconds (P1).
+    struct SquareOffJob {
+        QString symbol;
+        trading::UnifiedOrder order;
+    };
+    QVector<SquareOffJob> jobs;
+    jobs.reserve(targets.size());
+    for (const auto& h : targets)
+        jobs.append({h.symbol, make_square_off_order(h)});
 
-    if (failures.isEmpty()) {
-        QMessageBox::information(this, tr("Square Off All Holdings"), tr("Placed %1 sell order(s).").arg(placed));
-    } else {
-        QMessageBox::warning(this, tr("Square Off All Holdings"),
-                             tr("Placed %1 order(s). %2 failed:\n%3")
-                                 .arg(placed)
-                                 .arg(failures.size())
-                                 .arg(failures.join(QStringLiteral("\n"))));
-    }
+    const QString account = account_id_;
+    QPointer<BrokerHoldingsWidget> self = this;
+    (void)QtConcurrent::run([self, account, jobs]() {
+        int placed = 0;
+        QStringList failures;
+        for (const auto& j : jobs) {
+            const auto resp = trading::UnifiedTrading::instance().place_order(account, j.order);
+            if (resp.success)
+                ++placed;
+            else
+                failures.append(QStringLiteral("%1 (%2)").arg(j.symbol, resp.message));
+        }
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, placed, failures]() {
+                if (!self)
+                    return;
+                if (failures.isEmpty())
+                    QMessageBox::information(self, tr("Square Off All Holdings"),
+                                             tr("Placed %1 sell order(s).").arg(placed));
+                else
+                    QMessageBox::warning(self, tr("Square Off All Holdings"),
+                                         tr("Placed %1 order(s). %2 failed:\n%3")
+                                             .arg(placed)
+                                             .arg(failures.size())
+                                             .arg(failures.join(QStringLiteral("\n"))));
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 void BrokerHoldingsWidget::on_theme_changed() {

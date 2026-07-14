@@ -49,6 +49,8 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {
     // checker that gates agent-originated tool calls. Both are idempotent;
     // failure to bind the port is logged but not fatal — agents simply lose
     // terminal-tool access.
+    connect(&mcp::TerminalMcpBridge::instance(), &mcp::TerminalMcpBridge::bridge_error, this,
+            [](const QString& msg) { LOG_ERROR("AgentService", "Terminal MCP bridge error: " + msg); });
     if (mcp::TerminalMcpBridge::instance().start()) {
         LOG_INFO("AgentService", "Terminal MCP bridge started: " + mcp::TerminalMcpBridge::instance().endpoint());
     } else {

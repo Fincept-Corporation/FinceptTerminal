@@ -59,6 +59,19 @@ struct CallFlagGuard {
 };
 } // namespace
 
+// Public RAII helper — re-establishes the (thread_local) gating flags on the
+// pool thread that runs an external tool, then restores the prior values.
+TerminalMcpBridge::ScopedCallFlags::ScopedCallFlags(bool call_in_progress, bool destructive_allowed)
+    : prev_in_progress_(tls_call_in_progress), prev_destructive_(tls_destructive_allowed) {
+    tls_call_in_progress = call_in_progress;
+    tls_destructive_allowed = destructive_allowed;
+}
+
+TerminalMcpBridge::ScopedCallFlags::~ScopedCallFlags() {
+    tls_call_in_progress = prev_in_progress_;
+    tls_destructive_allowed = prev_destructive_;
+}
+
 TerminalMcpBridge& TerminalMcpBridge::instance() {
     static TerminalMcpBridge s;
     return s;
@@ -77,6 +90,7 @@ bool TerminalMcpBridge::start() {
 
     if (!server_->listen(QHostAddress::LocalHost, 0)) {
         LOG_ERROR(TAG, "Failed to bind 127.0.0.1: " + server_->errorString());
+        emit bridge_error(QStringLiteral("Failed to bind terminal MCP bridge: ") + server_->errorString());
         server_->deleteLater();
         server_ = nullptr;
         return false;

@@ -25,6 +25,7 @@ struct EndpointsResult {
 struct QueryResult {
     bool success = false;
     QJsonArray rows;
+    QStringList columns; // ordered column names from the source DataFrame (empty if the script didn't supply them)
     QString error;
 };
 

@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QPointer>
+#include <QUrl>
 
 #include <algorithm>
 
@@ -58,9 +59,13 @@ void MarketSearchService::search(const QString& query, const QString& type, int 
     }
     const int clamped = std::clamp(limit, kMinLimit, kMaxLimit);
 
-    QString url = QString("/market/search?q=%1&limit=%2").arg(q).arg(clamped);
+    // Percent-encode the query so symbols like "S&P" / "AT&T" / spaces don't
+    // break the query string (the raw '&' would be read as a param separator).
+    QString url = QString("/market/search?q=%1&limit=%2")
+                      .arg(QString::fromUtf8(QUrl::toPercentEncoding(q)))
+                      .arg(clamped);
     if (!type.isEmpty())
-        url += "&type=" + type;
+        url += "&type=" + QString::fromUtf8(QUrl::toPercentEncoding(type));
 
     QPointer<MarketSearchService> self = this;
     HttpClient::instance().get(

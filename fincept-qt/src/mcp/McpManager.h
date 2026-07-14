@@ -10,6 +10,7 @@
 #include <QObject>
 #include <QTimer>
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -68,11 +69,15 @@ class McpManager : public QObject {
 
     QTimer* health_timer_ = nullptr;
     mutable QMutex mutex_;
+    std::atomic<bool> health_check_running_{false}; // guards against overlapping async health passes
 
     static constexpr int MAX_RESTART_ATTEMPTS = 3;
 
     McpClient* get_client(const QString& id) const;
     void refresh_tools_for(const QString& id);
+    // Handles one server's ping result on the MAIN thread (restart uses QProcess,
+    // which is thread-affine and must stay on the thread that owns it).
+    void on_health_result(const QString& id, bool ok);
 
   private slots:
     void do_health_check();

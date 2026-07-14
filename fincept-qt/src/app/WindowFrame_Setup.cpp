@@ -71,6 +71,7 @@
 #include "screens/quantlib/QuantLibScreen.h"
 #include "screens/relationship_map/RelationshipMapScreen.h"
 #include "screens/report_builder/ReportBuilderScreen.h"
+#include "screens/screener/ScreenerScreen.h"
 #include "screens/settings/SettingsScreen.h"
 #include "screens/support/SupportScreen.h"
 #include "screens/surface_analytics/SurfaceAnalyticsScreen.h"
@@ -263,6 +264,7 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("derivatives", []() { return new screens::DerivativesScreen; });
     dock_router_->register_factory("fno", []() { return new screens::fno::FnoScreen; });
     dock_router_->register_factory("equity_research", []() { return new screens::EquityResearchScreen; });
+    dock_router_->register_factory("screener", []() { return new screens::ScreenerScreen; });
     dock_router_->register_factory("ma_analytics", []() { return new screens::MAAnalyticsScreen; });
     dock_router_->register_factory("alt_investments", []() { return new screens::AltInvestmentsScreen; });
     dock_router_->register_factory("geopolitics", []() { return new screens::GeopoliticsScreen; });

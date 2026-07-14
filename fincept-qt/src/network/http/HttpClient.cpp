@@ -44,6 +44,12 @@ QNetworkRequest HttpClient::build_request(const QString& url) const {
 void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback, const QObject* context) {
     // Connect to caller-provided context so caller destruction auto-disconnects before the lambda fires.
     const QObject* receiver = context ? context : static_cast<const QObject*>(this);
+    // Safety net: guarantee the reply is always deleted. If `context` is
+    // destroyed before the reply finishes, Qt auto-disconnects the callback
+    // lambda below and its reply->deleteLater() would never run → the reply
+    // leaks until app exit. deleteLater() is idempotent, so a double-call when
+    // the lambda also runs is harmless.
+    connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
     connect(reply, &QNetworkReply::finished, receiver, [reply, cb = std::move(callback)]() {
         reply->deleteLater();
 

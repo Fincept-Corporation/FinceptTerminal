@@ -81,19 +81,44 @@ void PolymarketOrderBook::mousePressEvent(QMouseEvent* event) {
     if (y < HEADER_HEIGHT)
         return;
 
-    QMutexLocker lock(&mutex_);
-    int row_idx = (y - HEADER_HEIGHT) / ROW_HEIGHT;
-    int ask_rows = qMin(asks_.size(), 10);
+    // Resolve which price level was clicked using the SAME visible-row counts the
+    // painter used, otherwise a click lands on a different level than the one
+    // drawn (which, for a trading order book, fills the order form with a wrong
+    // price). Compute under the lock, then emit outside it so a slot that calls
+    // back into set_data()/clear() can't deadlock on mutex_.
+    double clicked_price = 0.0;
+    bool has_click = false;
+    {
+        QMutexLocker lock(&mutex_);
+        int row_idx = (y - HEADER_HEIGHT) / ROW_HEIGHT;
+        int ask_rows = 0, bid_rows = 0;
+        visible_row_counts(ask_rows, bid_rows);
 
-    if (row_idx < ask_rows && row_idx < asks_.size()) {
-        int ask_i = ask_rows - 1 - row_idx;
-        emit price_clicked(asks_[ask_i].price);
-    } else {
-        int bid_idx = row_idx - ask_rows - 1; // -1 for spread row
-        if (bid_idx >= 0 && bid_idx < bids_.size()) {
-            emit price_clicked(bids_[bid_idx].price);
+        if (row_idx < ask_rows) {
+            // Asks are painted highest-first (reversed), so the top row is the
+            // last ask index and the row just above the spread is asks_[0].
+            int ask_i = ask_rows - 1 - row_idx;
+            if (ask_i >= 0 && ask_i < asks_.size()) {
+                clicked_price = asks_[ask_i].price;
+                has_click = true;
+            }
+        } else {
+            int bid_idx = row_idx - ask_rows - 1; // -1 for the spread row
+            if (bid_idx >= 0 && bid_idx < bid_rows && bid_idx < bids_.size()) {
+                clicked_price = bids_[bid_idx].price;
+                has_click = true;
+            }
         }
     }
+    if (has_click)
+        emit price_clicked(clicked_price);
+}
+
+void PolymarketOrderBook::visible_row_counts(int& ask_rows, int& bid_rows) const {
+    const int h = height();
+    const int max_rows = (h - HEADER_HEIGHT) / ROW_HEIGHT;
+    ask_rows = qMin(asks_.size(), qMax(1, max_rows / 2 - 1));
+    bid_rows = qMin(bids_.size(), qMax(1, max_rows / 2 - 1));
 }
 
 void PolymarketOrderBook::rebuild_cache() {
@@ -129,9 +154,8 @@ void PolymarketOrderBook::rebuild_cache() {
     p.setPen(QColor(colors::BORDER_DIM()));
     p.drawLine(0, HEADER_HEIGHT - 1, w, HEADER_HEIGHT - 1);
 
-    int max_rows = (h - HEADER_HEIGHT) / ROW_HEIGHT;
-    int ask_rows = qMin(asks_.size(), qMax(1, max_rows / 2 - 1));
-    int bid_rows = qMin(bids_.size(), qMax(1, max_rows / 2 - 1));
+    int ask_rows = 0, bid_rows = 0;
+    visible_row_counts(ask_rows, bid_rows);
 
     // Find max cumulative size for depth bars
     double max_depth = 0;

@@ -2,6 +2,7 @@
 #include "screens/portfolio/PortfolioTxnPanel.h"
 
 #include "screens/portfolio/PortfolioPanelHeader.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
@@ -148,20 +149,20 @@ void PortfolioTxnPanel::populate() {
         type_item->setFont(QFont(ui::fonts::DATA_FAMILY, 11, QFont::Bold));
         table_->setItem(row, 2, type_item);
 
-        // Qty
-        auto* qty_item = new QTableWidgetItem(QString::number(t.quantity, 'f', 4));
+        // Qty — numeric item so header-sort orders by magnitude, not lexically
+        auto* qty_item = new ui::NumericTableWidgetItem(QString::number(t.quantity, 'f', 4), t.quantity);
         qty_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         qty_item->setForeground(QColor(ui::colors::TEXT_PRIMARY()));
         table_->setItem(row, 3, qty_item);
 
         // Price
-        auto* price_item = new QTableWidgetItem(QString::number(t.price, 'f', 2));
+        auto* price_item = new ui::NumericTableWidgetItem(QString::number(t.price, 'f', 2), t.price);
         price_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         price_item->setForeground(QColor(ui::colors::TEXT_PRIMARY()));
         table_->setItem(row, 4, price_item);
 
         // Total
-        auto* total_item = new QTableWidgetItem(QString::number(t.total_value, 'f', 2));
+        auto* total_item = new ui::NumericTableWidgetItem(QString::number(t.total_value, 'f', 2), t.total_value);
         total_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         const char* total_color = (t.transaction_type == "BUY")    ? ui::colors::NEGATIVE
                                   : (t.transaction_type == "SELL") ? ui::colors::POSITIVE

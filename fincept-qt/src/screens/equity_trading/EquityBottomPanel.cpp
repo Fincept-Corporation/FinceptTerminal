@@ -1416,7 +1416,32 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
                 dlg->exec();
                 dlg->deleteLater();
             });
-            orders_table_->setCellWidget(i, 9, btn);
+            // CANCEL — kills the open order. Confirmed here because on_cancel_order
+            // cancels immediately with no downstream prompt and equity orders are live.
+            auto* cancel_row_btn = new QPushButton(tr("CANCEL"));
+            cancel_row_btn->setObjectName("eqTableBtn");
+            cancel_row_btn->setFixedHeight(18);
+            cancel_row_btn->setStyleSheet(QString("QPushButton#eqTableBtn { background: rgba(220,38,38,0.12); "
+                                                  "color: %1; border: 1px solid %2; font-size: 10px; "
+                                                  "padding: 0 6px; border-radius: 2px; }")
+                                              .arg(fincept::ui::colors::NEGATIVE())
+                                              .arg(fincept::ui::colors::NEGATIVE_DIM()));
+            cancel_row_btn->setCursor(Qt::PointingHandCursor);
+            const QString cancel_oid = o.order_id;
+            connect(cancel_row_btn, &QPushButton::clicked, this, [this, cancel_oid]() {
+                if (QMessageBox::question(this, tr("Cancel Order"), tr("Cancel order %1?").arg(cancel_oid.left(12)),
+                                          QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes)
+                    emit cancel_order_requested(cancel_oid);
+            });
+
+            auto* action_cell = new QWidget;
+            auto* action_lay = new QHBoxLayout(action_cell);
+            action_lay->setContentsMargins(2, 0, 2, 0);
+            action_lay->setSpacing(4);
+            action_lay->addWidget(btn);
+            action_lay->addWidget(cancel_row_btn);
+            action_lay->addStretch();
+            orders_table_->setCellWidget(i, 9, action_cell);
         } else {
             orders_table_->setCellWidget(i, 9, nullptr);
         }

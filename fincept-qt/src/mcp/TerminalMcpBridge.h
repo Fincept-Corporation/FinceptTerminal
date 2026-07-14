@@ -67,6 +67,24 @@ class TerminalMcpBridge : public QObject {
     /// token. Only meaningful while is_call_in_progress() is true.
     static bool is_destructive_allowed();
 
+    /// RAII helper that re-establishes the agent-gating flags on ANOTHER thread.
+    /// The flags above are thread_local, so when an external tool call hops onto
+    /// a QtConcurrent pool thread (McpService::execute_openai_function_async) the
+    /// agent context is lost and the auth checker would treat it as a chat call
+    /// — bypassing the destructive-tool gate. Capture the flags on the bridge
+    /// thread, then construct one of these inside the pool-thread lambda.
+    class ScopedCallFlags {
+      public:
+        ScopedCallFlags(bool call_in_progress, bool destructive_allowed);
+        ~ScopedCallFlags();
+        ScopedCallFlags(const ScopedCallFlags&) = delete;
+        ScopedCallFlags& operator=(const ScopedCallFlags&) = delete;
+
+      private:
+        bool prev_in_progress_;
+        bool prev_destructive_;
+    };
+
     /// Build the catalog payload that AgentService injects into
     /// `config["terminal_tools"]`. Output shape (per item):
     ///   { "name": str, "description": str, "inputSchema": {JSON Schema} }

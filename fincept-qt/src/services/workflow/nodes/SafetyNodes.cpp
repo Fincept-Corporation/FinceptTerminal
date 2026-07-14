@@ -50,7 +50,15 @@ void register_safety_nodes(NodeRegistry& registry) {
 
                 QStringList failures;
 
-                if (portfolio_value > 0 && price > 0) {
+                // Fail CLOSED when the data needed to size the position is
+                // missing: a risk gate that can't evaluate its rule because the
+                // upstream portfolio_value/price is absent must not wave the
+                // trade through. The old code skipped the check (fail-open).
+                if (portfolio_value <= 0 || price <= 0) {
+                    failures << QString("Cannot verify position size — missing %1")
+                                    .arg(portfolio_value <= 0 ? QStringLiteral("portfolio_value")
+                                                              : QStringLiteral("price"));
+                } else {
                     double position_value = quantity * price;
                     double position_pct = (position_value / portfolio_value) * 100.0;
                     if (position_pct > max_pos_pct)

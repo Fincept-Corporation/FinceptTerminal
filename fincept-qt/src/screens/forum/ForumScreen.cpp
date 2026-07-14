@@ -14,6 +14,8 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHideEvent>
+#include <QMessageBox>
+#include <QPointer>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -120,15 +122,26 @@ void ForumScreen::build_ui() {
     connect(thread_, &ForumThreadPanel::back_requested, this, &ForumScreen::navigate_back_to_feed);
 
     connect(thread_, &ForumThreadPanel::comment_submitted, this, [this](const QString& uuid, const QString& content) {
-        services::ForumService::instance().create_comment(uuid, content, [this, uuid](bool ok, const QString&) {
+        QPointer<ForumScreen> self = this;
+        services::ForumService::instance().create_comment(uuid, content, [self, uuid](bool ok, const QString& msg) {
+            if (!self)
+                return;
             if (ok) {
-                thread_->set_loading(true);
-                services::ForumService::instance().fetch_post(uuid, [this](bool ok2, services::ForumPostDetail d) {
+                self->thread_->clear_reply_input(); // only clear once it actually posted
+                self->thread_->set_loading(true);
+                services::ForumService::instance().fetch_post(uuid, [self](bool ok2, services::ForumPostDetail d) {
+                    if (!self)
+                        return;
                     if (ok2)
-                        thread_->show_post(d);
+                        self->thread_->show_post(d);
                     else
-                        thread_->set_loading(false);
+                        self->thread_->set_loading(false);
                 });
+            } else {
+                LOG_WARN("ForumScreen", "Create comment failed: " + msg);
+                QMessageBox::warning(self, ForumScreen::tr("Reply Failed"),
+                                     msg.isEmpty() ? ForumScreen::tr("Could not post your reply. Please try again.")
+                                                   : ForumScreen::tr("Could not post your reply: %1").arg(msg));
             }
         });
     });
@@ -512,18 +525,39 @@ void ForumScreen::show_new_post_dialog(int category_id) {
                                   "border-color:rgba(217,119,6,0.6);"
                                   "background:rgba(217,119,6,0.2);}")
                               .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
-    connect(submit, &QPushButton::clicked, this, [this, dlg, title_edit, body_edit, category_id]() {
+    connect(submit, &QPushButton::clicked, this, [this, dlg, title_edit, body_edit, submit, category_id]() {
         QString title = title_edit->text().trimmed();
         QString content = body_edit->toPlainText().trimmed();
         if (title.isEmpty() || content.isEmpty())
             return;
-        dlg->accept();
+        // Keep the dialog (and the user's typed post) open until the async call
+        // returns. Only close on success; on failure re-enable Publish and show
+        // the error so the text isn't lost. The old code accept()ed (discarding
+        // the text) BEFORE the call and merely LOG_WARN'd on failure.
+        submit->setEnabled(false);
+        submit->setText(tr("PUBLISHING…"));
+        QPointer<ForumScreen> self = this;
+        QPointer<QDialog> dlg_guard(dlg);
+        QPointer<QPushButton> submit_guard(submit);
         services::ForumService::instance().create_post(
-            category_id, title, content, [this](bool ok, const QString& msg) {
-                if (ok)
-                    on_category_selected(active_category_id_, active_category_name_, active_category_color_);
-                else
-                    LOG_WARN("ForumScreen", "Create post failed: " + msg);
+            category_id, title, content, [self, dlg_guard, submit_guard](bool ok, const QString& msg) {
+                if (ok) {
+                    if (dlg_guard)
+                        dlg_guard->accept();
+                    if (self)
+                        self->on_category_selected(self->active_category_id_, self->active_category_name_,
+                                                   self->active_category_color_);
+                    return;
+                }
+                LOG_WARN("ForumScreen", "Create post failed: " + msg);
+                if (submit_guard) {
+                    submit_guard->setEnabled(true);
+                    submit_guard->setText(ForumScreen::tr("PUBLISH POST"));
+                }
+                if (dlg_guard)
+                    QMessageBox::warning(dlg_guard, ForumScreen::tr("Post Failed"),
+                                         msg.isEmpty() ? ForumScreen::tr("Could not publish your post. Please try again.")
+                                                       : ForumScreen::tr("Could not publish your post: %1").arg(msg));
             });
     });
 

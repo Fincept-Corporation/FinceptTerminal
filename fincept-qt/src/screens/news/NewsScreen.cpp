@@ -709,35 +709,33 @@ void NewsScreen::apply_filters_async() {
     const QString variant = active_variant_;
     const QString lang_filter = active_lang_.toLower();
 
-    // For 7D / 30D ranges, merge DB history
-    if (time_range == "7D" || time_range == "30D") {
-        const int64_t window_sec = (time_range == "30D") ? (30LL * 86400) : (7LL * 86400);
-        const int64_t cutoff = QDateTime::currentSecsSinceEpoch() - window_sec;
-
-        QSet<QString> live_ids;
-        live_ids.reserve(articles_copy.size());
-        for (const auto& a : std::as_const(articles_copy))
-            live_ids.insert(a.id);
-
-        auto merge_into = [&](const QVector<services::NewsArticle>& extras) {
-            for (const auto& a : extras)
-                if (!live_ids.contains(a.id))
-                    articles_copy.append(a);
-        };
-
-        if (!search_lower.isEmpty()) {
-            auto fts_result = fincept::NewsArticleRepository::instance().search_fts(search_lower, cutoff, 1000);
-            if (fts_result.is_ok())
-                merge_into(fts_result.value());
-        } else {
-            auto db_result = fincept::NewsArticleRepository::instance().load_recent(cutoff, {}, 5000);
-            if (db_result.is_ok())
-                merge_into(db_result.value());
-        }
-    }
-
     (void)QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower,
-                             sort, variant, lang_filter]() {
+                             sort, variant, lang_filter]() mutable {
+        // 7D/30D history merge — moved OFF the UI thread. Reading up to 5000 rows
+        // from SQLite on the UI thread stuttered the UI on each filter keystroke.
+        // Safe on a worker: Database hands out per-thread cloned connections.
+        if (time_range == "7D" || time_range == "30D") {
+            const int64_t hist_window = (time_range == "30D") ? (30LL * 86400) : (7LL * 86400);
+            const int64_t cutoff = QDateTime::currentSecsSinceEpoch() - hist_window;
+            QSet<QString> live_ids;
+            live_ids.reserve(articles_copy.size());
+            for (const auto& a : std::as_const(articles_copy))
+                live_ids.insert(a.id);
+            auto merge_into = [&](const QVector<services::NewsArticle>& extras) {
+                for (const auto& a : extras)
+                    if (!live_ids.contains(a.id))
+                        articles_copy.append(a);
+            };
+            if (!search_lower.isEmpty()) {
+                auto fts_result = fincept::NewsArticleRepository::instance().search_fts(search_lower, cutoff, 1000);
+                if (fts_result.is_ok())
+                    merge_into(fts_result.value());
+            } else {
+                auto db_result = fincept::NewsArticleRepository::instance().load_recent(cutoff, {}, 5000);
+                if (db_result.is_ok())
+                    merge_into(db_result.value());
+            }
+        }
         int64_t window_sec = 0;
         if (time_range == "1H")
             window_sec = 3600;

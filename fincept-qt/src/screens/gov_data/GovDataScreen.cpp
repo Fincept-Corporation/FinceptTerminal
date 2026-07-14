@@ -156,13 +156,11 @@ void GovDataScreen::build_ui() {
         } else if (prov.id == "hk") {
             panel = new GovDataHKPanel(panel_stack_);
         } else if (prov.id == "universal-ckan") {
-            GovProviderOptions ckan_opts;
-            ckan_opts.portal_combo_items = {"data.gov.uk",    "open.canada.ca", "data.gov.au", "data.gov.hk",
-                                            "opendata.swiss", "data.gouv.fr",   "data.gov",    "openafrica.net"};
-            ckan_opts.portal_combo_tooltip =
-                tr("This panel uses datagovuk_api.py which queries data.gov.uk.\n"
-                   "The selector shows all CKAN portals covered by the universal provider.");
-            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", ckan_opts, panel_stack_);
+            // The universal CKAN connector (datagovuk_api.py) hardcodes the
+            // data.gov.uk endpoint, so serve this provider with the dedicated UK
+            // panel (Publishers → Datasets → Resources + search) instead of the
+            // generic provider panel with its non-functional portal selector.
+            panel = new GovDataUKPanel(panel_stack_);
         } else if (prov.id == "australia") {
             panel = new GovDataAustraliaPanel(panel_stack_);
         } else {

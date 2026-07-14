@@ -8,6 +8,7 @@
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
 #include "services/quantlib/QuantLibClient.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -623,7 +624,8 @@ void QuantLibScreen::display_result_array(const QJsonArray& arr) {
                 QString text = val.isDouble() ? QString::number(val.toDouble(), 'g', 10)
                                : val.isNull() ? "--"
                                               : val.toVariant().toString();
-                auto* item = new QTableWidgetItem(text);
+                QTableWidgetItem* item = val.isDouble() ? new ui::NumericTableWidgetItem(text, val.toDouble())
+                                                         : new QTableWidgetItem(text);
                 item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 if (val.isDouble())
                     item->setForeground(QColor(val.toDouble() < 0 ? colors::NEGATIVE() : colors::CYAN()));

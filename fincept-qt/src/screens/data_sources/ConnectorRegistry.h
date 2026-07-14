@@ -1,5 +1,5 @@
 #pragma once
-// ConnectorRegistry — singleton holding all 78 data source connector definitions.
+// ConnectorRegistry — singleton holding all 118 data source connector definitions.
 // Connector files self-register via static init.
 
 #include "screens/data_sources/DataSourceTypes.h"

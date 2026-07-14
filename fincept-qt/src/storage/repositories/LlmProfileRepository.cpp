@@ -3,11 +3,21 @@
 #include "storage/repositories/LlmProfileRepository.h"
 
 #include "core/logging/Logger.h"
+#include "storage/repositories/LlmConfigRepository.h"
+#include "storage/secure/SecureStorage.h"
 
 #include <QSqlQuery>
 #include <QUuid>
 
 namespace fincept {
+
+namespace {
+// Encrypt the profile API key at rest in SecureStorage; reads fall back to the
+// plaintext column so legacy rows keep working and no key is lost.
+QString profile_secret_key(const QString& id) {
+    return QStringLiteral("llm:apikey:profile:") + id;
+}
+} // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
@@ -32,6 +42,13 @@ LlmProfile LlmProfileRepository::map_profile(QSqlQuery& q) {
     p.is_default = q.value(9).toBool();
     p.created_at = q.value(10).toString();
     p.updated_at = q.value(11).toString();
+    // Decrypt the api_key from SecureStorage when the column is blank (encrypted
+    // row); a non-empty column is a legacy plaintext value, used as-is.
+    if (p.api_key.isEmpty() && !p.id.isEmpty()) {
+        auto sr = SecureStorage::instance().retrieve(profile_secret_key(p.id));
+        if (sr.is_ok())
+            p.api_key = sr.value();
+    }
     return p;
 }
 
@@ -54,15 +71,21 @@ Result<void> LlmProfileRepository::save_profile(const LlmProfile& p) {
     // Generate id if empty (new profile)
     QString id = p.id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : p.id;
 
+    // Encrypt the api_key; blank the column only if the encrypted store worked.
+    QString column_key = p.api_key;
+    if (!p.api_key.isEmpty() && SecureStorage::instance().store(profile_secret_key(id), p.api_key).is_ok())
+        column_key.clear();
+
     return exec_write("INSERT OR REPLACE INTO llm_profiles "
                       "  (id, name, provider, model_id, api_key, base_url, "
                       "   temperature, max_tokens, system_prompt, is_default, updated_at) "
                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-                      {id, p.name, p.provider, p.model_id, p.api_key, p.base_url, p.temperature, p.max_tokens,
+                      {id, p.name, p.provider, p.model_id, column_key, p.base_url, p.temperature, p.max_tokens,
                        p.system_prompt, p.is_default ? 1 : 0});
 }
 
 Result<void> LlmProfileRepository::delete_profile(const QString& id) {
+    SecureStorage::instance().remove(profile_secret_key(id)); // drop the encrypted key too
     // Assignments cascade-delete via FK ON DELETE CASCADE
     return exec_write("DELETE FROM llm_profiles WHERE id = ?", {id});
 }
@@ -145,21 +168,23 @@ ResolvedLlmProfile LlmProfileRepository::profile_to_resolved(const LlmProfile& p
 }
 
 ResolvedLlmProfile LlmProfileRepository::legacy_fallback() const {
-    // Read from llm_configs (old table) as last resort
-    auto r = db().execute("SELECT provider, api_key, base_url, model FROM llm_configs WHERE is_active = 1 LIMIT 1");
-    if (r.is_err())
+    // Read the active provider via LlmConfigRepository (which decrypts the
+    // api_key from SecureStorage) rather than a raw SELECT on llm_configs —
+    // that column is now blanked for encrypted rows.
+    auto cr = LlmConfigRepository::instance().get_active_provider();
+    if (cr.is_err())
         return {};
-    auto& q = r.value();
-    if (!q.next())
+    const LlmConfig c = cr.value();
+    if (c.provider.isEmpty())
         return {};
 
     ResolvedLlmProfile rp;
     rp.profile_id = {};
     rp.profile_name = "Legacy Active";
-    rp.provider = q.value(0).toString();
-    rp.api_key = q.value(1).toString();
-    rp.base_url = q.value(2).toString();
-    rp.model_id = q.value(3).toString();
+    rp.provider = c.provider;
+    rp.api_key = c.api_key;
+    rp.base_url = c.base_url;
+    rp.model_id = c.model;
 
     // Pull global temperature/max_tokens
     auto gs = db().execute("SELECT temperature, max_tokens FROM llm_global_settings WHERE id = 1");

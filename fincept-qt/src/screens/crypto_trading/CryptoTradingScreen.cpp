@@ -77,6 +77,11 @@ void CryptoTradingScreen::showEvent(QShowEvent* event) {
         clock_timer_->start();
     if (ws_flush_timer_)
         ws_flush_timer_->start();
+    // Restart the live positions/P&L poller if we're in LIVE mode. hideEvent
+    // stopped it and it was only ever (re)started from the mode toggle, so
+    // tabbing away and back froze live P&L until the mode was re-toggled.
+    if (live_data_timer_ && trading_mode_ == crypto::TradingMode::Live)
+        live_data_timer_->start(5000);
     LOG_INFO(TAG, "Screen visible — WS-only mode (no REST polling)");
 }
 

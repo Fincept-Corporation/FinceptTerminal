@@ -11,6 +11,7 @@
 #include <QGraphicsPathItem>
 #include <QGraphicsSceneMouseEvent>
 #include <QMouseEvent>
+#include <QTransform>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
@@ -73,6 +74,7 @@ class RelNode : public QGraphicsItem {
     RelNode(const QString& label, const QString& sub, const QColor& accent, qreal w, qreal h, Role role)
         : label_(label), sub_(sub), accent_(accent), w_(w), h_(h), role_(role) {
         setFlag(QGraphicsItem::ItemIsMovable, role != Role::Center);
+        setFlag(QGraphicsItem::ItemIsSelectable); // required for the click→detail-panel path
         setFlag(QGraphicsItem::ItemSendsGeometryChanges);
         setCacheMode(QGraphicsItem::DeviceCoordinateCache);
         setZValue(role == Role::Center ? 5 : (role == Role::Hub ? 3 : 1));
@@ -253,10 +255,17 @@ class RelNode : public QGraphicsItem {
         return QGraphicsItem::itemChange(change, value);
     }
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override {
-        if (role_ == Role::Center && event->button() == Qt::LeftButton) {
-            auto* rms = qobject_cast<RelationshipGraphScene*>(scene());
-            if (rms)
-                emit rms->center_card_clicked(label_.split(" ").first());
+        if (event->button() == Qt::LeftButton) {
+            if (auto* rms = qobject_cast<RelationshipGraphScene*>(scene())) {
+                if (role_ == Role::Center)
+                    emit rms->center_card_clicked(label_.split(" ").first());
+                // Every node (not just the center) opens the right-side detail
+                // panel. The panel slot looks up rich data by this label.
+                const QString category = (role_ == Role::Center) ? QStringLiteral("COMPANY")
+                                         : (role_ == Role::Hub)  ? QStringLiteral("SECTOR / GROUP")
+                                                                 : QStringLiteral("PEER / RELATED");
+                emit rms->node_activated(label_, sub_, category);
+            }
         }
         update();
         QGraphicsItem::mousePressEvent(event);
@@ -634,12 +643,20 @@ void RelationshipGraphView::fit_to_content() {
         return;
     fitInView(scene()->itemsBoundingRect().adjusted(-60, -60, 60, 60), Qt::KeepAspectRatio);
     current_zoom_ = transform().m11();
+    emit zoom_changed(current_zoom_);
 }
 
 void RelationshipGraphView::reset_zoom() {
     resetTransform();
     current_zoom_ = 1.0;
     fit_to_content();
+}
+
+void RelationshipGraphScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    // Empty-canvas click (no item under cursor) → let listeners clear selection/detail.
+    if (!itemAt(event->scenePos(), QTransform()))
+        emit background_clicked();
+    QGraphicsScene::mousePressEvent(event);
 }
 
 void RelationshipGraphView::wheelEvent(QWheelEvent* event) {
@@ -656,6 +673,7 @@ void RelationshipGraphView::wheelEvent(QWheelEvent* event) {
         factor = kMaxZoom / current_zoom_;
     scale(factor, factor);
     current_zoom_ *= factor;
+    emit zoom_changed(current_zoom_);
     event->accept();
 }
 

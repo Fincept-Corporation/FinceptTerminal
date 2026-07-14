@@ -20,6 +20,9 @@ class ForumThreadPanel : public QWidget {
 
     void show_post(const services::ForumPostDetail& detail);
     void set_loading(bool on);
+    /// Clear the reply composer. Called by ForumScreen only after a reply has
+    /// actually posted, so a failed submit keeps the user's text.
+    void clear_reply_input();
     void clear();
     QString reply_draft() const;
     void set_reply_draft(const QString& text);

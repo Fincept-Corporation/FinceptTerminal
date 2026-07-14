@@ -281,6 +281,19 @@ std::vector<ToolDef> get_live_trading_tools() {
             order.price = args["price"].toDouble(0.0);
             order.product_type = parse_product(args["product"].toString("MIS"));
 
+            // Semi-Auto gate: a live smart order places a REAL position-delta
+            // order, so the AI must not execute it unattended. Unlike
+            // live_place_order this previously went straight to place_smart_order,
+            // bypassing the approval queue. The queue's executor only replays
+            // UnifiedOrders (not position-aware smart orders), so we can't safely
+            // queue this one — refuse in Semi-Auto rather than bypass the gate.
+            if (ActionCenter::instance().should_queue(account_id, "smartorder")) {
+                return ToolResult::fail(
+                    "This account is in Semi-Auto approval mode. Position-aware smart orders cannot be queued for "
+                    "approval yet — use live_place_order (which supports the approval queue), or switch the account "
+                    "out of Semi-Auto to place smart orders directly.");
+            }
+
             auto resp = UnifiedTrading::instance().place_smart_order(account_id, order);
             if (!resp.success)
                 return ToolResult::fail(resp.error.isEmpty() ? "Smart order failed" : resp.error);

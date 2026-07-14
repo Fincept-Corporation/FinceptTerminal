@@ -529,15 +529,23 @@ void MarketsScreen::update_clocks() {
 void MarketsScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
 
-    // Distribute equal space now that geometry is valid.
-    // Horizontal: equal column widths.
-    if (h_splitter_ && h_splitter_->count() > 1) {
-        QList<int> hsizes;
-        for (int i = 0; i < h_splitter_->count(); ++i)
-            hsizes.append(1000);
-        h_splitter_->setSizes(hsizes);
+    // Horizontal (column widths): apply ONCE, now that geometry is valid —
+    // restore the user's saved widths if any, else fall back to equal columns.
+    // Doing an unconditional equalize on EVERY show wiped the saved/manually
+    // adjusted widths that restore_splitter_state() had applied.
+    if (!h_splitter_initialized_ && h_splitter_ && h_splitter_->count() > 1) {
+        h_splitter_initialized_ = true;
+        auto res = SettingsRepository::instance().get("markets_splitter_state");
+        if (res.is_ok() && !res.value().isEmpty()) {
+            restore_splitter_state();
+        } else {
+            QList<int> hsizes;
+            for (int i = 0; i < h_splitter_->count(); ++i)
+                hsizes.append(1000);
+            h_splitter_->setSizes(hsizes);
+        }
     }
-    // Vertical: equal panel heights within each column.
+    // Vertical: equal panel heights within each column (always, by design).
     for (auto* vs : col_splitters_) {
         if (vs->count() > 1) {
             QList<int> vsizes;

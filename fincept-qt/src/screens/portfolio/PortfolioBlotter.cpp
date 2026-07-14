@@ -366,9 +366,10 @@ void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, doubl
         auto* item = table_->item(r, 0);
         if (!item || item->data(Qt::UserRole).toString() != symbol)
             continue;
-        // Column layout: SYMBOL(0), QTY(1), AVG(2), LAST(3), MKT VAL(4), COST(5), P&L(6), P&L%(7), CHG%(8),
-        // SPARKLINE(9), WT%(10)
-        if (auto* last_item = table_->item(r, 3))
+        // Column layout: SYMBOL(0), QTY(1), LAST(2), AVG COST(3), MKT VAL(4), COST BASIS(5), P&L(6), P&L%(7),
+        // CHG%(8), TREND(9), WT%(10). LAST is column 2 — the old code wrote the
+        // live price into column 3 (AVG COST), corrupting the displayed cost.
+        if (auto* last_item = table_->item(r, 2))
             last_item->setText(format_value(ltp));
         // Recalculate market value & P&L from holdings data
         const int idx = r + (current_page_ - 1) * page_size_;
@@ -606,6 +607,11 @@ void PortfolioBlotter::populate_table() {
 
         // SYMBOL
         set_cell(0, h.symbol, ui::colors::CYAN, Qt::AlignLeft | Qt::AlignVCenter);
+        // Stash the raw symbol on the cell so live broker-price ticks
+        // (update_row_price) can locate this row — its guard matches col-0
+        // Qt::UserRole, which was never set, so live prices never updated.
+        if (auto* sym_item = table_->item(r, 0))
+            sym_item->setData(Qt::UserRole, h.symbol);
 
         // QTY
         set_cell(1, format_value(h.quantity, h.quantity == std::floor(h.quantity) ? 0 : 2));

@@ -1295,7 +1295,6 @@ set(SERVICE_SOURCES
     src/services/data_normalization/DataNormalizationService.cpp
     src/services/data_normalization/DataMappingTestClient.cpp
     src/core/services/Services.cpp
-    src/python/ScriptCatalog.cpp
     # NewsService split; see NewsService.cpp header.
     src/services/news/NewsService.cpp
     src/services/news/NewsService_LiveFeed.cpp
@@ -1563,6 +1562,7 @@ set(SCREEN_SOURCES
     src/screens/trade_viz/TradeVizScreen.cpp
     # DocsScreen split into pages files; see DocsScreen.cpp header.
     src/screens/docs/DocsScreen.cpp
+    src/screens/screener/ScreenerScreen.cpp
     src/screens/docs/DocsScreen_Pages_Intro.cpp
     src/screens/docs/DocsScreen_Pages_Trading.cpp
     src/screens/docs/DocsScreen_Pages_Data.cpp
@@ -1658,8 +1658,6 @@ set(SCREEN_SOURCES
     src/screens/forum/ForumScreen.cpp
     src/screens/forum/ForumFeedPanel.cpp
     src/screens/forum/ForumSidebarPanel.cpp
-    src/screens/forum/ForumPostListPanel.cpp
-    src/screens/forum/ForumPostReaderPanel.cpp
     src/screens/forum/ForumThreadPanel.cpp
     src/services/forum/ForumService.cpp
     # CryptoTradingScreen split; see header comment.
@@ -2242,6 +2240,7 @@ set_source_files_properties(
     src/screens/dashboard/widgets/RiskMetricsWidget.cpp
     src/screens/dashboard/widgets/ScreenerWidget.cpp
     src/screens/dashboard/widgets/SectorHeatmapWidget.cpp
+    src/screens/screener/ScreenerScreen.cpp
     src/screens/dashboard/widgets/StockQuoteWidget.cpp
     src/screens/dashboard/widgets/TopMoversWidget.cpp
     src/screens/dashboard/widgets/RecentFilesWidget.cpp
@@ -2321,8 +2320,6 @@ set_source_files_properties(
     src/screens/excel/SpreadsheetWidget.cpp
     src/screens/file_manager/FileManagerScreen.cpp
     src/screens/forum/ForumFeedPanel.cpp
-    src/screens/forum/ForumPostListPanel.cpp
-    src/screens/forum/ForumPostReaderPanel.cpp
     src/screens/forum/ForumScreen.cpp
     src/screens/forum/ForumSidebarPanel.cpp
     src/screens/forum/ForumThreadPanel.cpp

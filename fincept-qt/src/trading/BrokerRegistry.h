@@ -1,5 +1,5 @@
 #pragma once
-// Broker Registry — factory + lookup for all 16 broker implementations
+// Broker Registry — factory + lookup for all 22 broker implementations
 
 #include "trading/BrokerInterface.h"
 

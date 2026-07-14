@@ -27,7 +27,11 @@ class RelationshipGraphScene : public QGraphicsScene {
 
   signals:
     void center_card_clicked(const QString& ticker);
+    void node_activated(const QString& label, const QString& sub, const QString& category);
     void background_clicked();
+
+  protected:
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
 
   private:
     // kept as no-ops for ABI stability — layout is now pure radial/deterministic

@@ -761,11 +761,17 @@ void WatchlistScreen::on_remove_stock() {
     if (current_wl_id_.isEmpty())
         return;
 
-    int row = table_->currentRow();
-    if (row < 0 || row >= stocks_.size())
+    // Read the symbol from the selected VISUAL row's first column, not
+    // stocks_[currentRow()]: sorting is enabled, so the visual row index no
+    // longer maps to the insertion-ordered stocks_ vector — indexing it would
+    // remove the WRONG symbol from the watchlist.
+    const int row = table_->currentRow();
+    auto* sym_item = (row >= 0) ? table_->item(row, 0) : nullptr;
+    if (!sym_item)
         return;
-
-    QString symbol = stocks_[row].symbol;
+    const QString symbol = sym_item->text();
+    if (symbol.isEmpty())
+        return;
     fincept::WatchlistRepository::instance().remove_stock(current_wl_id_, symbol);
     load_stocks();
 }
@@ -973,13 +979,15 @@ void WatchlistScreen::restore_state(const QVariantMap& state) {
 void WatchlistScreen::on_group_symbol_changed(const SymbolRef& ref) {
     if (!table_ || !ref.is_valid())
         return;
-    // Select the row whose symbol matches; scroll into view. No-op if the
-    // ticker isn't in this watchlist.
-    for (int r = 0; r < stocks_.size(); ++r) {
-        if (stocks_[r].symbol.compare(ref.symbol, Qt::CaseInsensitive) == 0) {
+    // Match against the table's VISUAL rows (column 0 = symbol), not the
+    // insertion-ordered stocks_ vector: with sorting enabled, selectRow(stocks_
+    // index) would highlight the wrong row. No-op if the ticker isn't shown.
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* it = table_->item(r, 0);
+        if (it && it->text().compare(ref.symbol, Qt::CaseInsensitive) == 0) {
             QSignalBlocker block(table_); // avoid re-emitting publish
             table_->selectRow(r);
-            table_->scrollToItem(table_->item(r, 0), QAbstractItemView::PositionAtCenter);
+            table_->scrollToItem(it, QAbstractItemView::PositionAtCenter);
             return;
         }
     }
@@ -988,19 +996,23 @@ void WatchlistScreen::on_group_symbol_changed(const SymbolRef& ref) {
 SymbolRef WatchlistScreen::current_symbol() const {
     if (!table_)
         return {};
+    // Symbol from the selected visual row's column 0 (sort-safe), not
+    // stocks_[currentRow()] which is wrong once the user sorts a column.
     const int r = table_->currentRow();
-    if (r < 0 || r >= stocks_.size())
+    auto* sym_item = (r >= 0) ? table_->item(r, 0) : nullptr;
+    if (!sym_item || sym_item->text().isEmpty())
         return {};
-    return SymbolRef::equity(stocks_[r].symbol);
+    return SymbolRef::equity(sym_item->text());
 }
 
 void WatchlistScreen::publish_selection_to_group() {
     if (link_group_ == SymbolGroup::None || !table_)
         return;
     const int r = table_->currentRow();
-    if (r < 0 || r >= stocks_.size())
+    auto* sym_item = (r >= 0) ? table_->item(r, 0) : nullptr;
+    if (!sym_item || sym_item->text().isEmpty())
         return;
-    const SymbolRef ref = SymbolRef::equity(stocks_[r].symbol);
+    const SymbolRef ref = SymbolRef::equity(sym_item->text());
     SymbolContext::instance().set_group_symbol(link_group_, ref, this);
 }
 

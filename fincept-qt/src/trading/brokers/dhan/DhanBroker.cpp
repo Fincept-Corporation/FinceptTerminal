@@ -212,7 +212,7 @@ TokenExchangeResponse DhanBroker::exchange_token(const QString& api_key, const Q
     // The live validation sweep is the authoritative guard; this expiry is only
     // a startup hint so a token isn't shown green long after it has lapsed.
     const QString extra = with_token_expiry({}, rolling_expiry_epoch(24));
-    LOG_INFO(TAG, "Token exchange OK, client_id=" + api_key);
+    LOG_INFO(TAG, "Token exchange OK"); // don't log client_id (P14)
     return {true, api_secret, /*refresh*/ "", api_key, /*additional*/ extra, ""};
 }
 

@@ -345,32 +345,42 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
                     sources.insert(a.source);
                 state->service->active_sources_ = sources.values();
 
-                QJsonArray parr;
-                for (const auto& a : all) {
-                    QJsonObject o;
-                    o["id"] = a.id;
-                    o["time"] = a.time;
-                    o["headline"] = a.headline;
-                    o["summary"] = a.summary;
-                    o["source"] = a.source;
-                    o["region"] = a.region;
-                    o["category"] = a.category;
-                    o["link"] = a.link;
-                    o["sort_ts"] = static_cast<qint64>(a.sort_ts);
-                    o["tier"] = a.tier;
-                    o["priority"] = priority_string(a.priority);
-                    o["sentiment"] = sentiment_string(a.sentiment);
-                    o["impact"] = impact_string(a.impact);
-                    o["lang"] = a.lang;
-                    QJsonArray tickers;
-                    for (const auto& t : a.tickers)
-                        tickers.append(t);
-                    o["tickers"] = tickers;
-                    parr.append(o);
+                // Only rewrite the on-disk cache when we actually fetched
+                // articles. If every feed failed (e.g. full network loss) `all`
+                // is empty — overwriting the cache with an empty array would wipe
+                // the last-known-good news and leave a blank widget after a
+                // restart. Keep the previous cache in that case.
+                if (!all.isEmpty()) {
+                    QJsonArray parr;
+                    for (const auto& a : all) {
+                        QJsonObject o;
+                        o["id"] = a.id;
+                        o["time"] = a.time;
+                        o["headline"] = a.headline;
+                        o["summary"] = a.summary;
+                        o["source"] = a.source;
+                        o["region"] = a.region;
+                        o["category"] = a.category;
+                        o["link"] = a.link;
+                        o["sort_ts"] = static_cast<qint64>(a.sort_ts);
+                        o["tier"] = a.tier;
+                        o["priority"] = priority_string(a.priority);
+                        o["sentiment"] = sentiment_string(a.sentiment);
+                        o["impact"] = impact_string(a.impact);
+                        o["lang"] = a.lang;
+                        QJsonArray tickers;
+                        for (const auto& t : a.tickers)
+                            tickers.append(t);
+                        o["tickers"] = tickers;
+                        parr.append(o);
+                    }
+                    fincept::CacheManager::instance().put(
+                        "news:articles",
+                        QVariant(QString::fromUtf8(QJsonDocument(parr).toJson(QJsonDocument::Compact))),
+                        kArticleCacheTtlSec, "news");
+                } else {
+                    LOG_WARN("NewsService", "All feeds returned no articles — keeping last-known-good cache");
                 }
-                fincept::CacheManager::instance().put(
-                    "news:articles", QVariant(QString::fromUtf8(QJsonDocument(parr).toJson(QJsonDocument::Compact))),
-                    kArticleCacheTtlSec, "news");
 
                 LOG_INFO(
                     "NewsService",

@@ -4,6 +4,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "services/asia_markets/AsiaMarketsService.h"
 #include "storage/cache/CacheManager.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
@@ -751,7 +752,8 @@ void AsiaMarketsScreen::display_table(const QJsonArray& rows_json) {
                 text = val.toVariant().toString();
             }
 
-            auto* item = new QTableWidgetItem(text);
+            QTableWidgetItem* item = val.isDouble() ? new ui::NumericTableWidgetItem(text, val.toDouble())
+                                                     : new QTableWidgetItem(text);
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             if (val.isDouble())
                 item->setForeground(is_neg ? col_neg : col_pos);

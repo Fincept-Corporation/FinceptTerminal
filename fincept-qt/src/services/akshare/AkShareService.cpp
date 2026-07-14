@@ -118,8 +118,18 @@ void AkShareService::query(const QString& script, const QString& endpoint, const
                 rows.append(obj);
             }
 
+            // Ordered column names, if the script supplied them. QJsonObject sorts
+            // its keys, so deriving columns from a row would scramble the source
+            // DataFrame's column order — the script's explicit list preserves it.
+            QStringList columns;
+            if (obj.contains("columns") && obj["columns"].isArray()) {
+                for (const auto& c : obj["columns"].toArray())
+                    columns << c.toString();
+            }
+
             out.success = true;
             out.rows = rows;
+            out.columns = columns;
             if (cb)
                 cb(out);
         });

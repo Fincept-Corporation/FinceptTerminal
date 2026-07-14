@@ -73,6 +73,7 @@ class ExpandedFundsWrapper:
                         return {
                             "success": True,
                             "data": self._convert_dataframe_to_json_safe(result),
+                        "columns": (list(result.columns) if hasattr(result, "columns") else []),
                             "count": len(result),
                             "timestamp": int(datetime.now().timestamp()),
                             "data_quality": "high",
@@ -585,7 +586,10 @@ if __name__ == "__main__":
     if hasattr(wrapper, method_name):
         method = getattr(wrapper, method_name)
         try:
-            result = method(*args) if args else method()
+            try:
+                result = method(*args)
+            except TypeError:
+                result = method()
             print(json.dumps(result, ensure_ascii=True))
         except Exception as e:
             print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))

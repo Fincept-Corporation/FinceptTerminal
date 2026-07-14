@@ -603,12 +603,43 @@ void EquityOrderEntry::on_submit() {
         return;
     }
 
+    // Validate price/trigger for the order types that require them. Without this
+    // a blank Limit price sends price=0 to the broker (and a paper SELL-limit @0
+    // would fill at market).
+    const trading::OrderType otype = selected_order_type();
+    const double limit_px = price_edit_->text().toDouble();
+    const double trigger_px = stop_price_edit_->text().toDouble();
+    if ((otype == trading::OrderType::Limit || otype == trading::OrderType::StopLossLimit) && limit_px <= 0.0) {
+        status_label_->setText(tr("Enter a valid limit price"));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        return;
+    }
+    if ((otype == trading::OrderType::StopLoss || otype == trading::OrderType::StopLossLimit) && trigger_px <= 0.0) {
+        status_label_->setText(tr("Enter a valid trigger price"));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        return;
+    }
+
+    // Double-submit guard: in Auto mode there is no confirm dialog, so a rapid
+    // double-click would emit two live orders. Briefly disable the button; a
+    // single-shot timer re-enables it.
+    if (submit_btn_) {
+        if (!submit_btn_->isEnabled())
+            return;
+        submit_btn_->setEnabled(false);
+        QPointer<EquityOrderEntry> self = this;
+        QTimer::singleShot(1000, this, [self]() {
+            if (self && self->submit_btn_)
+                self->submit_btn_->setEnabled(true);
+        });
+    }
+
     trading::UnifiedOrder order;
     order.symbol = current_symbol_;
     order.exchange = exchange_combo_->currentText();
     order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
 
-    order.order_type = selected_order_type();
+    order.order_type = otype;
     order.quantity = qty;
     order.price = price_edit_->text().toDouble();
     order.stop_price = stop_price_edit_->text().toDouble();

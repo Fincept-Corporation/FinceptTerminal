@@ -82,7 +82,7 @@ void WebSocketClient::connect_to(const QString& url) {
         self->url_ = u;
         self->reconnect_attempts_ = 0;
         self->reconnect_stopped_ = false; // a fresh connect re-enables auto-reconnect
-        LOG_INFO(kTag, QString("[%1] Connecting to %2").arg(thread_label(), u));
+        LOG_INFO(kTag, QString("[%1] Connecting to %2").arg(thread_label(), redact_url(u)));
         self->socket_->open(QUrl(u));
     });
 }
@@ -136,14 +136,14 @@ bool WebSocketClient::is_connected() const {
 }
 
 void WebSocketClient::on_connected() {
-    LOG_INFO(kTag, QString("[%1] Connected to %2").arg(thread_label(), url_));
+    LOG_INFO(kTag, QString("[%1] Connected to %2").arg(thread_label(), redact_url(url_)));
     reconnect_attempts_ = 0;
     emit connected();
 }
 
 void WebSocketClient::on_disconnected() {
     LOG_WARN(kTag, QString("[%1] Disconnected from %2 (state=%3)")
-                       .arg(thread_label(), url_)
+                       .arg(thread_label(), redact_url(url_))
                        .arg(static_cast<int>(socket_ ? socket_->state() : QAbstractSocket::UnconnectedState)));
     emit disconnected();
     if (!reconnect_stopped_ && reconnect_attempts_ < MAX_RECONNECT_ATTEMPTS) {
@@ -158,7 +158,7 @@ void WebSocketClient::on_disconnected() {
         LOG_ERROR(kTag, QString("[%1] Max reconnect attempts (%2) reached for %3")
                             .arg(thread_label())
                             .arg(MAX_RECONNECT_ATTEMPTS)
-                            .arg(url_));
+                            .arg(redact_url(url_)));
     }
 }
 

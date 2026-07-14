@@ -167,7 +167,11 @@ void FiiDiiService::kick_off_refresh() {
 
         auto qr = fincept::FiiDiiRepository::instance().get_recent(kPublishWindowDays);
         if (qr.is_err()) {
-            LOG_WARN("FiiDii", QString("get_recent failed: %1").arg(QString::fromStdString(qr.error())));
+            // Must publish_error so the hub clears the in-flight state for kTopic;
+            // otherwise subscribers spin on "loading" until the ~30s watchdog.
+            const QString err = QString("get_recent failed: %1").arg(QString::fromStdString(qr.error()));
+            LOG_WARN("FiiDii", err);
+            fincept::datahub::DataHub::instance().publish_error(kTopic, err);
             return;
         }
         QVector<FiiDiiDay> rows = qr.value();

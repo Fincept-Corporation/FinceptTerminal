@@ -8,7 +8,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPointer>
 #include <QUuid>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::mcp {
 
@@ -290,36 +292,64 @@ void McpManager::stop_health_check() {
 }
 
 void McpManager::do_health_check() {
-    QMutexLocker lock(&mutex_);
-    QStringList running_ids = clients_.keys();
-    lock.unlock();
+    // Don't overlap passes: a slow ping could still be running when the timer
+    // fires again.
+    bool expected = false;
+    if (!health_check_running_.compare_exchange_strong(expected, true))
+        return;
 
-    for (const auto& id : running_ids) {
-        QMutexLocker l(&mutex_);
-        if (!clients_.contains(id))
-            continue;
-        McpClient* client = clients_[id].get();
-        l.unlock();
+    // Snapshot the clients under the lock — shared_ptr copies keep each alive
+    // across its ping() even if stop_server() removes the map entry meanwhile.
+    QVector<QPair<QString, std::shared_ptr<McpClient>>> targets;
+    {
+        QMutexLocker lock(&mutex_);
+        targets.reserve(clients_.size());
+        for (auto it = clients_.constBegin(); it != clients_.constEnd(); ++it)
+            if (it.value())
+                targets.append({it.key(), it.value()});
+    }
+    if (targets.isEmpty()) {
+        health_check_running_ = false;
+        return;
+    }
 
-        auto r = client->ping();
-        if (r.is_err()) {
-            LOG_WARN(TAG, "Health check failed for " + id + ": " + QString::fromStdString(r.error()));
-
-            int attempts = restart_attempts_.value(id, 0);
-            if (attempts < MAX_RESTART_ATTEMPTS) {
-                restart_attempts_[id] = attempts + 1;
-                LOG_INFO(TAG, QString("Restarting server %1 (attempt %2/%3)")
-                                  .arg(id)
-                                  .arg(attempts + 1)
-                                  .arg(MAX_RESTART_ATTEMPTS));
-                restart_server(id);
-            } else {
-                LOG_ERROR(TAG, "Server " + id + " exceeded max restart attempts — giving up");
-                McpServerRepository::instance().set_status(id, "error");
-            }
-        } else {
-            restart_attempts_.remove(id); // reset on success
+    // Ping OFF the UI thread. ping() blocks up to ~5s per server, so looping on
+    // the UI thread froze the whole terminal every health tick (P1). The
+    // follow-up (restart) is marshalled back to the main thread in
+    // on_health_result() because it manages a thread-affine QProcess.
+    QPointer<McpManager> self = this;
+    (void)QtConcurrent::run([self, targets]() {
+        for (const auto& t : targets) {
+            const bool ok = !t.second->ping().is_err();
+            if (!self)
+                return;
+            const QString id = t.first;
+            QMetaObject::invokeMethod(
+                self, [self, id, ok]() { if (self) self->on_health_result(id, ok); }, Qt::QueuedConnection);
         }
+        if (self)
+            QMetaObject::invokeMethod(
+                self, [self]() { if (self) self->health_check_running_ = false; }, Qt::QueuedConnection);
+    });
+}
+
+void McpManager::on_health_result(const QString& id, bool ok) {
+    // Runs on the main thread: safe to restart (QProcess) and touch
+    // restart_attempts_ (only mutated here).
+    if (ok) {
+        restart_attempts_.remove(id); // reset on success
+        return;
+    }
+    LOG_WARN(TAG, "Health check failed for " + id);
+    const int attempts = restart_attempts_.value(id, 0);
+    if (attempts < MAX_RESTART_ATTEMPTS) {
+        restart_attempts_[id] = attempts + 1;
+        LOG_INFO(TAG,
+                 QString("Restarting server %1 (attempt %2/%3)").arg(id).arg(attempts + 1).arg(MAX_RESTART_ATTEMPTS));
+        restart_server(id);
+    } else {
+        LOG_ERROR(TAG, "Server " + id + " exceeded max restart attempts — giving up");
+        McpServerRepository::instance().set_status(id, "error");
     }
 }
 
@@ -337,12 +367,19 @@ std::vector<ExternalTool> McpManager::get_all_external_tools() {
 
 Result<QJsonObject> McpManager::call_external_tool(const QString& server_id, const QString& tool_name,
                                                    const QJsonObject& args) {
-    QMutexLocker lock(&mutex_);
-    McpClient* client = get_client(server_id);
-    if (!client)
-        return Result<QJsonObject>::err("Server not running: " + server_id.toStdString());
-    lock.unlock();
-
+    // Hold a shared_ptr COPY across the (blocking, up to ~120s) call. This runs
+    // on a QtConcurrent pool thread while stop_server()/restart_server() can run
+    // on the main thread and erase the map entry; the previous raw pointer then
+    // outlived the McpClient it pointed at → use-after-free. The copy keeps the
+    // object alive until the call returns.
+    std::shared_ptr<McpClient> client;
+    {
+        QMutexLocker lock(&mutex_);
+        auto it = clients_.find(server_id);
+        if (it == clients_.end() || !it.value())
+            return Result<QJsonObject>::err("Server not running: " + server_id.toStdString());
+        client = it.value();
+    }
     return client->call_tool(tool_name, args);
 }
 

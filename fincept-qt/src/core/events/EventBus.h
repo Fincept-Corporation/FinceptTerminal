@@ -1,6 +1,7 @@
 #pragma once
 #include <QHash>
 #include <QList>
+#include <QMutex>
 #include <QObject>
 #include <QVariantMap>
 
@@ -36,6 +37,9 @@ class EventBus : public QObject {
 
     QList<Subscription> subscriptions_;
     HandlerId next_id_ = 1;
+    // Guards subscriptions_/next_id_. publish() may run on worker threads while
+    // subscribe()/unsubscribe() run on the main thread (see EventBus.cpp).
+    QMutex mutex_;
 };
 
 } // namespace fincept

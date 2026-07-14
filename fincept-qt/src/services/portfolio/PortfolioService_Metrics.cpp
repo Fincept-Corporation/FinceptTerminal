@@ -382,7 +382,11 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
             const double var = (sum_sq / n) - (mean * mean);
             const double daily_vol = std::sqrt(std::max(var, 0.0));
             const double ann_vol = daily_vol * std::sqrt(252.0);
-            metrics.volatility = ann_vol * 100.0; // store as %
+            // day_change_percent is already in percent units, so daily_vol/ann_vol
+            // are too — do NOT multiply by 100 again (that produced ~100x-inflated
+            // "2380%" volatility). The full-history path stores ann_vol directly,
+            // and vol_score/sharpe below already treat it as a percentage.
+            metrics.volatility = ann_vol; // already in %
             const double rf_daily = rf_rate_ / 252.0;
             if (daily_vol > 1e-6)
                 metrics.sharpe = ((mean / 100.0 - rf_daily) / (daily_vol / 100.0)) * std::sqrt(252.0);

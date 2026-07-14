@@ -74,6 +74,7 @@ class MacroEconomicWrapper:
                 return {
                     "success": True,
                     "data": data,
+                    "columns": (list(df.columns) if hasattr(df, "columns") else []),
                     "error": None
                 }
 

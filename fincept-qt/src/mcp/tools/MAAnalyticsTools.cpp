@@ -137,10 +137,11 @@ static ToolDef make_ma_cmd_tool(const char* name, const char* desc, const QStrin
     return t;
 }
 
-// The keyless data-connector manifest (auto-generated). Defines kDataConnectorManifest.
+// The data-connector manifest (auto-generated). Defines kDataConnectorManifest
+// (127 keyed + 63 keyless = 190 connectors; the loop below iterates all of them).
 #include "mcp/tools/DataConnectorManifest.inc"
 
-// Build one dispatcher tool per keyless `scripts/*_data.py` connector from the
+// Build one dispatcher tool per `scripts/*_data.py` connector from the
 // embedded manifest. Each connector shares the uniform positional ABI
 // `python <script> <command> [args…] → JSON`; the tool exposes the command as an
 // enum and forwards optional positional args. Category "data-connectors".

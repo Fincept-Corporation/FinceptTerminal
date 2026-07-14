@@ -21,6 +21,15 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     QVector<RiskCheckResult> results;
     double order_value = quantity * price;
 
+    // Daily counters roll over at midnight. This method is const (the real reset
+    // lives in record_trade), so use effective values: once the calendar day has
+    // changed, yesterday's count / volume / loss no longer apply — otherwise the
+    // first order after midnight is wrongly blocked by yesterday's daily loss.
+    const bool same_day = (daily_stats_.date == QDate::currentDate().toString(Qt::ISODate));
+    const int eff_trade_count = same_day ? daily_stats_.trade_count : 0;
+    const double eff_volume = same_day ? daily_stats_.volume : 0.0;
+    const double eff_realized_pnl = same_day ? daily_stats_.realized_pnl : 0.0;
+
     // Position size check
     if (quantity > limits_.max_position_size) {
         results.append({false, RiskSeverity::Error, "position_size",
@@ -50,16 +59,16 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     }
 
     // Daily trade count check
-    if (daily_stats_.trade_count >= limits_.max_daily_trades) {
+    if (eff_trade_count >= limits_.max_daily_trades) {
         results.append(
             {false, RiskSeverity::Warning, "daily_trades",
-             QString("Daily trade count %1 at limit %2").arg(daily_stats_.trade_count).arg(limits_.max_daily_trades)});
+             QString("Daily trade count %1 at limit %2").arg(eff_trade_count).arg(limits_.max_daily_trades)});
     } else {
         results.append({true, RiskSeverity::Info, "daily_trades", "OK"});
     }
 
     // Daily volume check
-    if (daily_stats_.volume + order_value > limits_.max_daily_volume) {
+    if (eff_volume + order_value > limits_.max_daily_volume) {
         results.append({false, RiskSeverity::Warning, "daily_volume",
                         QString("Daily volume would exceed $%1 limit").arg(limits_.max_daily_volume, 0, 'f', 2)});
     } else {
@@ -67,10 +76,10 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     }
 
     // Daily loss limit check
-    if (daily_stats_.realized_pnl < -limits_.daily_loss_limit) {
+    if (eff_realized_pnl < -limits_.daily_loss_limit) {
         results.append({false, RiskSeverity::Critical, "daily_loss",
                         QString("Daily loss $%1 exceeds limit $%2")
-                            .arg(-daily_stats_.realized_pnl, 0, 'f', 2)
+                            .arg(-eff_realized_pnl, 0, 'f', 2)
                             .arg(limits_.daily_loss_limit, 0, 'f', 2)});
     } else {
         results.append({true, RiskSeverity::Info, "daily_loss", "OK"});

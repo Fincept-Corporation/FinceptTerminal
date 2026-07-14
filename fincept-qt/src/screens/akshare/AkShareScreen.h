@@ -70,7 +70,7 @@ class AkShareScreen : public QWidget, public IStatefulScreen {
     void load_endpoints(const AkShareSource& source);
     void populate_endpoint_list(const QJsonObject& result);
     void execute_query(const QString& script, const QString& endpoint, const QStringList& args);
-    void display_table_data(const QJsonArray& data);
+    void display_table_data(const QJsonArray& data, const QStringList& columns = {});
     void display_json_data(const QJsonArray& data);
     void display_error(const QString& error);
     void set_loading(bool loading);

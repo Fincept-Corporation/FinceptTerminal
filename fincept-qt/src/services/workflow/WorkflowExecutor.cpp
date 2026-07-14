@@ -286,12 +286,15 @@ QVector<QString> WorkflowExecutor::topological_sort() const {
     while (front < queue.size()) {
         QString u = queue[front++];
 
-        // Skip disabled nodes
+        // A disabled node does not execute, but we MUST still relax its outgoing
+        // edges (treat it as pass-through). The old code `continue`d before the
+        // edge-relaxation loop, so every downstream node kept a permanently
+        // non-zero in-degree and was silently stranded — never added to `order`,
+        // excluded from total_count_, yet execution still reported success.
         auto nd_it = node_map_.constFind(u);
-        if (nd_it != node_map_.constEnd() && nd_it->disabled)
-            continue;
-
-        order.append(u);
+        const bool disabled = (nd_it != node_map_.constEnd() && nd_it->disabled);
+        if (!disabled)
+            order.append(u);
 
         for (const auto& v : adjacency_.value(u)) {
             in_deg[v]--;

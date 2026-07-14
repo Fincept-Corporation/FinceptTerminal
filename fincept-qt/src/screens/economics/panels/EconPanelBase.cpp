@@ -397,7 +397,15 @@ void EconPanelBase::render_page() {
 }
 
 void EconPanelBase::update_stats(const QJsonArray& rows) {
-    QVector<double> vals;
+    // Collect (date, value) pairs and sort chronologically so LATEST/CHANGE are
+    // correct whether the provider returns oldest- or newest-first (min/max/avg
+    // are order-independent). ISO-style dates sort correctly lexically; rows
+    // without a recognisable date keep their original order (stable sort).
+    struct DatedVal {
+        QString date;
+        double value;
+    };
+    QVector<DatedVal> pts;
     for (const auto& v : rows) {
         const auto obj = v.toObject();
         QJsonValue jv = obj["value"];
@@ -422,9 +430,22 @@ void EconPanelBase::update_stats(const QJsonArray& rows) {
             d = jv.toDouble();
             ok = true;
         }
-        if (ok)
-            vals << d;
+        if (!ok)
+            continue;
+        QString date;
+        for (const char* k : {"date", "Date", "TIME_PERIOD", "period", "Period", "time", "obs_date"}) {
+            if (obj.contains(QLatin1String(k))) {
+                date = obj[QLatin1String(k)].toString();
+                break;
+            }
+        }
+        pts.append({date, d});
     }
+    std::stable_sort(pts.begin(), pts.end(), [](const DatedVal& a, const DatedVal& b) { return a.date < b.date; });
+    QVector<double> vals;
+    vals.reserve(pts.size());
+    for (const auto& p : pts)
+        vals << p.value;
 
     if (vals.isEmpty()) {
         for (auto* l : {stat_latest_, stat_change_, stat_min_, stat_max_, stat_avg_, stat_count_})

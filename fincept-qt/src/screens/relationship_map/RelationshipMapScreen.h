@@ -57,7 +57,7 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     void on_data_ready(const fincept::relmap::RelationshipData& data);
     void on_fetch_failed(const QString& error);
     void on_progress(int percent, const QString& message);
-    void on_node_selected();
+    void on_node_selected(const QString& label, const QString& sublabel, const QString& category_text);
     void rebuild_graph();
     void update_status_bar();
     QWidget* build_filter_panel();

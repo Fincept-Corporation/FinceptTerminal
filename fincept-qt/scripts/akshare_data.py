@@ -122,6 +122,7 @@ class AKShareDataWrapper:
                 return {
                     "success": True,
                     "data": df_copy.to_dict('records'),
+                    "columns": list(df_copy.columns),
                     "count": len(result),
                     "timestamp": int(datetime.now().timestamp())
                 }
@@ -432,6 +433,8 @@ def main():
                     result = method(symbol=args[0], start_date=args[1] if len(args) > 1 else None, end_date=args[2] if len(args) > 2 else None)
                 else:
                     result = method(*args)
+            except TypeError:
+                result = method()  # endpoint takes no/fewer args - ignore UI default
             except Exception as e:
                 result = {"error": str(e), "endpoint": endpoint}
         else:
@@ -475,7 +478,10 @@ if __name__ == "__main__":
     if hasattr(wrapper, method_name):
         method = getattr(wrapper, method_name)
         try:
-            result = method(*args) if args else method()
+            try:
+                result = method(*args)
+            except TypeError:
+                result = method()
             print(json.dumps(result, ensure_ascii=True))
         except Exception as e:
             print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))

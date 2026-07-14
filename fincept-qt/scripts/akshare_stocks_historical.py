@@ -38,7 +38,7 @@ def safe_call(func, *args, **kwargs):
                 result = result.replace([float("inf"), float("-inf")], None)
                 result = result.where(pd.notna(result), None)
                 data = result.to_dict(orient='records')
-                return {"success": True, "data": data, "count": len(data)}
+                return {"success": True, "data": data, "columns": list(result.columns), "count": len(data)}
             elif isinstance(result, (list, dict)):
                 return {"success": True, "data": result, "count": len(result) if isinstance(result, list) else 1}
             else:
@@ -434,7 +434,10 @@ def main():
     elif endpoint in ENDPOINTS:
         func = ENDPOINTS[endpoint]["func"]
         if args:
-            result = func(*args)
+            try:
+                result = func(*args)
+            except TypeError:
+                result = func()  # endpoint takes no/fewer args - ignore UI default
         else:
             result = func()
     else:

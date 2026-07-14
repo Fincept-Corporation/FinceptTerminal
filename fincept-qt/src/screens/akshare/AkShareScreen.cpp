@@ -4,12 +4,17 @@
 #include "core/session/ScreenStateManager.h"
 #include "services/akshare/AkShareService.h"
 #include "storage/cache/CacheManager.h"
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QPointer>
+
+#include <cmath>
 #include <QScrollArea>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -711,12 +716,21 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-        if (doc.isArray() && !doc.array().isEmpty()) {
-            const QJsonArray data_array = doc.array();
+        QJsonArray data_array;
+        QStringList cols;
+        if (doc.isObject()) {
+            const auto o = doc.object();
+            data_array = o["rows"].toArray();
+            for (const auto& c : o["columns"].toArray())
+                cols << c.toString();
+        } else if (doc.isArray()) {
+            data_array = doc.array(); // legacy cache entries (rows only)
+        }
+        if (!data_array.isEmpty()) {
             record_count_->setText(tr("%1 records").arg(data_array.size()));
             record_count_->show();
             data_status_->setText(tr("%1 (cached)").arg(endpoint));
-            display_table_data(data_array);
+            display_table_data(data_array, cols);
             display_json_data(data_array);
             return;
         }
@@ -747,12 +761,15 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
             self->data_status_->setText(endpoint);
 
             if (!data_array.isEmpty()) {
+                QJsonObject cache_obj;
+                cache_obj["rows"] = data_array;
+                cache_obj["columns"] = QJsonArray::fromStringList(r.columns);
                 fincept::CacheManager::instance().put(
-                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(cache_obj).toJson(QJsonDocument::Compact))),
                     2 * 60, "akshare");
             }
 
-            self->display_table_data(data_array);
+            self->display_table_data(data_array, r.columns);
             self->display_json_data(data_array);
 
             LOG_INFO("AkShare", "Query " + endpoint + ": " + QString::number(count) + " records");
@@ -761,7 +778,7 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
 
 // ── Display ─────────────────────────────────────────────────────────────────
 
-void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
+void AkShareScreen::display_table_data(const QJsonArray& rows_json, const QStringList& ordered_columns) {
     data_table_->setSortingEnabled(false);
     data_table_->clear();
     data_table_->setRowCount(0);
@@ -772,11 +789,15 @@ void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
         return;
     }
 
-    // Extract columns from first row
-    QStringList columns;
-    auto first = rows_json[0].toObject();
-    for (auto it = first.begin(); it != first.end(); ++it) {
-        columns << it.key();
+    // Column order: prefer the ordered list the script supplied. QJsonObject
+    // sorts its keys, so deriving columns from a row scrambled the source
+    // DataFrame's real column order (akshare 序号/代码/名称/最新价 came out in
+    // meaningless Unicode order). Fall back to the first row's keys.
+    QStringList columns = ordered_columns;
+    if (columns.isEmpty()) {
+        auto first = rows_json[0].toObject();
+        for (auto it = first.begin(); it != first.end(); ++it)
+            columns << it.key();
     }
 
     data_table_->setColumnCount(columns.size());
@@ -792,14 +813,29 @@ void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
             auto val = obj.value(columns[col]);
             QString text;
             if (val.isDouble()) {
-                text = QString::number(val.toDouble(), 'g', 10);
+                const double v = val.toDouble();
+                if (v == std::floor(v) && std::abs(v) < 1e15) {
+                    // Exact integer (volume, market cap, index number) — render
+                    // in full, never in scientific notation (the old 'g',10
+                    // format turned e.g. a large 成交额 into "1.23e+10").
+                    text = QString::number(static_cast<qint64>(v));
+                } else {
+                    text = QString::number(v, 'f', 4);
+                    if (text.contains('.')) {
+                        while (text.endsWith('0'))
+                            text.chop(1);
+                        if (text.endsWith('.'))
+                            text.chop(1);
+                    }
+                }
             } else if (val.isNull()) {
                 text = "--";
             } else {
                 text = val.toVariant().toString();
             }
 
-            auto* item = new QTableWidgetItem(text);
+            QTableWidgetItem* item = val.isDouble() ? new ui::NumericTableWidgetItem(text, val.toDouble())
+                                                     : new QTableWidgetItem(text);
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
             // Color numbers in cyan, negative in red

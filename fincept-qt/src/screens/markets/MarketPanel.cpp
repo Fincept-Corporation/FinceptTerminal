@@ -217,7 +217,11 @@ void MarketPanel::open_cols_dropdown() {
 
     // NAME is now the locked first column (renders the friendly name), so the
     // optional set offers TICKER instead for users who also want the raw symbol.
-    const QStringList optional = {"CHG", "CHG%", "HIGH", "LOW", "VOL", "BID", "ASK", "OPEN", "TICKER"};
+    // BID/ASK/OPEN are intentionally omitted: the markets quote snapshot
+    // (QuoteData) carries no bid, ask, or open, so those columns could only ever
+    // render "--". (Wiring real values would need MarketDataService + the hub
+    // QuoteData serialization to carry them — tracked as a follow-up.)
+    const QStringList optional = {"CHG", "CHG%", "HIGH", "LOW", "VOL", "TICKER"};
 
     for (const QString& col : optional) {
         auto* act = menu->addAction(column_label(col));
@@ -486,11 +490,11 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
                 table_->setItem(row, ci,
                                 mk(fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)),
                                    ui::colors::TEXT_DIM()));
-            else if (col == "BID")
-                table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
-            else if (col == "ASK")
-                table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
-            else if (col == "OPEN")
+            else if (col == "BID" || col == "ASK" || col == "OPEN")
+                // No data source in the markets QuoteData snapshot (only OHLC
+                // high/low + last/change/volume are populated). Dropped from the
+                // column picker; this fallback keeps legacy saved configs from
+                // showing an empty cell / hitting the unknown-column path.
                 table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
         }
     }

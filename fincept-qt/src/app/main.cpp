@@ -449,6 +449,9 @@ int main(int argc, char* argv[]) {
                 if (auto creds = fincept::services::prediction::PredictionCredentialStore::load_kalshi()) {
                     ks->set_credentials(*creds);
                 }
+                // Register the Kalshi WS producer + push-only topic policies
+                // (prediction:kalshi:price:*, prediction:kalshi:orderbook:*) with the hub.
+                ks->ensure_registered_with_hub();
             }
             if (auto* fi = reg.adapter(QStringLiteral("fincept"))) {
                 fi->ensure_registered_with_hub();

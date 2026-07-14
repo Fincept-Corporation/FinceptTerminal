@@ -671,9 +671,13 @@ void register_analytics_nodes(NodeRegistry& registry) {
 
                 int n_sims = static_cast<int>(params.value("simulations").toDouble(1000));
                 int horizon = static_cast<int>(params.value("horizon_days").toDouble(252));
-                // Cap simulations for performance
-                if (n_sims > 10000)
-                    n_sims = 10000;
+                // Clamp: >10000 sims is a perf risk; <1 sim leaves final_prices
+                // empty and the percentile reads below (final_prices[n_sims/2],
+                // .first(), .last()) would be out-of-bounds → crash. A negative
+                // horizon must not underflow the inner loop bound either.
+                n_sims = qBound(1, n_sims, 10000);
+                if (horizon < 0)
+                    horizon = 0;
 
                 double start_price = prices.last();
                 QVector<double> final_prices;

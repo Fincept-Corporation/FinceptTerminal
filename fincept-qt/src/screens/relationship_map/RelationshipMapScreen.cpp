@@ -305,6 +305,19 @@ void RelationshipMapScreen::build_ui() {
     connect(scene_, &relmap::RelationshipGraphScene::center_card_clicked, this, [](const QString& ticker) {
         fincept::EventBus::instance().publish("equity_research.load_symbol", {{"symbol", ticker}, {"type", "equity"}});
     });
+    // Any node click opens the right-side detail panel (previously the slot was
+    // never connected, so the panel was unreachable).
+    connect(scene_, &relmap::RelationshipGraphScene::node_activated, this, &RelationshipMapScreen::on_node_selected);
+    // Empty-canvas click dismisses the detail panel (deselect).
+    connect(scene_, &relmap::RelationshipGraphScene::background_clicked, this, [this]() {
+        if (detail_panel_)
+            detail_panel_->hide();
+    });
+    // Live zoom indicator surfaced on the FIT button tooltip.
+    connect(view_, &relmap::RelationshipGraphView::zoom_changed, this, [this](double f) {
+        if (fit_btn_)
+            fit_btn_->setToolTip(tr("Zoom %1% — click to fit (Home)").arg(qRound(f * 100.0)));
+    });
 }
 
 // ── Filter Panel ─────────────────────────────────────────────────────────────
@@ -678,42 +691,18 @@ void RelationshipMapScreen::rebuild_graph() {
     update_status_bar();
 }
 
-void RelationshipMapScreen::on_node_selected() {
-    auto items = scene_->selectedItems();
-    if (items.isEmpty()) {
+void RelationshipMapScreen::on_node_selected(const QString& label, const QString& sublabel,
+                                             const QString& category_text) {
+    // Driven by RelationshipGraphScene::node_activated (any node click). The
+    // node carries only label/sub/category; rich properties are looked up from
+    // current_data_ by matching the label against the company / peer tickers.
+    if (label.isEmpty()) {
         detail_panel_->hide();
         return;
     }
 
-    // Find the GraphNodeItem
-    for (auto* item : items) {
-        // Dynamic cast to our custom type
-        auto* rect = dynamic_cast<QGraphicsRectItem*>(item);
-        if (!rect)
-            continue;
-
-        // Access node data through scene items — we stored it in the item
-        // Since GraphNodeItem is defined in the .cpp, we use a different approach:
-        // Get the data from item's tooltip or child text items
-        auto children = rect->childItems();
-        QString label, category_text, sublabel;
-        QMap<QString, QString> props;
-
-        if (children.size() >= 2) {
-            auto* badge_item = dynamic_cast<QGraphicsTextItem*>(children[0]);
-            auto* label_item = dynamic_cast<QGraphicsTextItem*>(children[1]);
-            if (badge_item)
-                category_text = badge_item->toPlainText();
-            if (label_item)
-                label = label_item->toPlainText();
-            if (children.size() >= 3) {
-                auto* sub_item = dynamic_cast<QGraphicsTextItem*>(children[2]);
-                if (sub_item)
-                    sublabel = sub_item->toPlainText();
-            }
-        }
-
-        detail_title_->setText(label.isEmpty() ? tr("NODE") : label);
+    {
+        detail_title_->setText(label);
         detail_category_->setText(category_text);
         detail_category_->setStyleSheet(
             QString("color: %1; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; %2")
@@ -782,7 +771,6 @@ void RelationshipMapScreen::on_node_selected() {
         }
 
         detail_panel_->show();
-        break;
     }
 }
 

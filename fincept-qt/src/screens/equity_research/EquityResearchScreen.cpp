@@ -362,6 +362,11 @@ QWidget* EquityResearchScreen::build_quote_bar() {
 
 // Called when a new quote (price/change/volume) arrives from the service
 void EquityResearchScreen::on_quote_loaded(services::equity::QuoteData q) {
+    // Guard: ignore a late quote for a symbol the user already navigated away
+    // from (matches on_info_loaded below), otherwise a stale price flashes in
+    // the header bar over the newly-selected symbol.
+    if (q.symbol != current_symbol_)
+        return;
     update_quote_bar(q);
 }
 

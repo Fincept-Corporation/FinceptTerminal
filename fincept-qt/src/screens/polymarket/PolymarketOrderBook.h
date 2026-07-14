@@ -34,6 +34,10 @@ class PolymarketOrderBook : public QWidget {
 
   private:
     void rebuild_cache();
+    // Number of ask/bid levels actually painted, derived from the current widget
+    // height. Both the painter and the click hit-test MUST use this so a click
+    // maps to the same level that was drawn. Caller must hold mutex_.
+    void visible_row_counts(int& ask_rows, int& bid_rows) const;
 
     QVector<fincept::services::prediction::OrderLevel> bids_;
     QVector<fincept::services::prediction::OrderLevel> asks_;

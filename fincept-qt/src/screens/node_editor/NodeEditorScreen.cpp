@@ -120,6 +120,21 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
             if (auto* node = dynamic_cast<NodeItem*>(item))
                 ids.append(node->node_def().id);
         }
+        if (ids.isEmpty()) {
+            event->accept();
+            return;
+        }
+        // Confirm: deletion is NOT undoable (no QUndoCommand is pushed for it)
+        // and the 30s autosave persists it, so an accidental Delete/Backspace
+        // would silently and permanently lose the nodes and their connections.
+        const auto ans = QMessageBox::question(
+            this, tr("Delete Nodes"),
+            tr("Delete %1 selected node(s) and their connections? This cannot be undone.").arg(ids.size()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (ans != QMessageBox::Yes) {
+            event->accept();
+            return;
+        }
         for (const auto& id : ids)
             scene_->remove_node(id);
         properties_->clear();

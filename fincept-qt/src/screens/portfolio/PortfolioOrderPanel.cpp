@@ -85,10 +85,12 @@ void PortfolioOrderPanel::build_ui() {
     connect(buy_tab_, &QPushButton::clicked, this, [this, update_tabs]() {
         side_ = "BUY";
         update_tabs();
+        update_display(); // refresh the submit button label/colour for the new side
     });
     connect(sell_tab_, &QPushButton::clicked, this, [this, update_tabs]() {
         side_ = "SELL";
         update_tabs();
+        update_display();
     });
 
     layout->addLayout(side_row);

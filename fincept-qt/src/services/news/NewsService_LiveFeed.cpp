@@ -102,6 +102,16 @@ void NewsService::connect_live_feed(const QString& ws_url) {
                     a.link = o["link"].toString();
                     a.sort_ts = o["sort_ts"].toVariant().toLongLong();
                     a.tier = o["tier"].toInt(4);
+                    // Preserve the NLP enrichment — omitting these fields on the
+                    // round-trip stripped priority/sentiment/impact/lang/tickers
+                    // from every cached row on each live push, breaking colouring,
+                    // priority sort and ticker filters.
+                    a.priority = priority_from_string(o["priority"].toString());
+                    a.sentiment = sentiment_from_string(o["sentiment"].toString());
+                    a.impact = impact_from_string(o["impact"].toString());
+                    a.lang = o["lang"].toString();
+                    for (const auto& t : o["tickers"].toArray())
+                        a.tickers << t.toString();
                     updated.append(a);
                 }
             }
@@ -120,6 +130,15 @@ void NewsService::connect_live_feed(const QString& ws_url) {
             o["link"] = a.link;
             o["sort_ts"] = static_cast<qint64>(a.sort_ts);
             o["tier"] = a.tier;
+            // Write the enrichment back too, so it survives the next live push.
+            o["priority"] = priority_string(a.priority);
+            o["sentiment"] = sentiment_string(a.sentiment);
+            o["impact"] = impact_string(a.impact);
+            o["lang"] = a.lang;
+            QJsonArray tk;
+            for (const auto& t : a.tickers)
+                tk.append(t);
+            o["tickers"] = tk;
             narr.append(o);
         }
         fincept::CacheManager::instance().put(

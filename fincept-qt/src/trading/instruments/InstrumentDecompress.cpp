@@ -3,6 +3,16 @@
 #include "core/logging/Logger.h"
 
 #include <cstring>
+// Qt Core bundles zlib and exports it with a `z_` prefix (see Qt's zconf.h:
+// "Qt Core must export these symbols, define Z_PREFIX to avoid clashes with
+// system zlib"). We link Qt6::ZlibPrivate on Windows, so the calls must be
+// prefixed too. Qt's own zconf.h auto-defines Z_PREFIX, but if another zlib.h
+// shadows it on the include path (e.g. a PostgreSQL install whose include dir
+// precedes QtZlib), the unprefixed symbols won't link. Define it ourselves so
+// inflate() → z_inflate() regardless of which standard zlib.h is picked up.
+#ifndef Z_PREFIX
+#    define Z_PREFIX
+#endif
 #include <zlib.h>
 
 namespace fincept::trading::decompress {

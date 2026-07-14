@@ -107,25 +107,26 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& ses
     QString side_str = order_side_str(order.side);
     QString type_str = order_type_str(order.order_type);
 
+    // Fill/reference price = caller-supplied LTP (order.price). The old code used
+    // a hardcoded 1000.0 for market orders, fabricating P&L. Reject a market fill
+    // with no usable price instead, matching the account-based place_order path.
     std::optional<double> price_opt;
-    if (order.order_type == OrderType::Market) {
-        price_opt = 1000.0;
-    } else if (order.price > 0) {
+    if (order.price > 0)
         price_opt = order.price;
-    }
 
     std::optional<double> stop_opt;
     if (order.stop_price > 0)
         stop_opt = order.stop_price;
 
+    if (order.order_type == OrderType::Market && !price_opt)
+        return {false, "", "No live price yet for a market fill — wait for quotes to load", "paper"};
+
     try {
         auto paper_order = pt_place_order(session.paper_portfolio_id, symbol, side_str, type_str, order.quantity,
                                           price_opt, stop_opt, false);
 
-        if (order.order_type == OrderType::Market) {
-            double fill_price = order.price > 0 ? order.price : 1000.0;
-            pt_fill_order(paper_order.id, fill_price);
-        }
+        if (order.order_type == OrderType::Market)
+            pt_fill_order(paper_order.id, *price_opt);
 
         return {true, paper_order.id, "Paper order placed", "paper"};
     } catch (const std::exception& e) {
@@ -532,11 +533,20 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
             return {true, SmartOrderResult{false, {}, {}, 0, "No action needed. Position already at target."}, {}};
         }
 
-        auto side_str = (action == OrderSide::Buy) ? QString("buy") : QString("sell");
+        // Fill at the caller-supplied live price (SmartOrder.price = LTP), NOT a
+        // hardcoded 1000.0 sentinel — that fabricated P&L (closing a 250-cost
+        // long booked (1000-250)·qty of phantom profit, and a net-new position
+        // opened at 1000). Reject a paper market fill with no usable price, the
+        // same way the regular paper place_order path does.
+        if (order.price <= 0.0)
+            return {false, std::nullopt,
+                    QString("No live price for a paper smart-order fill on %1 (supply SmartOrder.price = LTP)")
+                        .arg(paper_sym)};
+        const auto side_str = (action == OrderSide::Buy) ? QString("buy") : QString("sell");
         try {
             auto paper_order = pt_place_order(account.paper_portfolio_id, paper_sym, side_str, "market", quantity,
-                                              std::nullopt, std::nullopt, false);
-            pt_fill_order(paper_order.id, 1000.0);
+                                              order.price, std::nullopt, false);
+            pt_fill_order(paper_order.id, order.price);
             return {true,
                     SmartOrderResult{true, paper_order.id, action, quantity,
                                      QString("Paper: adjusted from %1 to %2").arg(current).arg(target)},
@@ -665,7 +675,9 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     }
 
     QPointer<UnifiedTrading> self = this;
-    (void)QtConcurrent::run([self, orders, is_paper, broker, creds, paper_portfolio_id, callback]() {
+    const QString basket_strategy = basket.strategy_name;
+    (void)QtConcurrent::run(
+        [self, account_id, basket_strategy, orders, is_paper, broker, creds, paper_portfolio_id, callback]() {
         BasketOrderResult result;
         result.total = orders.size();
 
@@ -733,7 +745,10 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, result, callback]() {
+            [self, account_id, basket_strategy, is_paper, result, callback]() {
+                // Notify listeners (e.g. TradingNotificationBridge) that the basket finished.
+                publish(BasketCompletedEvent{account_id, basket_strategy, result.successful, result.failed,
+                                             result.total, is_paper ? QStringLiteral("paper") : QStringLiteral("live")});
                 if (callback)
                     callback(result);
             },

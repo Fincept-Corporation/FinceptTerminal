@@ -11,6 +11,7 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QRegularExpression>
+#include <QSet>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -107,6 +108,21 @@ QVector<double> SpreadsheetItem::resolve_range(const QString& from, const QStrin
 QVariant SpreadsheetItem::evaluate_formula() const {
     if (!tableWidget())
         return "#ERR";
+
+    // Guard against self-referential / circular formulas ("=A1" in A1, or
+    // A1→B1→A1). Evaluating a formula reads other cells' DisplayRole, which
+    // re-enters evaluate_formula(); without this a cycle recurses until the
+    // stack overflows and the whole terminal crashes on the next repaint. Track
+    // the items currently on the evaluation stack (single UI thread) and return
+    // #CYCLE on re-entry instead of recursing.
+    static thread_local QSet<const SpreadsheetItem*> evaluating;
+    if (evaluating.contains(this))
+        return QStringLiteral("#CYCLE");
+    evaluating.insert(this);
+    struct EvalGuard {
+        const SpreadsheetItem* item;
+        ~EvalGuard() { evaluating.remove(item); }
+    } eval_guard{this};
 
     QString expr = raw_text_.mid(1).trimmed().toUpper();
 

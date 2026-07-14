@@ -66,6 +66,7 @@ class MarketsScreen : public QWidget {
     // Splitter tree
     QSplitter* h_splitter_ = nullptr;   // horizontal — columns
     QVector<QSplitter*> col_splitters_; // vertical — panels within each column
+    bool h_splitter_initialized_ = false; // horizontal widths applied once (restore/equalize) on first show
 
     // Header bar widgets
     QWidget* header_bar_ = nullptr;

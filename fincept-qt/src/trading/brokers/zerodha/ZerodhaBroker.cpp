@@ -151,8 +151,8 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
     QByteArray input = (api_key + request_token + api_secret).toUtf8();
     QString checksum = QCryptographicHash::hash(input, QCryptographicHash::Sha256).toHex();
 
-    LOG_INFO("Zerodha", QString("exchange_token: api_key=%1 req_token_len=%2 secret_len=%3")
-                            .arg(api_key)
+    LOG_INFO("Zerodha", QString("exchange_token: api_key_len=%1 req_token_len=%2 secret_len=%3")
+                            .arg(api_key.length())
                             .arg(request_token.length())
                             .arg(api_secret.length()));
 

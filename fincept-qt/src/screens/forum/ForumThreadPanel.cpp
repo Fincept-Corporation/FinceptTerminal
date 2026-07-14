@@ -401,8 +401,10 @@ void ForumThreadPanel::build_ui() {
         QString txt = t_reply_input_->text().trimmed();
         if (txt.isEmpty() || current_.post.post_uuid.isEmpty())
             return;
+        // Don't clear optimistically — ForumScreen calls clear_reply_input()
+        // only after the comment actually posts, so a network/auth failure keeps
+        // the user's typed reply instead of silently discarding it.
         emit comment_submitted(current_.post.post_uuid, txt);
-        t_reply_input_->clear();
     };
     connect(send_btn_, &QPushButton::clicked, this, submit);
     connect(t_reply_input_, &QLineEdit::returnPressed, this, submit);
@@ -429,6 +431,11 @@ void ForumThreadPanel::set_loading(bool on) {
     } else {
         spin_timer_->stop();
     }
+}
+
+void ForumThreadPanel::clear_reply_input() {
+    if (t_reply_input_)
+        t_reply_input_->clear();
 }
 
 void ForumThreadPanel::clear() {

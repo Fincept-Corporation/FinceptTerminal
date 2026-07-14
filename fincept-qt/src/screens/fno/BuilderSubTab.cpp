@@ -384,6 +384,25 @@ void BuilderSubTab::on_trade_clicked() {
         return;
     }
 
+    // SAFETY (money-loss guard): this action is paper-only — the button, tooltip,
+    // confirm dialog and toast all say "paper", and it fills every leg as a
+    // market order at the current premium. UnifiedTrading::place_order routes by
+    // the account's real trading_mode, so if the resolved account is LIVE this
+    // would fire real broker orders while the entire UI claims "paper". Refuse
+    // instead. (Live F&O trading is done per-leg from the option chain's
+    // right-click Buy/Sell, which maps the broker-native symbol, confirms LIVE
+    // explicitly, and places off the UI thread.)
+    const BrokerAccount acct = AccountManager::instance().get_account(account_id);
+    if (acct.trading_mode == QStringLiteral("live")) {
+        QMessageBox::warning(
+            this, tr("Paper trade only"),
+            tr("The %1 account is in LIVE mode.\n\n“Trade All (Paper)” only places simulated paper orders — it will "
+               "not place live orders. To trade this strategy live, place each leg from the option chain "
+               "(right-click a strike → Buy / Sell), which confirms each live order individually.")
+                .arg(acct.display_name.isEmpty() ? broker : acct.display_name));
+        return;
+    }
+
     int placed = 0;
     int failed = 0;
     QStringList failures;

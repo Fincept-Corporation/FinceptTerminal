@@ -9,6 +9,8 @@
 #include "services/workflow/ConfirmationService.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/RiskManager.h"
+#include "services/workflow/WorkflowExecutor.h"
+#include "storage/repositories/WorkflowRepository.h"
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
@@ -31,6 +33,7 @@
 #include <QPointer>
 #include <QPrinter>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -2356,6 +2359,75 @@ print(json.dumps({"path": path, "chart_type": chart_type, "size": os.path.getsiz
                 cb(true, out, {});
             });
         };
+    }
+
+    // ── Execute Workflow — run another saved workflow as a sub-workflow ──
+    auto* subwf_def = const_cast<NodeTypeDef*>(registry.find("control.execute_workflow"));
+    if (subwf_def && !subwf_def->execute) {
+        subwf_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                                std::function<void(bool, QJsonValue, QString)> cb) {
+            const QString wf_id = params.value("workflow_id").toString().trimmed();
+            if (wf_id.isEmpty()) {
+                cb(false, {}, "Workflow ID is required");
+                return;
+            }
+
+            // Recursion / cycle guard across nested execute_workflow nodes. Runs on the
+            // UI thread; executors are signal-driven on the same thread, so a plain set
+            // is sufficient. Blocks A→A and A→B→A; A→B→C is allowed.
+            static QSet<QString> in_flight;
+            if (in_flight.contains(wf_id)) {
+                cb(false, {}, QString("Cyclic sub-workflow execution detected for '%1'").arg(wf_id));
+                return;
+            }
+
+            auto loaded = fincept::WorkflowRepository::instance().load(wf_id);
+            if (loaded.is_err()) {
+                cb(false, {},
+                   QString("Failed to load workflow '%1': %2").arg(wf_id, QString::fromStdString(loaded.error())));
+                return;
+            }
+
+            WorkflowDef sub = loaded.value();
+            if (sub.nodes.isEmpty()) {
+                cb(false, {}, QString("Sub-workflow '%1' has no executable nodes").arg(wf_id));
+                return;
+            }
+
+            // Expose this node's inbound payload to the sub-workflow via static_data.
+            if (!inputs.isEmpty() && !inputs[0].isNull() && !inputs[0].isUndefined()) {
+                QJsonObject sd = sub.static_data;
+                sd["parent_input"] = inputs[0];
+                sub.static_data = sd;
+            }
+
+            in_flight.insert(wf_id);
+            auto* exec = new WorkflowExecutor();
+            QObject::connect(exec, &WorkflowExecutor::execution_finished, exec,
+                             [cb, wf_id, exec](const WorkflowExecutionResult& result) {
+                                 in_flight.remove(wf_id);
+
+                                 QJsonObject out;
+                                 out["workflow_id"] = result.workflow_id;
+                                 out["success"] = result.success;
+                                 out["duration_ms"] = result.total_duration_ms;
+                                 QJsonObject node_outputs;
+                                 for (const auto& nr : result.node_results)
+                                     node_outputs[nr.node_id] = nr.output;
+                                 out["nodes"] = node_outputs;
+                                 if (!result.error.isEmpty())
+                                     out["error"] = result.error;
+
+                                 if (result.success)
+                                     cb(true, out, {});
+                                 else
+                                     cb(false, out, result.error.isEmpty() ? "Sub-workflow failed" : result.error);
+
+                                 exec->deleteLater();
+                             });
+            exec->execute(sub);
+        };
+        LOG_INFO("ServiceBridges", "control.execute_workflow bridge wired");
     }
 
     LOG_INFO("ServiceBridges", "Utility bridges wired");

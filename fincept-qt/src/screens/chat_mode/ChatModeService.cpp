@@ -886,6 +886,7 @@ QNetworkReply* ChatModeService::stream_message(const QString& message, const QSt
 
     sse_reply_ = sse_nam_->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     sse_current_event_.clear();
+    sse_terminal_emitted_ = false; // fresh stream — no terminal signal yet
 
     connect(sse_reply_, &QNetworkReply::readyRead, this, [this]() {
         while (sse_reply_ && sse_reply_->canReadLine()) {
@@ -905,10 +906,18 @@ QNetworkReply* ChatModeService::stream_message(const QString& message, const QSt
         if (net_err != QNetworkReply::NoError && net_err != QNetworkReply::OperationCanceledError) {
             const QString body = QString::fromUtf8(sse_reply_->readAll().left(200));
             LOG_WARN("ChatModeService", QString("SSE error body: %1").arg(body));
+            sse_terminal_emitted_ = true;
             emit stream_error(QString("Stream failed (HTTP %1)").arg(status));
         }
         sse_reply_->deleteLater();
         sse_reply_ = nullptr;
+        // A clean close (or a cancel) that never sent a "finish"/"error" event
+        // still needs a terminal signal, otherwise the chat panel leaves its
+        // input disabled forever.
+        if (!sse_terminal_emitted_) {
+            sse_terminal_emitted_ = true;
+            emit stream_finish(0);
+        }
     });
 
     return sse_reply_;
@@ -919,6 +928,13 @@ void ChatModeService::abort_stream() {
         sse_reply_->abort();
         sse_reply_->deleteLater();
         sse_reply_ = nullptr;
+    }
+    // A user-initiated Stop otherwise emits no terminal signal (the finished
+    // handler skips OperationCanceledError), so the chat panel's input would
+    // stay disabled forever. Emit one if none has gone out for this stream.
+    if (!sse_terminal_emitted_) {
+        sse_terminal_emitted_ = true;
+        emit stream_finish(0);
     }
 }
 
@@ -964,6 +980,7 @@ void ChatModeService::handle_sse_line(const QByteArray& line) {
         } else if (ev == "finish") {
             const int total = data["totalTokens"].toInt();
             LOG_INFO("ChatModeService", QString("SSE finish: %1 total tokens").arg(total));
+            sse_terminal_emitted_ = true;
             emit stream_finish(total);
         } else if (ev == "heartbeat") {
             LOG_DEBUG("ChatModeService", "SSE heartbeat");
@@ -971,6 +988,7 @@ void ChatModeService::handle_sse_line(const QByteArray& line) {
         } else if (ev == "error") {
             const QString msg = data["message"].toString();
             LOG_WARN("ChatModeService", "SSE error: " + msg);
+            sse_terminal_emitted_ = true;
             emit stream_error(msg);
         } else if (!ev.isEmpty()) {
             LOG_DEBUG("ChatModeService", "SSE unknown event: " + ev);

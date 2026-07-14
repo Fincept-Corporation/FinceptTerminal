@@ -68,8 +68,16 @@ Result<screens::GridLayout> DashboardLayoutRepository::load_layout(const QString
 }
 
 Result<void> DashboardLayoutRepository::save_layout(const screens::GridLayout& layout, const QString& profile_name) {
-    // Upsert the layout profile
-    auto r = exec_write("INSERT INTO dashboard_layouts (profile_name, cols, row_height, margin, is_active, updated_at) "
+    // Persist the layout header + widget instances atomically. save_layout()
+    // DELETEs all instances then re-INSERTs them; without a transaction a
+    // mid-loop failure or crash reloads an empty/corrupt dashboard. Wrap in one
+    // transaction, roll back on error.
+    if (auto tx = db().begin_transaction(); tx.is_err())
+        return tx;
+
+    const auto body = [&]() -> Result<void> {
+        // Upsert the layout profile
+        auto r = exec_write("INSERT INTO dashboard_layouts (profile_name, cols, row_height, margin, is_active, updated_at) "
                         "VALUES (?, ?, ?, ?, 1, datetime('now')) "
                         "ON CONFLICT(profile_name) DO UPDATE SET "
                         "cols=excluded.cols, row_height=excluded.row_height, margin=excluded.margin, "
@@ -104,6 +112,15 @@ Result<void> DashboardLayoutRepository::save_layout(const screens::GridLayout& l
         if (ri.is_err())
             return ri;
     }
+        return Result<void>::ok();
+    }; // body
+
+    if (Result<void> br = body(); br.is_err()) {
+        db().rollback();
+        return br;
+    }
+    if (auto cr = db().commit(); cr.is_err())
+        return cr;
 
     LOG_INFO("DashboardRepo", QString("Saved %1 widgets for profile '%2'").arg(layout.items.size()).arg(profile_name));
     SyncOutbox::record_unique("dashboard", profile_name, "upsert");

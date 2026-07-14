@@ -1,5 +1,5 @@
 // EdgarTools.cpp — SEC EDGAR MCP tools
-// Calls Analytics/sec_edgar/edgar_fetcher.py directly via PythonRunner.
+// Calls mcp/edgar/main.py directly via PythonRunner.
 // Completely separate from M&A Analytics.
 
 #include "mcp/tools/EdgarTools.h"

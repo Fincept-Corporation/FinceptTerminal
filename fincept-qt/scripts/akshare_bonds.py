@@ -67,6 +67,7 @@ class BondsWrapper:
                     return {
                         "success": True,
                         "data": self._convert_dataframe_to_json_safe(result),
+                        "columns": (list(result.columns) if hasattr(result, "columns") else []),
                         "count": len(result),
                         "timestamp": int(datetime.now().timestamp()),
                         "source": f"akshare.{func.__name__}"
