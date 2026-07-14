@@ -6,10 +6,15 @@
 #include <QDateTime>
 
 #if defined(Q_OS_WIN)
-// The project defines WIN32_LEAN_AND_MEAN globally, which strips winsock from
-// <windows.h>. iphlpapi/netioapi need the base Windows + winsock2 types
-// already declared (SDK 26100+ headers are not self-sufficient), so the
-// order below is mandatory: winsock2 → windows → iphlpapi → netioapi.
+// <windows.h>. Pull the pieces we need explicitly in the right order: the base
+// winsock2 + windows types MUST be defined before iphlpapi.h / netioapi.h are
+// parsed (SDK 26100+ headers are not self-sufficient), otherwise MIB_IF_ROW2 /
+// GetIfTable2 drag in ifdef.h / netioapi.h with DWORD / BOOL / SOCKADDR still
+// undefined → C2146 / C3646 cascade. Mandatory order below:
+// winsock2 → windows → iphlpapi → netioapi.
+#    ifndef _WINSOCKAPI_
+#        define _WINSOCKAPI_ // prevent windows.h from including winsock1
+#    endif
 #    include <winsock2.h>
 #    include <ws2tcpip.h>
 #    include <windows.h>

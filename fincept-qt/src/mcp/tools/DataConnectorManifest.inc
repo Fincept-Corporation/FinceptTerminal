@@ -65,7 +65,8 @@ static const char* kDataConnectorManifest = R"CONNMANIFEST(
 {"name": "data_github_stats", "script": "github_stats_data.py", "desc": "GitHub Stats Data Fetcher", "commands": ["repo", "commits", "contributors", "languages", "search", "trending", "code_frequency", "releases"], "env_keys": ["GITHUB_TOKEN"]},
 {"name": "data_glassnode", "script": "glassnode_data.py", "desc": "Glassnode Data Fetcher", "commands": ["active_addresses", "transactions", "hash_rate", "nvt", "sopr", "metrics"], "env_keys": ["GLASSNODE_API_KEY"]},
 {"name": "data_global_competitiveness", "script": "global_competitiveness_data.py", "desc": "Global Competitiveness Data Fetcher", "commands": ["infrastructure", "technology", "market", "institutions", "innovation", "rankings"], "env_keys": []},
-{"name": "data_global_debt_monitor", "script": "global_debt_monitor_data.py", "desc": "Global Debt Monitor Data Fetcher", "commands": ["government", "corporate", "household", "total", "service_ratio", "trends"], "env_keys": ["IMF_API_KEY"]},
+)CONNMANIFEST"
+R"CONNMANIFEST({"name": "data_global_debt_monitor", "script": "global_debt_monitor_data.py", "desc": "Global Debt Monitor Data Fetcher", "commands": ["government", "corporate", "household", "total", "service_ratio", "trends"], "env_keys": ["IMF_API_KEY"]},
 {"name": "data_global_findex", "script": "global_findex_data.py", "desc": "World Bank Global Findex Data Fetcher", "commands": ["accounts", "digital_payments", "credit", "savings", "mobile_money", "index"], "env_keys": ["WORLDBANK_API_KEY"]},
 {"name": "data_global_fishing_watch", "script": "global_fishing_watch_data.py", "desc": "Global Fishing Watch Data Fetcher", "commands": ["search", "tracks", "fishing", "ports", "events", "datasets"], "env_keys": ["GFW_API_KEY"]},
 {"name": "data_global_forest_watch", "script": "global_forest_watch_data.py", "desc": "Global Forest Watch Data Fetcher", "commands": ["cover_loss", "alerts", "carbon", "protected", "fires", "countries"], "env_keys": ["GFW_API_KEY"]},
@@ -129,7 +130,8 @@ static const char* kDataConnectorManifest = R"CONNMANIFEST(
 {"name": "data_owid_co2", "script": "owid_co2_data.py", "desc": "Our World in Data CO2 & Energy Data Fetcher", "commands": ["country_co2", "global_co2", "energy_mix", "per_capita", "cumulative", "countries"], "env_keys": []},
 {"name": "data_paris_agreement", "script": "paris_agreement_data.py", "desc": "Paris Agreement / NDC Registry Data Fetcher", "commands": ["ndc", "emissions", "ndc_content", "targets", "adaptation", "countries"], "env_keys": ["CLIMATE_WATCH_API_KEY"]},
 {"name": "data_penn_world_table", "script": "penn_world_table_data.py", "desc": "Penn World Tables Data Fetcher", "commands": ["data", "gdp", "productivity", "trade", "indicators", "countries"], "env_keys": ["PWT_API_KEY"]},
-{"name": "data_pew_research", "script": "pew_research_data.py", "desc": "Pew Research Data Fetcher", "commands": ["surveys", "countries", "survey", "religion", "internet", "attitudes"], "env_keys": []},
+)CONNMANIFEST"
+R"CONNMANIFEST({"name": "data_pew_research", "script": "pew_research_data.py", "desc": "Pew Research Data Fetcher", "commands": ["surveys", "countries", "survey", "religion", "internet", "attitudes"], "env_keys": []},
 {"name": "data_platts", "script": "platts_data.py", "desc": "Platts Data Fetcher", "commands": ["assessment", "latest", "symbols", "market", "news", "datasets"], "env_keys": ["PLATTS_API_KEY"]},
 {"name": "data_polygon_io", "script": "polygon_io_data.py", "desc": "Polygon.io Data Fetcher", "commands": ["aggregates", "daily", "grouped", "details", "status", "crypto"], "env_keys": ["POLYGON_API_KEY"]},
 {"name": "data_port_congestion", "script": "port_congestion_data.py", "desc": "Port Congestion Data Fetcher", "commands": ["global_index", "port", "container_rates", "queue", "ports", "throughput"], "env_keys": ["PORTCHAIN_API_KEY"]},

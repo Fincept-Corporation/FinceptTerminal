@@ -1,7 +1,7 @@
 // controlscript.qs — Fincept Terminal QtIFW Controller script.
 //
 // Wizard-page automation for HEADLESS / COMMAND-LINE invocations only, e.g.
-//   FinceptMaintenanceTool.exe purge --confirm-command --accept-messages --default-answer
+//   FinceptMaintenanceTool.exe purge --confirm-command --default-answer
 //   FinceptTerminal-<v>-setup.exe install --confirm-command --default-answer
 // Without this, IFW would block on each wizard page even when --confirm-command
 // is set, because some pages (Introduction, ReadyForInstallation, Finished)

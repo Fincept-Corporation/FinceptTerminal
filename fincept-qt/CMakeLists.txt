@@ -3884,9 +3884,10 @@ if(FINCEPT_BUILD_INSTALLER)
     # <RemoveTargetDir>true</RemoveTargetDir> regardless of CPackIFW version.
     set(CPACK_IFW_PACKAGE_REMOVE_TARGET_DIR ON)
     # Controller script for headless invocations (e.g. `purge --confirm-command
-    # --accept-messages --default-answer`). Without it, IFW blocks on wizard
-    # pages even with --confirm-command set, because page auto-advance is only
-    # wired for the install path.
+    # --default-answer`). Without it, IFW blocks on wizard pages even with
+    # --confirm-command set, because page auto-advance is only wired for the
+    # install path. NB: --accept-messages and --default-answer are mutually
+    # exclusive in IFW — pass only one, or the tool exits 1 before running.
     set(CPACK_IFW_PACKAGE_CONTROL_SCRIPT
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/config/controlscript.qs")
 
