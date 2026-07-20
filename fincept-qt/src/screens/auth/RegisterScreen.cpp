@@ -135,8 +135,8 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
     });
     connect(&auth, &auth::AuthManager::otp_verified, this, [this]() {
         verify_btn_->setEnabled(true);
-        for (QLineEdit* w :
-             {first_name_, last_name_, email_, phone_, country_code_, password_, confirm_pw_, otp_input_}) {
+        for (QLineEdit* w : {first_name_, last_name_, username_, email_, phone_, country_code_, password_,
+                             confirm_pw_, otp_input_}) {
             if (w)
                 w->clear();
         }
@@ -248,6 +248,10 @@ void RegisterScreen::build_form_page() {
     add_field(last_name_lbl_, last_name_, ln_col);
     nrl->addLayout(ln_col);
     vl->addWidget(name_row);
+
+    // Username is required by POST /user/register; do not invent it from the
+    // name fields (that hid the control and caused silent collisions — #318).
+    add_field(username_lbl_, username_, vl);
 
     add_field(email_lbl_, email_, vl);
 
@@ -436,6 +440,8 @@ void RegisterScreen::retranslateUi() {
         first_name_lbl_->setText(tr("FIRST NAME"));
     if (last_name_lbl_)
         last_name_lbl_->setText(tr("LAST NAME"));
+    if (username_lbl_)
+        username_lbl_->setText(tr("USERNAME"));
     if (email_lbl_)
         email_lbl_->setText(tr("EMAIL"));
     if (code_lbl_)
@@ -451,6 +457,8 @@ void RegisterScreen::retranslateUi() {
         first_name_->setPlaceholderText(tr("First"));
     if (last_name_)
         last_name_->setPlaceholderText(tr("Last"));
+    if (username_)
+        username_->setPlaceholderText(tr("3-50 chars, letters/numbers/_"));
     if (email_)
         email_->setPlaceholderText(tr("user@domain.com"));
     if (country_code_)
@@ -501,14 +509,27 @@ void RegisterScreen::on_register() {
 
     QString fn = first_name_->text().trimmed();
     QString ln = last_name_->text().trimmed();
+    QString username = auth::sanitize_input(username_->text()).toLower();
     QString em = email_->text().trimmed();
     QString ph = phone_->text().trimmed();
     QString cc = country_code_->text().trimmed();
     QString pw = password_->text();
     QString cpw = confirm_pw_->text();
 
-    if (fn.isEmpty() || ln.isEmpty() || em.isEmpty() || ph.isEmpty() || pw.isEmpty() || cpw.isEmpty()) {
+    if (fn.isEmpty() || ln.isEmpty() || username.isEmpty() || em.isEmpty() || ph.isEmpty() || pw.isEmpty() ||
+        cpw.isEmpty()) {
         error_label_->setText(tr("All fields are required"));
+        error_label_->show();
+        return;
+    }
+    if (username.length() < 3 || username.length() > 50) {
+        error_label_->setText(tr("Username must be 3-50 characters"));
+        error_label_->show();
+        return;
+    }
+    // Keep usernames URL/API-safe; spaces from names were a common failure mode.
+    if (!QRegularExpression(QStringLiteral("^[a-z0-9_]+$")).match(username).hasMatch()) {
+        error_label_->setText(tr("Username may only contain letters, numbers, and underscores"));
         error_label_->show();
         return;
     }
@@ -539,13 +560,6 @@ void RegisterScreen::on_register() {
         return;
     }
 
-    QString username = auth::sanitize_input(fn + ln).toLower();
-    if (username.length() < 3 || username.length() > 50) {
-        error_label_->setText(tr("Username must be 3-50 characters"));
-        error_label_->show();
-        return;
-    }
-
     register_btn_->setEnabled(false);
     register_btn_->setText(tr("  CREATING...  "));
     auth::AuthManager::instance().signup(username, em, pw, ph, {}, cc);
@@ -565,9 +579,7 @@ void RegisterScreen::on_verify_otp() {
 }
 
 void RegisterScreen::on_resend_otp() {
-    QString fn = first_name_->text().trimmed();
-    QString ln = last_name_->text().trimmed();
-    QString username = auth::sanitize_input(fn + ln).toLower();
+    QString username = auth::sanitize_input(username_->text()).toLower();
     QString cc = country_code_->text().trimmed();
     if (!cc.isEmpty() && !cc.startsWith('+'))
         cc = '+' + cc;
