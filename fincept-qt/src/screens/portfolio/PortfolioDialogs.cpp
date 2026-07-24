@@ -5,6 +5,7 @@
 #include "services/markets/MarketSearchService.h"
 #include "ui/theme/Theme.h"
 
+#include <QApplication>
 #include <QDate>
 #include <QDateEdit>
 #include <QEvent>
@@ -306,24 +307,38 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
 
     layout->addLayout(btn_layout);
 
-    // ── Search dropdown (floats over the dialog, parented to this) ────────────
     search_frame_ = new QFrame(this);
+    search_frame_->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    search_frame_->setAttribute(Qt::WA_ShowWithoutActivating);
     search_frame_->setObjectName("assetSearchFrame");
     search_frame_->setStyleSheet(
         QString("QFrame#assetSearchFrame { background:%1; border:1px solid %2; border-top:none; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED()));
     search_frame_->hide();
 
+    // Hide dropdown when app loses focus
+    connect(qApp, &QApplication::focusChanged, this, [this](QWidget*, QWidget* now) {
+        if (search_frame_->isVisible()) {
+            if (!now || (now != symbol_edit_ && !search_frame_->isAncestorOf(now) && now != search_list_)) {
+                search_frame_->hide();
+            }
+        }
+    });
+
     auto* frame_layout = new QVBoxLayout(search_frame_);
     frame_layout->setContentsMargins(0, 0, 0, 0);
     frame_layout->setSpacing(0);
 
     search_list_ = new QListWidget(search_frame_);
-    search_list_->setStyleSheet(QString("QListWidget { background:transparent; border:none; outline:none; }"
+    search_list_->setStyleSheet(QString("QListWidget { background:%1; border:none; outline:none; }"
                                         "QListWidget::item { padding:0; border:none; background:transparent; }"
-                                        "QListWidget::item:selected { background:%1; border-left:3px solid %2; }")
-                                    .arg(ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+                                        "QListWidget::item:selected { background:%2; border-left:3px solid %3; }"
+                                        "QScrollBar:vertical { background:%1; width:6px; margin:0; }"
+                                        "QScrollBar::handle:vertical { background:%2; border-radius:3px; min-height:15px; }"
+                                        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }")
+                                    .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     search_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    search_list_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     search_list_->setCursor(Qt::PointingHandCursor);
     frame_layout->addWidget(search_list_);
 
@@ -384,7 +399,7 @@ void AddAssetDialog::show_results(const QList<fincept::services::MarketSearchSer
     if (results.isEmpty()) {
         auto* item = new QListWidgetItem(search_list_);
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
-        auto* row = new QWidget(this);
+        auto* row = new QWidget(search_list_);
         row->setStyleSheet("background:transparent;");
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(10, 6, 10, 6);
@@ -423,7 +438,7 @@ void AddAssetDialog::show_results(const QList<fincept::services::MarketSearchSer
         auto* item = new QListWidgetItem(search_list_);
         item->setData(Qt::UserRole, yf_sym);
 
-        auto* row = new QWidget(this);
+        auto* row = new QWidget(search_list_);
         row->setStyleSheet("background:transparent;");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 4, 10, 4);
@@ -483,9 +498,9 @@ void AddAssetDialog::select_result(const QString& sym) {
 
 void AddAssetDialog::position_dropdown() {
     // Place the dropdown directly below the symbol_edit_ row
-    const QPoint origin = symbol_edit_->mapTo(this, QPoint(0, symbol_edit_->height()));
+    const QPoint origin = symbol_edit_->mapToGlobal(QPoint(0, symbol_edit_->height()));
     const int w = symbol_edit_->width() + 60; // a bit wider to show exchange column
-    const int rows = std::min(search_list_->count(), kAssetSearchLimit);
+    const int rows = std::min(search_list_->count(), 6);
     const int h = rows * 30 + 2;
     search_frame_->setGeometry(origin.x(), origin.y(), w, h);
 }
@@ -524,6 +539,13 @@ void AddAssetDialog::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
     QDialog::changeEvent(event);
+}
+
+void AddAssetDialog::moveEvent(QMoveEvent* event) {
+    QDialog::moveEvent(event);
+    if (search_frame_ && search_frame_->isVisible()) {
+        position_dropdown();
+    }
 }
 
 void AddAssetDialog::retranslateUi() {
