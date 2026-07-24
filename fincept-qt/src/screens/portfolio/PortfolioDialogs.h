@@ -14,6 +14,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QMoveEvent>
 #include <QString>
 #include <QTimer>
 
@@ -80,6 +81,7 @@ class AddAssetDialog : public QDialog {
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void changeEvent(QEvent* event) override;
+    void moveEvent(QMoveEvent* event) override;
 
   private:
     void retranslateUi();
