@@ -273,10 +273,15 @@ struct WrappedRow {
 // no separate iv/tag. The columns are declared NOT NULL and a *default
 // constructed* QByteArray binds as SQL NULL — which fails the insert and
 // silently demotes us to the weaker wrapping scheme. Always bind real bytes.
-QByteArray unused_iv() {
+//
+// [[maybe_unused]]: every caller sits inside an `#ifdef Q_OS_WIN` block (DPAPI
+// is Windows-only), so on Linux/macOS these are dead and -Wunused-function
+// fires — which is -Werror on those CI legs. MSVC never sees it because there
+// they *are* called. Same for drop_row() below.
+[[maybe_unused]] QByteArray unused_iv() {
     return QByteArray(kIvLen, '\0');
 }
-QByteArray unused_tag() {
+[[maybe_unused]] QByteArray unused_tag() {
     return QByteArray(kTagLen, '\0');
 }
 
@@ -353,7 +358,9 @@ bool write_wrapped_row(QSqlDatabase conn, const WrappedRow& row) {
     return true;
 }
 
-bool drop_row(QSqlDatabase conn, const char* key) {
+// Only reachable from the DPAPI upgrade/retire paths, which are Q_OS_WIN-gated
+// — see the note on unused_iv() above.
+[[maybe_unused]] bool drop_row(QSqlDatabase conn, const char* key) {
     QSqlQuery q(conn);
     q.prepare("DELETE FROM secure_credentials WHERE key = ?");
     q.addBindValue(QString::fromLatin1(key));
