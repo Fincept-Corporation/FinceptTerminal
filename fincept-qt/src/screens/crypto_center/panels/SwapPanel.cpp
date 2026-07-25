@@ -996,8 +996,12 @@ void SwapPanel::start_status_poll(const QString& sig) {
         poll_timer->deleteLater();
         rpc->deleteLater();
     };
+    // No `poll_timer` capture here: every teardown path goes through
+    // stop_poll, which captures the timer itself. Capturing it again is
+    // unused and Clang rejects it under -Wunused-lambda-capture -Werror
+    // (GCC has no such warning, so this only ever failed the macOS leg).
     QObject::connect(poll_timer, &QTimer::timeout, this,
-                     [guard, rpc, sig, explorer_url, attempts, poll_timer, stop_poll]() {
+                     [guard, rpc, sig, explorer_url, attempts, stop_poll]() {
                          if (!guard) {
                              stop_poll();
                              return;
