@@ -78,6 +78,12 @@ class AddAssetDialog : public QDialog {
     double quantity() const;
     double price() const;
 
+    /// Pre-fill the ticker (and optionally the last price) and jump focus to
+    /// the quantity field. Used when BUY is invoked with a position already
+    /// selected — the user should not have to retype a symbol the terminal
+    /// already knows.
+    void preset(const QString& symbol, double price = 0.0);
+
   protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void changeEvent(QEvent* event) override;

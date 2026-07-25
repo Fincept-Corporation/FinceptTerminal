@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QMouseEvent>
 #include <QPieSeries>
+#include <QStringList>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -125,8 +126,30 @@ void PortfolioSectorPanel::build_ui() {
 
 void PortfolioSectorPanel::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
     holdings_ = holdings;
-    selected_sector_.clear(); // reset filter on fresh data
-    corr_matrix_.clear();     // invalidate stale correlation data
+
+    // Keep the active sector filter across a refresh as long as that sector
+    // still exists. Clearing it unconditionally desynced this panel from the
+    // blotter: the highlight disappeared here every 60 s while the blotter
+    // stayed filtered, with no visible way to tell why rows were missing.
+    if (!selected_sector_.isEmpty()) {
+        bool still_present = false;
+        for (const auto& h : holdings_) {
+            const QString sec = h.sector.isEmpty() ? tr("Unclassified") : h.sector;
+            if (sec == selected_sector_) {
+                still_present = true;
+                break;
+            }
+        }
+        if (!still_present) {
+            selected_sector_.clear();
+            emit sector_selected({}); // tell the blotter to drop the filter too
+        }
+    }
+
+    // Correlation is deliberately NOT cleared: it is keyed by symbol pair, so
+    // stale entries stay valid and entries for removed symbols are simply never
+    // looked up. Wiping it made the whole matrix flash back to "…" on every
+    // poll while the async refetch was in flight (violates P11).
     update_donut();
     update_correlation();
 }
@@ -254,6 +277,37 @@ void PortfolioSectorPanel::update_donut() {
 }
 
 void PortfolioSectorPanel::update_correlation() {
+    // ── Early-out fingerprint ────────────────────────────────────────────────
+    // Rebuilding this grid destroys and recreates one stylesheet-carrying
+    // QLabel per cell. The inputs (top-6 symbols by weight + the matrix) only
+    // change when a new correlation fetch lands, so skip the rebuild when the
+    // rendered content would be byte-identical.
+    {
+        auto probe = holdings_;
+        std::sort(probe.begin(), probe.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });
+        const int pn = static_cast<int>(std::min(qsizetype{6}, probe.size()));
+        QStringList parts;
+        parts.reserve(pn * pn + 1);
+        for (int i = 0; i < pn; ++i)
+            parts << probe[i].symbol;
+        for (int i = 0; i < pn; ++i) {
+            for (int j = 0; j < pn; ++j) {
+                const QString ab = probe[i].symbol + "|" + probe[j].symbol;
+                const QString ba = probe[j].symbol + "|" + probe[i].symbol;
+                if (corr_matrix_.contains(ab))
+                    parts << QString::number(corr_matrix_.value(ab), 'f', 2);
+                else if (corr_matrix_.contains(ba))
+                    parts << QString::number(corr_matrix_.value(ba), 'f', 2);
+                else
+                    parts << QStringLiteral("-");
+            }
+        }
+        const QString sig = QString::number(holdings_.size()) + "|" + parts.join(',');
+        if (sig == corr_signature_ && corr_widget_->layout())
+            return;
+        corr_signature_ = sig;
+    }
+
     if (auto* old = corr_widget_->layout()) {
         QLayoutItem* item;
         while ((item = old->takeAt(0)) != nullptr) {
@@ -368,7 +422,9 @@ void PortfolioSectorPanel::retranslateUi() {
 
     // Donut legend uses translated "Unclassified" + sector data; matrix shows
     // "Need 2+ holdings for correlation" or a grid. Re-run both so the strings
-    // pick up the new locale.
+    // pick up the new locale — the fingerprint must be dropped first or the
+    // correlation grid would short-circuit and keep the old language.
+    corr_signature_.clear();
     update_donut();
     update_correlation();
 }

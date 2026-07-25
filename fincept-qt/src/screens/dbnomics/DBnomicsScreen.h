@@ -90,6 +90,7 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     QPushButton* export_btn_ = nullptr;
     QLabel* chart_type_label_ = nullptr;
     QLabel* comparison_placeholder_ = nullptr;
+    QLabel* attribution_label_ = nullptr;
 
     services::DbnViewMode view_mode_ = services::DbnViewMode::Single;
     services::DbnChartType single_chart_type_ = services::DbnChartType::Line;

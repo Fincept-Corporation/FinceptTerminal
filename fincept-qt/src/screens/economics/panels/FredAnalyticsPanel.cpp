@@ -77,8 +77,11 @@ void FredAnalyticsPanel::on_fetch() {
 
     show_loading(tr("Fetching FRED Analytics: %1…").arg(dataset.label));
 
-    QStringList args = {dataset.command};
-    args << dataset.args;
+    // EconomicsService::execute() prepends `command` to the argv. Repeating it
+    // here shifted the parameters by one: `money_supply money_supply m1` was
+    // parsed as measure="money_supply", start_date="m1", so the M1/M2/M3
+    // selection never reached FRED and every dataset got a junk start date.
+    const QStringList args = dataset.args;
 
     const QString arg_suffix = dataset.args.isEmpty() ? "" : "_" + dataset.args.join("_");
     services::EconomicsService::instance().execute(kFredAnalyticsSourceId, kFredAnalyticsScript, dataset.command, args,

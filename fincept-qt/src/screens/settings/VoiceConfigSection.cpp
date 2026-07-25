@@ -233,9 +233,14 @@ void VoiceConfigSection::build_ui() {
     api_key_edit_->setPlaceholderText(tr("Paste your Deepgram API key"));
     api_key_edit_->setStyleSheet(input_ss());
     api_key_edit_->setMinimumWidth(320);
+    api_key_edit_->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
+    api_key_edit_->setDragEnabled(false);
+    api_key_edit_->setAcceptDrops(false);
+    api_key_edit_->setAccessibleName(tr("Deepgram API key"));
     show_key_btn_ = new QPushButton(tr("Show"));
     show_key_btn_->setStyleSheet(btn_secondary_ss());
     show_key_btn_->setCheckable(true);
+    show_key_btn_->setAccessibleName(tr("Show or hide the Deepgram API key"));
     key_hl->addWidget(key_lbl_);
     key_hl->addStretch();
     key_hl->addWidget(api_key_edit_);
@@ -354,6 +359,23 @@ void VoiceConfigSection::reload() {
     set_status({}, false);
 }
 
+void VoiceConfigSection::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    reload();
+}
+
+void VoiceConfigSection::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    if (e && e->spontaneous())
+        return;
+    if (show_key_btn_ && show_key_btn_->isChecked()) {
+        show_key_btn_->setChecked(false);
+        show_key_btn_->setText(tr("Show"));
+    }
+    if (api_key_edit_)
+        api_key_edit_->setEchoMode(QLineEdit::Password);
+}
+
 void VoiceConfigSection::apply_provider_visibility() {
     const QString stt = stt_provider_combo_->currentData().toString();
     const QString tts = tts_provider_combo_->currentData().toString();
@@ -461,6 +483,9 @@ void VoiceConfigSection::on_test() {
     QNetworkRequest req(QUrl("https://api.deepgram.com/v1/projects"));
     req.setRawHeader("Authorization", ("Token " + api_key).toUtf8());
     req.setRawHeader("Accept", "application/json");
+    // Without a timeout a stalled connection leaves the Test button disabled
+    // for the rest of the session with no way to retry.
+    req.setTransferTimeout(15000);
 
     QPointer<VoiceConfigSection> self = this;
     QNetworkReply* reply = nam->get(req);

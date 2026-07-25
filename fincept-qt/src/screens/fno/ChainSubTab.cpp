@@ -32,6 +32,8 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
+#include <cmath>
+
 namespace fincept::screens::fno {
 
 using namespace fincept::ui;
@@ -418,7 +420,14 @@ void ChainSubTab::resubscribe() {
         show_empty_state(tr("Pick a broker, underlying, and expiry."));
         return;
     }
-    hide_empty_state();
+    // Loading state: hide_empty_state() used to flip straight to the table, so
+    // between subscribing and the first publish the user stared at an empty grid
+    // with no indication anything was in flight. Keep the message visible until
+    // rows actually arrive (or an existing snapshot is already rendered).
+    if (table_ && table_->chain_model()->rowCount() > 0)
+        hide_empty_state();
+    else
+        show_empty_state(tr("Loading %1 %2 chain…").arg(header_->underlying(), header_->expiry()));
     active_topic_ = topic;
 
     QPointer<ChainSubTab> self = this;
@@ -488,7 +497,6 @@ QString ChainSubTab::current_topic() const {
 
 void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, bool is_buy) {
     using namespace fincept::trading;
-    Q_UNUSED(strike);
 
     const QString broker = header_->broker_id();
     if (broker.isEmpty() || broker == QStringLiteral("databento")) {
@@ -507,22 +515,38 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     QString sym;
     int lot = 0;
     double ltp = 0;
+    double resolved_strike = 0;
     for (const auto& r : chain.rows) {
         if (is_call && r.ce_token == token) {
             sym = r.ce_symbol;
             lot = r.lot_size;
             ltp = r.ce_quote.ltp;
+            resolved_strike = r.strike;
             break;
         }
         if (!is_call && r.pe_token == token) {
             sym = r.pe_symbol;
             lot = r.lot_size;
             ltp = r.pe_quote.ltp;
+            resolved_strike = r.strike;
             break;
         }
     }
     if (sym.isEmpty()) {
         QMessageBox::warning(this, tr("Place Order"), tr("Could not resolve the contract for this strike."));
+        return;
+    }
+    // Cross-check: the strike the user right-clicked must be the strike the
+    // token resolves to. They can only disagree if the chain republished with a
+    // different ladder between the click and this handler, or if the provider
+    // reused a token — either way, placing the order would trade a strike the
+    // user never selected.
+    if (std::abs(resolved_strike - strike) > 1e-6) {
+        QMessageBox::warning(this, tr("Place Order"),
+                             tr("The chain changed while the order was being prepared "
+                                "(you picked %1, the contract now resolves to %2). Nothing was sent — "
+                                "please pick the strike again.")
+                                 .arg(QString::number(strike, 'f', 2), QString::number(resolved_strike, 'f', 2)));
         return;
     }
 
@@ -588,11 +612,16 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
 
     auto* type_combo = new QComboBox(&dlg);
     type_combo->addItems({tr("Market"), tr("Limit")});
+    type_combo->setAccessibleName(tr("Order type"));
     form->addRow(tr("Type"), type_combo);
 
     auto* lots_spin = new QSpinBox(&dlg);
-    lots_spin->setRange(1, 100000);
+    // 10 000 lots is already far past any retail F&O limit; the old 100 000
+    // ceiling let one keypress build a basket two orders of magnitude larger
+    // than intended.
+    lots_spin->setRange(1, 10000);
     lots_spin->setValue(1);
+    lots_spin->setAccessibleName(tr("Quantity in lots"));
     form->addRow(tr("Qty (lots)"), lots_spin);
 
     auto* qty_label = new QLabel(&dlg);
@@ -608,10 +637,12 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     px_spin->setRange(0.05, 1.0e8);
     px_spin->setDecimals(2);
     px_spin->setValue(ltp > 0 ? ltp : 0.05);
+    px_spin->setAccessibleName(tr("Limit price per share"));
     form->addRow(tr("Limit price"), px_spin);
 
     auto* product_combo = new QComboBox(&dlg);
     product_combo->addItems({tr("NRML (positional)"), tr("MIS (intraday)")});
+    product_combo->setAccessibleName(tr("Product type"));
     form->addRow(tr("Product"), product_combo);
 
     // Market needs no price — hide the limit row unless Limit is selected.
@@ -619,23 +650,60 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     connect(type_combo, qOverload<int>(&QComboBox::currentIndexChanged), &dlg, sync_type);
     sync_type(type_combo->currentIndex());
 
-    auto* ctx = new QLabel(QStringLiteral("%1  ·  LTP %2  ·  [%3]")
+    auto* ctx = new QLabel(QStringLiteral("%1  ·  %2  ·  [%3]")
                                .arg(acct_name)
-                               .arg(ltp, 0, 'f', 2)
+                               .arg(tr("LTP %1 at ticket open").arg(QString::number(ltp, 'f', 2)))
                                .arg(is_paper ? tr("PAPER") : tr("LIVE")),
                            &dlg);
-    ctx->setStyleSheet(QStringLiteral("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
+    // A live F&O order is real leveraged money — the mode must not read as
+    // secondary text the way the paper case can.
+    ctx->setStyleSheet(is_paper ? QStringLiteral("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY())
+                                : QStringLiteral("color:%1;font-size:11px;font-weight:700;").arg(colors::NEGATIVE()));
     form->addRow(ctx);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
     QPushButton* ok = buttons->addButton(is_buy ? tr("Place Buy") : tr("Place Sell"), QDialogButtonBox::AcceptRole);
-    ok->setDefault(true);
+    ok->setAccessibleName(is_buy ? tr("Place buy order") : tr("Place sell order"));
+    // Live orders require a deliberate click; paper keeps Return as a shortcut.
+    if (is_paper) {
+        ok->setDefault(true);
+    } else if (auto* cancel = buttons->button(QDialogButtonBox::Cancel)) {
+        cancel->setDefault(true);
+        ok->setAutoDefault(false);
+    }
     connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     form->addRow(buttons);
 
+    // Keyboard traversal through the ticket in reading order.
+    dlg.setTabOrder(type_combo, lots_spin);
+    dlg.setTabOrder(lots_spin, px_spin);
+    dlg.setTabOrder(px_spin, product_combo);
+    dlg.setTabOrder(product_combo, buttons);
+
     if (dlg.exec() != QDialog::Accepted)
         return;
+
+    // Re-read the premium from the live chain at SUBMIT time. `ltp` was captured
+    // when the ticket opened; an option quote goes stale in seconds, and for a
+    // paper market order that value *is* the fill price. Filling a ticket the
+    // user left open for a minute at the old premium books a fictitious P&L.
+    double fill_ltp = ltp;
+    {
+        const auto& live = table_->chain_model()->chain();
+        for (const auto& r : live.rows) {
+            if (is_call && r.ce_token == token) {
+                if (r.ce_quote.ltp > 0)
+                    fill_ltp = r.ce_quote.ltp;
+                break;
+            }
+            if (!is_call && r.pe_token == token) {
+                if (r.pe_quote.ltp > 0)
+                    fill_ltp = r.pe_quote.ltp;
+                break;
+            }
+        }
+    }
 
     const bool is_market = (type_combo->currentIndex() == 0);
     UnifiedOrder order;
@@ -646,7 +714,8 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
     order.side = is_buy ? OrderSide::Buy : OrderSide::Sell;
     order.order_type = is_market ? OrderType::Market : OrderType::Limit;
     order.quantity = double(lots_spin->value()) * double(lot);
-    order.price = is_market ? ltp : px_spin->value(); // ltp lets paper fill a market order; live ignores it
+    // fill_ltp lets paper fill a market order at the current premium; live ignores it.
+    order.price = is_market ? fill_ltp : px_spin->value();
     order.product_type = (product_combo->currentIndex() == 1) ? ProductType::Intraday : ProductType::Margin;
     order.validity = QStringLiteral("DAY");
     order.instrument_token = QString::number(token);

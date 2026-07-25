@@ -150,11 +150,19 @@ void OptionChainModel::set_chain(const OptionChain& chain) {
     // e.g. a WS-driven live re-publish or a periodic reconcile), merge in place
     // and repaint instead of resetting the model. A full reset would drop the
     // user's scroll position and selection on every refresh; this keeps them.
+    //
+    // SAFETY: the strike ladder is compared too, not just the tokens. Some
+    // providers (Databento, Fyers' chain-v3) publish rows with token == 0 for
+    // every strike — comparing tokens alone would then call a *shifted* ladder
+    // "the same structure", leaving the user's selected row pointing at a
+    // different strike after a refresh. Row identity for this table is
+    // (strike, ce_token, pe_token); any change to any of them forces a reset.
     bool same_structure = chain.rows.size() == chain_.rows.size() && !chain_.rows.isEmpty();
     if (same_structure) {
         for (int i = 0; i < chain.rows.size(); ++i) {
             if (chain.rows[i].ce_token != chain_.rows[i].ce_token ||
-                chain.rows[i].pe_token != chain_.rows[i].pe_token) {
+                chain.rows[i].pe_token != chain_.rows[i].pe_token ||
+                std::abs(chain.rows[i].strike - chain_.rows[i].strike) > 1e-6) {
                 same_structure = false;
                 break;
             }

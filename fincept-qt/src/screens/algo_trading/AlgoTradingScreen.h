@@ -46,6 +46,9 @@ class AlgoTradingScreen : public QWidget, public IStatefulScreen {
     QWidget* build_top_bar();
     QWidget* build_status_bar();
     void update_tab_buttons();
+    /// Re-render the running-deployment badge. Red "N LIVE" only when real-money
+    /// deployments are running; green "N PAPER" otherwise.
+    void update_deploy_badge();
     void retranslateUi();
 
     QStackedWidget* content_stack_ = nullptr;
@@ -59,6 +62,7 @@ class AlgoTradingScreen : public QWidget, public IStatefulScreen {
     QVector<QPushButton*> tab_buttons_;
     int active_tab_ = 0;
     int active_deployments_ = 0;
+    int live_deployments_ = 0;
     QLabel* title_label_ = nullptr;
     QLabel* engine_caption_ = nullptr;
     QLabel* deploy_count_label_ = nullptr;

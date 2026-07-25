@@ -81,7 +81,31 @@ class ActionCenter : public QObject {
     // `order_data` should NOT contain credentials. Emits pending_order_created.
     QString queue_order(const QString& account_id, const QString& order_type, const QJsonObject& order_data);
 
+    // ── Expiry ──────────────────────────────────────────────────────────────
+    // A queued order carries a price and a market view that both decay. An
+    // order queued before lunch and approved after the close would execute at
+    // a market the user never saw and never intended to trade — the approval
+    // dialog would show the original details while the fill happens at the
+    // current price.
+    //
+    // Expiry is DERIVED from created_at rather than stored as a column. That is
+    // deliberate: a migration adding `expires_at` would default existing rows
+    // to NULL, so every order already sitting in the queue — precisely the
+    // stale ones this protects against — would never expire. Deriving applies
+    // the policy retroactively and cannot be set wrong by a caller.
+    static constexpr int kPendingOrderTtlMinutes = 15;
+
+    /// True when this order is too old to be safely executed. Callers should
+    /// use this to grey out or annotate the row; approve_order() enforces it
+    /// regardless, so the UI cannot be the only line of defence.
+    static bool is_expired(const PendingOrder& po);
+
+    /// Seconds since the order was queued (-1 if created_at is invalid).
+    static qint64 age_secs(const PendingOrder& po);
+
     // User actions.
+    // approve_order refuses an expired order and emits order_rejected with an
+    // explanatory reason rather than silently executing it.
     void approve_order(const QString& pending_id);
     void reject_order(const QString& pending_id, const QString& reason);
     void approve_all_pending(const QString& account_id = {});

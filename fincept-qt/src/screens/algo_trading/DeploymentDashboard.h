@@ -6,9 +6,11 @@
 #include <QEvent>
 #include <QFrame>
 #include <QHash>
+#include <QHideEvent>
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -24,6 +26,9 @@ class DeploymentDashboard : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    // P3: the 1s "updated Ns ago" ticker must not run while the tab is hidden.
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private slots:
     void on_deployments_loaded(QVector<fincept::services::algo::AlgoDeployment> deployments);
@@ -52,6 +57,10 @@ class DeploymentDashboard : public QWidget {
         QString mode;
         int64_t last_update_ms = 0;
         QStringList activity_lines;
+        // Set when the user has confirmed a STOP for this deployment but the
+        // engine hasn't reported "stopped" yet — prevents the card from claiming
+        // RUNNING while a stop is in flight, and blocks double-stop clicks.
+        bool stop_pending = false;
     };
     QHash<QString, CardHandles> cards_;
     QStringList card_order_; // deployment ids currently shown, to detect structure changes

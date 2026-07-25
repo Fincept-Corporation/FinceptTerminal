@@ -53,6 +53,7 @@ void MarketPanel::build_ui() {
     title_label_ = new QLabel(config_.title.toUpper());
     hhl->addWidget(title_label_);
     hhl->addStretch();
+    setAccessibleName(config_.title);
 
     auto make_hdr_btn = [](const QString& text) -> QPushButton* {
         auto* b = new QPushButton(text);
@@ -65,6 +66,15 @@ void MarketPanel::build_ui() {
     cols_btn_ = make_hdr_btn(tr("[COLS]"));
     edit_btn_ = make_hdr_btn(tr("[EDIT]"));
     delete_btn_ = make_hdr_btn(tr("[DEL]"));
+
+    cols_btn_->setAccessibleName(tr("Choose columns"));
+    cols_btn_->setToolTip(tr("Choose which columns this panel shows"));
+    edit_btn_->setAccessibleName(tr("Edit panel"));
+    edit_btn_->setToolTip(tr("Edit this panel's title and symbols"));
+    delete_btn_->setAccessibleName(tr("Remove panel"));
+    delete_btn_->setToolTip(tr("Remove this panel"));
+    setTabOrder(cols_btn_, edit_btn_);
+    setTabOrder(edit_btn_, delete_btn_);
 
     hhl->addWidget(cols_btn_);
     hhl->addWidget(edit_btn_);
@@ -116,6 +126,7 @@ void MarketPanel::build_ui() {
     error_label_->setWordWrap(true); // narrow panels — wrap the failure message
     retry_btn_ = new QPushButton(tr("[RETRY]"));
     retry_btn_->setCursor(Qt::PointingHandCursor);
+    retry_btn_->setAccessibleName(tr("Retry loading this panel"));
     retry_btn_->setFlat(true);
     connect(retry_btn_, &QPushButton::clicked, this, &MarketPanel::refresh);
     el->addWidget(error_label_);
@@ -173,6 +184,9 @@ QString MarketPanel::column_label(const QString& code) const {
 
 void MarketPanel::setup_table_columns() {
     const QStringList& cols = config_.column_order;
+    // Column set changed → the next populate() must run even if the row count
+    // is unchanged.
+    last_populated_rows_ = -1;
     table_->setColumnCount(cols.size());
 
     // Set header labels with alignment matching cell alignment.
@@ -260,6 +274,7 @@ void MarketPanel::update_config(const MarketPanelConfig& cfg) {
     if (config_.column_order.isEmpty())
         config_.column_order = default_market_columns();
     title_label_->setText(cfg.title.toUpper());
+    setAccessibleName(cfg.title);
     setup_table_columns();
     if (has_data_)
         populate(cached_quotes_);
@@ -270,13 +285,45 @@ void MarketPanel::update_config(const MarketPanelConfig& cfg) {
 // ---------------------------------------------------------------------------
 
 void MarketPanel::refresh() {
-    fetch_failed_ = false;
     title_label_->setText(config_.title.toUpper() + "  ...");
 
     if (!has_data_)
         show_loading();
 
     hub_resubscribe();
+}
+
+void MarketPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // MarketsScreen::showEvent only calls refresh_all() when the last refresh
+    // is older than 5 minutes, so re-subscribing has to happen here or a
+    // hide/show inside that window would leave the panel permanently detached
+    // from the hub.
+    if (!hub_active_ && !config_.symbols.isEmpty())
+        hub_resubscribe();
+}
+
+void MarketPanel::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    hub_unsubscribe_all();
+    if (loading_timer_)
+        loading_timer_->stop();
+}
+
+void MarketPanel::schedule_populate() {
+    if (populate_scheduled_)
+        return;
+    populate_scheduled_ = true;
+    QPointer<MarketPanel> self = this;
+    QMetaObject::invokeMethod(
+        this,
+        [self]() {
+            if (!self)
+                return;
+            self->populate_scheduled_ = false;
+            self->populate(self->cached_quotes_);
+        },
+        Qt::QueuedConnection);
 }
 
 void MarketPanel::rebuild_from_cache() {
@@ -302,6 +349,10 @@ void MarketPanel::hub_resubscribe() {
     if (config_.symbols.isEmpty()) {
         hub.unsubscribe(this);
         hub_active_ = false;
+        // refresh() already switched on the LOADING overlay; with no symbols
+        // nothing will ever arrive to turn it off, so the panel span forever.
+        // Show an actionable empty state instead.
+        show_error(tr("No symbols in this panel — use [EDIT] to add some."));
         emit refresh_finished();
         return;
     }
@@ -362,7 +413,6 @@ void MarketPanel::hub_resubscribe() {
                 emit refresh_finished();
             }
             if (!has_data_ && pending_initial_.isEmpty()) {
-                fetch_failed_ = true;
                 show_error(err.trimmed().isEmpty() ? tr("Failed to load market data")
                                                    : tr("Load failed: %1").arg(err.trimmed()));
             }
@@ -409,19 +459,17 @@ void MarketPanel::tick_loading_anim() {
 void MarketPanel::show_data() {
     error_widget_->setVisible(false);
     table_->setVisible(true);
-    // Defer populate until after the splitter has performed layout so body_->height() is valid
-    QPointer<MarketPanel> self = this;
-    QMetaObject::invokeMethod(
-        this,
-        [self]() {
-            if (self)
-                self->populate(self->cached_quotes_);
-        },
-        Qt::QueuedConnection);
+    // Defer populate until after the splitter has performed layout so
+    // body_->height() is valid — and coalesce, because rebuild_from_cache()
+    // lands once per arriving symbol and each populate() rebuilds every cell.
+    schedule_populate();
 }
 
 void MarketPanel::show_error(const QString& msg) {
     hide_loading(); // stop the spinner + hide the LOADING overlay
+    // refresh() appends "  ..." to the title; without this it stays there for
+    // good once a fetch fails.
+    title_label_->setText(config_.title.toUpper());
     table_->setVisible(false);
     error_widget_->setVisible(true);
     error_label_->setText(msg);
@@ -431,7 +479,8 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
     const int body_h = body_->height();
     // Use actual visible rows if laid out, otherwise show all quotes (resizeEvent will trim)
     const int visible = (body_h > kColHeaderH + kRowH) ? (body_h - kColHeaderH) / kRowH : quotes.size();
-    const int count = qMin(quotes.size(), qMax(visible, 0));
+    const int count = static_cast<int>(qMin(quotes.size(), static_cast<qsizetype>(qMax(visible, 0))));
+    last_populated_rows_ = count;
     table_->setRowCount(count);
 
     for (int row = 0; row < count; ++row) {
@@ -525,10 +574,19 @@ QSize MarketPanel::minimumSizeHint() const {
 
 void MarketPanel::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
-    if (has_data_)
-        populate(cached_quotes_);
-    else
+    if (has_data_) {
+        // A splitter drag fires resizeEvent per pixel. Only rebuild the cells
+        // when the number of rows that actually fit has changed — otherwise
+        // the columns just re-stretch and the existing items stay valid.
+        const int body_h = body_->height();
+        const int visible = (body_h > kColHeaderH + kRowH) ? (body_h - kColHeaderH) / kRowH
+                                                           : static_cast<int>(cached_quotes_.size());
+        const int want = static_cast<int>(qMin(cached_quotes_.size(), static_cast<qsizetype>(qMax(visible, 0))));
+        if (want != last_populated_rows_)
+            schedule_populate();
+    } else {
         update_visible_rows();
+    }
 }
 
 // ---------------------------------------------------------------------------

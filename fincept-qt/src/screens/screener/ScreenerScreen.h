@@ -39,6 +39,9 @@ class ScreenerScreen : public QWidget {
 
     void hub_subscribe_all();
     void hub_unsubscribe_all();
+    /// Coalesce the ~62 per-symbol hub deliveries of a refresh sweep into one
+    /// table rebuild on the next event-loop turn.
+    void schedule_rebuild();
     /// Recompute `all_quotes_` from `row_cache_` (in basket order) then filter.
     void rebuild_from_cache();
     void apply_filter();
@@ -57,6 +60,10 @@ class ScreenerScreen : public QWidget {
     QHash<QString, services::QuoteData> row_cache_;
     QVector<services::QuoteData> all_quotes_;
     bool hub_active_ = false;
+    bool rebuild_pending_ = false;
+    /// Guards changeEvent(StyleChange) -> apply_styles() -> setStyleSheet() ->
+    /// StyleChange -> ... which recursed until the stack was exhausted.
+    bool restyling_ = false;
 };
 
 } // namespace fincept::screens

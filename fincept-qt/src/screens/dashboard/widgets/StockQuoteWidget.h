@@ -4,6 +4,7 @@
 
 #include <QGridLayout>
 #include <QLabel>
+#include <QStringList>
 
 namespace fincept::screens::widgets {
 
@@ -20,7 +21,15 @@ class StockQuoteWidget : public BaseWidget {
 
     void set_symbol(const QString& symbol);
 
+    /// Per-instance config — the tracked symbol. The widget registry already
+    /// seeds the constructor from `cfg["symbol"]`; these overrides close the
+    /// loop so a symbol picked via the gear icon is written back to the
+    /// persisted dashboard layout.
+    QJsonObject config() const override;
+    void apply_config(const QJsonObject& cfg) override;
+
   protected:
+    QDialog* make_config_dialog(QWidget* parent) override;
     void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
@@ -53,6 +62,9 @@ class StockQuoteWidget : public BaseWidget {
     QVector<QWidget*> stat_cells_;
     QVector<QLabel*> stat_labels_;
     QVector<QLabel*> stat_values_;
+    // English source keys for stat_labels_, in the same order, so
+    // retranslateUi() can re-run tr() without rebuilding the grid.
+    QStringList stat_label_keys_;
 
     bool hub_active_ = false;
 };

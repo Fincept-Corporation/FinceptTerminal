@@ -83,14 +83,14 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     scroll_area_ = new QScrollArea;
     scroll_area_->setWidgetResizable(true);
 
-    auto* list_widget = new QWidget(this);
-    list_widget->setStyleSheet("background: transparent;");
-    list_layout_ = new QVBoxLayout(list_widget);
+    list_widget_ = new QWidget(this);
+    list_widget_->setObjectName("psList");
+    list_layout_ = new QVBoxLayout(list_widget_);
     list_layout_->setContentsMargins(0, 0, 0, 0);
     list_layout_->setSpacing(0);
     list_layout_->addStretch();
 
-    scroll_area_->setWidget(list_widget);
+    scroll_area_->setWidget(list_widget_);
     vl->addWidget(scroll_area_, 1);
 
     // Enable the BaseWidget gear icon — make_config_dialog() handles the rest.
@@ -184,6 +184,23 @@ void PortfolioSummaryWidget::apply_styles() {
                 "QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
             .arg(ui::colors::BORDER_MED()));
+
+    // Holdings-row chrome, hoisted (P7). render() draws 5 cells per holding
+    // and used to call setStyleSheet on every one of them on every re-render.
+    if (list_widget_)
+        list_widget_->setStyleSheet(QString("#psList{background:transparent;}"
+                                            "#psList QWidget#psRow{background:transparent;}"
+                                            "#psList QWidget#psRowAlt{background:%1;}"
+                                            "#psList QLabel{font-size:10px;background:transparent;}"
+                                            "#psList QLabel#psSym{color:%2;}"
+                                            "#psList QLabel#psShares{color:%3;}"
+                                            "#psList QLabel#psNum{color:%2;}"
+                                            "#psList QLabel#psPnlPos{color:%4;}"
+                                            "#psList QLabel#psPnlNeg{color:%5;}"
+                                            "#psList QLabel#psEmpty{color:%6;font-size:11px;padding:20px;}")
+                                        .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
+                                             ui::colors::TEXT_SECONDARY(), ui::colors::POSITIVE(),
+                                             ui::colors::NEGATIVE(), ui::colors::TEXT_TERTIARY()));
 }
 
 void PortfolioSummaryWidget::on_theme_changed() {
@@ -268,11 +285,10 @@ void PortfolioSummaryWidget::render_empty(const QString& message) {
             item->widget()->deleteLater();
         delete item;
     }
-    auto* empty = new QLabel(message);
+    auto* empty = new QLabel(message, list_widget_);
+    empty->setObjectName("psEmpty");
     empty->setAlignment(Qt::AlignCenter);
     empty->setWordWrap(true);
-    empty->setStyleSheet(QString("color: %1; font-size: 11px; padding: 20px; background: transparent;")
-                             .arg(ui::colors::TEXT_TERTIARY()));
     list_layout_->addWidget(empty);
     list_layout_->addStretch();
     const QString sym = cur::symbol_for(selected_portfolio_currency_);
@@ -310,7 +326,8 @@ void PortfolioSummaryWidget::hub_resubscribe(const QVector<Holding>& holdings) {
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             set_loading(false);
-            rebuild_from_cache();
+            // One holdings-table rebuild per delivery burst, not one per symbol.
+            schedule_render([this]() { rebuild_from_cache(); });
         });
     }
     hub_active_ = true;
@@ -370,29 +387,31 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
         total_cost += cost;
         day_pnl += day_chg;
 
-        auto* row = new QWidget(this);
-        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
+        // No setStyleSheet in this loop — colours come from the single
+        // stylesheet on list_widget_ (see apply_styles) via these object names.
+        auto* row = new QWidget(list_widget_);
+        row->setObjectName(alt ? QStringLiteral("psRowAlt") : QStringLiteral("psRow"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
-        auto cell = [&](const QString& text, int stretch, Qt::Alignment align, const QString& color) {
+        auto cell = [&](const QString& text, Qt::Alignment align, const QString& object_name) {
             auto* lbl = new QLabel(text);
+            lbl->setObjectName(object_name);
             lbl->setAlignment(align);
-            lbl->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(color));
-            rl->addWidget(lbl, stretch);
+            rl->addWidget(lbl, 1);
         };
 
-        cell(h.symbol, 1, Qt::AlignLeft, ui::colors::TEXT_PRIMARY);
-        cell(QString::number(h.shares, 'f', h.shares == (int)h.shares ? 0 : 2), 1, Qt::AlignRight,
-             ui::colors::TEXT_SECONDARY);
-        cell(price > 0 ? sym + QString::number(price, 'f', 2) : QStringLiteral("--"), 1, Qt::AlignRight,
-             ui::colors::TEXT_PRIMARY);
-        cell(value > 0 ? sym + QString::number(value, 'f', 0) : QStringLiteral("--"), 1, Qt::AlignRight,
-             ui::colors::TEXT_PRIMARY);
+        cell(h.symbol, Qt::AlignLeft, QStringLiteral("psSym"));
+        cell(QString::number(h.shares, 'f', h.shares == (int)h.shares ? 0 : 2), Qt::AlignRight,
+             QStringLiteral("psShares"));
+        cell(price > 0 ? sym + QString::number(price, 'f', 2) : QStringLiteral("--"), Qt::AlignRight,
+             QStringLiteral("psNum"));
+        cell(value > 0 ? sym + QString::number(value, 'f', 0) : QStringLiteral("--"), Qt::AlignRight,
+             QStringLiteral("psNum"));
 
         QString pnl_str = pnl >= 0 ? QStringLiteral("+") + sym + QString::number(pnl, 'f', 0)
                                    : QStringLiteral("-") + sym + QString::number(-pnl, 'f', 0);
-        cell(pnl_str, 1, Qt::AlignRight, pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        cell(pnl_str, Qt::AlignRight, pnl >= 0 ? QStringLiteral("psPnlPos") : QStringLiteral("psPnlNeg"));
 
         list_layout_->addWidget(row);
         alt = !alt;

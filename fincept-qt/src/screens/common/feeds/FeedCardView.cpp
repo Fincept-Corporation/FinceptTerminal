@@ -51,6 +51,19 @@ class ClickableCard : public QFrame {
 } // namespace
 
 FeedCardView::FeedCardView(QWidget* parent) : QWidget(parent) {
+    using namespace fincept::ui;
+    // One stylesheet for the whole card list, applied once here instead of a
+    // setStyleSheet() (== full CSS reparse) on every card and every child label
+    // on every feed refresh. A 50-item feed refreshing on its poll interval was
+    // reparsing ~200 stylesheets per tick.
+    setStyleSheet(QString("#feedCard { background:%1; border:1px solid %2; border-radius:4px; }"
+                          "#feedCard:hover { background:%3; }"
+                          "#feedCardMeta { color:%4; font-size:10px; font-weight:700; }"
+                          "#feedCardTitle { color:%5; font-size:12px; font-weight:600; }"
+                          "#feedCardSummary { color:%6; font-size:11px; }")
+                      .arg(colors::BG_SURFACE(), colors::BORDER_MED(), colors::BG_HOVER(), colors::TEXT_TERTIARY(),
+                           colors::TEXT_PRIMARY(), colors::TEXT_SECONDARY()));
+
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
     scroll_ = new QScrollArea(this);
@@ -67,12 +80,10 @@ FeedCardView::FeedCardView(QWidget* parent) : QWidget(parent) {
 }
 
 QWidget* FeedCardView::build_card(const FeedItem& it) {
-    using namespace fincept::ui;
+    // All styling comes from the view-level stylesheet via object names — see
+    // the constructor. Nothing here calls setStyleSheet().
     auto* card = new ClickableCard(it.link, nullptr);
     card->setObjectName("feedCard");
-    card->setStyleSheet(QString("#feedCard{background:%1;border:1px solid %2;border-radius:4px;}"
-                                "#feedCard:hover{background:%3;}")
-                            .arg(colors::BG_SURFACE(), colors::BORDER_MED(), colors::BG_HOVER()));
     auto* v = new QVBoxLayout(card);
     v->setContentsMargins(8, 6, 8, 6);
     v->setSpacing(3);
@@ -81,22 +92,23 @@ QWidget* FeedCardView::build_card(const FeedItem& it) {
     const QString when = rel.isEmpty() ? it.time : rel; // fall back to the absolute string
     auto* meta =
         new QLabel(when.isEmpty() ? QString("● %1").arg(it.source) : QString("● %1 · %2").arg(it.source, when));
-    meta->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;").arg(colors::TEXT_TERTIARY()));
+    meta->setObjectName("feedCardMeta");
     if (!it.time.isEmpty())
         meta->setToolTip(it.time); // absolute parsed timestamp on hover
     v->addWidget(meta);
 
     auto* title = new QLabel(it.title);
+    title->setObjectName("feedCardTitle");
     title->setWordWrap(true);
-    title->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;").arg(colors::TEXT_PRIMARY()));
     v->addWidget(title);
 
     if (!it.summary.isEmpty()) {
         auto* sum = new QLabel(it.summary);
+        sum->setObjectName("feedCardSummary");
         sum->setWordWrap(true);
-        sum->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::TEXT_SECONDARY()));
         v->addWidget(sum);
     }
+    card->setAccessibleName(it.title);
     return card;
 }
 

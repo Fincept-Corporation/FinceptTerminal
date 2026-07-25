@@ -281,6 +281,17 @@ EquityOverviewTab::EquityOverviewTab(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::equity::EquityResearchService::info_loaded, this, &EquityOverviewTab::on_info_loaded);
     connect(&svc, &services::equity::EquityResearchService::historical_loaded, this,
             &EquityOverviewTab::on_historical_loaded);
+    // Overview waits on three legs (quote / info / historical) and only hides the
+    // overlay on success, so any one failing left "LOADING OVERVIEW…" spinning
+    // over the tab with no way to dismiss it.
+    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
+            [this](const QString& ctx, const QString&) {
+                if (!loading_overlay_)
+                    return;
+                if (ctx == QLatin1String("Quote") || ctx == QLatin1String("Info") ||
+                    ctx == QLatin1String("Historical"))
+                    loading_overlay_->hide_loading();
+            });
 }
 
 void EquityOverviewTab::set_symbol(const QString& symbol) {

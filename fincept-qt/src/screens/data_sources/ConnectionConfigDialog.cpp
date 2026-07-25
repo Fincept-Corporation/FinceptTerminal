@@ -26,6 +26,7 @@
 #include <QTextEdit>
 #include <QUuid>
 #include <QVBoxLayout>
+#include <QVector>
 
 namespace fincept::screens::datasources {
 
@@ -137,7 +138,10 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
                            ? (duplicate ? QObject::tr("Copy of %1").arg(existing.display_name) : existing.display_name)
                            : "");
     name_edit->setFixedHeight(34);
+    name_edit->setAccessibleName(QObject::tr("Connection name"));
+    name_edit->setAccessibleDescription(QObject::tr("Display name for this %1 connection").arg(config.name));
     form->addWidget(name_edit, row, 1);
+    name_lbl->setBuddy(name_edit);
     ++row;
 
     auto* enabled_lbl = new QLabel(QObject::tr("Enable Connection"));
@@ -146,10 +150,15 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
     auto* enabled_check = new QCheckBox(QObject::tr("Active"));
     enabled_check->setChecked(existing_loaded ? existing.enabled : true);
+    enabled_check->setAccessibleName(QObject::tr("Enable connection"));
     form->addWidget(enabled_check, row, 1);
     ++row;
 
     QMap<QString, QWidget*> field_widgets;
+    // Focus chain in visual order — the dialog previously relied on creation
+    // order, which put the footer buttons ahead of the dynamic form fields.
+    QVector<QWidget*> focus_chain{name_edit, enabled_check};
+    bool has_secret_field = false;
 
     for (const auto& field : config.fields) {
         auto* lbl = new QLabel(field.label + (field.required ? " *" : ""));
@@ -195,7 +204,22 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
             input = edit;
         }
 
+        if (field.type == FieldType::Password) {
+            has_secret_field = true;
+            input->setAccessibleName(QObject::tr("%1 (secret)").arg(field.label));
+            input->setAccessibleDescription(
+                QObject::tr("Secret value. Stored locally and masked; screen readers will not read it back."));
+        } else {
+            input->setAccessibleName(field.label);
+            if (!field.placeholder.isEmpty())
+                input->setAccessibleDescription(QObject::tr("Example: %1").arg(field.placeholder));
+        }
+        if (field.required)
+            input->setProperty("required", true);
+        lbl->setBuddy(input);
+
         field_widgets[field.name] = input;
+        focus_chain.append(input);
         form->addWidget(input, row, 1);
         ++row;
     }
@@ -209,6 +233,9 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     tags_edit->setPlaceholderText(QObject::tr("Comma-separated tags, e.g. prod, live, trading"));
     tags_edit->setFixedHeight(34);
     tags_edit->setText(existing_loaded ? existing.tags : "");
+    tags_edit->setAccessibleName(QObject::tr("Tags"));
+    tags_lbl->setBuddy(tags_edit);
+    focus_chain.append(tags_edit);
     form->addWidget(tags_edit, row, 1);
     ++row;
 
@@ -219,6 +246,19 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     note->setStyleSheet(
         QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY()));
     body_vl->addWidget(note);
+
+    if (has_secret_field) {
+        // Be explicit about where the secret goes — the connection store is a
+        // local SQLite table, not an encrypted keychain, and EXPORT can carry
+        // these values off the machine.
+        auto* secret_note = new QLabel(
+            QObject::tr("Secrets are saved to the local connection database on this machine. "
+                        "EXPORT blanks them out unless you explicitly choose to include them."));
+        secret_note->setWordWrap(true);
+        secret_note->setStyleSheet(
+            QString("color:%1;font-size:11px;background:transparent;").arg(col::WARNING()));
+        body_vl->addWidget(secret_note);
+    }
     body_vl->addStretch();
 
     scroll->setWidget(body);
@@ -238,6 +278,7 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
     auto* cancel = new QPushButton(QObject::tr("Cancel"));
     cancel->setCursor(Qt::PointingHandCursor);
+    cancel->setAccessibleName(QObject::tr("Cancel")); // QDialog already maps Esc to reject()
     cancel->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %3;}"
                                   "QPushButton:hover{background:%3;color:%4;}")
                               .arg(col::BG_BASE(), col::TEXT_SECONDARY(), col::BORDER_MED(), col::TEXT_PRIMARY()));
@@ -247,12 +288,21 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     save->setCursor(Qt::PointingHandCursor);
     save->setDefault(true);
     save->setAutoDefault(true);
+    save->setAccessibleName(editing ? QObject::tr("Update connection") : QObject::tr("Save connection"));
     save->setStyleSheet(QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;}"
                                 "QPushButton:hover{background:%1;color:%3;}")
                             .arg(col::AMBER(), col::AMBER_DIM(), col::BG_BASE()));
     footer_hl->addWidget(save);
 
     root_vl->addWidget(footer);
+
+    // Explicit tab order: every form field in visual order, then Save, then
+    // Cancel. Without this, Qt walks creation order and jumps from the name
+    // field straight into the footer.
+    focus_chain.append(save);
+    focus_chain.append(cancel);
+    for (int i = 0; i + 1 < focus_chain.size(); ++i)
+        QWidget::setTabOrder(focus_chain[i], focus_chain[i + 1]);
 
     name_edit->setFocus();
 
@@ -284,6 +334,8 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
                 status->setText(QObject::tr("Missing required field: %1").arg(field.label));
                 status->setStyleSheet(
                     QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
+                if (widget) // put the caret where the problem is instead of just naming it
+                    widget->setFocus(Qt::OtherFocusReason);
                 return;
             }
         }

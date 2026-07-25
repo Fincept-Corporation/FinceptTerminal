@@ -8,6 +8,7 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QUuid>
 #include <QVBoxLayout>
 
@@ -105,6 +106,16 @@ void AlgoDeployDialog::build_ui() {
         QString("color: %1; font-size: 9px; font-family: %2;").arg(colors::TEXT_TERTIARY(), fonts::DATA_FAMILY()));
     root->addWidget(id_label);
 
+    // Live banner — hidden in paper mode, impossible to miss in live mode.
+    live_warning_ = new QLabel(tr("⚠  LIVE MODE — this strategy will place REAL orders with REAL money."), this);
+    live_warning_->setWordWrap(true);
+    live_warning_->setStyleSheet(QString("color: %1; background: rgba(220,38,38,0.10);"
+                                         " border: 1px solid %1; padding: 6px 10px;"
+                                         " font-size: 11px; font-weight: 700; font-family: %2;")
+                                     .arg(colors::NEGATIVE(), fonts::DATA_FAMILY()));
+    live_warning_->setVisible(false);
+    root->addWidget(live_warning_);
+
     auto* form = new QFormLayout;
     form->setSpacing(8);
     form->setLabelAlignment(Qt::AlignRight);
@@ -186,8 +197,43 @@ void AlgoDeployDialog::build_ui() {
     connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
     root->addWidget(buttons_);
 
+    // ── Accessibility ────────────────────────────────────────────────────────
+    // Screen readers otherwise announce these as bare "combo box" / "spin box".
+    symbol_edit_->setAccessibleName(tr("Trading symbol"));
+    mode_combo_->setAccessibleName(tr("Deployment mode, paper or live"));
+    side_combo_->setAccessibleName(tr("Entry side, buy or sell"));
+    account_combo_->setAccessibleName(tr("Broker account"));
+    exchange_combo_->setAccessibleName(tr("Exchange"));
+    product_type_combo_->setAccessibleName(tr("Product type"));
+    timeframe_combo_->setAccessibleName(tr("Bar timeframe"));
+    quantity_spin_->setAccessibleName(tr("Order quantity"));
+    max_order_spin_->setAccessibleName(tr("Maximum order value"));
+    max_loss_spin_->setAccessibleName(tr("Maximum daily loss"));
+    if (auto* ok_btn = buttons_->button(QDialogButtonBox::Ok))
+        ok_btn->setAccessibleName(tr("Deploy strategy"));
+
+    // ── Keyboard order ───────────────────────────────────────────────────────
+    // Mode comes second on purpose: paper-vs-live is the decision that matters.
+    setTabOrder(symbol_edit_, mode_combo_);
+    setTabOrder(mode_combo_, side_combo_);
+    setTabOrder(side_combo_, account_combo_);
+    setTabOrder(account_combo_, exchange_combo_);
+    setTabOrder(exchange_combo_, product_type_combo_);
+    setTabOrder(product_type_combo_, timeframe_combo_);
+    setTabOrder(timeframe_combo_, quantity_spin_);
+    setTabOrder(quantity_spin_, max_order_spin_);
+    setTabOrder(max_order_spin_, max_loss_spin_);
+    setTabOrder(max_loss_spin_, buttons_);
+
     on_mode_changed(0);
     populate_accounts();
+}
+
+void AlgoDeployDialog::set_risk_defaults(double quantity, double max_order_value) {
+    if (quantity_spin_ && quantity > 0.0)
+        quantity_spin_->setValue(quantity);
+    if (max_order_spin_ && max_order_value >= 0.0)
+        max_order_spin_->setValue(max_order_value);
 }
 
 void AlgoDeployDialog::on_mode_changed(int index) {
@@ -205,6 +251,26 @@ void AlgoDeployDialog::on_mode_changed(int index) {
 
     const bool is_live = (mode_combo_->currentData().toString() == "live");
     account_label_->setText(is_live ? tr("Broker (orders + data):") : tr("Broker (data source):"));
+
+    // Live vs paper must be legible at a glance, not inferred from a dropdown:
+    // red banner + red destructive-styled action button + explicit button text.
+    if (live_warning_)
+        live_warning_->setVisible(is_live);
+    if (buttons_) {
+        if (auto* ok_btn = buttons_->button(QDialogButtonBox::Ok)) {
+            ok_btn->setText(is_live ? tr("DEPLOY LIVE") : tr("DEPLOY (PAPER)"));
+            ok_btn->setStyleSheet(
+                is_live ? QString("QPushButton { background: rgba(220,38,38,0.12); color: %1;"
+                                  " border: 1px solid %1; font-size: 11px; font-weight: 700; padding: 6px 20px; }"
+                                  "QPushButton:hover { background: %1; color: %2; }")
+                              .arg(colors::NEGATIVE(), colors::TEXT_PRIMARY())
+                        : QString("QPushButton { background: %1; color: %2; border: 1px solid %3;"
+                                  " font-size: 11px; font-weight: 700; padding: 6px 20px; }"
+                                  "QPushButton:hover { border-color: %4; color: %4; }")
+                              .arg(colors::BG_RAISED(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::CYAN()));
+        }
+    }
+    setWindowTitle(is_live ? tr("Deploy Strategy — LIVE") : tr("Deploy Strategy — Paper"));
 }
 
 void AlgoDeployDialog::populate_accounts() {
@@ -274,6 +340,45 @@ void AlgoDeployDialog::on_ok() {
                                  tr("Account credentials expired. Re-authenticate in Equity Trading."));
             return;
         }
+
+        // ── Live confirmation gate ───────────────────────────────────────────
+        // Going live is irreversible from this dialog's point of view: the engine
+        // starts a runner that will place real broker orders unattended. Restate
+        // the exact terms and require a deliberate second confirmation, defaulted
+        // to Cancel.
+        const auto account = AccountManager::instance().get_account(account_id);
+        const QString acct_label = account.display_name.isEmpty() ? account_id : account.display_name;
+        const bool is_fno_confirm = (fno_instrument_type_ != QLatin1String("equity"));
+        const QString instrument =
+            is_fno_confirm ? tr("%1 %2 (%3)").arg(fno_underlying_, fno_expiry_rule_, fno_instrument_type_)
+                           : symbol_edit_->text().trimmed().toUpper();
+        const QString max_order_text = max_order_spin_->value() > 0
+                                           ? QString::number(max_order_spin_->value(), 'f', 0)
+                                           : tr("no limit");
+        const QString max_loss_text =
+            max_loss_spin_->value() > 0 ? QString::number(max_loss_spin_->value(), 'f', 0) : tr("no limit");
+
+        const auto answer =
+            QMessageBox::warning(this, tr("Confirm LIVE deployment"),
+                                 tr("You are about to deploy \"%1\" to LIVE trading.\n\n"
+                                    "It will place REAL orders on a REAL account, unattended,\n"
+                                    "until you stop it from the Dashboard.\n\n"
+                                    "  Instrument:      %2\n"
+                                    "  Entry side:      %3\n"
+                                    "  Quantity:        %4\n"
+                                    "  Timeframe:       %5\n"
+                                    "  Broker account:  %6 (%7)\n"
+                                    "  Exchange:        %8\n"
+                                    "  Max order value: %9\n"
+                                    "  Max daily loss:  %10\n\n"
+                                    "Deploy live?")
+                                     .arg(strategy_name_, instrument, side_combo_->currentData().toString())
+                                     .arg(quantity_spin_->value(), 0, 'f', 2)
+                                     .arg(timeframe_combo_->currentText(), acct_label, account.broker_id,
+                                          exchange_combo_->currentText(), max_order_text, max_loss_text),
+                                 QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (answer != QMessageBox::Yes)
+            return;
     }
 
     // Mint a stable id for this deployment — used as the runner key, the
@@ -326,9 +431,10 @@ void AlgoDeployDialog::changeEvent(QEvent* event) {
 }
 
 void AlgoDeployDialog::retranslateUi() {
-    setWindowTitle(tr("Deploy Strategy"));
     if (title_label_)
         title_label_->setText(tr("DEPLOY: %1").arg(strategy_name_));
+    if (live_warning_)
+        live_warning_->setText(tr("⚠  LIVE MODE — this strategy will place REAL orders with REAL money."));
     if (symbol_edit_)
         symbol_edit_->setPlaceholderText(tr("e.g. RELIANCE"));
     if (symbol_label_)
@@ -365,8 +471,11 @@ void AlgoDeployDialog::retranslateUi() {
         max_order_spin_->setSpecialValueText(tr("No limit"));
     if (max_loss_spin_)
         max_loss_spin_->setSpecialValueText(tr("No limit"));
-    if (buttons_)
-        buttons_->button(QDialogButtonBox::Ok)->setText(tr("DEPLOY"));
+    // Window title and the OK button's text/skin are mode-dependent (paper vs
+    // live) — re-derive them rather than resetting to a neutral "DEPLOY", which
+    // would erase the live-mode warning styling on a language switch.
+    if (mode_combo_)
+        on_mode_changed(mode_combo_->currentIndex());
     // account_combo_ "No connected accounts" placeholder is rebuilt by populate_accounts().
 }
 

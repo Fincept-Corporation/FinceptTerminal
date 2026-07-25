@@ -20,6 +20,7 @@ rdagent connects via:
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import os
@@ -27,6 +28,71 @@ from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# ── Factor-expression sandbox ────────────────────────────────────────────────
+# factor_backtest evaluates a caller-supplied expression. eval() with
+# {"__builtins__": {}} is NOT a sandbox: exposing the pandas/numpy module
+# objects hands over pd.read_pickle (deserialises arbitrary objects from a URL)
+# and np.load, and even without them `().__class__.__mro__[1].__subclasses__()`
+# walks back to the whole class hierarchy. Since factor_expr arrives from an
+# LLM that reads untrusted market/news text, that is a prompt-injection → RCE
+# path.
+#
+# So the expression is parsed and checked against an allowlist before it ever
+# reaches eval(). Attribute access is the escape hatch, so it is gated on a
+# name allowlist: `close.rolling(20).mean()` and `np.log(close)` (the syntax
+# the docstring advertises) still work, while `.read_pickle` / `.__class__` /
+# any dunder is rejected at parse time.
+
+_FACTOR_ALLOWED_NODES = (
+    ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.Call,
+    ast.Attribute, ast.Name, ast.Load, ast.Constant, ast.Tuple, ast.List,
+    ast.keyword, ast.Slice, ast.Subscript, ast.IfExp,
+    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+    ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
+    ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+)
+
+_FACTOR_ALLOWED_ATTRS = frozenset({
+    # numpy ufuncs
+    "log", "log1p", "log10", "exp", "sqrt", "abs", "sign", "tanh", "clip",
+    "maximum", "minimum", "where", "power", "square", "floor", "ceil",
+    "nan_to_num",
+    # pandas Series / rolling / ewm / expanding
+    "rolling", "ewm", "expanding", "shift", "diff", "pct_change", "rank",
+    "mean", "median", "std", "var", "sum", "min", "max", "corr", "cov",
+    "skew", "kurt", "quantile", "cumsum", "cumprod", "fillna", "dropna",
+    "round",
+})
+
+
+def _compile_factor_expr(expr: str):
+    """Parse+validate a factor expression, returning a compiled code object.
+
+    Raises ValueError with a caller-facing reason if the expression uses
+    anything outside the allowlist.
+    """
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as e:
+        raise ValueError(f"invalid syntax: {e}") from None
+
+    for node in ast.walk(tree):
+        if not isinstance(node, _FACTOR_ALLOWED_NODES):
+            raise ValueError(f"disallowed expression element: {type(node).__name__}")
+        if isinstance(node, ast.Attribute):
+            if node.attr.startswith("_") or node.attr not in _FACTOR_ALLOWED_ATTRS:
+                raise ValueError(f"disallowed attribute: .{node.attr}")
+        if isinstance(node, ast.Name) and node.id.startswith("_"):
+            raise ValueError(f"disallowed name: {node.id}")
+        # Only method calls (allowlisted above) and calls on plain names are
+        # permitted; a call on anything else is a construction we have not
+        # reasoned about.
+        if isinstance(node, ast.Call) and not isinstance(node.func, (ast.Attribute, ast.Name)):
+            raise ValueError("disallowed call target")
+
+    return compile(tree, "<factor_expr>", "eval")
 
 # ---------------------------------------------------------------------------
 # Availability checks
@@ -382,10 +448,15 @@ def build_mcp_server() -> Any:
             })
             df["returns"] = df["close"].pct_change()
 
-            # Evaluate factor expression safely
+            # Evaluate factor expression — allowlist-checked at parse time,
+            # see _compile_factor_expr above.
+            try:
+                code = _compile_factor_expr(factor_expr)
+            except ValueError as e:
+                return {"error": f"Factor expression rejected: {e}"}
             try:
                 factor_vals = eval(  # noqa: S307
-                    factor_expr,
+                    code,
                     {"__builtins__": {}},
                     {**{col: df[col] for col in df.columns},
                      "pd": pd, "np": np},

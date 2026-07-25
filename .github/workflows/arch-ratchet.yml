@@ -1,0 +1,53 @@
+name: Architecture Ratchets
+
+# Runs on `pull_request` (NOT pull_request_target): this checks out PR code, so
+# it must run with the fork's read-only token and no secrets. pr-gate.yml uses
+# pull_request_target because it needs write access to label/comment; that
+# trigger must never be used to execute or scan untrusted contributor code.
+on:
+  pull_request:
+    paths:
+      - 'fincept-qt/src/**'
+      - '.github/scripts/arch_ratchet.py'
+      - '.github/scripts/arch_ratchet_baseline.json'
+      - '.github/workflows/arch-ratchet.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ratchets:
+    name: Architecture ratchets
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Three non-increasing counters. They exist because all three regressions
+      # are invisible at compile time and were each found by hand-audit:
+      #   • inline setStyleSheet total          (theming maintainability)
+      #   • setStyleSheet inside a loop body    (a full CSS re-parse per row per tick)
+      #   • untranslated setText/... literals   (lupdate cannot see them, so they
+      #                                          can never be translated)
+      #
+      # Ratchets rather than hard gates: there are ~5,200 / ~460 / ~120 existing
+      # sites, so an outright ban would fail every PR on day one and the check
+      # would be deleted. A ratchet people keep beats a gate they remove.
+      - name: Check architecture ratchets
+        run: python .github/scripts/arch_ratchet.py --root fincept-qt/src
+
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "A ratchet went UP. Options, in order of preference:"
+          echo "  1. Don't add the violation — use setObjectName() + a global"
+          echo "     stylesheet selector, or wrap the string in tr()."
+          echo "  2. If you REMOVED violations elsewhere and the count should be"
+          echo "     lower, regenerate the baseline:"
+          echo "       python .github/scripts/arch_ratchet.py --root fincept-qt/src --update-baseline"
+          echo "     Only ever regenerate to LOWER a baseline, never to let a new"
+          echo "     violation through."

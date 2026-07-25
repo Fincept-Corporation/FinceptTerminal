@@ -1,5 +1,6 @@
 #pragma once
 #include <QComboBox>
+#include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -85,6 +86,12 @@ class SupportScreen : public QWidget {
     bool selected_is_closed_ = false;
     QPushButton* active_row_btn_ = nullptr; // currently highlighted sidebar row
 
+    /// Last successfully-fetched ticket set (plus the demo row). Cached so the
+    /// search box and status filter can re-render the sidebar without a network
+    /// round-trip.
+    QJsonArray all_tickets_;
+    bool load_failed_ = false;
+
     // ── Builders ─────────────────────────────────────────────────────────────
     QWidget* build_sidebar();
     QWidget* build_empty_state();
@@ -99,6 +106,11 @@ class SupportScreen : public QWidget {
     static QString status_color(const QString& s);
     static QString priority_color(const QString& p);
     static QString status_label(const QString& s);
+
+    /// Re-render the sidebar rows from all_tickets_, honouring the search box
+    /// and the status filter combo. Called by load_tickets() and whenever
+    /// either control changes — no refetch.
+    void rebuild_ticket_rows();
 
     // ── Slots ─────────────────────────────────────────────────────────────────
     void load_tickets();

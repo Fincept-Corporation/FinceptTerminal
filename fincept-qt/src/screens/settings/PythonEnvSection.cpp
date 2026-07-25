@@ -196,7 +196,21 @@ void PythonEnvSection::build_ui() {
     pkg_table_ = new QTableWidget(0, 7, this);
     pkg_table_->setHorizontalHeaderLabels(
         {"", tr("Package"), tr("Venv"), tr("Required"), tr("Installed"), tr("Status"), tr("Action")});
-    pkg_table_->setStyleSheet(table_ss());
+    // Per-row cell-widget styling lives here, keyed by objectName, instead of
+    // two setStyleSheet() calls per row in merge_and_populate_table(). With
+    // ~300 requirement entries that was ~600 CSS reparses on every refresh.
+    pkg_table_->setStyleSheet(
+        table_ss() +
+        QString("QCheckBox#pkgChk{background:transparent;}"
+                "QCheckBox#pkgChk::indicator{width:13px;height:13px;}"
+                "QCheckBox#pkgChk::indicator:unchecked{border:1px solid %1;background:%2;}"
+                "QCheckBox#pkgChk::indicator:checked{border:1px solid %3;background:%3;}"
+                "QPushButton#pkgInstall{background:%3;color:%4;border:none;font-size:10px;font-weight:700;}"
+                "QPushButton#pkgInstall:hover{background:%5;}"
+                "QPushButton#pkgUpgrade{background:transparent;color:%6;border:1px solid %7;font-size:10px;}"
+                "QPushButton#pkgUpgrade:hover{background:%2;}")
+            .arg(ui::colors::BORDER_BRIGHT(), ui::colors::BG_RAISED(), ui::colors::AMBER(), ui::colors::BG_BASE(),
+                 ui::colors::AMBER_DIM(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM()));
     pkg_table_->setSelectionMode(QAbstractItemView::NoSelection);
     pkg_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     pkg_table_->setAlternatingRowColors(false);
@@ -523,13 +537,10 @@ void PythonEnvSection::merge_and_populate_table() {
         pkg_table_->insertRow(i);
         pkg_table_->setRowHeight(i, 28);
 
-        // Col 0: checkbox
+        // Col 0: checkbox (styling comes from the table-level stylesheet)
         auto* chk = new QCheckBox(this);
-        chk->setStyleSheet(QString("QCheckBox{background:transparent;}"
-                                   "QCheckBox::indicator{width:13px;height:13px;}"
-                                   "QCheckBox::indicator:unchecked{border:1px solid %1;background:%2;}"
-                                   "QCheckBox::indicator:checked{border:1px solid %3;background:%3;}")
-                               .arg(ui::colors::BORDER_BRIGHT(), ui::colors::BG_RAISED(), ui::colors::AMBER()));
+        chk->setObjectName(QStringLiteral("pkgChk"));
+        chk->setAccessibleName(tr("Select %1").arg(row.display_name));
         auto* chk_cell = new QWidget(this);
         auto* chk_hl = new QHBoxLayout(chk_cell);
         chk_hl->setContentsMargins(4, 0, 4, 0);
@@ -568,18 +579,10 @@ void PythonEnvSection::merge_and_populate_table() {
         status_item->setTextAlignment(Qt::AlignCenter);
         pkg_table_->setItem(i, 5, status_item);
 
-        // Col 6: action button
+        // Col 6: action button (styling comes from the table-level stylesheet)
         auto* btn = new QPushButton(row.missing ? tr("Install") : tr("Upgrade"), this);
+        btn->setObjectName(row.missing ? QStringLiteral("pkgInstall") : QStringLiteral("pkgUpgrade"));
         btn->setFixedHeight(22);
-        btn->setStyleSheet(
-            row.missing ? QString("QPushButton{background:%1;color:%2;border:none;font-size:10px;"
-                                  "font-weight:700;}"
-                                  "QPushButton:hover{background:%3;}")
-                              .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM())
-                        : QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
-                                  "font-size:10px;}"
-                                  "QPushButton:hover{background:%3;}")
-                              .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED()));
         btn->setCursor(Qt::PointingHandCursor);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_row_action_clicked(i); });
         pkg_table_->setCellWidget(i, 6, btn);
@@ -612,11 +615,16 @@ void PythonEnvSection::on_row_action_clicked(int row) {
 // ── build_batches_for_selected ────────────────────────────────────────────────
 
 QList<PythonEnvSection::ActionBatch> PythonEnvSection::build_batches_for_selected() const {
-    ActionBatch b1, b2;
-    b1.venv = "venv-numpy1";
-    b1.upgrade = false;
-    b2.venv = "venv-numpy2";
-    b2.upgrade = false;
+    // Four buckets, not two: `upgrade` is a property of the uv invocation, so a
+    // selection mixing an installed and a missing package inside one venv used
+    // to have its --upgrade flag decided by whichever row happened to come
+    // last. Missing packages then got force-upgraded (or installed packages
+    // silently not upgraded), depending on row order.
+    ActionBatch install1, install2, upgrade1, upgrade2;
+    install1.venv = upgrade1.venv = QStringLiteral("venv-numpy1");
+    install2.venv = upgrade2.venv = QStringLiteral("venv-numpy2");
+    install1.upgrade = install2.upgrade = false;
+    upgrade1.upgrade = upgrade2.upgrade = true;
 
     for (int i = 0; i < pkg_table_->rowCount(); ++i) {
         if (pkg_table_->isRowHidden(i))
@@ -631,21 +639,23 @@ QList<PythonEnvSection::ActionBatch> PythonEnvSection::build_batches_for_selecte
         if (i >= all_packages_.size())
             continue;
         const PackageRow& row = all_packages_[i];
+        const bool v1 = (row.venv == QLatin1String("venv-numpy1"));
 
-        if (row.venv == "venv-numpy1") {
-            b1.packages << row.required_spec;
-            b1.upgrade = !row.missing;
-        } else {
-            b2.packages << row.required_spec;
-            b2.upgrade = !row.missing;
-        }
+        if (row.missing)
+            (v1 ? install1 : install2).packages << row.required_spec;
+        else
+            (v1 ? upgrade1 : upgrade2).packages << row.required_spec;
     }
 
     QList<ActionBatch> result;
-    if (!b1.packages.isEmpty())
-        result << b1;
-    if (!b2.packages.isEmpty())
-        result << b2;
+    if (!install1.packages.isEmpty())
+        result << install1;
+    if (!install2.packages.isEmpty())
+        result << install2;
+    if (!upgrade1.packages.isEmpty())
+        result << upgrade1;
+    if (!upgrade2.packages.isEmpty())
+        result << upgrade2;
     return result;
 }
 

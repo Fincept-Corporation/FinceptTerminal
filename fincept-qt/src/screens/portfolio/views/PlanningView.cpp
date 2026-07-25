@@ -15,6 +15,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QTabBar>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -702,7 +703,9 @@ void PlanningView::recalculate_goals() {
             const char* pc = mc.success_prob >= 0.75  ? ui::colors::POSITIVE
                              : mc.success_prob >= 0.5 ? ui::colors::WARNING
                                                       : ui::colors::NEGATIVE;
-            goal_mc_label_->setText(tr("Monte Carlo: <b><span style='color:%1'>%2%% chance</span></b> of reaching "
+            // NOTE: QString::arg() has no "%%" escape (that is printf/asprintf).
+            // "%2%%" rendered a literal double percent sign — use "%2%".
+            goal_mc_label_->setText(tr("Monte Carlo: <b><span style='color:%1'>%2% chance</span></b> of reaching "
                                        "%3 %4 — likely %3 %5 – %3 %6.")
                                         .arg(pc)
                                         .arg(QString::number(mc.success_prob * 100, 'f', 0))
@@ -1027,9 +1030,17 @@ void PlanningView::remove_selected_goal() {
     const int row = goals_list_->currentRow();
     if (row < 0 || row >= goals_.size())
         return;
+    // Goals are persisted immediately and there is no undo — confirm first.
+    const QString name = goals_[row].name.isEmpty() ? tr("(unnamed)") : goals_[row].name;
+    const auto answer =
+        QMessageBox::question(this, tr("Remove Goal"), tr("Remove the goal \"%1\"? This cannot be undone.").arg(name),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+        return;
     goals_.removeAt(row);
     save_goals();
     refresh_goals_list();
+    recalculate_goals();
 }
 
 void PlanningView::changeEvent(QEvent* event) {
@@ -1175,7 +1186,15 @@ void PlanningView::recalculate() {
                                    .arg(QString::number(gap, 'f', 0)));
         status_label_->setStyleSheet(QString("color:%1; font-size:12px; padding:12px;").arg(ui::colors::POSITIVE()));
     } else {
-        double needed_monthly = (-gap) / ((std::pow(1.0 + monthly_rate, months) - 1.0) / monthly_rate);
+        // Annuity factor. Guard both degenerate inputs: a zero real return
+        // (expected return == inflation, a perfectly plausible entry) made the
+        // divisor 0/0 and printed "nan"; a zero horizon (retire age ==
+        // current age) made it 0 as well.
+        const double annuity_factor = (months <= 0)                ? 0.0
+                                      : (std::abs(monthly_rate) > 1e-9)
+                                          ? ((std::pow(1.0 + monthly_rate, months) - 1.0) / monthly_rate)
+                                          : static_cast<double>(months);
+        const double needed_monthly = annuity_factor > 1e-9 ? (-gap) / annuity_factor : 0.0;
         status_label_->setText(tr("\u26A0 Shortfall of %1 %2. Consider increasing monthly savings "
                                   "by %1 %3 to close the gap.")
                                    .arg(currency_)
@@ -1194,7 +1213,7 @@ void PlanningView::recalculate() {
                              : mc.success_prob >= 0.5 ? ui::colors::WARNING
                                                       : ui::colors::NEGATIVE;
             retire_mc_label_->setText(
-                tr("Monte Carlo (2000 runs, %1% vol): <b><span style='color:%2'>%3%% chance</span></b> "
+                tr("Monte Carlo (2000 runs, %1% vol): <b><span style='color:%2'>%3% chance</span></b> "
                    "of reaching your target. Likely range %4 %5 \u2013 %6 %7 (median %4 %8).")
                     .arg(QString::number(vol * 100, 'f', 0))
                     .arg(pc)
@@ -1215,8 +1234,8 @@ void PlanningView::recalculate() {
         const double shocked = projected * (1.0 - dd_pct / 100.0);
         const double shocked_funded = (target > 1e-6) ? (shocked / target * 100.0) : 0.0;
         retire_stress_label_->setText(
-            tr("Stress: a %1%% drawdown (your historical max) near retirement would cut the projection to "
-               "%2 %3 \u2014 %4%% of target.")
+            tr("Stress: a %1% drawdown (your historical max) near retirement would cut the projection to "
+               "%2 %3 \u2014 %4% of target.")
                 .arg(QString::number(dd_pct, 'f', 0))
                 .arg(currency_)
                 .arg(QString::number(shocked, 'f', 0))

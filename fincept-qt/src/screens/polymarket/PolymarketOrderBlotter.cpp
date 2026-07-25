@@ -3,10 +3,12 @@
 #include "ui/theme/Theme.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -112,19 +114,37 @@ PolymarketOrderBlotter::PolymarketOrderBlotter(QWidget* parent) : QWidget(parent
     table_->horizontalHeader()->setStretchLastSection(false);
     table_->horizontalHeader()->setSectionResizeMode(ColMarket, QHeaderView::Stretch);
     table_->setShowGrid(false);
-    table_->setStyleSheet(QString("QTableWidget { background: %1; color: %2; border: none; font-size: 10px; }"
-                                  "QTableWidget::item { padding: 3px 8px; border-bottom: 1px solid %3; }"
-                                  "QTableWidget::item:selected { background: %4; color: %2; }"
-                                  "QHeaderView::section { background: %5; color: %6; border: none;"
-                                  "  border-bottom: 1px solid %3; padding: 5px 8px;"
-                                  "  font-size: 8px; font-weight: 700; letter-spacing: 0.5px; }"
-                                  "QScrollBar:vertical { background: %1; width: 4px; border: none; }"
-                                  "QScrollBar::handle:vertical { background: %3; min-height: 20px; }"
-                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-                              .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_HOVER(),
-                                   colors::BG_RAISED(), colors::TEXT_SECONDARY()));
+    table_->setAccessibleName(tr("Open orders"));
+    apply_table_style();
     connect(table_, &QTableWidget::cellDoubleClicked, this, &PolymarketOrderBlotter::on_cell_double_clicked);
     vl->addWidget(table_, 1);
+}
+
+void PolymarketOrderBlotter::apply_table_style() {
+    if (!table_)
+        return;
+    // One stylesheet for the table AND its per-row action buttons. The row
+    // controls are children of the table's viewport, so object-name selectors
+    // here reach them — that replaces two setStyleSheet() calls per row (a
+    // full CSS reparse each) on every set_orders()/update_order() rebuild.
+    table_->setStyleSheet(
+        QString("QTableWidget { background: %1; color: %2; border: none; font-size: 10px; }"
+                "QTableWidget::item { padding: 3px 8px; border-bottom: 1px solid %3; }"
+                "QTableWidget::item:selected { background: %4; color: %2; }"
+                "QHeaderView::section { background: %5; color: %6; border: none;"
+                "  border-bottom: 1px solid %3; padding: 5px 8px;"
+                "  font-size: 8px; font-weight: 700; letter-spacing: 0.5px; }"
+                "QScrollBar:vertical { background: %1; width: 4px; border: none; }"
+                "QScrollBar::handle:vertical { background: %3; min-height: 20px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+                "QPushButton#blotterRowRefresh { background: transparent; color: %6; border: 1px solid %3;"
+                "  font-size: 11px; }"
+                "QPushButton#blotterRowRefresh:hover { color: %7; border-color: %7; }"
+                "QPushButton#blotterRowCancel { background: transparent; color: %8; border: 1px solid %8;"
+                "  font-size: 11px; }"
+                "QPushButton#blotterRowCancel:hover { background: rgba(239,68,68,0.15); }")
+            .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_HOVER(),
+                 colors::BG_RAISED(), colors::TEXT_SECONDARY(), presentation_.accent.name(), colors::NEGATIVE()));
 }
 
 void PolymarketOrderBlotter::set_orders(const QVector<OpenOrder>& orders) {
@@ -151,6 +171,7 @@ void PolymarketOrderBlotter::clear() {
 
 void PolymarketOrderBlotter::set_presentation(const ExchangePresentation& p) {
     presentation_ = p;
+    apply_table_style(); // accent drives the row refresh-button hover colour
     rebuild_rows();
 }
 
@@ -167,9 +188,24 @@ void PolymarketOrderBlotter::rebuild_rows() {
 
     for (int i = 0; i < orders_.size(); ++i) {
         const auto& o = orders_[i];
-        table_->setItem(i, ColTime,
-                        new QTableWidgetItem(QString::number(o.expires_ms))); // placeholder: expiry
-        table_->setItem(i, ColMarket, new QTableWidgetItem(o.market_id));
+        // The TIME column used to render `expires_ms` as a raw 13-digit epoch
+        // integer — unreadable, and the wrong field for the heading. Show the
+        // order's creation time formatted, with the expiry in the tooltip.
+        auto* time_item = new QTableWidgetItem(
+            o.created_ms > 0 ? QDateTime::fromMSecsSinceEpoch(o.created_ms).toString(QStringLiteral("MM-dd HH:mm:ss"))
+                             : QStringLiteral("—"));
+        time_item->setData(Qt::UserRole, QVariant::fromValue(o.created_ms));
+        time_item->setToolTip(o.expires_ms > 0
+                                  ? tr("Expires %1").arg(QDateTime::fromMSecsSinceEpoch(o.expires_ms).toString(
+                                        QStringLiteral("yyyy-MM-dd HH:mm:ss")))
+                                  : tr("No expiry (good-till-cancelled)"));
+        table_->setItem(i, ColTime, time_item);
+
+        auto* market_item = new QTableWidgetItem(o.market_id);
+        // The cancel button targets order_id — surface it so the user can
+        // verify which order a row's ✕ will actually cancel.
+        market_item->setToolTip(tr("Order ID: %1").arg(o.order_id));
+        table_->setItem(i, ColMarket, market_item);
 
         auto* side_item = new QTableWidgetItem(o.side);
         side_item->setForeground(
@@ -220,24 +256,29 @@ void PolymarketOrderBlotter::install_row_controls(int row, const OpenOrder& orde
     rhl->setContentsMargins(4, 0, 4, 0);
     rhl->setSpacing(4);
 
+    // Styling comes from the table-level stylesheet (see apply_table_style)
+    // via these object names — no per-row setStyleSheet.
     auto* refresh_btn = new QPushButton(QStringLiteral("↻"), host);
+    refresh_btn->setObjectName(QStringLiteral("blotterRowRefresh"));
     refresh_btn->setFixedSize(22, 20);
     refresh_btn->setCursor(Qt::PointingHandCursor);
     refresh_btn->setToolTip(tr("Refresh order state"));
-    refresh_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %2; "
-                                       "font-size: 11px; } QPushButton:hover { color: %3; border-color: %3; }")
-                                   .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), presentation_.accent.name()));
+    refresh_btn->setAccessibleName(tr("Refresh order %1").arg(order.order_id));
     const QString oid = order.order_id;
     connect(refresh_btn, &QPushButton::clicked, this, [this, oid]() { emit refresh_order(oid); });
     rhl->addWidget(refresh_btn);
 
     auto* cancel_btn = new QPushButton(QStringLiteral("✕"), host);
+    cancel_btn->setObjectName(QStringLiteral("blotterRowCancel"));
     cancel_btn->setFixedSize(22, 20);
     cancel_btn->setCursor(Qt::PointingHandCursor);
-    cancel_btn->setToolTip(tr("Cancel order"));
-    cancel_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %1; "
-                                      "font-size: 11px; } QPushButton:hover { background: rgba(239,68,68,0.15); }")
-                                  .arg(colors::NEGATIVE()));
+    // Spell out exactly which order the ✕ targets — the row's own id, not the
+    // selected row's.
+    cancel_btn->setToolTip(tr("Cancel %1 %2 @ %3 (id %4)")
+                               .arg(order.side, order.outcome)
+                               .arg(order.price, 0, 'f', qBound(0, presentation_.price_decimal_places, 6))
+                               .arg(order.order_id));
+    cancel_btn->setAccessibleName(tr("Cancel order %1").arg(order.order_id));
     connect(cancel_btn, &QPushButton::clicked, this, [this, oid]() { emit cancel_order(oid); });
     rhl->addWidget(cancel_btn);
 
@@ -270,8 +311,19 @@ void PolymarketOrderBlotter::on_cancel_all_clicked() {
     for (const auto& o : orders_)
         if (!o.order_id.isEmpty())
             ids.push_back(o.order_id);
-    if (!ids.isEmpty())
-        emit cancel_all(ids);
+    if (ids.isEmpty())
+        return;
+    // Pulling every resting order off the book is destructive and was a
+    // single unguarded click. Confirm, and say how many.
+    const auto choice = QMessageBox::warning(
+        this, tr("Cancel all orders?"),
+        tr("Cancel all %1 open order(s) on %2?\n\nThis cannot be undone — any partially filled quantity stays filled.")
+            .arg(ids.size())
+            .arg(presentation_.display_name.isEmpty() ? tr("this exchange") : presentation_.display_name),
+        QMessageBox::Cancel | QMessageBox::Yes, QMessageBox::Cancel);
+    if (choice != QMessageBox::Yes)
+        return;
+    emit cancel_all(ids);
 }
 
 void PolymarketOrderBlotter::changeEvent(QEvent* event) {

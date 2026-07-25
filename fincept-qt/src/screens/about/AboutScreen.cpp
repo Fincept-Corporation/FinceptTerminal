@@ -370,14 +370,17 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             QString label;
             QString url;
         };
+        // Every URL here must resolve. docs/TRADEMARK.md and docs/CLA.md do NOT
+        // exist in the repository — those two buttons opened GitHub 404 pages.
+        // Replaced with documents that are actually checked in.
         const Link links[] = {
             {tr("GitHub Repository"), "https://github.com/Fincept-Corporation/FinceptTerminal"},
             {tr("License (AGPL-3.0)"), "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE"},
             {tr("Commercial License"),
              "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md"},
-            {tr("Trademark Policy"),
-             "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md"},
-            {tr("Contributor CLA"), "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md"},
+            {tr("Documentation"), "https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs"},
+            {tr("Contributing Guide"),
+             "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CONTRIBUTING.md"},
             {tr("Official Website"), "https://fincept.in"},
         };
 
@@ -386,6 +389,8 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             btn->setStyleSheet(LINK_BTN());
             btn->setFixedHeight(36);
             const QString url = links[i].url;
+            btn->setAccessibleName(links[i].label);
+            btn->setToolTip(url);
             connect(btn, &QPushButton::clicked, this, [url]() { QDesktopServices::openUrl(QUrl(url)); });
             grid->addWidget(btn, i / 3, i % 3);
             resource_btns_.append(btn);
@@ -505,8 +510,8 @@ void AboutScreen::retranslateUi() {
         resource_btns_[0]->setText(tr("GitHub Repository"));
         resource_btns_[1]->setText(tr("License (AGPL-3.0)"));
         resource_btns_[2]->setText(tr("Commercial License"));
-        resource_btns_[3]->setText(tr("Trademark Policy"));
-        resource_btns_[4]->setText(tr("Contributor CLA"));
+        resource_btns_[3]->setText(tr("Documentation"));
+        resource_btns_[4]->setText(tr("Contributing Guide"));
         resource_btns_[5]->setText(tr("Official Website"));
     }
 

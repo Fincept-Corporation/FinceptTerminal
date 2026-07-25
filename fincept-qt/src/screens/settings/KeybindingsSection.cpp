@@ -11,6 +11,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMap>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
@@ -123,6 +124,8 @@ void KeybindingsSection::build_ui() {
     // Search bar
     search_input_ = new QLineEdit;
     search_input_->setPlaceholderText(tr("Search actions..."));
+    search_input_->setAccessibleName(tr("Search keyboard actions"));
+    search_input_->setClearButtonEnabled(true);
     search_input_->setStyleSheet(
         QString("QLineEdit{background:%1;color:%2;border:1px solid %3;padding:6px;}"
                 "QLineEdit:focus{border:1px solid %4;}")
@@ -149,7 +152,18 @@ void KeybindingsSection::build_ui() {
                 "QPushButton:hover{background:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(),
                  ui::colors::BG_HOVER()));
-    connect(reset_all_btn_, &QPushButton::clicked, this, []() { KeyConfigManager::instance().reset_all(); });
+    reset_all_btn_->setAccessibleName(tr("Reset all keybindings to defaults"));
+    connect(reset_all_btn_, &QPushButton::clicked, this, [this]() {
+        // Wipes every custom binding the user has made, with no undo — the one
+        // destructive action on this page and it had no confirmation.
+        const auto reply = QMessageBox::question(
+            this, tr("Reset Keybindings"),
+            tr("Reset every keyboard shortcut to its default?\n\nAll of your custom bindings will be lost."),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (reply != QMessageBox::Yes)
+            return;
+        KeyConfigManager::instance().reset_all();
+    });
 
     root->addWidget(search_input_);
     root->addWidget(scroll, 1);

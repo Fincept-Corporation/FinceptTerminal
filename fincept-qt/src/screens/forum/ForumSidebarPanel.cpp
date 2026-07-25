@@ -143,6 +143,8 @@ void ForumSidebarPanel::build_ui() {
                                           ui::colors::BORDER_BRIGHT(), ui::colors::TEXT_PRIMARY(),
                                           ui::colors::TEXT_DIM()));
 
+    search_input_->setClearButtonEnabled(true);
+    search_input_->setAccessibleName(tr("Search discussions"));
     connect(search_input_, &QLineEdit::returnPressed, this,
             [this]() { emit search_requested(search_input_->text().trimmed()); });
 
@@ -350,7 +352,21 @@ void ForumSidebarPanel::set_active_category(int id) {
 }
 
 void ForumSidebarPanel::set_loading(bool on) {
-    Q_UNUSED(on)
+    // The sidebar has no spinner of its own; the only thing that reads as
+    // "loading" here is the leaderboard placeholder. Previously this was an
+    // empty body, so the call site had no effect at all.
+    if (!on || !contrib_layout_ || !contributors_.isEmpty())
+        return;
+    while (contrib_layout_->count() > 0) {
+        auto* item = contrib_layout_->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    auto* ph = new QLabel(tr("  loading…"));
+    ph->setFixedHeight(28);
+    ph->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;%2").arg(ui::colors::TEXT_DIM(), M(10)));
+    contrib_layout_->addWidget(ph);
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

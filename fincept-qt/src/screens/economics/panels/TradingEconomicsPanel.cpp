@@ -86,13 +86,17 @@ void TradingEconomicsPanel::on_fetch() {
 
     show_loading(tr("Fetching Trading Economics: %1…").arg(dataset.label));
 
-    QStringList args = {dataset.command};
+    // EconomicsService::execute() prepends `command` to the argv. Repeating it
+    // here made the script read the command name as the country
+    // (`yield_curve yield_curve US` → country="yield_curve"), so every
+    // country-scoped Trading Economics query hit the wrong endpoint.
+    QStringList args;
     if (dataset.country_arg == "required" || dataset.country_arg == "optional")
         args << country;
 
     services::EconomicsService::instance().execute(kTradingEconomicsSourceId, kTradingEconomicsScript, dataset.command,
                                                    args,
-                                                   "te_" + dataset.command + (args.size() > 1 ? "_" + country : ""));
+                                                   "te_" + dataset.command + (args.isEmpty() ? "" : "_" + country));
 }
 
 // Normalise various Trading Economics response shapes into displayable rows.

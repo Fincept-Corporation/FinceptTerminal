@@ -1,4 +1,4 @@
-#include "services/notifications/providers/NtfyProvider.h"
+﻿#include "services/notifications/providers/NtfyProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -9,13 +9,13 @@ namespace fincept::notifications {
 void NtfyProvider::load_fields(SettingsRepository& r, const QString& cat) {
     server_url_ = get_str(r, cat + ".server_url");
     topic_ = get_str(r, cat + ".topic");
-    token_ = get_str(r, cat + ".token");
+    token_ = get_secret(r, cat + ".token");
 }
 
 void NtfyProvider::save_fields(SettingsRepository& r, const QString& cat) {
     r.set(cat + ".server_url", server_url_, cat);
     r.set(cat + ".topic", topic_, cat);
-    r.set(cat + ".token", token_, cat);
+    set_secret(r, cat + ".token", token_, cat);
 }
 
 void NtfyProvider::send(const NotificationRequest& req, std::function<void(bool, QString)> cb) {

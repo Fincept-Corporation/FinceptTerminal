@@ -7,6 +7,8 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
 #include <QPushButton>
 #include <QSpinBox>
 
@@ -38,6 +40,14 @@ class RssFeedEditDialog : public QDialog {
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
+
+    /// One QNetworkAccessManager for the whole dialog (P10) instead of a fresh
+    /// one per test request. Created lazily on first use.
+    QNetworkAccessManager* nam();
+    /// Build the shared feed-probe request for `url`.
+    QNetworkRequest probe_request(const QString& url) const;
+
+    QNetworkAccessManager* nam_ = nullptr;
 
     services::RSSFeed initial_;
     bool is_builtin_id_;

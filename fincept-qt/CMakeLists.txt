@@ -33,7 +33,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     unset(_fincept_sdk_dirs)
 endif()
 
-project(FinceptTerminal VERSION 4.2.0 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 4.3.0 LANGUAGES C CXX)
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -353,6 +353,15 @@ add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 # OFF by default so a normal build is unchanged. Turn on with
 # -DFINCEPT_BUILD_TESTS=ON to compile the Qt Test executables under
 # fincept-qt/tests/. Run via `ctest` in the build directory.
+#
+# STATUS: fincept-qt/tests/ does NOT exist yet — there is no Qt Test target in
+# the repo (no `#include <QTest>` anywhere). Turning this option on currently
+# warns and builds nothing; see the guarded add_subdirectory near the end of
+# this file. Today's automated coverage is the headless `--selftest-*` flags on
+# the main binary (DockLayout, ToolSelfTest, PaperTrading, PortfolioReplication,
+# PortfolioMonitor, UniverseScan, FnoAlgo, Arena, Feeds), which CI runs in
+# .github/workflows/build-cpp.yml. Adding a real unit-test tree here is tracked
+# in AUDIT_2026-07-25.md §E.
 option(FINCEPT_BUILD_TESTS "Build the Fincept Terminal test suite" OFF)
 
 # ── Alpha Arena live-mode geofencing ─────────────────────────────────────────
@@ -1072,8 +1081,11 @@ set(MCP_SOURCES
     src/mcp/ToolRetriever.cpp
     src/mcp/ToolSelfTest.cpp
     src/mcp/TerminalMcpBridge.cpp
+    src/mcp/JobRegistry.cpp
+    src/mcp/ResultStore.cpp
 
     # Tool modules
+    src/mcp/tools/JobTools.cpp
     src/mcp/tools/NavigationTools.cpp
     src/mcp/tools/MarketsTools.cpp
     src/mcp/tools/WatchlistTools.cpp
@@ -1473,6 +1485,10 @@ set(UI_SOURCES
     src/ui/widgets/SpeedSparkline.cpp
     src/ui/widgets/LanguageSwitcher.cpp
     src/ui/tables/DataTable.cpp
+    # Selftest for the header-only LiveTableModel/LiveTableDelegate. Also the
+    # only TU that includes them, so it is their compile check — a header with
+    # no includer is never compiled and can rot unnoticed.
+    src/ui/tables/LiveTableSelftest.cpp
     src/ui/charts/ChartFactory.cpp
     src/ui/charts/ChartIndicators.cpp
     src/ui/charts/OverlayLayer.cpp
@@ -1880,6 +1896,7 @@ set(SCREEN_SOURCES
     src/screens/economics/panels/GlobalCentralBanksPanel.cpp
     src/screens/economics/panels/FederalReservePanel.cpp
     src/screens/economics/panels/FiscalDataPanel.cpp
+    src/screens/economics/panels/NberPanel.cpp
     src/screens/economics/panels/OwIdPanel.cpp
     src/screens/economics/panels/StatCanPanel.cpp
     src/screens/economics/panels/IlostatPanel.cpp
@@ -3200,14 +3217,16 @@ if(WIN32)
 else()
     target_link_libraries(FinceptTerminal PRIVATE ZLIB::ZLIB)
 endif()
-# SecureStorage no longer needs platform-specific credential frameworks —
-# it's pure SQLite + AES-256-GCM (OpenSSL) on every platform. See
+# SecureStorage stores credentials as SQLite + AES-256-GCM (OpenSSL) on every
+# platform. The row key is a random DEK wrapped by a platform key: DPAPI on
+# Windows (crypt32, below), PBKDF2 over the machine seed elsewhere. See
 # storage/secure/SecureStorage.cpp.
 
-# Windows: link dbghelp for the crash-handler minidump writer (see
-# src/core/crash/CrashHandler.cpp).
+# Windows: dbghelp for the crash-handler minidump writer (see
+# src/core/crash/CrashHandler.cpp); crypt32 for the DPAPI
+# CryptProtectData/CryptUnprotectData pair that wraps the SecureStorage DEK.
 if(WIN32)
-    target_link_libraries(FinceptTerminal PRIVATE dbghelp)
+    target_link_libraries(FinceptTerminal PRIVATE dbghelp crypt32)
 endif()
 
 # Copy OpenSSL DLLs to build output — Windows only
@@ -3383,16 +3402,39 @@ endif()
 # whole copy+prune when nothing under scripts/ changed since the last sync. The
 # previous version did an unconditional copy_directory of 4000+ files on every
 # link, taxing every one-line C++ change with a multi-minute scripts re-copy.
-add_custom_command(TARGET FinceptTerminal POST_BUILD
+#
+# Driven as a real build edge (stamp OUTPUT + DEPENDS on the script files), not
+# a POST_BUILD of the link: as a POST_BUILD it only ran when the exe relinked,
+# so editing a Python script and rebuilding printed "ninja: no work to do" and
+# the build output kept the stale copy. The dependency list is filtered the same
+# way sync_scripts.cmake filters its walk — a stray scripts/.venv must never
+# become 115k ninja dependencies.
+file(GLOB_RECURSE FINCEPT_SCRIPT_DEPS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/*")
+list(FILTER FINCEPT_SCRIPT_DEPS EXCLUDE REGEX
+     "/(\\.venv|venv|env|__pycache__|\\.pytest_cache|\\.benchmarks|\\.firecrawl|\\.git|\\.mypy_cache|\\.ruff_cache|node_modules)/")
+list(FILTER FINCEPT_SCRIPT_DEPS EXCLUDE REGEX "\\.(pyc|pyo|bak|log|db|sqlite|sqlite3)$")
+list(FILTER FINCEPT_SCRIPT_DEPS EXCLUDE REGEX "\\.deleted")
+list(LENGTH FINCEPT_SCRIPT_DEPS _fincept_script_dep_count)
+message(STATUS "Python scripts tracked as build dependencies: ${_fincept_script_dep_count}")
+
+set(FINCEPT_SCRIPTS_STAMP "${CMAKE_CURRENT_BINARY_DIR}/scripts_sync.stamp")
+add_custom_command(
+    OUTPUT "${FINCEPT_SCRIPTS_STAMP}"
     COMMAND ${CMAKE_COMMAND}
             -DSRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}/scripts
             -DDST_DIR=$<TARGET_FILE_DIR:FinceptTerminal>/scripts
-            -DSTAMP_FILE=${CMAKE_CURRENT_BINARY_DIR}/scripts_sync.stamp
+            -DSTAMP_FILE=${FINCEPT_SCRIPTS_STAMP}
             -DPRUNE_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/cmake/prune_scripts_junk.cmake
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/sync_scripts.cmake"
-    COMMENT "Syncing Python scripts to build output (skips when unchanged)..."
+    # The sync writes the stamp only when it actually copies; touch it here so
+    # ninja sees the edge as satisfied on a no-op run too.
+    COMMAND ${CMAKE_COMMAND} -E touch "${FINCEPT_SCRIPTS_STAMP}"
+    DEPENDS ${FINCEPT_SCRIPT_DEPS}
+    COMMENT "Syncing Python scripts to build output..."
     VERBATIM
 )
+add_custom_target(fincept_sync_scripts DEPENDS "${FINCEPT_SCRIPTS_STAMP}")
+add_dependencies(FinceptTerminal fincept_sync_scripts)
 
 # ── Copy requirements files to build output ──────────────────────────────────
 # PythonSetupManager::find_requirements_file() searches exe_dir/resources/ first.
@@ -4173,6 +4215,18 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ── Test suite (opt-in; see fincept-qt/tests/CMakeLists.txt) ─────────────────
+# The EXISTS guard is load-bearing: the tests/ tree is not in the repo yet, and
+# a bare add_subdirectory(tests) makes -DFINCEPT_BUILD_TESTS=ON fail at CONFIGURE
+# time with "add_subdirectory given source 'tests' which is not an existing
+# directory" — i.e. the documented opt-in switch was unusable. Fail soft with a
+# clear message instead, so turning the option on is diagnostic rather than fatal.
 if(FINCEPT_BUILD_TESTS)
-    add_subdirectory(tests)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+        add_subdirectory(tests)
+    else()
+        message(WARNING
+            "FINCEPT_BUILD_TESTS=ON but ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt "
+            "does not exist — no test targets will be built. Headless self-tests are still "
+            "available via the --selftest-* flags on the main binary.")
+    endif()
 endif()

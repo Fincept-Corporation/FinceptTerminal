@@ -159,6 +159,16 @@ void EquityChartPanel::set_candles(const QVector<trading::BrokerCandle>& candles
     }
 }
 
+void EquityChartPanel::clear_candles() {
+    if (fallback_)
+        fallback_->clear();
+    else if (kline_)
+        kline_->clear();
+    // Drop the forming-bar baseline too — on_quote() must not extend a bar that
+    // belongs to the symbol we just cleared.
+    have_bar_ = false;
+}
+
 void EquityChartPanel::on_quote(const trading::BrokerQuote& quote) {
     if (!fallback_ && !kline_)
         return;

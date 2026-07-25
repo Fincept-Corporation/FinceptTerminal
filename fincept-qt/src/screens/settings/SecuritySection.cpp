@@ -19,6 +19,7 @@
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QString>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -43,6 +44,27 @@ SecuritySection::SecuritySection(QWidget* parent) : QWidget(parent) {
 void SecuritySection::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     reload();
+}
+
+void SecuritySection::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    // Spontaneous hides are window-manager events (minimise / workspace
+    // switch); the user has not left the form.
+    if (e && e->spontaneous())
+        return;
+
+    for (QLineEdit* f : {sec_current_pin_, sec_new_pin_, sec_confirm_pin_}) {
+        if (f)
+            f->clear();
+    }
+    if (sec_pin_error_)
+        sec_pin_error_->hide();
+    if (sec_pin_success_)
+        sec_pin_success_->hide();
+    if (sec_change_pin_form_)
+        sec_change_pin_form_->setVisible(false);
+    if (sec_change_pin_btn_)
+        sec_change_pin_btn_->setText(tr("Change PIN"));
 }
 
 void SecuritySection::build_ui() {
@@ -115,6 +137,12 @@ void SecuritySection::build_ui() {
         input->setEchoMode(QLineEdit::Password);
         input->setFixedWidth(200);
         input->setStyleSheet(input_ss());
+        // Match the lock screen's hardening: digits only, no predictive text,
+        // no IME candidate window, no context menu (paste-based scripting).
+        input->setInputMethodHints(Qt::ImhDigitsOnly | Qt::ImhSensitiveData | Qt::ImhNoPredictiveText |
+                                   Qt::ImhNoAutoUppercase | Qt::ImhHiddenText);
+        input->setContextMenuPolicy(Qt::NoContextMenu);
+        input->setAccessibleName(placeholder);
         return input;
     };
 
@@ -153,6 +181,16 @@ void SecuritySection::build_ui() {
     save_pin_btn_->setFixedWidth(140);
     save_pin_btn_->setStyleSheet(btn_primary_ss());
     cpfl->addWidget(save_pin_btn_);
+
+    // Enter anywhere in the change-PIN form submits it; explicit tab order so
+    // the three fields chain into the Update button.
+    for (QLineEdit* f : {sec_current_pin_, sec_new_pin_, sec_confirm_pin_})
+        connect(f, &QLineEdit::returnPressed, save_pin_btn_, &QPushButton::click);
+    setTabOrder(sec_current_pin_, sec_new_pin_);
+    setTabOrder(sec_new_pin_, sec_confirm_pin_);
+    setTabOrder(sec_confirm_pin_, save_pin_btn_);
+    save_pin_btn_->setAccessibleName(tr("Update PIN"));
+    sec_change_pin_btn_->setAccessibleName(tr("Change PIN"));
 
     sec_change_pin_form_->hide();
     vl->addWidget(sec_change_pin_form_);
@@ -294,12 +332,31 @@ void SecuritySection::build_ui() {
         guard.set_timeout_minutes(minutes);
         guard.set_enabled(autolock && pm.has_pin());
 
+        if (save_status_) {
+            if (autolock && !pm.has_pin()) {
+                save_status_->setText(tr("Saved — but auto-lock stays off until you set a PIN."));
+                save_status_->setStyleSheet(
+                    QString("color:%1;background:transparent;").arg(ui::colors::WARNING()));
+            } else {
+                save_status_->setText(tr("Security settings saved."));
+                save_status_->setStyleSheet(
+                    QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
+            }
+            save_status_->show();
+            QTimer::singleShot(4000, save_status_, &QLabel::hide);
+        }
+
         LOG_INFO("Settings", QString("Security settings saved: autolock=%1, timeout=%2min, has_pin=%3")
                                  .arg(autolock)
                                  .arg(minutes)
                                  .arg(pm.has_pin()));
     });
     vl->addWidget(save_btn_);
+
+    save_status_ = new QLabel;
+    save_status_->setWordWrap(true);
+    save_status_->hide();
+    vl->addWidget(save_status_);
 
     // ── AUDIT LOG ─────────────────────────────────────────────────────────────
     vl->addSpacing(16);

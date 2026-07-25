@@ -33,6 +33,7 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::crypto {
@@ -183,6 +184,16 @@ QTableWidgetItem* CryptoBottomPanel::ensure_item(QTableWidget* table, int row, i
     return it;
 }
 
+namespace {
+/// Role under which the positions table stashes the exact (unrounded) numeric
+/// value of a cell. `update_position_prices()` used to recover quantity and
+/// entry price by re-parsing the *displayed* strings, which are rounded for
+/// presentation — an entry of 1.005 rendered "1.00" and the recomputed
+/// unrealised P&L was wrong by 0.005 × qty, while any sub-cent entry rendered
+/// "0.00" and the row was skipped entirely.
+constexpr int kExactValueRole = Qt::UserRole + 1;
+} // namespace
+
 void CryptoBottomPanel::update_empty_state(QTableWidget* /*table*/, QStackedWidget* stack, int row_count) {
     if (!stack)
         return;
@@ -314,6 +325,14 @@ void CryptoBottomPanel::retranslateUi() {
         stat_titles_[3]->setText(tr("BEST TRADE"));
     if (stat_titles_[4])
         stat_titles_[4]->setText(tr("WORST TRADE"));
+
+    // Live account card titles
+    if (live_balance_title_)
+        live_balance_title_->setText(tr("LIVE BALANCE"));
+    if (live_equity_title_)
+        live_equity_title_->setText(tr("LIVE EQUITY"));
+    if (live_margin_title_)
+        live_margin_title_->setText(tr("USED MARGIN"));
 }
 
 void CryptoBottomPanel::setup_positions_tab() {
@@ -344,6 +363,7 @@ void CryptoBottomPanel::setup_positions_tab() {
     close_all_btn_ = new QPushButton(tr("SQUARE OFF ALL"));
     close_all_btn_->setObjectName("cryptoCloseAllBtn");
     close_all_btn_->setCursor(Qt::PointingHandCursor);
+    close_all_btn_->setAccessibleName(tr("Close every open position at market"));
     close_all_btn_->setStyleSheet(
         QString("QPushButton{background:rgba(220,38,38,0.12);color:%1;border:1px solid %2;"
                 "padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
@@ -398,6 +418,7 @@ void CryptoBottomPanel::setup_orders_tab() {
     cancel_all_btn_ = new QPushButton(tr("CANCEL ALL ORDERS"));
     cancel_all_btn_->setObjectName("cryptoCancelAllBtn");
     cancel_all_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_all_btn_->setAccessibleName(tr("Cancel every pending order"));
     cancel_all_btn_->setStyleSheet(
         QString("QPushButton{background:rgba(217,119,6,0.12);color:%1;border:1px solid %2;"
                 "padding:3px 12px;font-size:10px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
@@ -567,6 +588,19 @@ void CryptoBottomPanel::setup_stats_tab() {
     for (int i = 0; i < 5; ++i)
         stat_titles_[i] = card_title_of(stat_values_[i]);
 
+    // Live account cards. `set_live_balance()` / `set_balance_unavailable()`
+    // both opened with `if (!live_balance_label_) return;` and these three
+    // labels were declared but NEVER constructed — so in LIVE mode the
+    // exchange balance, equity and used margin fetched every 5 s went
+    // straight into the bin, and a failed balance fetch produced no visible
+    // signal at all. Build the cards so the data path terminates on screen.
+    live_balance_label_ = build_card(grid, 1, 2, tr("LIVE BALANCE"));
+    live_equity_label_ = build_card(grid, 2, 0, tr("LIVE EQUITY"));
+    live_margin_label_ = build_card(grid, 2, 1, tr("USED MARGIN"));
+    live_balance_title_ = card_title_of(live_balance_label_);
+    live_equity_title_ = card_title_of(live_equity_label_);
+    live_margin_title_ = card_title_of(live_margin_label_);
+
     // Mark P&L cards as such so the QSS can colour them via the [pnl] property.
     stat_values_[0]->setProperty("pnl", "neutral");
     stat_values_[3]->setProperty("pnl", "positive");
@@ -617,13 +651,18 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
 
         set(0, pos.symbol);
         set(1, pos.side.toUpper(), pos.side == "long" ? kColorPos() : kColorNeg());
-        set(2, QString::number(pos.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(3, QString::number(pos.entry_price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(4, QString::number(pos.current_price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(2, format_size(pos.quantity), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(3, format_price_plain(pos.entry_price), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(4, format_price_plain(pos.current_price), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(5, QString::number(pos.unrealized_pnl, 'f', 2), pos.unrealized_pnl >= 0 ? kColorPos() : kColorNeg(),
             Qt::AlignRight | Qt::AlignVCenter);
         set(6, QString::number(pos.leverage, 'f', 1) + QStringLiteral("x"), QColor(),
             Qt::AlignRight | Qt::AlignVCenter);
+
+        // Stash the exact values the live mark-to-market path needs so it
+        // never has to re-parse rounded display text.
+        ensure_item(positions_table_, i, 2)->setData(kExactValueRole, pos.quantity);
+        ensure_item(positions_table_, i, 3)->setData(kExactValueRole, pos.entry_price);
     }
     positions_table_->setUpdatesEnabled(true);
     update_empty_state(positions_table_, positions_stack_, n);
@@ -657,14 +696,19 @@ void CryptoBottomPanel::update_position_prices(const QHash<QString, double>& las
             continue;
 
         const bool is_long = side_item->text().compare("LONG", Qt::CaseInsensitive) == 0;
-        const double qty = qty_item->text().toDouble();
-        const double entry = entry_item->text().toDouble();
+        // Prefer the exact values stashed by set_positions/set_live_positions;
+        // fall back to the display text only for rows written by an older
+        // path that didn't stash them.
+        const QVariant qty_exact = qty_item->data(kExactValueRole);
+        const QVariant entry_exact = entry_item->data(kExactValueRole);
+        const double qty = qty_exact.isValid() ? qty_exact.toDouble() : qty_item->text().toDouble();
+        const double entry = entry_exact.isValid() ? entry_exact.toDouble() : entry_item->text().toDouble();
         if (qty <= 0.0 || entry <= 0.0)
             continue;
 
         const double pnl = is_long ? (mark - entry) * qty : (entry - mark) * qty;
 
-        cur_item->setText(QString::number(mark, 'f', 2));
+        cur_item->setText(format_price_plain(mark));
         pnl_item->setText(QString::number(pnl, 'f', 2));
         pnl_item->setForeground(pnl >= 0 ? kColorPos() : kColorNeg());
     }
@@ -700,8 +744,8 @@ void CryptoBottomPanel::set_orders(const QVector<trading::PtOrder>& orders) {
         set(0, o.symbol);
         set(1, o.side.toUpper(), o.side == "buy" ? kColorPos() : kColorNeg());
         set(2, o.order_type.toUpper());
-        set(3, QString::number(o.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(4, o.price ? QString::number(*o.price, 'f', 2) : QStringLiteral("MKT"), QColor(),
+        set(3, format_size(o.quantity), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(4, o.price ? format_price_plain(*o.price) : QStringLiteral("MKT"), QColor(),
             Qt::AlignRight | Qt::AlignVCenter);
         set(5, o.status.toUpper(), kColorSec());
 
@@ -746,8 +790,8 @@ void CryptoBottomPanel::set_trades(const QVector<trading::PtTrade>& trades) {
 
         set(0, t.symbol);
         set(1, t.side.toUpper(), t.side == "buy" ? kColorPos() : kColorNeg());
-        set(2, QString::number(t.price, 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(3, QString::number(t.quantity, 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(2, format_price_plain(t.price), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(3, format_size(t.quantity), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, QString::number(t.fee, 'f', 4), kColorSec(), Qt::AlignRight | Qt::AlignVCenter);
         set(5, QString::number(t.pnl, 'f', 2), t.pnl >= 0 ? kColorPos() : kColorNeg(),
             Qt::AlignRight | Qt::AlignVCenter);
@@ -786,8 +830,8 @@ void CryptoBottomPanel::set_market_info(const MarketInfoData& info) {
     if (!info.has_data)
         return;
     funding_label_->setText(QString("%1%").arg(info.funding_rate * 100.0, 0, 'f', 4));
-    mark_label_->setText(QString("$%1").arg(info.mark_price, 0, 'f', 2));
-    index_label_->setText(QString("$%1").arg(info.index_price, 0, 'f', 2));
+    mark_label_->setText(format_price_usd(info.mark_price));
+    index_label_->setText(format_price_usd(info.index_price));
     oi_label_->setText(QString("$%1M").arg(info.open_interest_value / 1e6, 0, 'f', 2));
     fees_label_->setText(
         QString("%1% / %2%").arg(info.maker_fee * 100, 0, 'f', 3).arg(info.taker_fee * 100, 0, 'f', 3));
@@ -824,15 +868,20 @@ void CryptoBottomPanel::set_live_positions(const QJsonArray& positions) {
         };
 
         const QString side_str = p.value("side").toString();
+        const double contracts = p.value("contracts").toDouble();
+        const double entry_px = p.value("entryPrice").toDouble();
         set(0, p.value("symbol").toString());
         set(1, side_str.toUpper(), side_str.contains("long") ? kColorPos() : kColorNeg());
-        set(2, QString::number(p.value("contracts").toDouble(), 'f', 4), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(3, QString::number(p.value("entryPrice").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(4, QString::number(p.value("markPrice").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(2, format_size(contracts), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(3, format_price_plain(entry_px), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(4, format_price_plain(p.value("markPrice").toDouble()), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         const double pnl = p.value("unrealizedPnl").toDouble();
         set(5, QString::number(pnl, 'f', 2), pnl >= 0 ? kColorPos() : kColorNeg(), Qt::AlignRight | Qt::AlignVCenter);
         set(6, QString::number(p.value("leverage").toDouble(), 'f', 0) + QStringLiteral("x"), QColor(),
             Qt::AlignRight | Qt::AlignVCenter);
+
+        ensure_item(positions_table_, i, 2)->setData(kExactValueRole, contracts);
+        ensure_item(positions_table_, i, 3)->setData(kExactValueRole, entry_px);
     }
     positions_table_->setUpdatesEnabled(true);
     update_empty_state(positions_table_, positions_stack_, n);
@@ -862,8 +911,8 @@ void CryptoBottomPanel::set_live_orders(const QJsonArray& orders) {
         set(0, o.value("symbol").toString());
         set(1, side_str.toUpper(), side_str == "buy" ? kColorPos() : kColorNeg());
         set(2, o.value("type").toString().toUpper());
-        set(3, QString::number(o.value("amount").toDouble(), 'f', 4), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(4, QString::number(o.value("price").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(3, format_size(o.value("amount").toDouble()), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(4, format_price_plain(o.value("price").toDouble()), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(5, o.value("status").toString().toUpper(), kColorSec());
 
         auto* existing_btn = qobject_cast<QPushButton*>(orders_table_->cellWidget(i, 6));
@@ -912,8 +961,8 @@ void CryptoBottomPanel::update_my_trades(const QJsonObject& json) {
 
         set(0, t.value("symbol").toString());
         set(1, side.toUpper(), side == "buy" ? kColorPos() : kColorNeg());
-        set(2, QString::number(t.value("price").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
-        set(3, QString::number(t.value("amount").toDouble(), 'f', 6), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(2, format_price_plain(t.value("price").toDouble()), QColor(), Qt::AlignRight | Qt::AlignVCenter);
+        set(3, format_size(t.value("amount").toDouble()), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(4, QString::number(t.value("cost").toDouble(), 'f', 2), QColor(), Qt::AlignRight | Qt::AlignVCenter);
         set(5, QString::number(t.value("fee").toDouble(), 'f', 6), kColorSec(), Qt::AlignRight | Qt::AlignVCenter);
         set(6, t.value("fee_currency").toString(), kColorTert());

@@ -1,4 +1,4 @@
-#include "services/notifications/providers/WebhookProvider.h"
+﻿#include "services/notifications/providers/WebhookProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -7,14 +7,14 @@
 namespace fincept::notifications {
 
 void WebhookProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    url_ = get_str(r, cat + ".url");
+    url_ = get_secret(r, cat + ".url");
     method_ = get_str(r, cat + ".method");
     if (method_.isEmpty())
         method_ = "POST";
 }
 
 void WebhookProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".url", url_, cat);
+    set_secret(r, cat + ".url", url_, cat);
     r.set(cat + ".method", method_, cat);
 }
 

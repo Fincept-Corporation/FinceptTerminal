@@ -582,13 +582,20 @@ QWidget* MaritimeScreen::build_right_panel() {
     place_table_->horizontalHeader()->setStretchLastSection(true);
     place_table_->setMinimumHeight(120);
     place_table_->setStyleSheet(table_ss());
-    // Click a suggestion → fill bbox + load vessels in that area.
-    connect(place_table_, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) {
+    place_table_->setAccessibleName(tr("Place search results"));
+    place_table_->setAccessibleDescription(tr("Click or press Enter on a place to load vessels in its bounding box."));
+    // Click (or Enter) a suggestion → fill bbox + load vessels in that area.
+    // This was wired to currentCellChanged, which also fires on every arrow-key
+    // move — walking the list with the keyboard issued a metered vessel
+    // area-search per row.
+    auto pick_place = [this](int row, int) {
         if (row < 0 || row >= place_results_.size())
             return;
         const auto& p = place_results_[row];
         run_area_search(p.min_lat, p.max_lat, p.min_lng, p.max_lng);
-    });
+    };
+    connect(place_table_, &QTableWidget::cellClicked, this, pick_place);
+    connect(place_table_, &QTableWidget::cellActivated, this, pick_place);
     vl->addWidget(place_table_);
 
     // ── Area Search (Advanced — raw lat/long) ───────────────────────────────
@@ -764,9 +771,12 @@ QWidget* MaritimeScreen::build_right_panel() {
     ports_table_->horizontalHeader()->setStretchLastSection(true);
     ports_table_->setMinimumHeight(160);
     ports_table_->setStyleSheet(table_ss());
-    // Click → drop an AMBER pin on the existing world map to distinguish from
-    // the green vessel pins, then re-fit the camera.
-    connect(ports_table_, &QTableWidget::currentCellChanged, this, [this](int row, int, int, int) {
+    ports_table_->setAccessibleName(tr("Port search results"));
+    ports_table_->setAccessibleDescription(tr("Click or press Enter on a port to plot it on the map."));
+    // Click (or Enter) → drop an AMBER pin on the existing world map to
+    // distinguish from the green vessel pins, then re-fit the camera. Was on
+    // currentCellChanged, so arrow-keying the list flew the map on every row.
+    auto pick_port = [this](int row, int) {
         if (row < 0 || row >= port_results_.size() || !map_widget_)
             return;
         const auto& p = port_results_[row];
@@ -781,7 +791,9 @@ QWidget* MaritimeScreen::build_right_panel() {
         pin.id = -1;
         map_widget_->add_pin(pin);
         map_widget_->fly_to(p.latitude, p.longitude);
-    });
+    };
+    connect(ports_table_, &QTableWidget::cellClicked, this, pick_port);
+    connect(ports_table_, &QTableWidget::cellActivated, this, pick_port);
     vl->addWidget(ports_table_);
 
     // ── Route Detail ───────────────────────────────────────────────────────
@@ -830,13 +842,8 @@ QWidget* MaritimeScreen::build_right_panel() {
 
     // Suppressed: hardcoded "system status" placeholders (AIS Transponders /
     // Satellite Imagery / 10 corridors / 13 SATs / 6 ports) — none of these
-    // figures come from the API. Restore once a real backend exposes them.
-    QVector<QPair<QString, QString>> statuses;
-    for (const auto& [text, color] : statuses) {
-        auto* lbl = new QLabel(QString::fromUtf8("\u25CF ") + text, content);
-        lbl->setStyleSheet(QString("color:%1; font-size:8px; font-family:%2;").arg(color).arg(ui::fonts::DATA_FAMILY));
-        vl->addWidget(lbl);
-    }
+    // figures come from the API. The empty vector + dead loop that replaced
+    // them has been removed; restore a real block once a backend exposes it.
 
     classified_footer_ = new QLabel(tr("CLASSIFIED — AUTHORIZED PERSONNEL ONLY"), content);
     classified_footer_->setWordWrap(true);

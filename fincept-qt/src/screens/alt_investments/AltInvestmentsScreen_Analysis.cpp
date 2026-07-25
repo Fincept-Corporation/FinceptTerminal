@@ -540,11 +540,15 @@ QJsonObject AltInvestmentsScreen::collect_form_data() const {
         } else {
             if (auto* sp = qobject_cast<QDoubleSpinBox*>(w)) {
                 double val = sp->value();
+                // Scale and percent-conversion are independent concerns: a field
+                // can legitimately be entered in billions *and* be a rate. The
+                // old else-if chain silently dropped divide_100 whenever a
+                // B/M suffix was present.
                 if (f.suffix == "B")
                     val *= 1e9;
                 else if (f.suffix == "M")
                     val *= 1e6;
-                else if (f.divide_100)
+                if (f.divide_100)
                     val /= 100.0;
                 form[f.key] = val;
             }
@@ -632,10 +636,17 @@ void AltInvestmentsScreen::display_verdict(const QJsonObject& result, const QStr
 
     QString badge_color, badge_bg;
     const QString lcat = category.toLower();
-    if (lcat.contains("good") || lcat.contains("ok")) {
+    // Short verdict tokens are matched as WHOLE WORDS. Substring matching made
+    // "ok" fire on any category containing those two letters — "token",
+    // "broker", "lookback", "stockholder" — painting an unrated result green as
+    // if the analyzer had approved it. Long unambiguous words stay substring
+    // matches so "flawed"/"cautionary" still hit.
+    const QStringList words = lcat.split(QRegularExpression(R"([^a-z]+)"), Qt::SkipEmptyParts);
+    auto has_word = [&words](const char* w) { return words.contains(QLatin1String(w)); };
+    if (has_word("good") || has_word("ok") || has_word("okay")) {
         badge_color = colors::POSITIVE();
         badge_bg = "rgba(22,163,74,0.15)";
-    } else if (lcat.contains("ugly") || lcat.contains("bad") || lcat.contains("avoid")) {
+    } else if (has_word("ugly") || has_word("bad") || lcat.contains("avoid")) {
         badge_color = colors::NEGATIVE();
         badge_bg = "rgba(220,38,38,0.15)";
     } else if (lcat.contains("flaw") || lcat.contains("warn") || lcat.contains("caution")) {

@@ -219,7 +219,7 @@ void AiChatScreen::changeEvent(QEvent* event) {
 void AiChatScreen::retranslateUi() {
     // Sidebar
     if (new_btn_)
-        new_btn_->setToolTip(tr("New Chat  (Ctrl+N)"));
+        new_btn_->setToolTip(tr("New Chat  (Ctrl+N / Ctrl+K)"));
     if (search_edit_)
         search_edit_->setPlaceholderText(tr("Search sessions..."));
     if (rename_btn_)
@@ -263,7 +263,9 @@ bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
             on_send();
             return true;
         }
-        if (ke->key() == Qt::Key_N && (ke->modifiers() & Qt::ControlModifier)) {
+        // Ctrl+N and Ctrl+K both start a new session (Ctrl+K is the convention
+        // most chat clients use; Ctrl+N was already documented in the tooltip).
+        if ((ke->key() == Qt::Key_N || ke->key() == Qt::Key_K) && (ke->modifiers() & Qt::ControlModifier)) {
             on_new_session();
             return true;
         }

@@ -193,7 +193,12 @@ PortItem* NodeCanvas::port_at(const QPoint& view_pos) const {
 
 void NodeCanvas::drawForeground(QPainter* painter, const QRectF& rect) {
     Q_UNUSED(rect);
-    if (!node_scene_ || !node_scene_->items().isEmpty())
+    // P9: this runs on every canvas repaint. items() materialises a QList of
+    // EVERY graphics item (each node plus all of its ports plus every edge), so
+    // at a few hundred nodes it allocated and populated a multi-thousand-entry
+    // list per frame just to ask "is the canvas empty?". is_empty() is a hash
+    // lookup on the node map.
+    if (!node_scene_ || !node_scene_->is_empty())
         return;
 
     painter->save();

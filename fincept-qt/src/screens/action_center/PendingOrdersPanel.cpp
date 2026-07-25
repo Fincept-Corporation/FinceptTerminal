@@ -9,6 +9,7 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
@@ -75,7 +76,17 @@ void PendingOrdersPanel::build_ui() {
                           "#acApproveAll:hover{background:rgba(34,197,94,0.28);}"
                           "#acRejectAll{background:rgba(220,38,38,0.12);color:%8;border:1px solid %8;"
                           "padding:5px 16px;font-size:11px;font-weight:700;letter-spacing:0.5px;border-radius:2px;}"
-                          "#acRejectAll:hover{background:rgba(220,38,38,0.25);}")
+                          "#acRejectAll:hover{background:rgba(220,38,38,0.25);}"
+                          // Per-row action buttons: hoisted here (P7) so refresh()
+                          // doesn't reparse two stylesheets per row on every update.
+                          "#acRowApprove{background:rgba(34,197,94,0.14);color:%7;border:1px solid %7;"
+                          "padding:2px 10px;font-size:10px;font-weight:700;border-radius:2px;}"
+                          "#acRowApprove:hover{background:rgba(34,197,94,0.28);}"
+                          "#acRowApprove:disabled{color:%5;border-color:%5;background:transparent;}"
+                          "#acRowReject{background:rgba(220,38,38,0.12);color:%8;border:1px solid %8;"
+                          "padding:2px 10px;font-size:10px;font-weight:700;border-radius:2px;}"
+                          "#acRowReject:hover{background:rgba(220,38,38,0.25);}"
+                          "#acRowReject:disabled{color:%5;border-color:%5;background:transparent;}")
                       .arg(fincept::ui::colors::DARK(), fincept::ui::colors::PANEL(), fincept::ui::colors::BORDER(),
                            fincept::ui::colors::AMBER(), fincept::ui::colors::TEXT_SECONDARY(),
                            fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::POSITIVE(),
@@ -173,10 +184,48 @@ void PendingOrdersPanel::build_ui() {
     // ── Wiring ────────────────────────────────────────────────────────────────
     connect(account_combo_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
     connect(status_filter_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
+    approve_all_btn_->setAccessibleName(tr("Approve all pending orders"));
+    reject_all_btn_->setAccessibleName(tr("Reject all pending orders"));
     connect(approve_all_btn_, &QPushButton::clicked, this, [this]() {
         const QString acct = selected_account();
-        auto ans = QMessageBox::question(this, tr("Approve All"), tr("Execute ALL pending orders now?"),
-                                         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        // Bulk approval fires every queued order at the broker in a loop with no
+        // per-order review. Say exactly how many, for which account, how many are
+        // stale, and default to No.
+        const auto pending = ActionCenter::instance().get_pending_orders(acct);
+        if (pending.isEmpty()) {
+            QMessageBox::information(this, tr("Approve All"), tr("There are no pending orders to approve."));
+            return;
+        }
+        int stale_count = 0;
+        int buys = 0;
+        int sells = 0;
+        for (const auto& p : pending) {
+            bool s = false;
+            order_age_text(p.created_at, &s);
+            if (s)
+                ++stale_count;
+            const QString a = p.action.toUpper();
+            if (a == QLatin1String("BUY"))
+                ++buys;
+            else if (a == QLatin1String("SELL"))
+                ++sells;
+        }
+        const QString scope = acct.isEmpty() ? tr("ALL accounts") : account_combo_->currentText();
+        QString body = tr("Send %1 pending order(s) to the broker now?\n\n"
+                          "  Account scope: %2\n"
+                          "  %3 BUY  ·  %4 SELL\n\n"
+                          "Each order executes immediately. There is no per-order review.")
+                           .arg(pending.size())
+                           .arg(scope)
+                           .arg(buys)
+                           .arg(sells);
+        if (stale_count > 0)
+            body += tr("\n\n⚠  %1 of these have been waiting over %2 minutes and will be REFUSED\n"
+                       "as expired rather than executed. Re-place them if you still want the trade.")
+                        .arg(stale_count)
+                        .arg(ActionCenter::kPendingOrderTtlMinutes);
+        const auto ans =
+            QMessageBox::question(this, tr("Approve All"), body, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (ans != QMessageBox::Yes)
             return;
         ActionCenter::instance().approve_all_pending(acct);
@@ -290,7 +339,18 @@ void PendingOrdersPanel::refresh() {
             item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
             table_->setItem(row, col, item);
         };
-        set(kColTime, o.created_at.toString("HH:mm:ss"));
+        // Time column carries the age too: a queued order's staleness is the
+        // single most important thing to know before executing it at market.
+        bool stale = false;
+        const QString age = order_age_text(o.created_at, &stale);
+        auto* time_item = new QTableWidgetItem(o.created_at.toString("HH:mm:ss"));
+        time_item->setToolTip(tr("Queued %1").arg(age));
+        const bool flag_stale = stale && o.status == QLatin1String("pending");
+        time_item->setForeground(flag_stale ? QColor(fincept::ui::colors::WARNING())
+                                            : QColor(fincept::ui::colors::TEXT_PRIMARY()));
+        if (flag_stale)
+            time_item->setText(o.created_at.toString("HH:mm:ss") + QStringLiteral(" ⚠"));
+        table_->setItem(row, kColTime, time_item);
         // Resolve account display name.
         const auto acct_meta = trading::AccountManager::instance().get_account(o.account_id);
         set(kColAccount, acct_meta.display_name.isEmpty() ? o.account_id : acct_meta.display_name);
@@ -320,22 +380,40 @@ void PendingOrdersPanel::refresh() {
             cl->setContentsMargins(4, 2, 4, 2);
             cl->setSpacing(6);
             auto* approve = new QPushButton(tr("Approve"));
+            approve->setObjectName(QStringLiteral("acRowApprove"));
             approve->setCursor(Qt::PointingHandCursor);
-            approve->setStyleSheet(QString("QPushButton{background:rgba(34,197,94,0.14);color:%1;"
-                                           "border:1px solid %1;padding:2px 10px;font-size:10px;"
-                                           "font-weight:700;border-radius:2px;}"
-                                           "QPushButton:hover{background:rgba(34,197,94,0.28);}")
-                                       .arg(fincept::ui::colors::POSITIVE()));
+            approve->setAccessibleName(
+                tr("Approve %1 %2 %3").arg(o.action.toUpper(), o.quantity, o.symbol));
             auto* reject = new QPushButton(tr("Reject"));
+            reject->setObjectName(QStringLiteral("acRowReject"));
             reject->setCursor(Qt::PointingHandCursor);
-            reject->setStyleSheet(QString("QPushButton{background:rgba(220,38,38,0.12);color:%1;"
-                                          "border:1px solid %1;padding:2px 10px;font-size:10px;"
-                                          "font-weight:700;border-radius:2px;}"
-                                          "QPushButton:hover{background:rgba(220,38,38,0.25);}")
-                                      .arg(fincept::ui::colors::NEGATIVE()));
+            reject->setAccessibleName(tr("Reject %1 %2 %3").arg(o.action.toUpper(), o.quantity, o.symbol));
             const QString id = o.id;
-            connect(approve, &QPushButton::clicked, this, [this, id]() { approve_row(id); });
-            connect(reject, &QPushButton::clicked, this, [this, id]() { reject_row(id); });
+            // Latch BOTH buttons off the moment either is clicked. approve_order()
+            // executes against the broker synchronously; a second click before the
+            // table refreshes would otherwise fire a second approval attempt on the
+            // same queued order.
+            // QPointer: approving triggers ActionCenter signals that call refresh(),
+            // which retires these cell widgets while we are still inside the click
+            // handler. Guard before touching them again.
+            QPointer<QPushButton> approve_guard(approve);
+            QPointer<QPushButton> reject_guard(reject);
+            auto set_row_enabled = [approve_guard, reject_guard](bool on) {
+                if (approve_guard)
+                    approve_guard->setEnabled(on);
+                if (reject_guard)
+                    reject_guard->setEnabled(on);
+            };
+            connect(approve, &QPushButton::clicked, this, [this, id, set_row_enabled]() {
+                set_row_enabled(false);
+                if (!approve_row(id)) // user cancelled — restore the row
+                    set_row_enabled(true);
+            });
+            connect(reject, &QPushButton::clicked, this, [this, id, set_row_enabled]() {
+                set_row_enabled(false);
+                if (!reject_row(id))
+                    set_row_enabled(true);
+            });
             cl->addWidget(approve);
             cl->addWidget(reject);
             cl->addStretch(1);
@@ -359,17 +437,87 @@ void PendingOrdersPanel::refresh_stats() {
     stat_sell_->setText(QString::number(s.total_sell));
 }
 
-void PendingOrdersPanel::approve_row(const QString& pending_id) {
-    ActionCenter::instance().approve_order(pending_id);
+// Human-readable age of a queued order, plus whether it is stale enough that
+// approving it could execute against a market that has moved on.
+QString PendingOrdersPanel::order_age_text(const QDateTime& created, bool* stale_out) {
+    const qint64 secs = created.isValid() ? created.secsTo(QDateTime::currentDateTime()) : 0;
+    if (stale_out)
+        *stale_out = (secs >= kStaleOrderSecs);
+    if (!created.isValid())
+        return tr("unknown age");
+    if (secs < 60)
+        return tr("%1s ago").arg(secs);
+    if (secs < 3600)
+        return tr("%1m ago").arg(secs / 60);
+    if (secs < 86400)
+        return tr("%1h %2m ago").arg(secs / 3600).arg((secs % 3600) / 60);
+    return tr("%1d ago").arg(secs / 86400);
 }
 
-void PendingOrdersPanel::reject_row(const QString& pending_id) {
+// Returns true when the action was dispatched (or definitively consumed), false
+// when the user backed out and the row should become interactive again.
+bool PendingOrdersPanel::approve_row(const QString& pending_id) {
+    // Re-read the order rather than trusting the row snapshot: the table is
+    // rebuilt asynchronously from ActionCenter signals, so a row widget can
+    // outlive the state it was rendered from.
+    const auto po_opt = ActionCenter::instance().get_order(pending_id);
+    if (!po_opt) {
+        QMessageBox::warning(this, tr("Approve Order"),
+                             tr("This order is no longer in the queue. Refreshing the list."));
+        refresh();
+        return true;
+    }
+    const PendingOrder& o = *po_opt;
+    if (o.status != QLatin1String("pending")) {
+        QMessageBox::information(this, tr("Approve Order"),
+                                 tr("This order was already %1 — nothing was sent.").arg(o.status));
+        refresh();
+        return true;
+    }
+
+    const auto acct_meta = trading::AccountManager::instance().get_account(o.account_id);
+    const QString acct_label = acct_meta.display_name.isEmpty() ? o.account_id : acct_meta.display_name;
+    bool stale = false;
+    const QString age = order_age_text(o.created_at, &stale);
+
+    // An approval sends a REAL order. Restate every field the user is agreeing
+    // to — previously a single click on a 10px button executed it with no
+    // confirmation and no visibility of price type, exchange or account.
+    QString body = tr("Send this order to the broker now?\n\n"
+                      "  Symbol:     %1\n"
+                      "  Exchange:   %2\n"
+                      "  Side:       %3\n"
+                      "  Quantity:   %4\n"
+                      "  Price type: %5\n"
+                      "  Order type: %6\n"
+                      "  Account:    %7\n"
+                      "  Strategy:   %8\n"
+                      "  Queued:     %9")
+                       .arg(o.symbol, o.exchange.isEmpty() ? tr("—") : o.exchange, o.action.toUpper(), o.quantity,
+                            o.price_type, o.order_type, acct_label, o.strategy, age);
+    if (stale) {
+        body += tr("\n\n⚠  This order has been waiting a long time. The market has almost\n"
+                   "certainly moved since it was queued — a MARKET order will fill at\n"
+                   "today's price, not the price that triggered it.");
+    }
+
+    const auto ans = QMessageBox::question(this, tr("Approve Order"), body,
+                                           QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (ans != QMessageBox::Yes)
+        return false;
+
+    ActionCenter::instance().approve_order(pending_id);
+    return true;
+}
+
+bool PendingOrdersPanel::reject_row(const QString& pending_id) {
     bool ok = false;
     const QString reason = QInputDialog::getText(this, tr("Reject Order"), tr("Rejection reason:"), QLineEdit::Normal,
                                                  tr("Rejected by user"), &ok);
     if (!ok)
-        return;
+        return false;
     ActionCenter::instance().reject_order(pending_id, reason);
+    return true;
 }
 
 // ── ActionCenter signal slots ───────────────────────────────────────────────

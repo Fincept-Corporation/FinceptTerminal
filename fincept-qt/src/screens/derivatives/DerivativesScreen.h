@@ -102,7 +102,20 @@ class DerivativesScreen : public QWidget, public IStatefulScreen {
     QDoubleSpinBox* opt_div_ = nullptr;
     QComboBox* opt_type_ = nullptr;
     QDoubleSpinBox* opt_time_ = nullptr;
+
+    // Implied-volatility panel inputs. These are a SEPARATE set from the
+    // Black-Scholes panel above: the IV card has its own spot / strike / time /
+    // rate / dividend / type fields on screen, and they must be the ones sent to
+    // the solver. They used to be unnamed locals, so everything the user typed
+    // into this card was discarded and the left panel's values were solved
+    // instead — a silently wrong implied vol.
     QDoubleSpinBox* opt_market_price_ = nullptr;
+    QDoubleSpinBox* iv_spot_ = nullptr;
+    QDoubleSpinBox* iv_strike_ = nullptr;
+    QDoubleSpinBox* iv_time_ = nullptr;
+    QDoubleSpinBox* iv_rate_ = nullptr;
+    QDoubleSpinBox* iv_div_ = nullptr;
+    QComboBox* iv_type_ = nullptr;
 
     // FX option inputs
     QDoubleSpinBox* fx_strike_ = nullptr;

@@ -32,9 +32,29 @@ struct WbHealthIndicator {
 };
 
 static const QList<WbHealthIndicator> kWbHealthIndicators = {
-    {"Life Expectancy", "life_expectancy", "years"}, {"Infant Mortality Rate", "infant_mortality", "per 1,000"},
-    {"Literacy Rate (Adult)", "literacy", "%"},      {"Gini Index (Inequality)", "gini", "index"},
-    {"Human Development Index", "hdi", "index"},     {"Poverty Rate ($2.15/day)", "poverty", "%"},
+    {"Life Expectancy", "life_expectancy", "years"},
+    {"Infant Mortality Rate", "infant_mortality", "per 1,000"},
+    {"Literacy Rate (Adult)", "literacy", "%"},
+    {"Gini Index (Inequality)", "gini", "index"},
+    // WAS: {"Human Development Index", "hdi", "index"} — that was wrong in a way
+    // that produced a confident, plausible, and completely different number.
+    //
+    // HDI is published by UNDP, not the World Bank, and the World Bank has no
+    // HDI series. worldbank_health_data.py is honest about this internally: the
+    // "hdi" command calls get_hdi_proxy(), which fetches NY.GNP.PCAP.PP.KD —
+    // GNI per capita, PPP, in constant international dollars. The panel then
+    // presented that five-figure dollar amount as "Human Development Index"
+    // with unit "index". Real HDI is a 0–1 composite of life expectancy,
+    // education and income, so a user comparing this against a published HDI
+    // table would find no relationship whatsoever.
+    //
+    // Relabelled to what the data actually is. Real HDI is available from
+    // scripts/undp_data.py (commands: hdi, gii, mpi) but is NOT wired here: it
+    // requires UNDP_API_KEY and returns the UNDP HDR API's own shape, which
+    // flatten_wb() — which expects World Bank's `records` array — cannot parse.
+    // Wiring it needs a second flattener and a key, and is tracked separately.
+    {"GNI per Capita (PPP, HDI proxy)", "hdi", "int'l $"},
+    {"Poverty Rate ($2.15/day)", "poverty", "%"},
 };
 
 static const QList<QPair<QString, QString>> kWbHealthCountries = {
@@ -56,7 +76,6 @@ QJsonArray WorldBankHealthPanel::flatten_wb(const QJsonObject& response) {
         if (r["value"].isNull() || r["value"].isUndefined())
             continue;
         const double val = r["value"].toDouble();
-        // Skip placeholder zeros for HDI/similar where 0 is not meaningful
         QJsonObject row;
         row["date"] = r["date"].toString();
         row["value"] = val;
@@ -84,7 +103,8 @@ WorldBankHealthPanel::WorldBankHealthPanel(QWidget* parent)
 
 void WorldBankHealthPanel::activate() {
     show_empty(tr("Select an indicator and country, then click FETCH\n"
-                  "Source: World Bank — Health & Development indicators"));
+                  "Source: World Bank Open Data (World Development Indicators) — CC BY-4.0\n"
+                  "Annual observations; years with no survey are omitted, not zero-filled"));
 }
 
 void WorldBankHealthPanel::build_controls(QHBoxLayout* thl) {

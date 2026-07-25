@@ -284,10 +284,12 @@ void DataMappingScreen::retranslateUi() {
     if (cache_ttl_)
         cache_ttl_->setSuffix(tr(" sec"));
     if (encryption_title_)
-        encryption_title_->setText(tr("ENCRYPTION"));
+        encryption_title_->setText(tr("CREDENTIAL STORAGE"));
     if (encryption_detail_)
-        encryption_detail_->setText(tr("API credentials are encrypted with AES-256-GCM before storage.\n"
-                                       "Sensitive data never stored in plaintext."));
+        encryption_detail_->setText(tr("The AUTH VALUE and any credentials placed in HEADERS are saved to the "
+                                       "local application database on this machine, unencrypted.\n"
+                                       "Anything running as your user account can read them. Prefer a scoped, "
+                                       "revocable key over a full-access one."));
 
     // Step 4 — test & save
     if (test_save_panel_title_)
@@ -468,8 +470,9 @@ QVariantMap DataMappingScreen::save_state() const {
         state["api_base_url"] = api_base_url_->text();
     if (api_endpoint_)
         state["api_endpoint"] = api_endpoint_->text();
-    if (api_auth_value_)
-        state["api_auth_value"] = api_auth_value_->text();
+    // SECURITY: api_auth_value_ holds a live bearer token / API key. Screen
+    // state is persisted verbatim, so it is deliberately NOT captured here —
+    // the user re-enters it (or loads a saved mapping) after a restart.
     if (api_headers_)
         state["api_headers"] = api_headers_->toPlainText();
     if (api_body_)
@@ -493,8 +496,8 @@ void DataMappingScreen::restore_state(const QVariantMap& state) {
         api_base_url_->setText(state.value("api_base_url").toString());
     if (api_endpoint_ && state.contains("api_endpoint"))
         api_endpoint_->setText(state.value("api_endpoint").toString());
-    if (api_auth_value_ && state.contains("api_auth_value"))
-        api_auth_value_->setText(state.value("api_auth_value").toString());
+    // "api_auth_value" is intentionally not restored — see save_state(). Older
+    // states may still carry one; ignoring it also lets that stale copy age out.
     if (api_headers_ && state.contains("api_headers"))
         api_headers_->setPlainText(state.value("api_headers").toString());
     if (api_body_ && state.contains("api_body"))

@@ -16,6 +16,8 @@ using namespace fincept::services::prediction;
 
 PolymarketOrderBook::PolymarketOrderBook(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(200);
+    setAccessibleName(tr("Order book"));
+    setToolTip(tr("Click a price level to load it into the trade ticket."));
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
         cache_dirty_ = true;

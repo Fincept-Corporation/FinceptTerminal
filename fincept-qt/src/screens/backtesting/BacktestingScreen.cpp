@@ -99,6 +99,34 @@ void BacktestingScreen::trigger_auto_run() {
 
 void BacktestingScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    // P3: never leave a 1s timer running for a screen the user can't see. The
+    // run itself keeps going; the ticker resumes its count from run_elapsed_.
+    if (run_timer_)
+        run_timer_->stop();
+}
+
+// ── Run ticker (elapsed-time feedback for long commands) ─────────────────────
+
+void BacktestingScreen::start_run_ticker() {
+    if (!run_timer_) {
+        run_timer_ = new QTimer(this);
+        run_timer_->setInterval(1000);
+        connect(run_timer_, &QTimer::timeout, this, [this]() {
+            if (!is_running_) {
+                run_timer_->stop();
+                return;
+            }
+            const qint64 secs = run_elapsed_.elapsed() / 1000;
+            set_status_state(tr("EXECUTING… %1s").arg(secs), ui::colors::WARNING, "rgba(217,119,6,0.08)");
+        });
+    }
+    run_elapsed_.restart();
+    run_timer_->start();
+}
+
+void BacktestingScreen::stop_run_ticker() {
+    if (run_timer_)
+        run_timer_->stop();
 }
 
 void BacktestingScreen::changeEvent(QEvent* e) {

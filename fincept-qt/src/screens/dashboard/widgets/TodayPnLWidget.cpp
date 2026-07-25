@@ -231,7 +231,17 @@ void TodayPnLWidget::apply_styles() {
 void TodayPnLWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("TODAY P&L"));
-    hub_resubscribe(); // re-renders header hint + breakdown labels in the new language
+    // Re-translate the kept captions instead of tearing down and rebuilding
+    // the hub subscription (which the old implementation did, and which
+    // translated nothing).
+    if (day_pnl_label_)
+        day_pnl_label_->setText(tr("Day"));
+    if (realized_pnl_label_)
+        realized_pnl_label_->setText(tr("Realized"));
+    if (positions_label_)
+        positions_label_->setText(tr("Positions"));
+    if (header_hint_ && account_id_.isEmpty())
+        header_hint_->setText(tr("No active account — click gear to configure"));
 }
 
 } // namespace fincept::screens::widgets

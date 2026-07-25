@@ -33,13 +33,21 @@ AlgoTradingScreen::AlgoTradingScreen(QWidget* parent) : QWidget(parent) {
 
     connect(&fincept::algo::AlgoEngine::instance(), &fincept::algo::AlgoEngine::deployments_loaded, this,
             [this](const QVector<AlgoDeployment>& deps) {
+                // "LIVE" must mean real money. Counting paper deployments in this
+                // badge made a paper-only session look like it was trading live
+                // (and vice-versa hid the fact that something real was running).
                 int active = 0;
+                int live = 0;
                 for (const auto& d : deps) {
-                    if (d.status == "running" || d.status == "starting")
-                        ++active;
+                    if (d.status != "running" && d.status != "starting")
+                        continue;
+                    ++active;
+                    if (d.mode == QLatin1String("live"))
+                        ++live;
                 }
                 active_deployments_ = active;
-                deploy_count_label_->setText(tr("%1 LIVE").arg(active));
+                live_deployments_ = live;
+                update_deploy_badge();
             });
 
     LOG_INFO("AlgoTrading", "Screen constructed");
@@ -156,16 +164,32 @@ QWidget* AlgoTradingScreen::build_top_bar() {
 
     hl->addStretch(1);
 
-    // Deployment count badge
-    deploy_count_label_ = new QLabel(tr("%1 LIVE").arg(0), bar);
-    deploy_count_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
-                                               "padding:3px 8px; background:rgba(22,163,74,0.08);"
-                                               "border:1px solid rgba(22,163,74,0.25); border-radius:2px;")
-                                           .arg(ui::colors::POSITIVE())
-                                           .arg(ui::fonts::DATA_FAMILY()));
+    // Running-deployment badge (live vs paper — see update_deploy_badge()).
+    deploy_count_label_ = new QLabel(bar);
     hl->addWidget(deploy_count_label_);
+    update_deploy_badge();
 
     return bar;
+}
+
+void AlgoTradingScreen::update_deploy_badge() {
+    if (!deploy_count_label_)
+        return;
+    const bool has_live = (live_deployments_ > 0);
+    deploy_count_label_->setText(has_live ? tr("%1 LIVE").arg(live_deployments_)
+                                          : tr("%1 PAPER").arg(active_deployments_));
+    deploy_count_label_->setToolTip(tr("%1 deployment(s) running — %2 live, %3 paper")
+                                        .arg(active_deployments_)
+                                        .arg(live_deployments_)
+                                        .arg(active_deployments_ - live_deployments_));
+    deploy_count_label_->setAccessibleName(deploy_count_label_->toolTip());
+    deploy_count_label_->setStyleSheet(
+        QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
+                "padding:3px 8px; background:rgba(%3,0.08);"
+                "border:1px solid rgba(%3,0.25); border-radius:2px;")
+            .arg(has_live ? ui::colors::NEGATIVE() : ui::colors::POSITIVE())
+            .arg(ui::fonts::DATA_FAMILY())
+            .arg(has_live ? "220,38,38" : "22,163,74"));
 }
 
 QWidget* AlgoTradingScreen::build_status_bar() {
@@ -243,8 +267,7 @@ void AlgoTradingScreen::retranslateUi() {
         engine_caption_->setText(tr("ENGINE:"));
     if (status_label_)
         status_label_->setText(tr("IDLE"));
-    if (deploy_count_label_)
-        deploy_count_label_->setText(tr("%1 LIVE").arg(active_deployments_));
+    update_deploy_badge();
 
     // Tab button labels — fixed order matches build_top_bar().
     if (tab_buttons_.size() == 6) {

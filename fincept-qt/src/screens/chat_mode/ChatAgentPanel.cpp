@@ -9,6 +9,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMessageBox>
+#include <QPointer>
 #include <QVBoxLayout>
 
 namespace fincept::chat_mode {
@@ -323,8 +324,16 @@ void ChatAgentPanel::on_tab_changed(int index) {
 
 // ── Refresh methods ───────────────────────────────────────────────────────────
 
+// P8: these five run unprompted (constructor, tab switch, language change) and
+// their callbacks are owned by the ChatModeService singleton, which outlives the
+// panel. A window closed with a request in flight used to land in a dangling
+// `this`. QPointer guard on each.
+
 void ChatAgentPanel::refresh_memory() {
-    ChatModeService::instance().list_memory([this](bool ok, QVector<AgentMemory> memories, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().list_memory([this, self](bool ok, QVector<AgentMemory> memories, QString err) {
+        if (!self)
+            return; // panel destroyed while the request was in flight
         memory_list_->clear();
         if (!ok) {
             auto* item = new QListWidgetItem(tr("Not available."));
@@ -349,7 +358,10 @@ void ChatAgentPanel::refresh_memory() {
 }
 
 void ChatAgentPanel::refresh_schedules() {
-    ChatModeService::instance().list_schedules([this](bool ok, QVector<AgentSchedule> schedules, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().list_schedules([this, self](bool ok, QVector<AgentSchedule> schedules, QString err) {
+        if (!self)
+            return;
         sched_list_->clear();
         if (!ok) {
             auto* item = new QListWidgetItem(tr("Not available."));
@@ -376,7 +388,10 @@ void ChatAgentPanel::refresh_schedules() {
 }
 
 void ChatAgentPanel::refresh_tasks() {
-    ChatModeService::instance().list_tasks([this](bool ok, QVector<AgentTask> tasks, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().list_tasks([this, self](bool ok, QVector<AgentTask> tasks, QString err) {
+        if (!self)
+            return;
         task_list_->clear();
         if (!ok) {
             auto* item = new QListWidgetItem(tr("Not available."));
@@ -414,8 +429,11 @@ void ChatAgentPanel::refresh_tasks() {
 }
 
 void ChatAgentPanel::refresh_mcp_servers() {
+    QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().list_mcp_servers(
-        [this](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
+        [this, self](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
+            if (!self)
+                return;
             mcp_list_->clear();
             if (!ok) {
                 auto* item = new QListWidgetItem(tr("Not available."));
@@ -449,7 +467,10 @@ void ChatAgentPanel::refresh_mcp_servers() {
 }
 
 void ChatAgentPanel::refresh_monitors() {
-    ChatModeService::instance().list_monitors([this](bool ok, QVector<AgentMonitor> monitors, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().list_monitors([this, self](bool ok, QVector<AgentMonitor> monitors, QString err) {
+        if (!self)
+            return;
         monitor_list_->clear();
         if (!ok) {
             auto* item = new QListWidgetItem(tr("Not available."));

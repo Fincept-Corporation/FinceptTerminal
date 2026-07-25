@@ -31,15 +31,20 @@
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonParseError>
+#include <QKeySequence>
 #include <QLineSeries>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QProgressBar>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QShortcut>
 #include <QStackedWidget>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QUrl>
 #include <QValueAxis>
 
@@ -68,6 +73,12 @@ QPushButton* QuantModulePanel::make_run_button(const QString& text, QWidget* par
     auto* btn = new QPushButton(text, parent);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setFixedHeight(32);
+    // Tagged so the panel-wide Ctrl+Enter shortcut (build_ui) can find the run
+    // button belonging to the currently visible tab, and so screen readers
+    // announce something meaningful.
+    btn->setObjectName(QStringLiteral("quantRunButton"));
+    btn->setAccessibleName(text);
+    btn->setAccessibleDescription(tr("Run this analysis (Ctrl+Enter)"));
     btn->setStyleSheet(QString("QPushButton { background:%1; color:%2; font-weight:700; border:none;"
                                "padding:0 20px; border-radius:2px; letter-spacing:0.8px; }"
                                "QPushButton:hover { background:%3; }"
@@ -93,8 +104,13 @@ QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input,
         lbl->setText(label);
     }
     lbl->setStyleSheet(QString("color:%1; background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+    lbl->setBuddy(input);
     hl->addWidget(lbl);
     hl->addWidget(input, 1);
+    // Every parameter control gets an accessible name — without this a screen
+    // reader announces bare "edit"/"combo box" for ~200 unlabeled inputs.
+    if (input && input->accessibleName().isEmpty())
+        input->setAccessibleName(lbl->text().isEmpty() ? label : lbl->text());
     return row;
 }
 
@@ -134,8 +150,8 @@ QJsonObject QuantModulePanel::llm_config_from_combo(QComboBox* combo) const {
     if (profile_id.isEmpty())
         return {};
 
-    auto resolved = LlmProfileRepository::instance().resolve_for_context("ai_quant_lab", profile_id);
-    // resolve_for_context uses context_id as a profile_id hint — use get_profile directly
+    // resolve_for_context() takes the context id, not a profile id — the combo
+    // already holds a concrete profile id, so read it directly.
     auto result = LlmProfileRepository::instance().get_profile(profile_id);
     if (!result.is_ok())
         return {};
@@ -322,6 +338,24 @@ void QuantModulePanel::build_ui() {
 
     scroll->setWidget(content);
     root->addWidget(scroll, 1);
+
+    // ── Ctrl+Enter runs the visible tab's action ─────────────────────────────
+    // One shortcut per panel rather than QPushButton::setShortcut on every run
+    // button: N buttons sharing a window-level shortcut is an "ambiguous
+    // shortcut overload" in Qt and silently does nothing. Scoped to this widget
+    // subtree so it never fires for another screen.
+    auto* run_shortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), this);
+    run_shortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(run_shortcut, &QShortcut::activated, this, [this]() {
+        // isVisible() is false for widgets on a non-current QTabWidget page, so
+        // this resolves to the run button the user is actually looking at.
+        for (auto* btn : this->findChildren<QPushButton*>(QStringLiteral("quantRunButton"))) {
+            if (btn->isVisible() && btn->isEnabled()) {
+                btn->click();
+                return;
+            }
+        }
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -375,17 +409,24 @@ QWidget* QuantModulePanel::build_generic_panel() {
 
     auto* run = make_run_button(tr("EXECUTE"), w);
     connect(run, &QPushButton::clicked, this, [this, params_edit]() {
-        status_label_->setText(tr("Running..."));
         auto cmd_text = text_inputs_["gen_command"]->text().trimmed();
         if (cmd_text.isEmpty())
-            cmd_text = "analyze";
-        auto json_text = params_edit->toPlainText().trimmed();
+            cmd_text = QStringLiteral("analyze");
+        const auto json_text = params_edit->toPlainText().trimmed();
         QJsonObject params;
         if (!json_text.isEmpty()) {
-            auto doc = QJsonDocument::fromJson(json_text.toUtf8());
-            if (!doc.isNull())
-                params = doc.object();
+            // A malformed body used to be dropped silently and the command ran
+            // with no parameters at all.
+            QJsonParseError perr{};
+            const auto doc = QJsonDocument::fromJson(json_text.toUtf8(), &perr);
+            if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+                display_error(tr("JSON parameters must be an object like {\"ticker\":\"AAPL\"} — %1")
+                                  .arg(perr.errorString()));
+                return;
+            }
+            params = doc.object();
         }
+        show_loading(tr("Running %1 %2...").arg(module_.script, cmd_text));
         AIQuantLabService::instance().run_module(module_.id, cmd_text, params);
     });
     vl->addWidget(run);
@@ -417,8 +458,22 @@ void QuantModulePanel::clear_results() {
 
 void QuantModulePanel::display_error(const QString& msg) {
     clear_results();
-    auto* err = new QLabel(msg);
+    if (!results_layout_)
+        return;
+
+    // Python tracebacks can be thousands of lines; an unbounded QLabel makes the
+    // scroll area unusable. Keep the tail — that's where the exception is.
+    constexpr int kMaxChars = 4000;
+    QString text = msg;
+    if (text.size() > kMaxChars)
+        text = tr("… (%1 earlier characters omitted) …\n\n").arg(text.size() - kMaxChars) +
+               text.right(kMaxChars);
+
+    auto* err = new QLabel(text);
     err->setWordWrap(true);
+    // Selectable so the user can copy the traceback into a bug report.
+    err->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    err->setAccessibleName(tr("Error details"));
     err->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
                                "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);"
                                "border-radius:2px;")
@@ -426,14 +481,18 @@ void QuantModulePanel::display_error(const QString& msg) {
                            .arg(ui::fonts::SMALL)
                            .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(err);
-    status_label_->setText(tr("Error"));
+    if (status_label_)
+        status_label_->setText(tr("Error"));
 }
 
 // ── Loading spinner shown while a Python op is in flight ─────────────────────
 
 void QuantModulePanel::show_loading(const QString& message) {
     clear_results();
-    status_label_->setText(message);
+    if (!results_layout_)
+        return;
+    if (status_label_)
+        status_label_->setText(message);
 
     // Container card
     auto* box = new QWidget(this);
@@ -492,10 +551,25 @@ void QuantModulePanel::show_loading(const QString& message) {
 void QuantModulePanel::on_error(const QString& module_id, const QString& message) {
     if (module_id != module_.id)
         return;
-    if (module_id == "rl_trading" && rl_train_button_) {
-        rl_train_button_->setEnabled(true);
+    if (module_id == "rl_trading") {
+        if (rl_train_button_)
+            rl_train_button_->setEnabled(true);
+        if (rl_progress_bar_)
+            rl_progress_bar_->setValue(0);
+        if (rl_progress_stats_)
+            rl_progress_stats_->setText(tr("Training failed — see the log below."));
     }
-    display_error(message);
+    // Rolling Retraining owns a bespoke progress bar; leave it in a readable
+    // failed state rather than a stale "Starting..." forever.
+    if (auto* pb = this->findChild<QProgressBar*>(QStringLiteral("rr_progress")))
+        pb->setFormat(tr("Failed"));
+
+    // message is the script's stderr (PythonRunner::PythonResult::error), so the
+    // user sees the actual traceback. Prefix it with the script that failed —
+    // otherwise a bare traceback gives no clue which module produced it.
+    display_error(message.trimmed().isEmpty()
+                      ? tr("%1 failed with no diagnostic output.").arg(module_.script)
+                      : tr("%1 failed:\n\n%2").arg(module_.script, message.trimmed()));
 }
 
 } // namespace fincept::screens

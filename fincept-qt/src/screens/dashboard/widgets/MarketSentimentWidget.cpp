@@ -186,7 +186,8 @@ void MarketSentimentWidget::hub_subscribe_all() {
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             set_loading_progress(row_cache_.size(), kSentimentSymbols.size());
-            rebuild_from_cache();
+            // One redraw per delivery burst, not one per symbol.
+            schedule_render([this]() { rebuild_from_cache(); });
         });
     }
     hub_active_ = true;

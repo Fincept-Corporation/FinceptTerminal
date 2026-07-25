@@ -27,6 +27,30 @@ namespace fincept::screens {
 
 using namespace fincept::services::algo;
 
+namespace {
+
+// P7: the four per-row action buttons used to carry an inline setStyleSheet
+// each, so rendering a 50-row page cost 200 CSS parses + 200 repolishes — every
+// keystroke in the search box. The skins are identical per column, so they live
+// on the table's stylesheet as ID selectors and the rows only set objectName.
+QString row_button_qss() {
+    using namespace fincept::ui;
+    auto rule = [](const char* id, const QString& color, const QString& hover) {
+        return QString("QPushButton#%1 { background: transparent; color: %2; border: 1px solid %2;"
+                       " font-size: %3px; font-weight: 700; font-family: %4; padding: 1px 8px; }"
+                       "QPushButton#%1:hover { background: %5; }")
+            .arg(QLatin1String(id), color)
+            .arg(fonts::TINY)
+            .arg(fonts::DATA_FAMILY(), hover);
+    };
+    return rule("slRowEdit", colors::CYAN(), QStringLiteral("rgba(34,211,238,0.1)")) +
+           rule("slRowBacktest", colors::POSITIVE(), QStringLiteral("rgba(22,163,74,0.1)")) +
+           rule("slRowDeploy", colors::AMBER(), QStringLiteral("rgba(217,119,6,0.1)")) +
+           rule("slRowDelete", colors::NEGATIVE(), QStringLiteral("rgba(220,38,38,0.1)"));
+}
+
+} // namespace
+
 // ── Constructor ──────────────────────────────────────────────────────────────
 
 StrategyListPanel::StrategyListPanel(QWidget* parent) : QWidget(parent) {
@@ -152,7 +176,8 @@ void StrategyListPanel::build_ui() {
                               .arg(colors::BG_BASE(), colors::BG_SURFACE(), colors::TEXT_PRIMARY())
                               .arg(fonts::SMALL)
                               .arg(fonts::DATA_FAMILY(), colors::BORDER_DIM(), colors::BG_HOVER(), colors::BG_RAISED(),
-                                   colors::TEXT_TERTIARY()));
+                                   colors::TEXT_TERTIARY()) +
+                          row_button_qss());
     root->addWidget(table_, 1);
 
     // ── Pagination bar ───────────────────────────────────────────────────────
@@ -247,27 +272,27 @@ void StrategyListPanel::render_page() {
         id_item->setForeground(QColor(colors::TEXT_TERTIARY()));
         table_->setItem(row, 3, id_item);
 
-        auto make_btn = [&](const QString& text, const QString& color, const QString& hover, int col, auto handler) {
+        // Skins come from the table-level stylesheet (row_button_qss) — rows only
+        // tag an objectName, so a page render costs zero CSS parses.
+        auto make_btn = [&](const QString& text, const char* obj_name, const QString& a11y, int col, auto handler) {
             auto* btn = new QPushButton(text, table_);
+            btn->setObjectName(QLatin1String(obj_name));
             btn->setCursor(Qt::PointingHandCursor);
             btn->setFixedHeight(22);
-            btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
-                                       " font-size: %2px; font-weight: 700; font-family: %3; padding: 1px 8px; }"
-                                       "QPushButton:hover { background: %4; }")
-                                   .arg(color)
-                                   .arg(fonts::TINY)
-                                   .arg(fonts::DATA_FAMILY())
-                                   .arg(hover));
+            btn->setAccessibleName(a11y);
             connect(btn, &QPushButton::clicked, this, handler);
             table_->setCellWidget(row, col, btn);
         };
 
         // Col 4: EDIT (Builder). 5: BACKTEST. 6: DEPLOY. 7: DELETE.
-        make_btn(tr("EDIT"), colors::CYAN(), "rgba(34,211,238,0.1)", 4, [this, row]() { on_edit_clicked(row); });
-        make_btn(tr("BACKTEST"), colors::POSITIVE(), "rgba(22,163,74,0.1)", 5,
+        make_btn(tr("EDIT"), "slRowEdit", tr("Edit strategy %1").arg(s.name), 4,
+                 [this, row]() { on_edit_clicked(row); });
+        make_btn(tr("BACKTEST"), "slRowBacktest", tr("Backtest strategy %1").arg(s.name), 5,
                  [this, row]() { on_backtest_clicked(row); });
-        make_btn(tr("DEPLOY"), colors::AMBER(), "rgba(217,119,6,0.1)", 6, [this, row]() { on_deploy_clicked(row); });
-        make_btn(tr("DELETE"), colors::NEGATIVE(), "rgba(220,38,38,0.1)", 7, [this, row]() { on_delete_clicked(row); });
+        make_btn(tr("DEPLOY"), "slRowDeploy", tr("Deploy strategy %1").arg(s.name), 6,
+                 [this, row]() { on_deploy_clicked(row); });
+        make_btn(tr("DELETE"), "slRowDelete", tr("Delete strategy %1").arg(s.name), 7,
+                 [this, row]() { on_delete_clicked(row); });
     }
 
     update_pagination_controls();
@@ -292,6 +317,21 @@ void StrategyListPanel::go_to_page(int page) {
 
 // ── Filter + sort ─────────────────────────────────────────────────────────────
 
+void StrategyListPanel::apply_sort() {
+    const int index = sort_combo_ ? sort_combo_->currentIndex() : 0;
+    if (index == 1) { // Name Z→A
+        std::sort(filtered_.begin(), filtered_.end(),
+                  [](const AlgoStrategy& a, const AlgoStrategy& b) { return a.name > b.name; });
+    } else if (index == 2) { // Category, then name
+        std::sort(filtered_.begin(), filtered_.end(), [](const AlgoStrategy& a, const AlgoStrategy& b) {
+            return a.description < b.description || (a.description == b.description && a.name < b.name);
+        });
+    } else { // Name A→Z (default)
+        std::sort(filtered_.begin(), filtered_.end(),
+                  [](const AlgoStrategy& a, const AlgoStrategy& b) { return a.name < b.name; });
+    }
+}
+
 void StrategyListPanel::on_filter_changed(const QString&) {
     const QString text = search_edit_->text().trimmed().toLower();
     const QString cat = cat_combo_->currentIndex() == 0 ? QString() : cat_combo_->currentText();
@@ -306,22 +346,17 @@ void StrategyListPanel::on_filter_changed(const QString&) {
         filtered_.append(s);
     }
 
+    // Re-apply the active sort: filtering rebuilt `filtered_` in load order, so
+    // without this the SORT selector silently reverted to "as loaded" on every
+    // keystroke in the search box.
+    apply_sort();
+
     current_page_ = 0;
     render_page();
 }
 
-void StrategyListPanel::on_sort_changed(int index) {
-    if (index == 0) { // Name A→Z
-        std::sort(filtered_.begin(), filtered_.end(),
-                  [](const AlgoStrategy& a, const AlgoStrategy& b) { return a.name < b.name; });
-    } else if (index == 1) { // Name Z→A
-        std::sort(filtered_.begin(), filtered_.end(),
-                  [](const AlgoStrategy& a, const AlgoStrategy& b) { return a.name > b.name; });
-    } else if (index == 2) { // Category
-        std::sort(filtered_.begin(), filtered_.end(), [](const AlgoStrategy& a, const AlgoStrategy& b) {
-            return a.description < b.description || (a.description == b.description && a.name < b.name);
-        });
-    }
+void StrategyListPanel::on_sort_changed(int) {
+    apply_sort();
     current_page_ = 0;
     render_page();
 }
@@ -350,12 +385,9 @@ void StrategyListPanel::on_strategies_loaded(QVector<AlgoStrategy> strategies) {
     }
     cat_combo_->blockSignals(false);
 
-    // Reset filtered to full list, sort by name
-    filtered_ = strategies_;
-    std::sort(filtered_.begin(), filtered_.end(),
-              [](const AlgoStrategy& a, const AlgoStrategy& b) { return a.name < b.name; });
-    current_page_ = 0;
-    render_page();
+    // Re-apply the live search/category filter and the active sort so a background
+    // reload doesn't silently reset what the user is looking at.
+    on_filter_changed(search_edit_->text());
 
     LOG_INFO("AlgoTrading", QString("Loaded %1 strategies").arg(strategies_.size()));
 }

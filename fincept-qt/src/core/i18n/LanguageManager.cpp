@@ -85,6 +85,16 @@ QString LanguageManager::detect_system_language() {
     const QStringList preferred = QLocale::system().uiLanguages(QLocale::TagSeparator::Underscore);
 
     for (const QString& ui : preferred) {
+        // Script-tagged locales first. macOS reports UI languages with a script
+        // subtag ("zh_Hant_TW", "zh_Hans_CN"), which never matches our
+        // region-coded .qm names directly — the loop below would strip it down
+        // to "zh" and the prefix fallback would then hand every Chinese system
+        // the Simplified build, including Traditional ones. QLocale resolves
+        // the likely territory for us ("zh_Hant_TW" → "zh_TW").
+        const QString resolved = QLocale(ui).name();
+        if (supported.contains(resolved))
+            return resolved;
+
         // Strip script/region tags from longest to shortest (e.g.
         // "zh_Hans_CN" → "zh_Hans" → "zh") and try each form against our
         // supported set. This catches both exact matches ("zh_CN") and

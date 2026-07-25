@@ -59,12 +59,24 @@ class NotesScreen : public QWidget, public IStatefulScreen {
     void enter_edit_mode();
     void enter_view_mode();
 
+    /// Snapshot the editor fields into one comparable string. Used to detect
+    /// unsaved edits without tracking every widget's changed() signal.
+    QString editor_fingerprint() const;
+    /// True when the editor is open and its contents differ from what was
+    /// loaded into it.
+    bool has_unsaved_edits() const;
+    /// Ask before throwing away an in-progress edit. Returns true if the caller
+    /// may proceed (nothing pending, or the user chose to discard/save).
+    bool confirm_leave_editor();
+
     // Data
     QVector<fincept::FinancialNote> notes_;
     QVector<fincept::FinancialNote> filtered_notes_;
     QString current_category_ = "ALL";
     int selected_note_id_ = -1;
     bool is_editing_ = false;
+    /// editor_fingerprint() as of the last load/save into the editor.
+    QString editor_baseline_;
 
     // Category sidebar
     QListWidget* category_list_ = nullptr;

@@ -27,6 +27,7 @@
 #include <QCompleter>
 #include <QDateTime>
 #include <QHBoxLayout>
+#include <QJsonObject>
 #include <QPointer>
 #include <QSplitter>
 #include <QStringListModel>
@@ -110,7 +111,15 @@ void CryptoTradingScreen::async_fetch_live_positions() {
             // Widget destroyed before dispatch — no counter to decrement.
             return;
         }
-        auto result = ExchangeService::instance().fetch_positions_live(self->selected_symbol_);
+        // A throw here would skip the invokeMethod below, leaving
+        // `live_inflight_` permanently above zero — `refresh_live_data()`
+        // then returns early on every tick and LIVE data never updates again.
+        QJsonObject result;
+        try {
+            result = ExchangeService::instance().fetch_positions_live(self->selected_symbol_);
+        } catch (...) {
+            LOG_WARN("CryptoTrading", "fetch_positions_live threw");
+        }
         QMetaObject::invokeMethod(
             self,
             [self, result]() {
@@ -129,7 +138,12 @@ void CryptoTradingScreen::async_fetch_live_orders() {
     (void)QtConcurrent::run([self]() {
         if (!self)
             return;
-        auto result = ExchangeService::instance().fetch_open_orders_live(self->selected_symbol_);
+        QJsonObject result;
+        try {
+            result = ExchangeService::instance().fetch_open_orders_live(self->selected_symbol_);
+        } catch (...) {
+            LOG_WARN("CryptoTrading", "fetch_open_orders_live threw");
+        }
         QMetaObject::invokeMethod(
             self,
             [self, result]() {
@@ -145,13 +159,30 @@ void CryptoTradingScreen::async_fetch_live_orders() {
 
 void CryptoTradingScreen::async_fetch_live_balance() {
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    // The quote currency of the pair actually being traded, so a USD- or
+    // USDC-margined account isn't reported as $0.00. Hard-coding "USDT" made
+    // the whole LIVE balance read empty on every non-USDT venue — which looks
+    // identical to a genuinely empty account right next to a live BUY button.
+    const int slash = selected_symbol_.indexOf(QLatin1Char('/'));
+    QString quote = slash > 0 ? selected_symbol_.mid(slash + 1) : QStringLiteral("USDT");
+    const int colon = quote.indexOf(QLatin1Char(':')); // settled perps: "BTC/USDC:USDC"
+    if (colon > 0)
+        quote = quote.left(colon);
+    (void)QtConcurrent::run([self, quote]() {
         if (!self)
             return;
-        auto result = ExchangeService::instance().fetch_balance();
+        QJsonObject result;
+        try {
+            result = ExchangeService::instance().fetch_balance();
+        } catch (...) {
+            // Must still post back: `live_inflight_` is only decremented on the
+            // UI thread, and if it never reaches zero `refresh_live_data()`
+            // skips every subsequent tick and live data freezes permanently.
+            result = QJsonObject{{QStringLiteral("error"), QStringLiteral("balance fetch threw")}};
+        }
         QMetaObject::invokeMethod(
             self,
-            [self, result]() {
+            [self, result, quote]() {
                 if (!self)
                     return;
                 // A daemon/bridge failure (e.g. bad API key) returns an "error"
@@ -163,9 +194,22 @@ void CryptoTradingScreen::async_fetch_live_balance() {
                     self->bottom_panel_->set_balance_unavailable(
                         result.value("error").toString(QStringLiteral("no data")));
                 } else {
-                    double total = result.value("total").toObject().value("USDT").toDouble();
-                    double free = result.value("free").toObject().value("USDT").toDouble();
-                    double used = result.value("used").toObject().value("USDT").toDouble();
+                    const QJsonObject totals = result.value("total").toObject();
+                    // Fall back through the common stable quotes so an account
+                    // funded in USDC on a USDT-quoted pair still shows.
+                    QString ccy = quote;
+                    if (!totals.contains(ccy)) {
+                        for (const QString& alt : {QStringLiteral("USDT"), QStringLiteral("USDC"),
+                                                   QStringLiteral("USD"), QStringLiteral("BUSD")}) {
+                            if (totals.contains(alt)) {
+                                ccy = alt;
+                                break;
+                            }
+                        }
+                    }
+                    const double total = totals.value(ccy).toDouble();
+                    const double free = result.value("free").toObject().value(ccy).toDouble();
+                    const double used = result.value("used").toObject().value(ccy).toDouble();
                     self->bottom_panel_->set_live_balance(free, total, used);
                     self->order_entry_->set_balance(free);
                 }
@@ -184,7 +228,12 @@ void CryptoTradingScreen::async_fetch_my_trades() {
     (void)QtConcurrent::run([self]() {
         if (!self)
             return;
-        auto result = ExchangeService::instance().fetch_my_trades(self->selected_symbol_);
+        QJsonObject result;
+        try {
+            result = ExchangeService::instance().fetch_my_trades(self->selected_symbol_);
+        } catch (...) {
+            LOG_WARN("CryptoTrading", "fetch_my_trades threw");
+        }
         QMetaObject::invokeMethod(
             self,
             [self, result]() {

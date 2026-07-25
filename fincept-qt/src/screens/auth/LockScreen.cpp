@@ -315,6 +315,14 @@ void LockScreen::build_setup_page() {
     connect(setup_pin_input_, &QLineEdit::returnPressed, this, [this]() { setup_confirm_input_->setFocus(); });
     connect(setup_confirm_input_, &QLineEdit::returnPressed, this, &LockScreen::on_setup_submit);
 
+    setup_pin_input_->setAccessibleName(tr("New PIN"));
+    setup_pin_input_->setAccessibleDescription(tr("Six digit PIN used to unlock the terminal"));
+    setup_confirm_input_->setAccessibleName(tr("Confirm new PIN"));
+    setup_btn_->setAccessibleName(tr("Set PIN"));
+    setup_error_->setAccessibleName(tr("PIN setup error"));
+    setTabOrder(setup_pin_input_, setup_confirm_input_);
+    setTabOrder(setup_confirm_input_, setup_btn_);
+
     pages_->addWidget(page); // index 0
 }
 
@@ -405,19 +413,28 @@ void LockScreen::build_unlock_page() {
     // "Forgot PIN?" escape — a forgotten PIN is recoverable by signing in again
     // (this clears the PIN). Without this link the only path was to fail the unlock
     // kMaxAttempts times through escalating lockouts, which is minutes of dead-end.
-    auto* forgot_link = new QPushButton(tr("Forgot PIN?  Sign in again"));
-    forgot_link->setCursor(Qt::PointingHandCursor);
-    forgot_link->setStyleSheet(QString("QPushButton{color:%1; background:transparent; border:none;"
-                                       "font-size:12px; text-decoration:underline;"
-                                       "font-family:'Consolas','Courier New',monospace;}"
-                                       "QPushButton:hover{color:%2;}")
-                                   .arg(ui::colors::TEXT_DIM(), ui::colors::AMBER()));
-    connect(forgot_link, &QPushButton::clicked, this, [this]() { emit reauth_requested(); });
-    vl->addWidget(forgot_link, 0, Qt::AlignHCenter);
+    unlock_forgot_btn_ = new QPushButton(tr("Forgot PIN?  Sign in again"));
+    unlock_forgot_btn_->setCursor(Qt::PointingHandCursor);
+    unlock_forgot_btn_->setStyleSheet(QString("QPushButton{color:%1; background:transparent; border:none;"
+                                              "font-size:12px; text-decoration:underline;"
+                                              "font-family:'Consolas','Courier New',monospace;}"
+                                              "QPushButton:hover{color:%2;}")
+                                          .arg(ui::colors::TEXT_DIM(), ui::colors::AMBER()));
+    connect(unlock_forgot_btn_, &QPushButton::clicked, this, [this]() { emit reauth_requested(); });
+    vl->addWidget(unlock_forgot_btn_, 0, Qt::AlignHCenter);
 
     vl->addStretch();
 
     connect(unlock_pin_input_, &QLineEdit::returnPressed, this, &LockScreen::on_unlock_submit);
+
+    unlock_pin_input_->setAccessibleName(tr("Unlock PIN"));
+    unlock_pin_input_->setAccessibleDescription(tr("Six digit PIN that unlocks the terminal"));
+    unlock_btn_->setAccessibleName(tr("Unlock terminal"));
+    unlock_forgot_btn_->setAccessibleName(tr("Forgot PIN, sign in again"));
+    unlock_error_->setAccessibleName(tr("Unlock error"));
+    unlock_lockout_label_->setAccessibleName(tr("Lockout status"));
+    setTabOrder(unlock_pin_input_, unlock_btn_);
+    setTabOrder(unlock_btn_, unlock_forgot_btn_);
 
     pages_->addWidget(page); // index 1
 }
@@ -471,6 +488,9 @@ void LockScreen::build_lockout_page() {
 
     vl->addStretch();
 
+    lockout_reauth_btn_->setAccessibleName(tr("Sign in again to reset your PIN"));
+    lockout_msg_->setAccessibleName(tr("Account locked message"));
+
     pages_->addWidget(page); // index 2
 }
 
@@ -506,6 +526,8 @@ void LockScreen::retranslateUi() {
         unlock_pin_lbl_->setText(tr("PIN"));
     if (unlock_btn_)
         unlock_btn_->setText(tr("  UNLOCK  "));
+    if (unlock_forgot_btn_)
+        unlock_forgot_btn_->setText(tr("Forgot PIN?  Sign in again"));
 
     if (lockout_title_)
         lockout_title_->setText(tr("ACCOUNT LOCKED"));
@@ -579,6 +601,16 @@ void LockScreen::show_lockout() {
 void LockScreen::on_setup_submit() {
     const QString pin = setup_pin_input_->text();
     const QString confirm = setup_confirm_input_->text();
+
+    // Length is checked first so an empty/short entry gets a specific message
+    // instead of falling through to PinManager's generic rejection (an empty
+    // PIN also equals an empty confirmation, so the mismatch check misses it).
+    if (pin.length() != 6) {
+        setup_error_->setText(tr("PIN must be exactly 6 digits"));
+        setup_error_->show();
+        setup_pin_input_->setFocus();
+        return;
+    }
 
     // Clear BOTH fields on mismatch — see header note about masked-text leak.
     if (pin != confirm) {

@@ -1,4 +1,4 @@
-#include "services/notifications/providers/SMSProvider.h"
+﻿#include "services/notifications/providers/SMSProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -8,14 +8,14 @@ namespace fincept::notifications {
 
 void SMSProvider::load_fields(SettingsRepository& r, const QString& cat) {
     account_sid_ = get_str(r, cat + ".account_sid");
-    auth_token_ = get_str(r, cat + ".auth_token");
+    auth_token_ = get_secret(r, cat + ".auth_token");
     from_number_ = get_str(r, cat + ".from_number");
     to_number_ = get_str(r, cat + ".to_number");
 }
 
 void SMSProvider::save_fields(SettingsRepository& r, const QString& cat) {
     r.set(cat + ".account_sid", account_sid_, cat);
-    r.set(cat + ".auth_token", auth_token_, cat);
+    set_secret(r, cat + ".auth_token", auth_token_, cat);
     r.set(cat + ".from_number", from_number_, cat);
     r.set(cat + ".to_number", to_number_, cat);
 }

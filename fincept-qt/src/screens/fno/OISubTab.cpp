@@ -108,6 +108,7 @@ void OISubTab::setup_ui() {
     picker_lbl_ = new QLabel(tr("STRIKE"), intraday_wrap);
     picker_lbl_->setObjectName("fnoOIPickerLabel");
     strike_combo_ = new QComboBox(intraday_wrap);
+    strike_combo_->setAccessibleName(tr("Strike for intraday open-interest chart"));
     picker_row->addWidget(picker_lbl_);
     picker_row->addWidget(strike_combo_);
     picker_row->addStretch(1);
@@ -133,14 +134,22 @@ void OISubTab::setup_ui() {
 
 QVariantMap OISubTab::save_state() const {
     QVariantMap m;
-    m["strike_index"] = strike_combo_ ? strike_combo_->currentIndex() : -1;
+    // Persist the strike VALUE, not the combo index: the index means nothing
+    // across sessions (different ladder, different ATM) and restoring it would
+    // silently chart a different strike than the one the user was watching.
+    m["strike"] = selected_strike_;
     return m;
 }
 
 void OISubTab::restore_state(const QVariantMap& state) {
-    Q_UNUSED(state);
-    // Strike combo content is rebuilt from chain on first publish — restore
-    // happens implicitly when the user re-navigates and the chain arrives.
+    const double strike = state.value("strike", 0.0).toDouble();
+    if (strike <= 0)
+        return;
+    selected_strike_ = strike;
+    // Applied when the next chain publish rebuilds the combo; if the chain is
+    // already here, apply it immediately.
+    if (!last_chain_.rows.isEmpty())
+        rebuild_strike_combo(last_chain_);
 }
 
 void OISubTab::showEvent(QShowEvent* e) {
@@ -170,14 +179,13 @@ void OISubTab::changeEvent(QEvent* event) {
 void OISubTab::retranslateUi() {
     if (picker_lbl_)
         picker_lbl_->setText(tr("STRIKE"));
-    // Rebuild the combo so the "(ATM)" suffix picks up the new language,
-    // preserving the current selection.
-    if (strike_combo_ && strike_combo_->count() > 0 && !last_chain_.rows.isEmpty()) {
-        const int keep = strike_combo_->currentIndex();
+    if (strike_combo_)
+        strike_combo_->setAccessibleName(tr("Strike for intraday open-interest chart"));
+    // Rebuild the combo so the "(ATM)" suffix picks up the new language.
+    // rebuild_strike_combo re-selects by strike value, so the user's pick is
+    // preserved without touching indices.
+    if (strike_combo_ && strike_combo_->count() > 0 && !last_chain_.rows.isEmpty())
         rebuild_strike_combo(last_chain_);
-        if (keep >= 0 && keep < strike_combo_->count())
-            strike_combo_->setCurrentIndex(keep);
-    }
 }
 
 void OISubTab::on_chain_published(const QString& topic, const QVariant& v) {
@@ -190,49 +198,69 @@ void OISubTab::on_chain_published(const QString& topic, const QVariant& v) {
     pain_chart_->set_chain(last_chain_);
     buildup_->buildup_model()->set_chain(last_chain_);
 
-    // Rebuild strike combo whenever the underlying changes (different strike
-    // ladder). For chain refreshes on the same underlying, leave the combo
-    // alone so the user's selection sticks.
-    if (last_chain_.underlying != current_underlying_) {
+    // Rebuild the strike combo whenever the ladder itself can have changed:
+    // a new underlying OR a new expiry (each expiry has its own strike set),
+    // or a differently-sized ladder on the same series (the chain window slides
+    // as the ATM moves). On a plain refresh the combo is left alone so the
+    // user's selection sticks.
+    const bool ladder_changed = last_chain_.underlying != current_underlying_ ||
+                                last_chain_.expiry != current_expiry_ ||
+                                strike_combo_->count() != last_chain_.rows.size();
+    if (ladder_changed) {
         current_underlying_ = last_chain_.underlying;
+        current_expiry_ = last_chain_.expiry;
         rebuild_strike_combo(last_chain_);
     }
-    // Strike list might be empty if the publish came in with rows but combo
-    // hadn't been seeded yet (e.g. underlying just changed mid-publish).
-    if (strike_combo_->count() == 0)
-        rebuild_strike_combo(last_chain_);
 }
 
 void OISubTab::rebuild_strike_combo(const OptionChain& chain) {
     QSignalBlocker block(strike_combo_);
     strike_combo_->clear();
+    // The item's userData is the STRIKE, not the row index. A row index goes
+    // stale the moment the chain republishes with a shifted window, which would
+    // silently point the intraday OI chart at a different strike than the combo
+    // label claims.
     int atm_idx = 0;
+    int keep_idx = -1;
     for (int i = 0; i < chain.rows.size(); ++i) {
         const auto& r = chain.rows[i];
-        strike_combo_->addItem(strike_label(r), QVariant(int(i)));
+        strike_combo_->addItem(strike_label(r), QVariant(r.strike));
         if (r.is_atm)
             atm_idx = i;
+        if (selected_strike_ > 0 && std::abs(r.strike - selected_strike_) < 1e-6)
+            keep_idx = i;
     }
-    if (chain.rows.isEmpty())
+    if (chain.rows.isEmpty()) {
+        intraday_->clear_subscription();
         return;
-    strike_combo_->setCurrentIndex(atm_idx);
+    }
+    strike_combo_->setCurrentIndex(keep_idx >= 0 ? keep_idx : atm_idx);
+    selected_strike_ = strike_combo_->currentData().toDouble();
     apply_strike_subscription();
 }
 
 void OISubTab::on_strike_combo_changed(int /*index*/) {
+    if (strike_combo_)
+        selected_strike_ = strike_combo_->currentData().toDouble();
     apply_strike_subscription();
 }
 
 void OISubTab::apply_strike_subscription() {
     if (last_chain_.rows.isEmpty() || !strike_combo_)
         return;
-    const int row_idx = strike_combo_->currentData().toInt();
-    if (row_idx < 0 || row_idx >= last_chain_.rows.size()) {
+    const double strike = strike_combo_->currentData().toDouble();
+    const fincept::services::options::OptionChainRow* row = nullptr;
+    for (const auto& r : last_chain_.rows) {
+        if (std::abs(r.strike - strike) < 1e-6) {
+            row = &r;
+            break;
+        }
+    }
+    if (!row) {
         intraday_->clear_subscription();
         return;
     }
-    const auto& row = last_chain_.rows.at(row_idx);
-    intraday_->set_subscription(last_chain_.broker_id, row.ce_token, row.pe_token, QStringLiteral("1d"));
+    intraday_->set_subscription(last_chain_.broker_id, row->ce_token, row->pe_token, QStringLiteral("1d"));
 }
 
 } // namespace fincept::screens::fno

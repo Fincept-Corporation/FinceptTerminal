@@ -74,7 +74,19 @@ class SpreadsheetWidget : public QWidget {
     void delete_selected_rows();
     void delete_selected_cols();
 
+    /// Clipboard over the whole selected range (TSV, Excel-compatible).
+    /// Copies the RAW cell text (formulas included), matching Excel semantics.
+    void copy_selection(bool cut = false);
+    void paste_clipboard();
+    /// Blank every cell in the selection (Delete key).
+    void clear_selection();
+    /// Prompt for text and select the next matching cell (Ctrl+F / F3).
+    void find_next(bool prompt = true);
+
   signals:
+    /// Emitted on any mutation of sheet content or structure — cell edits,
+    /// paste, clear, and row/column insert/delete. ExcelScreen uses it to drive
+    /// the dirty marker and the unsaved-changes guard.
     void data_changed();
 
   private slots:
@@ -86,6 +98,7 @@ class SpreadsheetWidget : public QWidget {
   private:
     void build_ui(int rows, int cols);
     void setup_headers(int cols);
+    void install_shortcuts();
     static QString column_label(int col);
 
     QTableWidget* table_ = nullptr;
@@ -94,6 +107,7 @@ class SpreadsheetWidget : public QWidget {
     QString sheet_name_;
 
     bool updating_formula_bar_ = false;
+    QString last_find_; // remembered Ctrl+F term so F3 can repeat it
 };
 
 } // namespace fincept::screens

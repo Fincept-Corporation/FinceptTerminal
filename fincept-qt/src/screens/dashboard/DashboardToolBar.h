@@ -35,6 +35,8 @@ class DashboardToolBar : public QWidget {
     void update_clock();
     void refresh_theme();
     void retranslateUi();
+    /// Sets accessible names on every control and wires an explicit tab order.
+    void apply_accessibility();
 
     QWidget* left_container_ = nullptr;
     QWidget* right_container_ = nullptr;

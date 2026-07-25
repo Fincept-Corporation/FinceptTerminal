@@ -59,9 +59,13 @@ void BacktestingScreen::update_provider_buttons() {
 
         // Same pill template as the brand / RUN / status chips so geometry is
         // identical regardless of selection state.
-        provider_buttons_[i]->setStyleSheet(
-            pill_qss("QPushButton", fg, bg, border, ui::fonts::TINY, ui::fonts::DATA_FAMILY, weight) +
-            QString("QPushButton:hover { background:rgba(%1,0.15); }").arg(rgb));
+        // P7: setStyleSheet always reparses + repolishes, even for an identical
+        // string. This runs for every provider on every provider change, so skip
+        // the 4 buttons whose skin didn't actually change.
+        const QString ss = pill_qss("QPushButton", fg, bg, border, ui::fonts::TINY, ui::fonts::DATA_FAMILY, weight) +
+                           QString("QPushButton:hover { background:rgba(%1,0.15); }").arg(rgb);
+        if (provider_buttons_[i]->styleSheet() != ss)
+            provider_buttons_[i]->setStyleSheet(ss);
     }
 }
 
@@ -126,7 +130,9 @@ void BacktestingScreen::update_command_buttons() {
         bool active = (i == active_command_);
         bool enabled = supported.contains(cmd.id);
         command_buttons_[i]->setEnabled(enabled);
-        command_buttons_[i]->setStyleSheet(
+        // P7: only 2 of the 11 command pills change skin per command switch —
+        // skip the identical 9 rather than reparsing every stylesheet each time.
+        const QString cmd_ss =
             QString("QPushButton { text-align:left; padding:6px 10px; border:none;"
                     "border-left:1px solid %1; color:%2;"
                     "font-size:%3px; font-family:%4; font-weight:%5; background:%6; }"
@@ -144,7 +150,9 @@ void BacktestingScreen::update_command_buttons() {
                             : "transparent")
                 .arg(QString("%1,%2,%3").arg(cmd.color.red()).arg(cmd.color.green()).arg(cmd.color.blue()))
                 .arg(cmd.color.name())
-                .arg(ui::colors::TEXT_DIM()));
+                .arg(ui::colors::TEXT_DIM());
+        if (command_buttons_[i]->styleSheet() != cmd_ss)
+            command_buttons_[i]->setStyleSheet(cmd_ss);
     }
 }
 // ── Gather args ──────────────────────────────────────────────────────────────
@@ -484,7 +492,8 @@ void BacktestingScreen::on_run() {
 
     is_running_ = true;
     run_button_->setEnabled(false);
-    set_status_state(tr("EXECUTING..."), ui::colors::WARNING, "rgba(217,119,6,0.08)");
+    set_status_state(tr("EXECUTING…  0s"), ui::colors::WARNING, "rgba(217,119,6,0.08)");
+    start_run_ticker();
 
     auto args = gather_args();
 

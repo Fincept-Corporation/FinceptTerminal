@@ -95,6 +95,10 @@ class CellWidget : public QWidget {
     void mousePressEvent(QMouseEvent* event) override;
     void changeEvent(QEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    /// Watches md_preview_ so a click on the rendered markdown drops back into
+    /// the source editor. The filter was installed but never implemented, so
+    /// the preview was a dead end for mouse users.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
     void build_ui();
@@ -228,6 +232,16 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     QWidget* build_status_bar();
     void retranslateUi();
     void rebuild_cells();
+
+    /// Copy every live CellWidget's editor text back into cells_. Anything that
+    /// tears down and re-creates the cell widgets must call this first or the
+    /// user's in-progress typing is silently discarded.
+    void sync_cells_from_widgets();
+    /// Canonical string used to detect unsaved edits (type + source per cell).
+    QString notebook_fingerprint() const;
+    /// True if the notebook has no unsaved changes, or the user agreed to
+    /// discard them. `action` names the operation in the prompt.
+    bool confirm_discard_changes(const QString& action);
     void add_cell_after(const QString& after_id, const QString& type);
     int find_cell_index(const QString& cell_id) const;
     CellWidget* find_cell_widget(const QString& cell_id) const;
@@ -240,6 +254,12 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     QVector<NotebookCell> cells_;
     int execution_counter_ = 0;
     QString notebook_path_;
+    /// Fingerprint at the last new/open/save — compared against the live one to
+    /// detect unsaved edits.
+    QString clean_fingerprint_;
+    /// Cells still waiting on a PythonRunner callback. RUN ALL queues several,
+    /// so a single bool would clear the "BUSY" badge on the first return.
+    int pending_runs_ = 0;
 
     // UI
     QSplitter* splitter_ = nullptr;

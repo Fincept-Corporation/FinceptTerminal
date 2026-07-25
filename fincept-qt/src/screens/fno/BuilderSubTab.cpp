@@ -14,6 +14,7 @@
 #include "storage/repositories/StrategiesRepository.h"
 #include "trading/AccountManager.h"
 #include "trading/UnifiedTrading.h"
+#include "trading/instruments/InstrumentService.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 
@@ -33,6 +34,70 @@
 #include <exception>
 
 namespace fincept::screens::fno {
+
+namespace {
+
+/// ATM implied vol (decimal) for a chain snapshot, averaging the CE/PE pair on
+/// the ATM row. Returns 0 when the Greeks worker hasn't solved the row yet.
+///
+/// PayoffComputeOptions::fallback_iv defaults to a hard-coded 0.20 — leaving it
+/// there prices every leg that has no captured IV, *and* the whole probability-
+/// of-profit integral, at 20% vol regardless of the underlying. That is wildly
+/// wrong for BANKNIFTY (typically 2×) and equally wrong the other way for a
+/// low-vol index. Seed it from the live chain instead.
+double atm_iv_of(const fincept::services::options::OptionChain& chain) {
+    for (const auto& row : chain.rows) {
+        if (!row.is_atm)
+            continue;
+        if (row.ce_iv > 0 && row.pe_iv > 0)
+            return 0.5 * (row.ce_iv + row.pe_iv);
+        if (row.ce_iv > 0)
+            return row.ce_iv;
+        return row.pe_iv;
+    }
+    return 0.0;
+}
+
+/// Fill in any leg whose lot size the chain didn't carry (Fyers' options-chain
+/// endpoint omits it entirely, so `StrategyTemplates::instantiate` copies a 0).
+/// Without this a template-built strategy is un-tradable, and — before the
+/// Builder's pre-flight check existed — would have dispatched one *unit* per
+/// lot. All contracts on one underlying/expiry share a lot size, so a sibling
+/// lookup is authoritative.
+void backfill_lot_sizes(QVector<fincept::services::options::StrategyLeg>& legs,
+                        const fincept::services::options::OptionChain& chain) {
+    bool any_missing = false;
+    for (const auto& leg : legs)
+        if (leg.lot_size <= 0)
+            any_missing = true;
+    if (!any_missing || chain.broker_id.isEmpty())
+        return;
+
+    auto& insts = fincept::trading::InstrumentService::instance();
+    int shared_lot = 0;
+    const auto siblings =
+        insts.find_options_for_underlying(chain.broker_id, chain.underlying, chain.expiry, QStringLiteral("NFO"));
+    for (const auto& in : siblings) {
+        if (in.lot_size > 0) {
+            shared_lot = in.lot_size;
+            break;
+        }
+    }
+    for (auto& leg : legs) {
+        if (leg.lot_size > 0)
+            continue;
+        if (!leg.symbol.isEmpty()) {
+            if (auto inst = insts.find(leg.symbol, QStringLiteral("NFO"), chain.broker_id); inst && inst->lot_size > 0) {
+                leg.lot_size = inst->lot_size;
+                continue;
+            }
+        }
+        if (shared_lot > 0)
+            leg.lot_size = shared_lot;
+    }
+}
+
+} // namespace
 
 using fincept::services::options::OptionChain;
 using fincept::services::options::OptionChainService;
@@ -65,7 +130,12 @@ BuilderSubTab::BuilderSubTab(QWidget* parent) : QWidget(parent) {
         StrategyLeg blank;
         blank.type = fincept::trading::InstrumentType::CE;
         blank.lots = 1;
-        blank.lot_size = 1;
+        // lot_size stays 0 — a hand-added scratch row has no contract behind it.
+        // It used to default to 1, which made the row look tradable and would
+        // have dispatched a ONE UNIT order for "1 lot". The Builder's pre-flight
+        // check refuses to trade a basket containing it; the user has to add the
+        // leg from the Chain tab (or a template) to get a real contract.
+        blank.lot_size = 0;
         legs_view_->leg_model()->append_leg(blank);
     });
     connect(legs_view_->leg_model(), &LegEditorModel::legs_changed, this, &BuilderSubTab::on_legs_changed);
@@ -190,6 +260,17 @@ void BuilderSubTab::setup_ui() {
     trade_btn_->setCursor(Qt::PointingHandCursor);
     foot_lay->addWidget(trade_btn_);
     root->addWidget(footer);
+
+    // ── Accessibility + keyboard traversal ────────────────────────────────
+    save_btn_->setAccessibleName(tr("Save strategy"));
+    load_btn_->setAccessibleName(tr("Load or delete a saved strategy"));
+    days_to_target_spin_->setAccessibleName(tr("Days to target date"));
+    trade_btn_->setAccessibleName(tr("Trade all active legs as paper orders"));
+    setTabOrder(toolbar_, legs_view_);
+    setTabOrder(legs_view_, save_btn_);
+    setTabOrder(save_btn_, load_btn_);
+    setTabOrder(load_btn_, days_to_target_spin_);
+    setTabOrder(days_to_target_spin_, trade_btn_);
 }
 
 QVariantMap BuilderSubTab::save_state() const {
@@ -203,6 +284,11 @@ void BuilderSubTab::restore_state(const QVariantMap& state) {
 
 void BuilderSubTab::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    is_visible_ = true;
+    if (analytics_dirty_) {
+        analytics_dirty_ = false;
+        refresh_analytics();
+    }
     if (chain_subscribed_)
         return;
     auto& hub = fincept::datahub::DataHub::instance();
@@ -217,6 +303,7 @@ void BuilderSubTab::showEvent(QShowEvent* e) {
 
 void BuilderSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    is_visible_ = false;
 }
 
 void BuilderSubTab::changeEvent(QEvent* event) {
@@ -277,7 +364,9 @@ void BuilderSubTab::on_template_chosen(const QString& template_id, const Strateg
         QMessageBox::warning(this, tr("Could not build strategy"), QString::fromStdString(r.error()));
         return;
     }
-    legs_view_->leg_model()->set_legs(r.value().legs);
+    auto legs = r.value().legs;
+    backfill_lot_sizes(legs, last_chain_);
+    legs_view_->leg_model()->set_legs(legs);
     loaded_strategy_id_ = 0;
     loaded_strategy_name_.clear();
     refresh_analytics();
@@ -299,6 +388,13 @@ Strategy BuilderSubTab::current_strategy() const {
 }
 
 void BuilderSubTab::refresh_analytics() {
+    // Deferred while hidden — showEvent replays it. Keeps a background tab from
+    // running the full payoff + POP integral on every chain publish.
+    if (!is_visible_) {
+        analytics_dirty_ = true;
+        update_trade_button_state();
+        return;
+    }
     const auto& legs = legs_view_->leg_model()->legs();
     if (legs.isEmpty() || last_chain_.rows.isEmpty()) {
         ribbon_->clear();
@@ -311,6 +407,8 @@ void BuilderSubTab::refresh_analytics() {
     PayoffComputeOptions opts;
     opts.current_spot = last_chain_.spot;
     opts.days_to_target = days_to_target_spin_ ? days_to_target_spin_->value() : 0;
+    if (const double atm_iv = atm_iv_of(last_chain_); atm_iv > 0)
+        opts.fallback_iv = atm_iv;
 
     auto curve = fincept::services::options::analytics::compute_payoff(s, opts);
     auto bes = fincept::services::options::analytics::compute_breakevens(curve);
@@ -355,9 +453,64 @@ void BuilderSubTab::on_trade_clicked() {
         return;
     Strategy s = current_strategy();
 
+    // ── Pre-flight contract validation (money-loss guard) ────────────────────
+    // A leg reaches the basket from three places: the chain's left-click (fully
+    // resolved), a template instantiation, and TemplateToolbar's "+ ADD LEG"
+    // (a blank leg with lot_size = 1 and no symbol). Submitting the blank one
+    // sends quantity = |lots| × 1 — a ONE UNIT order where the user asked for
+    // one lot — and an empty symbol the broker will either reject or, worse,
+    // mis-route. Refuse the whole basket instead of silently placing part of it.
+    QStringList invalid;
+    int placeable = 0;
+    for (const auto& leg : legs) {
+        if (!leg.is_active || leg.lots == 0)
+            continue;
+        ++placeable;
+        const QString label = leg.symbol.isEmpty()
+                                  ? tr("row %1 (%2)").arg(placeable).arg(leg.strike, 0, 'f', 0)
+                                  : leg.symbol;
+        if (leg.symbol.isEmpty())
+            invalid.append(tr("%1 — no contract symbol").arg(label));
+        else if (leg.lot_size <= 0)
+            invalid.append(tr("%1 — lot size not resolved").arg(label));
+        else if (leg.type != fincept::trading::InstrumentType::CE &&
+                 leg.type != fincept::trading::InstrumentType::PE && leg.type != fincept::trading::InstrumentType::FUT)
+            invalid.append(tr("%1 — instrument type not set").arg(label));
+    }
+    if (placeable == 0) {
+        QMessageBox::information(this, tr("Nothing to trade"),
+                                 tr("Switch on at least one leg with a non-zero lot count."));
+        return;
+    }
+    if (!invalid.isEmpty()) {
+        QMessageBox::warning(
+            this, tr("Cannot trade this strategy"),
+            tr("These legs are not fully resolved, so the order quantity would be wrong:\n\n%1\n\n"
+               "Add legs by clicking a premium in the Chain tab (or use a template) so the contract "
+               "symbol and lot size come from the live chain.")
+                .arg(invalid.join("\n")));
+        return;
+    }
+
     fincept::services::options::analytics::PayoffComputeOptions opts;
     opts.current_spot = last_chain_.spot;
+    if (const double atm_iv = atm_iv_of(last_chain_); atm_iv > 0)
+        opts.fallback_iv = atm_iv;
     auto a = fincept::services::options::analytics::compute_all(s, last_chain_, opts);
+
+    // Double-submit guard: the dispatch loop below is synchronous, but the
+    // confirm dialog spins a nested event loop and the button stays live under
+    // it on some styles. Disable for the whole ticket lifetime.
+    if (trade_btn_)
+        trade_btn_->setEnabled(false);
+    struct ReenableGuard {
+        QPushButton* btn;
+        BuilderSubTab* owner;
+        ~ReenableGuard() {
+            if (btn && owner)
+                owner->update_trade_button_state();
+        }
+    } reenable{trade_btn_, this};
 
     OrderConfirmDialog dlg(s, last_chain_, a.premium_paid, a.max_profit, a.max_loss, this);
     if (dlg.exec() != QDialog::Accepted)
@@ -502,7 +655,12 @@ void BuilderSubTab::on_load_clicked() {
                     QMessageBox::warning(this, tr("Load failed"), QString::fromStdString(r.error()));
                     return;
                 }
-                legs_view_->leg_model()->set_legs(r.value().strategy.legs);
+                // A strategy saved in an earlier session can carry lot_size 0 if
+                // the provider omitted it then. Re-resolve against today's
+                // instrument master before it reaches the leg table.
+                auto loaded_legs = r.value().strategy.legs;
+                backfill_lot_sizes(loaded_legs, last_chain_);
+                legs_view_->leg_model()->set_legs(loaded_legs);
                 loaded_strategy_id_ = id;
                 loaded_strategy_name_ = name_for_msg;
                 refresh_analytics();

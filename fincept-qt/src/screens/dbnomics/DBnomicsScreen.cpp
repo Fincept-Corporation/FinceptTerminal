@@ -25,6 +25,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <utility>
 
 namespace fincept::screens {
 
@@ -65,6 +66,16 @@ DBnomicsScreen::DBnomicsScreen(QWidget* parent) : QWidget(parent) {
     connect(selection_panel_, &DBnomicsSelectionPanel::load_more_series_requested, this, [this](int offset) {
         services::DBnomicsService::instance().fetch_series(selection_panel_->selected_provider(),
                                                            selection_panel_->selected_dataset(), {}, offset);
+    });
+
+    // The global-search "LOAD MORE" button emitted this signal but nothing was
+    // listening — paging past the first 50 search hits was impossible.
+    connect(selection_panel_, &DBnomicsSelectionPanel::load_more_search_requested, this, [this](int offset) {
+        const QString q = selection_panel_->global_search_text().trimmed();
+        if (q.isEmpty())
+            return;
+        selection_panel_->set_search_loading(true);
+        services::DBnomicsService::instance().global_search(q, offset);
     });
 
     connect(selection_panel_, &DBnomicsSelectionPanel::add_to_single_view_clicked, this,
@@ -310,7 +321,18 @@ void DBnomicsScreen::build_ui() {
                                     .arg(ui::fonts::DATA_FAMILY));
     stats_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
+    // Source attribution — an economics screen must say where its numbers come
+    // from and under what terms.
+    attribution_label_ = new QLabel(tr("Source: DBnomics (db.nomics.world) — aggregated public data, "
+                                       "terms per originating provider"),
+                                    status_bar);
+    attribution_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px;")
+                                          .arg(ui::colors::TEXT_DIM())
+                                          .arg(ui::fonts::DATA_FAMILY));
+
     status_hl->addWidget(status_label_);
+    status_hl->addSpacing(14);
+    status_hl->addWidget(attribution_label_);
     status_hl->addStretch();
     status_hl->addWidget(stats_label_);
 
@@ -402,6 +424,9 @@ void DBnomicsScreen::retranslateUi() {
         compare_btn_->setText(tr("COMPARE"));
     if (chart_type_label_)
         chart_type_label_->setText(tr("CHART:"));
+    if (attribution_label_)
+        attribution_label_->setText(tr("Source: DBnomics (db.nomics.world) — aggregated public data, "
+                                       "terms per originating provider"));
 
     // Chart-type combo — setItemText preserves the current selection/index.
     if (chart_type_combo_ && chart_type_combo_->count() >= 4) {
@@ -493,15 +518,33 @@ void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& point)
     chart_widget_->set_loading(false);
     data_table_->set_loading(false);
 
-    // Check if this series is already in single_series_
+    // Update every place this series is already shown — single view AND any
+    // comparison slot (slots used to be skipped, so REFRESH silently left
+    // stale numbers on screen in COMPARE mode).
+    bool in_view = false;
     for (auto& s : single_series_) {
         if (s.series_id == point.series_id) {
             s.observations = point.observations;
             s.series_name = point.series_name;
-            render_single_view();
-            return;
+            in_view = true;
         }
     }
+    bool in_slot = false;
+    for (auto& slot : slots_) {
+        for (auto& s : slot.series) {
+            if (s.series_id == point.series_id) {
+                s.observations = point.observations;
+                s.series_name = point.series_name;
+                in_slot = true;
+            }
+        }
+    }
+    if (in_view)
+        render_single_view();
+    if (in_slot)
+        rebuild_comparison_view();
+    if (in_view || in_slot)
+        return;
 
     // Not yet in view — prompt user
     set_status(tr("Loaded: %1  •  Click ADD TO SINGLE VIEW").arg(point.series_name));
@@ -536,20 +579,53 @@ void DBnomicsScreen::on_fetch_clicked() {
 }
 
 void DBnomicsScreen::on_refresh_clicked() {
-    if (single_series_.isEmpty())
-        return;
-
-    for (const auto& s : std::as_const(single_series_)) {
+    // Refresh every loaded series, in BOTH views — comparison slots used to be
+    // ignored entirely, so REFRESH looked like a no-op in COMPARE mode.
+    QSet<QString> seen;
+    int n = 0;
+    auto refresh_one = [&](const services::DbnDataPoint& s) {
+        if (seen.contains(s.series_id))
+            return;
+        seen.insert(s.series_id);
         // series_id format: "PROV/DS/CODE"
         const QStringList parts = s.series_id.split('/');
-        if (parts.size() == 3)
+        if (parts.size() == 3) {
             services::DBnomicsService::instance().fetch_observations(parts[0], parts[1], parts[2]);
+            ++n;
+        }
+    };
+
+    for (const auto& s : std::as_const(single_series_))
+        refresh_one(s);
+    for (const auto& slot : std::as_const(slots_))
+        for (const auto& s : slot.series)
+            refresh_one(s);
+
+    if (n == 0) {
+        set_status(tr("Nothing to refresh — add a series first"));
+        return;
     }
-    set_status(tr("Refreshing series data..."));
+    set_status(tr("Refreshing %1 series…").arg(n));
 }
 
 void DBnomicsScreen::on_export_csv() {
-    if (single_series_.isEmpty()) {
+    // Export whatever the user is actually looking at. Previously COMPARE mode
+    // always reported "No data to export" even with every slot populated,
+    // because only single_series_ was ever considered.
+    QVector<services::DbnDataPoint> export_series;
+    if (view_mode_ == services::DbnViewMode::Comparison) {
+        for (int i = 0; i < slots_.size(); ++i) {
+            for (const auto& s : std::as_const(slots_[i].series)) {
+                services::DbnDataPoint copy = s;
+                copy.series_name = tr("Slot %1: %2").arg(i + 1).arg(s.series_name);
+                export_series.append(copy);
+            }
+        }
+    } else {
+        export_series = single_series_;
+    }
+
+    if (export_series.isEmpty()) {
         set_status(tr("No data to export"));
         return;
     }
@@ -570,12 +646,13 @@ void DBnomicsScreen::on_export_csv() {
     }
 
     QTextStream out(&file);
+    out.setEncoding(QStringConverter::Utf8);
 
     // Collect all unique periods in order (use the first series as the period reference,
     // then union with others for completeness)
     QVector<QString> periods;
     QSet<QString> seen_periods;
-    for (const auto& series : std::as_const(single_series_)) {
+    for (const auto& series : std::as_const(export_series)) {
         for (const auto& obs : series.observations) {
             if (!seen_periods.contains(obs.period)) {
                 seen_periods.insert(obs.period);
@@ -585,28 +662,42 @@ void DBnomicsScreen::on_export_csv() {
     }
     std::sort(periods.begin(), periods.end());
 
+    auto csv_quote = [](QString v) {
+        if (v.contains(',') || v.contains('"') || v.contains('\n'))
+            v = "\"" + v.replace("\"", "\"\"") + "\"";
+        return v;
+    };
+
+    // Provenance banner — a macro export without its source and series ids is
+    // not reproducible.
+    out << "# source=DBnomics (https://db.nomics.world)  exported="
+        << QDateTime::currentDateTimeUtc().toString(Qt::ISODate) << "\n";
+    out << "# series=";
+    for (int i = 0; i < export_series.size(); ++i)
+        out << (i ? "|" : "") << export_series[i].series_id;
+    out << "\n";
+
     // Header row
     out << "Period";
-    for (const auto& series : std::as_const(single_series_))
-        out << "," << series.series_name;
+    for (const auto& series : std::as_const(export_series))
+        out << "," << csv_quote(series.series_name);
     out << "\n";
 
     // Data rows
     for (const auto& period : std::as_const(periods)) {
-        out << period;
-        for (const auto& series : std::as_const(single_series_)) {
+        out << csv_quote(period);
+        for (const auto& series : std::as_const(export_series)) {
             out << ",";
-            bool found = false;
             for (const auto& obs : series.observations) {
-                if (obs.period == period) {
-                    if (obs.valid)
-                        out << obs.value;
-                    // else: empty cell for NA
-                    found = true;
-                    break;
-                }
+                if (obs.period != period)
+                    continue;
+                // QTextStream's default real precision is 6 significant digits,
+                // which silently rewrote e.g. 21433226000000 as 2.14332e+13.
+                if (obs.valid)
+                    out << QString::number(obs.value, 'g', 15);
+                // else: empty cell for NA — a gap must stay a gap
+                break;
             }
-            Q_UNUSED(found)
         }
         out << "\n";
     }
@@ -685,11 +776,10 @@ void DBnomicsScreen::on_add_to_single_view() {
     assign_series_colors();
     render_single_view();
 
-    // Switch to single view
-    single_btn_->setChecked(true);
-    compare_btn_->setChecked(false);
-    view_mode_ = services::DbnViewMode::Single;
-    view_stack_->setCurrentIndex(0);
+    // Switch to single view through the toggle handler so button styling
+    // follows the stack (a bare setChecked() left the old style applied).
+    if (single_btn_)
+        single_btn_->click();
 
     set_status(tr("Added: %1").arg(last_loaded_data_.series_name));
     LOG_INFO("DBnomicsScreen", QString("Series added to single view: %1").arg(last_loaded_data_.series_id));
@@ -968,10 +1058,11 @@ void DBnomicsScreen::restore_state(const QVariantMap& state) {
     const QString ser = state.value("series").toString();
     const int mode = state.value("view_mode", 0).toInt();
 
-    if (mode == 1) {
-        view_mode_ = services::DbnViewMode::Comparison;
-        view_stack_->setCurrentIndex(1);
-    }
+    // Drive the toggle through its own handler so the button check-state AND
+    // its stylesheet stay in sync with view_stack_. Setting the stack index
+    // directly left COMPARE showing while SINGLE still looked selected.
+    if (mode == 1 && compare_btn_)
+        compare_btn_->click();
 
     if (!prov.isEmpty())
         on_provider_selected(prov);

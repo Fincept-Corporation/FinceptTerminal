@@ -7,10 +7,12 @@
 
 #include <QComboBox>
 #include <QEvent>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSet>
+#include <QShowEvent>
 #include <QTimer>
 #include <QWidget>
 
@@ -37,6 +39,14 @@ class EquityOrderEntry : public QWidget {
     void set_broker_id(const QString& broker_id);
     void show_order_status(const QString& msg, bool success); // show result after order placed
 
+    // Fill the LIMIT price box from an external price gesture (clicking a level in
+    // the market-depth ladder). Switches the ticket to LMT when it is on MKT, so
+    // the value the user just picked is the one that will actually be sent.
+    void set_limit_price(double price);
+
+    // Move keyboard focus to the quantity box (the trader's entry point).
+    void focus_quantity();
+
   signals:
     void order_submitted(const trading::UnifiedOrder& order);
     void broadcast_requested(const trading::UnifiedOrder& order);
@@ -47,6 +57,8 @@ class EquityOrderEntry : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private slots:
     void on_submit();
@@ -57,6 +69,24 @@ class EquityOrderEntry : public QWidget {
     void retranslateUi();
     void set_buy_side(bool is_buy);
     void set_order_type(int idx);
+
+    // Shared entry validation for BOTH the focused submit and the broadcast
+    // ("ALL") path. Returns false and paints the status line when the ticket is
+    // not safe to send. `qty_out` receives the parsed quantity.
+    bool validate_entry(double& qty_out);
+
+    // Build the order from the current form. Fields that do not apply to the
+    // selected order type are zeroed so a stale limit/trigger left in a disabled
+    // box can never ride along to the broker.
+    trading::UnifiedOrder build_order() const;
+
+    // Lock/unlock the send controls around an in-flight submit (see submit_lock_
+    // failsafe below).
+    void set_send_locked(bool locked);
+
+    // Repaint the LTP line, including the stale marker.
+    void render_price_label();
+    void update_stale_state();
 
     // Resolve the current form selections into trading enums (dedups the
     // order-type / product-type mapping repeated across submit/broadcast/margin).
@@ -151,6 +181,19 @@ class EquityOrderEntry : public QWidget {
     // Margin fetch debounce timer — fires 500ms after last qty/price change
     QTimer* margin_timer_ = nullptr;
     std::atomic<bool> margin_fetching_{false};
+
+    // Send lock: the send controls stay disabled from click until the placement
+    // result comes back through show_order_status(). A failsafe timer releases
+    // the lock if a result never arrives, so the ticket can never wedge.
+    bool submit_locked_ = false;
+    QTimer* submit_failsafe_ = nullptr;
+
+    // Stale-quote guard: a price with no indication of its age is dangerous to
+    // trade on. last_price_ms_ is stamped on every real quote; the timer (running
+    // only while visible, P3) flips the LTP line to a dim "STALE" reading.
+    qint64 last_price_ms_ = 0;
+    bool price_is_stale_ = false;
+    QTimer* stale_timer_ = nullptr;
 
     void fetch_margin_async();
 

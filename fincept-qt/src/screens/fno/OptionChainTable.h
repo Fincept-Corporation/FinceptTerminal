@@ -33,8 +33,17 @@ class OptionChainTable : public QTableView {
   protected:
     void mousePressEvent(QMouseEvent* e) override;
     void contextMenuEvent(QContextMenuEvent* e) override;
+    /// Arrow keys traverse strikes (QTableView default); Return/Enter on a CE or
+    /// PE cell adds that leg to the Builder, so the chain is usable without a
+    /// mouse. Placing an order still requires the explicit context menu.
+    void keyPressEvent(QKeyEvent* e) override;
 
   private:
+    /// Resolve (token, strike, is_call) for a cell. Returns false when the cell
+    /// is the strike pivot, is out of range, or carries no instrument token —
+    /// the single gate every trade entry point goes through.
+    bool leg_at(const QModelIndex& idx, qint64& token, double& strike, bool& is_call) const;
+
     OptionChainModel* model_ = nullptr;
 };
 

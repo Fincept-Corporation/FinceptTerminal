@@ -13,6 +13,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -223,22 +224,37 @@ void KLineChartWidget::update_candle(const QJsonObject& candle) {
     run_js(QStringLiteral("window.updateCandle(%1)").arg(json));
 }
 
+namespace {
+// Build `fn.apply(null,[...])` with every argument JSON-encoded. Interpolating
+// values straight into '%1' quotes lets any value containing a quote terminate
+// the literal and append arbitrary script — and this page runs with
+// JavascriptEnabled + LocalContentCanAccessFileUrls, so injected script reads
+// local files. Callers currently pass trusted values (theme colours, formatted
+// numbers, fixed indicator names), but the chart takes indicator/pane names
+// from callers that may one day be symbol- or config-derived; encoding here
+// makes that safe by construction rather than by convention.
+QString js_call(const QString& fn, const QJsonArray& args) {
+    const QString json = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
+    return QStringLiteral("%1.apply(null,%2)").arg(fn, json);
+}
+} // namespace
+
 void KLineChartWidget::add_indicator(const QString& name, const QString& pane_id) {
     if (pane_id.isEmpty())
-        run_js(QStringLiteral("window.addIndicator('%1')").arg(name));
+        run_js(js_call(QStringLiteral("window.addIndicator"), {name}));
     else
-        run_js(QStringLiteral("window.addIndicator('%1','%2')").arg(name, pane_id));
+        run_js(js_call(QStringLiteral("window.addIndicator"), {name, pane_id}));
 }
 
 void KLineChartWidget::remove_indicator(const QString& name, const QString& pane_id) {
     if (pane_id.isEmpty())
-        run_js(QStringLiteral("window.removeIndicator('%1')").arg(name));
+        run_js(js_call(QStringLiteral("window.removeIndicator"), {name}));
     else
-        run_js(QStringLiteral("window.removeIndicator('%1','%2')").arg(name, pane_id));
+        run_js(js_call(QStringLiteral("window.removeIndicator"), {name, pane_id}));
 }
 
 void KLineChartWidget::set_position_line(double price, const QString& label, const QString& color_hex) {
-    run_js(QStringLiteral("window.setPositionLine(%1,'%2','%3')").arg(price, 0, 'f', 6).arg(label, color_hex));
+    run_js(js_call(QStringLiteral("window.setPositionLine"), {price, label, color_hex}));
 }
 
 void KLineChartWidget::clear_position_line() {

@@ -7,7 +7,6 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTableWidget>
@@ -21,14 +20,18 @@ namespace fincept::screens {
 struct QuantModule {
     QString id;
     QString name;
+    /// Number of REST endpoints exposed by this module. Populated from the
+    /// module_endpoints() catalog at construction time -- the literal in
+    /// build_modules() is only a fallback.
     int endpoint_count;
     QStringList panels; // sub-panel names
 };
 
-/// QuantLib Suite — 18 quantitative analysis modules with 590+ endpoints.
+/// QuantLib Suite -- 18 quantitative analysis modules.
 /// Modules: Core, Analysis, Curves, Economics, Instruments, ML, Models,
 /// Numerical, Physics, Portfolio, Pricing, Regulatory, Risk, Scheduling,
 /// Solver, Statistics, Stochastic, Volatility.
+/// Endpoint counts are derived from the catalog in QuantLibScreen_Data.cpp.
 /// All computations via api.fincept.in REST API.
 class QuantLibScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
@@ -45,7 +48,6 @@ class QuantLibScreen : public QWidget, public IStatefulScreen {
 
   private slots:
     void on_module_changed(int index);
-    void on_panel_changed(QListWidgetItem* item);
     void on_endpoint_changed(int index);
     void on_execute();
 
@@ -58,6 +60,8 @@ class QuantLibScreen : public QWidget, public IStatefulScreen {
     QWidget* create_right_panel();
     QWidget* create_status_bar();
 
+    /// Refill endpoint_combo_ for the active module, restricted to the active
+    /// sub-panel when that panel maps onto a recognisable path segment.
     void populate_panels(int module_index);
     void execute_api(const QString& endpoint, const QJsonObject& params);
     void display_result(const QJsonObject& result);
@@ -91,9 +95,6 @@ class QuantLibScreen : public QWidget, public IStatefulScreen {
     QLabel* center_title_ = nullptr;
     QComboBox* endpoint_combo_ = nullptr;
     QLineEdit* param_input1_ = nullptr;
-    QLineEdit* param_input2_ = nullptr;
-    QLineEdit* param_input3_ = nullptr;
-    QLineEdit* param_input4_ = nullptr;
     QPushButton* exec_btn_ = nullptr;
 
     // Right (results)

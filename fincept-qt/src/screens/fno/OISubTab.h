@@ -66,6 +66,14 @@ class OISubTab : public QWidget {
 
     fincept::services::options::OptionChain last_chain_;
     QString current_underlying_;
+    /// Expiry the strike combo was last built for. A new expiry has a different
+    /// strike ladder, so the combo must be rebuilt even when the underlying is
+    /// unchanged.
+    QString current_expiry_;
+    /// Strike the user picked (0 = none). Carried across combo rebuilds and
+    /// session restore. Selection is keyed on the strike VALUE, never on a row
+    /// index — the ladder shifts as the ATM moves.
+    double selected_strike_ = 0.0;
     bool subscribed_ = false;
 };
 

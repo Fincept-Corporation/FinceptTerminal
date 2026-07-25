@@ -27,6 +27,7 @@
 #include "screens/economics/panels/FredPanel.h"
 #include "screens/economics/panels/GlobalCentralBanksPanel.h"
 #include "screens/economics/panels/IlostatPanel.h"
+#include "screens/economics/panels/NberPanel.h"
 #include "screens/economics/panels/ImfPanel.h"
 #include "screens/economics/panels/OecdPanel.h"
 #include "screens/economics/panels/OnsPanel.h"
@@ -46,6 +47,8 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
+
+#include <iterator>
 
 namespace fincept::screens {
 
@@ -74,6 +77,7 @@ static const struct {
     {"global_cb", "Central Banks", "#4A148C"},
     {"federal_reserve", "Federal Reserve", "#1A237E"},
     {"fiscal_data", "Fiscal Data", "#006064"},
+    {"nber", "NBER Cycles", "#7C3AED"},
     {"owid", "Our World In Data", "#6D28D9"},
     {"statcan", "StatCan", "#B71C1C"},
     {"ilostat", "ILO", "#0D47A1"},
@@ -127,6 +131,8 @@ static EconPanelBase* make_panel(const QString& id, QWidget* parent) {
         return new FederalReservePanel(parent);
     if (id == "fiscal_data")
         return new FiscalDataPanel(parent);
+    if (id == "nber")
+        return new NberPanel(parent);
     if (id == "owid")
         return new OwIdPanel(parent);
     if (id == "statcan")
@@ -182,7 +188,9 @@ void EconomicsScreen::build_ui() {
     hl->setSpacing(8);
 
     title_ = new QLabel(tr("ECONOMICS DATA EXPLORER"));
-    subtitle_ = new QLabel(tr("32 global data sources · 1000+ indicators"));
+    // Derive the count from the registry — the hard-coded "32" was one more
+    // than the number of panels actually registered.
+    subtitle_ = new QLabel(tr("%1 global data sources · 1000+ indicators").arg(static_cast<int>(std::size(kSources))));
 
     hl->addWidget(title_);
     hl->addWidget(subtitle_);
@@ -191,6 +199,7 @@ void EconomicsScreen::build_ui() {
 
     // ── Badge bar (scrollable) ────────────────────────────────────────────────
     scroll_ = new QScrollArea;
+    scroll_->setAccessibleName(tr("Economics data source selector"));
     scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll_->setFixedHeight(34);
@@ -211,6 +220,8 @@ void EconomicsScreen::build_ui() {
         auto* btn = new QPushButton(src.label);
         btn->setCheckable(true);
         btn->setFixedHeight(26);
+        btn->setAccessibleName(tr("Data source: %1").arg(QString::fromUtf8(src.label)));
+        btn->setToolTip(tr("Switch to the %1 data source").arg(QString::fromUtf8(src.label)));
 
         const QString sid = src.id;
         connect(btn, &QPushButton::clicked, this, [this, sid]() { switch_to(sid); });
@@ -220,6 +231,10 @@ void EconomicsScreen::build_ui() {
         sources_.append(entry);
     }
     bhl->addStretch();
+
+    // Left-to-right keyboard traversal across the source badges.
+    for (int i = 1; i < sources_.size(); ++i)
+        QWidget::setTabOrder(sources_[i - 1].badge, sources_[i].badge);
 
     scroll_->setWidget(badge_bar_);
     root->addWidget(scroll_);
@@ -280,7 +295,8 @@ void EconomicsScreen::retranslateUi() {
     if (title_)
         title_->setText(tr("ECONOMICS DATA EXPLORER"));
     if (subtitle_)
-        subtitle_->setText(tr("32 global data sources · 1000+ indicators"));
+        subtitle_->setText(
+            tr("%1 global data sources · 1000+ indicators").arg(static_cast<int>(std::size(kSources))));
     // Source badge labels are brand/source names (data) and are not translated.
 }
 

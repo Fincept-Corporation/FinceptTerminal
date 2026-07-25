@@ -195,6 +195,13 @@ EquityAnalysisTab::EquityAnalysisTab(QWidget* parent) : QWidget(parent) {
     build_ui();
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::info_loaded, this, &EquityAnalysisTab::on_info_loaded);
+    // The overlay was only ever hidden on the success path, so a failed "Info"
+    // fetch left "LOADING ANALYSIS…" spinning over the tab forever.
+    connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
+            [this](const QString& ctx, const QString&) {
+                if (ctx == QLatin1String("Info") && loading_overlay_)
+                    loading_overlay_->hide_loading();
+            });
 }
 
 void EquityAnalysisTab::set_symbol(const QString& symbol) {

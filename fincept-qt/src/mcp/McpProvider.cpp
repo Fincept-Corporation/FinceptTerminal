@@ -3,12 +3,15 @@
 #include "mcp/McpProvider.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/JobRegistry.h"
 #include "mcp/SchemaValidator.h"
 
 #include <QCoreApplication>
 #include <QFutureWatcher>
+#include <QPointer>
 #include <QPromise>
 #include <QRegularExpression>
+#include <QSemaphore>
 #include <QSet>
 #include <QThread>
 #include <QTimer>
@@ -178,6 +181,73 @@ ToolResult McpProvider::call_tool(const QString& name, const QJsonObject& args) 
     return future.result();
 }
 
+bool McpProvider::supports_async_jobs(const QString& name) const {
+    QMutexLocker lock(&mutex_);
+    auto it = tools_.constFind(name);
+    if (it == tools_.constEnd() || disabled_tools_.contains(name))
+        return false;
+    // The flag alone isn't enough — a sync handler runs to completion on the
+    // calling thread and can be neither observed nor interrupted, so there is
+    // nothing a job wrapper could add.
+    return it->supports_async && static_cast<bool>(it->async_handler);
+}
+
+ToolResult McpProvider::call_tool_or_defer(const QString& name, const QJsonObject& args, int grace_ms) {
+    if (!supports_async_jobs(name))
+        return call_tool(name, args);
+
+    auto& jobs = JobRegistry::instance();
+    const QString job_id = jobs.create(name);
+
+    // Wire the job into the handler's context: cancellation reads the job's own
+    // atomic flag (no registry lock in the handler's polling loop), progress
+    // writes straight back to the snapshot the model polls.
+    ToolContext ctx;
+    if (auto flag = jobs.cancel_flag(job_id))
+        ctx.is_cancelled = [flag]() { return flag->load(); };
+    ctx.on_progress = [job_id](double progress, const QString& message) {
+        JobRegistry::instance().set_progress(job_id, progress, message);
+    };
+
+    auto future = call_tool_async(name, args, ctx);
+
+    // One continuation per QFuture is the Qt limit, and this is it — the future
+    // is never handed to anyone else, so there is no contention.
+    auto gate = std::make_shared<QSemaphore>(0);
+    future.then([job_id, gate](QFuture<ToolResult> f) {
+        // A handler is allowed to finish without ever adding a result; treat
+        // that as a failure rather than dereferencing an empty future.
+        JobRegistry::instance().complete(job_id, f.resultCount() > 0
+                                                     ? f.result()
+                                                     : ToolResult::fail("Tool produced no result"));
+        gate->release();
+    });
+
+    if (gate->tryAcquire(1, std::max(0, grace_ms))) {
+        // Beat the grace window — hand back the real result and let the job
+        // record expire on the short collected-TTL. The model never learns a
+        // job existed, which is the point: fast calls stay one round-trip.
+        if (auto r = jobs.take_result(job_id))
+            return *r;
+        return ToolResult::fail("Job " + job_id + " finished without a result");
+    }
+
+    LOG_INFO(TAG, QString("Tool '%1' exceeded the %2 ms grace window — backgrounded as %3")
+                      .arg(name)
+                      .arg(grace_ms)
+                      .arg(job_id));
+
+    return ToolResult::ok(QString("Started background job %1 for '%2'. Poll job_status(job_id='%1', wait_ms=20000) "
+                                  "until status is 'succeeded' or 'failed', then call job_result(job_id='%1'). "
+                                  "Do NOT call '%2' again — it is already running.")
+                              .arg(job_id, name),
+                          QJsonObject{
+                              {"job_id", job_id},
+                              {"status", "running"},
+                              {"tool", name},
+                          });
+}
+
 QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJsonObject& args, ToolContext ctx) {
     ToolHandler sync_handler;
     AsyncToolHandler async_handler;
@@ -274,19 +344,50 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
             ctx.is_cancelled = [orig, cancelled]() { return cancelled->load() || orig(); };
         }
 
+        // Single-winner guard for promise resolution. `promise->future().isFinished()`
+        // is NOT a valid guard on its own: the watchdog runs on the GUI thread
+        // while the handler resolves on a service/worker thread, so both could
+        // read "not finished" and then both addResult() — the second one lands
+        // after finish() and trips a Qt assertion. A compare-exchange makes
+        // exactly one caller the winner.
+        //
+        // Resolving also tears down the watchdog. Previously the timer was left
+        // to fire at its full interval even when the tool finished in
+        // milliseconds, so a tool with a 300 s budget parked a live timer on the
+        // GUI thread for 300 s after it was already done — once per call.
+        // `watchdog_slot` is filled in below; resolve() only reads it, so the
+        // fast path (handler resolves before we even arm the timer) is safe.
+        auto resolved = std::make_shared<std::atomic<bool>>(false);
+        auto watchdog_slot = std::make_shared<QPointer<QTimer>>();
+        auto resolve = [promise, resolved, watchdog_slot](ToolResult r) {
+            bool expected = false;
+            if (!resolved->compare_exchange_strong(expected, true))
+                return;
+            promise->addResult(std::move(r));
+            promise->finish();
+            if (QTimer* wd = watchdog_slot->data()) {
+                QMetaObject::invokeMethod(
+                    wd,
+                    [watchdog_slot]() {
+                        if (QTimer* t = watchdog_slot->data()) {
+                            t->stop();
+                            t->deleteLater();
+                        }
+                    },
+                    Qt::QueuedConnection);
+            }
+        };
+
         // Arm a one-shot timeout. We post the timer onto the QApplication
         // thread so it ticks even if the caller returns immediately.
         auto* watchdog = new QTimer;
         watchdog->setSingleShot(true);
         watchdog->moveToThread(qApp->thread());
-        QObject::connect(watchdog, &QTimer::timeout, watchdog, [promise, cancelled, watchdog, name]() {
-            if (!promise->future().isFinished()) {
-                cancelled->store(true);
-                LOG_WARN(TAG, QString("Tool '%1' timed out").arg(name));
-                promise->addResult(ToolResult::fail("Tool '" + name + "' timed out"));
-                promise->finish();
-            }
-            watchdog->deleteLater();
+        *watchdog_slot = watchdog;
+        QObject::connect(watchdog, &QTimer::timeout, watchdog, [resolve, cancelled, name]() {
+            cancelled->store(true);
+            LOG_WARN(TAG, QString("Tool '%1' timed out").arg(name));
+            resolve(ToolResult::fail("Tool '" + name + "' timed out"));
         });
         QMetaObject::invokeMethod(
             watchdog, [watchdog, ms = ctx.timeout_ms]() { watchdog->start(ms); }, Qt::QueuedConnection);
@@ -296,16 +397,10 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
             async_handler(normalized, ctx, promise);
         } catch (const std::exception& e) {
             LOG_ERROR(TAG, QString("Async tool '%1' threw: %2").arg(name, e.what()));
-            if (!promise->future().isFinished()) {
-                promise->addResult(ToolResult::fail(QString("Tool execution error: ") + e.what()));
-                promise->finish();
-            }
+            resolve(ToolResult::fail(QString("Tool execution error: ") + e.what()));
         } catch (...) {
             LOG_ERROR(TAG, QString("Async tool '%1' threw unknown exception").arg(name));
-            if (!promise->future().isFinished()) {
-                promise->addResult(ToolResult::fail("Unknown error during tool execution"));
-                promise->finish();
-            }
+            resolve(ToolResult::fail("Unknown error during tool execution"));
         }
         return promise->future();
     }

@@ -9,6 +9,7 @@
 
 #include <QHBoxLayout>
 #include <QScrollArea>
+#include <QSet>
 #include <QSplitter>
 
 namespace fincept::screens {
@@ -70,11 +71,11 @@ void MAAnalyticsScreen::retranslateUi() {
     if (stat_total_modules_lbl_)
         stat_total_modules_lbl_->setText(tr("Total Modules"));
     if (stat_valuation_methods_lbl_)
-        stat_valuation_methods_lbl_->setText(tr("Valuation Methods"));
+        stat_valuation_methods_lbl_->setText(tr("Categories"));
     if (stat_python_scripts_lbl_)
-        stat_python_scripts_lbl_->setText(tr("Python Scripts"));
+        stat_python_scripts_lbl_->setText(tr("Capabilities"));
     if (stat_analysis_tools_lbl_)
-        stat_analysis_tools_lbl_->setText(tr("Analysis Tools"));
+        stat_analysis_tools_lbl_->setText(tr("Engine"));
 
     if (tips_label_)
         tips_label_->setText(tr("Click sidebar modules to switch views. "
@@ -160,6 +161,7 @@ QWidget* MAAnalyticsScreen::build_top_bar() {
         const auto& mod = modules_[i];
         auto* btn = new QPushButton(mod.short_label, bar);
         btn->setToolTip(mod.label);
+        btn->setAccessibleName(mod.label);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_module_selected(i); });
@@ -226,6 +228,7 @@ QWidget* MAAnalyticsScreen::build_left_sidebar() {
         // Module button
         auto* btn = new QPushButton(mod.label, list_widget);
         btn->setCursor(Qt::PointingHandCursor);
+        btn->setAccessibleName(tr("%1 module").arg(mod.label));
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_module_selected(i); });
         left_items_layout_->addWidget(btn);
         module_buttons_.append(btn);
@@ -317,10 +320,19 @@ QWidget* MAAnalyticsScreen::build_right_sidebar() {
         rl->addWidget(val);
         sl->addWidget(row);
     };
-    add_stat(tr("Total Modules"), "8", stat_total_modules_lbl_);
-    add_stat(tr("Valuation Methods"), "15+", stat_valuation_methods_lbl_);
-    add_stat(tr("Python Scripts"), "30+", stat_python_scripts_lbl_);
-    add_stat(tr("Analysis Tools"), "60+", stat_analysis_tools_lbl_);
+    // These were hardcoded to "8 / 15+ / 30+ / 60+" — invented figures that
+    // drifted from the module registry and could not be verified. Everything
+    // shown here is now counted from the registry that drives the UI.
+    QSet<QString> categories;
+    int total_caps = 0;
+    for (const auto& m : modules_) {
+        categories.insert(m.category);
+        total_caps += static_cast<int>(module_capabilities(m.id).size());
+    }
+    add_stat(tr("Total Modules"), QString::number(modules_.size()), stat_total_modules_lbl_);
+    add_stat(tr("Categories"), QString::number(categories.size()), stat_valuation_methods_lbl_);
+    add_stat(tr("Capabilities"), QString::number(total_caps), stat_python_scripts_lbl_);
+    add_stat(tr("Engine"), QStringLiteral("Python + C++"), stat_analysis_tools_lbl_);
     cl->addWidget(stats_card_);
 
     // Tips
@@ -375,6 +387,11 @@ void MAAnalyticsScreen::on_module_selected(int index) {
     content_stack_->setCurrentIndex(index);
     update_sidebar_selection();
     update_right_panel();
+    // The status bar's MODULE: value was created as an em-dash and then never
+    // written to — it stayed "—" no matter which module was open.
+    if (status_bar_)
+        if (auto* mod_val = status_bar_->findChild<QLabel*>("maStatusModule"))
+            mod_val->setText(modules_[index].label.toUpper());
     LOG_INFO("MAAnalytics", QString("Switched to module: %1").arg(modules_[index].label));
     ScreenStateManager::instance().notify_changed(this);
 }

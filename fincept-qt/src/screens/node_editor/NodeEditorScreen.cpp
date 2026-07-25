@@ -2,6 +2,8 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/node_editor/NodeEditorCommands.h"
+#include "screens/node_editor/canvas/EdgeItem.h"
 #include "screens/node_editor/canvas/MiniMap.h"
 #include "screens/node_editor/canvas/NodeCanvas.h"
 #include "screens/node_editor/canvas/NodeItem.h"
@@ -114,30 +116,49 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
         undo_stack_->redo();
         event->accept();
     } else if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-        // Delete selected nodes
+        // Delete selected nodes. Now undoable (RemoveNodesCommand restores the
+        // nodes AND every edge that touched them), so no confirmation prompt —
+        // Ctrl+Z is the recovery path.
         QStringList ids;
         for (auto* item : scene_->selectedItems()) {
             if (auto* node = dynamic_cast<NodeItem*>(item))
                 ids.append(node->node_def().id);
         }
-        if (ids.isEmpty()) {
+        if (!ids.isEmpty()) {
+            push_remove_nodes(ids, ids.size() > 1 ? tr("Delete %1 nodes").arg(ids.size()) : tr("Delete node"));
             event->accept();
             return;
         }
-        // Confirm: deletion is NOT undoable (no QUndoCommand is pushed for it)
-        // and the 30s autosave persists it, so an accidental Delete/Backspace
-        // would silently and permanently lose the nodes and their connections.
-        const auto ans = QMessageBox::question(
-            this, tr("Delete Nodes"),
-            tr("Delete %1 selected node(s) and their connections? This cannot be undone.").arg(ids.size()),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if (ans != QMessageBox::Yes) {
-            event->accept();
-            return;
+        // Nothing but edges selected → delete those instead.
+        QStringList edge_ids;
+        for (auto* item : scene_->selectedItems()) {
+            if (auto* edge = dynamic_cast<EdgeItem*>(item))
+                edge_ids.append(edge->edge_id());
         }
-        for (const auto& id : ids)
-            scene_->remove_node(id);
-        properties_->clear();
+        for (const auto& eid : edge_ids) {
+            const EdgeDef ed = scene_->edge_def(eid);
+            if (!ed.id.isEmpty())
+                undo_stack_->push(new commands::RemoveEdgeCommand(scene_, ed));
+        }
+        event->accept();
+    } else if (event->matches(QKeySequence::Save)) {
+        on_save_workflow();
+        event->accept();
+    } else if (event->key() == Qt::Key_D && (event->modifiers() & Qt::ControlModifier)) {
+        // Ctrl+D — duplicate the selection (same offset/rename as the context menu).
+        QVector<NodeDef> copies;
+        for (auto* item : scene_->selectedItems()) {
+            auto* node = dynamic_cast<NodeItem*>(item);
+            if (!node)
+                continue;
+            NodeDef copy = node->node_def();
+            copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+            copy.x += 40;
+            copy.y += 40;
+            copy.name += " (copy)";
+            copies.append(copy);
+        }
+        push_add_nodes(copies, {}, tr("Duplicate %1 node(s)").arg(copies.size()));
         event->accept();
     } else if (event->matches(QKeySequence::SelectAll)) {
         // Ctrl+A — select all nodes
@@ -171,6 +192,8 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
         }
 
         QMap<QString, QString> id_remap;
+        QVector<NodeDef> pasted_nodes;
+        QVector<EdgeDef> pasted_edges;
         for (const auto& nd : clipboard_nodes_) {
             NodeDef copy = nd;
             QString new_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -179,11 +202,7 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
             copy.x += 40;
             copy.y += 40;
             copy.name = nd.name + " (copy)";
-
-            auto& reg = NodeRegistry::instance();
-            const auto* td = reg.find(copy.type);
-            if (td)
-                scene_->add_node(copy, *td);
+            pasted_nodes.append(copy);
         }
         for (const auto& ed : clipboard_edges_) {
             EdgeDef copy = ed;
@@ -191,9 +210,11 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
             copy.source_node = id_remap.value(ed.source_node);
             copy.target_node = id_remap.value(ed.target_node);
             if (!copy.source_node.isEmpty() && !copy.target_node.isEmpty())
-                scene_->add_edge(copy);
+                pasted_edges.append(copy);
         }
-        LOG_INFO("NodeEditor", QString("Pasted %1 nodes").arg(clipboard_nodes_.size()));
+        // Single undoable step for the whole paste, wiring included.
+        push_add_nodes(pasted_nodes, pasted_edges, tr("Paste %1 node(s)").arg(pasted_nodes.size()));
+        LOG_INFO("NodeEditor", QString("Pasted %1 nodes").arg(pasted_nodes.size()));
         event->accept();
     } else {
         QWidget::keyPressEvent(event);
@@ -269,11 +290,37 @@ void NodeEditorScreen::wire_signals() {
         copy.x += 40;
         copy.y += 40;
         copy.name += " (copy)";
-        auto& reg = NodeRegistry::instance();
-        const auto* td = reg.find(copy.type);
-        if (td)
-            scene_->add_node(copy, *td);
+        push_add_nodes({copy}, {}, tr("Duplicate %1").arg(item->node_def().name));
     });
+
+    // ── Undoable-intent signals from the canvas ────────────────────────────
+    // NodeScene announces user-initiated deletes/connects instead of applying
+    // them, so every structural mutation lands on the QUndoStack.
+    connect(scene_, &NodeScene::node_delete_requested, this, &NodeEditorScreen::on_delete_node);
+    connect(scene_, &NodeScene::edge_delete_requested, this, [this](const QString& edge_id) {
+        const EdgeDef ed = scene_->edge_def(edge_id);
+        if (ed.id.isEmpty()) {
+            scene_->remove_edge(edge_id); // dangling edge — drop it without history
+            return;
+        }
+        undo_stack_->push(new commands::RemoveEdgeCommand(scene_, ed));
+    });
+    connect(scene_, &NodeScene::edge_create_requested, this,
+            [this](const EdgeDef& ed) { undo_stack_->push(new commands::AddEdgeCommand(scene_, ed)); });
+    connect(scene_, &NodeScene::node_move_started, this, &NodeEditorScreen::begin_move_snapshot);
+    connect(scene_, &NodeScene::node_move_finished, this, &NodeEditorScreen::commit_move_snapshot);
+
+    // ── Node execution flags (SETTINGS block in the properties panel) ──────
+    connect(properties_, &NodePropertiesPanel::node_flag_changed, this,
+            [this](const QString& node_id, const QString& flag, bool value) {
+                auto* item = scene_->find_node(node_id);
+                if (!item)
+                    return;
+                if (flag == QLatin1String("disabled"))
+                    item->set_disabled(value);
+                else if (flag == QLatin1String("continue_on_fail"))
+                    item->set_continue_on_fail(value);
+            });
     connect(scene_, &NodeScene::node_execute_from_requested, this, [this](const QString& node_id) {
         WorkflowDef wf = scene_->serialize();
         if (wf.nodes.isEmpty())
@@ -327,6 +374,9 @@ void NodeEditorScreen::wire_signals() {
         toolbar_->set_workflow_name(wf.name);
         current_workflow_id_ = wf.id;
         properties_->clear();
+        // The stack's commands reference nodes from the previous graph — undoing
+        // into them after a load would resurrect foreign nodes / drop live ones.
+        reset_undo_history();
         LOG_INFO("NodeEditor", QString("Workflow loaded: %1").arg(wf.name));
     });
     connect(&svc, &WorkflowService::workflow_load_failed, this,
@@ -361,6 +411,72 @@ void NodeEditorScreen::wire_signals() {
     });
 }
 
+// ── Undo plumbing ──────────────────────────────────────────────────────
+
+void NodeEditorScreen::push_add_nodes(const QVector<NodeDef>& nodes, const QVector<EdgeDef>& edges,
+                                      const QString& label) {
+    if (nodes.isEmpty())
+        return;
+    undo_stack_->push(new commands::AddNodesCommand(scene_, nodes, edges, label));
+}
+
+void NodeEditorScreen::push_remove_nodes(const QStringList& ids, const QString& label) {
+    if (ids.isEmpty())
+        return;
+    QVector<NodeDef> defs;
+    QSet<QString> id_set;
+    defs.reserve(ids.size());
+    for (const auto& id : ids) {
+        if (auto* item = scene_->find_node(id)) {
+            defs.append(item->node_def()); // carries the live x/y (itemChange keeps it current)
+            id_set.insert(id);
+        }
+    }
+    if (defs.isEmpty())
+        return;
+    const QVector<EdgeDef> edges = commands::edges_touching(scene_, id_set);
+    undo_stack_->push(new commands::RemoveNodesCommand(scene_, defs, edges, label));
+    properties_->clear();
+}
+
+void NodeEditorScreen::begin_move_snapshot() {
+    // A QGraphicsScene delivers the press to exactly one item, so a press always
+    // starts a fresh gesture — no nesting to reconcile. Snapshotting every node
+    // (not just the pressed one) is what makes a multi-select drag undoable as a
+    // single step.
+    move_snapshot_.clear();
+    for (auto* item : scene_->node_items())
+        move_snapshot_.insert(item->node_def().id, item->pos());
+}
+
+void NodeEditorScreen::commit_move_snapshot() {
+    if (move_snapshot_.isEmpty())
+        return;
+
+    QHash<QString, QPointF> before;
+    QHash<QString, QPointF> after;
+    for (auto* item : scene_->node_items()) {
+        const QString id = item->node_def().id;
+        auto it = move_snapshot_.constFind(id);
+        if (it == move_snapshot_.constEnd())
+            continue;
+        if (it.value() != item->pos()) {
+            before.insert(id, it.value());
+            after.insert(id, item->pos());
+        }
+    }
+    move_snapshot_.clear();
+    if (after.isEmpty())
+        return; // a click, not a drag
+    undo_stack_->push(new commands::MoveNodesCommand(scene_, before, after));
+}
+
+void NodeEditorScreen::reset_undo_history() {
+    if (undo_stack_)
+        undo_stack_->clear();
+    move_snapshot_.clear();
+}
+
 // ── Action handlers ────────────────────────────────────────────────────
 
 void NodeEditorScreen::on_node_drop(const QString& type_id, const QPointF& scene_pos) {
@@ -385,7 +501,7 @@ void NodeEditorScreen::on_node_drop(const QString& type_id, const QPointF& scene
             def.parameters[param.key] = param.default_value;
     }
 
-    scene_->add_node(def, *type_def);
+    push_add_nodes({def}, {}, tr("Add %1").arg(type_def->display_name));
 }
 
 void NodeEditorScreen::on_node_selected(const QString& node_id) {
@@ -416,23 +532,39 @@ void NodeEditorScreen::on_name_changed(const QString& node_id, const QString& ne
 }
 
 void NodeEditorScreen::on_delete_node(const QString& node_id) {
-    scene_->remove_node(node_id);
-    properties_->clear();
+    auto* item = scene_->find_node(node_id);
+    push_remove_nodes({node_id}, item ? tr("Delete %1").arg(item->node_def().name) : tr("Delete node"));
 }
 
 void NodeEditorScreen::on_clear_workflow() {
-    auto result =
-        QMessageBox::question(this, tr("Clear Workflow"), tr("Are you sure you want to clear all nodes and edges?"),
-                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (scene_->is_empty())
+        return;
+    auto result = QMessageBox::question(
+        this, tr("Clear Workflow"),
+        tr("Clear all %1 node(s) and their connections?\n\nThis can be undone with Ctrl+Z.")
+            .arg(scene_->node_items().size()),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (result == QMessageBox::Yes) {
-        scene_->clear_all();
+        undo_stack_->push(
+            new commands::ReplaceGraphCommand(scene_, scene_->serialize(), WorkflowDef{}, tr("Clear workflow")));
         properties_->clear();
         LOG_INFO("NodeEditor", "Workflow cleared");
     }
 }
 
 void NodeEditorScreen::on_import_workflow() {
+    // Importing replaces the whole canvas — guard the work already on it.
+    if (!scene_->is_empty()) {
+        const auto ans = QMessageBox::question(
+            this, tr("Import Workflow"),
+            tr("Importing replaces the %1 node(s) currently on the canvas.\n\nContinue?")
+                .arg(scene_->node_items().size()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (ans != QMessageBox::Yes)
+            return;
+    }
+
     QString path =
         QFileDialog::getOpenFileName(this, tr("Import Workflow"), {}, tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
@@ -485,6 +617,8 @@ void NodeEditorScreen::on_import_workflow() {
 
     scene_->deserialize(wf);
     toolbar_->set_workflow_name(wf.name);
+    properties_->clear();
+    reset_undo_history(); // the previous graph's commands no longer apply
     LOG_INFO("NodeEditor", QString("Imported workflow: %1").arg(wf.name));
 }
 
@@ -612,11 +746,84 @@ void NodeEditorScreen::on_execute() {
 
     wf.name = toolbar_->workflow_name();
 
+    // A workflow is not just a computation — trading.* nodes place, modify and
+    // cancel REAL orders. The algo tab gates live deployment behind an explicit
+    // confirmation; this path had none, so pressing EXECUTE on a graph
+    // containing a live order node sent it straight to the broker. Several
+    // shipped templates (Price Alert Trading, Mean Reversion, Portfolio
+    // Rebalancer, Pre-Trade Compliance) contain order nodes, so this is
+    // reachable by loading a template and pressing one button.
+    if (!confirm_live_order_nodes(wf, tr("Execute Workflow")))
+        return;
+
     // Reset all node states to idle before execution
     for (auto* item : scene_->node_items())
         item->set_execution_state("idle");
 
     WorkflowService::instance().execute_workflow(wf);
+}
+
+bool NodeEditorScreen::confirm_live_order_nodes(const WorkflowDef& wf, const QString& action) {
+    // Only MUTATING trading nodes matter. Read-only ones (get_quote,
+    // get_positions, get_balance, …) are safe and must not nag, or the warning
+    // becomes noise people click through — which is worse than no warning.
+    static const QSet<QString> kMutatingTradingTypes = {
+        QStringLiteral("trading.place_order"),   QStringLiteral("trading.cancel_order"),
+        QStringLiteral("trading.modify_order"),  QStringLiteral("trading.close_position"),
+        QStringLiteral("trading.bracket_order"), QStringLiteral("trading.trailing_stop"),
+        QStringLiteral("trading.scale_in"),
+    };
+
+    QStringList live_rows;
+    for (const auto& nd : wf.nodes) {
+        if (nd.disabled || !kMutatingTradingTypes.contains(nd.type))
+            continue;
+        // `mode` is declared on the order nodes as select{paper,live}, default
+        // "paper". Treat anything that is not explicitly "paper" as live: a
+        // missing or unexpected value must fail toward asking, not toward
+        // sending an order silently.
+        const QString mode = nd.parameters.value(QStringLiteral("mode")).toString(QStringLiteral("paper"));
+        if (mode.compare(QLatin1String("paper"), Qt::CaseInsensitive) == 0)
+            continue;
+
+        const QString broker = nd.parameters.value(QStringLiteral("broker")).toString();
+        const QString symbol = nd.parameters.value(QStringLiteral("symbol")).toString();
+        const QString side = nd.parameters.value(QStringLiteral("action")).toString();
+        const QString qty = nd.parameters.value(QStringLiteral("quantity")).toVariant().toString();
+
+        QString row = QStringLiteral("  • %1  [%2]").arg(nd.name.isEmpty() ? nd.type : nd.name, nd.type);
+        if (!symbol.isEmpty())
+            row += QStringLiteral("  %1").arg(symbol);
+        if (!side.isEmpty())
+            row += QStringLiteral("  %1").arg(side.toUpper());
+        if (!qty.isEmpty())
+            row += QStringLiteral(" x%1").arg(qty);
+        if (!broker.isEmpty())
+            row += QStringLiteral("  → %1").arg(broker);
+        live_rows << row;
+    }
+
+    if (live_rows.isEmpty())
+        return true; // nothing live — proceed silently
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Warning);
+    box.setWindowTitle(action);
+    box.setText(tr("This workflow contains %n LIVE order node(s).", "", live_rows.size()));
+    box.setInformativeText(tr("Running it will place REAL orders with REAL money at your broker:\n\n%1\n\n"
+                              "Set each node's Mode to \"paper\" if you only meant to simulate.")
+                               .arg(live_rows.join(QLatin1Char('\n'))));
+    auto* proceed = box.addButton(tr("Run with LIVE orders"), QMessageBox::AcceptRole);
+    box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(QMessageBox::Cancel); // Enter must not fire live orders
+    box.exec();
+
+    const bool go = (box.clickedButton() == proceed);
+    LOG_WARN("NodeEditor", QString("%1: %2 live order node(s) — user %3")
+                               .arg(action)
+                               .arg(live_rows.size())
+                               .arg(go ? "CONFIRMED" : "cancelled"));
+    return go;
 }
 
 void NodeEditorScreen::on_show_templates() {
@@ -649,6 +856,19 @@ void NodeEditorScreen::on_show_templates() {
         QInputDialog::getItem(this, tr("Workflow Templates"), tr("Select a template:"), templates, 0, false, &ok);
     if (!ok)
         return;
+
+    // Loading a template wipes the canvas. Confirm, and capture the current graph
+    // so the whole swap is a single Ctrl+Z.
+    const WorkflowDef before = scene_->serialize();
+    if (!before.nodes.isEmpty()) {
+        const auto ans = QMessageBox::question(
+            this, tr("Workflow Templates"),
+            tr("Loading a template replaces the %1 node(s) on the canvas.\n\nThis can be undone with Ctrl+Z. Continue?")
+                .arg(before.nodes.size()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (ans != QMessageBox::Yes)
+            return;
+    }
 
     int idx = templates.indexOf(chosen);
     scene_->clear_all();
@@ -1047,6 +1267,10 @@ void NodeEditorScreen::on_show_templates() {
     }
 
     current_workflow_id_.clear();
+    // The scene already holds the template; record the swap so Ctrl+Z restores
+    // whatever was on the canvas before. (push() re-applies `after`, which
+    // rebuilds an identical graph.)
+    undo_stack_->push(new commands::ReplaceGraphCommand(scene_, before, scene_->serialize(), tr("Load template")));
     LOG_INFO("NodeEditor", QString("Loaded template: %1").arg(chosen));
 }
 

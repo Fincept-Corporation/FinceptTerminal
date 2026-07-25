@@ -95,7 +95,12 @@ class NewsCommandBar : public QWidget {
     QPushButton* drawer_btn_ = nullptr;
     QPushButton* sources_btn_ = nullptr;
     QPushButton* rtl_btn_ = nullptr;
+    // AI-brief row (label + dismiss button) — laid out under the intel strip.
+    QWidget* summary_row_ = nullptr;
     QLabel* summary_label_ = nullptr;
+    QPushButton* summary_close_btn_ = nullptr;
+    /// Height with the summary row hidden: 32px command row + 28px intel strip.
+    static constexpr int kBaseHeight = 60;
     QLabel* count_label_ = nullptr;
     QLabel* alert_label_ = nullptr;
     QLabel* unseen_label_ = nullptr;

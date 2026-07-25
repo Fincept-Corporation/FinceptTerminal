@@ -8,7 +8,57 @@
 #include <QString>
 #include <QVector>
 
+#include <cmath>
+
 namespace fincept::screens::crypto {
+
+// ── Price / size formatting ──────────────────────────────────────────────────
+//
+// Crypto spans ~11 orders of magnitude of unit price: BTC trades near 1e5 and
+// PEPE/SHIB near 1e-8. Every price on this screen used to be rendered with a
+// hard-coded `'f', 2`, so for any sub-cent pair the ticker read "$0.00", the
+// order book showed twelve identical "0.00" levels, the depth-chart axis
+// printed five zeros, and the ticker's own change-detection (which compared
+// values rounded to 2 dp) suppressed updates entirely — the screen looked
+// frozen. Scale the precision to the magnitude instead.
+//
+// Header-only + inline so every widget in this directory shares one
+// definition without a new translation unit.
+
+/// Decimal places appropriate for a unit price of magnitude `v`.
+inline int price_decimals(double v) {
+    const double a = std::fabs(v);
+    if (a >= 1000.0)
+        return 2;
+    if (a >= 1.0)
+        return 4;
+    if (a >= 0.01)
+        return 5;
+    if (a >= 0.0001)
+        return 6;
+    return 8;
+}
+
+/// Plain number, no currency symbol, magnitude-appropriate precision.
+inline QString format_price_plain(double v) {
+    return QString::number(v, 'f', price_decimals(v));
+}
+
+/// `$`-prefixed price with magnitude-appropriate precision.
+inline QString format_price_usd(double v) {
+    return QStringLiteral("$") + QString::number(v, 'f', price_decimals(v));
+}
+
+/// Order/position size. Large sizes (meme-coin lots run to billions of units)
+/// don't need 6 dp; small ones do.
+inline QString format_size(double v) {
+    const double a = std::fabs(v);
+    if (a >= 1e6)
+        return QString::number(v, 'f', 2);
+    if (a >= 1.0)
+        return QString::number(v, 'f', 4);
+    return QString::number(v, 'f', 8);
+}
 
 // Order book level (UI-ready, with cumulative for depth bars)
 struct OBLevel {

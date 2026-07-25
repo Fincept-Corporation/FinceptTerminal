@@ -2,6 +2,7 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -19,6 +20,19 @@ static QString btn_style() {
                    "QPushButton:disabled { color: %6; }")
         .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(),
              ui::colors::BG_HOVER(), ui::colors::TEXT_DIM());
+}
+
+// Undo/redo cover structural graph edits only (add / delete / connect / move /
+// clear / template). Text typed into a properties field is undone with that
+// field's own Ctrl+Z — say so, rather than letting the user assume otherwise.
+static QString undo_tooltip() {
+    return QCoreApplication::translate("NodeEditorToolbar",
+                                       "Undo last graph change — add, delete, connect, move, clear (Ctrl+Z).\n"
+                                       "Text typed in the properties panel is undone in that field.");
+}
+
+static QString redo_tooltip() {
+    return QCoreApplication::translate("NodeEditorToolbar", "Redo last undone graph change (Ctrl+Y)");
 }
 
 static QString accent_btn_style() {
@@ -93,11 +107,11 @@ void NodeEditorToolbar::retranslateUi() {
         status_badge_->setText(tr("DRAFT"));
     if (undo_btn_) {
         undo_btn_->setText(tr("UNDO"));
-        undo_btn_->setToolTip(tr("Undo last action (Ctrl+Z)"));
+        undo_btn_->setToolTip(undo_tooltip());
     }
     if (redo_btn_) {
         redo_btn_->setText(tr("REDO"));
-        redo_btn_->setToolTip(tr("Redo last action (Ctrl+Y)"));
+        redo_btn_->setToolTip(redo_tooltip());
     }
     if (save_btn_) {
         save_btn_->setText(tr("SAVE"));
@@ -156,14 +170,16 @@ void NodeEditorToolbar::build_ui() {
     undo_btn_ = new QPushButton(tr("UNDO"));
     undo_btn_->setStyleSheet(btn_style());
     undo_btn_->setEnabled(false);
-    undo_btn_->setToolTip(tr("Undo last action (Ctrl+Z)"));
+    undo_btn_->setToolTip(undo_tooltip());
+    undo_btn_->setAccessibleName(tr("Undo last graph change"));
     layout->addWidget(undo_btn_);
     connect(undo_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::undo_clicked);
 
     redo_btn_ = new QPushButton(tr("REDO"));
     redo_btn_->setStyleSheet(btn_style());
     redo_btn_->setEnabled(false);
-    redo_btn_->setToolTip(tr("Redo last action (Ctrl+Y)"));
+    redo_btn_->setToolTip(redo_tooltip());
+    redo_btn_->setAccessibleName(tr("Redo last undone graph change"));
     layout->addWidget(redo_btn_);
     connect(redo_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::redo_clicked);
 
@@ -188,6 +204,8 @@ void NodeEditorToolbar::build_ui() {
 
     clear_btn_ = new QPushButton(tr("CLEAR"));
     clear_btn_->setStyleSheet(btn_style());
+    clear_btn_->setToolTip(tr("Remove every node and connection (undoable)"));
+    clear_btn_->setAccessibleName(tr("Clear the whole workflow"));
     layout->addWidget(clear_btn_);
     connect(clear_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::clear_clicked);
 
@@ -235,6 +253,8 @@ void NodeEditorToolbar::build_ui() {
     // ── Execute ────────────────────────────────────────────────────
     execute_btn_ = new QPushButton(tr("EXECUTE"));
     execute_btn_->setStyleSheet(accent_btn_style());
+    execute_btn_->setToolTip(tr("Run this workflow once now. Nodes that place orders WILL place them."));
+    execute_btn_->setAccessibleName(tr("Run the workflow"));
     layout->addWidget(execute_btn_);
     connect(execute_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::execute_clicked);
 }

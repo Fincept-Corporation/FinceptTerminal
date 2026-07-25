@@ -7,9 +7,11 @@
 //     emitted by models that don't support structured tool_calls (minimax,
 //     some OpenRouter models). Executes them and asks the LLM to summarise.
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
+#include "mcp/ResultStore.h"
 #include "services/llm/LlmContentExtractors.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "services/llm/LlmService.h"
@@ -20,17 +22,21 @@
 #include <QRegularExpression>
 #include <QString>
 
+#include <algorithm>
 #include <vector>
 
 namespace fincept::ai_chat {
 
 namespace {
 constexpr const char* kLlmToolLoopTag = "LlmService";
-}
+} // namespace
 
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers, QSet<QString> activated_tools) {
     LlmResponse resp;
+    // Bounded, LRU-evicting view over the discovered-tool set — see
+    // ActivationTracker for why an unbounded set defeats Tier-0.
+    detail::ActivationTracker activated(activated_tools);
     // MiniMax-style models spend 3 rounds per action (tool_list → tool_describe
     // → actual call), so the default 40 gives ~13 real actions — enough for a
     // full report template fill. Below ~12 silently cripples report-builder flows.
@@ -45,7 +51,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         fu["max_tokens"] = resolved_max_tokens();
 
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(
-            detail::apply_request_policy(tool_filter_), activated_tools);
+            detail::apply_request_policy(tool_filter_), activated.names());
         if (!tools.isEmpty())
             fu["tools"] = tools;
 
@@ -93,18 +99,20 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                     display = display.mid(sep + 2);
                 display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
                 detail::emit_progress(QStringLiteral("• ") + display + QStringLiteral("\n"));
-                auto tr = mcp::McpService::instance().execute_openai_function(fname, fa);
+                // allow_defer: this is the one call site that knows about the
+                // job_* tools, so it is the one allowed to receive a receipt
+                // instead of a result for a long-running tool.
+                auto tr = mcp::McpService::instance().execute_openai_function(fname, fa, /*allow_defer=*/true);
                 LOG_INFO(kLlmToolLoopTag,
                          QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
                              .arg(round)
                              .arg(fname, tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                 // If this was a discovery call (tool_list / tool_describe), declare
                 // what it surfaced so the model can actually call it next round.
-                detail::note_tool_activations(display, fa, tr, activated_tools);
-                loop_messages.append(QJsonObject{
-                    {"role", "tool"},
-                    {"tool_call_id", cid},
-                    {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
+                detail::note_tool_activations(display, fa, tr, activated);
+                loop_messages.append(QJsonObject{{"role", "tool"},
+                                                 {"tool_call_id", cid},
+                                                 {"content", detail::encode_tool_result_for_llm(display, tr)}});
             }
             continue;
         }
@@ -161,7 +169,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         // which leaked into the chat bubble. Carry the activated set so a
         // last-ditch tool call can still reference a discovered tool.
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(
-            detail::apply_request_policy(tool_filter_), activated_tools);
+            detail::apply_request_policy(tool_filter_), activated.names());
         if (!tools.isEmpty())
             fu["tools"] = tools;
 
@@ -400,14 +408,28 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         detail::emit_progress(QStringLiteral("Using `") + display + QStringLiteral("` …\n"));
         auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
 
+        // Shaped rather than clipped at a byte offset. Two reasons: `.left(4000)`
+        // cut the JSON mid-token, leaving the model to interpret a malformed
+        // fragment; and `tr.data.toObject()` silently rendered array payloads as
+        // "{}" — a whole result vanishing without a trace. shrink_json keeps the
+        // JSON valid and marks in-place what it dropped.
+        //
+        // No result_id handoff here: the follow-up request on this path attaches
+        // no tools, so pointing the model at result_fetch would be a dead
+        // instruction. This path is the fallback for models without structured
+        // tool calls; the structured loop above is where the overflow store applies.
         QString result_content;
-        if (!tr.message.isEmpty())
+        if (!tr.message.isEmpty()) {
             result_content = tr.message;
-        else if (!tr.data.isNull() && !tr.data.isUndefined())
-            result_content =
-                QString::fromUtf8(QJsonDocument(tr.data.toObject()).toJson(QJsonDocument::Compact)).left(4000);
-        else
-            result_content = QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact)).left(4000);
+        } else {
+            QJsonValue payload = (!tr.data.isNull() && !tr.data.isUndefined()) ? tr.data : QJsonValue(tr.to_json());
+            mcp::shrink_json(payload, 4000);
+            result_content = payload.isObject()
+                                 ? QString::fromUtf8(QJsonDocument(payload.toObject()).toJson(QJsonDocument::Compact))
+                             : payload.isArray()
+                                 ? QString::fromUtf8(QJsonDocument(payload.toArray()).toJson(QJsonDocument::Compact))
+                                 : payload.toVariant().toString();
+        }
 
         int sep = tc.name.indexOf("__");
         QString short_name = (sep >= 0) ? tc.name.mid(sep + 2) : tc.name;

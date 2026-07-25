@@ -73,6 +73,19 @@ float SurfaceAnalyticsScreen::spot_for(const QString& sym) const {
     return 100.0f;
 }
 
+void SurfaceAnalyticsScreen::mark_chart_real(ChartType type) {
+    real_data_charts_.insert(static_cast<int>(type));
+    sync_synthetic_badge();
+}
+
+void SurfaceAnalyticsScreen::sync_synthetic_badge() {
+    const bool synthetic = !real_data_charts_.contains(static_cast<int>(active_chart_));
+    if (control_panel_)
+        control_panel_->mark_synthetic(synthetic);
+    if (demo_banner_)
+        demo_banner_->setVisible(synthetic);
+}
+
 void SurfaceAnalyticsScreen::refresh_provider_status() {
     if (!control_panel_)
         return;
@@ -149,6 +162,9 @@ void SurfaceAnalyticsScreen::retranslateUi() {
         btn_table_->setText(tr("TABLE"));
     if (btn_line_)
         btn_line_->setText(tr("LINE"));
+    if (demo_banner_)
+        demo_banner_->setText(tr("SAMPLE DATA — synthetic values, not a live market surface. "
+                                 "Do not trade or quote from this."));
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

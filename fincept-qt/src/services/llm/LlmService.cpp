@@ -497,11 +497,11 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 QJsonObject input = block["input"].toObject();
 
                 LOG_INFO(kLlmSvcTag, "Executing Anthropic tool: " + tool_name);
-                auto tr = mcp::McpService::instance().execute_openai_function(tool_name, input);
-                tool_results.append(QJsonObject{
-                    {"type", "tool_result"},
-                    {"tool_use_id", tool_id},
-                    {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
+                auto tr = mcp::McpService::instance().execute_openai_function(tool_name, input, /*allow_defer=*/true);
+                tool_results.append(
+                    QJsonObject{{"type", "tool_result"},
+                                {"tool_use_id", tool_id},
+                                {"content", detail::encode_tool_result_for_llm(tool_name, tr)}});
             }
 
             loop_msgs.append(QJsonObject{{"role", "user"}, {"content", tool_results}});
@@ -555,11 +555,11 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     const QString tid = block["id"].toString();
                     const QString tname = block["name"].toString();
                     LOG_INFO(kLlmSvcTag, QString("Anthropic tool loop r%1: %2").arg(round).arg(tname));
-                    auto tr = mcp::McpService::instance().execute_openai_function(tname, block["input"].toObject());
-                    more_results.append(QJsonObject{
-                        {"type", "tool_result"},
-                        {"tool_use_id", tid},
-                        {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
+                    auto tr = mcp::McpService::instance().execute_openai_function(tname, block["input"].toObject(),
+                                                                                  /*allow_defer=*/true);
+                    more_results.append(QJsonObject{{"type", "tool_result"},
+                                                    {"tool_use_id", tid},
+                                                    {"content", detail::encode_tool_result_for_llm(tname, tr)}});
                 }
                 loop_msgs.append(QJsonObject{{"role", "user"}, {"content", more_results}});
             }
@@ -620,7 +620,8 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         const QJsonObject fc = part["functionCall"].toObject();
                         const QString fn_name = fc["name"].toString();
                         LOG_INFO(kLlmSvcTag, QString("Gemini tool loop r%1: %2").arg(round).arg(fn_name));
-                        auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fc["args"].toObject());
+                        auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fc["args"].toObject(),
+                                                                                      /*allow_defer=*/true);
                         // Gemini requires response to be an object — wrap strings under "result".
                         QJsonObject response_obj;
                         if (!tr.data.isNull() && !tr.data.isUndefined() && tr.data.isObject())
@@ -629,6 +630,9 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                             response_obj["result"] = tr.message;
                         else
                             response_obj = tr.to_json();
+                        // Same transcript budget as the other providers — this
+                        // path re-posts `fu_contents` wholesale every round too.
+                        detail::fit_llm_payload(fn_name, response_obj);
                         fn_response_parts.append(QJsonObject{
                             {"functionResponse", QJsonObject{{"name", fn_name}, {"response", response_obj}}}});
                     }
@@ -731,7 +735,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 // Tools the model has discovered this turn — seeded from this
                 // first round so the loop can re-declare them on the next turn
                 // (Tool RAG only ships Tier-0 otherwise; see note_tool_activations).
-                QSet<QString> activated;
+                detail::ActivationTracker activated;
 
                 for (const auto& tc_val : tcs) {
                     QJsonObject tc = tc_val.toObject();
@@ -746,19 +750,19 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         QString("Executing tool: %1 args=%2")
                             .arg(fn_name,
                                  QString::fromUtf8(QJsonDocument(fn_args).toJson(QJsonDocument::Compact)).left(200)));
-                    auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
+                    auto tr =
+                        mcp::McpService::instance().execute_openai_function(fn_name, fn_args, /*allow_defer=*/true);
                     LOG_INFO(kLlmSvcTag,
                              QString("Tool %1 -> %2 (msg=%3 err=%4)")
                                  .arg(fn_name, tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
                     const QString bare = mcp::McpProvider::parse_openai_function_name(fn_name).second;
                     detail::note_tool_activations(bare, fn_args, tr, activated);
-                    loop_msgs.append(QJsonObject{
-                        {"role", "tool"},
-                        {"tool_call_id", call_id},
-                        {"content", QString::fromUtf8(QJsonDocument(tr.to_json()).toJson(QJsonDocument::Compact))}});
+                    loop_msgs.append(QJsonObject{{"role", "tool"},
+                                                 {"tool_call_id", call_id},
+                                                 {"content", detail::encode_tool_result_for_llm(bare, tr)}});
                 }
 
-                resp = do_tool_loop(loop_msgs, url, hdr, activated);
+                resp = do_tool_loop(loop_msgs, url, hdr, activated.names());
                 parse_usage(resp, rj, provider_);
                 return resp;
 

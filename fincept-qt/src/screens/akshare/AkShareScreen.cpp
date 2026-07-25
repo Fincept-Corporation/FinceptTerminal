@@ -346,6 +346,8 @@ QWidget* AkShareScreen::create_endpoint_panel() {
     search_input_ = new QLineEdit;
     search_input_->setObjectName("akSearchInput");
     search_input_->setPlaceholderText(tr("Search endpoints..."));
+    search_input_->setAccessibleName(tr("Filter endpoints"));
+    search_input_->setClearButtonEnabled(true);
     connect(search_input_, &QLineEdit::textChanged, this, &AkShareScreen::on_search_changed);
 
     endpoint_count_ = new QLabel(tr("%1 endpoints").arg(0));
@@ -358,6 +360,7 @@ QWidget* AkShareScreen::create_endpoint_panel() {
     // Endpoint list
     endpoint_list_ = new QListWidget;
     endpoint_list_->setObjectName("akEndpointList");
+    endpoint_list_->setAccessibleName(tr("Available endpoints"));
     connect(endpoint_list_, &QListWidget::itemClicked, this, &AkShareScreen::on_endpoint_clicked);
     vl->addWidget(endpoint_list_, 1);
 
@@ -386,6 +389,8 @@ QWidget* AkShareScreen::create_params_panel() {
     param_symbol_ = new QLineEdit("000001");
     param_symbol_->setObjectName("akParamInput");
     param_symbol_->setFixedWidth(90);
+    param_symbol_->setAccessibleName(tr("Symbol parameter"));
+    connect(param_symbol_, &QLineEdit::returnPressed, this, &AkShareScreen::on_execute);
 
     // Start date
     start_label_ = new QLabel(tr("START"));
@@ -434,6 +439,19 @@ QWidget* AkShareScreen::create_params_panel() {
     hl->addWidget(param_period_);
     hl->addStretch(1);
     hl->addWidget(exec_btn_);
+
+    param_start_->setAccessibleName(tr("Start date parameter"));
+    param_end_->setAccessibleName(tr("End date parameter"));
+    param_period_->setAccessibleName(tr("Period parameter (disabled)"));
+    exec_btn_->setAccessibleName(tr("Execute query"));
+    connect(param_start_, &QLineEdit::returnPressed, this, &AkShareScreen::on_execute);
+    connect(param_end_, &QLineEdit::returnPressed, this, &AkShareScreen::on_execute);
+
+    // Explicit left-to-right tab order through the parameter form.
+    QWidget::setTabOrder(param_symbol_, param_start_);
+    QWidget::setTabOrder(param_start_, param_end_);
+    QWidget::setTabOrder(param_end_, param_period_);
+    QWidget::setTabOrder(param_period_, exec_btn_);
 
     return panel;
 }
@@ -704,7 +722,20 @@ void AkShareScreen::populate_endpoint_list(const QJsonObject& result) {
     }
 
     endpoint_count_->setText(tr("%1 endpoints").arg(all_endpoints.size()));
-    data_status_->setText(tr("Select an endpoint"));
+    // The "select a data source" hint used to stay pinned under the list
+    // forever, even once endpoints were loaded. Show it only when the list is
+    // genuinely empty, and say why.
+    if (empty_state_) {
+        if (all_endpoints.isEmpty()) {
+            empty_state_->setText(active_source_ >= 0
+                                      ? tr("No endpoints published by %1").arg(sources_[active_source_].name)
+                                      : tr("Select a data source above\nto load available endpoints"));
+            empty_state_->show();
+        } else {
+            empty_state_->hide();
+        }
+    }
+    data_status_->setText(all_endpoints.isEmpty() ? tr("No endpoints available") : tr("Select an endpoint"));
     LOG_INFO("AkShare", "Loaded " + QString::number(all_endpoints.size()) + " endpoints");
 }
 

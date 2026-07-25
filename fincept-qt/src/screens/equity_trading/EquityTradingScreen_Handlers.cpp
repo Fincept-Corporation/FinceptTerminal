@@ -494,7 +494,7 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         if (ActionCenter::instance().should_queue(acct_id, "placeorder")) {
             const auto acct_meta = AccountManager::instance().get_account(acct_id);
             const QString acct_label = acct_meta.display_name.isEmpty() ? acct_id : acct_meta.display_name;
-            if (!OrderConfirmDialog::confirm(this, order, acct_label, current_price_)) {
+            if (!OrderConfirmDialog::confirm(this, order, acct_label, current_price_, acct_id)) {
                 order_entry_->show_order_status(tr("Order cancelled"), false);
                 return;
             }
@@ -528,16 +528,29 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
 // confirmation listing every target account + its mode, then the same per-account
 // Semi-Auto gating and background broadcast the ALL dialog uses.
 void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& order, const QStringList& account_ids) {
-    if (account_ids.isEmpty())
+    if (account_ids.isEmpty()) {
+        // Releases the order ticket's send lock (armed on click) — every exit
+        // from this slot must report an outcome or the ticket stays disabled.
+        order_entry_->show_order_status(tr("No target accounts selected"), false);
         return;
+    }
 
+    // Only accounts that still exist may receive the order — the inline BROKERS
+    // selector caches ids, and one may have been removed/deactivated since it was
+    // ticked. Broadcasting to a stale id is a silently-dropped order at best.
+    QStringList live_ids;
     QStringList lines;
+    int live_n = 0;
     for (const QString& id : account_ids) {
         const auto account = AccountManager::instance().get_account(id);
         if (account.account_id.isEmpty())
             continue;
-        const QString mode_tag = account.trading_mode == "live" ? tr("LIVE") : tr("PAPER");
+        const bool is_live = account.trading_mode == "live";
+        if (is_live)
+            ++live_n;
+        const QString mode_tag = is_live ? tr("LIVE") : tr("PAPER");
         lines << QString("• %1  [%2]").arg(account.display_name, mode_tag);
+        live_ids << id;
     }
     if (lines.isEmpty()) {
         order_entry_->show_order_status(tr("Selected accounts no longer exist"), false);
@@ -547,20 +560,28 @@ void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& or
     const QString side = order.side == trading::OrderSide::Buy ? tr("BUY") : tr("SELL");
     const QString px =
         order.order_type == trading::OrderType::Market ? tr("MARKET") : QString::number(order.price, 'f', 2);
-    const auto ret = QMessageBox::question(this, tr("Multi-Broker Order"),
-                                           tr("%1 %2 × %3 @ %4 on %5 account(s):\n\n%6")
-                                               .arg(side, QString::number(order.quantity), order.symbol, px)
-                                               .arg(lines.size())
-                                               .arg(lines.join("\n")),
-                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (ret != QMessageBox::Yes)
+    // Spell out product + exchange + order type: this fires N orders at once and
+    // the ticket's product (MIS vs CNC) is not otherwise visible from here.
+    const QString detail = tr("%1 %2 × %3 @ %4\nType %5 · Product %6 · Exchange %7\n\nOn %8 account(s)%9:\n\n%10")
+                               .arg(side, QString::number(order.quantity, 'f', 0), order.symbol, px,
+                                    QString::fromLatin1(order_type_str(order.order_type)),
+                                    QString::fromLatin1(product_to_broker_str(order.product_type)),
+                                    order.exchange.isEmpty() ? tr("(broker default)") : order.exchange)
+                               .arg(lines.size())
+                               .arg(live_n > 0 ? tr(" — %1 LIVE").arg(live_n) : QString())
+                               .arg(lines.join("\n"));
+    const auto ret = QMessageBox::question(this, tr("Multi-Broker Order"), detail, QMessageBox::Yes | QMessageBox::No,
+                                           QMessageBox::No);
+    if (ret != QMessageBox::Yes) {
+        order_entry_->show_order_status(tr("Order cancelled"), false);
         return;
+    }
 
     // Per-account Semi-Auto gate: queue those accounts for approval, broadcast
     // the rest immediately (mirrors BroadcastOrderDialog::on_place_order).
     QStringList immediate;
     int queued = 0;
-    for (const QString& acct : account_ids) {
+    for (const QString& acct : live_ids) {
         if (ActionCenter::instance().should_queue(acct, "placeorder")) {
             const QString pid =
                 ActionCenter::instance().queue_order(acct, "placeorder", ActionCenter::serialize_unified_order(order));
@@ -660,6 +681,17 @@ void EquityTradingScreen::open_chart_order_ticket(bool is_buy, double price) {
     px_spin->setValue(price > 0 ? price : 0.01);
     form->addRow(tr("Limit price"), px_spin);
 
+    // Product type must be explicit: MIS auto-squares at 15:30 while CNC carries
+    // overnight and locks the full cash. This ticket used to hardcode Intraday,
+    // so a chart right-click silently opened an intraday position even for a
+    // delivery trader. Intraday stays the default (unchanged behaviour).
+    auto* product_combo = new QComboBox(&dlg);
+    product_combo->addItem(tr("Intraday (MIS)"), QStringLiteral("MIS"));
+    product_combo->addItem(tr("Delivery (CNC)"), QStringLiteral("CNC"));
+    product_combo->addItem(tr("Margin (NRML)"), QStringLiteral("NRML"));
+    product_combo->setCurrentIndex(0);
+    form->addRow(tr("Product"), product_combo);
+
     // A Market order needs no price (it fills at the LTP), so the limit-price
     // row (label + field) is hidden entirely unless Limit is selected.
     auto sync_type = [form, px_spin](int idx) { form->setRowVisible(px_spin, idx == 1); }; // 1 = Limit
@@ -684,7 +716,7 @@ void EquityTradingScreen::open_chart_order_ticket(bool is_buy, double price) {
     order.order_type = is_market ? OrderType::Market : OrderType::Limit;
     order.quantity = qty_spin->value();
     order.price = is_market ? 0.0 : px_spin->value();
-    order.product_type = ProductType::Intraday;
+    order.product_type = product_from_broker_str(product_combo->currentData().toString());
     order.validity = QStringLiteral("DAY");
     on_order_submitted(order);
 }
@@ -713,7 +745,11 @@ void EquityTradingScreen::on_cancel_order(const QString& order_id) {
 }
 
 void EquityTradingScreen::on_ob_price_clicked(double price) {
-    order_entry_->set_current_price(price);
+    // Clicking a depth level is a "trade at THIS price" gesture — it must fill the
+    // order ticket's limit price, not overwrite the LTP readout. Overwriting the
+    // LTP made the ticket display a price that was never the last traded price,
+    // which is exactly the kind of wrong number a trader must not be shown.
+    order_entry_->set_limit_price(price);
 }
 
 void EquityTradingScreen::refresh_candles() {

@@ -131,6 +131,18 @@ void SurfaceAnalyticsScreen::setup_ui() {
     rvl->setContentsMargins(0, 0, 0, 0);
     rvl->setSpacing(0);
 
+    demo_banner_ = new QLabel(tr("SAMPLE DATA — synthetic values, not a live market surface. "
+                                 "Do not trade or quote from this."),
+                              right);
+    demo_banner_->setWordWrap(true);
+    demo_banner_->setAlignment(Qt::AlignCenter);
+    demo_banner_->setAccessibleName(tr("Synthetic data warning"));
+    demo_banner_->setStyleSheet(QString("background:rgba(217,119,6,0.18); color:%1; border-bottom:1px solid %2;"
+                                        " font-size:10px; font-weight:bold; letter-spacing:0.4px; padding:5px 8px;")
+                                    .arg(colors::AMBER())
+                                    .arg(colors::AMBER_DIM()));
+    rvl->addWidget(demo_banner_);
+
     view_stack_ = new QStackedWidget(right);
     surface_3d_ = new Surface3DWidget(view_stack_);
     surface_table_ = new SurfaceTableWidget(view_stack_);

@@ -476,16 +476,22 @@ void CryptoTradingScreen::retranslateUi() {
 // ============================================================================
 
 void CryptoTradingScreen::hub_subscribe_topics() {
-    // Drop any prior connections to this owner (handles symbol/exchange swap).
+    auto& hub = fincept::datahub::DataHub::instance();
+
+    // Drop any prior subscriptions (handles symbol/exchange swap). This runs
+    // from signal handlers (chart timeframe change, symbol switch) that can
+    // themselves be reached from a hub dispatch, so per P13 the owner is
+    // retired with deleteLater() rather than `delete`. Unsubscribing first
+    // means the deferred destruction can't deliver a stale tick in between.
     if (ws_subscription_owner_) {
-        delete ws_subscription_owner_;
+        hub.unsubscribe(ws_subscription_owner_);
+        ws_subscription_owner_->deleteLater();
         ws_subscription_owner_ = nullptr;
     }
 
     // ws_subscription_owner_ is a context QObject the subscriptions are bound
     // to. Destroying it auto-cancels every subscription on swap.
     ws_subscription_owner_ = new QObject(this);
-    auto& hub = fincept::datahub::DataHub::instance();
     const QString ex = exchange_id_;
     QPointer<CryptoTradingScreen> self = this;
 
@@ -547,7 +553,11 @@ void CryptoTradingScreen::hub_subscribe_topics() {
 
 void CryptoTradingScreen::hub_unsubscribe_topics() {
     if (ws_subscription_owner_) {
-        delete ws_subscription_owner_;
+        // Same reasoning as hub_subscribe_topics(): drop the subscriptions
+        // synchronously, destroy the context object on the next event-loop
+        // turn (P13 — never `delete` a QObject that may be inside a dispatch).
+        fincept::datahub::DataHub::instance().unsubscribe(ws_subscription_owner_);
+        ws_subscription_owner_->deleteLater();
         ws_subscription_owner_ = nullptr;
     }
     LOG_INFO(TAG, "Direct WS signals detached");

@@ -215,12 +215,22 @@ void NodePropertiesPanel::build_editor(const NodeDef& node, const NodeTypeDef& t
                 "QCheckBox::indicator { width: 14px; height: 14px; background: %2; border: 1px solid %3; }"
                 "QCheckBox::indicator:checked { background: %4; }")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
+    disabled_check_->setToolTip(tr("Skip this node during execution"));
+    connect(disabled_check_, &QCheckBox::toggled, this, [this](bool on) {
+        if (!current_node_id_.isEmpty())
+            emit node_flag_changed(current_node_id_, QStringLiteral("disabled"), on);
+    });
     editor_layout_->insertWidget(pos++, disabled_check_);
 
     // Continue on fail toggle
     cof_check_ = new QCheckBox(tr("Continue on Fail"));
     cof_check_->setChecked(node.continue_on_fail);
     cof_check_->setStyleSheet(disabled_check_->styleSheet());
+    cof_check_->setToolTip(tr("Keep running the workflow if this node errors"));
+    connect(cof_check_, &QCheckBox::toggled, this, [this](bool on) {
+        if (!current_node_id_.isEmpty())
+            emit node_flag_changed(current_node_id_, QStringLiteral("continue_on_fail"), on);
+    });
     editor_layout_->insertWidget(pos++, cof_check_);
 }
 

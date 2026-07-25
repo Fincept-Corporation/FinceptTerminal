@@ -92,8 +92,6 @@ class MAAnalyticsScreen : public QWidget, public IStatefulScreen {
     QLabel* status_status_lbl_ = nullptr;
     QLabel* status_ready_val_ = nullptr;
 
-    bool left_open_ = true;
-    bool right_open_ = true;
     bool first_show_ = true;
 };
 

@@ -97,7 +97,8 @@ void AiChatScreen::build_sidebar() {
     new_btn_ = new QPushButton("＋");
     new_btn_->setFixedSize(34, 34);
     new_btn_->setCursor(Qt::PointingHandCursor);
-    new_btn_->setToolTip(tr("New Chat  (Ctrl+N)"));
+    new_btn_->setToolTip(tr("New Chat  (Ctrl+N / Ctrl+K)"));
+    new_btn_->setAccessibleName(tr("New chat session"));
     new_btn_->setStyleSheet(
         QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                 "border-radius:0px;font-size:20px;font-weight:700;}"
@@ -232,6 +233,14 @@ void AiChatScreen::build_chat_area() {
     messages_layout_->setContentsMargins(32, 24, 32, 16);
     messages_layout_->setSpacing(18);
     messages_layout_->addStretch();
+
+    // build_welcome() existed and was fully written but was never called, so
+    // welcome_panel_ stayed null and show_welcome() was a permanent no-op — the
+    // "How can I help you?" heading and the six suggestion cards never rendered
+    // on an empty session. Insert it above the stretch; clear_messages() keeps it.
+    welcome_panel_ = build_welcome();
+    messages_layout_->insertWidget(0, welcome_panel_);
+
     scroll_area_->setWidget(messages_container_);
     vl->addWidget(scroll_area_, 1);
 
@@ -432,6 +441,9 @@ QWidget* AiChatScreen::build_input_area() {
                                   .arg(fnt::BODY)
                                   .arg(col::AMBER()));
     input_box_->installEventFilter(this);
+    input_box_->setAccessibleName(tr("Message Fincept AI"));
+    input_box_->setAccessibleDescription(
+        tr("Enter sends, Shift+Enter inserts a new line, Ctrl+N or Ctrl+K starts a new session."));
     connect(input_box_, &QPlainTextEdit::textChanged, this, [this]() {
         const int lines = input_box_->document()->blockCount();
         input_box_->setFixedHeight(qMin(qMax(lines, 1), 6) * 24 + 20);
@@ -444,6 +456,7 @@ QWidget* AiChatScreen::build_input_area() {
     attach_btn_->setFixedSize(44, 44);
     attach_btn_->setCursor(Qt::PointingHandCursor);
     attach_btn_->setToolTip(tr("Attach a file to this message"));
+    attach_btn_->setAccessibleName(tr("Attach file"));
     attach_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                                        "border-radius:0px;font-size:20px;font-weight:700;}"
                                        "QPushButton:hover{background:rgba(217,119,6,0.15);border-color:%1;}"
@@ -465,6 +478,7 @@ QWidget* AiChatScreen::build_input_area() {
     send_btn_ = new QPushButton(tr("Send  ↑"));
     send_btn_->setFixedSize(82, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
+    send_btn_->setAccessibleName(tr("Send message"));
     send_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:none;border-radius:0px;"
                                      "font-size:%3px;font-weight:700;}"
                                      "QPushButton:hover:enabled{background:%4;}"
@@ -474,6 +488,10 @@ QWidget* AiChatScreen::build_input_area() {
                                  .arg(col::ORANGE(), col::BG_RAISED(), col::TEXT_DIM()));
     connect(send_btn_, &QPushButton::clicked, this, &AiChatScreen::on_send);
     hl->addWidget(send_btn_);
+
+    // Explicit tab order — composer first, then its two actions.
+    setTabOrder(input_box_, attach_btn_);
+    setTabOrder(attach_btn_, send_btn_);
 
     return bar;
 }

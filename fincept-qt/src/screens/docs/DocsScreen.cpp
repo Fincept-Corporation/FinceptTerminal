@@ -12,10 +12,14 @@
 #include "screens/docs/DocsScreen_internal.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeySequence>
+#include <QLineEdit>
 #include <QScrollArea>
+#include <QShortcut>
 #include <QSplitter>
 #include <QTreeWidgetItemIterator>
 
@@ -387,6 +391,55 @@ void DocsScreen::navigate_to(const QString& section_id) {
     }
 }
 
+// ── Topic count + search ─────────────────────────────────────────────────────
+
+void DocsScreen::update_topic_count() {
+    if (!cmd_count_ || !sidebar_)
+        return;
+    // Counted, not hardcoded — the literal said "35 TOPICS" while the tree had
+    // 38, and would drift again on the next page added.
+    int topics = 0;
+    const int categories = sidebar_->topLevelItemCount();
+    for (QTreeWidgetItemIterator it(sidebar_); *it; ++it)
+        if (!(*it)->data(0, Qt::UserRole).toString().isEmpty())
+            ++topics;
+    cmd_count_->setText(tr("%1 TOPICS  |  %2 CATEGORIES").arg(topics).arg(categories));
+}
+
+void DocsScreen::apply_search(const QString& text) {
+    if (!sidebar_)
+        return;
+    const QString needle = text.trimmed();
+
+    // Empty query restores the full tree.
+    if (needle.isEmpty()) {
+        for (int i = 0; i < sidebar_->topLevelItemCount(); ++i) {
+            auto* cat = sidebar_->topLevelItem(i);
+            cat->setHidden(false);
+            cat->setExpanded(true);
+            for (int j = 0; j < cat->childCount(); ++j)
+                cat->child(j)->setHidden(false);
+        }
+        return;
+    }
+
+    for (int i = 0; i < sidebar_->topLevelItemCount(); ++i) {
+        auto* cat = sidebar_->topLevelItem(i);
+        const bool cat_hit = cat->text(0).contains(needle, Qt::CaseInsensitive);
+        int visible_children = 0;
+        for (int j = 0; j < cat->childCount(); ++j) {
+            auto* child = cat->child(j);
+            const bool hit = cat_hit || child->text(0).contains(needle, Qt::CaseInsensitive) ||
+                             child->data(0, Qt::UserRole).toString().contains(needle, Qt::CaseInsensitive);
+            child->setHidden(!hit);
+            if (hit)
+                ++visible_children;
+        }
+        cat->setHidden(visible_children == 0);
+        cat->setExpanded(true);
+    }
+}
+
 // ============================================================================
 // Constructor — Main layout
 // ============================================================================
@@ -419,17 +472,36 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
                            .arg(ui::colors::BORDER_BRIGHT()));
     cmd_hl->addWidget(sep);
 
-    // Brand + version string — shown verbatim, not translated.
-    breadcrumb_ = new QLabel("FINCEPT TERMINAL v4.0.0");
+    // Brand + version string — shown verbatim, not translated. Read from the
+    // running application rather than hardcoded: the literal here said v4.0.0
+    // while the app shipped as 4.0.1.
+    breadcrumb_ = new QLabel(QStringLiteral("FINCEPT TERMINAL v%1").arg(QCoreApplication::applicationVersion()));
     breadcrumb_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold;"
                                        " background: transparent; letter-spacing: 0.5px;"
                                        " font-family: 'Consolas','Courier New',monospace;")
                                    .arg(ui::colors::TEXT_SECONDARY()));
     cmd_hl->addWidget(breadcrumb_);
 
+    // ── Search ────────────────────────────────────────────────────────────────
+    // 38 topics with no way to search them. Filters the sidebar tree live;
+    // Ctrl+F focuses it.
+    search_input_ = new QLineEdit;
+    search_input_->setFixedWidth(220);
+    search_input_->setClearButtonEnabled(true);
+    search_input_->setPlaceholderText(tr("Search topics…  (Ctrl+F)"));
+    search_input_->setAccessibleName(tr("Search documentation topics"));
+    search_input_->setStyleSheet(QString("QLineEdit { background: %1; color: %2; border: 1px solid %3;"
+                                         "  padding: 2px 6px; font-size: 11px;"
+                                         "  font-family: 'Consolas','Courier New',monospace; }"
+                                         "QLineEdit:focus { border-color: %4; }")
+                                     .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(),
+                                          ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
+    connect(search_input_, &QLineEdit::textChanged, this, &DocsScreen::apply_search);
+    cmd_hl->addWidget(search_input_);
+
     cmd_hl->addStretch();
 
-    cmd_count_ = new QLabel(tr("%1 TOPICS  |  %2 CATEGORIES").arg(35).arg(9));
+    cmd_count_ = new QLabel;
     cmd_count_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
                                       " font-family: 'Consolas','Courier New',monospace;")
                                   .arg(ui::colors::TEXT_TERTIARY()));
@@ -440,6 +512,14 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     // ── Splitter: sidebar + content ──────────────────────────────────────────
     build_sidebar();
     build_content_pages();
+    update_topic_count();
+
+    auto* find_sc = new QShortcut(QKeySequence::Find, this);
+    find_sc->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(find_sc, &QShortcut::activated, this, [this]() {
+        search_input_->setFocus();
+        search_input_->selectAll();
+    });
 
     splitter_ = new QSplitter(Qt::Horizontal);
     splitter_->setStyleSheet(QString("QSplitter { background: %1; }"
@@ -474,8 +554,8 @@ void DocsScreen::retranslateUi() {
     // Command bar
     if (cmd_title_)
         cmd_title_->setText(tr("DOCUMENTATION"));
-    if (cmd_count_)
-        cmd_count_->setText(tr("%1 TOPICS  |  %2 CATEGORIES").arg(35).arg(9));
+    if (search_input_)
+        search_input_->setPlaceholderText(tr("Search topics…  (Ctrl+F)"));
 
     // Rebuild sidebar + content pages so their tr() strings pick up the new
     // language. Preserve the currently displayed section across the rebuild.
@@ -512,6 +592,10 @@ void DocsScreen::retranslateUi() {
 
     old_sidebar->deleteLater();
     old_pages->deleteLater();
+
+    update_topic_count();
+    if (search_input_)
+        apply_search(search_input_->text()); // re-apply the active filter to the new tree
 
     // Restore the section the user was on (also re-selects the sidebar row via
     // the currentItemChanged → navigate_to wiring).

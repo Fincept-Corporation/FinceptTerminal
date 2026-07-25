@@ -35,6 +35,11 @@ class EquityChartPanel : public QWidget {
     // Bulk-load historical candles (full reload on symbol/timeframe change).
     void set_candles(const QVector<trading::BrokerCandle>& candles);
 
+    // Drop every candle from whichever backend is active. Used when the symbol
+    // or timeframe changes and the new history could not be fetched, so the
+    // previous symbol's series is never left on screen (#338).
+    void clear_candles();
+
     // Roll a live quote into the forming candle (no-op in the fallback backend).
     void on_quote(const trading::BrokerQuote& quote);
 

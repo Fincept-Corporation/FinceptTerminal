@@ -62,16 +62,24 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget(tr("STOCK SCREENER"
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
 
-    auto* list_widget = new QWidget(this);
-    list_widget->setStyleSheet("background: transparent;");
-    list_layout_ = new QVBoxLayout(list_widget);
+    list_widget_ = new QWidget(this);
+    list_widget_->setObjectName("screenerList");
+    list_layout_ = new QVBoxLayout(list_widget_);
     list_layout_->setContentsMargins(0, 0, 0, 0);
     list_layout_->setSpacing(0);
+
+    // Empty / loading placeholder — the screener used to render nothing at all
+    // until the first quote landed, which reads as a broken tile.
+    empty_lbl_ = new QLabel(tr("Waiting for quotes..."));
+    empty_lbl_->setObjectName("scEmpty");
+    empty_lbl_->setAlignment(Qt::AlignCenter);
+    list_layout_->addWidget(empty_lbl_);
     list_layout_->addStretch();
 
-    scroll_->setWidget(list_widget);
+    scroll_->setWidget(list_widget_);
     vl->addWidget(scroll_, 1);
 
+    filter_combo_->setAccessibleName(tr("Screener sort order"));
     connect(filter_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ScreenerWidget::apply_filter);
     connect(this, &BaseWidget::refresh_requested, this, &ScreenerWidget::refresh_data);
 
@@ -107,6 +115,28 @@ void ScreenerWidget::apply_styles() {
         QString("QScrollBar::handle:vertical { background: %1; border-radius: 2px; min-height: 20px; }")
             .arg(ui::colors::BORDER_MED()) +
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }");
+
+    // ── Row styling, hoisted (P7) ──
+    // render_rows() draws up to 20 rows × 5 widgets. Styling each of those
+    // inline meant ~100 full CSS reparses per render, and render ran once per
+    // arriving symbol (42 of them). All of it is now one stylesheet, set here
+    // and only re-set on a theme change; rows just carry object names.
+    if (list_widget_) {
+        list_widget_->setStyleSheet(
+            QString("#screenerList{background:transparent;}"
+                    "#screenerList QWidget#scRow{background:transparent;}"
+                    "#screenerList QWidget#scRowAlt{background:%1;}"
+                    "#screenerList QLabel{font-size:10px;background:transparent;}"
+                    "#screenerList QLabel#scSym{color:%2;font-weight:bold;}"
+                    "#screenerList QLabel#scPrice{color:%3;}"
+                    "#screenerList QLabel#scChgPos{color:%4;font-weight:bold;}"
+                    "#screenerList QLabel#scChgNeg{color:%5;font-weight:bold;}"
+                    "#screenerList QLabel#scChgFlat{color:%3;font-weight:bold;}"
+                    "#screenerList QLabel#scVol{color:%6;}"
+                    "#screenerList QLabel#scEmpty{color:%7;font-size:11px;padding:20px;}")
+                .arg(ui::colors::BG_RAISED(), ui::colors::INFO(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),
+                     ui::colors::NEGATIVE(), ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_TERTIARY()));
+    }
 
     // Re-render data rows with current tokens if data exists
     if (!all_quotes_.isEmpty())
@@ -148,7 +178,8 @@ void ScreenerWidget::hub_subscribe_all() {
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             set_loading_progress(row_cache_.size(), kScreenerSymbols.size());
-            rebuild_all_quotes();
+            // One sort + 20-row redraw per delivery burst, not one per symbol.
+            schedule_render([this]() { rebuild_all_quotes(); });
         });
     }
     hub_active_ = true;
@@ -171,8 +202,10 @@ void ScreenerWidget::rebuild_all_quotes() {
 }
 
 void ScreenerWidget::apply_filter() {
-    if (all_quotes_.isEmpty())
+    if (all_quotes_.isEmpty()) {
+        render_rows({}); // keeps the empty-state label on screen
         return;
+    }
 
     QVector<services::QuoteData> sorted = all_quotes_;
     int idx = filter_combo_ ? filter_combo_->currentIndex() : 0;
@@ -206,37 +239,47 @@ void ScreenerWidget::apply_filter() {
 void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
     while (list_layout_->count() > 0) {
         auto* item = list_layout_->takeAt(0);
-        if (item->widget())
+        // empty_lbl_ is reused across renders — take it out of the layout but
+        // never delete it.
+        if (item->widget() && item->widget() != empty_lbl_)
             item->widget()->deleteLater();
         delete item;
     }
 
+    if (rows.isEmpty()) {
+        if (empty_lbl_) {
+            empty_lbl_->setVisible(true);
+            list_layout_->addWidget(empty_lbl_);
+        }
+        list_layout_->addStretch();
+        return;
+    }
+    if (empty_lbl_)
+        empty_lbl_->setVisible(false);
+
+    // No setStyleSheet in this loop — every colour/size comes from the single
+    // stylesheet on list_widget_ (see apply_styles) via these object names.
     bool alt = false;
     for (const auto& q : rows) {
-        auto* row = new QWidget(this);
-        row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
+        auto* row = new QWidget(list_widget_);
+        row->setObjectName(alt ? QStringLiteral("scRowAlt") : QStringLiteral("scRow"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
         auto* sym = new QLabel(q.symbol);
-        sym->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(ui::colors::INFO()));
+        sym->setObjectName("scSym");
         rl->addWidget(sym, 2);
 
         auto* price = new QLabel(QString("$%1").arg(q.price, 0, 'f', 2));
+        price->setObjectName("scPrice");
         price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        price->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_PRIMARY()));
         rl->addWidget(price, 2);
 
-        QString chg_str = QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2);
-        QString chg_col = q.change_pct > 0   ? ui::colors::POSITIVE()
-                          : q.change_pct < 0 ? ui::colors::NEGATIVE()
-                                             : ui::colors::TEXT_PRIMARY();
-        auto* chg = new QLabel(chg_str);
+        auto* chg = new QLabel(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
+        chg->setObjectName(q.change_pct > 0   ? QStringLiteral("scChgPos")
+                           : q.change_pct < 0 ? QStringLiteral("scChgNeg")
+                                              : QStringLiteral("scChgFlat"));
         chg->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        chg->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(chg_col));
         rl->addWidget(chg, 1);
 
         // Format volume: e.g. 45.2M
@@ -251,9 +294,8 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
             vol_str = QString::number(static_cast<long long>(q.volume));
 
         auto* vol = new QLabel(vol_str);
+        vol->setObjectName("scVol");
         vol->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        vol->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
         rl->addWidget(vol, 2);
 
         list_layout_->addWidget(row);
@@ -266,9 +308,29 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
 void ScreenerWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("STOCK SCREENER"));
+    // Must match the source string used in the constructor — this said
+    // "FILTER:" while the ctor used "SORT BY", so a language switch silently
+    // relabelled the control (and looked up a key that isn't in the catalogue).
     if (filter_lbl_)
-        filter_lbl_->setText(tr("FILTER:"));
-    rebuild_all_quotes(); // re-renders headers + count label in the new language
+        filter_lbl_->setText(tr("SORT BY"));
+    if (count_lbl_)
+        count_lbl_->setText(tr("%1 symbols").arg(kScreenerSymbols.size()));
+    if (empty_lbl_)
+        empty_lbl_->setText(tr("Waiting for quotes..."));
+    // Column headers + sort-order items are set once in the ctor — the old
+    // rebuild_all_quotes() call re-rendered data rows but never these.
+    const QStringList hdrs = {tr("SYMBOL"), tr("PRICE"), tr("CHG%"), tr("VOLUME")};
+    for (int i = 0; i < header_labels_.size() && i < hdrs.size(); ++i)
+        header_labels_[i]->setText(hdrs[i]);
+    if (filter_combo_) {
+        const int cur = filter_combo_->currentIndex();
+        const QStringList items = {tr("% CHANGE ↑"), tr("% CHANGE ↓"), tr("VOLUME ↓"), tr("PRICE ↓"), tr("PRICE ↑")};
+        for (int i = 0; i < filter_combo_->count() && i < items.size(); ++i)
+            filter_combo_->setItemText(i, items[i]);
+        filter_combo_->setCurrentIndex(cur);
+        filter_combo_->setAccessibleName(tr("Screener sort order"));
+    }
+    rebuild_all_quotes();
 }
 
 } // namespace fincept::screens::widgets

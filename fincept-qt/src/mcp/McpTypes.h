@@ -21,6 +21,13 @@ namespace fincept::mcp {
 /// the 30s default referenced by ToolContext, ToolDef, and McpProvider.
 constexpr int kMcpDefaultTimeoutMs = 30000;
 
+/// How long an LLM-originated call to a `supports_async` tool waits for an
+/// inline result before it converts to a background job and hands back a
+/// receipt. Tuned so genuinely fast paths (warm cache, cheap query) still
+/// answer in one round-trip while a real long-runner backgrounds promptly.
+/// Overridable via the `mcp/job_grace_ms` setting.
+constexpr int kMcpJobGraceMs = 2500;
+
 // ============================================================================
 // Tool Result — returned by tool handlers
 // ============================================================================
@@ -291,6 +298,23 @@ struct ToolDef {
     /// larger for slow ones (e.g. analytics scripts that run a full backtest).
     /// Per-call overrides are merged from `_meta.timeout_ms` (Phase 6).
     int default_timeout_ms = kMcpDefaultTimeoutMs;
+
+    /// Opt-in to the async job protocol. When true, an LLM-originated call that
+    /// hasn't finished within the grace window (see `kMcpJobGraceMs`) returns a
+    /// `{job_id, status:"running"}` receipt instead of blocking, and the work
+    /// continues in the background under `JobRegistry`. The model then polls
+    /// `job_status` / collects with `job_result`.
+    ///
+    /// Set this on tools whose p95 runtime is measured in tens of seconds —
+    /// agent runs, backtests, bulk EDGAR pulls. Leave it false for everything
+    /// else: a fast tool that returns a receipt costs the model an extra
+    /// round-trip for no benefit. Tools that finish inside the grace window
+    /// return their real result inline regardless, so setting it on a
+    /// sometimes-slow tool is safe.
+    ///
+    /// Requires `async_handler` — a sync handler cannot be interrupted or
+    /// backgrounded, so the flag is ignored for those.
+    bool supports_async = false;
 
     // ── Phase 6: Authorization ──────────────────────────────────────────
     /// Required auth level — checked by McpProvider::call_tool before the

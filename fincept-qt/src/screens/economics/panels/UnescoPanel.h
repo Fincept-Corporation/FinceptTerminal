@@ -27,6 +27,10 @@ class UnescoPanel : public EconPanelBase {
 
   private:
     void load_indicators();
+    /// Rebuild the indicator list from the live UIS catalogue (all_records_)
+    /// for `theme_index`, restoring `keep_code` if still present.
+    /// Returns false when the catalogue has no entry for that theme.
+    bool populate_indicators_from_records(int theme_index, const QString& keep_code);
     void on_theme_changed(int index);
     void on_indicator_filter(const QString& text);
     void retranslateUi() override;
@@ -50,6 +54,8 @@ class UnescoPanel : public EconPanelBase {
         QString code;
     };
     QList<IndicatorDef> current_indicators_;
+    /// Raw `list_indicators` catalogue records, cached for theme re-filtering.
+    QJsonArray all_records_;
     bool indicators_loaded_ = false;
 };
 

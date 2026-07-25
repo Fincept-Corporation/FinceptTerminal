@@ -50,11 +50,21 @@ class ExcelScreen : public QWidget, public IStatefulScreen {
     SpreadsheetWidget* current_sheet() const;
     QString generate_sheet_name() const;
 
+    /// Load a .csv into a single new sheet, replacing the current workbook.
+    bool import_csv(const QString& path);
+    /// Track edits so we can warn before discarding them.
+    void mark_dirty();
+    /// Returns true if it is safe to proceed (nothing unsaved, or the user
+    /// confirmed discarding). `action` names what is about to happen.
+    bool confirm_discard(const QString& action);
+    /// Attach a new sheet's data_changed to mark_dirty().
+    void watch_sheet(SpreadsheetWidget* sheet);
+
     QTabWidget* sheet_tabs_ = nullptr;
     QLabel* status_label_ = nullptr;
     QString file_name_ = "Untitled.xlsx";
     QString file_path_;
-    int sheet_counter_ = 1;
+    bool dirty_ = false;
 
     // Toolbar text widgets (cached for retranslateUi)
     QLabel* toolbar_title_ = nullptr;

@@ -49,6 +49,8 @@ class AccountManagementDialog : public QDialog {
     void on_rename_account();
     void build_credential_form(const trading::BrokerProfile& profile);
     void load_saved_credentials(const QString& account_id);
+    // Show/hide the "LIVE + Auto = no confirmation" banner under the approval combo.
+    void update_approval_warning();
 
     // Zerodha-specific form + handlers
     void build_zerodha_form();
@@ -98,6 +100,7 @@ class AccountManagementDialog : public QDialog {
     // including the dedicated Zerodha/Fyers/MT4 forms.
     QLabel* approval_caption_ = nullptr;
     QComboBox* approval_mode_combo_ = nullptr;
+    QLabel* approval_warning_ = nullptr;
 
     // Dynamic credential fields (rebuilt per broker profile)
     QVector<QLineEdit*> cred_fields_;

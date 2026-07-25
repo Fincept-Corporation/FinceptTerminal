@@ -456,12 +456,14 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
 
     for (int i = 0; i < std::min(8, static_cast<int>(sigs.size())); ++i) {
         const auto& sig = sigs[i];
-        QString color = sig.severity == "critical"
-                            ? "" + QString(ui::colors::NEGATIVE()) + ""
-                            : (sig.severity == "high" ? "" + QString(ui::colors::WARNING()) + ""
-                                                      : "" + QString(ui::colors::WARNING()) + "");
+        // "critical" is red, everything else amber. The previous nested
+        // ternary had identical "high" and default branches wrapped in
+        // no-op "" + … + "" concatenations.
+        const QString color =
+            sig.severity == QLatin1String("critical") ? ui::colors::NEGATIVE() : ui::colors::WARNING();
         auto* lbl = new QLabel(sig.detail.left(40), this);
         lbl->setObjectName("newsDeviationCategory");
+        lbl->setTextFormat(Qt::PlainText);
         lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
         lbl->setToolTip(sig.detail);
         signals_layout_->addWidget(lbl);
@@ -471,32 +473,32 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
 void NewsSidePanel::update_instability(const QString& country, const services::InstabilityScore& score) {
     cii_section_->show();
 
+    // CRITICAL → red, HIGH/ELEVATED → amber, otherwise green. Was a four-way
+    // nested ternary with two identical branches and no-op string concats.
+    auto level_color = [](const QString& level) -> QString {
+        if (level == QLatin1String("CRITICAL"))
+            return ui::colors::NEGATIVE();
+        if (level == QLatin1String("HIGH") || level == QLatin1String("ELEVATED"))
+            return ui::colors::WARNING();
+        return ui::colors::POSITIVE();
+    };
+
     // Check if already exists
     for (int i = 0; i < cii_layout_->count(); ++i) {
         auto* w = cii_layout_->itemAt(i)->widget();
         if (w && w->property("country").toString() == country) {
             auto* lbl = qobject_cast<QLabel*>(w);
             if (lbl) {
-                QString color = score.level == "CRITICAL"
-                                    ? "" + QString(ui::colors::NEGATIVE()) + ""
-                                    : (score.level == "HIGH"
-                                           ? "" + QString(ui::colors::WARNING()) + ""
-                                           : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + ""
-                                                                        : "" + QString(ui::colors::POSITIVE()) + ""));
                 lbl->setText(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level));
-                lbl->setStyleSheet(QString("color: %1; font-weight: 700; background: transparent;").arg(color));
+                lbl->setStyleSheet(
+                    QString("color: %1; font-weight: 700; background: transparent;").arg(level_color(score.level)));
             }
             return;
         }
     }
 
     // New entry
-    QString color =
-        score.level == "CRITICAL"
-            ? "" + QString(ui::colors::NEGATIVE()) + ""
-            : (score.level == "HIGH" ? "" + QString(ui::colors::WARNING()) + ""
-                                     : (score.level == "ELEVATED" ? "" + QString(ui::colors::WARNING()) + ""
-                                                                  : "" + QString(ui::colors::POSITIVE()) + ""));
+    const QString color = level_color(score.level);
     auto* lbl = new QLabel(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level), this);
     lbl->setObjectName("newsDeviationScore");
     lbl->setProperty("country", country);
@@ -520,12 +522,12 @@ void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>
 
     for (int i = 0; i < std::min(6, static_cast<int>(predictions.size())); ++i) {
         const auto& pm = predictions[i];
-        int pct = static_cast<int>(pm.yes_price * 100);
-        QString color = pct >= 70 ? "" + QString(ui::colors::POSITIVE()) + ""
-                                  : (pct <= 30 ? "" + QString(ui::colors::NEGATIVE()) + ""
-                                               : "" + QString(ui::colors::WARNING()) + "");
+        const int pct = static_cast<int>(pm.yes_price * 100);
+        const QString color =
+            pct >= 70 ? ui::colors::POSITIVE() : (pct <= 30 ? ui::colors::NEGATIVE() : ui::colors::WARNING());
         auto* lbl = new QLabel(QString("%1%  %2").arg(pct).arg(pm.question.left(32)), this);
         lbl->setObjectName("newsMonitorLabel");
+        lbl->setTextFormat(Qt::PlainText);
         lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
         lbl->setToolTip(pm.question);
         predictions_layout_->addWidget(lbl);

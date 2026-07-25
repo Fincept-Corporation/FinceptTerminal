@@ -24,6 +24,13 @@ constexpr const char* kHeliusKey = "solana.helius_api_key";
 constexpr const char* kSlippageKey = "wallet.default_slippage_bps";
 constexpr int kDefaultSlippageBps = 100; // 1.00%
 constexpr int kMaxSlippageBps = 500;     // 5.00%
+// PumpPortal's `trade-local` takes an INTEGER percent and clamps it to [1,5];
+// SwapPanel rounds the stored bps up to a whole percent before sending. The
+// slider used to start at 10 bps, so a user who set 0.10 % had 1.00 % actually
+// enforced — the settings screen promised a tolerance the swap path could not
+// honour. Bound the control to what is executable.
+constexpr int kMinSlippageBps = 100; // 1.00%
+constexpr int kSlippageStepBps = 25;
 
 QString settings_font_stack() {
     return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
@@ -150,20 +157,26 @@ void SettingsTab::build_ui() {
         helius_input_->setPlaceholderText(tr("paste API key…"));
         helius_input_->setEchoMode(QLineEdit::Password);
         helius_input_->setFixedHeight(28);
+        helius_input_->setAccessibleName(tr("Helius API key"));
         row->addWidget(helius_input_, 1);
 
         helius_save_button_ = new QPushButton(tr("SAVE"), panel);
         helius_save_button_->setObjectName(QStringLiteral("settingsTabButton"));
         helius_save_button_->setFixedHeight(28);
         helius_save_button_->setCursor(Qt::PointingHandCursor);
+        helius_save_button_->setAccessibleName(tr("Save Helius API key"));
         row->addWidget(helius_save_button_);
 
         helius_clear_button_ = new QPushButton(tr("CLEAR"), panel);
         helius_clear_button_->setObjectName(QStringLiteral("settingsTabDangerButton"));
         helius_clear_button_->setFixedHeight(28);
         helius_clear_button_->setCursor(Qt::PointingHandCursor);
+        helius_clear_button_->setAccessibleName(tr("Remove stored Helius API key"));
         row->addWidget(helius_clear_button_);
         body->addLayout(row);
+
+        setTabOrder(helius_input_, helius_save_button_);
+        setTabOrder(helius_save_button_, helius_clear_button_);
 
         helius_status_ = new QLabel(QStringLiteral("—"), panel);
         helius_status_->setObjectName(QStringLiteral("settingsTabHint"));
@@ -179,9 +192,10 @@ void SettingsTab::build_ui() {
     {
         auto [panel, body] =
             make_panel(tr("DEFAULT SLIPPAGE"), tr("1% – 5%"), slippage_panel_title_, slippage_panel_sub_);
-        slippage_hint_ = new QLabel(tr("Default slippage tolerance for swaps. Quotes whose route "
-                                       "impact exceeds this value are blocked. Adjustable per-swap on "
-                                       "the TRADE tab."),
+        slippage_hint_ = new QLabel(tr("Maximum price drift PumpSwap may fill your swap at before it "
+                                       "reverts. Applies to every swap on the TRADE tab — there is no "
+                                       "per-swap override. PumpPortal accepts whole percents only, so "
+                                       "the value is rounded up to the next percent and clamped to 5%."),
                                     panel);
         slippage_hint_->setObjectName(QStringLiteral("settingsTabHint"));
         slippage_hint_->setWordWrap(true);
@@ -191,13 +205,15 @@ void SettingsTab::build_ui() {
         row->setSpacing(8);
         slippage_slider_ = new QSlider(Qt::Horizontal, panel);
         slippage_slider_->setObjectName(QStringLiteral("settingsTabSlider"));
-        slippage_slider_->setMinimum(10); // 0.10%
+        slippage_slider_->setMinimum(kMinSlippageBps);
         slippage_slider_->setMaximum(kMaxSlippageBps);
-        slippage_slider_->setSingleStep(5);
-        slippage_slider_->setTickInterval(50);
+        slippage_slider_->setSingleStep(kSlippageStepBps);
+        slippage_slider_->setPageStep(kSlippageStepBps * 4);
+        slippage_slider_->setTickInterval(kMinSlippageBps);
         slippage_slider_->setTickPosition(QSlider::TicksBelow);
         slippage_slider_->setValue(kDefaultSlippageBps);
         slippage_slider_->setFixedHeight(28);
+        slippage_slider_->setAccessibleName(tr("Default swap slippage tolerance"));
         slippage_value_ = new QLabel(format_bps(kDefaultSlippageBps), panel);
         slippage_value_->setObjectName(QStringLiteral("settingsTabSliderValue"));
         slippage_value_->setFixedWidth(64);
@@ -320,9 +336,14 @@ void SettingsTab::load_initial_values() {
     if (slip_res.is_ok()) {
         bool ok = false;
         const auto v = slip_res.value().toInt(&ok);
-        if (ok && v >= 10 && v <= kMaxSlippageBps)
+        if (ok && v > 0 && v <= kMaxSlippageBps)
             bps = v;
     }
+    // A value persisted by an older build could be below the executable floor
+    // (e.g. 10 bps). Clamp before display so the label can't advertise a
+    // tolerance the swap path silently widens.
+    if (bps < kMinSlippageBps)
+        bps = kMinSlippageBps;
     QSignalBlocker b(slippage_slider_);
     slippage_slider_->setValue(bps);
     slippage_value_->setText(format_bps(bps));
@@ -439,9 +460,10 @@ void SettingsTab::retranslateUi() {
     if (slippage_panel_sub_)
         slippage_panel_sub_->setText(tr("1% – 5%"));
     if (slippage_hint_)
-        slippage_hint_->setText(tr("Default slippage tolerance for swaps. Quotes whose route "
-                                   "impact exceeds this value are blocked. Adjustable per-swap on "
-                                   "the TRADE tab."));
+        slippage_hint_->setText(tr("Maximum price drift PumpSwap may fill your swap at before it "
+                                   "reverts. Applies to every swap on the TRADE tab — there is no "
+                                   "per-swap override. PumpPortal accepts whole percents only, so "
+                                   "the value is rounded up to the next percent and clamped to 5%."));
 
     // Asset filters panel
     if (filters_panel_title_)

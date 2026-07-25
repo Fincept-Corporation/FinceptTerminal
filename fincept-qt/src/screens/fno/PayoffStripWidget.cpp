@@ -18,6 +18,12 @@ using namespace fincept::ui;
 PayoffStripWidget::PayoffStripWidget(QWidget* parent) : QWidget(parent) {
     setFixedHeight(80);
     setObjectName("fnoPayoffStrip");
+    setAccessibleName(tr("Payoff at expiry"));
+    setAccessibleDescription(tr("Profit and loss across underlying prices. Solid line is P/L at expiry; "
+                                "the dashed line is P/L on the selected target date. Vertical markers show "
+                                "the current spot and each breakeven."));
+    setToolTip(tr("Solid: P/L at expiry.  Dashed: P/L at the TARGET date.  "
+                  "Amber vertical: spot.  Dotted verticals: breakevens."));
 }
 
 void PayoffStripWidget::set_payoff(const QVector<fincept::services::options::PayoffPoint>& curve, double spot,
@@ -57,7 +63,11 @@ void PayoffStripWidget::rebuild_pixmap() {
         cached_ = QPixmap();
         return;
     }
-    cached_ = QPixmap(sz);
+    // HiDPI: without a DPR-scaled backing store the strip renders at 1× and is
+    // visibly soft next to the rest of the UI on a 150%/200% display.
+    const qreal dpr = devicePixelRatioF();
+    cached_ = QPixmap(QSize(int(sz.width() * dpr), int(sz.height() * dpr)));
+    cached_.setDevicePixelRatio(dpr);
     cached_.fill(QColor(colors::BG_BASE()));
 
     if (curve_.size() < 2)
@@ -75,12 +85,23 @@ void PayoffStripWidget::rebuild_pixmap() {
     if (spot_range < 1e-6)
         spot_range = 1.0;
 
+    // The target-day curve is bounded too — the TARGET +N d control drives it,
+    // and before this it was computed but never drawn, so the spin box looked
+    // like it did nothing. Its range has to be inside the y-window or it would
+    // be clipped away.
+    bool has_target = false;
     double y_min = std::numeric_limits<double>::max();
     double y_max = std::numeric_limits<double>::lowest();
     for (const auto& pt : curve_) {
         if (std::isfinite(pt.pnl_expiry)) {
             y_min = std::min(y_min, pt.pnl_expiry);
             y_max = std::max(y_max, pt.pnl_expiry);
+        }
+        if (std::isfinite(pt.pnl_target)) {
+            y_min = std::min(y_min, pt.pnl_target);
+            y_max = std::max(y_max, pt.pnl_target);
+            if (std::abs(pt.pnl_target - pt.pnl_expiry) > 1e-9)
+                has_target = true;
         }
     }
     if (y_min >= y_max) {
@@ -130,6 +151,20 @@ void PayoffStripWidget::rebuild_pixmap() {
             p.setPen(Qt::NoPen);
             p.setBrush(loss_color);
             p.drawPolygon(poly);
+        }
+    }
+
+    // Target-day (mark-to-market) curve — dashed amber, drawn under the expiry
+    // line so the payoff at expiry stays the dominant read.
+    if (has_target) {
+        QPen target_pen(QColor(colors::AMBER()), 1, Qt::DashLine);
+        p.setPen(target_pen);
+        p.setBrush(Qt::NoBrush);
+        for (int i = 0; i < curve_.size() - 1; ++i) {
+            if (!std::isfinite(curve_[i].pnl_target) || !std::isfinite(curve_[i + 1].pnl_target))
+                continue;
+            p.drawLine(QPointF(to_x(curve_[i].spot), to_y(curve_[i].pnl_target)),
+                       QPointF(to_x(curve_[i + 1].spot), to_y(curve_[i + 1].pnl_target)));
         }
     }
 

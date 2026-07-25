@@ -88,6 +88,9 @@ class MultiStraddleSubTab : public QWidget {
     QVector<Selection> selections_;
     fincept::services::options::OptionChain last_chain_;
     QString current_underlying_;
+    /// Expiry the anchor combo was last built for — a new expiry means a new
+    /// strike ladder even when the underlying is unchanged.
+    QString current_expiry_;
     bool chain_subscribed_ = false;
 
     /// Per-token sample cache populated by oi:history subscription callbacks.

@@ -54,6 +54,8 @@ class PortfolioStatsRibbon : public QWidget {
     QWidget* build_risk_grid();
     GridChip add_grid_chip(QGridLayout* g, int row, int col, const QString& label_text);
     void apply_hero_value_color(HeroCell& c, const char* color, int value_px);
+    /// Explains what SHARPE/CONC/BETA/VOL/MDD/RISK actually measure.
+    void apply_chip_tooltips();
 
     // Cells
     HeroCell value_cell_; // PORTFOLIO VALUE

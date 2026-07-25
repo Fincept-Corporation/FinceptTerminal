@@ -220,6 +220,31 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
 
 void LoginScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+
+    // Spontaneous hides come from the window manager (minimise, workspace
+    // switch, lock). The user has not left the form — wiping their half-typed
+    // password there would be hostile. Only wipe on a real in-app navigation.
+    if (event && event->spontaneous())
+        return;
+
+    // The screen lives in a QStackedWidget for the whole session, so without
+    // this the email/password/MFA code stay resident in the line edits (and
+    // are re-shown verbatim on the next logout → login cycle).
+    if (email_input_)
+        email_input_->clear();
+    if (password_input_) {
+        password_input_->clear();
+        password_input_->setEchoMode(QLineEdit::Password);
+    }
+    if (mfa_input_)
+        mfa_input_->clear();
+    if (show_pw_btn_)
+        show_pw_btn_->setText(tr("SHOW"));
+    clear_error();
+    if (mfa_error_)
+        mfa_error_->hide();
+    if (pages_)
+        pages_->setCurrentIndex(0);
 }
 
 void LoginScreen::changeEvent(QEvent* event) {
@@ -400,6 +425,28 @@ void LoginScreen::build_login_page() {
     connect(password_input_, &QLineEdit::returnPressed, this, &LoginScreen::on_login);
     connect(email_input_, &QLineEdit::returnPressed, this, [this]() { password_input_->setFocus(); });
 
+    // ── Accessibility + keyboard order ───────────────────────────────────────
+    // Screen readers announce the accessible name; without it every field here
+    // is read as an anonymous "text edit". Tab order is set explicitly because
+    // the show/hide button sits inside a nested row widget, which otherwise
+    // puts it before the password field in the focus chain.
+    email_input_->setAccessibleName(tr("Email address"));
+    email_input_->setAccessibleDescription(tr("The email address of your Fincept account"));
+    password_input_->setAccessibleName(tr("Password"));
+    show_pw_btn_->setAccessibleName(tr("Show or hide password"));
+    login_btn_->setAccessibleName(tr("Sign in"));
+    forgot_btn_->setAccessibleName(tr("Forgot password"));
+    google_btn_->setAccessibleName(tr("Continue with Google"));
+    signup_btn_->setAccessibleName(tr("Create an account"));
+    error_label_->setAccessibleName(tr("Sign-in error"));
+
+    setTabOrder(email_input_, password_input_);
+    setTabOrder(password_input_, show_pw_btn_);
+    setTabOrder(show_pw_btn_, login_btn_);
+    setTabOrder(login_btn_, forgot_btn_);
+    setTabOrder(forgot_btn_, google_btn_);
+    setTabOrder(google_btn_, signup_btn_);
+
     pages_->addWidget(page);
 }
 
@@ -486,6 +533,18 @@ void LoginScreen::build_mfa_page() {
 
     vl->addStretch();
     connect(mfa_input_, &QLineEdit::returnPressed, this, &LoginScreen::on_mfa_verify);
+
+    // Deliberately no digits-only validator: some accounts use alphanumeric
+    // recovery codes on this same field. The hint helps soft keyboards without
+    // rejecting those.
+    mfa_input_->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
+    mfa_input_->setAccessibleName(tr("Two-factor verification code"));
+    mfa_verify_btn_->setAccessibleName(tr("Verify code"));
+    mfa_back_btn_->setAccessibleName(tr("Back to sign in"));
+    mfa_error_->setAccessibleName(tr("Verification error"));
+    setTabOrder(mfa_input_, mfa_verify_btn_);
+    setTabOrder(mfa_verify_btn_, mfa_back_btn_);
+
     pages_->addWidget(mfa_page_);
 }
 
@@ -543,6 +602,12 @@ void LoginScreen::build_conflict_page() {
     vl->addWidget(cancel_btn_);
 
     vl->addStretch();
+
+    force_login_btn_->setAccessibleName(tr("Log out the other session and continue"));
+    cancel_btn_->setAccessibleName(tr("Cancel sign in"));
+    conflict_msg_->setAccessibleName(tr("Session conflict details"));
+    setTabOrder(cancel_btn_, force_login_btn_);
+
     pages_->addWidget(conflict_page_);
 }
 
@@ -712,6 +777,12 @@ void LoginScreen::set_loading(bool loading) {
     login_btn_->setEnabled(!loading);
     email_input_->setEnabled(!loading);
     password_input_->setEnabled(!loading);
+    // Navigating away mid-request hides this screen, which wipes the fields
+    // (hideEvent) while the reply is still in flight — lock the exits too.
+    if (forgot_btn_)
+        forgot_btn_->setEnabled(!loading);
+    if (signup_btn_)
+        signup_btn_->setEnabled(!loading);
     login_btn_->setText(loading ? tr("  SIGNING IN...  ") : tr("  SIGN IN  "));
     if (google_btn_) {
         google_btn_->setEnabled(!loading);

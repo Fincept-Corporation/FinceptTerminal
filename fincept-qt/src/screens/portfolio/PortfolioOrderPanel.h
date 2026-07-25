@@ -6,6 +6,8 @@
 #include <QPushButton>
 #include <QWidget>
 
+#include <optional>
+
 namespace fincept::screens {
 
 /// 200px right sidebar for BUY/SELL order entry.
@@ -29,6 +31,7 @@ class PortfolioOrderPanel : public QWidget {
   private:
     void build_ui();
     void update_display();
+    void apply_side_styles();
     void retranslateUi();
 
     QLabel* title_label_ = nullptr;
@@ -49,7 +52,13 @@ class PortfolioOrderPanel : public QWidget {
 
     QString side_ = "BUY";
     QString currency_ = "USD";
-    const portfolio::HoldingWithQuote* holding_ = nullptr;
+    /// Value copy, deliberately NOT the caller's pointer. set_holding() used to
+    /// store the raw `HoldingWithQuote*` returned by PortfolioScreen::
+    /// find_holding(), which points into PortfolioSummary::holdings — that
+    /// QVector is reassigned wholesale on every summary refresh, so the stored
+    /// pointer dangled whenever a refresh did not immediately re-select
+    /// (e.g. the portfolio went to zero positions).
+    std::optional<portfolio::HoldingWithQuote> holding_;
 };
 
 } // namespace fincept::screens

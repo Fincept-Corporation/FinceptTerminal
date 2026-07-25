@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QListWidgetItem>
 #include <QMessageBox>
+#include <QPointer>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -141,7 +142,13 @@ void ChatSessionPanel::build_ui() {
 }
 
 void ChatSessionPanel::refresh_sessions() {
-    ChatModeService::instance().list_sessions([this](bool ok, QVector<ChatSession> sessions, QString err) {
+    // P8: the callback is owned by the ChatModeService singleton, which outlives
+    // this panel. Guard so a window closed mid-request doesn't touch a dead
+    // widget (refresh_sessions fires on every stream finish + session mutation).
+    QPointer<ChatSessionPanel> self = this;
+    ChatModeService::instance().list_sessions([this, self](bool ok, QVector<ChatSession> sessions, QString err) {
+        if (!self)
+            return;
         if (!ok) {
             LOG_WARN("ChatSessionPanel", "Failed to load sessions: " + err);
             return;
@@ -276,7 +283,10 @@ void ChatSessionPanel::on_export_clicked() {
     export_btn_->setEnabled(false);
     export_btn_->setText("...");
 
-    ChatModeService::instance().export_sessions(uuids, [this, path](bool ok, QJsonArray payload, QString err) {
+    QPointer<ChatSessionPanel> self = this;
+    ChatModeService::instance().export_sessions(uuids, [this, self, path](bool ok, QJsonArray payload, QString err) {
+        if (!self)
+            return;
         export_btn_->setEnabled(true);
         export_btn_->setText(tr("Export"));
         if (!ok) {
@@ -309,8 +319,9 @@ void ChatSessionPanel::on_search_server() {
     if (query.length() < 2)
         return;
 
-    ChatModeService::instance().search_messages(query, [this](bool ok, QVector<ChatMessage> results, QString) {
-        if (!ok || results.isEmpty())
+    QPointer<ChatSessionPanel> self = this;
+    ChatModeService::instance().search_messages(query, [this, self](bool ok, QVector<ChatMessage> results, QString) {
+        if (!self || !ok || results.isEmpty())
             return;
         // Highlight sessions that have matching messages
         for (int i = 0; i < session_list_->count(); ++i) {

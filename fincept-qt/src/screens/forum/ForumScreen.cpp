@@ -88,33 +88,41 @@ void ForumScreen::build_ui() {
 
     connect(feed_, &ForumFeedPanel::category_clicked, this, &ForumScreen::on_category_selected);
 
+    // NOTE on lambda captures below: ForumService callbacks are plain
+    // std::functions with no QObject context, so they are NOT auto-disconnected
+    // when this screen is destroyed. Every one of them must hold a QPointer
+    // guard, or a reply that lands after the screen closes dereferences a dead
+    // `this`. (Several of these previously captured a raw [this].)
     connect(feed_, &ForumFeedPanel::load_more_requested, this, [this](int page) {
-        if (active_category_id_ > 0) {
-            feed_->set_loading(true);
-            services::ForumService::instance().fetch_posts(active_category_id_, page, "latest",
-                                                           [this](bool ok, services::ForumPostsPage p) {
-                                                               if (ok)
-                                                                   feed_->set_posts(p, active_category_color_);
-                                                               else
-                                                                   feed_->set_loading(false);
-                                                           });
-        }
+        if (active_category_id_ <= 0)
+            return;
+        feed_->set_loading(true);
+        QPointer<ForumScreen> self = this;
+        services::ForumService::instance().fetch_posts(active_category_id_, page, "latest",
+                                                       [self](bool ok, services::ForumPostsPage p) {
+                                                           if (!self)
+                                                               return;
+                                                           if (ok)
+                                                               self->feed_->set_posts(p, self->active_category_color_);
+                                                           else
+                                                               self->feed_->set_loading(false);
+                                                       });
     });
 
     connect(feed_, &ForumFeedPanel::new_post_clicked, this, [this]() { on_new_post_requested(); });
 
     connect(feed_, &ForumFeedPanel::vote_post_requested, this, [this](const QString& uuid, const QString& vtype) {
-        LOG_INFO("ForumScreen", "Feed vote: " + uuid + " type=" + vtype);
-        services::ForumService::instance().vote_post(uuid, vtype, [this](bool ok, const QString&) {
-            LOG_INFO("ForumScreen", QString("Feed vote result: ok=%1").arg(ok));
-            if (ok && active_category_id_ > 0) {
-                // Refresh current feed to show updated vote
-                services::ForumService::instance().fetch_posts(active_category_id_, 1, "latest",
-                                                               [this](bool ok2, services::ForumPostsPage p) {
-                                                                   if (ok2)
-                                                                       feed_->set_posts(p, active_category_color_);
-                                                               });
-            }
+        QPointer<ForumScreen> self = this;
+        services::ForumService::instance().vote_post(uuid, vtype, [self](bool ok, const QString&) {
+            if (!self || !ok || self->active_category_id_ <= 0)
+                return;
+            // Refresh current feed to show updated vote
+            services::ForumService::instance().fetch_posts(self->active_category_id_, 1, "latest",
+                                                           [self](bool ok2, services::ForumPostsPage p) {
+                                                               if (self && ok2)
+                                                                   self->feed_->set_posts(p,
+                                                                                          self->active_category_color_);
+                                                           });
         });
     });
 
@@ -147,36 +155,43 @@ void ForumScreen::build_ui() {
     });
 
     connect(thread_, &ForumThreadPanel::vote_post, this, [this](const QString& uuid, const QString& vtype) {
-        LOG_INFO("ForumScreen", "Vote post: " + uuid + " type=" + vtype);
-        services::ForumService::instance().vote_post(uuid, vtype, [this, uuid](bool ok, const QString& msg) {
-            LOG_INFO("ForumScreen", QString("Vote result: ok=%1 msg=%2").arg(ok).arg(msg));
-            if (ok) {
-                services::ForumService::instance().fetch_post(uuid, [this](bool ok2, services::ForumPostDetail d) {
-                    if (ok2)
-                        thread_->show_post(d);
-                });
+        QPointer<ForumScreen> self = this;
+        services::ForumService::instance().vote_post(uuid, vtype, [self, uuid](bool ok, const QString& msg) {
+            if (!self)
+                return;
+            if (!ok) {
+                LOG_WARN("ForumScreen", "Vote failed: " + msg);
+                return;
             }
+            services::ForumService::instance().fetch_post(uuid, [self](bool ok2, services::ForumPostDetail d) {
+                if (self && ok2)
+                    self->thread_->show_post(d);
+            });
         });
     });
 
     connect(thread_, &ForumThreadPanel::vote_comment, this, [this](const QString& uuid, const QString& vtype) {
-        services::ForumService::instance().vote_comment(uuid, vtype, [this](bool, const QString&) {
-            if (!current_detail_uuid_.isEmpty()) {
-                services::ForumService::instance().fetch_post(current_detail_uuid_,
-                                                              [this](bool ok, services::ForumPostDetail d) {
-                                                                  if (ok)
-                                                                      thread_->show_post(d);
-                                                              });
-            }
+        QPointer<ForumScreen> self = this;
+        services::ForumService::instance().vote_comment(uuid, vtype, [self](bool, const QString&) {
+            if (!self || self->current_detail_uuid_.isEmpty())
+                return;
+            services::ForumService::instance().fetch_post(self->current_detail_uuid_,
+                                                          [self](bool ok, services::ForumPostDetail d) {
+                                                              if (self && ok)
+                                                                  self->thread_->show_post(d);
+                                                          });
         });
     });
 
     connect(thread_, &ForumThreadPanel::author_clicked, this, [this](const QString& username) {
-        services::ForumService::instance().fetch_profile(username, [this](bool ok, services::ForumProfile profile) {
-            if (!ok)
+        QPointer<ForumScreen> outer = this;
+        services::ForumService::instance().fetch_profile(username, [outer](bool ok, services::ForumProfile profile) {
+            if (!ok || !outer)
                 return;
-            // Profile popup
-            auto* dlg = new QDialog(this);
+            ForumScreen* self = outer.data();
+            // Profile popup. Freed after exec() returns — the previous version
+            // leaked one QDialog per profile view for the screen's lifetime.
+            auto* dlg = new QDialog(self);
             dlg->setWindowTitle(tr("USER PROFILE"));
             dlg->setFixedSize(380, 340);
             dlg->setStyleSheet(QString("QDialog{background:%1;border:1px solid %2;}"
@@ -188,7 +203,7 @@ void ForumScreen::build_ui() {
             vl->setSpacing(10);
 
             // Profile header with gradient accent
-            auto* hdr = new QWidget(this);
+            auto* hdr = new QWidget(self);
             hdr->setFixedHeight(4);
             QString avc = profile.avatar_color.isEmpty() ? ui::colors::AMBER() : profile.avatar_color;
             hdr->setStyleSheet(QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
@@ -197,7 +212,7 @@ void ForumScreen::build_ui() {
             vl->addWidget(hdr);
 
             // Avatar + name
-            auto* top = new QWidget(this);
+            auto* top = new QWidget(self);
             top->setStyleSheet("background:transparent;");
             auto* th = new QHBoxLayout(top);
             th->setContentsMargins(0, 0, 0, 0);
@@ -236,14 +251,14 @@ void ForumScreen::build_ui() {
             vl->addWidget(sep);
 
             // Stats grid
-            auto* grid = new QWidget(this);
+            auto* grid = new QWidget(self);
             grid->setStyleSheet("background:transparent;");
             auto* gh = new QHBoxLayout(grid);
             gh->setContentsMargins(0, 0, 0, 0);
             gh->setSpacing(0);
 
             auto mk_stat = [&](const QString& val, const QString& lbl, const QString& col) {
-                auto* cell = new QWidget(this);
+                auto* cell = new QWidget(self);
                 cell->setStyleSheet("background:transparent;");
                 auto* cv = new QVBoxLayout(cell);
                 cv->setContentsMargins(0, 8, 0, 8);
@@ -279,9 +294,10 @@ void ForumScreen::build_ui() {
                             "border-color:rgba(217,119,6,0.5);"
                             "background:rgba(217,119,6,0.15);}")
                         .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), M(11), ui::colors::AMBER()));
-                connect(edit_btn, &QPushButton::clicked, this, [this, dlg, profile]() {
+                QObject::connect(edit_btn, &QPushButton::clicked, self, [outer, dlg, profile]() {
                     dlg->accept();
-                    show_edit_profile_dialog(profile);
+                    if (outer)
+                        outer->show_edit_profile_dialog(profile);
                 });
                 vl->addStretch();
                 vl->addWidget(edit_btn);
@@ -289,6 +305,7 @@ void ForumScreen::build_ui() {
                 vl->addStretch();
             }
             dlg->exec();
+            dlg->deleteLater(); // exec() returns on accept/reject; free the dialog
         });
     });
 }
@@ -311,28 +328,38 @@ void ForumScreen::load_initial_data() {
     feed_->set_loading(true);
 
     // Stats
-    services::ForumService::instance().fetch_stats([this](bool ok, services::ForumStats s) {
-        if (!ok)
+    QPointer<ForumScreen> self1 = this;
+    services::ForumService::instance().fetch_stats([self1](bool ok, services::ForumStats s) {
+        if (!ok || !self1)
             return;
-        sidebar_->set_stats(s);
-        feed_->set_stats(s);
+        self1->sidebar_->set_stats(s);
+        self1->feed_->set_stats(s);
     });
 
     // My profile
-    services::ForumService::instance().fetch_my_profile([this](bool ok, services::ForumProfile p) {
-        if (!ok)
+    QPointer<ForumScreen> self2 = this;
+    services::ForumService::instance().fetch_my_profile([self2](bool ok, services::ForumProfile p) {
+        if (!ok || !self2)
             return;
-        sidebar_->set_my_profile(p);
-        feed_->set_profile(p);
+        self2->sidebar_->set_my_profile(p);
+        self2->feed_->set_profile(p);
     });
 
     // Categories
+    QPointer<ForumScreen> self3 = this;
     services::ForumService::instance().fetch_categories(
-        [this](bool ok, QVector<services::ForumCategory> cats, services::ForumPermissions) {
-            if (!ok || cats.isEmpty())
+        [self3](bool ok, QVector<services::ForumCategory> cats, services::ForumPermissions) {
+            if (!self3)
                 return;
-            categories_ = cats;
-            sidebar_->set_categories(cats);
+            if (!ok || cats.isEmpty()) {
+                // The feed sat on an animated skeleton forever when the forum
+                // API was unreachable. Stop it and show the empty state.
+                self3->feed_->set_loading(false);
+                self3->feed_->set_posts({}, ui::colors::TEXT_TERTIARY());
+                return;
+            }
+            self3->categories_ = cats;
+            self3->sidebar_->set_categories(cats);
 
             // Auto-select first category with posts
             int sel_idx = 0;
@@ -343,19 +370,21 @@ void ForumScreen::load_initial_data() {
                 }
             }
             const auto& first = cats[sel_idx];
-            active_category_id_ = first.id;
-            active_category_name_ = first.name;
-            active_category_color_ = first.color;
-            sidebar_->set_active_category(first.id);
-            feed_->set_header(first.name);
-            feed_->set_categories(cats, first.id);
+            self3->active_category_id_ = first.id;
+            self3->active_category_name_ = first.name;
+            self3->active_category_color_ = first.color;
+            self3->sidebar_->set_active_category(first.id);
+            self3->feed_->set_header(first.name);
+            self3->feed_->set_categories(cats, first.id);
 
             services::ForumService::instance().fetch_posts(first.id, 1, "latest",
-                                                           [this, first](bool ok2, services::ForumPostsPage p) {
+                                                           [self3, first](bool ok2, services::ForumPostsPage p) {
+                                                               if (!self3)
+                                                                   return;
                                                                if (ok2)
-                                                                   feed_->set_posts(p, first.color);
+                                                                   self3->feed_->set_posts(p, first.color);
                                                                else
-                                                                   feed_->set_loading(false);
+                                                                   self3->feed_->set_loading(false);
                                                            });
         });
 }
@@ -380,11 +409,14 @@ void ForumScreen::on_category_selected(int id, const QString& name, const QStrin
     sidebar_->set_active_category(id);
     main_stack_->setCurrentIndex(0);
 
-    services::ForumService::instance().fetch_posts(id, 1, "latest", [this, color](bool ok, services::ForumPostsPage p) {
+    QPointer<ForumScreen> self = this;
+    services::ForumService::instance().fetch_posts(id, 1, "latest", [self, color](bool ok, services::ForumPostsPage p) {
+        if (!self)
+            return;
         if (ok)
-            feed_->set_posts(p, color);
+            self->feed_->set_posts(p, color);
         else
-            feed_->set_loading(false);
+            self->feed_->set_loading(false);
     });
 }
 
@@ -395,11 +427,14 @@ void ForumScreen::on_post_selected(const services::ForumPost& post) {
     thread_->set_loading(true);
     main_stack_->setCurrentIndex(1);
 
-    services::ForumService::instance().fetch_post(post.post_uuid, [this](bool ok, services::ForumPostDetail d) {
+    QPointer<ForumScreen> self = this;
+    services::ForumService::instance().fetch_post(post.post_uuid, [self](bool ok, services::ForumPostDetail d) {
+        if (!self)
+            return;
         if (ok)
-            thread_->show_post(d);
+            self->thread_->show_post(d);
         else
-            thread_->set_loading(false);
+            self->thread_->set_loading(false);
     });
 }
 
@@ -413,11 +448,14 @@ void ForumScreen::on_search(const QString& query) {
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
 
-    services::ForumService::instance().search(query, 1, [this](bool ok, services::ForumPostsPage p) {
+    QPointer<ForumScreen> self = this;
+    services::ForumService::instance().search(query, 1, [self](bool ok, services::ForumPostsPage p) {
+        if (!self)
+            return;
         if (ok)
-            feed_->set_posts(p, ui::colors::CYAN());
+            self->feed_->set_posts(p, ui::colors::CYAN());
         else
-            feed_->set_loading(false);
+            self->feed_->set_loading(false);
     });
 }
 
@@ -429,11 +467,14 @@ void ForumScreen::on_trending() {
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
 
-    services::ForumService::instance().fetch_trending([this](bool ok, services::ForumPostsPage p) {
+    QPointer<ForumScreen> self = this;
+    services::ForumService::instance().fetch_trending([self](bool ok, services::ForumPostsPage p) {
+        if (!self)
+            return;
         if (ok)
-            feed_->set_posts(p, ui::colors::AMBER());
+            self->feed_->set_posts(p, ui::colors::AMBER());
         else
-            feed_->set_loading(false);
+            self->feed_->set_loading(false);
     });
 }
 
@@ -528,8 +569,17 @@ void ForumScreen::show_new_post_dialog(int category_id) {
     connect(submit, &QPushButton::clicked, this, [this, dlg, title_edit, body_edit, submit, category_id]() {
         QString title = title_edit->text().trimmed();
         QString content = body_edit->toPlainText().trimmed();
-        if (title.isEmpty() || content.isEmpty())
+        // Silently doing nothing made PUBLISH look broken; say what's missing.
+        if (title.isEmpty()) {
+            QMessageBox::information(dlg, tr("Title required"), tr("Give your post a title."));
+            title_edit->setFocus();
             return;
+        }
+        if (content.isEmpty()) {
+            QMessageBox::information(dlg, tr("Content required"), tr("Write something in the body of your post."));
+            body_edit->setFocus();
+            return;
+        }
         // Keep the dialog (and the user's typed post) open until the async call
         // returns. Only close on success; on failure re-enable Publish and show
         // the error so the text isn't lost. The old code accept()ed (discarding
@@ -565,7 +615,16 @@ void ForumScreen::show_new_post_dialog(int category_id) {
     btn_hl->addWidget(cancel);
     btn_hl->addWidget(submit);
     vl->addWidget(btn_row);
+
+    title_edit->setAccessibleName(tr("Post title"));
+    body_edit->setAccessibleName(tr("Post content"));
+    dlg->setTabOrder(title_edit, body_edit);
+    dlg->setTabOrder(body_edit, submit);
+    dlg->setTabOrder(submit, cancel);
+    title_edit->setFocus();
+
     dlg->exec();
+    dlg->deleteLater(); // otherwise one QDialog leaks per new-post attempt
 }
 
 void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile) {
@@ -642,16 +701,26 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
                           .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
     connect(sc, &QPushButton::clicked, this, [this, dlg, name_e, bio_e, sig_e, col_e]() {
         dlg->accept();
+        QPointer<ForumScreen> self = this;
         services::ForumService::instance().update_profile(
             name_e->text().trimmed(), bio_e->text().trimmed(), sig_e->text().trimmed(), col_e->text().trimmed(),
-            [this](bool ok, const QString&) {
-                if (ok) {
-                    services::ForumService::instance().fetch_my_profile([this](bool ok2, services::ForumProfile p) {
-                        if (!ok2)
-                            return;
-                        sidebar_->set_my_profile(p);
-                    });
+            [self](bool ok, const QString& msg) {
+                if (!self)
+                    return;
+                if (!ok) {
+                    // Previously the failure path was completely silent — the
+                    // dialog closed and the user assumed the edit had saved.
+                    QMessageBox::warning(self, ForumScreen::tr("Profile not saved"),
+                                         msg.isEmpty() ? ForumScreen::tr("Your profile changes could not be saved.")
+                                                       : ForumScreen::tr("Your profile changes could not be "
+                                                                         "saved:\n%1")
+                                                             .arg(msg));
+                    return;
                 }
+                services::ForumService::instance().fetch_my_profile([self](bool ok2, services::ForumProfile p) {
+                    if (self && ok2)
+                        self->sidebar_->set_my_profile(p);
+                });
             });
     });
 
@@ -661,6 +730,7 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
     vl->addStretch();
     vl->addWidget(btn_row);
     dlg->exec();
+    dlg->deleteLater(); // otherwise one QDialog leaks per profile edit
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 // CryptoDepthChart.cpp — custom-painted cumulative bid/ask depth area chart
 #include "screens/crypto_trading/CryptoDepthChart.h"
 
+#include "screens/crypto_trading/CryptoTypes.h"
 #include "ui/theme/ThemeManager.h"
 
 #include <QMutexLocker>
@@ -250,11 +251,13 @@ void CryptoDepthChart::rebuild_cache() {
         p.drawText(QRect(0, y - 8, margin_l - 4, 16), Qt::AlignRight | Qt::AlignVCenter, label);
     }
 
-    // Price axis labels (bottom)
+    // Price axis labels (bottom). `'f', 0` printed five identical "0" ticks
+    // for any pair trading below $1 — which is most of the long tail — so the
+    // x axis carried no information at all there.
     for (int i = 0; i <= 4; ++i) {
         const double price = min_price + (max_price - min_price) * i / 4;
         const int x = map_x(price);
-        p.drawText(QRect(x - 30, margin_t + plot_h + 2, 60, 16), Qt::AlignCenter, QString::number(price, 'f', 0));
+        p.drawText(QRect(x - 40, margin_t + plot_h + 2, 80, 16), Qt::AlignCenter, format_price_plain(price));
     }
 
     cache_dirty_ = false;

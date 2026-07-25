@@ -8,7 +8,9 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QShowEvent>
+#include <QSignalBlocker>
 #include <QStackedWidget>
+#include <QVector>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -37,17 +39,21 @@ class GovDataScreen : public QWidget, public IStatefulScreen {
     QWidget* build_sidebar();
     QWidget* build_toolbar();
     QWidget* build_status_bar();
+    /// Construct (and register in panel_stack_) the panel for provider `index`.
+    /// Called lazily on first activation — see P2 in CLAUDE.md.
+    QWidget* make_panel(int index);
     void activate_provider(int index);
     void retranslateUi();
 
     QListWidget* provider_list_ = nullptr;
     QStackedWidget* panel_stack_ = nullptr;
+    /// provider index → panel widget, nullptr until first activation.
+    QVector<QWidget*> panels_;
     QLabel* header_title_ = nullptr;
     QLabel* header_subtitle_ = nullptr;
     QWidget* header_bar_ = nullptr;
     QLabel* status_portal_ = nullptr;
     QLabel* status_country_ = nullptr;
-    QLabel* status_datasets_ = nullptr;
     QLabel* provider_badge_ = nullptr;
     QLabel* sidebar_count_ = nullptr;
     QLabel* sidebar_title_ = nullptr;

@@ -26,6 +26,8 @@
 #include <QSplitter>
 #include <QVBoxLayout>
 
+#include <utility>
+
 namespace fincept::screens {
 namespace {
 
@@ -134,8 +136,14 @@ UnescoPanel::UnescoPanel(QWidget* parent) : EconPanelBase(kUnescoSourceId, kUnes
 
 void UnescoPanel::activate() {
     show_empty(tr("Select a theme, indicator and country code, then click FETCH\n"
-                  "UNESCO UIS data is free — no API key required\n"
+                  "Source: UNESCO Institute for Statistics (UIS) — free, no API key required\n"
                   "Use 3-letter ISO country codes: USA, GBR, IND, CHN, BRA, DEU"));
+    // Replace the curated fallback list with the live UIS indicator catalogue
+    // once per session. load_indicators() existed but was never called, so the
+    // `unesco_list_indicators` branch in on_result() was unreachable and the
+    // panel could only ever offer the ~26 hard-coded presets.
+    if (!indicators_loaded_)
+        load_indicators();
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -171,7 +179,51 @@ void UnescoPanel::build_controls(QHBoxLayout* thl) {
     thl->addWidget(end_input_);
 }
 
+// Repopulate the indicator list from the live UIS catalogue for the given
+// theme index. Returns false (leaving the list untouched) when the catalogue
+// has nothing for that theme, so the curated presets stay in place.
+bool UnescoPanel::populate_indicators_from_records(int theme_index, const QString& keep_code) {
+    if (all_records_.isEmpty())
+        return false;
+    static const char* kThemeKeys[] = {"EDUCATION", "SCIENCE", "CULTURE"};
+    const QString theme_key =
+        QLatin1String(kThemeKeys[(theme_index >= 0 && theme_index < 3) ? theme_index : 0]);
+
+    QList<IndicatorDef> found;
+    for (const auto& v : std::as_const(all_records_)) {
+        const auto obj = v.toObject();
+        if (!obj["theme"].toString().contains(theme_key, Qt::CaseInsensitive))
+            continue;
+        const QString id = obj["id"].toString();
+        if (id.isEmpty())
+            continue;
+        found.append({obj["name"].toString(id), id});
+    }
+    if (found.isEmpty())
+        return false;
+
+    current_indicators_ = found;
+    indicator_list_->clear();
+    int restore_row = -1;
+    for (int i = 0; i < found.size(); ++i) {
+        auto* item = new QListWidgetItem(found[i].name);
+        item->setData(Qt::UserRole, found[i].code);
+        item->setToolTip(found[i].code);
+        indicator_list_->addItem(item);
+        if (!keep_code.isEmpty() && found[i].code == keep_code)
+            restore_row = i;
+    }
+    indicator_list_->setCurrentRow(restore_row >= 0 ? restore_row : 0);
+    // Re-apply any active text filter to the freshly built list.
+    on_indicator_filter(indicator_search_->text());
+    return true;
+}
+
 void UnescoPanel::on_theme_changed(int index) {
+    // Prefer the live catalogue once it has loaded.
+    if (populate_indicators_from_records(index, QString()))
+        return;
+
     current_indicators_.clear();
     indicator_list_->clear();
     indicator_search_->clear();
@@ -250,27 +302,18 @@ void UnescoPanel::on_result(const QString& request_id, const services::Economics
     // Handle live indicator list load
     if (request_id == "unesco_list_indicators") {
         // data: { "records": [{"id": "GER.1", "name": "...", "theme": "EDUCATION"}] }
+        if (!result.success)
+            return; // keep the curated preset list as the fallback
         const QJsonArray records = result.data["data"].toObject()["records"].toArray();
         if (records.isEmpty())
             return;
 
-        const QString current_theme = theme_combo_->currentData().toString().toUpper();
-        indicator_list_->clear();
-        current_indicators_.clear();
-
-        for (const auto& v : records) {
-            const auto obj = v.toObject();
-            const QString theme = obj["theme"].toString();
-            if (!current_theme.isEmpty() && !theme.contains(current_theme, Qt::CaseInsensitive))
-                continue;
-            const QString id = obj["id"].toString();
-            const QString name = obj["name"].toString();
-            current_indicators_.append({name, id});
-            auto* item = new QListWidgetItem(name);
-            item->setData(Qt::UserRole, id);
-            item->setToolTip(id);
-            indicator_list_->addItem(item);
-        }
+        all_records_ = records;
+        // Remember what the user had selected so a background catalogue load
+        // doesn't silently move their selection.
+        const QString keep_code =
+            indicator_list_->currentItem() ? indicator_list_->currentItem()->data(Qt::UserRole).toString() : QString();
+        populate_indicators_from_records(theme_combo_->currentIndex(), keep_code);
         return;
     }
 

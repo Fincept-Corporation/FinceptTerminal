@@ -392,7 +392,13 @@ void ToolsViewPanel::setup_connections() {
         update_assigned_dots();
     });
 
-    connect(search_edit_, &QLineEdit::textChanged, this, &ToolsViewPanel::filter_tools);
+    // Debounced search — filter_tools() rebuilds a ~600-node tree and used to
+    // run synchronously on every keystroke.
+    search_debounce_ = new QTimer(this);
+    search_debounce_->setSingleShot(true);
+    search_debounce_->setInterval(180);
+    connect(search_debounce_, &QTimer::timeout, this, [this]() { filter_tools(search_edit_->text()); });
+    connect(search_edit_, &QLineEdit::textChanged, this, [this](const QString&) { search_debounce_->start(); });
 
     // Tool tree — single click = detail, double click = add
     connect(tool_tree_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* item, QTreeWidgetItem*) {
@@ -472,15 +478,26 @@ void ToolsViewPanel::showEvent(QShowEvent* event) {
 
 void ToolsViewPanel::populate_tools(const services::AgentToolsInfo& info) {
     all_tools_ = info;
-    total_count_->setText(QString::number(info.total_count));
+    // Flatten once — the MCP dedupe check below is O(1) against this set
+    // instead of re-walking every category array per MCP tool per keystroke.
+    agent_tool_names_.clear();
+    for (const auto& cat : all_tools_.categories)
+        for (const auto& t : all_tools_.tools[cat].toArray())
+            agent_tool_names_.insert(t.toString());
     filter_tools(search_edit_->text());
+}
+
+void ToolsViewPanel::refresh_assigned_cache() {
+    assigned_cache_ = tools_of_target();
 }
 
 void ToolsViewPanel::filter_tools(const QString& query) {
     tool_tree_->clear();
     QString q = query.toLower().trimmed();
 
-    QStringList assigned = tools_of_target();
+    // Cached — tools_of_target() reads AgentConfigRepository, and this function
+    // runs on every search change and every selection change.
+    const QStringList& assigned = assigned_cache_;
     int total = 0;
 
     // Agent service tools grouped by category
@@ -523,15 +540,8 @@ void ToolsViewPanel::filter_tools(const QString& query) {
         for (const auto& tool : mcp_tools) {
             if (!q.isEmpty() && !tool.name.toLower().contains(q))
                 continue;
-            // Skip duplicates already shown from agent service
-            bool already_shown = false;
-            for (const auto& cat : all_tools_.categories) {
-                if (all_tools_.tools[cat].toArray().contains(QJsonValue(tool.name))) {
-                    already_shown = true;
-                    break;
-                }
-            }
-            if (already_shown)
+            // Skip duplicates already shown from agent service (O(1) lookup).
+            if (agent_tool_names_.contains(tool.name))
                 continue;
 
             QString cat = tool.is_internal ? "internal-mcp" : tool.server_name;
@@ -659,12 +669,28 @@ void ToolsViewPanel::refresh_used_by(const QString& tool_name) {
             }
         }
     }
+    // Teams are AgentConfig rows with category == "team". The panel header and
+    // the empty-state text both promised "agents or teams", but only agents
+    // were ever scanned — a tool assigned to a team looked unused.
+    if (auto teams = AgentConfigRepository::instance().list_by_category("team"); teams.is_ok()) {
+        for (const auto& cfg : teams.value()) {
+            const QJsonArray tools =
+                QJsonDocument::fromJson(cfg.config_json.toUtf8()).object().value("tools").toArray();
+            for (const auto& t : tools) {
+                if (t.toString() == tool_name) {
+                    lines << tr("● Team: %1").arg(cfg.name);
+                    break;
+                }
+            }
+        }
+    }
     detail_used_by_->setPlainText(lines.isEmpty() ? tr("Not assigned to any agent or team yet.") : lines.join("\n"));
 }
 
 // ── Assigned dots ─────────────────────────────────────────────────────────────
 
 void ToolsViewPanel::update_assigned_dots() {
+    refresh_assigned_cache();
     filter_tools(search_edit_->text());
 }
 

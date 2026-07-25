@@ -28,6 +28,12 @@ class AlgoDeployDialog : public QDialog {
     // F&O context for option/future deployments (set by the StrategyBuilder before exec()).
     void set_fno_context(const QString& instrument_type, const QString& underlying, const QString& expiry_rule);
 
+    // Seed the risk fields from the caller's risk panel BEFORE exec(), so the
+    // numbers the user confirms in this dialog are the numbers that are actually
+    // deployed. Callers must not overwrite result().quantity afterwards — that
+    // made the dialog lie about the size going live.
+    void set_risk_defaults(double quantity, double max_order_value);
+
   protected:
     void changeEvent(QEvent* event) override;
 
@@ -61,6 +67,9 @@ class AlgoDeployDialog : public QDialog {
     QDoubleSpinBox* max_loss_spin_ = nullptr;
 
     QLabel* title_label_ = nullptr;
+    // Persistent red banner shown only while Mode == Live. Real money is the
+    // one state that must never be inferred from a dropdown alone.
+    QLabel* live_warning_ = nullptr;
     QLabel* symbol_label_ = nullptr;
     QLabel* mode_label_ = nullptr;
     QLabel* side_label_ = nullptr;

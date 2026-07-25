@@ -12,8 +12,14 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fincept::screens {
+namespace {
+/// Most-recent periods rendered in the observation table. The chart still
+/// plots the whole series; only this preview grid is capped.
+constexpr int kMaxRows = 50;
+} // namespace
 
 DBnomicsDataTable::DBnomicsDataTable(QWidget* parent) : QWidget(parent) {
     build_ui();
@@ -128,6 +134,8 @@ void DBnomicsDataTable::set_loading(bool on) {
 }
 
 void DBnomicsDataTable::clear() {
+    if (header_label_)
+        header_label_->setText(tr("OBSERVATION DATA"));
     table_->clear();
     table_->setRowCount(1);
     table_->setColumnCount(1);
@@ -157,8 +165,19 @@ void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) 
     }
     QVector<QString> periods(period_set.begin(), period_set.end());
     std::sort(periods.begin(), periods.end(), std::greater<QString>());
-    if (periods.size() > 50)
-        periods.resize(50);
+    const int total_periods = static_cast<int>(periods.size());
+    if (total_periods > kMaxRows)
+        periods.resize(kMaxRows);
+    const int shown_periods = static_cast<int>(periods.size());
+    // Be explicit that the table is truncated — it silently showed only the
+    // 50 most recent periods with no indication the series went further back.
+    if (header_label_) {
+        header_label_->setText(total_periods > shown_periods
+                                   ? tr("OBSERVATION DATA — LATEST %1 OF %2 PERIODS")
+                                         .arg(shown_periods)
+                                         .arg(total_periods)
+                                   : tr("OBSERVATION DATA — %1 PERIODS").arg(total_periods));
+    }
 
     // Columns: Period + one per series
     const int col_count = 1 + series.size();
@@ -201,8 +220,21 @@ void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) 
         for (int s = 0; s < series.size(); ++s) {
             QTableWidgetItem* cell;
             if (lookups[s].contains(period) && lookups[s][period].valid) {
-                cell = new QTableWidgetItem(QString::number(lookups[s][period].value, 'f', 4));
-                cell->setForeground(QColor("#00E5FF")); // cyan for valid data
+                const double v = lookups[s][period].value;
+                // Fixed 4-decimals mangled both ends of the range: a levels
+                // series (GDP) got 4 pointless zeros, and anything below 1e-4
+                // (rates in decimal form, small indices) collapsed to "0.0000".
+                QString txt;
+                if (v == std::floor(v) && std::abs(v) < 1e15)
+                    txt = QString::number(static_cast<qint64>(v));
+                else if (std::abs(v) >= 1e-4)
+                    txt = QString::number(v, 'f', 4);
+                else
+                    txt = QString::number(v, 'g', 6);
+                cell = new QTableWidgetItem(txt);
+                // Theme token, not a hard-coded hex — the old #00E5FF was
+                // invisible against a light theme background.
+                cell->setForeground(QColor(ui::colors::CYAN()));
             } else {
                 cell = new QTableWidgetItem("—");
                 cell->setForeground(QColor(ui::colors::TEXT_TERTIARY()));

@@ -27,6 +27,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QJsonValue>
 #include <QLabel>
 #include <QLineEdit>
@@ -99,22 +100,31 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     sigvl->addWidget(build_input_row(tr("End Date"), sig_end, sig_tab));
     auto* sig_run = make_run_button(tr("FETCH SIGNALS"), sig_tab);
     connect(sig_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Fetching..."));
+        const QJsonArray instr = parse_csv_strings(text_inputs_["ls_instruments"]->text(), /*lowercase=*/true);
+        if (instr.isEmpty()) {
+            display_error(tr("Enter at least one instrument, e.g. aapl,msft."));
+            return;
+        }
+        const QJsonArray fields = parse_csv_strings(text_inputs_["ls_fields"]->text());
+        if (fields.isEmpty()) {
+            display_error(tr("Enter at least one field, e.g. $close,$volume."));
+            return;
+        }
+        QString iso_start, iso_end;
+        if (const QString err =
+                check_iso_range(text_inputs_["ls_start"]->text(), text_inputs_["ls_end"]->text(), iso_start, iso_end);
+            !err.isEmpty()) {
+            display_error(err);
+            return;
+        }
+        show_loading(tr("Fetching %1 field(s) for %2 instrument(s)...").arg(fields.size()).arg(instr.size()));
         QJsonObject params;
-        QJsonArray instr;
-        for (auto& s : text_inputs_["ls_instruments"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
-        QJsonArray fields;
-        for (auto& s : text_inputs_["ls_fields"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                fields.append(s.trimmed());
         params["fields"] = fields;
-        if (!text_inputs_["ls_start"]->text().isEmpty())
-            params["start_date"] = text_inputs_["ls_start"]->text().trimmed();
-        if (!text_inputs_["ls_end"]->text().isEmpty())
-            params["end_date"] = text_inputs_["ls_end"]->text().trimmed();
+        if (!iso_start.isEmpty())
+            params["start_date"] = iso_start;
+        if (!iso_end.isEmpty())
+            params["end_date"] = iso_end;
         AIQuantLabService::instance().signals_get_data(params);
     });
     sigvl->addWidget(sig_run);
@@ -143,17 +153,25 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     favl->addWidget(build_input_row(tr("End Date"), fa_end, fa_tab));
     auto* fa_run = make_run_button(tr("RUN FACTOR ANALYSIS"), fa_tab);
     connect(fa_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Analyzing..."));
+        const QJsonArray instr = parse_csv_strings(text_inputs_["ls_fa_instr"]->text(), /*lowercase=*/true);
+        if (instr.isEmpty()) {
+            display_error(tr("Enter at least one instrument, e.g. aapl,msft."));
+            return;
+        }
+        QString iso_start, iso_end;
+        if (const QString err = check_iso_range(text_inputs_["ls_fa_start"]->text(), text_inputs_["ls_fa_end"]->text(),
+                                                iso_start, iso_end);
+            !err.isEmpty()) {
+            display_error(err);
+            return;
+        }
+        show_loading(tr("Running factor analysis on %1 instrument(s)...").arg(instr.size()));
         QJsonObject params;
-        QJsonArray instr;
-        for (auto& s : text_inputs_["ls_fa_instr"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
-        if (!text_inputs_["ls_fa_start"]->text().isEmpty())
-            params["start_date"] = text_inputs_["ls_fa_start"]->text().trimmed();
-        if (!text_inputs_["ls_fa_end"]->text().isEmpty())
-            params["end_date"] = text_inputs_["ls_fa_end"]->text().trimmed();
+        if (!iso_start.isEmpty())
+            params["start_date"] = iso_start;
+        if (!iso_end.isEmpty())
+            params["end_date"] = iso_end;
         AIQuantLabService::instance().signals_get_factor_analysis(params);
     });
     favl->addWidget(fa_run);
@@ -172,9 +190,14 @@ QWidget* QuantModulePanel::build_live_signals_panel() {
     fivl->addWidget(build_input_row(tr("Model ID"), fi_model, fi_tab));
     auto* fi_run = make_run_button(tr("GET FEATURE IMPORTANCE"), fi_tab);
     connect(fi_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        const QString mid = text_inputs_["ls_fi_model"]->text().trimmed();
+        if (mid.isEmpty()) {
+            display_error(tr("Enter the ID of a trained model."));
+            return;
+        }
+        show_loading(tr("Loading feature importance for %1...").arg(mid));
         QJsonObject params;
-        params["model_id"] = text_inputs_["ls_fi_model"]->text().trimmed();
+        params["model_id"] = mid;
         AIQuantLabService::instance().signals_get_feature_importance(params);
     });
     fivl->addWidget(fi_run);
@@ -214,7 +237,7 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     mtvl->addWidget(mt_info);
     auto* mt_list = make_run_button(tr("LIST ALL MODELS"), models_tab);
     connect(mt_list, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        show_loading(tr("Loading online models..."));
         AIQuantLabService::instance().online_list_models();
     });
     mtvl->addWidget(mt_list);
@@ -238,7 +261,7 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     ctvl->addWidget(build_input_row(tr("Model ID"), ol_model_id, create_tab));
     auto* ol_create = make_run_button(tr("CREATE MODEL"), create_tab);
     connect(ol_create, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Creating..."));
+        show_loading(tr("Creating %1 online model...").arg(combo_inputs_["ol_model_type"]->currentText()));
         QJsonObject params;
         params["model_type"] = combo_inputs_["ol_model_type"]->currentText();
         auto mid = text_inputs_["ol_model_id"]->text().trimmed();
@@ -272,13 +295,32 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     ttvl->addWidget(build_input_row(tr("Target"), ol_target, train_tab));
     auto* ol_train = make_run_button(tr("TRAIN ONE STEP"), train_tab);
     connect(ol_train, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Training..."));
+        const QString mid = text_inputs_["ol_train_id"]->text().trimmed();
+        if (mid.isEmpty()) {
+            display_error(tr("Enter the ID of a model created in the Create Model tab."));
+            return;
+        }
+        QJsonParseError perr{};
+        const auto doc = QJsonDocument::fromJson(text_inputs_["ol_features"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject() || doc.object().isEmpty()) {
+            display_error(tr("Features must be a non-empty JSON object like "
+                             "{\"close\":94.0,\"rsi\":55.0} — %1")
+                              .arg(perr.errorString()));
+            return;
+        }
+        // A blank / non-numeric target silently became 0.0 and corrupted the
+        // model's running MAE with a fake observation.
+        bool ok = false;
+        const double target = text_inputs_["ol_target"]->text().trimmed().toDouble(&ok);
+        if (!ok) {
+            display_error(tr("Target must be a number (e.g. 0.02)."));
+            return;
+        }
+        show_loading(tr("Feeding one sample to %1...").arg(mid));
         QJsonObject params;
-        params["model_id"] = text_inputs_["ol_train_id"]->text().trimmed();
-        auto doc = QJsonDocument::fromJson(text_inputs_["ol_features"]->text().toUtf8());
-        if (!doc.isNull())
-            params["features"] = doc.object();
-        params["target"] = text_inputs_["ol_target"]->text().trimmed().toDouble();
+        params["model_id"] = mid;
+        params["features"] = doc.object();
+        params["target"] = target;
         AIQuantLabService::instance().online_train(params);
     });
     ttvl->addWidget(ol_train);
@@ -302,20 +344,34 @@ QWidget* QuantModulePanel::build_online_learning_panel() {
     predvl->addWidget(build_input_row(tr("Features (JSON)"), ol_pfeats, pred_tab));
     auto* ol_pred = make_run_button(tr("PREDICT"), pred_tab);
     connect(ol_pred, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Predicting..."));
+        const QString mid = text_inputs_["ol_pred_id"]->text().trimmed();
+        if (mid.isEmpty()) {
+            display_error(tr("Enter a model ID."));
+            return;
+        }
+        QJsonParseError perr{};
+        const auto doc = QJsonDocument::fromJson(text_inputs_["ol_pred_feats"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject() || doc.object().isEmpty()) {
+            display_error(tr("Features must be a non-empty JSON object — %1").arg(perr.errorString()));
+            return;
+        }
+        show_loading(tr("Predicting with %1...").arg(mid));
         QJsonObject params;
-        params["model_id"] = text_inputs_["ol_pred_id"]->text().trimmed();
-        auto doc = QJsonDocument::fromJson(text_inputs_["ol_pred_feats"]->text().toUtf8());
-        if (!doc.isNull())
-            params["features"] = doc.object();
+        params["model_id"] = mid;
+        params["features"] = doc.object();
         AIQuantLabService::instance().online_predict(params);
     });
     predvl->addWidget(ol_pred);
     auto* ol_perf = make_run_button(tr("GET PERFORMANCE"), pred_tab);
     connect(ol_perf, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        const QString mid = text_inputs_["ol_pred_id"]->text().trimmed();
+        if (mid.isEmpty()) {
+            display_error(tr("Enter a model ID."));
+            return;
+        }
+        show_loading(tr("Loading performance for %1...").arg(mid));
         QJsonObject params;
-        params["model_id"] = text_inputs_["ol_pred_id"]->text().trimmed();
+        params["model_id"] = mid;
         AIQuantLabService::instance().online_performance(params);
     });
     predvl->addWidget(ol_perf);
@@ -355,7 +411,7 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     selvl->addWidget(sel_info);
     auto* sel_list_btn = make_run_button(tr("LIST AVAILABLE MODELS"), sel_tab);
     connect(sel_list_btn, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        show_loading(tr("Loading candidate model catalog..."));
         AIQuantLabService::instance().meta_list_models();
     });
     selvl->addWidget(sel_list_btn);
@@ -371,12 +427,13 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     selvl->addWidget(build_input_row(tr("Task Type"), sel_task, sel_tab));
     auto* sel_run = make_run_button(tr("RUN MODEL SELECTION"), sel_tab);
     connect(sel_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Selecting..."));
+        const QJsonArray model_ids = parse_csv_strings(text_inputs_["ml_sel_models"]->text());
+        if (model_ids.size() < 2) {
+            display_error(tr("Model selection needs at least two candidates, e.g. lightgbm,xgboost."));
+            return;
+        }
+        show_loading(tr("Training and ranking %1 candidate model(s)...").arg(model_ids.size()));
         QJsonObject params;
-        QJsonArray model_ids;
-        for (auto& s : text_inputs_["ml_sel_models"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                model_ids.append(s.trimmed());
         params["model_ids"] = model_ids;
         params["task_type"] = combo_inputs_["ml_sel_task"]->currentText();
         AIQuantLabService::instance().meta_run_selection(params);
@@ -402,12 +459,15 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     ensvl->addWidget(build_input_row(tr("Ensemble Method"), ens_method, ens_tab));
     auto* ens_run = make_run_button(tr("CREATE ENSEMBLE"), ens_tab);
     connect(ens_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Creating ensemble..."));
+        const QJsonArray keys = parse_csv_strings(text_inputs_["ml_ens_keys"]->text());
+        if (keys.size() < 2) {
+            display_error(tr("An ensemble needs at least two model keys from the Model Selection output."));
+            return;
+        }
+        show_loading(tr("Building a %1 ensemble from %2 model(s)...")
+                         .arg(combo_inputs_["ml_ens_method"]->currentText())
+                         .arg(keys.size()));
         QJsonObject params;
-        QJsonArray keys;
-        for (auto& s : text_inputs_["ml_ens_keys"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                keys.append(s.trimmed());
         params["model_keys"] = keys;
         params["method"] = combo_inputs_["ml_ens_method"]->currentText();
         AIQuantLabService::instance().meta_create_ensemble(params);
@@ -438,19 +498,27 @@ QWidget* QuantModulePanel::build_meta_learning_panel() {
     tunevl->addWidget(build_input_row(tr("Search Method"), tune_method, tune_tab));
     auto* tune_run = make_run_button(tr("TUNE HYPERPARAMETERS"), tune_tab);
     connect(tune_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Tuning..."));
+        QJsonParseError perr{};
+        const auto doc = QJsonDocument::fromJson(text_inputs_["ml_tune_grid"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject() || doc.object().isEmpty()) {
+            display_error(tr("Param Grid must be a non-empty JSON object like "
+                             "{\"n_estimators\":[50,100],\"max_depth\":[3,5]} — %1")
+                              .arg(perr.errorString()));
+            return;
+        }
+        show_loading(tr("%1 search over %2 hyperparameter(s) — this can take a while...")
+                         .arg(combo_inputs_["ml_tune_method"]->currentText())
+                         .arg(doc.object().size()));
         QJsonObject params;
         params["model_id"] = combo_inputs_["ml_tune_model"]->currentText();
-        auto doc = QJsonDocument::fromJson(text_inputs_["ml_tune_grid"]->text().toUtf8());
-        if (!doc.isNull())
-            params["param_grid"] = doc.object();
+        params["param_grid"] = doc.object();
         params["search_method"] = combo_inputs_["ml_tune_method"]->currentText();
         AIQuantLabService::instance().meta_tune_hyperparameters(params);
     });
     tunevl->addWidget(tune_run);
     auto* results_btn = make_run_button(tr("GET ALL RESULTS"), tune_tab);
     connect(results_btn, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        show_loading(tr("Loading meta-learning results..."));
         AIQuantLabService::instance().meta_get_results();
     });
     tunevl->addWidget(results_btn);
@@ -512,7 +580,7 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
 
     auto* lt_run = make_run_button(tr("REFRESH SCHEDULES"), list_tab);
     connect(lt_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading schedules..."));
+        show_loading(tr("Loading schedules..."));
         AIQuantLabService::instance().rolling_list_schedules();
     });
     ltvl->addWidget(lt_run);
@@ -576,18 +644,29 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
         const QString mid = text_inputs_["rr_model_id"]->text().trimmed();
         const QString cp = text_inputs_["rr_conf_path"]->text().trimmed();
         if (mid.isEmpty() && cp.isEmpty()) {
-            status_label_->setText(tr("Enter a Model ID or Config Path to preview."));
+            display_error(tr("Enter a Model ID or Config Path to preview."));
             return;
         }
-        status_label_->setText(tr("Generating preview..."));
+        // A non-numeric step used to silently become 0, which makes the window
+        // generator produce zero (or infinitely many) windows.
+        const QString step = text_inputs_["rr_step"]->text().trimmed();
+        int step_days = 0;
+        if (!step.isEmpty()) {
+            bool ok = false;
+            step_days = step.toInt(&ok);
+            if (!ok || step_days <= 0) {
+                display_error(tr("Step must be a positive whole number of trading days (got '%1').").arg(step));
+                return;
+            }
+        }
+        show_loading(tr("Generating rolling-window preview..."));
         QJsonObject params;
         if (!mid.isEmpty())
             params["model_id"] = mid;
         if (!cp.isEmpty())
             params["conf_path"] = cp;
-        const QString step = text_inputs_["rr_step"]->text().trimmed();
-        if (!step.isEmpty())
-            params["step"] = step.toInt();
+        if (step_days > 0)
+            params["step"] = step_days;
         AIQuantLabService::instance().rolling_preview_tasks(params);
     });
     btn_hl->addWidget(rr_preview, 1);
@@ -596,10 +675,33 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     connect(rr_create, &QPushButton::clicked, this, [this]() {
         const QString mid = text_inputs_["rr_model_id"]->text().trimmed();
         if (mid.isEmpty()) {
-            status_label_->setText(tr("Model ID is required."));
+            display_error(tr("Model ID is required."));
             return;
         }
-        status_label_->setText(tr("Creating schedule..."));
+        // Window / step used to fall through as 0 on any non-numeric input.
+        const QString win = text_inputs_["rr_window"]->text().trimmed();
+        const QString step = text_inputs_["rr_step"]->text().trimmed();
+        int win_days = 0, step_days = 0;
+        if (!win.isEmpty()) {
+            bool ok = false;
+            win_days = win.toInt(&ok);
+            if (!ok || win_days <= 0) {
+                display_error(tr("Window must be a positive whole number of trading days (got '%1').").arg(win));
+                return;
+            }
+        }
+        if (!step.isEmpty()) {
+            bool ok = false;
+            step_days = step.toInt(&ok);
+            if (!ok || step_days <= 0) {
+                display_error(tr("Step must be a positive whole number of trading days (got '%1').").arg(step));
+                return;
+            }
+        }
+        // NOTE: step > window silently skips training data between windows.
+        // Not blocked — gapped windows are a valid (if unusual) design — but it
+        // is almost always a typo and deserves a UI warning eventually.
+        show_loading(tr("Creating schedule for %1...").arg(mid));
         QJsonObject params;
         params["model_id"] = mid;
         params["frequency"] = combo_inputs_["rr_frequency"]->currentText();
@@ -607,12 +709,10 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
         const QString cp = text_inputs_["rr_conf_path"]->text().trimmed();
         if (!cp.isEmpty())
             params["conf_path"] = cp;
-        const QString win = text_inputs_["rr_window"]->text().trimmed();
-        if (!win.isEmpty())
-            params["window"] = win.toInt();
-        const QString step = text_inputs_["rr_step"]->text().trimmed();
-        if (!step.isEmpty())
-            params["step"] = step.toInt();
+        if (win_days > 0)
+            params["window"] = win_days;
+        if (step_days > 0)
+            params["step"] = step_days;
         AIQuantLabService::instance().rolling_create_schedule(params);
     });
     btn_hl->addWidget(rr_create, 1);
@@ -626,8 +726,12 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     retrainvl->setContentsMargins(12, 12, 12, 12);
     retrainvl->setSpacing(10);
 
+    // NOTE: AIQuantLabService::rolling_execute_retrain() parses the script's
+    // JSON event lines only after the process exits, so the per-window log is
+    // replayed on completion rather than streamed. Don't promise "live".
     auto* rt_info = new QLabel(tr("Executes a full rolling retrain for a scheduled model. Each window trains "
-                                  "independently and progress is streamed live below."),
+                                  "independently; the per-window log below is filled in when the run finishes. "
+                                  "Long runs can take many minutes with no intermediate output."),
                                retrain_tab);
     rt_info->setWordWrap(true);
     rt_info->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
@@ -657,7 +761,7 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     auto* rr_log = new QTextEdit(retrain_tab);
     rr_log->setObjectName("rr_log");
     rr_log->setReadOnly(true);
-    rr_log->setPlaceholderText(tr("Training progress will stream here..."));
+    rr_log->setPlaceholderText(tr("Per-window training log appears here when the run completes..."));
     rr_log->setStyleSheet(output_ss());
     rr_log->setMinimumHeight(140);
     retrainvl->addWidget(rr_log, 1);
@@ -666,7 +770,7 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     connect(rr_exec, &QPushButton::clicked, this, [this]() {
         const QString mid = text_inputs_["rr_exec_id"]->text().trimmed();
         if (mid.isEmpty()) {
-            status_label_->setText(tr("Model ID is required."));
+            display_error(tr("Model ID is required."));
             return;
         }
         // Reset progress UI

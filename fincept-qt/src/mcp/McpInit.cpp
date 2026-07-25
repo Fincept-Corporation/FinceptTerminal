@@ -21,6 +21,7 @@
 #include "mcp/tools/ForumTools.h"
 #include "mcp/tools/GeopoliticsTools.h"
 #include "mcp/tools/GovDataTools.h"
+#include "mcp/tools/JobTools.h"
 #include "mcp/tools/LiveTradingTools.h"
 #include "mcp/tools/MAAnalyticsTools.h"
 #include "mcp/tools/MarketsTools.h"
@@ -193,6 +194,12 @@ void initialize_all_tools() {
     // Phase 6: meta tools — tool_list, tool_describe, mcp_health.
     // Always exposed so the LLM can lazy-discover specialised tools.
     provider.register_tools(tools::get_meta_tools());
+
+    // Long-running-job + oversized-result protocol — job_status/result/cancel/list
+    // and result_fetch. Tier-0 (always sent), because a model holding a job
+    // receipt or a truncated-result envelope must be able to redeem it without
+    // first running a tool_list search to find out how.
+    provider.register_tools(tools::get_job_tools());
 
     LOG_INFO(TAG, QString("Registered %1 internal MCP tools").arg(provider.tool_count()));
 

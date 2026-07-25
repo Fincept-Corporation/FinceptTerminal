@@ -211,8 +211,15 @@ void NotificationsSection::build_ui() {
             // numbers) — left untranslated. Field labels are UI text.
             field->setPlaceholderText(fd.placeholder);
             field->setStyleSheet(input_ss());
-            if (fd.is_password)
+            field->setAccessibleName(QString("%1 — %2").arg(def.name, fd.label));
+            if (fd.is_password) {
                 field->setEchoMode(QLineEdit::Password);
+                // Bot tokens / SMTP passwords / Twilio auth tokens must not be
+                // harvested by predictive text or an IME candidate window.
+                field->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
+                field->setDragEnabled(false);
+                field->setAcceptDrops(false);
+            }
             pw.fields[fd.key] = field;
             auto* field_row = make_row(tr(fd.label.toUtf8().constData()), field);
             QLabel* row_lbl = nullptr;

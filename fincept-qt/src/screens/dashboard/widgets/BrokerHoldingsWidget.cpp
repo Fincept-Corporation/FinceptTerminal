@@ -155,7 +155,22 @@ void BrokerHoldingsWidget::hideEvent(QHideEvent* e) {
 
 void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows) {
     holdings_ = rows;
-    table_->setRowCount(rows.size());
+
+    // Empty state — an account with no holdings used to render a blank grid.
+    table_->clearSpans();
+    if (rows.isEmpty()) {
+        table_->setRowCount(1);
+        auto* msg = new QTableWidgetItem(tr("No holdings"));
+        msg->setTextAlignment(Qt::AlignCenter);
+        msg->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
+        table_->setItem(0, 0, msg);
+        table_->setSpan(0, 0, 1, table_->columnCount());
+        square_off_all_btn_->setEnabled(false);
+        set_loading(false);
+        return;
+    }
+
+    table_->setRowCount(static_cast<int>(rows.size()));
     int sellable = 0;
     for (int i = 0; i < rows.size(); ++i) {
         const auto& h = rows[i];
@@ -361,7 +376,19 @@ void BrokerHoldingsWidget::apply_styles() {
 void BrokerHoldingsWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("HOLDINGS"));
-    hub_resubscribe(); // re-renders header hint + table from cached subscription
+    // Re-apply the actual strings (the old body called hub_resubscribe(),
+    // which rebuilds subscriptions and translates nothing).
+    if (table_) {
+        table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg"), tr("LTP"), tr("P&L %"), QString()});
+        for (int r = 0; r < table_->rowCount(); ++r) {
+            if (auto* btn = qobject_cast<QPushButton*>(table_->cellWidget(r, 5)))
+                btn->setText(tr("Exit"));
+        }
+    }
+    if (square_off_all_btn_)
+        square_off_all_btn_->setText(tr("SQUARE OFF ALL"));
+    if (header_hint_ && account_id_.isEmpty())
+        header_hint_->setText(tr("No active account — click gear to configure"));
 }
 
 } // namespace fincept::screens::widgets

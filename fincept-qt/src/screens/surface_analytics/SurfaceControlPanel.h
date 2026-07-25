@@ -65,6 +65,11 @@ class SurfaceControlPanel : public QWidget {
     // Show a one-line lineage string from the active capability + state.
     void update_lineage(const QString& line);
 
+    /// Fill in the "Spot:" readout under the symbol field. The label existed
+    /// but nothing ever wrote to it, so it read "Spot: —" forever even though
+    /// the screen resolves a spot for every fetch. Pass <= 0 to clear.
+    void set_spot(double spot);
+
     SurfaceControlsState state() const { return state_; }
 
     void apply_state(const SurfaceControlsState& s);
@@ -131,6 +136,7 @@ class SurfaceControlPanel : public QWidget {
     QComboBox* dataset_combo_ = nullptr;
     QLabel* dataset_lbl_ = nullptr; // "Dataset:" (cached for retranslateUi)
     QLabel* spot_label_ = nullptr;
+    double last_spot_ = 0.0; // last value pushed to spot_label_, for retranslate
     QLabel* tier_badge_ = nullptr;
     bool synthetic_ = false; // true while the displayed surface is demo/sample data
 

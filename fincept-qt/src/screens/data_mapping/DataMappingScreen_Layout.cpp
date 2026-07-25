@@ -236,12 +236,15 @@ QWidget* DataMappingScreen::create_right_panel() {
 
     il->addSpacing(8);
 
-    // Security
+    // Security. NOTE: DataMappingRepository::save() writes `auth_token` to the
+    // data_mappings SQLite table as plaintext — this panel must not claim
+    // otherwise. See the FEATURE GAPS note about moving it to SecureStorage.
     security_title_ = new QLabel(tr("SECURITY"));
     security_title_->setObjectName("dmLabel");
     il->addWidget(security_title_);
-    auto* sec_val = new QLabel("AES-256-GCM"); // crypto standard name — not translated
+    auto* sec_val = new QLabel(tr("LOCAL STORE"));
     sec_val->setObjectName("dmInfoValue");
+    sec_val->setToolTip(tr("Mapping credentials are kept in the local application database on this machine."));
     il->addWidget(sec_val);
 
     il->addSpacing(8);
@@ -296,22 +299,27 @@ QWidget* DataMappingScreen::create_api_config_panel() {
 
     api_name_ = new QLineEdit;
     api_name_->setPlaceholderText(tr("e.g. Upstox OHLCV"));
+    api_name_->setAccessibleName(tr("Mapping name"));
     api_name_row_ = create_form_row(tr("MAPPING NAME"), api_name_);
     bl->addWidget(api_name_row_);
 
     api_base_url_ = new QLineEdit;
     api_base_url_->setPlaceholderText("https://api.example.com");
+    api_base_url_->setAccessibleName(tr("Base URL"));
     api_endpoint_ = new QLineEdit;
     api_endpoint_->setPlaceholderText("/v2/historical-candle/{symbol}/{interval}");
+    api_endpoint_->setAccessibleName(tr("Endpoint path"));
     api_base_url_row_ = create_form_row(tr("BASE URL"), api_base_url_);
     api_endpoint_row_ = create_form_row(tr("ENDPOINT"), api_endpoint_);
     bl->addWidget(create_form_two_col(api_base_url_row_, api_endpoint_row_));
 
     api_method_ = new QComboBox;
     api_method_->addItems({"GET", "POST", "PUT", "DELETE", "PATCH"}); // HTTP verbs — protocol values
+    api_method_->setAccessibleName(tr("HTTP method"));
     api_auth_type_ = new QComboBox;
     // Auth types are matched by text against template configs — keep untranslated.
     api_auth_type_->addItems({"None", "API Key", "Bearer Token", "Basic Auth", "OAuth2"});
+    api_auth_type_->setAccessibleName(tr("Authentication type"));
     api_method_row_ = create_form_row(tr("HTTP METHOD"), api_method_);
     api_auth_type_row_ = create_form_row(tr("AUTHENTICATION"), api_auth_type_);
     bl->addWidget(create_form_two_col(api_method_row_, api_auth_type_row_));
@@ -319,18 +327,23 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_auth_value_ = new QLineEdit;
     api_auth_value_->setPlaceholderText(tr("Token / API Key value"));
     api_auth_value_->setEchoMode(QLineEdit::Password);
+    api_auth_value_->setAccessibleName(tr("Auth value (secret)"));
+    api_auth_value_->setToolTip(tr("Saved with the mapping. TEST API REQUEST does not send it — put the key in "
+                                   "HEADERS or the endpoint query string to exercise an authenticated endpoint."));
     api_auth_value_row_ = create_form_row(tr("AUTH VALUE"), api_auth_value_);
     bl->addWidget(api_auth_value_row_);
 
     api_headers_ = new QPlainTextEdit;
     api_headers_->setPlaceholderText("Content-Type: application/json\nAccept: application/json");
     api_headers_->setMaximumHeight(60);
+    api_headers_->setAccessibleName(tr("Request headers, one per line"));
     api_headers_row_ = create_form_row(tr("HEADERS (one per line)"), api_headers_);
     bl->addWidget(api_headers_row_);
 
     api_body_ = new QPlainTextEdit;
     api_body_->setPlaceholderText("{\"symbol\": \"AAPL\"}");
     api_body_->setMaximumHeight(60);
+    api_body_->setAccessibleName(tr("Request body (JSON)"));
     api_body_row_ = create_form_row(tr("REQUEST BODY (JSON)"), api_body_);
     bl->addWidget(api_body_row_);
 
@@ -338,6 +351,9 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_timeout_->setRange(1, 120);
     api_timeout_->setValue(30);
     api_timeout_->setSuffix(tr(" sec"));
+    api_timeout_->setAccessibleName(tr("Request timeout"));
+    api_timeout_->setToolTip(tr("Saved with the mapping. The TEST API REQUEST client currently uses its own "
+                                "fixed timeout."));
     api_timeout_row_ = create_form_row(tr("TIMEOUT"), api_timeout_);
     bl->addWidget(api_timeout_row_);
 
@@ -348,6 +364,7 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_test_btn_ = new QPushButton(tr("TEST API REQUEST"));
     api_test_btn_->setObjectName("dmCalcBtn");
     api_test_btn_->setCursor(Qt::PointingHandCursor);
+    api_test_btn_->setAccessibleName(tr("Send a test request and capture the response shape"));
     connect(api_test_btn_, &QPushButton::clicked, this, &DataMappingScreen::on_test_api);
     api_test_status_ = new QLabel;
     api_test_status_->setObjectName("dmInfoLabel");
@@ -533,16 +550,21 @@ QWidget* DataMappingScreen::create_cache_panel() {
     cache_ttl_row_ = create_form_row(tr("CACHE TTL"), cache_ttl_);
     bl->addWidget(cache_ttl_row_);
 
+    // Honest disclosure. The previous copy claimed AES-256-GCM encryption at
+    // rest, which DataMappingRepository does not do — auth_token goes into the
+    // data_mappings table verbatim. Never advertise a control that isn't there.
     auto* sec_box = new QWidget(this);
     sec_box->setStyleSheet(
-        QString("background: rgba(22,163,74,0.05); border: 1px solid %1; padding: 8px;").arg(colors::BORDER_DIM()));
+        QString("background: rgba(217,119,6,0.05); border: 1px solid %1; padding: 8px;").arg(colors::BORDER_DIM()));
     auto* sbl = new QVBoxLayout(sec_box);
     sbl->setSpacing(4);
-    encryption_title_ = new QLabel(tr("ENCRYPTION"));
+    encryption_title_ = new QLabel(tr("CREDENTIAL STORAGE"));
     encryption_title_->setObjectName("dmLabel");
     sbl->addWidget(encryption_title_);
-    encryption_detail_ = new QLabel(tr("API credentials are encrypted with AES-256-GCM before storage.\n"
-                                       "Sensitive data never stored in plaintext."));
+    encryption_detail_ = new QLabel(tr("The AUTH VALUE and any credentials placed in HEADERS are saved to the "
+                                       "local application database on this machine, unencrypted.\n"
+                                       "Anything running as your user account can read them. Prefer a scoped, "
+                                       "revocable key over a full-access one."));
     encryption_detail_->setObjectName("dmInfoLabel");
     encryption_detail_->setWordWrap(true);
     sbl->addWidget(encryption_detail_);
@@ -638,23 +660,32 @@ QWidget* DataMappingScreen::create_list_view() {
     list_run_btn_ = new QPushButton(tr("▶ RUN"));
     list_run_btn_->setObjectName("dmCalcBtn");
     list_run_btn_->setCursor(Qt::PointingHandCursor);
+    list_run_btn_->setEnabled(false); // gated on selection — see refresh_saved_mappings()
+    list_run_btn_->setAccessibleName(tr("Run selected mapping"));
     connect(list_run_btn_, &QPushButton::clicked, this, &DataMappingScreen::on_run_mapping);
     tbl->addWidget(list_run_btn_);
 
     list_del_btn_ = new QPushButton(tr("DELETE"));
     list_del_btn_->setObjectName("dmDestructiveBtn");
     list_del_btn_->setCursor(Qt::PointingHandCursor);
+    list_del_btn_->setEnabled(false);
+    list_del_btn_->setAccessibleName(tr("Delete selected mapping"));
     connect(list_del_btn_, &QPushButton::clicked, this, &DataMappingScreen::on_delete_mapping);
     tbl->addWidget(list_del_btn_);
 
     list_new_btn_ = new QPushButton(tr("+ NEW MAPPING"));
     list_new_btn_->setObjectName("dmCalcBtn");
     list_new_btn_->setCursor(Qt::PointingHandCursor);
+    list_new_btn_->setAccessibleName(tr("Create a new mapping"));
     connect(list_new_btn_, &QPushButton::clicked, this, &DataMappingScreen::on_new_mapping);
     tbl->addWidget(list_new_btn_);
     vl->addWidget(toolbar);
 
     mapping_list_ = new QListWidget;
+    mapping_list_->setAccessibleName(tr("Saved mappings"));
+    // Selection drives RUN / DELETE; double-click runs (same as the RUN button).
+    connect(mapping_list_, &QListWidget::currentRowChanged, this, [this](int) { refresh_saved_mappings(); });
+    connect(mapping_list_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) { on_run_mapping(); });
     vl->addWidget(mapping_list_, 1);
 
     list_empty_ = new QLabel(tr("No mappings saved yet.\nClick CREATE to build your first data mapping."));

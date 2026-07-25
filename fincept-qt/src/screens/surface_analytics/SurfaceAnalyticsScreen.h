@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QString>
@@ -92,6 +93,16 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     void refresh_provider_status();
     void load_dataset_range_for_active_capability();
 
+    /// Mark `type`'s z-grid as holding genuine (fetched or imported) data and
+    /// refresh the tier badge. Called only from a provider/CSV path that
+    /// actually wrote the grid.
+    void mark_chart_real(ChartType type);
+    /// Re-apply the control panel's DEMO badge for whatever surface is on
+    /// screen. Every surface starts synthetic; the badge is per-surface, not
+    /// per-screen, so switching from a fetched surface to an un-fetched one has
+    /// to put DEMO back.
+    void sync_synthetic_badge();
+
     QString current_symbol_or_default() const;
     float spot_for(const QString& sym) const;
     const std::vector<std::vector<float>>* active_z_grid() const;
@@ -112,6 +123,13 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     SurfaceTableWidget* surface_table_ = nullptr;
     SurfaceLineWidget* surface_line_ = nullptr;
     QStackedWidget* view_stack_ = nullptr;
+    /// Always-visible banner directly above the chart, shown whenever the
+    /// surface on screen is SurfaceDemoData's rand() output. The control
+    /// panel's DEMO badge lives inside the ASSET group box, which
+    /// apply_capability_visibility() *hides* for the 12 surfaces that need no
+    /// underlying — precisely the always-synthetic ones. Those users saw
+    /// fabricated curves with no marking at all.
+    QLabel* demo_banner_ = nullptr;
 
     // State
     int active_category_ = 0;
@@ -151,6 +169,11 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     ImpliedDividendData impl_div_data_;
     InflationExpData inflation_data_;
     MonetaryPolicyData monetary_data_;
+
+    /// ChartTypes (as int) whose z-grid currently holds real fetched/imported
+    /// data rather than SurfaceDemoData's rand() output. Everything not in here
+    /// is synthetic and must be badged DEMO. Cleared by load_demo_data().
+    QSet<int> real_data_charts_;
 
     // Symbol group link — SymbolGroup::None when unlinked.
     fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;

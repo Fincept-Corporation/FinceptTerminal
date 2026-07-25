@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerLogRedact.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -184,10 +185,12 @@ TokenExchangeResponse IciciDirectBroker::exchange_token(const QString& api_key, 
     auto resp = BrokerHttp::instance().send("GET", QString(base_url()) + "/customerdetails", body_bytes,
                                             "application/json", headers);
 
+    // Redacted: the Success block of this response *is* the session_token
+    // (read below at `session_token`), alongside customer PII.
     LOG_INFO("IciciDirect", QString("customerdetails HTTP %1 success=%2 body=%3")
                                 .arg(resp.status_code)
                                 .arg(resp.success)
-                                .arg(resp.raw_body.left(300)));
+                                .arg(redact_body(resp.raw_body, 300)));
 
     if (!resp.success) {
         result.error = resp.json.value("Error").toString(resp.error.isEmpty() ? QString("HTTP %1").arg(resp.status_code)

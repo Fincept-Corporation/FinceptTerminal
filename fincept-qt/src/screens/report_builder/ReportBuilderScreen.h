@@ -54,6 +54,10 @@ class ReportBuilderScreen : public QWidget, public IStatefulScreen {
     void show_theme_dialog();
     void show_metadata_dialog();
 
+    /// Ask before replacing the in-memory document (New / Open / Recent).
+    /// Returns true if the caller may proceed.
+    bool confirm_replace_document(const QString& title);
+
     // User-driven operations — all go through the service
     void add_component(const QString& type);
     void select_component(int index);

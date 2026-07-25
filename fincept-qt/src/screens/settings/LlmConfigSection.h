@@ -13,6 +13,7 @@
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QStringList>
@@ -33,6 +34,11 @@ class LlmConfigSection : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    /// Re-reads providers + profiles every time the section becomes visible.
+    /// SettingsScreen's MCP-driven sync works by hiding and re-showing the
+    /// current section, so without this override an `llm.provider_changed`
+    /// event left this panel showing stale rows.
+    void showEvent(QShowEvent* e) override;
 
   private slots:
     // Provider tab

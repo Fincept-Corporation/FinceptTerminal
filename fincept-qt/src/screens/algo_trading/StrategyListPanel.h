@@ -45,6 +45,9 @@ class StrategyListPanel : public QWidget {
     void connect_service();
     void render_page();
     void update_pagination_controls();
+    /// Sort `filtered_` by the sort combo's current selection. Called after every
+    /// rebuild of `filtered_` so the sort survives search/category changes.
+    void apply_sort();
     void retranslateUi();
 
     static constexpr int kPageSize = 50;

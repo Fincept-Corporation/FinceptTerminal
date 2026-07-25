@@ -96,17 +96,32 @@ void DashboardCanvas::load_layout(const GridLayout& layout) {
     if (width() > 0)
         layout_.cols = responsive_cols(width());
 
+    // Unknown widget types used to be skipped while the GridItem stayed in
+    // layout_.items — leaving a permanent invisible hole in the grid, a
+    // widget_count that disagreed with the layout, and the dead entry being
+    // re-serialised on every save. Drop them instead.
+    QVector<GridItem> kept;
+    kept.reserve(layout_.items.size());
     for (const auto& item : layout_.items) {
         const WidgetMeta* meta = WidgetRegistry::instance().find(item.id);
         if (!meta) {
-            LOG_WARN("Canvas", QString("Unknown widget type: %1").arg(item.id));
+            LOG_WARN("Canvas", QString("Dropping tile with unknown widget type: %1").arg(item.id));
             continue;
         }
         auto* widget = meta->factory(item.config);
+        if (!widget) {
+            LOG_WARN("Canvas", QString("Factory returned null for widget type: %1").arg(item.id));
+            continue;
+        }
         auto* tile = new WidgetTile(item.instance_id, widget, this);
         connect_tile(tile);
         tiles_.append(tile);
         tile->show();
+        kept.append(item);
+    }
+    if (kept.size() != layout_.items.size()) {
+        layout_.items = compact_vertical(kept);
+        emit layout_changed(layout_);
     }
 
     reflow_tiles();
@@ -157,10 +172,17 @@ void DashboardCanvas::add_widget(const QString& widget_type_id) {
     item.cell.min_w = meta->min_w;
     item.cell.min_h = meta->min_h;
 
+    auto* widget = meta->factory(item.config);
+    if (!widget) {
+        // Never leave a GridItem behind for a widget that failed to construct —
+        // that produced an invisible tile that still reserved grid space.
+        LOG_WARN("Canvas", QString("Factory returned null for widget type: %1").arg(widget_type_id));
+        return;
+    }
+
     layout_.items.append(item);
     layout_.items = compact_vertical(layout_.items);
 
-    auto* widget = meta->factory(item.config);
     auto* tile = new WidgetTile(item.instance_id, widget, this);
     connect_tile(tile);
     tiles_.append(tile);

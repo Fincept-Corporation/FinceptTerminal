@@ -3,6 +3,9 @@
 #include "screens/common/IStatefulScreen.h"
 #include "screens/node_editor/NodeEditorTypes.h"
 
+#include <QHash>
+#include <QPointF>
+#include <QStringList>
 #include <QTimer>
 #include <QUndoStack>
 #include <QWidget>
@@ -38,6 +41,12 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     void build_ui();
     void wire_signals();
 
+    /// Ask before running a graph that contains LIVE (non-paper) trading nodes.
+    /// Returns true to proceed. Cancel is the default button so Enter cannot
+    /// fire real orders. Read-only trading.get_* nodes are deliberately ignored
+    /// — warning on those would make the prompt noise people click through.
+    bool confirm_live_order_nodes(const WorkflowDef& wf, const QString& action);
+
     // Actions
     void on_node_drop(const QString& type_id, const QPointF& scene_pos);
     void on_node_selected(const QString& node_id);
@@ -53,6 +62,20 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     void on_auto_save();
     void on_show_templates();
     void on_deploy();
+
+    // ── Undo plumbing ────────────────────────────────────────────────────────
+    /// Push an AddNodesCommand for `nodes` (+ the edges among them).
+    void push_add_nodes(const QVector<NodeDef>& nodes, const QVector<EdgeDef>& edges, const QString& label);
+    /// Push a RemoveNodesCommand for `ids`, capturing their current defs and
+    /// every edge that touches them so undo restores the wiring too.
+    void push_remove_nodes(const QStringList& ids, const QString& label);
+    /// Snapshot every node position (drag start) / diff against it (drag end).
+    void begin_move_snapshot();
+    void commit_move_snapshot();
+    /// Discard undo history — mandatory whenever the graph is replaced wholesale
+    /// from outside the editor (load / import / restore), because the queued
+    /// commands refer to nodes that no longer exist.
+    void reset_undo_history();
 
     // Components
     NodeEditorToolbar* toolbar_ = nullptr;
@@ -70,6 +93,9 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     // Clipboard for copy/paste
     QVector<NodeDef> clipboard_nodes_;
     QVector<EdgeDef> clipboard_edges_;
+
+    // Positions captured at drag start, diffed at drag end into one undoable move.
+    QHash<QString, QPointF> move_snapshot_;
 };
 
 } // namespace fincept::workflow

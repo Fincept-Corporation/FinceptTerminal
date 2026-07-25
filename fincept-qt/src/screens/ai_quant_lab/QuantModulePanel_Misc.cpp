@@ -2,9 +2,12 @@
 //
 // Miscellaneous panel builders — Advanced Models, Feature Engineering,
 // Portfolio Opt, Factor Evaluation, Strategy Builder, Data Processors, Factor
-// Discovery, Model Library, Live Signals, Online Learning, Meta Learning, HFT,
-// Rolling Retraining. Extracted from QuantModulePanel.cpp to keep that file
-// maintainable.
+// Discovery, Model Library. Extracted from QuantModulePanel.cpp to keep that
+// file maintainable.
+//
+// Live Signals / Online Learning / Meta Learning / Rolling Retraining live in
+// QuantModulePanel_LiveLearning.cpp; HFT in QuantModulePanel_HFT.cpp;
+// RL Trading in QuantModulePanel_RL.cpp.
 #include "core/logging/Logger.h"
 #include "screens/ai_quant_lab/QuantModulePanel.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
@@ -30,6 +33,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QJsonValue>
 #include <QLabel>
 #include <QLineEdit>
@@ -106,7 +110,9 @@ QWidget* QuantModulePanel::build_advanced_models_panel() {
 
     auto* run = make_run_button(tr("CREATE & TRAIN MODEL"), w);
     connect(run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Training..."));
+        show_loading(tr("Creating and training %1 (%2 epochs) — this can take several minutes...")
+                         .arg(combo_inputs_["adv_model"]->currentText())
+                         .arg(int_inputs_["adv_epochs"]->value()));
         QJsonObject params;
         params["model_type"] = combo_inputs_["adv_model"]->currentText();
         QJsonObject config;
@@ -169,11 +175,24 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
 
     auto* ind_run = make_run_button(tr("COMPUTE INDICATOR"), ind);
     connect(ind_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Computing..."));
+        QJsonArray series;
+        QString bad;
+        if (!parse_doubles(text_inputs_["fe_data"]->text(), series, &bad)) {
+            display_error(tr("Price Data: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        const int window = int_inputs_["fe_window"]->value();
+        if (series.size() < window) {
+            display_error(
+                tr("A %1-period window needs at least %1 prices; you provided %2.").arg(window).arg(series.size()));
+            return;
+        }
+        show_loading(
+            tr("Computing %1 over %2 prices...").arg(combo_inputs_["fe_indicator"]->currentText()).arg(series.size()));
         QJsonObject params;
         params["data"] = text_inputs_["fe_data"]->text();
         params["indicator"] = combo_inputs_["fe_indicator"]->currentText();
-        params["window"] = int_inputs_["fe_window"]->value();
+        params["window"] = window;
         AIQuantLabService::instance().feature_compute(params);
     });
     ivl->addWidget(ind_run);
@@ -207,12 +226,28 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
 
     auto* sel_run = make_run_button(tr("SELECT FEATURES BY IC"), sel);
     connect(sel_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Selecting..."));
+        // JSON parse failures used to be swallowed: params["features"] was simply
+        // omitted and the run failed server-side with an unrelated message.
+        QJsonParseError perr{};
+        const auto doc = QJsonDocument::fromJson(text_inputs_["fe_sel_features"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+            display_error(
+                tr("Features must be a JSON object like {\"rsi\":[…],\"macd\":[…]} — %1").arg(perr.errorString()));
+            return;
+        }
+        QJsonArray rets;
+        QString bad;
+        if (!parse_doubles(text_inputs_["fe_sel_returns"]->text(), rets, &bad)) {
+            display_error(tr("Returns: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (rets.isEmpty()) {
+            display_error(tr("Enter the target return series."));
+            return;
+        }
+        show_loading(tr("Ranking %1 feature(s) by IC...").arg(doc.object().size()));
         QJsonObject params;
-        auto feat_text = text_inputs_["fe_sel_features"]->text();
-        auto doc = QJsonDocument::fromJson(feat_text.toUtf8());
-        if (!doc.isNull())
-            params["features"] = doc.object();
+        params["features"] = doc.object();
         params["returns"] = text_inputs_["fe_sel_returns"]->text();
         params["top_k"] = int_inputs_["fe_topk"]->value();
         AIQuantLabService::instance().feature_select_by_ic(params);
@@ -241,13 +276,22 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
 
     auto* expr_run = make_run_button(tr("EVALUATE EXPRESSION"), expr);
     connect(expr_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Evaluating..."));
+        QJsonParseError perr{};
+        const auto doc = QJsonDocument::fromJson(text_inputs_["fe_expr_data"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+            display_error(tr("OHLCV Data must be a JSON object like {\"close\":[…],\"volume\":[…]} — %1")
+                              .arg(perr.errorString()));
+            return;
+        }
+        const QString expression = text_inputs_["fe_expression"]->text().trimmed();
+        if (expression.isEmpty()) {
+            display_error(tr("Enter an expression, e.g. Mean(close, 5) / Std(close, 20)."));
+            return;
+        }
+        show_loading(tr("Evaluating %1...").arg(expression));
         QJsonObject params;
-        auto data_text = text_inputs_["fe_expr_data"]->text();
-        auto doc = QJsonDocument::fromJson(data_text.toUtf8());
-        if (!doc.isNull())
-            params["data"] = doc.object();
-        params["expression"] = text_inputs_["fe_expression"]->text();
+        params["data"] = doc.object();
+        params["expression"] = expression;
         AIQuantLabService::instance().feature_evaluate_expression(params);
     });
     evl->addWidget(expr_run);
@@ -306,23 +350,48 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
 
         auto* run = make_run_button(btn_label, t);
         connect(run, &QPushButton::clicked, this, [this, method_id, needs_returns]() {
-            status_label_->setText(tr("Optimizing..."));
+            // Previously: a blank Assets field produced [""] and a malformed
+            // covariance matrix was silently dropped, so the optimiser ran on
+            // nonsense and returned an unrelated Python error.
+            const QJsonArray assets_arr = parse_csv_strings(text_inputs_[method_id + "_assets"]->text());
+            if (assets_arr.isEmpty()) {
+                display_error(tr("Enter at least two asset names, e.g. AAPL,GOOG,MSFT."));
+                return;
+            }
+            QJsonParseError perr{};
+            const auto cov_doc = QJsonDocument::fromJson(text_inputs_[method_id + "_cov"]->text().toUtf8(), &perr);
+            if (perr.error != QJsonParseError::NoError || !cov_doc.isArray()) {
+                display_error(tr("Covariance Matrix must be a JSON 2-D array like [[0.04,0.01],[0.01,0.09]] — %1")
+                                  .arg(perr.errorString()));
+                return;
+            }
+            const QJsonArray cov = cov_doc.array();
+            if (cov.size() != assets_arr.size()) {
+                display_error(tr("Covariance matrix has %1 row(s) but you listed %2 assets - they must match.")
+                                  .arg(cov.size())
+                                  .arg(assets_arr.size()));
+                return;
+            }
             QJsonObject params;
-            auto assets_str = text_inputs_[method_id + "_assets"]->text().split(',');
-            QJsonArray assets_arr;
-            for (auto& a : assets_str)
-                assets_arr.append(a.trimmed());
             params["assets"] = assets_arr;
-            auto cov_doc = QJsonDocument::fromJson(text_inputs_[method_id + "_cov"]->text().toUtf8());
-            if (!cov_doc.isNull())
-                params["cov_matrix"] = cov_doc.array();
+            params["cov_matrix"] = cov;
             if (needs_returns) {
                 QJsonArray ret_arr;
-                for (auto& r : text_inputs_[method_id + "_returns"]->text().split(','))
-                    ret_arr.append(r.trimmed().toDouble());
+                QString bad;
+                if (!parse_doubles(text_inputs_[method_id + "_returns"]->text(), ret_arr, &bad)) {
+                    display_error(tr("Expected Returns: '%1' is not numeric.").arg(bad));
+                    return;
+                }
+                if (ret_arr.size() != assets_arr.size()) {
+                    display_error(tr("Expected Returns has %1 entries but you listed %2 assets.")
+                                      .arg(ret_arr.size())
+                                      .arg(assets_arr.size()));
+                    return;
+                }
                 params["expected_returns"] = ret_arr;
             }
             params["risk_free_rate"] = double_inputs_[method_id + "_rf"]->value() / 100.0;
+            show_loading(tr("Optimising %1 assets...").arg(assets_arr.size()));
             AIQuantLabService::instance().portopt_run(method_id, params);
         });
         tvl->addWidget(run);
@@ -367,24 +436,49 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
     blvl->addWidget(build_input_row(tr("View Confidences"), bl_conf, bl));
     auto* bl_run = make_run_button(tr("RUN BLACK-LITTERMAN"), bl);
     connect(bl_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Running BL..."));
+        const QJsonArray assets = parse_csv_strings(text_inputs_["bl_assets"]->text());
+        if (assets.isEmpty()) {
+            display_error(tr("Enter at least two asset names."));
+            return;
+        }
+        QJsonArray caps, views, confs;
+        QString bad;
+        if (!parse_doubles(text_inputs_["bl_caps"]->text(), caps, &bad)) {
+            display_error(tr("Market Caps: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (caps.size() != assets.size()) {
+            display_error(
+                tr("Market Caps has %1 entries but you listed %2 assets.").arg(caps.size()).arg(assets.size()));
+            return;
+        }
+        if (!parse_doubles(text_inputs_["bl_views"]->text(), views, &bad)) {
+            display_error(tr("Views: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (!parse_doubles(text_inputs_["bl_conf"]->text(), confs, &bad)) {
+            display_error(tr("View Confidences: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (views.size() != confs.size()) {
+            display_error(tr("Each view needs exactly one confidence — got %1 view(s) and %2 confidence(s).")
+                              .arg(views.size())
+                              .arg(confs.size()));
+            return;
+        }
+        QJsonParseError perr{};
+        const auto cov_doc = QJsonDocument::fromJson(text_inputs_["bl_cov"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !cov_doc.isArray()) {
+            display_error(tr("Covariance Matrix must be a JSON 2-D array — %1").arg(perr.errorString()));
+            return;
+        }
         QJsonObject params;
-        QJsonArray caps, views, confs, assets;
-        for (auto& v : text_inputs_["bl_caps"]->text().split(','))
-            caps.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["bl_views"]->text().split(','))
-            views.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["bl_conf"]->text().split(','))
-            confs.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["bl_assets"]->text().split(','))
-            assets.append(v.trimmed());
         params["market_caps"] = caps;
         params["views"] = views;
         params["view_confidences"] = confs;
         params["assets"] = assets;
-        auto cov_doc = QJsonDocument::fromJson(text_inputs_["bl_cov"]->text().toUtf8());
-        if (!cov_doc.isNull())
-            params["cov_matrix"] = cov_doc.array();
+        params["cov_matrix"] = cov_doc.array();
+        show_loading(tr("Blending %1 view(s) into the equilibrium prior...").arg(views.size()));
         AIQuantLabService::instance().portopt_run("black_litterman", params);
     });
     blvl->addWidget(bl_run);
@@ -432,13 +526,31 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     icvl->addWidget(build_input_row(tr("Method"), ic_method, ic));
     auto* ic_run = make_run_button(tr("CALCULATE IC METRICS"), ic);
     connect(ic_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Calculating..."));
-        QJsonObject params;
         QJsonArray preds, rets;
-        for (auto& v : text_inputs_["ev_predictions"]->text().split(','))
-            preds.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["ev_returns"]->text().split(','))
-            rets.append(v.trimmed().toDouble());
+        QString bad;
+        if (!parse_doubles(text_inputs_["ev_predictions"]->text(), preds, &bad)) {
+            display_error(tr("Predictions: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (!parse_doubles(text_inputs_["ev_returns"]->text(), rets, &bad)) {
+            display_error(tr("Returns: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        // A correlation over fewer than 3 pairs is degenerate (|IC| == 1 by
+        // construction at n == 2), so refuse rather than report a fake 1.0.
+        if (preds.size() < 3) {
+            display_error(tr("IC needs at least 3 paired observations; you provided %1.").arg(preds.size()));
+            return;
+        }
+        if (preds.size() != rets.size()) {
+            display_error(
+                tr("Predictions (%1) and returns (%2) must have the same length.").arg(preds.size()).arg(rets.size()));
+            return;
+        }
+        show_loading(tr("Computing %1 IC over %2 observations...")
+                         .arg(combo_inputs_["ev_ic_method"]->currentText())
+                         .arg(preds.size()));
+        QJsonObject params;
         params["predictions"] = preds;
         params["returns"] = rets;
         params["method"] = combo_inputs_["ev_ic_method"]->currentText();
@@ -470,14 +582,31 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     repvl->addWidget(build_input_row(tr("Returns"), rep_rets, rep));
     auto* rep_run = make_run_button(tr("GENERATE EVALUATION REPORT"), rep);
     connect(rep_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Generating..."));
-        QJsonObject params;
         QJsonArray preds, rets;
-        for (auto& v : text_inputs_["ev_rep_preds"]->text().split(','))
-            preds.append(v.trimmed().toDouble());
-        for (auto& v : text_inputs_["ev_rep_returns"]->text().split(','))
-            rets.append(v.trimmed().toDouble());
-        params["factor_name"] = text_inputs_["ev_factor_name"]->text();
+        QString bad;
+        if (!parse_doubles(text_inputs_["ev_rep_preds"]->text(), preds, &bad)) {
+            display_error(tr("Predictions: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (!parse_doubles(text_inputs_["ev_rep_returns"]->text(), rets, &bad)) {
+            display_error(tr("Returns: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (preds.size() < 3) {
+            display_error(tr("Need at least 3 paired observations; you provided %1.").arg(preds.size()));
+            return;
+        }
+        if (preds.size() != rets.size()) {
+            display_error(
+                tr("Predictions (%1) and returns (%2) must have the same length.").arg(preds.size()).arg(rets.size()));
+            return;
+        }
+        const QString fname = text_inputs_["ev_factor_name"]->text().trimmed();
+        show_loading(tr("Scoring factor '%1' over %2 observations...")
+                         .arg(fname.isEmpty() ? tr("unnamed") : fname)
+                         .arg(preds.size()));
+        QJsonObject params;
+        params["factor_name"] = fname.isEmpty() ? QStringLiteral("factor") : fname;
         params["predictions"] = preds;
         params["returns"] = rets;
         AIQuantLabService::instance().evaluation_report(params);
@@ -506,20 +635,40 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     riskvl->addWidget(build_input_row(tr("Confidence Level"), risk_conf, risk));
     auto* risk_run = make_run_button(tr("CALCULATE RISK METRICS"), risk);
     connect(risk_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Calculating..."));
-        QJsonObject params;
         QJsonArray rets;
-        for (auto& v : text_inputs_["ev_risk_returns"]->text().split(','))
-            rets.append(v.trimmed().toDouble());
+        QString bad;
+        if (!parse_doubles(text_inputs_["ev_risk_returns"]->text(), rets, &bad)) {
+            display_error(tr("Returns: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        // Below 5 points volatility / VaR / drawdown are degenerate. (30+ is the
+        // practical floor for the ANNUALISED figures, but blocking there would
+        // reject legitimate exploratory runs.)
+        if (rets.size() < 5) {
+            display_error(tr("Risk metrics need at least 5 daily returns; you provided %1. "
+                             "Annualised figures only become meaningful past ~30 observations.")
+                              .arg(rets.size()));
+            return;
+        }
+        QJsonObject params;
         params["returns"] = rets;
         params["confidence_level"] = double_inputs_["ev_risk_conf"]->value();
-        auto bench_text = text_inputs_["ev_risk_bench"]->text().trimmed();
+        const auto bench_text = text_inputs_["ev_risk_bench"]->text().trimmed();
         if (!bench_text.isEmpty()) {
             QJsonArray bench;
-            for (auto& v : bench_text.split(','))
-                bench.append(v.trimmed().toDouble());
+            if (!parse_doubles(bench_text, bench, &bad)) {
+                display_error(tr("Benchmark returns: '%1' is not numeric.").arg(bad));
+                return;
+            }
+            // Beta / tracking error / capture ratios are only defined pairwise.
+            if (bench.size() != rets.size()) {
+                display_error(
+                    tr("Benchmark (%1) must have the same length as returns (%2).").arg(bench.size()).arg(rets.size()));
+                return;
+            }
             params["benchmark_returns"] = bench;
         }
+        show_loading(tr("Computing risk metrics over %1 observations...").arg(rets.size()));
         AIQuantLabService::instance().evaluation_risk_metrics(params);
     });
     riskvl->addWidget(risk_run);
@@ -569,14 +718,31 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     tkvl->addWidget(build_input_row(tr("N-Drop"), tk_drop, topk));
     auto* tk_run = make_run_button(tr("CREATE TOPK-DROPOUT STRATEGY"), topk);
     connect(tk_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Creating..."));
-        QJsonObject params;
         QJsonArray signal;
-        for (auto& v : text_inputs_["st_tk_signal"]->text().split(','))
-            signal.append(v.trimmed().toDouble());
+        QString bad;
+        if (!parse_doubles(text_inputs_["st_tk_signal"]->text(), signal, &bad)) {
+            display_error(tr("Signal: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        const int topk = int_inputs_["st_topk"]->value();
+        const int ndrop = int_inputs_["st_ndrop"]->value();
+        if (signal.isEmpty()) {
+            display_error(tr("Enter the cross-sectional signal values."));
+            return;
+        }
+        // NOTE: topk > signal.size() is deliberately NOT blocked — a small test
+        // universe is a legitimate way to try the panel and the shipped default
+        // topk is 50. n_drop >= topk, however, replaces the whole book every
+        // rebalance: that is not TopK-Dropout, it is 100% turnover.
+        if (ndrop >= topk) {
+            display_error(tr("N-Drop (%1) must be smaller than Top-K (%2).").arg(ndrop).arg(topk));
+            return;
+        }
+        show_loading(tr("Building TopK-Dropout over %1 names...").arg(signal.size()));
+        QJsonObject params;
         params["signal"] = signal;
-        params["topk"] = int_inputs_["st_topk"]->value();
-        params["n_drop"] = int_inputs_["st_ndrop"]->value();
+        params["topk"] = topk;
+        params["n_drop"] = ndrop;
         AIQuantLabService::instance().strategy_create("create_topk_dropout", params);
     });
     tkvl->addWidget(tk_run);
@@ -603,11 +769,21 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     rpvl->addWidget(build_input_row(tr("Rebalance"), rp_freq, rp));
     auto* rp_run = make_run_button(tr("CREATE RISK PARITY STRATEGY"), rp);
     connect(rp_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Creating..."));
+        QJsonParseError perr{};
+        const auto ret_doc = QJsonDocument::fromJson(text_inputs_["st_rp_returns"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !ret_doc.isArray()) {
+            display_error(tr("Returns Matrix must be a JSON 2-D array like [[0.01,-0.02],[0.00,0.01]] — %1")
+                              .arg(perr.errorString()));
+            return;
+        }
+        const QJsonArray rows = ret_doc.array();
+        if (rows.isEmpty() || !rows.first().isArray()) {
+            display_error(tr("Returns Matrix must contain at least one row of per-asset returns."));
+            return;
+        }
+        show_loading(tr("Solving risk parity over %1 period(s)...").arg(rows.size()));
         QJsonObject params;
-        auto ret_doc = QJsonDocument::fromJson(text_inputs_["st_rp_returns"]->text().toUtf8());
-        if (!ret_doc.isNull())
-            params["returns"] = ret_doc.array();
+        params["returns"] = rows;
         params["target_risk"] = double_inputs_["st_rp_target"]->value();
         params["rebalance_frequency"] = combo_inputs_["st_rp_freq"]->currentText();
         AIQuantLabService::instance().strategy_create("create_risk_parity", params);
@@ -636,20 +812,36 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     pmvl->addWidget(build_input_row(tr("Risk-Free Rate"), pm_rf, pm));
     auto* pm_run = make_run_button(tr("CALCULATE PORTFOLIO METRICS"), pm);
     connect(pm_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Calculating..."));
-        QJsonObject params;
         QJsonArray rets;
-        for (auto& v : text_inputs_["st_pm_returns"]->text().split(','))
-            rets.append(v.trimmed().toDouble());
+        QString bad;
+        if (!parse_doubles(text_inputs_["st_pm_returns"]->text(), rets, &bad)) {
+            display_error(tr("Returns: '%1' is not numeric.").arg(bad));
+            return;
+        }
+        if (rets.size() < 5) {
+            display_error(tr("Portfolio metrics need at least 5 daily returns; you provided %1. "
+                             "Annualised Sharpe/Sortino/Calmar only become meaningful past ~30 observations.")
+                              .arg(rets.size()));
+            return;
+        }
+        QJsonObject params;
         params["returns"] = rets;
         params["risk_free_rate"] = double_inputs_["st_pm_rf"]->value() / 100.0;
-        auto bench_text = text_inputs_["st_pm_bench"]->text().trimmed();
+        const auto bench_text = text_inputs_["st_pm_bench"]->text().trimmed();
         if (!bench_text.isEmpty()) {
             QJsonArray bench;
-            for (auto& v : bench_text.split(','))
-                bench.append(v.trimmed().toDouble());
+            if (!parse_doubles(bench_text, bench, &bad)) {
+                display_error(tr("Benchmark returns: '%1' is not numeric.").arg(bad));
+                return;
+            }
+            if (bench.size() != rets.size()) {
+                display_error(
+                    tr("Benchmark (%1) must have the same length as returns (%2).").arg(bench.size()).arg(rets.size()));
+                return;
+            }
             params["benchmark_returns"] = bench;
         }
+        show_loading(tr("Computing portfolio metrics over %1 observations...").arg(rets.size()));
         AIQuantLabService::instance().strategy_portfolio_metrics(params);
     });
     pmvl->addWidget(pm_run);
@@ -689,7 +881,7 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     ltvl->addWidget(lt_info);
     auto* lt_run = make_run_button(tr("LIST ALL PROCESSORS"), list_tab);
     connect(lt_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        show_loading(tr("Loading processor catalog..."));
         AIQuantLabService::instance().dataproc_list_processors();
     });
     ltvl->addWidget(lt_run);
@@ -713,12 +905,23 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     ptvl->addWidget(build_input_row(tr("Processors (JSON)"), pipe_procs, pipe_tab));
     auto* pipe_run = make_run_button(tr("CREATE PIPELINE"), pipe_tab);
     connect(pipe_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Creating..."));
+        const QString pid = text_inputs_["dp_pipeline_id"]->text().trimmed();
+        if (pid.isEmpty()) {
+            display_error(tr("Enter a pipeline ID — you need it to run PROCESS DATA later."));
+            return;
+        }
+        QJsonParseError perr{};
+        const auto doc = QJsonDocument::fromJson(text_inputs_["dp_processors"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isArray() || doc.array().isEmpty()) {
+            display_error(tr("Processors must be a non-empty JSON array like "
+                             "[{\"type\":\"zscore\"}] — %1")
+                              .arg(perr.errorString()));
+            return;
+        }
+        show_loading(tr("Creating pipeline '%1' with %2 stage(s)...").arg(pid).arg(doc.array().size()));
         QJsonObject params;
-        params["pipeline_id"] = text_inputs_["dp_pipeline_id"]->text();
-        auto doc = QJsonDocument::fromJson(text_inputs_["dp_processors"]->text().toUtf8());
-        if (!doc.isNull())
-            params["processors"] = doc.array();
+        params["pipeline_id"] = pid;
+        params["processors"] = doc.array();
         AIQuantLabService::instance().dataproc_create_pipeline(params);
     });
     ptvl->addWidget(pipe_run);
@@ -742,12 +945,21 @@ QWidget* QuantModulePanel::build_data_processors_panel() {
     procvl->addWidget(build_input_row(tr("Data (JSON)"), proc_data, proc_tab));
     auto* proc_run = make_run_button(tr("PROCESS DATA"), proc_tab);
     connect(proc_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Processing..."));
+        const QString pid = text_inputs_["dp_proc_pid"]->text().trimmed();
+        if (pid.isEmpty()) {
+            display_error(tr("Enter the ID of a pipeline you created in the Create Pipeline tab."));
+            return;
+        }
+        QJsonParseError perr{};
+        const auto doc = QJsonDocument::fromJson(text_inputs_["dp_proc_data"]->text().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject() || doc.object().isEmpty()) {
+            display_error(tr("Data must be a non-empty JSON object of column → values — %1").arg(perr.errorString()));
+            return;
+        }
+        show_loading(tr("Running pipeline '%1' over %2 column(s)...").arg(pid).arg(doc.object().size()));
         QJsonObject params;
-        params["pipeline_id"] = text_inputs_["dp_proc_pid"]->text();
-        auto doc = QJsonDocument::fromJson(text_inputs_["dp_proc_data"]->text().toUtf8());
-        if (!doc.isNull())
-            params["data"] = doc.object();
+        params["pipeline_id"] = pid;
+        params["data"] = doc.object();
         AIQuantLabService::instance().dataproc_process_data(params);
     });
     procvl->addWidget(proc_run);
@@ -787,13 +999,13 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     libvl->addWidget(lib_info);
     auto* lib_run = make_run_button(tr("BROWSE FACTOR LIBRARY"), lib_tab);
     connect(lib_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        show_loading(tr("Loading Qlib factor library..."));
         AIQuantLabService::instance().factor_get_library();
     });
     libvl->addWidget(lib_run);
     auto* inst_run = make_run_button(tr("LIST INSTRUMENTS"), lib_tab);
     connect(inst_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        show_loading(tr("Loading instrument universe..."));
         AIQuantLabService::instance().factor_get_instruments();
     });
     libvl->addWidget(inst_run);
@@ -836,20 +1048,29 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     datavl->addWidget(build_input_row(tr("End Date"), fd_end, data_tab));
     auto* fd_run = make_run_button(tr("FETCH DATA"), data_tab);
     connect(fd_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Fetching..."));
+        const QJsonArray instr = parse_csv_strings(text_inputs_["fd_instruments"]->text(), /*lowercase=*/true);
+        if (instr.isEmpty()) {
+            display_error(tr("Enter at least one instrument, e.g. aapl,msft."));
+            return;
+        }
+        const QJsonArray fields = parse_csv_strings(text_inputs_["fd_fields"]->text());
+        if (fields.isEmpty()) {
+            display_error(tr("Enter at least one field, e.g. $close,$volume."));
+            return;
+        }
+        const QDate start = date_inputs_["fd_start"]->date();
+        const QDate end = date_inputs_["fd_end"]->date();
+        if (start > end) {
+            display_error(tr("Start date (%1) is after end date (%2).")
+                              .arg(start.toString("yyyy-MM-dd"), end.toString("yyyy-MM-dd")));
+            return;
+        }
+        show_loading(tr("Fetching %1 field(s) for %2 instrument(s)...").arg(fields.size()).arg(instr.size()));
         QJsonObject params;
-        QJsonArray instr;
-        for (auto& s : text_inputs_["fd_instruments"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
-        QJsonArray fields;
-        for (auto& s : text_inputs_["fd_fields"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                fields.append(s.trimmed());
         params["fields"] = fields;
-        params["start_date"] = date_inputs_["fd_start"]->date().toString("yyyy-MM-dd");
-        params["end_date"] = date_inputs_["fd_end"]->date().toString("yyyy-MM-dd");
+        params["start_date"] = start.toString("yyyy-MM-dd");
+        params["end_date"] = end.toString("yyyy-MM-dd");
         AIQuantLabService::instance().factor_get_data(params);
     });
     datavl->addWidget(fd_run);
@@ -882,10 +1103,18 @@ QWidget* QuantModulePanel::build_factor_discovery_panel() {
     calvl->addWidget(build_input_row(tr("End Date"), cal_end, cal_tab));
     auto* cal_run = make_run_button(tr("GET TRADING CALENDAR"), cal_tab);
     connect(cal_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        const QDate start = date_inputs_["fd_cal_start"]->date();
+        const QDate end = date_inputs_["fd_cal_end"]->date();
+        if (start > end) {
+            display_error(tr("Start date (%1) is after end date (%2).")
+                              .arg(start.toString("yyyy-MM-dd"), end.toString("yyyy-MM-dd")));
+            return;
+        }
+        show_loading(
+            tr("Loading trading calendar %1 → %2...").arg(start.toString("yyyy-MM-dd"), end.toString("yyyy-MM-dd")));
         QJsonObject params;
-        params["start_date"] = date_inputs_["fd_cal_start"]->date().toString("yyyy-MM-dd");
-        params["end_date"] = date_inputs_["fd_cal_end"]->date().toString("yyyy-MM-dd");
+        params["start_date"] = start.toString("yyyy-MM-dd");
+        params["end_date"] = end.toString("yyyy-MM-dd");
         AIQuantLabService::instance().factor_get_calendar(params);
     });
     calvl->addWidget(cal_run);
@@ -926,13 +1155,13 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     btvl->addWidget(bt_info);
     auto* bt_list = make_run_button(tr("LIST ALL MODELS"), browse_tab);
     connect(bt_list, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Loading..."));
+        show_loading(tr("Loading Qlib model catalog..."));
         AIQuantLabService::instance().model_list();
     });
     btvl->addWidget(bt_list);
     auto* bt_status = make_run_button(tr("CHECK QLIB STATUS"), browse_tab);
     connect(bt_status, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Checking..."));
+        show_loading(tr("Checking Qlib runtime status..."));
         AIQuantLabService::instance().model_check_status();
     });
     btvl->addWidget(bt_status);
@@ -966,18 +1195,29 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     ttvl->addWidget(build_input_row(tr("End Date"), ml_end, train_tab));
     auto* ml_run = make_run_button(tr("TRAIN MODEL"), train_tab);
     connect(ml_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Training..."));
+        const QJsonArray instr = parse_csv_strings(text_inputs_["ml_instruments"]->text(), /*lowercase=*/true);
+        if (instr.isEmpty()) {
+            display_error(tr("Enter at least one instrument, e.g. aapl,msft."));
+            return;
+        }
+        QString iso_start, iso_end;
+        if (const QString err =
+                check_iso_range(text_inputs_["ml_start"]->text(), text_inputs_["ml_end"]->text(), iso_start, iso_end);
+            !err.isEmpty()) {
+            display_error(err);
+            return;
+        }
+
+        show_loading(tr("Training %1 on %2 instrument(s) — this can take several minutes...")
+                         .arg(combo_inputs_["ml_model_type"]->currentText())
+                         .arg(instr.size()));
         QJsonObject params;
         params["model_type"] = combo_inputs_["ml_model_type"]->currentText();
-        QJsonArray instr;
-        for (auto& s : text_inputs_["ml_instruments"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                instr.append(s.trimmed().toLower());
         params["instruments"] = instr;
-        if (!text_inputs_["ml_start"]->text().isEmpty())
-            params["start_date"] = text_inputs_["ml_start"]->text().trimmed();
-        if (!text_inputs_["ml_end"]->text().isEmpty())
-            params["end_date"] = text_inputs_["ml_end"]->text().trimmed();
+        if (!iso_start.isEmpty())
+            params["start_date"] = iso_start;
+        if (!iso_end.isEmpty())
+            params["end_date"] = iso_end;
         AIQuantLabService::instance().model_train(params);
     });
     ttvl->addWidget(ml_run);
@@ -1011,18 +1251,31 @@ QWidget* QuantModulePanel::build_model_library_panel() {
     btvl2->addWidget(build_input_row(tr("End Date"), bt_end2, bt_tab));
     auto* bt_run2 = make_run_button(tr("RUN BACKTEST"), bt_tab);
     connect(bt_run2, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Running backtest..."));
+        const QString model_id = text_inputs_["ml_bt_model"]->text().trimmed();
+        if (model_id.isEmpty()) {
+            display_error(tr("Enter the Model ID printed by TRAIN MODEL."));
+            return;
+        }
+        const QJsonArray instr = parse_csv_strings(text_inputs_["ml_bt_instr"]->text(), /*lowercase=*/true);
+        if (instr.isEmpty()) {
+            display_error(tr("Enter at least one instrument, e.g. aapl,msft."));
+            return;
+        }
+        QString iso_start, iso_end;
+        if (const QString err = check_iso_range(text_inputs_["ml_bt_start"]->text(), text_inputs_["ml_bt_end"]->text(),
+                                                iso_start, iso_end);
+            !err.isEmpty()) {
+            display_error(err);
+            return;
+        }
+        show_loading(tr("Backtesting %1 on %2 instrument(s)...").arg(model_id).arg(instr.size()));
         QJsonObject params;
-        params["model_id"] = text_inputs_["ml_bt_model"]->text().trimmed();
-        QJsonArray instr;
-        for (auto& s : text_inputs_["ml_bt_instr"]->text().split(','))
-            if (!s.trimmed().isEmpty())
-                instr.append(s.trimmed().toLower());
+        params["model_id"] = model_id;
         params["instruments"] = instr;
-        if (!text_inputs_["ml_bt_start"]->text().isEmpty())
-            params["start_date"] = text_inputs_["ml_bt_start"]->text().trimmed();
-        if (!text_inputs_["ml_bt_end"]->text().isEmpty())
-            params["end_date"] = text_inputs_["ml_bt_end"]->text().trimmed();
+        if (!iso_start.isEmpty())
+            params["start_date"] = iso_start;
+        if (!iso_end.isEmpty())
+            params["end_date"] = iso_end;
         AIQuantLabService::instance().model_backtest(params);
     });
     btvl2->addWidget(bt_run2);

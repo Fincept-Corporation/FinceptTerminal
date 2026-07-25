@@ -250,6 +250,12 @@ void CftcPanel::build_sentiment_widget() {
     root->addLayout(cards_hl);
     root->addWidget(oi_row);
     root->addStretch(1);
+
+    // Register the sentiment card view as a real page of the shared content
+    // stack. Previously this whole widget tree was built, parented to the panel
+    // and then never added to any layout — it floated at (0,0) over the toolbar
+    // and the Market Sentiment view silently degraded to a one-row table.
+    sentiment_page_ = add_content_page(sentiment_widget_);
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -288,6 +294,11 @@ void CftcPanel::on_result(const QString& request_id, const services::EconomicsRe
         show_error(result.error);
         return;
     }
+
+    // Table/trend views are time series — restore the aggregate stat row that
+    // the sentiment view hides.
+    if (!request_id.startsWith("cftc_sent_"))
+        set_stats_visible(true);
 
     // Sentiment view: data is an object, not an array
     if (request_id.startsWith("cftc_sent_")) {
@@ -372,20 +383,23 @@ void CftcPanel::show_sentiment(const QJsonObject& s) {
     sent_noncomm_bias_->style()->unpolish(sent_noncomm_bias_);
     sent_noncomm_bias_->style()->polish(sent_noncomm_bias_);
 
+    // NB: QString::arg(qlonglong, int fieldWidth) — the previous `.arg(v, 'd')`
+    // passed the *char literal* 'd' (=100) as the field width, padding every
+    // net-position number with 100 leading spaces. Format the number first.
     const QJsonObject comm = s["commercial_positions"].toObject();
     const double comm_net = comm["net"].toDouble();
-    sent_comm_net_->setText(tr("Net: %1%2").arg(comm_net >= 0 ? "+" : "").arg(static_cast<qint64>(comm_net), 'd'));
+    sent_comm_net_->setText(tr("Net: %1%2")
+                                .arg(comm_net >= 0 ? QStringLiteral("+") : QString())
+                                .arg(QString::number(static_cast<qint64>(comm_net))));
 
     const QJsonObject noncomm = s["non_commercial_positions"].toObject();
     const double noncomm_net = noncomm["net"].toDouble();
-    sent_noncomm_net_->setText(
-        tr("Net: %1%2").arg(noncomm_net >= 0 ? "+" : "").arg(static_cast<qint64>(noncomm_net), 'd'));
+    sent_noncomm_net_->setText(tr("Net: %1%2")
+                                   .arg(noncomm_net >= 0 ? QStringLiteral("+") : QString())
+                                   .arg(QString::number(static_cast<qint64>(noncomm_net))));
 
-    // Switch to sentiment widget — we show it in place of empty state
-    // by temporarily inserting it into the layout if not already there
-    // The base class stack_ is private; we use show_empty and overlay trick:
-    // Instead, we just show data in the table as a summary row fallback.
-    // For now, display the sentiment as a single-row table so base stats work.
+    // Populate the shared table too (one summary row) so CSV export still has
+    // something to write, then switch the stack to the sentiment card view.
     QJsonArray rows;
     QJsonObject row;
     row["market"] = s["market_name"].toString(market_combo_->currentText());
@@ -397,7 +411,10 @@ void CftcPanel::show_sentiment(const QJsonObject& s) {
     row["noncomm_bias"] = noncomm_bias;
     row["oi_trend"] = oi_trend;
     rows.append(row);
+    // A one-row snapshot has no meaningful LATEST/CHANGE/MIN/MAX/AVG.
+    set_stats_visible(false);
     display(rows, "CFTC Sentiment: " + market_combo_->currentText());
+    show_content_page(sentiment_page_);
 
     LOG_INFO("CftcPanel", "Displayed sentiment for " + market_combo_->currentText());
 }

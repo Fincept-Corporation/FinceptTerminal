@@ -11,6 +11,7 @@
 #include <QList>
 #include <QPushButton>
 #include <QStackedWidget>
+#include <QStringList>
 #include <QTableWidget>
 #include <QWidget>
 
@@ -98,6 +99,16 @@ class PolymarketDetailPanel : public QWidget {
     void on_submit_clicked();
     void retranslateUi();
 
+    /// Recompute the "≈ COST" readout under the ticket from the current
+    /// price × size. Shows "—" when either field is blank/invalid.
+    void refresh_ticket_cost();
+    /// Fill the ticket price from an order-book level click and surface the
+    /// TRADE tab so the effect is visible. No-op when trading is disabled.
+    void on_book_price_clicked(double price);
+    /// Repopulate the ticket outcome combo for `market`, preserving the
+    /// user's current choice by outcome name when the market is unchanged.
+    void sync_ticket_outcomes(const fincept::services::prediction::PredictionMarket& market, bool same_market);
+
     QList<QPushButton*> tab_btns_;
     QStackedWidget* stack_ = nullptr;
 
@@ -139,7 +150,20 @@ class PolymarketDetailPanel : public QWidget {
     QComboBox* ticket_type_cb_ = nullptr;
     QPushButton* ticket_submit_btn_ = nullptr;
     QLabel* ticket_status_lbl_ = nullptr;
+    QLabel* ticket_cost_lbl_ = nullptr; // "≈ $12.50 max cost" readout
     QString ticket_side_ = "BUY";
+    /// Outcome names currently loaded into ticket_outcome_cb_. Lets a
+    /// same-market refresh skip the rebuild (and so keep the selection).
+    QStringList ticket_outcome_names_;
+    /// True between emit place_order() and the matching on_order_result().
+    /// Guards against double-submit and stops an incoming price refresh from
+    /// re-enabling the submit button mid-flight.
+    bool submit_in_flight_ = false;
+    /// Exchange constraints captured from the last order book for the
+    /// selected market. Used to validate/round the ticket price and size so
+    /// the exchange doesn't silently reject the order.
+    double book_tick_size_ = 0.0;
+    double book_min_size_ = 0.0;
 
     // Holders
     QTableWidget* holders_table_ = nullptr;

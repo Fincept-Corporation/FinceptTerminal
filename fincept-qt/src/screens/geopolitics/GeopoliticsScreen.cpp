@@ -272,6 +272,8 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     country_edit_ = new QLineEdit(panel);
     country_edit_->setPlaceholderText(tr("e.g. Ukraine"));
     country_edit_->setStyleSheet(input_style);
+    country_edit_->setAccessibleName(tr("Filter by country"));
+    country_edit_->setClearButtonEnabled(true);
     connect(country_edit_, &QLineEdit::returnPressed, this, &GeopoliticsScreen::on_apply_filters);
     vl->addWidget(country_edit_);
 
@@ -281,6 +283,8 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     city_edit_ = new QLineEdit(panel);
     city_edit_->setPlaceholderText(tr("e.g. Kyiv"));
     city_edit_->setStyleSheet(input_style);
+    city_edit_->setAccessibleName(tr("Filter by city"));
+    city_edit_->setClearButtonEnabled(true);
     connect(city_edit_, &QLineEdit::returnPressed, this, &GeopoliticsScreen::on_apply_filters);
     vl->addWidget(city_edit_);
 
@@ -289,10 +293,15 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     vl->addWidget(category_lbl_);
     category_combo_ = new QComboBox(panel);
     category_combo_->setStyleSheet(input_style);
+    category_combo_->setAccessibleName(tr("Filter by event category"));
     // Populated from API once categories_loaded fires — start with a single
     // "All" entry so the combo renders before the network round-trip.
     category_combo_->addItem(tr("All Categories"), "");
     vl->addWidget(category_combo_);
+
+    // Keyboard order across the filter column.
+    QWidget::setTabOrder(country_edit_, city_edit_);
+    QWidget::setTabOrder(city_edit_, category_combo_);
 
     vl->addSpacing(4);
 
@@ -528,6 +537,7 @@ void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
     }
 
     status_label_->setText(tr("READY"));
+    status_label_->setToolTip(QString()); // clear any stale error detail
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                      .arg(ui::colors::POSITIVE())
                                      .arg(ui::fonts::TINY)
@@ -615,7 +625,12 @@ void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCatego
 }
 
 void GeopoliticsScreen::on_error(const QString& context, const QString& message) {
-    status_label_->setText(tr("ERROR"));
+    // "ERROR" alone told the user nothing and left the real cause in a log
+    // file they can't see. Surface a short reason inline, the full text on
+    // hover, and point at the retry that actually exists (APPLY FILTERS).
+    const QString brief = message.simplified().left(72);
+    status_label_->setText(brief.isEmpty() ? tr("ERROR") : tr("ERROR: %1").arg(brief));
+    status_label_->setToolTip(tr("%1\n\n%2\n\nClick APPLY FILTERS to retry.").arg(context, message));
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                      .arg(ui::colors::NEGATIVE())
                                      .arg(ui::fonts::TINY)

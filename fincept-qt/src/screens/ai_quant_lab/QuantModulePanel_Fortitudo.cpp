@@ -267,7 +267,12 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
         if (maxw > 0.0)
             params["max_weight"] = maxw;
         // Translate annual % rf rate to per-day decimal for daily returns.
-        params["risk_free_rate"] = double_inputs_["ft_mv_rf"]->value() / 100.0 / 252.0;
+        // Geometric (compounded) de-annualisation, matching the target_return
+        // conversion below. These two used to disagree: rf was divided by 252
+        // while the target was compounded, so the Sharpe objective compared a
+        // simple-interest hurdle against compounded portfolio returns
+        // (~2% relative bias in the rf term at 4.5% p.a.).
+        params["risk_free_rate"] = std::pow(1.0 + double_inputs_["ft_mv_rf"]->value() / 100.0, 1.0 / 252.0) - 1.0;
         if (obj == "target_return") {
             // Translate annualized % to per-day decimal so the optimizer's
             // expected_return constraint matches.
@@ -391,7 +396,8 @@ QWidget* QuantModulePanel::build_fortitudo_panel() {
         const double maxw = double_inputs_["ft_ef_max"]->value();
         if (maxw > 0.0)
             params["max_weight"] = maxw;
-        params["risk_free_rate"] = double_inputs_["ft_ef_rf"]->value() / 100.0 / 252.0;
+        // Geometric de-annualisation — same convention as the MV/CVaR tabs.
+        params["risk_free_rate"] = std::pow(1.0 + double_inputs_["ft_ef_rf"]->value() / 100.0, 1.0 / 252.0) - 1.0;
         show_loading(
             tr("Fetching %1 and tracing %2-point frontier...").arg(tk).arg(int_inputs_["ft_ef_n_points"]->value()));
         AIQuantLabService::instance().fort_efficient_frontier(params);

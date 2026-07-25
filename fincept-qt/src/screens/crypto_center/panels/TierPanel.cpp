@@ -137,7 +137,7 @@ void TierPanel::apply_theme() {
                                       "  font-weight:600; letter-spacing:1.2px; background:transparent; }"
                                       "QWidget#tierBody { background:%1; }"
                                       "QFrame#tierRow { background:%8; border:1px solid %3; }"
-                                      "QFrame#tierRowCurrent { background:rgba(217,119,6,0.10); border:1px solid %12; }"
+                                      "QFrame#tierRowCurrent { background:rgba(217,119,6,0.10); border:1px solid %9; }"
                                       "QLabel#tierRowLabel { color:%4; font-family:%5; font-size:11px;"
                                       "  font-weight:700; letter-spacing:1.4px; background:transparent; }"
                                       "QLabel#tierRowThreshold { color:%7; font-family:%5; font-size:11px;"
@@ -145,13 +145,19 @@ void TierPanel::apply_theme() {
                                       "QLabel#tierRowUnlocks { color:%6; font-family:%5; font-size:11px;"
                                       "  background:transparent; }"
                                       "QLabel#tierRowChipAchieved { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
+                                      "  border:1px solid %9; font-family:%5; font-size:9px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 6px; }"
                                       "QLabel#tierRowChipLocked { color:%6; background:transparent;"
                                       "  border:1px solid %3; font-family:%5; font-size:9px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 6px; }"
                                       "QLabel#tierFooter { color:%6; font-family:%5; font-size:10px;"
                                       "  background:transparent; padding-top:6px; }")
+                           // One arg per marker, in ascending marker order.
+                           // QString::arg fills the LOWEST marker present, so a
+                           // gap in the numbering silently shifts every later
+                           // colour by one and warns "Argument missing" for the
+                           // overflow — that is how %12 used to be painted with
+                           // NEGATIVE (#dc2626) instead of the dark amber.
                            .arg(BG_BASE(),                  // %1
                                 BG_SURFACE(),               // %2
                                 BORDER_DIM(),               // %3
@@ -160,10 +166,7 @@ void TierPanel::apply_theme() {
                                 TEXT_TERTIARY(),            // %6
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
-                                NEGATIVE())                 // %9
-                           .arg(BG_HOVER(),                 // %10
-                                BORDER_BRIGHT(),            // %11
-                                QStringLiteral("#78350f")); // %12 darker amber
+                                QStringLiteral("#78350f")); // %9 darker amber
     setStyleSheet(ss);
 }
 

@@ -68,6 +68,10 @@ class LockScreen : public QWidget {
     QLabel* unlock_error_ = nullptr;
     QLabel* unlock_attempts_ = nullptr;
     QLabel* unlock_lockout_label_ = nullptr;
+    /// "Forgot PIN? Sign in again" escape link. Cached so retranslateUi() can
+    /// re-apply its label — it was previously built inline and left in the
+    /// source language after a live language switch.
+    QPushButton* unlock_forgot_btn_ = nullptr;
 
     // Lockout page (index 2)
     QLabel* lockout_title_ = nullptr;

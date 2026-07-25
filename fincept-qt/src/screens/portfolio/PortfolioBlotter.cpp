@@ -17,12 +17,15 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLocale>
 #include <QMenu>
 #include <QMetaObject>
+#include <QScrollBar>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace fincept::screens {
 
@@ -42,6 +45,25 @@ static const char* const kColumnKeys[] = {
     QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "WT%"),
 };
 static constexpr int kColumnCount = sizeof(kColumnKeys) / sizeof(kColumnKeys[0]);
+
+// Named column indices — the layout was previously spelled out as bare
+// integers in five places (populate_table, update_row_price,
+// repaint_sparkline_cells, on_header_clicked), which is exactly how the live
+// broker tick ended up writing the last price into the AVG COST column.
+enum Column {
+    kColSymbol = 0,
+    kColQty = 1,
+    kColLast = 2,
+    kColAvgCost = 3,
+    kColMktVal = 4,
+    kColCostBasis = 5,
+    kColPnl = 6,
+    kColPnlPct = 7,
+    kColChgPct = 8,
+    kColTrend = 9,
+    kColWeight = 10,
+};
+static_assert(kColWeight + 1 == kColumnCount, "Column enum and kColumnKeys are out of sync");
 
 PortfolioBlotter::PortfolioBlotter(QWidget* parent) : QWidget(parent) {
     // Restore persisted page size before building the UI so the combo and
@@ -87,16 +109,18 @@ void PortfolioBlotter::build_ui() {
     hdr->setSortIndicatorShown(false);
     hdr->setSectionResizeMode(QHeaderView::Stretch);
 
+    // Markers must be contiguous and match the args 1:1 — QString::arg fills the
+    // LOWEST marker present, so the old %5-less numbering pushed AMBER onto
+    // :hover and dropped BG_HOVER with an "Argument missing" warning.
     table_->setStyleSheet(QString("QTableWidget { background:%1; color:%2; border:none;"
                                   "  font-size:11px; font-family:%3; gridline-color:transparent; }"
                                   "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
-                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%6; }"
-                                  "QTableWidget::item:hover { background:%7; }"
+                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%5; }"
+                                  "QTableWidget::item:hover { background:%6; }"
                                   "QScrollBar:vertical { width:5px; background:%1; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
                               .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER(),
-                                   ui::colors::BG_HOVER()));
+                                   ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_HOVER()));
 
     // Apply the header rule directly on the header widget — the global qApp
     // stylesheet (ThemeManager.cpp) defines QHeaderView::section with
@@ -165,6 +189,9 @@ void PortfolioBlotter::build_pagination_footer() {
 
     btn_first_ = make_nav_btn(QStringLiteral("«"), tr("First page"));
     btn_prev_ = make_nav_btn(QStringLiteral("‹"), tr("Previous page"));
+    // Glyph-only buttons are opaque to screen readers.
+    btn_first_->setAccessibleName(tr("First page"));
+    btn_prev_->setAccessibleName(tr("Previous page"));
     h->addWidget(btn_first_);
     h->addWidget(btn_prev_);
 
@@ -177,6 +204,8 @@ void PortfolioBlotter::build_pagination_footer() {
 
     btn_next_ = make_nav_btn(QStringLiteral("›"), tr("Next page"));
     btn_last_ = make_nav_btn(QStringLiteral("»"), tr("Last page"));
+    btn_next_->setAccessibleName(tr("Next page"));
+    btn_last_->setAccessibleName(tr("Last page"));
     h->addWidget(btn_next_);
     h->addWidget(btn_last_);
 
@@ -255,6 +284,7 @@ void PortfolioBlotter::build_pagination_footer() {
 
 void PortfolioBlotter::set_holdings(const QVector<portfolio::HoldingWithQuote>& holdings) {
     holdings_ = holdings;
+    invalidate_view_cache();
     populate_table();
     fetch_sparklines(); // async — repaints sparkline cells when data arrives
 }
@@ -272,11 +302,14 @@ void PortfolioBlotter::fetch_sparklines() {
 
 void PortfolioBlotter::repaint_sparkline_cells() {
     for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* item = table_->item(r, 0);
+        auto* item = table_->item(r, kColSymbol);
         if (!item)
             continue;
-        const QString sym = item->text();
-        auto* w = qobject_cast<PortfolioSparkline*>(table_->cellWidget(r, 9));
+        // Use the stashed raw symbol, not the cell text — the two are the same
+        // today but the text is a display string and may gain decoration.
+        const QString sym = item->data(Qt::UserRole).toString().isEmpty() ? item->text()
+                                                                         : item->data(Qt::UserRole).toString();
+        auto* w = qobject_cast<PortfolioSparkline*>(table_->cellWidget(r, kColTrend));
         if (!w)
             continue;
 
@@ -363,31 +396,37 @@ void PortfolioBlotter::hub_resubscribe_broker_quotes(const QString& broker_accou
 
 void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, double change_pct) {
     for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* item = table_->item(r, 0);
+        auto* item = table_->item(r, kColSymbol);
         if (!item || item->data(Qt::UserRole).toString() != symbol)
             continue;
-        // Column layout: SYMBOL(0), QTY(1), LAST(2), AVG COST(3), MKT VAL(4), COST BASIS(5), P&L(6), P&L%(7),
-        // CHG%(8), TREND(9), WT%(10). LAST is column 2 — the old code wrote the
-        // live price into column 3 (AVG COST), corrupting the displayed cost.
-        if (auto* last_item = table_->item(r, 2))
+        if (auto* last_item = table_->item(r, kColLast))
             last_item->setText(format_value(ltp));
         // Recalculate market value & P&L from holdings data
         const int idx = r + (current_page_ - 1) * page_size_;
-        auto view = visible_view();
+        const auto& view = visible_view();
         if (idx >= 0 && idx < view.size()) {
-            auto& h = view[idx];
-            double mkt_val = ltp * h.quantity;
-            double pnl = mkt_val - h.cost_basis;
-            double pnl_pct = h.cost_basis > 0 ? (pnl / h.cost_basis) * 100.0 : 0.0;
-            if (auto* mv = table_->item(r, 4))
+            const auto& h = view[idx];
+            const double mkt_val = ltp * h.quantity;
+            const double pnl = mkt_val - h.cost_basis;
+            const double pnl_pct = h.cost_basis > 0 ? (pnl / h.cost_basis) * 100.0 : 0.0;
+            const char* pnl_color = pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+            if (auto* mv = table_->item(r, kColMktVal))
                 mv->setText(format_value(mkt_val));
-            if (auto* pnl_item = table_->item(r, 6))
-                pnl_item->setText(format_value(pnl));
-            if (auto* pnl_pct_item = table_->item(r, 7))
-                pnl_pct_item->setText(QString("%1%").arg(pnl_pct, 0, 'f', 2));
+            if (auto* pnl_item = table_->item(r, kColPnl)) {
+                pnl_item->setText(QString("%1%2").arg(pnl >= 0 ? "+" : "").arg(format_value(pnl)));
+                // Recolour too: a tick that flipped a position from green to
+                // red kept the stale green foreground until the next full poll.
+                pnl_item->setForeground(QColor(pnl_color));
+            }
+            if (auto* pnl_pct_item = table_->item(r, kColPnlPct)) {
+                pnl_pct_item->setText(
+                    QString("%1%2%").arg(pnl_pct >= 0 ? "+" : "").arg(format_value(pnl_pct)));
+                pnl_pct_item->setForeground(QColor(pnl_color));
+            }
         }
-        if (auto* chg = table_->item(r, 8)) {
-            chg->setText(QString("%1%").arg(change_pct, 0, 'f', 2));
+        if (auto* chg = table_->item(r, kColChgPct)) {
+            // Signed, matching how populate_table renders the same column.
+            chg->setText(QString("%1%2%").arg(change_pct >= 0 ? "+" : "").arg(format_value(change_pct)));
             chg->setForeground(QColor(change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
         }
         break;
@@ -397,37 +436,42 @@ void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, doubl
 void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
     selected_symbol_ = symbol;
     for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* item = table_->item(r, 0);
-        if (item && item->text() == symbol) {
+        auto* item = table_->item(r, kColSymbol);
+        // Match on the stashed raw symbol (see populate_table) so this keeps
+        // working if the symbol cell ever gains display decoration.
+        if (item && item->data(Qt::UserRole).toString() == symbol) {
             table_->selectRow(r);
             return;
         }
     }
+    // Not on this page: clear the highlight instead of leaving the previous
+    // row looking selected while the selection actually lives elsewhere.
+    table_->clearSelection();
 }
 
 void PortfolioBlotter::on_header_clicked(int section) {
     // Map column index to SortColumn
     portfolio::SortColumn col;
     switch (section) {
-        case 0:
+        case kColSymbol:
             col = portfolio::SortColumn::Symbol;
             break;
-        case 2:
+        case kColLast:
             col = portfolio::SortColumn::Price;
             break;
-        case 4:
+        case kColMktVal:
             col = portfolio::SortColumn::MarketValue;
             break;
-        case 6:
+        case kColPnl:
             col = portfolio::SortColumn::Pnl;
             break;
-        case 7:
+        case kColPnlPct:
             col = portfolio::SortColumn::PnlPct;
             break;
-        case 8:
+        case kColChgPct:
             col = portfolio::SortColumn::Change;
             break;
-        case 10:
+        case kColWeight:
             col = portfolio::SortColumn::Weight;
             break;
         default:
@@ -461,10 +505,16 @@ void PortfolioBlotter::on_row_clicked(int row, int) {
 
 // ── Pagination helpers ──────────────────────────────────────────────────────
 
-QVector<portfolio::HoldingWithQuote> PortfolioBlotter::visible_view() const {
+void PortfolioBlotter::invalidate_view_cache() {
+    view_cache_valid_ = false;
+    view_cache_.clear();
+}
+
+const QVector<portfolio::HoldingWithQuote>& PortfolioBlotter::visible_view() const {
+    if (view_cache_valid_)
+        return view_cache_;
+
     // Apply text filter + sector filter on top of the already-sorted set.
-    // We rebuild this every populate_table — the dataset is bounded (a few
-    // hundred holdings at most for a real portfolio).
     QVector<portfolio::HoldingWithQuote> out;
     out.reserve(sorted_.size());
     const QString needle = filter_text_.toLower();
@@ -483,11 +533,14 @@ QVector<portfolio::HoldingWithQuote> PortfolioBlotter::visible_view() const {
             continue;
         out.append(h);
     }
-    return out;
+
+    view_cache_ = std::move(out);
+    view_cache_valid_ = true;
+    return view_cache_;
 }
 
 QVector<portfolio::HoldingWithQuote> PortfolioBlotter::paged_view() const {
-    const auto all = visible_view();
+    const auto& all = visible_view();
     if (page_size_ <= 0)
         return all;
     const int start = (current_page_ - 1) * page_size_;
@@ -536,16 +589,12 @@ void PortfolioBlotter::update_pagination_controls() {
 }
 
 void PortfolioBlotter::populate_table() {
-    // Clean up old sparkline cell widgets before repopulating (prevents memory leak)
-    for (int r = 0; r < table_->rowCount(); ++r) {
-        auto* w = table_->cellWidget(r, 9);
-        if (w) {
-            table_->removeCellWidget(r, 9);
-            w->deleteLater();
-        }
-    }
+    // Remember the scroll offset so a background refresh does not yank the
+    // table back to the top while the user is reading a row further down.
+    const int prev_scroll = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
 
     sorted_ = holdings_;
+    invalidate_view_cache();
 
     // Sort
     bool asc = (sort_dir_ == portfolio::SortDirection::Asc);
@@ -588,6 +637,16 @@ void PortfolioBlotter::populate_table() {
     // a filter/sort change shrinks the view below the current page index.
     clamp_current_page();
     const auto page_rows = paged_view();
+
+    // Sparklines are pooled per row: they own a cached QPixmap and re-creating
+    // one per row on every 60 s poll threw that cache away. Only rows that are
+    // disappearing release their widget.
+    for (int r = page_rows.size(); r < table_->rowCount(); ++r) {
+        if (auto* w = table_->cellWidget(r, kColTrend)) {
+            table_->removeCellWidget(r, kColTrend);
+            w->deleteLater();
+        }
+    }
     table_->setRowCount(page_rows.size());
 
     for (int r = 0; r < page_rows.size(); ++r) {
@@ -606,47 +665,53 @@ void PortfolioBlotter::populate_table() {
         };
 
         // SYMBOL
-        set_cell(0, h.symbol, ui::colors::CYAN, Qt::AlignLeft | Qt::AlignVCenter);
+        set_cell(kColSymbol, h.symbol, ui::colors::CYAN, Qt::AlignLeft | Qt::AlignVCenter);
         // Stash the raw symbol on the cell so live broker-price ticks
         // (update_row_price) can locate this row — its guard matches col-0
         // Qt::UserRole, which was never set, so live prices never updated.
-        if (auto* sym_item = table_->item(r, 0))
+        if (auto* sym_item = table_->item(r, kColSymbol))
             sym_item->setData(Qt::UserRole, h.symbol);
 
         // QTY
-        set_cell(1, format_value(h.quantity, h.quantity == std::floor(h.quantity) ? 0 : 2));
+        set_cell(kColQty, format_value(h.quantity, h.quantity == std::floor(h.quantity) ? 0 : 2));
 
         // LAST (price)
-        set_cell(2, format_value(h.current_price));
+        set_cell(kColLast, format_value(h.current_price));
 
         // AVG COST
-        set_cell(3, format_value(h.avg_buy_price));
+        set_cell(kColAvgCost, format_value(h.avg_buy_price));
 
         // MKT VAL
-        set_cell(4, format_value(h.market_value), ui::colors::WARNING);
+        set_cell(kColMktVal, format_value(h.market_value), ui::colors::WARNING);
 
         // COST BASIS
-        set_cell(5, format_value(h.cost_basis));
+        set_cell(kColCostBasis, format_value(h.cost_basis));
 
         // P&L
         const char* pnl_color = h.unrealized_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        set_cell(6, QString("%1%2").arg(h.unrealized_pnl >= 0 ? "+" : "").arg(format_value(h.unrealized_pnl)),
+        set_cell(kColPnl, QString("%1%2").arg(h.unrealized_pnl >= 0 ? "+" : "").arg(format_value(h.unrealized_pnl)),
                  pnl_color);
 
         // P&L%
         set_cell(
-            7,
+            kColPnlPct,
             QString("%1%2%").arg(h.unrealized_pnl_percent >= 0 ? "+" : "").arg(format_value(h.unrealized_pnl_percent)),
             pnl_color);
 
         // CHG%
         const char* chg_color = h.day_change_percent >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        set_cell(8, QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(format_value(h.day_change_percent)),
+        set_cell(kColChgPct,
+                 QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(format_value(h.day_change_percent)),
                  chg_color);
 
-        // TREND — show loaded data, a pending shimmer, or a failure dash
-        auto* sparkline = new PortfolioSparkline(0, 0);
-        sparkline->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        // TREND — show loaded data, a pending shimmer, or a failure dash.
+        // Reuse the row's existing sparkline widget when there is one.
+        auto* sparkline = qobject_cast<PortfolioSparkline*>(table_->cellWidget(r, kColTrend));
+        if (!sparkline) {
+            sparkline = new PortfolioSparkline(0, 0);
+            sparkline->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+            table_->setCellWidget(r, kColTrend, sparkline);
+        }
         const auto state = sparkline_state_.value(h.symbol, SparklineState::Pending);
         if (state == SparklineState::Loaded && sparkline_cache_.contains(h.symbol)) {
             const auto& prices = sparkline_cache_[h.symbol];
@@ -664,10 +729,9 @@ void PortfolioBlotter::populate_table() {
             sparkline->set_data(pending);
             sparkline->set_color(QColor(ui::colors::TEXT_TERTIARY()));
         }
-        table_->setCellWidget(r, 9, sparkline);
 
         // WT%
-        set_cell(10, QString("%1%").arg(format_value(h.weight, 1)));
+        set_cell(kColWeight, QString("%1%").arg(format_value(h.weight, 1)));
 
         // Highlight selected row
         if (h.symbol == selected_symbol_) {
@@ -675,21 +739,51 @@ void PortfolioBlotter::populate_table() {
         }
     }
 
+    // Empty state — an unexplained blank grid reads as a bug. Distinguish
+    // "portfolio has nothing in it" from "your filter hid everything".
+    table_->clearSpans();
+    if (page_rows.isEmpty()) {
+        table_->setRowCount(1);
+        table_->setRowHeight(0, 40);
+        const bool filtered = !filter_text_.isEmpty() || !sector_symbols_.isEmpty();
+        auto* msg = new QTableWidgetItem(filtered ? tr("No positions match the current filter.")
+                                                  : tr("No positions yet — use BUY to add your first holding."));
+        msg->setTextAlignment(Qt::AlignCenter);
+        msg->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
+        msg->setFlags(Qt::ItemIsEnabled); // informational, not selectable
+        table_->setItem(0, kColSymbol, msg);
+        table_->setSpan(0, 0, 1, kColumnCount);
+    }
+
+    // Restore the scroll offset (clamped by the scrollbar itself when the row
+    // count shrank).
+    if (table_->verticalScrollBar())
+        table_->verticalScrollBar()->setValue(prev_scroll);
+
     // Footer status + nav button enabled-state must reflect what we just rendered.
     update_pagination_controls();
 }
 
 QString PortfolioBlotter::format_value(double v, int dp) const {
-    return QString::number(v, 'f', dp);
+    // Locale-aware: groups thousands so a six-figure market value is readable
+    // and matches PortfolioStatsRibbon / PortfolioStatusBar.
+    return QLocale().toString(v, 'f', dp);
 }
 
 void PortfolioBlotter::set_filter(const QString& text) {
-    filter_text_ = text.trimmed().toLower();
+    const QString needle = text.trimmed().toLower();
+    if (needle == filter_text_)
+        return;
+    filter_text_ = needle;
+    invalidate_view_cache();
     apply_filter();
 }
 
 void PortfolioBlotter::set_sector_filter(const QStringList& symbols) {
+    if (sector_symbols_ == symbols)
+        return;
     sector_symbols_ = symbols;
+    invalidate_view_cache();
     apply_filter();
 }
 
@@ -731,13 +825,16 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     auto* edit_act = menu.addAction(tr("Edit Transaction"));
     auto* delete_act = menu.addAction(tr("Close / Delete Position"));
 
-    edit_act->setIcon(QIcon());
-    delete_act->setIcon(QIcon());
-
-    // Style delete action in red
-    delete_act->setData("danger");
-    menu.setStyleSheet(menu.styleSheet() +
-                       QString("QMenu::item[data='danger'] { color:%1; }").arg(ui::colors::NEGATIVE()));
+    // Mark the destructive item so it does not read as a peer of "Edit".
+    // The previous attempt used `QMenu::item[data='danger']` — QSS attribute
+    // selectors match Q_PROPERTYs on the styled *widget*, not QAction::setData,
+    // so it matched nothing and the item rendered in the default colour. Two
+    // setIcon(QIcon()) calls next to it were pure no-ops and are gone.
+    delete_act->setFont([&] {
+        QFont f = menu.font();
+        f.setBold(true);
+        return f;
+    }());
 
     connect(edit_act, &QAction::triggered, this, [this, symbol]() { emit edit_transaction_requested(symbol); });
     connect(delete_act, &QAction::triggered, this, [this, symbol]() { emit delete_position_requested(symbol); });
@@ -753,13 +850,12 @@ void PortfolioBlotter::refresh_theme() {
                                   bsz +
                                   "px; font-family:%3; gridline-color:transparent; }"
                                   "QTableWidget::item { padding:5px 8px; border-bottom:1px solid %4; }"
-                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%6; }"
-                                  "QTableWidget::item:hover { background:%7; }"
+                                  "QTableWidget::item:selected { background:rgba(217,119,6,0.10); color:%5; }"
+                                  "QTableWidget::item:hover { background:%6; }"
                                   "QScrollBar:vertical { width:5px; background:%1; }"
                                   "QScrollBar::handle:vertical { background:%4; min-height:20px; }")
                               .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::fonts::DATA_FAMILY,
-                                   ui::colors::BORDER_DIM(), ui::colors::AMBER_DIM(), ui::colors::AMBER(),
-                                   ui::colors::BG_HOVER()));
+                                   ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_HOVER()));
     // See note in build constructor — header rule must live on the header
     // widget itself or the global qApp stylesheet wins.
     table_->horizontalHeader()->setStyleSheet(QString("QHeaderView::section { background:%1; color:%2; border:none;"
@@ -787,14 +883,24 @@ void PortfolioBlotter::retranslateUi() {
         table_->setHorizontalHeaderLabels(headers);
     }
 
-    if (btn_first_)
+    if (btn_first_) {
         btn_first_->setToolTip(tr("First page"));
-    if (btn_prev_)
+        btn_first_->setAccessibleName(tr("First page"));
+    }
+    if (btn_prev_) {
         btn_prev_->setToolTip(tr("Previous page"));
-    if (btn_next_)
+        btn_prev_->setAccessibleName(tr("Previous page"));
+    }
+    if (btn_next_) {
         btn_next_->setToolTip(tr("Next page"));
-    if (btn_last_)
+        btn_next_->setAccessibleName(tr("Next page"));
+    }
+    if (btn_last_) {
         btn_last_->setToolTip(tr("Last page"));
+        btn_last_->setAccessibleName(tr("Last page"));
+    }
+    if (page_size_combo_)
+        page_size_combo_->setAccessibleName(tr("Rows per page"));
     if (footer_rows_label_)
         footer_rows_label_->setText(tr("Rows:"));
 

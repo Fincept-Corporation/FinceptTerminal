@@ -201,7 +201,16 @@ void UniverseScannerPanel::build_ui() {
                                       .arg(fincept::ui::fonts::DATA_FAMILY)
                                       .arg(fincept::ui::colors::TEXT_PRIMARY())
                                       .arg(fincept::ui::colors::BG_RAISED())
-                                      .arg(fincept::ui::colors::TEXT_TERTIARY()));
+                                      .arg(fincept::ui::colors::TEXT_TERTIARY()) +
+                                  // P7: per-row DEPLOY skin hoisted here so on_match()
+                                  // doesn't reparse a stylesheet for every live match.
+                                  QString("QPushButton#usRowDeploy { background: transparent; color: %1;"
+                                          " border: 1px solid %2; font-size: %3px; %4 padding: 2px 8px; }"
+                                          "QPushButton#usRowDeploy:hover { color: %5; border-color: %5; }")
+                                      .arg(fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM())
+                                      .arg(fincept::ui::fonts::TINY)
+                                      .arg(uMono())
+                                      .arg(fincept::ui::colors::POSITIVE()));
     vl->addWidget(matches_table_);
     vl->addStretch();
 
@@ -323,6 +332,13 @@ void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symb
     if (watch_id != watch_id_ || watch_id_.isEmpty())
         return;
 
+    // A universe scan can run for hours across thousands of symbols; without a
+    // cap the table (and its per-row DEPLOY widgets) grows without bound and the
+    // panel eventually stalls. Keep the most recent kMaxMatchRows.
+    constexpr int kMaxMatchRows = 500;
+    while (matches_table_->rowCount() >= kMaxMatchRows)
+        matches_table_->removeRow(0);
+
     const int row = matches_table_->rowCount();
     matches_table_->insertRow(row);
 
@@ -348,14 +364,9 @@ void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symb
     matches_table_->setItem(row, 3, new QTableWidgetItem(detail));
 
     auto* deploy_btn = new QPushButton(tr("DEPLOY"), matches_table_);
+    deploy_btn->setObjectName(QStringLiteral("usRowDeploy"));
     deploy_btn->setCursor(Qt::PointingHandCursor);
-    deploy_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1;"
-                                      " border: 1px solid %2; font-size: %3px; %4 padding: 2px 8px; }"
-                                      "QPushButton:hover { color: %5; border-color: %5; }")
-                                  .arg(fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM())
-                                  .arg(fincept::ui::fonts::TINY)
-                                  .arg(uMono())
-                                  .arg(fincept::ui::colors::POSITIVE()));
+    deploy_btn->setAccessibleName(tr("Deploy the selected strategy on %1").arg(symbol));
     connect(deploy_btn, &QPushButton::clicked, this, [this, symbol]() { deploy_symbol(symbol); });
     matches_table_->setCellWidget(row, 4, deploy_btn);
 

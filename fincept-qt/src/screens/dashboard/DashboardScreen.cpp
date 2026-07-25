@@ -18,8 +18,10 @@
 #include <QJsonDocument>
 #include <QEvent>
 #include <QHideEvent>
+#include <QKeySequence>
 #include <QPalette>
 #include <QPointer>
+#include <QShortcut>
 #include <QShowEvent>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
@@ -116,20 +118,28 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     // ── Canvas signals → toolbar/statusbar ──
     connect(canvas_, &DashboardCanvas::widget_count_changed, toolbar_, &DashboardToolBar::set_widget_count);
     connect(canvas_, &DashboardCanvas::widget_count_changed, status_bar_, &DashboardStatusBar::set_widget_count);
+    // The toolbar's LIVE badge was hardcoded — set_connected() had no caller
+    // anywhere in the codebase. Drive it from the status bar's API health probe.
+    connect(status_bar_, &DashboardStatusBar::connectivity_changed, toolbar_, &DashboardToolBar::set_connected);
     connect(canvas_, &DashboardCanvas::layout_changed, this, [this](const GridLayout&) { save_timer_->start(); });
 
     // ── Toolbar buttons ──
-    connect(toolbar_, &DashboardToolBar::toggle_pulse_clicked, this, [this]() {
+    // Kept as named lambdas so the keyboard shortcuts below drive exactly the
+    // same code path as the toolbar buttons.
+    auto toggle_pulse = [this]() {
         pulse_visible_ = !pulse_visible_;
         market_pulse_->setVisible(pulse_visible_);
-    });
-
-    connect(toolbar_, &DashboardToolBar::add_widget_clicked, this, [this]() {
+    };
+    auto open_add_widget = [this]() {
         auto* dlg = new AddWidgetDialog(this);
         connect(dlg, &AddWidgetDialog::widget_selected, canvas_, &DashboardCanvas::add_widget);
         dlg->exec();
         dlg->deleteLater();
-    });
+    };
+
+    connect(toolbar_, &DashboardToolBar::toggle_pulse_clicked, this, toggle_pulse);
+
+    connect(toolbar_, &DashboardToolBar::add_widget_clicked, this, open_add_widget);
 
     connect(toolbar_, &DashboardToolBar::reset_layout_clicked, this, [this]() {
         auto* dlg = new TemplatePicker(this);
@@ -148,13 +158,26 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     connect(toolbar_, &DashboardToolBar::refresh_clicked, this, &DashboardScreen::on_refresh_clicked);
 
     connect(toolbar_, &DashboardToolBar::toggle_compact_clicked, this, [this]() {
-        static bool compact = false;
-        compact = !compact;
-        canvas_->set_row_height(compact ? 40 : 60);
+        compact_rows_ = !compact_rows_;
+        canvas_->set_row_height(compact_rows_ ? 40 : 60);
     });
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
+
+    // ── Keyboard shortcuts ────────────────────────────────────────────────────
+    // The dashboard had zero keyboard affordances; every action needed a mouse
+    // trip to the toolbar. WindowShortcut scope so they fire while any child
+    // of the dashboard has focus, but not while another screen is active.
+    auto add_shortcut = [this](QKeySequence seq, auto&& handler) {
+        auto* sc = new QShortcut(seq, this);
+        sc->setContext(Qt::WindowShortcut);
+        connect(sc, &QShortcut::activated, this, handler);
+    };
+    add_shortcut(QKeySequence(Qt::Key_F5), [this]() { on_refresh_clicked(); });
+    add_shortcut(QKeySequence(QKeySequence::Save), [this]() { save_layout(); });
+    add_shortcut(QKeySequence(Qt::CTRL | Qt::Key_N), open_add_widget);
+    add_shortcut(QKeySequence(Qt::CTRL | Qt::Key_P), toggle_pulse);
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -240,13 +263,13 @@ void DashboardScreen::hideEvent(QHideEvent* event) {
 void DashboardScreen::refresh_ticker() {
     if (!ticker_bar_)
         return;
-
-    const QStringList symbols = ticker_bar_->symbols();
-    if (symbols.isEmpty())
-        return;
-
     // Hub path: user edited symbols → drop old subs, attach to new set,
     // kick the hub so consumers see data immediately.
+    //
+    // Note: this used to early-return on an empty symbol list, which left the
+    // *previous* symbols subscribed and still scrolling after the user cleared
+    // the bar. hub_resubscribe_ticker() handles the empty case correctly
+    // (unsubscribe, then no-op).
     hub_resubscribe_ticker();
 }
 
@@ -304,8 +327,10 @@ void DashboardScreen::hub_resubscribe_ticker() {
     ticker_cache_.clear();
 
     ticker_subscribed_ = ticker_bar_->symbols();
-    if (ticker_subscribed_.isEmpty())
+    if (ticker_subscribed_.isEmpty()) {
+        ticker_bar_->set_data({}); // clear stale entries so nothing misleading scrolls
         return;
+    }
 
     QStringList topics;
     topics.reserve(ticker_subscribed_.size());
@@ -385,7 +410,6 @@ void DashboardScreen::save_layout() {
     }
 
     QString encoded = buf.toBase64();
-    QPointer<DashboardScreen> self = this;
     (void)QtConcurrent::run(
         [encoded]() { fincept::SettingsRepository::instance().set("dashboard_canvas_layout", encoded, "dashboard"); });
 }
@@ -430,6 +454,14 @@ void DashboardScreen::restore_layout() {
                     return;
                 }
 
+                // Clamp the grid geometry before anything downstream uses it.
+                // A truncated / corrupted blob previously produced items with
+                // cols == 0 or w == 0, which grid_to_rect() turns into
+                // zero-width tiles and compact_vertical() spins over.
+                layout.cols = qBound(1, layout.cols, 48);
+                layout.row_h = qBound(10, layout.row_h, 400);
+                layout.margin = qBound(0, layout.margin, 64);
+
                 for (int i = 0; i < count; ++i) {
                     GridItem item;
                     stream >> item.id >> item.instance_id;
@@ -442,7 +474,24 @@ void DashboardScreen::restore_layout() {
                         if (doc.isObject())
                             item.config = doc.object();
                     }
+                    // Stop at the first short read rather than appending
+                    // default-constructed garbage for the remaining items.
+                    if (stream.status() != QDataStream::Ok)
+                        break;
+                    if (item.id.isEmpty() || item.instance_id.isEmpty())
+                        continue;
+                    item.cell.min_w = qBound(1, item.cell.min_w, layout.cols);
+                    item.cell.min_h = qBound(1, item.cell.min_h, 64);
+                    item.cell.w = qBound(item.cell.min_w, item.cell.w, layout.cols);
+                    item.cell.h = qBound(item.cell.min_h, item.cell.h, 64);
+                    item.cell.x = qBound(0, item.cell.x, layout.cols - item.cell.w);
+                    item.cell.y = qBound(0, item.cell.y, 999);
                     layout.items.append(item);
+                }
+
+                if (layout.items.isEmpty()) {
+                    self->build_default_layout();
+                    return;
                 }
 
                 self->canvas_->load_layout(layout);

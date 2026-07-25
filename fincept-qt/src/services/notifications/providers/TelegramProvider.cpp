@@ -1,4 +1,4 @@
-#include "services/notifications/providers/TelegramProvider.h"
+﻿#include "services/notifications/providers/TelegramProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -7,12 +7,12 @@
 namespace fincept::notifications {
 
 void TelegramProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    bot_token_ = get_str(r, cat + ".bot_token");
+    bot_token_ = get_secret(r, cat + ".bot_token");
     chat_id_ = get_str(r, cat + ".chat_id");
 }
 
 void TelegramProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".bot_token", bot_token_, cat);
+    set_secret(r, cat + ".bot_token", bot_token_, cat);
     r.set(cat + ".chat_id", chat_id_, cat);
 }
 
@@ -27,13 +27,13 @@ void TelegramProvider::send(const NotificationRequest& req, std::function<void(b
     const QString level_tag = [&]() -> QString {
         switch (req.level) {
             case NotifLevel::Warning:
-                return "⚠️ ";
+                return "âš ï¸ ";
             case NotifLevel::Alert:
-                return "🔔 ";
+                return "ðŸ”” ";
             case NotifLevel::Critical:
-                return "🚨 ";
+                return "ðŸš¨ ";
             default:
-                return "ℹ️ ";
+                return "â„¹ï¸ ";
         }
     }();
 

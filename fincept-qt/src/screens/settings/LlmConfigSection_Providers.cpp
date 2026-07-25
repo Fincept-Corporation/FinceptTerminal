@@ -564,8 +564,12 @@ void LlmConfigSection::populate_form(const QString& provider) {
                 api_key_edit_->clear();
                 const QString stored = fincept::auth::AuthManager::instance().fincept_api_key();
                 if (!stored.isEmpty()) {
-                    QString masked = stored.left(8) + "...";
-                    api_key_edit_->setPlaceholderText(tr("Linked to your Fincept account: %1").arg(masked));
+                    // Show only the trailing 4 characters. The previous preview
+                    // printed the first 8, which for a prefixed key format gives
+                    // away a meaningful slice of the secret in a field that is
+                    // always visible (placeholders ignore Password echo mode).
+                    api_key_edit_->setPlaceholderText(
+                        tr("Linked to your Fincept account: ••••%1").arg(stored.right(4)));
                 } else {
                     api_key_edit_->setPlaceholderText(tr("Login to your Fincept account to enable"));
                 }
@@ -610,7 +614,7 @@ void LlmConfigSection::populate_form(const QString& provider) {
     if (is_fincept) {
         const QString stored = fincept::auth::AuthManager::instance().fincept_api_key();
         if (!stored.isEmpty())
-            api_key_edit_->setPlaceholderText(tr("Linked to your Fincept account: %1").arg(stored.left(8) + "..."));
+            api_key_edit_->setPlaceholderText(tr("Linked to your Fincept account: ••••%1").arg(stored.right(4)));
         else
             api_key_edit_->setPlaceholderText(tr("Login to your Fincept account to enable"));
         model_combo_->setVisible(false);

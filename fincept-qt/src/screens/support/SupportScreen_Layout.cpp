@@ -16,8 +16,10 @@
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QSplitter>
 #include <QTimer>
 #include <QUrl>
@@ -54,17 +56,27 @@ QWidget* SupportScreen::build_sidebar() {
         connect(new_ticket_btn_, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
         hl->addWidget(new_ticket_btn_);
 
-        // Search — placeholder set in retranslateUi
+        // Search — placeholder set in retranslateUi.
+        // Previously created but never connected to anything: typing in the box
+        // did nothing at all. It now filters the cached ticket list live.
         search_input_ = new QLineEdit;
         search_input_->setFixedHeight(30);
         search_input_->setStyleSheet(SS_INPUT());
+        search_input_->setClearButtonEnabled(true);
+        search_input_->setAccessibleName(tr("Search tickets"));
+        connect(search_input_, &QLineEdit::textChanged, this, [this]() { rebuild_ticket_rows(); });
         hl->addWidget(search_input_);
 
-        // Filter — items populated in retranslateUi
+        // Filter — items populated in retranslateUi. Also previously inert.
         filter_combo_ = new QComboBox;
         filter_combo_->setFixedHeight(28);
         filter_combo_->setStyleSheet(SS_INPUT());
+        filter_combo_->setAccessibleName(tr("Filter tickets by status"));
+        connect(filter_combo_, &QComboBox::currentIndexChanged, this, [this]() { rebuild_ticket_rows(); });
         hl->addWidget(filter_combo_);
+
+        setTabOrder(new_ticket_btn_, search_input_);
+        setTabOrder(search_input_, filter_combo_);
 
         vl->addWidget(hdr);
     }
@@ -220,6 +232,7 @@ QWidget* SupportScreen::build_create_page() {
     subject_input_->setPlaceholderText(tr("Brief summary of your issue"));
     subject_input_->setFixedHeight(38);
     subject_input_->setStyleSheet(SS_INPUT());
+    subject_input_->setAccessibleName(tr("Ticket subject"));
     add_field(tr("Subject"), subject_input_, true);
 
     // Category + Priority side by side
@@ -285,7 +298,14 @@ QWidget* SupportScreen::build_create_page() {
         desc_input_->setMinimumHeight(160);
         desc_input_->setMaximumHeight(280);
         desc_input_->setStyleSheet(SS_INPUT());
+        desc_input_->setAccessibleName(tr("Ticket description"));
         cl->addWidget(desc_input_);
+
+        // Explicit tab order across the form — the default order follows widget
+        // construction, which interleaves the two side-by-side combos oddly.
+        setTabOrder(subject_input_, category_combo_);
+        setTabOrder(category_combo_, priority_combo_);
+        setTabOrder(priority_combo_, desc_input_);
 
         connect(desc_input_, &QTextEdit::textChanged, this, [this]() {
             int n = desc_input_->toPlainText().length();
@@ -337,7 +357,9 @@ QWidget* SupportScreen::build_create_page() {
             tr("✓  One issue per ticket — easier to track and resolve"),
             tr("✓  Include your OS, version, and any error messages"),
             tr("✓  Describe steps to reproduce if it's a bug"),
-            tr("✓  Billing questions resolved within 4 hours"),
+            // No stated turnaround here: the previous "resolved within 4 hours"
+            // was an unbacked SLA promise on a support surface.
+            tr("✓  Attach the crash-dump path from About → Diagnostics if the app crashed"),
         };
         for (const auto& t : tip_items) {
             auto* tl = lbl(t, ui::colors::TEXT_SECONDARY(), 11, false, true);
@@ -494,7 +516,17 @@ QWidget* SupportScreen::build_detail_page() {
         msg_input_->setPlaceholderText(tr("Type your reply…"));
         msg_input_->setFixedHeight(80);
         msg_input_->setStyleSheet(SS_INPUT());
+        msg_input_->setAccessibleName(tr("Reply message"));
         rbl->addWidget(msg_input_);
+
+        // The header above advertises "Ctrl+Enter to send" but no such shortcut
+        // existed — pressing it did nothing. Scope it to the reply box so it
+        // can't fire while the user is elsewhere on the screen.
+        for (auto seq : {QKeySequence(Qt::CTRL | Qt::Key_Return), QKeySequence(Qt::CTRL | Qt::Key_Enter)}) {
+            auto* sc = new QShortcut(seq, msg_input_);
+            sc->setContext(Qt::WidgetShortcut);
+            connect(sc, &QShortcut::activated, this, &SupportScreen::on_send_message);
+        }
 
         auto* send_row = new QHBoxLayout;
         send_row->addStretch();
@@ -502,6 +534,7 @@ QWidget* SupportScreen::build_detail_page() {
         send_btn_->setFixedHeight(34);
         send_btn_->setMinimumWidth(140);
         send_btn_->setStyleSheet(SS_BTN_SUCCESS());
+        send_btn_->setAccessibleName(tr("Send reply"));
         connect(send_btn_, &QPushButton::clicked, this, &SupportScreen::on_send_message);
         send_row->addWidget(send_btn_);
         rbl->addLayout(send_row);

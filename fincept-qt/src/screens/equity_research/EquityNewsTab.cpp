@@ -254,27 +254,22 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
                                         .arg(ui::colors::AMBER()));
             cl->addWidget(read_lbl);
 
-            // Whole card opens URL
-            QString url = art.url;
-            auto* click_filter = new QObject(card);
-            card->installEventFilter(click_filter);
-            connect(click_filter, &QObject::destroyed, this, [] {});
-            // Use QPushButton invisible overlay approach via event filter on card
-            QObject::connect(card, &QFrame::destroyed, click_filter, &QObject::deleteLater);
-
-            // Simpler: intercept mouse release via child button spanning the card
-            auto* link_btn = new QPushButton;
-            link_btn->setFlat(true);
-            link_btn->setCursor(Qt::PointingHandCursor);
-            link_btn->setStyleSheet("QPushButton { background:transparent; border:0; }");
-            link_btn->setFixedSize(0, 0); // invisible, just for signal
-            connect(link_btn, &QPushButton::clicked, this, [url]() { QDesktopServices::openUrl(QUrl(url)); });
-
-            // Make the read_lbl clickable
+            // The whole card is the click target (it already shows a hand cursor).
+            // Previously the card's "click filter" was a bare QObject with no
+            // eventFilter override and the link button was sized 0×0, so only the
+            // small "READ FULL ARTICLE" line worked — three dead objects per card
+            // on every refresh. One filter (this) + a url property on both widgets.
+            const QString url = art.url;
             read_lbl->setCursor(Qt::PointingHandCursor);
-            read_lbl->installEventFilter(this);
             read_lbl->setProperty("url", url);
-            cl->addWidget(link_btn);
+            read_lbl->installEventFilter(this);
+            card->setProperty("url", url);
+            card->installEventFilter(this);
+            card->setToolTip(tr("Open in browser: %1").arg(url));
+            card->setAccessibleName(art.title);
+            card->setAccessibleDescription(tr("Open the full article in your browser"));
+        } else {
+            card->setCursor(Qt::ArrowCursor); // nothing to open — don't imply a link
         }
 
         cards_layout_->insertWidget(cards_layout_->count() - 1, card);

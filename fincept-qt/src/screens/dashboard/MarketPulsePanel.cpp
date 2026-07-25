@@ -133,6 +133,12 @@ MarketPulsePanel::MarketPulsePanel(QWidget* parent) : QWidget(parent) {
     hours_timer_->setInterval(60000); // 1 min — market open/close status
     connect(hours_timer_, &QTimer::timeout, this, &MarketPulsePanel::refresh_market_hours);
 
+    // Coalesces a burst of ~70 per-symbol hub deliveries into one render pass.
+    render_timer_ = new QTimer(this);
+    render_timer_->setSingleShot(true);
+    render_timer_->setInterval(0);
+    connect(render_timer_, &QTimer::timeout, this, &MarketPulsePanel::flush_render);
+
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
     refresh_theme();
@@ -282,8 +288,13 @@ void MarketPulsePanel::refresh_theme() {
     // Re-resolve data-driven status dot/label colors.
     refresh_market_hours();
 
-    // Mover rows (gainers/losers) are fully rebuilt by refresh_data().
-    // Trigger a refresh so they pick up new theme colors.
+    // Mover rows keep their chrome in one stylesheet per section.
+    style_mover_section(gainers_rows_, /*positive_section=*/true);
+    style_mover_section(losers_rows_, /*positive_section=*/false);
+
+    // Force the Fear & Greed labels to re-apply against the new tokens.
+    fg_applied_color_.clear();
+
     if (isVisible()) {
         rebuild_breadth_from_cache();
         rebuild_movers_from_cache();
@@ -304,6 +315,29 @@ void MarketPulsePanel::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     hub_unsubscribe_all();
     hours_timer_->stop();
+    if (render_timer_)
+        render_timer_->stop();
+}
+
+void MarketPulsePanel::schedule_render() {
+    if (render_timer_ && !render_timer_->isActive())
+        render_timer_->start();
+}
+
+void MarketPulsePanel::flush_render() {
+    if (breadth_dirty_) {
+        breadth_dirty_ = false;
+        rebuild_breadth_from_cache();
+    }
+    if (movers_dirty_) {
+        movers_dirty_ = false;
+        rebuild_movers_from_cache();
+    }
+    if (snapshot_dirty_) {
+        snapshot_dirty_ = false;
+        rebuild_snapshot_from_cache();
+    }
+    update_loading_progress();
 }
 
 // ── Header ───────────────────────────────────────────────────────────────────
@@ -489,39 +523,66 @@ QWidget* MarketPulsePanel::build_breadth_section() {
 
 // ── Top Movers ────────────────────────────────────────────────────────────────
 
-QWidget* MarketPulsePanel::build_mover_row(const QString& symbol, double change, const QString& volume) {
-    auto* w = new QWidget(this);
-    w->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
+// Builds ONE reusable mover row. All styling comes from the section-level
+// stylesheet installed by style_mover_section() — no per-row setStyleSheet.
+MarketPulsePanel::MoverRow MarketPulsePanel::make_mover_row(QWidget* parent, QVBoxLayout* into, bool /*positive*/) {
+    MoverRow r;
+    r.container = new QWidget(parent);
+    r.container->setObjectName("pulseMoverRow");
 
-    auto* hl = new QHBoxLayout(w);
+    auto* hl = new QHBoxLayout(r.container);
     hl->setContentsMargins(12, 5, 12, 5);
     hl->setSpacing(4);
 
-    auto* sym = new QLabel(symbol);
-    sym->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                           .arg(ui::colors::TEXT_PRIMARY()));
-    hl->addWidget(sym);
+    r.symbol = new QLabel(r.container);
+    r.symbol->setObjectName("pulseMoverSym");
+    hl->addWidget(r.symbol);
     hl->addStretch();
 
-    bool positive = change >= 0;
-    auto* arrow = new QLabel(positive ? QChar(0x25B2) : QChar(0x25BC));
-    arrow->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent;")
-                             .arg(positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-    hl->addWidget(arrow);
+    r.arrow = new QLabel(r.container);
+    r.arrow->setObjectName("pulseMoverArrow");
+    hl->addWidget(r.arrow);
 
-    auto* chg = new QLabel(QString("%1%2%").arg(positive ? "+" : "").arg(change, 0, 'f', 2));
-    chg->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                           .arg(positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-    hl->addWidget(chg);
+    r.change = new QLabel(r.container);
+    r.change->setObjectName("pulseMoverChg");
+    hl->addWidget(r.change);
 
-    if (!volume.isEmpty()) {
-        auto* vol = new QLabel(tr("VOL: %1").arg(volume));
-        vol->setStyleSheet(
-            QString("color: %1; font-size: 8px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-        hl->addWidget(vol);
-    }
+    r.volume = new QLabel(r.container);
+    r.volume->setObjectName("pulseMoverVol");
+    hl->addWidget(r.volume);
 
-    return w;
+    into->addWidget(r.container);
+    return r;
+}
+
+void MarketPulsePanel::fill_mover_row(const MoverRow& row, const QString& symbol, double change,
+                                      const QString& volume) {
+    if (!row.container)
+        return;
+    row.container->setVisible(true);
+    row.symbol->setText(symbol);
+    row.arrow->setText(change >= 0 ? QString(QChar(0x25B2)) : QString(QChar(0x25BC)));
+    row.change->setText(QString("%1%2%").arg(change >= 0 ? "+" : "").arg(change, 0, 'f', 2));
+    row.volume->setText(volume.isEmpty() ? QString() : tr("VOL: %1").arg(volume));
+}
+
+void MarketPulsePanel::clear_mover_row(const MoverRow& row) {
+    if (row.container)
+        row.container->setVisible(false);
+}
+
+void MarketPulsePanel::style_mover_section(QWidget* container, bool positive_section) {
+    if (!container)
+        return;
+    const QString accent = positive_section ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
+    container->setStyleSheet(
+        QString("QWidget#pulseMoverRow{border-bottom:1px solid %1;}"
+                "QWidget#pulseMoverRow QLabel{background:transparent;}"
+                "QLabel#pulseMoverSym{color:%2;font-size:10px;font-weight:bold;}"
+                "QLabel#pulseMoverArrow{color:%3;font-size:8px;}"
+                "QLabel#pulseMoverChg{color:%3;font-size:10px;font-weight:bold;}"
+                "QLabel#pulseMoverVol{color:%4;font-size:8px;}")
+            .arg(ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(), accent, ui::colors::TEXT_TERTIARY()));
 }
 
 static QString format_volume(double vol) {
@@ -542,16 +603,20 @@ QWidget* MarketPulsePanel::build_gainers_section() {
 
     vl->addWidget(build_section_header("TOP GAINERS", QChar(0x2191), ui::colors::POSITIVE()));
 
-    auto* rows_w = new QWidget(this);
-    gainers_layout_ = new QVBoxLayout(rows_w);
+    gainers_rows_ = new QWidget(this);
+    gainers_layout_ = new QVBoxLayout(gainers_rows_);
     gainers_layout_->setContentsMargins(0, 0, 0, 0);
     gainers_layout_->setSpacing(0);
 
-    // Placeholder rows while loading
-    for (int i = 0; i < 3; ++i)
-        gainers_layout_->addWidget(build_mover_row("...", 0.0, ""));
+    for (int i = 0; i < kMoverRows; ++i) {
+        MoverRow r = make_mover_row(gainers_rows_, gainers_layout_, /*positive_section=*/true);
+        // Placeholder text until the first quotes land.
+        r.symbol->setText(QStringLiteral("..."));
+        gainer_rows_.append(r);
+    }
+    style_mover_section(gainers_rows_, /*positive_section=*/true);
 
-    vl->addWidget(rows_w);
+    vl->addWidget(gainers_rows_);
     return w;
 }
 
@@ -563,51 +628,23 @@ QWidget* MarketPulsePanel::build_losers_section() {
 
     vl->addWidget(build_section_header("TOP LOSERS", QChar(0x2193), ui::colors::NEGATIVE()));
 
-    auto* rows_w = new QWidget(this);
-    losers_layout_ = new QVBoxLayout(rows_w);
+    losers_rows_ = new QWidget(this);
+    losers_layout_ = new QVBoxLayout(losers_rows_);
     losers_layout_->setContentsMargins(0, 0, 0, 0);
     losers_layout_->setSpacing(0);
 
-    for (int i = 0; i < 3; ++i)
-        losers_layout_->addWidget(build_mover_row("...", 0.0, ""));
+    for (int i = 0; i < kMoverRows; ++i) {
+        MoverRow r = make_mover_row(losers_rows_, losers_layout_, /*positive_section=*/false);
+        r.symbol->setText(QStringLiteral("..."));
+        loser_rows_.append(r);
+    }
+    style_mover_section(losers_rows_, /*positive_section=*/false);
 
-    vl->addWidget(rows_w);
+    vl->addWidget(losers_rows_);
     return w;
 }
 
 // ── Global Snapshot ───────────────────────────────────────────────────────────
-
-QWidget* MarketPulsePanel::build_stat_row(const QString& label, const QString& value, const QString& change,
-                                          const QString& color) {
-    auto* w = new QWidget(this);
-    w->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
-
-    auto* hl = new QHBoxLayout(w);
-    hl->setContentsMargins(12, 4, 12, 4);
-
-    auto* lbl = new QLabel(label);
-    lbl->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.3px; background: transparent;")
-            .arg(ui::colors::TEXT_SECONDARY()));
-    hl->addWidget(lbl);
-    hl->addStretch();
-
-    auto* val = new QLabel(value);
-    val->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(color));
-    hl->addWidget(val);
-
-    if (!change.isEmpty()) {
-        bool positive = change.startsWith('+');
-        auto* chg = new QLabel(change);
-        chg->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
-                               .arg(positive                 ? ui::colors::POSITIVE()
-                                    : change.startsWith('-') ? ui::colors::NEGATIVE()
-                                                             : ui::colors::TEXT_TERTIARY()));
-        hl->addWidget(chg);
-    }
-
-    return w;
-}
 
 QWidget* MarketPulsePanel::build_global_snapshot_section() {
     auto* w = new QWidget(this);
@@ -867,21 +904,29 @@ void MarketPulsePanel::rebuild_breadth_from_cache() {
     }
     fg_sentiment_key_ = sentiment_key;
 
-    if (fg_score_val_) {
+    if (fg_score_val_)
         fg_score_val_->setText(QString::number(score));
-        fg_score_val_->setStyleSheet(
-            QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;").arg(sentiment_color));
-    }
-    if (fg_sentiment_) {
+    if (fg_sentiment_)
         fg_sentiment_->setText(sentiment_text);
-        fg_sentiment_->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
-                .arg(sentiment_color));
+
+    // The two colour stylesheets only change when the regime bucket changes —
+    // re-applying them on every one of ~50 breadth deliveries was pure CSS
+    // reparse cost for an identical result.
+    if (sentiment_color != fg_applied_color_) {
+        fg_applied_color_ = sentiment_color;
+        if (fg_score_val_)
+            fg_score_val_->setStyleSheet(
+                QString("color: %1; font-size: 18px; font-weight: bold; background: transparent;")
+                    .arg(sentiment_color));
+        if (fg_sentiment_)
+            fg_sentiment_->setStyleSheet(
+                QString("color: %1; font-size: 9px; font-weight: bold; letter-spacing: 0.5px; background: transparent;")
+                    .arg(sentiment_color));
     }
 }
 
 void MarketPulsePanel::rebuild_movers_from_cache() {
-    if (movers_cache_.isEmpty() || !gainers_layout_ || !losers_layout_)
+    if (movers_cache_.isEmpty() || gainer_rows_.isEmpty() || loser_rows_.isEmpty())
         return;
 
     QVector<services::QuoteData> quotes;
@@ -892,32 +937,27 @@ void MarketPulsePanel::rebuild_movers_from_cache() {
     }
     std::sort(quotes.begin(), quotes.end(), [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
 
-    auto clear_layout = [](QVBoxLayout* layout) {
-        while (layout->count()) {
-            auto* item = layout->takeAt(0);
-            if (item->widget())
-                item->widget()->deleteLater();
-            delete item;
-        }
-    };
-    clear_layout(gainers_layout_);
-    clear_layout(losers_layout_);
-
+    // Reuse the fixed row pool — text-only updates, no widget churn.
     int gainers_added = 0;
     for (const auto& q : quotes) {
-        if (q.change_pct <= 0 || gainers_added >= 3)
+        if (q.change_pct <= 0 || gainers_added >= kMoverRows)
             break;
-        gainers_layout_->addWidget(build_mover_row(q.symbol, q.change_pct, format_volume(q.volume)));
+        fill_mover_row(gainer_rows_[gainers_added], q.symbol, q.change_pct, format_volume(q.volume));
         ++gainers_added;
     }
+    for (int i = gainers_added; i < gainer_rows_.size(); ++i)
+        clear_mover_row(gainer_rows_[i]);
+
     int losers_added = 0;
-    for (int i = quotes.size() - 1; i >= 0 && losers_added < 3; --i) {
+    for (int i = static_cast<int>(quotes.size()) - 1; i >= 0 && losers_added < kMoverRows; --i) {
         if (quotes[i].change_pct >= 0)
             continue;
-        losers_layout_->addWidget(
-            build_mover_row(quotes[i].symbol, quotes[i].change_pct, format_volume(quotes[i].volume)));
+        fill_mover_row(loser_rows_[losers_added], quotes[i].symbol, quotes[i].change_pct,
+                       format_volume(quotes[i].volume));
         ++losers_added;
     }
+    for (int i = losers_added; i < loser_rows_.size(); ++i)
+        clear_mover_row(loser_rows_[i]);
 }
 
 void MarketPulsePanel::rebuild_snapshot_from_cache() {
@@ -975,17 +1015,18 @@ void MarketPulsePanel::hub_subscribe_all() {
             const auto q = v.value<services::QuoteData>();
             if (in_breadth) {
                 breadth_cache_.insert(sym, q);
-                rebuild_breadth_from_cache();
+                breadth_dirty_ = true;
             }
             if (in_movers) {
                 movers_cache_.insert(sym, q);
-                rebuild_movers_from_cache();
+                movers_dirty_ = true;
             }
             if (in_snapshot) {
                 snapshot_cache_.insert(sym, q);
-                rebuild_snapshot_from_cache();
+                snapshot_dirty_ = true;
             }
-            update_loading_progress();
+            // Render once for the whole delivery burst.
+            schedule_render();
         });
     }
     hub_active_ = true;

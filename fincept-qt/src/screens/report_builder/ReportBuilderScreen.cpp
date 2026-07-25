@@ -29,6 +29,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -41,6 +42,7 @@
 #include <QPrintPreviewDialog>
 #include <QPrinter>
 #include <QPushButton>
+#include <QShortcut>
 #include <QTextDocument>
 #include <QTextFrame>
 #include <QVBoxLayout>
@@ -464,6 +466,38 @@ QWidget* ReportBuilderScreen::build_toolbar() {
 
     right_toggle_btn_ = make_panel_toggle("›", tr("Collapse properties panel  (Ctrl+Shift+B)"), "Ctrl+Shift+B");
     connect(right_toggle_btn_, &QPushButton::clicked, this, &ReportBuilderScreen::on_toggle_right);
+
+    // ── Standard document shortcuts ───────────────────────────────────────────
+    // Undo/Redo were toolbar-only; Save/Open/New/Print had no key bindings at
+    // all, which is surprising for a document editor.
+    auto add_sc = [this](QKeySequence::StandardKey key, auto fn) {
+        auto* sc = new QShortcut(QKeySequence(key), this);
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, fn);
+    };
+    add_sc(QKeySequence::Save, [this]() { on_save(); });
+    add_sc(QKeySequence::Open, [this]() { on_open(); });
+    add_sc(QKeySequence::New, [this]() { on_new(); });
+    add_sc(QKeySequence::Print, [this]() { on_preview(); });
+    {
+        auto* undo_sc = new QShortcut(QKeySequence(QKeySequence::Undo), this);
+        undo_sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(undo_sc, &QShortcut::activated, undo_stack, &QUndoStack::undo);
+        auto* redo_sc = new QShortcut(QKeySequence(QKeySequence::Redo), this);
+        redo_sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(redo_sc, &QShortcut::activated, undo_stack, &QUndoStack::redo);
+    }
+
+    // ── Accessibility ─────────────────────────────────────────────────────────
+    undo_btn_->setAccessibleName(tr("Undo last change"));
+    redo_btn_->setAccessibleName(tr("Redo last change"));
+    open_btn_->setAccessibleName(tr("Open a saved report"));
+    save_btn_->setAccessibleName(tr("Save this report"));
+    pdf_btn_->setAccessibleName(tr("Export this report as PDF"));
+    preview_btn_->setAccessibleName(tr("Print preview"));
+    save_btn_->setToolTip(tr("Save  (Ctrl+S)"));
+    open_btn_->setToolTip(tr("Open  (Ctrl+O)"));
+    preview_btn_->setToolTip(tr("Preview  (Ctrl+P)"));
 
     return bar;
 }

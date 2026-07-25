@@ -15,6 +15,14 @@ namespace fincept::trading {
 
 static constexpr const char* BASE = "https://openapi.motilaloswal.com";
 
+// Motilal's client-info block reports the *host application's* version
+// (alongside productname "FinceptTerminal") — it is not a Motilal API version.
+// Injected by CMake from CMAKE_PROJECT_VERSION so it can't drift from the
+// project version the way the previously hardcoded literal did.
+#ifndef FINCEPT_VERSION_STRING
+#    define FINCEPT_VERSION_STRING "0.0.0-dev"
+#endif
+
 static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
 }
@@ -120,7 +128,7 @@ QMap<QString, QString> MotilalBroker::auth_headers(const BrokerCredentials& cred
         {"devicemodel", "PC"},
         {"manufacturer", "Generic"},
         {"productname", "FinceptTerminal"},
-        {"productversion", "4.2.0"},
+        {"productversion", FINCEPT_VERSION_STRING},
         {"browsername", "Chrome"},
         {"browserversion", "120.0"},
     };
@@ -163,7 +171,7 @@ TokenExchangeResponse MotilalBroker::exchange_token(const QString& api_key, cons
         {"devicemodel", "PC"},
         {"manufacturer", "Generic"},
         {"productname", "FinceptTerminal"},
-        {"productversion", "4.2.0"},
+        {"productversion", FINCEPT_VERSION_STRING},
         {"browsername", "Chrome"},
         {"browserversion", "120.0"},
     };

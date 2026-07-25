@@ -150,6 +150,14 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         metrics_table_->resizeColumnsToContents();
     };
 
+    // Row-cap bookkeeping — the DETAILS table is capped at kMaxDetailRows so a
+    // 100k-trade backtest doesn't allocate 100k QTableWidgetItems. The cap must
+    // be VISIBLE (tab label + banner) or a trader silently reads a 200-trade
+    // sample as the whole trade list.
+    constexpr int kMaxDetailRows = 200;
+    int details_total = 0;
+    int details_shown = 0;
+
     auto fill_details_table = [&](const QJsonArray& arr, const QStringList& preferred_cols = {}) {
         if (arr.isEmpty() || !arr[0].isObject())
             return;
@@ -160,7 +168,9 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                 if (!it.value().isObject() && !it.value().isArray())
                     cols.append(it.key());
         }
-        const int rows = qMin(static_cast<int>(arr.size()), 200);
+        const int rows = qMin(static_cast<int>(arr.size()), kMaxDetailRows);
+        details_total = static_cast<int>(arr.size());
+        details_shown = rows;
         trades_table_->setColumnCount(cols.size());
         trades_table_->setHorizontalHeaderLabels(cols);
         trades_table_->setRowCount(rows);
@@ -203,6 +213,62 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
     if (command == "backtest") {
         auto perf = payload.value("performance").toObject();
+
+        // ── Cost disclosure ──
+        // Results are only achievable net of the costs that were actually sent
+        // to the provider. State them next to the headline numbers so a reader
+        // never mistakes a gross curve for a tradeable one.
+        {
+            const double comm = commission_spin_ ? commission_spin_->value() : 0.0;
+            const double slip = slippage_spin_ ? slippage_spin_->value() : 0.0;
+            const bool costless = (comm <= 0.0 && slip <= 0.0);
+            QString cost_text;
+            QString cost_fg;
+            QString cost_bg;
+            QString cost_border;
+            if (costless) {
+                cost_text = tr("NO COSTS MODELLED — commission and slippage are both 0%. "
+                               "These returns are gross and are not achievable.");
+                cost_fg = ui::colors::WARNING();
+                cost_bg = QStringLiteral("rgba(245,158,11,0.10)");
+                cost_border = ui::colors::WARNING();
+            } else {
+                cost_text = tr("Costs applied: commission %1% per trade, slippage %2% per fill.")
+                                .arg(comm, 0, 'f', 3)
+                                .arg(slip, 0, 'f', 4);
+                cost_fg = ui::colors::TEXT_TERTIARY();
+                cost_bg = ui::colors::BG_RAISED();
+                cost_border = ui::colors::BORDER_DIM();
+            }
+            auto* costs = new QLabel(cost_text, summary_container_);
+            costs->setWordWrap(true);
+            costs->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 10px; "
+                                         "background:%4; border:1px solid %5;")
+                                     .arg(cost_fg)
+                                     .arg(ui::fonts::TINY)
+                                     .arg(ui::fonts::DATA_FAMILY)
+                                     .arg(cost_bg, cost_border));
+            summary_layout_->addWidget(costs);
+        }
+
+        // ── No-trade guard ──
+        // A run that never traded reports 0% drawdown / 0 volatility, which reads
+        // like a flawless strategy on the summary cards. Say so explicitly.
+        const int n_trades = perf.value("totalTrades").toInt(perf.value("total_trades").toInt(-1));
+        if (n_trades == 0) {
+            auto* nt = new QLabel(tr("This strategy produced ZERO trades over the selected range. "
+                                     "Every performance figure below is meaningless — widen the date range, "
+                                     "loosen the entry rules, or check the symbol/interval."),
+                                  summary_container_);
+            nt->setWordWrap(true);
+            nt->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px; "
+                                      "background:rgba(220,38,38,0.08); border:1px solid %1;")
+                                  .arg(ui::colors::NEGATIVE())
+                                  .arg(ui::fonts::SMALL)
+                                  .arg(ui::fonts::DATA_FAMILY));
+            summary_layout_->addWidget(nt);
+        }
+
         add_cards_from(perf, {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio", "maxDrawdown",
                               "winRate", "profitFactor", "calmarRatio", "totalTrades", "volatility"});
         if (payload.contains("status")) {
@@ -509,6 +575,28 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         fill_kv_table(payload);
     }
 
+    // ── Row-cap disclosure ──
+    // Make the DETAILS truncation impossible to miss: label the tab with the
+    // real count and drop a banner on the summary.
+    if (result_tabs_ && result_tabs_->count() > 3) {
+        result_tabs_->setTabText(3, details_total > details_shown
+                                        ? tr("DETAILS (%1 of %2)").arg(details_shown).arg(details_total)
+                                        : tr("DETAILS"));
+    }
+    if (details_total > details_shown) {
+        auto* trunc = new QLabel(tr("Showing the first %1 of %2 rows. Use EXPORT JSON for the complete set.")
+                                     .arg(details_shown)
+                                     .arg(details_total),
+                                 summary_container_);
+        trunc->setWordWrap(true);
+        trunc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 10px; "
+                                     "background:rgba(245,158,11,0.10); border:1px solid %1;")
+                                 .arg(ui::colors::WARNING())
+                                 .arg(ui::fonts::TINY)
+                                 .arg(ui::fonts::DATA_FAMILY));
+        summary_layout_->addWidget(trunc);
+    }
+
     summary_layout_->addStretch();
 
     // ── Equity Curve chart ──
@@ -667,6 +755,7 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
 
     // Regular command result — update run state and display
     is_running_ = false;
+    stop_run_ticker();
     run_button_->setEnabled(true);
     set_status_state(tr("READY"), ui::colors::POSITIVE, "rgba(22,163,74,0.08)");
     display_result(command, payload);
@@ -709,6 +798,7 @@ void BacktestingScreen::on_command_options_loaded(const QString& provider, const
 
 void BacktestingScreen::on_error(const QString& context, const QString& message) {
     is_running_ = false;
+    stop_run_ticker();
     run_button_->setEnabled(true);
     set_status_state(tr("ERROR"), ui::colors::NEGATIVE, "rgba(220,38,38,0.08)");
     display_error(QString("[%1] %2").arg(context, message));

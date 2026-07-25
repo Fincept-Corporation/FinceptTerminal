@@ -44,9 +44,12 @@ class MarketPanelEditor : public QDialog {
     void refresh_ticker_list();
     void reposition_dropdown();
     void hide_dropdown();
+    /// Shows an inline validation message above the OK/Cancel row.
+    void show_validation_error(const QString& message);
 
     MarketPanelConfig config_;
 
+    QLabel* error_lbl_ = nullptr;
     QLabel* title_lbl_ = nullptr;
     QLabel* tickers_lbl_ = nullptr;
     QLabel* search_lbl_ = nullptr;

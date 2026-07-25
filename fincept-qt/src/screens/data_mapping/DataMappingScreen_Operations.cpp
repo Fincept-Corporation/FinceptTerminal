@@ -18,6 +18,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QListWidgetItem>
+#include <QMessageBox>
 #include <QUuid>
 
 namespace fincept::screens {
@@ -178,27 +179,57 @@ void DataMappingScreen::on_save_mapping() {
 
 void DataMappingScreen::on_run_mapping() {
     const int row = mapping_list_->currentRow();
-    if (row < 0 || row >= saved_mappings_.size())
+    if (row < 0 || row >= saved_mappings_.size()) {
+        QMessageBox::information(this, tr("Run Mapping"), tr("Select a saved mapping first."));
         return;
+    }
 
     const DataMapping& dm = saved_mappings_[row];
     LOG_INFO("DataMapping", "Running mapping: " + dm.name);
+
+    // Loading state — the fetch is a live network round-trip and RUN used to
+    // give no feedback at all from the list view.
+    if (list_run_btn_) {
+        list_run_btn_->setEnabled(false);
+        list_run_btn_->setText(tr("RUNNING..."));
+    }
 
     QPointer<DataMappingScreen> self = this;
     fincept::services::DataNormalizationService::instance().fetch_and_normalize(
         dm, [self, dm](bool ok, fincept::services::NormalizedRecord rec) {
             if (!self)
                 return;
+            if (self->list_run_btn_) {
+                self->list_run_btn_->setEnabled(true);
+                self->list_run_btn_->setText(DataMappingScreen::tr("▶ RUN"));
+            }
             if (ok) {
                 const QString out = QJsonDocument(rec.normalized).toJson(QJsonDocument::Indented);
                 self->test_output_->setPlainText(out);
                 self->test_status_->setText(
                     DataMappingScreen::tr("RUN OK — %1 fields extracted").arg(rec.normalized.size()));
                 LOG_INFO("DataMapping", "Run complete: " + dm.name);
+                // test_output_ lives on the CREATE view; a run started from the
+                // list view would otherwise write into a panel nobody can see.
+                QMessageBox box(self);
+                box.setIcon(QMessageBox::Information);
+                box.setWindowTitle(DataMappingScreen::tr("Run: %1").arg(dm.name));
+                box.setText(
+                    DataMappingScreen::tr("%n field(s) extracted.", "", static_cast<int>(rec.normalized.size())));
+                box.setDetailedText(out);
+                box.exec();
             } else {
-                const QString errs = rec.errors.join(", ");
-                self->test_status_->setText(DataMappingScreen::tr("RUN FAILED — %1").arg(errs));
+                const QString errs =
+                    rec.errors.isEmpty() ? DataMappingScreen::tr("no error detail reported") : rec.errors.join("\n");
+                self->test_status_->setText(DataMappingScreen::tr("RUN FAILED — %1").arg(rec.errors.join(", ")));
                 LOG_WARN("DataMapping", "Run failed: " + errs);
+                // Surface the actual upstream error, not just "failed".
+                QMessageBox box(self);
+                box.setIcon(QMessageBox::Warning);
+                box.setWindowTitle(DataMappingScreen::tr("Run: %1").arg(dm.name));
+                box.setText(DataMappingScreen::tr("The mapping did not produce a record."));
+                box.setInformativeText(errs);
+                box.exec();
             }
         });
 }
@@ -250,38 +281,87 @@ void DataMappingScreen::on_new_mapping() {
 
 void DataMappingScreen::on_delete_mapping() {
     const int row = mapping_list_->currentRow();
-    if (row < 0 || row >= saved_mappings_.size())
+    if (row < 0 || row >= saved_mappings_.size()) {
+        QMessageBox::information(this, tr("Delete Mapping"), tr("Select a saved mapping first."));
         return;
+    }
 
     const QString id = saved_mappings_[row].id;
+    const QString name = saved_mappings_[row].name;
+
+    // Destructive and irreversible — it was previously a single unguarded click
+    // next to RUN.
+    if (QMessageBox::question(this, tr("Delete Mapping"),
+                              tr("Delete the mapping \"%1\"?\n\nThis cannot be undone.").arg(name),
+                              QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
+        return;
+
     auto r = DataMappingRepository::instance().remove(id);
     if (r.is_err()) {
-        LOG_ERROR("DataMapping", "Failed to delete: " + QString::fromStdString(r.error()));
+        const QString err = QString::fromStdString(r.error());
+        LOG_ERROR("DataMapping", "Failed to delete: " + err);
+        QMessageBox::warning(this, tr("Delete Mapping"), tr("Could not delete \"%1\":\n\n%2").arg(name, err));
         return;
     }
 
     load_mappings_from_db();
-    LOG_INFO("DataMapping", "Mapping deleted");
+    LOG_INFO("DataMapping", "Mapping deleted: " + name);
 }
 
 void DataMappingScreen::load_mappings_from_db() {
+    // Keep the caret on the same mapping across a reload (delete/save both
+    // re-enter here and used to reset the selection to nothing).
+    const QString previously_selected =
+        (mapping_list_->currentRow() >= 0 && mapping_list_->currentRow() < saved_mappings_.size())
+            ? saved_mappings_[mapping_list_->currentRow()].id
+            : QString();
+
     saved_mappings_.clear();
     mapping_list_->clear();
 
     auto r = DataMappingRepository::instance().list_all();
     if (r.is_err()) {
-        LOG_WARN("DataMapping", "Could not load mappings: " + QString::fromStdString(r.error()));
+        const QString err = QString::fromStdString(r.error());
+        LOG_WARN("DataMapping", "Could not load mappings: " + err);
+        if (list_empty_) {
+            list_empty_->setText(tr("Could not load saved mappings:\n%1").arg(err));
+            list_empty_->setVisible(true);
+        }
+        refresh_saved_mappings();
         return;
     }
 
     saved_mappings_ = r.value();
-    for (const auto& dm : saved_mappings_) {
+    int restore_row = -1;
+    for (int i = 0; i < saved_mappings_.size(); ++i) {
+        const auto& dm = saved_mappings_[i];
         mapping_list_->addItem(dm.name + " — " + dm.schema_name);
+        if (!previously_selected.isEmpty() && dm.id == previously_selected)
+            restore_row = i;
     }
+    if (restore_row >= 0)
+        mapping_list_->setCurrentRow(restore_row);
 
     if (status_mappings_) {
         status_mappings_->setText(tr("Saved: %1").arg(saved_mappings_.size()));
     }
+
+    // The empty-state label used to sit permanently under a populated list.
+    if (list_empty_) {
+        list_empty_->setText(tr("No mappings saved yet.\nClick CREATE to build your first data mapping."));
+        list_empty_->setVisible(saved_mappings_.isEmpty());
+    }
+    refresh_saved_mappings();
+}
+
+/// Enable/disable the list-view actions from the current selection.
+void DataMappingScreen::refresh_saved_mappings() {
+    const bool has_selection =
+        mapping_list_ && mapping_list_->currentRow() >= 0 && mapping_list_->currentRow() < saved_mappings_.size();
+    if (list_run_btn_)
+        list_run_btn_->setEnabled(has_selection);
+    if (list_del_btn_)
+        list_del_btn_->setEnabled(has_selection);
 }
 
 void DataMappingScreen::build_mapping_config(QJsonObject& config) {

@@ -26,6 +26,7 @@ class PricingScreen : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
     void changeEvent(QEvent* event) override;
 
   private:
@@ -49,11 +50,24 @@ class PricingScreen : public QWidget {
     bool fetched_ = false;
     bool loading_ = false;
     bool awaiting_payment_ = false;
+    /// True between issuing a refresh_user_data() poll and receiving its
+    /// auth_state_changed reply. Without it every tick stacked another
+    /// one-shot connection on the same signal and fired another network
+    /// request, so a 10-minute checkout produced 600 in-flight listeners.
+    bool payment_poll_in_flight_ = false;
+    /// Ticks elapsed since polling started. Polling self-terminates at
+    /// kMaxPaymentPolls so an abandoned checkout tab cannot poll forever.
+    int payment_poll_ticks_ = 0;
+    static constexpr int kPaymentPollIntervalMs = 5000;
+    static constexpr int kMaxPaymentPolls = 120; // 5s × 120 = 10 minutes
     QString awaiting_plan_id_;
     QString pre_payment_plan_;
     QMetaObject::Connection focus_connection_;
     QTimer* payment_poll_timer_ = nullptr;
     ui::ConfettiOverlay* confetti_ = nullptr;
+
+    /// Tear down the payment polling machinery (timer, focus hook, flags).
+    void stop_payment_polling();
 
     void build_ui();
     void fetch_plans();

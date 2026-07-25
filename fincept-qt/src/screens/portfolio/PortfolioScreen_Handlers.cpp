@@ -75,6 +75,12 @@ void PortfolioScreen::on_portfolio_selected(const QString& id) {
     selected_id_ = id;
     ScreenStateManager::instance().notify_changed(this);
     summary_loaded_ = false;
+    // Drop any error caption left over from a previous failed load.
+    if (loading_label_) {
+        loading_label_->setText(tr("Loading portfolio data…"));
+        loading_label_->setStyleSheet(
+            QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.8px;").arg(ui::colors::AMBER()));
+    }
     active_detail_ = std::nullopt;
     command_bar_->set_detail_view(std::nullopt);
     if (txn_panel_)
@@ -105,6 +111,7 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     command_bar_->set_refreshing(false);
     stats_ribbon_->set_summary(summary);
     status_bar_->set_summary(summary);
+    status_bar_->set_feed_state(true);
 
     update_main_view_data();
     update_content_state();
@@ -156,11 +163,37 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     services::PortfolioService::instance().fetch_risk_free_rate();
 }
 
-void PortfolioScreen::on_summary_error(QString portfolio_id, QString /*error*/) {
+void PortfolioScreen::on_summary_error(QString portfolio_id, QString error) {
     if (portfolio_id != selected_id_)
         return;
-    // Show empty state with error — for now just revert to empty
+
+    // Always clear the spinner — it used to spin forever after a failed
+    // refresh because only the success path called set_refreshing(false).
+    command_bar_->set_refreshing(false);
+
+    if (summary_loaded_) {
+        // We already have data on screen. Keep showing it (P11: never blank a
+        // populated view) and flag the feed as stale instead.
+        status_bar_->set_feed_state(
+            false, error.isEmpty() ? tr("The last refresh failed — values shown may be out of date.")
+                                   : tr("The last refresh failed — values shown may be out of date.\n%1").arg(error));
+        return;
+    }
+
+    // Nothing rendered yet. update_content_state() parks on the loading
+    // skeleton whenever a portfolio is selected but no summary has arrived, so
+    // a first-load failure used to shimmer "Loading portfolio data…" forever
+    // with no way to tell that it had already given up. Turn the skeleton
+    // caption into an error + retry hint instead.
     summary_loaded_ = false;
+    status_bar_->set_feed_state(false, error);
+    if (loading_label_) {
+        loading_label_->setText(error.isEmpty()
+                                    ? tr("Could not load this portfolio. Press ↻ (F5) to retry.")
+                                    : tr("Could not load this portfolio: %1\nPress ↻ (F5) to retry.").arg(error));
+        loading_label_->setStyleSheet(
+            QString("color:%1; font-size:11px; font-weight:600; letter-spacing:0.8px;").arg(ui::colors::NEGATIVE()));
+    }
     update_content_state();
 }
 

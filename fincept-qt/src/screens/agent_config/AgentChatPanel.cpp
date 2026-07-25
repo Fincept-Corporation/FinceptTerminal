@@ -410,6 +410,8 @@ void AgentChatPanel::build_ui() {
                                        "QTextEdit:focus{border-color:%4;}")
                                    .arg(col::BG_BASE(), col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER()));
     input_edit_->installEventFilter(this);
+    input_edit_->setAccessibleName(tr("Message the selected agent"));
+    input_edit_->setAccessibleDescription(tr("Enter sends, Shift+Enter inserts a new line."));
     // Grow height as user types (max ~120px / ~5 lines)
     connect(input_edit_->document(), &QTextDocument::contentsChanged, input_edit_, [this]() {
         int doc_h = static_cast<int>(input_edit_->document()->size().height());
@@ -421,6 +423,7 @@ void AgentChatPanel::build_ui() {
     send_btn_ = new QPushButton(tr("Send"));
     send_btn_->setFixedSize(76, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
+    send_btn_->setAccessibleName(tr("Send message to agent"));
     send_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;border-radius:6px;"
                 "font-size:12px;font-weight:700;}"
@@ -429,6 +432,18 @@ void AgentChatPanel::build_ui() {
             .arg(col::AMBER(), col::BG_BASE(), col::ORANGE(), col::BG_RAISED(), col::TEXT_TERTIARY()));
     il->addWidget(send_btn_);
     root->addWidget(ib);
+
+    // Explicit tab order across the panel's interactive controls — creation
+    // order otherwise walks header widgets before the composer.
+    setTabOrder(agent_selector_, route_toggle_);
+    setTabOrder(route_toggle_, run_as_task_toggle_);
+    setTabOrder(run_as_task_toggle_, clear_btn_);
+    setTabOrder(clear_btn_, portfolio_combo_);
+    setTabOrder(portfolio_combo_, analyze_btn_);
+    setTabOrder(analyze_btn_, rebalance_btn_);
+    setTabOrder(rebalance_btn_, risk_btn_);
+    setTabOrder(risk_btn_, input_edit_);
+    setTabOrder(input_edit_, send_btn_);
 
     // ── Status bar ────────────────────────────────────────────────────────────
     status_label_ = new QLabel;
@@ -585,6 +600,28 @@ void AgentChatPanel::setup_connections() {
             hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
         }
         scroll_to_bottom();
+    });
+
+    // Failure that never produces an agent_result / agent_stream_done (Python
+    // crash, spawn failure, bad config). Without this the send button stayed
+    // disabled and `executing_` stuck true — the panel was dead until restart.
+    // Mirrors the guard TeamsViewPanel / WorkflowsViewPanel already have.
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString&, const QString& msg) {
+        if (!executing_)
+            return;
+        show_typing(false);
+        set_executing(false);
+        if (streaming_bubble_widget_) {
+            streaming_bubble_widget_->setPlainText(tr("Error: %1").arg(msg));
+            streaming_bubble_widget_->setReadOnly(true);
+            streaming_bubble_widget_ = nullptr;
+        } else {
+            add_system_bubble(tr("Error: %1").arg(msg));
+        }
+        streaming_text_.clear();
+        status_label_->setText(tr("Agent execution failed"));
+        hdr_status_lbl_->setText(tr("Error"));
+        hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
     });
 
     // Routing result
@@ -963,7 +1000,9 @@ QTextEdit* AgentChatPanel::add_streaming_bubble(const QString& agent_name) {
     bvl->setContentsMargins(0, 0, 0, 0);
 
     auto* body = new QTextEdit;
-    body->setReadOnly(false);
+    // Read-only from the start — programmatic setPlainText/insertPlainText still
+    // work, and the user can no longer type into the agent's answer mid-stream.
+    body->setReadOnly(true);
     body->setFrameShape(QFrame::NoFrame);
     body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     body->document()->setDocumentMargin(4);
@@ -1022,6 +1061,15 @@ void AgentChatPanel::show_typing(bool on) {
     if (!typing_indicator_)
         return;
     if (on) {
+        // Keep the indicator immediately above the trailing stretch, i.e. below
+        // the newest bubble. Bubbles are inserted at count()-1 too, so without
+        // this re-anchor the indicator stays wherever it was first inserted and
+        // "Agent is thinking" renders at the TOP of the transcript.
+        const int last = messages_layout_->count() - 1; // the stretch
+        if (messages_layout_->indexOf(typing_indicator_) != last - 1) {
+            messages_layout_->removeWidget(typing_indicator_);
+            messages_layout_->insertWidget(messages_layout_->count() - 1, typing_indicator_);
+        }
         typing_step_ = 0;
         typing_dots_lbl_->setText(tr("Agent is thinking"));
         typing_indicator_->show();
@@ -1039,18 +1087,21 @@ void AgentChatPanel::clear_chat() {
     show_typing(false);
     set_executing(false);
 
-    // Remove all message rows. Layout structure:
-    //   [0]        = welcome_panel_
-    //   [1..N]     = message rows
-    //   [count-2]  = typing_indicator_
-    //   [count-1]  = stretch
-    // Stop when only welcome + typing_indicator_ + stretch remain (count == 3).
-    // Always remove at index 1 so we never touch welcome(0), typing(count-2) or stretch(count-1).
-    while (messages_layout_->count() > 3) {
-        QLayoutItem* item = messages_layout_->takeAt(1);
-        if (item && item->widget())
-            item->widget()->deleteLater();
-        delete item;
+    // Remove every message row, keeping the two fixtures and the trailing
+    // stretch. The old version assumed the typing indicator sat at count-2 and
+    // blindly took index 1 — but new bubbles are inserted *after* the typing
+    // indicator, so index 1 WAS the typing indicator. Clearing therefore
+    // deleteLater()'d it (leaving `typing_indicator_` dangling — the next send
+    // called show()/setText() on freed memory) and always left the last message
+    // row behind. Identify the fixtures by pointer instead of by index.
+    for (int i = messages_layout_->count() - 1; i >= 0; --i) {
+        QLayoutItem* item = messages_layout_->itemAt(i);
+        QWidget* w = item ? item->widget() : nullptr;
+        if (!w || w == welcome_panel_ || w == typing_indicator_)
+            continue; // stretch (no widget) + the two permanent fixtures
+        QLayoutItem* taken = messages_layout_->takeAt(i);
+        w->deleteLater();
+        delete taken;
     }
 
     show_welcome(true);

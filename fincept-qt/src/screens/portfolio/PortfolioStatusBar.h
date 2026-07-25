@@ -18,6 +18,12 @@ class PortfolioStatusBar : public QWidget {
     void set_summary(const portfolio::PortfolioSummary& summary);
     void set_portfolio_name(const QString& name);
 
+    /// Drive the ●LIVE / ●STALE indicator from what actually happened.
+    /// It used to be a hard-coded green "LIVE" that stayed lit even when the
+    /// last refresh had failed — a status light that never reports a problem is
+    /// worse than no status light.
+    void set_feed_state(bool live, const QString& detail = {});
+
     void start_clock();
     void stop_clock();
 
@@ -39,6 +45,8 @@ class PortfolioStatusBar : public QWidget {
     QLabel* tz_label_ = nullptr;
 
     QTimer* clock_timer_ = nullptr;
+    QString tz_abbrev_; // cached — recomputed only when it actually changes
+    bool feed_live_ = true;
 
     std::optional<portfolio::PortfolioSummary> last_summary_;
 };

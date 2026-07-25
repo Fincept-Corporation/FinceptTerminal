@@ -4,6 +4,7 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
 
+#include <QJsonArray>
 #include <QLabel>
 
 namespace fincept::screens::widgets {
@@ -24,23 +25,16 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
     irl->addWidget(symbols_label_);
 
     symbols_input_ = new QLineEdit(symbols_.join(", "));
+    symbols_input_->setAccessibleName(tr("Watchlist symbols"));
+    symbols_input_->setToolTip(tr("Comma-separated symbols, e.g. AAPL, MSFT, BTC-USD"));
     irl->addWidget(symbols_input_, 1);
 
     go_btn_ = new QPushButton(tr("GO"));
     go_btn_->setFixedWidth(32);
-    connect(go_btn_, &QPushButton::clicked, this, [this]() {
-        QString text = symbols_input_->text().trimmed().toUpper();
-        symbols_.clear();
-        for (auto& s : text.split(",")) {
-            QString trimmed = s.trimmed();
-            if (!trimmed.isEmpty())
-                symbols_ << trimmed;
-        }
-        // Dynamic symbol set: drop any cached rows for symbols no longer
-        // tracked, then rewire subscriptions to the new set.
-        row_cache_.clear();
-        hub_resubscribe();
-    });
+    go_btn_->setAccessibleName(tr("Apply watchlist symbols"));
+    connect(go_btn_, &QPushButton::clicked, this, &WatchlistWidget::commit_symbols);
+    // Enter in the symbol box is the same action as clicking GO.
+    connect(symbols_input_, &QLineEdit::returnPressed, this, &WatchlistWidget::commit_symbols);
     irl->addWidget(go_btn_);
 
     vl->addWidget(input_row);
@@ -55,6 +49,57 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
 
     apply_styles();
     set_loading(true);
+}
+
+void WatchlistWidget::commit_symbols() {
+    const QString text = symbols_input_->text().trimmed().toUpper();
+    QStringList next;
+    for (const QString& s : text.split(',')) {
+        const QString trimmed = s.trimmed();
+        if (!trimmed.isEmpty() && !next.contains(trimmed))
+            next << trimmed;
+    }
+    if (next.isEmpty())
+        return; // refuse to blank the watchlist — keep the previous set
+    if (next == symbols_)
+        return;
+    symbols_ = next;
+    // Dynamic symbol set: drop any cached rows for symbols no longer
+    // tracked, then rewire subscriptions to the new set.
+    row_cache_.clear();
+    table_->clear_data();
+    hub_resubscribe();
+    // Persist through the canvas so the edited list survives a restart.
+    emit config_changed(config());
+}
+
+QJsonObject WatchlistWidget::config() const {
+    QJsonArray arr;
+    for (const auto& s : symbols_)
+        arr.append(s);
+    QJsonObject o;
+    o.insert("symbols", arr);
+    return o;
+}
+
+void WatchlistWidget::apply_config(const QJsonObject& cfg) {
+    QStringList next;
+    const QJsonArray arr = cfg.value("symbols").toArray();
+    for (const auto& v : arr) {
+        const QString s = v.toString().trimmed().toUpper();
+        if (!s.isEmpty() && !next.contains(s))
+            next << s;
+    }
+    if (next.isEmpty() || next == symbols_)
+        return;
+    symbols_ = next;
+    if (symbols_input_)
+        symbols_input_->setText(symbols_.join(", "));
+    row_cache_.clear();
+    if (table_)
+        table_->clear_data();
+    if (isVisible())
+        hub_resubscribe();
 }
 
 void WatchlistWidget::apply_styles() {
@@ -116,7 +161,8 @@ void WatchlistWidget::hub_resubscribe() {
             // Numerator = unique symbols delivered so far; the overlay
             // animates the count up and fades out when row_cache_ is full.
             set_loading_progress(row_cache_.size(), symbols_.size());
-            render_from_cache();
+            // One render per delivery burst, not one per symbol.
+            schedule_render([this]() { render_from_cache(); });
         });
     }
     hub_active_ = true;
@@ -134,19 +180,6 @@ void WatchlistWidget::render_from_cache() {
         if (it == row_cache_.constEnd())
             continue;
         const auto& q = it.value();
-        table_->add_row({q.symbol, QString("$%1").arg(q.price, 0, 'f', 2),
-                         QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
-                         QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2)});
-        int row = table_->rowCount() - 1;
-        table_->set_cell_color(row, 2, ui::change_color(q.change_pct));
-        table_->set_cell_color(row, 3, ui::change_color(q.change_pct));
-    }
-}
-
-void WatchlistWidget::populate(const QVector<services::QuoteData>& quotes) {
-    table_->clear_data();
-
-    for (const auto& q : quotes) {
         table_->add_row({q.symbol, QString("$%1").arg(q.price, 0, 'f', 2),
                          QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
                          QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2)});

@@ -313,6 +313,9 @@ QWidget* AiChatBubble::build_input_row() {
                                       "QPlainTextEdit:focus{border-color:%4;}")
                                   .arg(col::BG_RAISED(), col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER()));
     input_box_->installEventFilter(this);
+    input_box_->setAccessibleName(tr("Quick Chat message"));
+    input_box_->setAccessibleDescription(
+        tr("Enter sends, Shift+Enter inserts a new line, Esc closes, Ctrl+L clears."));
     hl->addWidget(input_box_, 1);
 
     mic_btn_ = new QPushButton("MIC");
@@ -327,6 +330,7 @@ QWidget* AiChatBubble::build_input_row() {
                 "QPushButton[listening=\"true\"]{background:%4;border-color:%3;color:%5;}")
             .arg(col::TEXT_PRIMARY(), col::BORDER_MED(), col::AMBER(), col::AMBER_DIM(), col::BG_BASE()));
     mic_btn_->setProperty("listening", false);
+    mic_btn_->setAccessibleName(tr("Dictate message"));
     connect(mic_btn_, &QPushButton::clicked, this, &AiChatBubble::on_toggle_mic);
     hl->addWidget(mic_btn_);
 
@@ -334,6 +338,7 @@ QWidget* AiChatBubble::build_input_row() {
     send_btn_->setFixedSize(56, 38);
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setToolTip(tr("Send (Enter)"));
+    send_btn_->setAccessibleName(tr("Send message"));
     send_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;"
                 "border-radius:0px;font-size:12px;font-weight:700;}"
@@ -342,6 +347,9 @@ QWidget* AiChatBubble::build_input_row() {
             .arg(col::AMBER(), col::BG_BASE(), col::AMBER_DIM(), col::BG_RAISED(), col::TEXT_TERTIARY()));
     connect(send_btn_, &QPushButton::clicked, this, &AiChatBubble::on_send);
     hl->addWidget(send_btn_);
+
+    setTabOrder(input_box_, mic_btn_);
+    setTabOrder(mic_btn_, send_btn_);
 
     return row;
 }
@@ -412,20 +420,25 @@ void AiChatBubble::build_welcome_widget() {
 }
 
 void AiChatBubble::show_welcome_if_empty() {
-    if (!welcome_widget_ || !msg_layout_)
+    if (!welcome_widget_ || !msg_layout_ || !chat_history_.empty())
         return;
-    if (chat_history_.empty() && welcome_widget_->parent() != msg_container_) {
+    // "Is it in the layout?" is the real question — parentage stays with
+    // msg_container_ so the widget is never orphaned (see hide_welcome).
+    if (msg_layout_->indexOf(welcome_widget_) < 0)
         msg_layout_->insertWidget(msg_layout_->count() - 1, welcome_widget_);
-        welcome_widget_->show();
-    }
+    welcome_widget_->show();
 }
 
 void AiChatBubble::hide_welcome() {
-    if (welcome_widget_ && welcome_widget_->parent() == msg_container_) {
+    if (!welcome_widget_ || !msg_layout_)
+        return;
+    // setParent(nullptr) used to orphan the card: msg_container_ no longer owned
+    // it, nothing else did, and on_clear_chat() then overwrote welcome_widget_
+    // with a fresh instance — leaking one card per send/clear cycle. Leave the
+    // parent alone; removeWidget() already takes it out of the layout.
+    if (msg_layout_->indexOf(welcome_widget_) >= 0)
         msg_layout_->removeWidget(welcome_widget_);
-        welcome_widget_->setParent(nullptr);
-        welcome_widget_->hide();
-    }
+    welcome_widget_->hide();
 }
 
 // ── Open / Close ──────────────────────────────────────────────────────────────
@@ -470,20 +483,23 @@ void AiChatBubble::on_clear_chat() {
     if (is_speaking_)
         stop_tts();
 
-    // Tear down message widgets but keep the trailing stretch.
-    while (msg_layout_->count() > 1) {
-        auto* item = msg_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
+    // Tear down message widgets, keeping the trailing stretch and the welcome
+    // card (which is reused — rebuilding it here leaked the previous instance
+    // whenever the card had already been hidden by a first message).
+    for (int i = msg_layout_->count() - 1; i >= 0; --i) {
+        auto* item = msg_layout_->itemAt(i);
+        auto* w = item ? item->widget() : nullptr;
+        if (!w || w == welcome_widget_)
+            continue;
+        auto* taken = msg_layout_->takeAt(i);
+        w->deleteLater();
+        delete taken;
     }
     chat_history_.clear();
     streaming_bubble_.clear();
     streaming_ = false;
     error_msg_.clear();
 
-    // Rebuild welcome card and re-show it.
-    build_welcome_widget();
     show_welcome_if_empty();
     set_input_enabled(true);
     render_status();

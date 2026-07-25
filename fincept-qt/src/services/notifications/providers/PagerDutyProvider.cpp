@@ -1,4 +1,4 @@
-#include "services/notifications/providers/PagerDutyProvider.h"
+﻿#include "services/notifications/providers/PagerDutyProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -8,11 +8,11 @@
 namespace fincept::notifications {
 
 void PagerDutyProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    routing_key_ = get_str(r, cat + ".routing_key");
+    routing_key_ = get_secret(r, cat + ".routing_key");
 }
 
 void PagerDutyProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".routing_key", routing_key_, cat);
+    set_secret(r, cat + ".routing_key", routing_key_, cat);
 }
 
 void PagerDutyProvider::send(const NotificationRequest& req, std::function<void(bool, QString)> cb) {

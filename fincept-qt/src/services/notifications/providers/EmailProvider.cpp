@@ -1,4 +1,4 @@
-#include "services/notifications/providers/EmailProvider.h"
+﻿#include "services/notifications/providers/EmailProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -10,7 +10,7 @@ void EmailProvider::load_fields(SettingsRepository& r, const QString& cat) {
     smtp_host_ = get_str(r, cat + ".smtp_host");
     smtp_port_ = get_str(r, cat + ".smtp_port");
     smtp_user_ = get_str(r, cat + ".smtp_user");
-    smtp_pass_ = get_str(r, cat + ".smtp_pass");
+    smtp_pass_ = get_secret(r, cat + ".smtp_pass");
     to_addr_ = get_str(r, cat + ".to_addr");
     from_addr_ = get_str(r, cat + ".from_addr");
 }
@@ -19,7 +19,7 @@ void EmailProvider::save_fields(SettingsRepository& r, const QString& cat) {
     r.set(cat + ".smtp_host", smtp_host_, cat);
     r.set(cat + ".smtp_port", smtp_port_, cat);
     r.set(cat + ".smtp_user", smtp_user_, cat);
-    r.set(cat + ".smtp_pass", smtp_pass_, cat);
+    set_secret(r, cat + ".smtp_pass", smtp_pass_, cat);
     r.set(cat + ".to_addr", to_addr_, cat);
     r.set(cat + ".from_addr", from_addr_, cat);
 }

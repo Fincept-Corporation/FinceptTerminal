@@ -11,8 +11,12 @@
 // Skipped:
 //   - deep_agent — has bespoke per-tab UI (LangGraph + RD-Agent text outputs,
 //     task table widget). Handled by legacy on_result branch.
-//   - pattern_intelligence — module declared but no panel/service wired yet.
+//   (pattern_intelligence was listed here as "declared but no panel/service
+//    wired yet"; it has since been removed from all_quant_modules() entirely —
+//    its target script is a library with no real command surface. See the
+//    comment at its former registration site in AIQuantLabTypes.h.)
 #include "screens/ai_quant_lab/QuantModulePanel.h"
+#include "screens/ai_quant_lab/QuantModulePanel_AdvancedHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
@@ -50,44 +54,9 @@ using namespace fincept::services::quant;
 using namespace fincept::screens::quant_styles;
 using namespace fincept::screens::quant_common;
 using namespace fincept::screens::quant_gs_helpers;
-
-namespace {
-
-[[maybe_unused]] QString fmt_num_safe(const QJsonValue& v, int decimals = 4) {
-    if (v.isNull() || v.isUndefined())
-        return QStringLiteral("—");
-    return QString::number(v.toDouble(), 'f', decimals);
-}
-
-QString fmt_int_safe(const QJsonValue& v) {
-    if (v.isNull() || v.isUndefined())
-        return QStringLiteral("—");
-    return QString::number(v.toInt());
-}
-
-QString fmt_pct_safe(const QJsonValue& v, int decimals = 2) {
-    if (v.isNull() || v.isUndefined())
-        return QStringLiteral("—");
-    return QString::number(v.toDouble() * 100.0, 'f', decimals) + "%";
-}
-
-// Returns false if the payload was an error (already displayed via callback).
-bool check_success(const QJsonObject& payload, const std::function<void(const QString&)>& display_error_fn) {
-    if (!payload.value("success").toBool(false)) {
-        const QString err =
-            payload.value("error").toString(QCoreApplication::translate("QuantModulePanel", "Unknown error"));
-        const QString kind = payload.value("error_kind").toString();
-        const QString prefix = kind == "validation" ? QCoreApplication::translate("QuantModulePanel", "Input error: ")
-                               : kind == "runtime"
-                                   ? QCoreApplication::translate("QuantModulePanel", "Computation failed: ")
-                                   : QString();
-        display_error_fn(prefix + err);
-        return false;
-    }
-    return true;
-}
-
-} // namespace
+// check_success() / fmt_int_safe() / fmt_pct_safe() used to be duplicated in a
+// file-local anonymous namespace here; they now come from the shared header.
+using namespace fincept::screens::quant_advanced_helpers;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. RL TRADING

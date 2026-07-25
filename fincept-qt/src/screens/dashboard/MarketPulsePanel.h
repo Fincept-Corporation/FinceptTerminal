@@ -54,9 +54,6 @@ class MarketPulsePanel : public QWidget {
     QWidget* build_losers_section();
     QWidget* build_global_snapshot_section();
     QWidget* build_market_hours_section();
-    QWidget* build_mover_row(const QString& symbol, double change, const QString& volume);
-    QWidget* build_stat_row(const QString& label, const QString& value, const QString& change, const QString& color);
-    QWidget* build_breadth_bar(const QString& label, int advancing, int declining);
 
     /// Re-apply all token-based styles so a theme switch updates every child widget.
     void refresh_theme();
@@ -112,8 +109,29 @@ class MarketPulsePanel : public QWidget {
     BreadthRow sp500_row_;
 
     // ── Top Movers ──
+    // Fixed pool of 3 rows per section. Rows are built once and only have
+    // their text updated; the old code destroyed and re-created 6 rows (24
+    // widgets, 24 inline setStyleSheet calls) on every single quote delivery
+    // — ~70 times per refresh cycle.
+    struct MoverRow {
+        QWidget* container = nullptr;
+        QLabel* symbol = nullptr;
+        QLabel* arrow = nullptr;
+        QLabel* change = nullptr;
+        QLabel* volume = nullptr;
+    };
+    QWidget* gainers_rows_ = nullptr;
+    QWidget* losers_rows_ = nullptr;
     QVBoxLayout* gainers_layout_ = nullptr;
     QVBoxLayout* losers_layout_ = nullptr;
+    QVector<MoverRow> gainer_rows_;
+    QVector<MoverRow> loser_rows_;
+    MoverRow make_mover_row(QWidget* parent, QVBoxLayout* into, bool positive_section);
+    static void fill_mover_row(const MoverRow& row, const QString& symbol, double change, const QString& volume);
+    static void clear_mover_row(const MoverRow& row);
+    /// Applies the single hoisted stylesheet for a movers section.
+    void style_mover_section(QWidget* container, bool positive_section);
+    static constexpr int kMoverRows = 3;
 
     // ── Global Snapshot ──
     struct StatRow {
@@ -151,6 +169,20 @@ class MarketPulsePanel : public QWidget {
     QHash<QString, services::QuoteData> snapshot_cache_;
     bool hub_active_ = false;
     QTimer* hours_timer_ = nullptr;
+
+    // ── Render coalescing ──
+    // ~70 symbols each arrive as their own hub delivery. Without this every
+    // delivery triggered a full re-render of whichever sections it touched.
+    QTimer* render_timer_ = nullptr;
+    bool breadth_dirty_ = false;
+    bool movers_dirty_ = false;
+    bool snapshot_dirty_ = false;
+    void schedule_render();
+    void flush_render();
+
+    // Last-applied sentiment colour, so the Fear & Greed labels only pay a CSS
+    // reparse when the regime actually changes.
+    QString fg_applied_color_;
 
     // Loading overlay shown over the scroll area while the union of the
     // breadth/movers/snapshot caches fills up. The denominator is the

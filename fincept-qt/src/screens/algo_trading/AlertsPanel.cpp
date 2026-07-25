@@ -13,6 +13,7 @@
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QJsonObject>
+#include <QMessageBox>
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -267,7 +268,17 @@ void AlertsPanel::build_ui() {
             .arg(fincept::ui::fonts::SMALL)
             .arg(fincept::ui::fonts::DATA_FAMILY)
             .arg(fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::BG_RAISED(),
-                 fincept::ui::colors::TEXT_TERTIARY()));
+                 fincept::ui::colors::TEXT_TERTIARY()) +
+        QString("QPushButton#apRowBtn { background: transparent; color: %1; border: 1px solid %2;"
+                " font-size: %3px; font-weight: 700; %4 padding: 1px 8px; }"
+                "QPushButton#apRowBtn:hover { color: %5; border-color: %5; }"
+                "QPushButton#apRowDelete { background: transparent; color: %6; border: 1px solid %6;"
+                " font-size: %3px; font-weight: 700; %4 padding: 1px 8px; }"
+                "QPushButton#apRowDelete:hover { background: rgba(220,38,38,0.12); }")
+            .arg(fincept::ui::colors::TEXT_SECONDARY(), fincept::ui::colors::BORDER_DIM())
+            .arg(fincept::ui::fonts::TINY)
+            .arg(kMonoFont())
+            .arg(fincept::ui::colors::AMBER(), fincept::ui::colors::NEGATIVE()));
     vl->addWidget(watches_table_);
 
     auto* hist_divider = new QFrame(content);
@@ -380,15 +391,38 @@ void AlertsPanel::on_refresh_watches() {
         auto* cell = new QWidget(watches_table_);
         auto* hl = new QHBoxLayout(cell);
         hl->setContentsMargins(2, 0, 2, 0);
+        // Object names only — the skins live on the table's stylesheet (P7) and
+        // give these three the terminal look instead of the platform default.
         auto* edit = new QPushButton(tr("Edit"), cell);
+        edit->setObjectName(QStringLiteral("apRowBtn"));
+        edit->setAccessibleName(tr("Edit watch %1").arg(w.name));
         connect(edit, &QPushButton::clicked, this, [this, w]() { load_watch(w); });
         auto* test = new QPushButton(tr("Test"), cell);
+        test->setObjectName(QStringLiteral("apRowBtn"));
+        test->setAccessibleName(tr("Fire a test alert for watch %1").arg(w.name));
         connect(test, &QPushButton::clicked, this,
                 [id]() { fincept::algo::ScanMonitor::instance().test_fire(id, QString()); });
         auto* del = new QPushButton(tr("Delete"), cell);
-        connect(del, &QPushButton::clicked, this, [this, id]() {
+        del->setObjectName(QStringLiteral("apRowDelete"));
+        del->setAccessibleName(tr("Delete watch %1").arg(w.name));
+        const QString wname = w.name;
+        connect(del, &QPushButton::clicked, this, [this, id, wname]() {
+            // Deleting a watch stops a live monitor and drops its config with no
+            // recovery path — confirm first.
+            const auto ans = QMessageBox::question(
+                this, tr("Delete Watch"),
+                tr("Delete watch \"%1\"?\n\nIt stops monitoring immediately. Its alert history is kept.").arg(wname),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if (ans != QMessageBox::Yes)
+                return;
             fincept::algo::ScanMonitor::instance().stop_watch(id);
             fincept::ScanWatchRepository::instance().remove(id);
+            // Editing state can't survive its own row being deleted.
+            if (editing_id_ == id) {
+                editing_id_.clear();
+                save_btn_->setText(tr("SAVE WATCH"));
+                status_label_->setText(tr("The watch being edited was deleted — this is now a new watch."));
+            }
             // Keep the fired history: deleting a live watch must NOT erase its
             // already-triggered events from ALERT HISTORY.
             on_refresh_watches();
@@ -455,6 +489,14 @@ void AlertsPanel::prefill(const QJsonArray& conditions, const QString& logic, co
     editing_id_.clear();
     save_btn_->setText(tr("SAVE WATCH"));
     status_label_->setText(tr("Pre-filled from Scanner — name it and SAVE WATCH."));
+}
+
+void AlertsPanel::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    // ALERT HISTORY only refreshed on construction and on watch_status_changed,
+    // so alerts that fired while another tab was open never appeared until the
+    // next status change. Re-read on entry (cheap: two capped SELECTs, no timer).
+    on_refresh_watches();
 }
 
 void AlertsPanel::changeEvent(QEvent* e) {

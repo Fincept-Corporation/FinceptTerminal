@@ -165,8 +165,13 @@ std::vector<ToolDef> get_paper_trading_tools() {
             try {
                 auto order = trading::pt_place_order(portfolio_id, symbol, side, order_type, quantity, price,
                                                      stop_price, reduce_only);
-                LOG_INFO(TAG,
-                         QString("Paper order placed: %1 %2 %.4f %3").arg(side, symbol).arg(quantity).arg(order.id));
+                // %.4f is printf syntax, not a QString place marker — it left
+                // the quantity unformatted, shifted order.id off the end and
+                // logged "QString::arg: Argument missing".
+                LOG_INFO(TAG, QString("Paper order placed: %1 %2 %3 %4")
+                                  .arg(side, symbol)
+                                  .arg(quantity, 0, 'f', 4)
+                                  .arg(order.id));
                 return ToolResult::ok("Order placed", QJsonObject{{"order_id", order.id},
                                                                   {"status", order.status},
                                                                   {"symbol", order.symbol},

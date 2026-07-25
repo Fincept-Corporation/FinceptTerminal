@@ -4,9 +4,11 @@
 
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -39,6 +41,8 @@ class ForumFeedPanel : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private:
     void build_ui();

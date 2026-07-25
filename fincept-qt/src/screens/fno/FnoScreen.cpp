@@ -11,6 +11,7 @@
 #include "screens/fno/OptionChainTable.h"
 #include "screens/fno/ScreenerSubTab.h"
 #include "services/options/OptionChainService.h"
+#include "trading/instruments/InstrumentService.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -66,19 +67,23 @@ QString FnoScreen::tab_label_for(int index) {
 }
 
 QString FnoScreen::tab_detail_for(int index) {
+    // Sub-title shown on a slot's placeholder. Every sub-tab is implemented, so
+    // the placeholder is replaced before it can be shown — these strings only
+    // surface if construction of a sub-tab ever fails. They describe what the
+    // tab does; the old "(Phase N)" roadmap markers were stale build notes.
     switch (index) {
         case TabChain:
-            return tr("Live option chain (Phase 2)");
+            return tr("Live option chain");
         case TabBuilder:
-            return tr("Strategy builder + payoff (Phase 5)");
+            return tr("Strategy builder + payoff");
         case TabOI:
-            return tr("Open Interest analytics (Phase 7)");
+            return tr("Open Interest analytics");
         case TabMultiStraddle:
-            return tr("Multi straddle / strangle charts (Phase 9)");
+            return tr("Multi straddle / strangle charts");
         case TabFiiDii:
-            return tr("Institutional flows (Phase 8)");
+            return tr("Institutional flows");
         case TabScreener:
-            return tr("Chain screener (Phase 9)");
+            return tr("Chain screener");
         case TabPositions:
             return tr("Paper positions, orders & square-off");
         default:
@@ -185,17 +190,47 @@ void FnoScreen::ensure_tab_built(SubTab which) {
                         leg.type =
                             is_call ? fincept::trading::InstrumentType::CE : fincept::trading::InstrumentType::PE;
                         leg.lots = lots;
+                        leg.expiry = chain.expiry;
                         for (const auto& row : chain.rows) {
                             if (std::abs(row.strike - strike) < 1e-6) {
                                 const auto& q = is_call ? row.ce_quote : row.pe_quote;
                                 leg.entry_price = q.ltp;
                                 leg.iv_at_entry = is_call ? row.ce_iv : row.pe_iv;
-                                leg.lot_size = row.lot_size > 0 ? row.lot_size : 1;
+                                // ORDER SAFETY: never invent a lot size. This used
+                                // to fall back to 1 when the provider omitted it
+                                // (Fyers' options-chain-v3 always does), which made
+                                // "1 lot" dispatch as ONE UNIT and understated every
+                                // payoff/Greek by the lot multiplier. Resolve it from
+                                // the instrument master instead, and leave it at 0 —
+                                // which the Builder's pre-flight check refuses to
+                                // trade — when it genuinely can't be determined.
+                                leg.lot_size = row.lot_size;
                                 leg.instrument_token = is_call ? row.ce_token : row.pe_token;
                                 leg.symbol = is_call ? row.ce_symbol : row.pe_symbol;
                                 break;
                             }
                         }
+                        if (leg.lot_size <= 0 && !leg.symbol.isEmpty()) {
+                            auto& insts = fincept::trading::InstrumentService::instance();
+                            if (auto inst = insts.find(leg.symbol, QStringLiteral("NFO"), chain.broker_id))
+                                leg.lot_size = inst->lot_size;
+                            if (leg.lot_size <= 0) {
+                                // All options on one underlying/expiry share a lot
+                                // size — borrow it from any sibling contract.
+                                const auto siblings = insts.find_options_for_underlying(
+                                    chain.broker_id, chain.underlying, chain.expiry, QStringLiteral("NFO"));
+                                for (const auto& in : siblings) {
+                                    if (in.lot_size > 0) {
+                                        leg.lot_size = in.lot_size;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (leg.lot_size <= 0)
+                            LOG_WARN("FnoScreen", QString("Leg %1 has no resolvable lot size — it will be blocked "
+                                                          "from the Builder's Trade All.")
+                                                      .arg(leg.symbol));
                         builder_tab_->legs_view()->leg_model()->append_leg(leg);
                     });
         }

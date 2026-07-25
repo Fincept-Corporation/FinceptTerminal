@@ -4,9 +4,11 @@
 
 #include <QEvent>
 #include <QHash>
+#include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QSet>
+#include <QShowEvent>
 #include <QTableWidget>
 #include <QTimer>
 #include <QWidget>
@@ -46,6 +48,11 @@ class MarketPanel : public QWidget {
   protected:
     void resizeEvent(QResizeEvent* event) override;
     void changeEvent(QEvent* event) override;
+    /// Visibility-driven hub lifecycle (CLAUDE.md P3 / D3). Without these the
+    /// panel stayed subscribed — and kept its loading spinner ticking — for as
+    /// long as the app ran, even with the Markets tab closed.
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private slots:
     void show_row_context_menu(const QPoint& pos);
@@ -75,7 +82,12 @@ class MarketPanel : public QWidget {
     MarketPanelConfig config_;
     QVector<services::QuoteData> cached_quotes_; // all fetched data; display subset shown
     bool has_data_ = false;
-    bool fetch_failed_ = false;
+    /// Coalesces the per-symbol re-render burst into a single populate().
+    bool populate_scheduled_ = false;
+    /// Row count the table was last laid out for — lets resizeEvent skip a
+    /// full repopulate when the visible row count hasn't actually changed.
+    int last_populated_rows_ = -1;
+    void schedule_populate();
 
     QHash<QString, services::QuoteData> row_cache_;
     QHash<QString, QString> names_; // symbol → human-readable display name (yfinance, cached)

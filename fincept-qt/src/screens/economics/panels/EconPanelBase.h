@@ -57,6 +57,19 @@ class EconPanelBase : public QWidget {
     void display(const QJsonArray& rows, const QString& title = {});
     void export_csv();
 
+    /// Append a subclass-owned page to the shared content stack.
+    /// Returns the page index (>= 2; 0 = status page, 1 = table page), or -1
+    /// if build_base_ui() has not run yet.
+    int add_content_page(QWidget* page);
+    /// Switch the content stack to a page returned by add_content_page().
+    void show_content_page(int index);
+
+    /// Show/hide the LATEST · CHANGE · MIN · MAX · AVG · POINTS row.
+    /// Call with `false` whenever the displayed rows are a cross-section
+    /// (one row per country, wide year columns, …) rather than a single time
+    /// series — the aggregates are meaningless there and actively misleading.
+    void set_stats_visible(bool visible);
+
     /// Per-provider accent color stylesheet (uses live theme tokens).
     QString panel_style() const;
 
@@ -126,6 +139,8 @@ class EconPanelBase : public QWidget {
 
     QJsonArray all_rows_;
     QStringList columns_;
+    /// Most recent period present in all_rows_ (the data's as-of date).
+    QString latest_date_;
 };
 
 } // namespace fincept::screens

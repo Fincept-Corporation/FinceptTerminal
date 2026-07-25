@@ -16,6 +16,34 @@
 
 namespace fincept::screens {
 
+namespace {
+
+/// Recursively empties a layout, destroying the widgets it owns.
+///
+/// `delete panel->layout()` alone does NOT destroy child widgets — they stay
+/// parented to the panel, keep their last geometry and keep painting, so every
+/// rebuild stacked another full set of cards + tables on top of the previous
+/// one (a visible artefact and an unbounded leak). Always drain the layout
+/// first.
+void clear_layout(QLayout* layout) {
+    if (!layout)
+        return;
+    QLayoutItem* item = nullptr;
+    while ((item = layout->takeAt(0)) != nullptr) {
+        if (auto* w = item->widget()) {
+            w->hide();
+            w->deleteLater();
+        } else if (auto* child = item->layout()) {
+            clear_layout(child);
+        }
+        // `item` IS the nested layout when item->layout() is non-null, so a
+        // single delete covers both cases — never delete both.
+        delete item;
+    }
+}
+
+} // namespace
+
 ReportsView::ReportsView(QWidget* parent) : QWidget(parent) {
     build_ui();
 }
@@ -155,8 +183,10 @@ void ReportsView::retranslateUi() {
 }
 
 void ReportsView::update_summary() {
-    if (summary_panel_->layout())
-        delete summary_panel_->layout();
+    if (auto* old = summary_panel_->layout()) {
+        clear_layout(old);
+        delete old;
+    }
 
     auto* layout = new QVBoxLayout(summary_panel_);
     layout->setContentsMargins(16, 12, 16, 12);

@@ -735,7 +735,7 @@ void PortfolioOptimizationView::run_optimization() {
                     const double ret = root["expected_annual_return"].toDouble();
                     const double vol = root["annual_volatility"].toDouble();
                     const double sharpe = root["sharpe_ratio"].toDouble();
-                    self->status_label_->setText(QString("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4 (cached)")
+                    self->status_label_->setText(tr("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4 (cached)")
                                                      .arg(self->method_cb_->currentText())
                                                      .arg(ret * 100.0, 0, 'f', 1)
                                                      .arg(vol * 100.0, 0, 'f', 1)
@@ -795,7 +795,7 @@ void PortfolioOptimizationView::run_optimization() {
                 self->run_btn_->setEnabled(true);
 
                 if (!r.success) {
-                    self->status_label_->setText(QString("Optimization: %1").arg(r.error));
+                    self->status_label_->setText(tr("Optimization: %1").arg(r.error));
                     self->status_label_->setStyleSheet(
                         QString("color:%1; font-size:10px;").arg(ui::colors::NEGATIVE()));
                     return;
@@ -808,7 +808,7 @@ void PortfolioOptimizationView::run_optimization() {
                 const double sharpe = root["sharpe_ratio"].toDouble();
 
                 // ── Status label ──────────────────────────────────────────
-                self->status_label_->setText(QString("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4")
+                self->status_label_->setText(tr("Done — %1 | Exp. Return: %2%  Vol: %3%  Sharpe: %4")
                                                  .arg(self->method_cb_->currentText())
                                                  .arg(ret * 100.0, 0, 'f', 1)
                                                  .arg(vol * 100.0, 0, 'f', 1)
@@ -925,8 +925,12 @@ void PortfolioOptimizationView::update_frontier(const QJsonArray& pts) {
     auto* chart = frontier_chart_->chart();
     chart->removeAllSeries();
     const auto old_axes = chart->axes();
-    for (auto* ax : old_axes)
+    for (auto* ax : old_axes) {
+        // removeAxis() only detaches — without the delete every re-run leaked
+        // both axes.
         chart->removeAxis(ax);
+        delete ax;
+    }
 
     // Frontier line
     auto* frontier_series = new QLineSeries;

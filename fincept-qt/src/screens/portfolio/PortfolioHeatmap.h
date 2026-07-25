@@ -5,7 +5,10 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QVector>
 #include <QWidget>
+
+class QGridLayout;
 
 namespace fincept::screens {
 
@@ -44,8 +47,14 @@ class PortfolioHeatmap : public QWidget {
     QPushButton* weight_btn_ = nullptr;
     QPushButton* day_btn_ = nullptr;
 
-    // Blocks container
+    // Blocks container. Blocks are allocated once and reused across refreshes —
+    // rebuilding them (and re-running setStyleSheet on every one) fired on every
+    // 60 s poll AND on every selection change, which is a full CSS reparse per
+    // holding for data that usually has not changed.
     QWidget* blocks_container_ = nullptr;
+    QGridLayout* blocks_grid_ = nullptr;
+    QVector<QPushButton*> blocks_;
+    int stretch_row_ = -1;
 
     // Top movers footer
     QLabel* top_gainer_ = nullptr;

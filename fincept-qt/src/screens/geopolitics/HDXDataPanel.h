@@ -59,6 +59,8 @@ class HDXDataPanel : public QWidget {
     QLabel* country_lbl_ = nullptr;
     QLabel* topic_lbl_ = nullptr;
     QPushButton* explore_btn_ = nullptr;
+    /// HDX source + licence attribution footer (required by HDX terms).
+    QLabel* attribution_lbl_ = nullptr;
     // Fixed English view-tab labels, re-applied in retranslateUi (upper-cased).
     QStringList view_labels_;
 

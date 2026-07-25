@@ -23,6 +23,9 @@ class NodeItem : public QGraphicsObject {
     void set_name(const QString& name);
     void set_parameter(const QString& key, const QJsonValue& value);
     void set_execution_state(const QString& state); // "idle", "running", "completed", "error"
+    /// Node-level execution flags edited from the properties panel / context menu.
+    void set_disabled(bool disabled);
+    void set_continue_on_fail(bool value);
 
     PortItem* find_port(const QString& port_id) const;
     QVector<PortItem*> input_ports() const { return input_ports_; }
@@ -38,10 +41,16 @@ class NodeItem : public QGraphicsObject {
     void delete_requested(const QString& id);
     void duplicate_requested(const QString& id);
     void execute_from_requested(const QString& id);
+    /// Drag gesture boundaries, so the editor can record one undoable move per
+    /// drag instead of one per pixel of ItemPositionHasChanged.
+    void move_started();
+    void move_finished();
 
   protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
@@ -58,6 +67,7 @@ class NodeItem : public QGraphicsObject {
 
     QString execution_state_ = "idle";
     bool hovered_ = false;
+    bool dragging_ = false;
 
     // Paint cache (P9)
     QPixmap cache_;

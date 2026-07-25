@@ -11,14 +11,6 @@
 
 namespace fincept::screens {
 
-namespace {
-
-QString roadmap_font_stack() {
-    return QStringLiteral("'Consolas','Cascadia Mono','JetBrains Mono','SF Mono',monospace");
-}
-
-} // namespace
-
 RoadmapTab::RoadmapTab(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("roadmapTab"));
     build_ui();
@@ -73,8 +65,7 @@ void RoadmapTab::build_ui() {
 
 void RoadmapTab::apply_theme() {
     using namespace ui::colors;
-    const QString font = roadmap_font_stack();
-
+    // No font token in this stylesheet — the panels inside supply their own.
     const QString ss = QStringLiteral("QWidget#roadmapTab { background:%1; }"
                                       "QScrollArea#roadmapTabScroll { background:%1; border:none; }"
                                       "QWidget#roadmapTabContent { background:%1; }"

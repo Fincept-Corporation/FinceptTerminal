@@ -6,6 +6,7 @@
 #include <QHeaderView>
 #include <QMouseEvent>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::fno {
@@ -66,7 +67,16 @@ double LegEditorModel::resolve_ltp(const StrategyLeg& leg) const {
 }
 
 double LegEditorModel::resolve_delta(const StrategyLeg& leg) const {
-    return lookup_delta(leg, chain_);
+    // POSITION delta, not per-share delta. The chain publishes per-share Greeks
+    // (see OptionChainTypes.h); a sold call has a *negative* position delta even
+    // though its per-share delta is positive. Showing the raw per-share number
+    // here contradicted the Builder ribbon's "Delta" (which is
+    // Σ delta × lots × lot_size) and read as long-delta on a short leg.
+    const double per_share = lookup_delta(leg, chain_);
+    if (per_share == 0)
+        return 0;
+    const int lot_size = leg.lot_size > 0 ? leg.lot_size : 1;
+    return per_share * double(leg.lots) * double(lot_size);
 }
 
 double LegEditorModel::resolve_pnl(const StrategyLeg& leg) const {
@@ -179,7 +189,13 @@ bool LegEditorModel::setData(const QModelIndex& index, const QVariant& value, in
         }
     } else if (role == Qt::EditRole) {
         if (col == ColLots) {
-            const int v = value.toInt();
+            // Signed: + buy, - sell. Zero is rejected (a zero-lot leg is never
+            // submitted, so allowing it would only desync the preview from the
+            // order). Clamped so a fat-finger paste can't build a basket that
+            // would be rejected — or worse, accepted — at the broker.
+            constexpr int kMaxLots = 10000;
+            int v = value.toInt();
+            v = std::clamp(v, -kMaxLots, kMaxLots);
             if (v != 0 && v != leg.lots) {
                 leg.lots = v;
                 mutated = true;
@@ -215,13 +231,33 @@ Qt::ItemFlags LegEditorModel::flags(const QModelIndex& index) const {
 }
 
 QVariant LegEditorModel::headerData(int section, Qt::Orientation orient, int role) const {
-    if (orient != Qt::Horizontal || role != Qt::DisplayRole)
+    if (orient != Qt::Horizontal)
+        return {};
+    if (section < 0 || section >= ColCount)
+        return {};
+    if (role == Qt::ToolTipRole) {
+        // Units are the single biggest source of misreading on an options
+        // blotter — spell them out rather than leaving "Delta" ambiguous.
+        const QString tips[ColCount] = {
+            tr("Include this leg in analytics and in the order basket."),
+            tr("Buy when Lots is positive, Sell when negative."),
+            tr("CE = call, PE = put."),
+            tr("Strike price."),
+            tr("Signed lots: positive = buy, negative = sell. Quantity = lots × lot size."),
+            tr("Entry premium per share (not per lot)."),
+            tr("Implied volatility captured when the leg was added."),
+            tr("Live premium per share from the option chain."),
+            tr("Position delta = per-share delta × lots × lot size (signed)."),
+            tr("Mark-to-market P&L = (LTP − entry) × lots × lot size."),
+            QString(),
+        };
+        return tips[section];
+    }
+    if (role != Qt::DisplayRole)
         return {};
     // tr() per-call — owning QHeaderView re-polls on QEvent::LanguageChange.
     const QString headers[ColCount] = {tr("On"), tr("B/S"), tr("Type"),  tr("Strike"), tr("Lots"), tr("Entry"),
                                        tr("IV"), tr("LTP"), tr("Delta"), tr("P&L"),    QString()};
-    if (section < 0 || section >= ColCount)
-        return {};
     return headers[section];
 }
 
@@ -262,6 +298,10 @@ void LegEditorModel::set_chain(const fincept::services::options::OptionChain& ch
 LegEditorTable::LegEditorTable(QWidget* parent) : QTableView(parent) {
     model_ = new LegEditorModel(this);
     setModel(model_);
+
+    setAccessibleName(tr("Strategy legs"));
+    setAccessibleDescription(
+        tr("Editable list of option legs. Space toggles a leg on or off; edit Lots (signed) and Entry premium."));
 
     setShowGrid(false);
     setAlternatingRowColors(true);

@@ -27,9 +27,18 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    auto* q_btn =
-        new QPushButton(icon.isEmpty() ? QString("  %1").arg(question) : QString("  %1  %2").arg(icon, question));
+    // The disclosure arrow is part of the label: the previous version computed
+    // an arrow into a local and then Q_UNUSED'd it, so the button text never
+    // showed whether the answer was open or closed.
+    auto btn_text = [question, icon](bool open) {
+        const QString arrow = open ? QStringLiteral("▾") : QStringLiteral("▸");
+        return icon.isEmpty() ? QString("  %1  %2").arg(arrow, question)
+                              : QString("  %1  %2  %3").arg(arrow, icon, question);
+    };
+
+    auto* q_btn = new QPushButton(btn_text(false));
     q_btn->setCursor(Qt::PointingHandCursor);
+    q_btn->setAccessibleName(question);
     q_btn->setStyleSheet(QString("QPushButton { color: %1; background: %2; border: 1px solid %3;"
                                  " padding: 11px 14px; text-align: left;"
                                  " font-size: 12px; font-weight: 600; %4 }"
@@ -47,11 +56,10 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
             .arg(colors::TEXT_SECONDARY(), colors::BG_SURFACE(), colors::BORDER_DIM(), colors::AMBER(), MF));
     a_lbl->setVisible(false);
 
-    QObject::connect(q_btn, &QPushButton::clicked, a_lbl, [a_lbl, q_btn, question, icon]() {
+    QObject::connect(q_btn, &QPushButton::clicked, a_lbl, [a_lbl, q_btn, btn_text]() {
         bool show = !a_lbl->isVisible();
         a_lbl->setVisible(show);
-        QString arrow = show ? "▾" : "▸";
-        q_btn->setText(icon.isEmpty() ? QString("  %1").arg(question) : QString("  %1  %2").arg(icon, question));
+        q_btn->setText(btn_text(show));
         // tint open state
         q_btn->setStyleSheet(
             QString("QPushButton { color: %1; background: %2; border: 1px solid %3;"
@@ -61,7 +69,6 @@ static QWidget* make_faq(const QString& question, const QString& answer, const Q
                     "QPushButton:hover { background: %4; }")
                 .arg(show ? colors::AMBER() : colors::TEXT_PRIMARY(), show ? colors::BG_RAISED() : colors::BG_SURFACE(),
                      show ? colors::AMBER() : colors::BORDER_DIM(), colors::BG_RAISED()));
-        Q_UNUSED(arrow);
     });
 
     vl->addWidget(q_btn);
@@ -188,7 +195,11 @@ QWidget* HelpScreen::build_page() {
         // Business-hours label IS translated.
         chips_vl->addWidget(make_chip("✉", "support@fincept.in", colors::CYAN, "mailto:support@fincept.in"));
         chips_vl->addWidget(make_chip("", "discord.gg/ae87a8ygbN", colors::POSITIVE, "https://discord.gg/ae87a8ygbN"));
-        chips_vl->addWidget(make_chip("", tr("Mon-Fri  9AM–6PM EST"), colors::TEXT_TERTIARY));
+        // No staffed-hours claim: the project has no published support roster,
+        // and the previous "Mon-Fri 9AM-6PM EST" line implied one.
+        chips_vl->addWidget(
+            make_chip("", "github.com/Fincept-Corporation/FinceptTerminal", colors::TEXT_TERTIARY,
+                      "https://github.com/Fincept-Corporation/FinceptTerminal/issues"));
         hl->addLayout(chips_vl);
 
         vl->addWidget(hero);
@@ -216,9 +227,9 @@ QWidget* HelpScreen::build_page() {
             {"", "create_account", tr("Create Account"), tr("Register for full access")},
             {"", "reset_password", tr("Reset Password"), tr("Recover your account")},
             {"", "documentation", tr("Documentation"), tr("Guides, tutorials & API ref")},
-            {"", "report_bug", tr("Report a Bug"), tr("Open a bug report ticket")},
+            {"", "report_bug", tr("Report a Bug"), tr("Open a GitHub issue")},
             {"", "join_discord", tr("Join Discord"), tr("Community & live support")},
-            {"", "support_tickets", tr("Support Tickets"), tr("View or open a support ticket")},
+            {"", "support_tickets", tr("Email Support"), tr("Or open a ticket in the Support tab")},
         };
 
         int col = 0, row = 0;
@@ -261,13 +272,31 @@ QWidget* HelpScreen::build_page() {
                 ++row;
             }
             grid->addWidget(btn, row, col++);
+            btn->setAccessibleName(a.label);
+            btn->setToolTip(a.desc);
 
             // Wire known actions by stable English key (label is localized).
+            // Four of these six buttons had no connect() at all — clicking
+            // Documentation / Report a Bug / Join Discord / Support Tickets did
+            // nothing. The three that map to a public URL now open it; the
+            // in-app ticket view is reachable from the Support tab, which the
+            // description now says.
             const QString key = QString::fromLatin1(a.key);
+            auto open = [btn](const QString& url) {
+                QObject::connect(btn, &QPushButton::clicked, btn, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+            };
             if (key == "create_account")
                 connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_register);
-            if (key == "reset_password")
+            else if (key == "reset_password")
                 connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_forgot_password);
+            else if (key == "documentation")
+                open(QStringLiteral("https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs"));
+            else if (key == "report_bug")
+                open(QStringLiteral("https://github.com/Fincept-Corporation/FinceptTerminal/issues/new"));
+            else if (key == "join_discord")
+                open(QStringLiteral("https://discord.gg/ae87a8ygbN"));
+            else if (key == "support_tickets")
+                open(QStringLiteral("mailto:support@fincept.in"));
         }
 
         vl->addLayout(grid);
@@ -302,13 +331,13 @@ QWidget* HelpScreen::build_page() {
 
             {"", tr("How do I connect a broker?"),
              tr("Navigate to Settings → Brokers, select your broker from the list, and enter your "
-                "API key and secret. Fincept supports 18+ brokers including Zerodha, Angel One, "
+                "API key and secret. Fincept supports 16 brokers including Zerodha, Angel One, "
                 "Upstox, Interactive Brokers, and more.")},
 
             {"", tr("Why does Python install at first launch?"),
-             tr("Fincept embeds Python for 1300+ analytics scripts covering equity, "
-                "portfolio, derivatives, and quant analysis. The one-time install is ~150 MB and "
-                "happens automatically in the background.")},
+             tr("Fincept embeds Python 3.11 for its analytics scripts covering equity, "
+                "portfolio, derivatives, and quant analysis. The one-time install happens "
+                "automatically in the background.")},
 
             {"", tr("What are the system requirements?"),
              tr("Windows 10+ (x64), macOS 12+, or Linux (glibc 2.31+). 8 GB RAM recommended. "
@@ -321,9 +350,9 @@ QWidget* HelpScreen::build_page() {
                 "direct broker connections from your machine.")},
 
             {"", tr("How do I report a bug?"),
-             tr("Open a support ticket with category \"bug report\" (Help → Support Tickets → "
-                "+ New Ticket). Include your OS, version, steps to reproduce, and any error "
-                "messages you see. Screenshots are helpful.")},
+             tr("Open a ticket in the Support tab with category \"Bug Report\", or file a GitHub "
+                "issue. Include your OS, version, steps to reproduce, and any error messages you "
+                "see. If the app crashed, attach the dump from About → Diagnostics.")},
         };
 
         for (const auto& f : faqs)

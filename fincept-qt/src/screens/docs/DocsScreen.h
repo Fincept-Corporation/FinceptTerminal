@@ -9,6 +9,7 @@
 #include <QWidget>
 
 class QSplitter;
+class QLineEdit;
 
 namespace fincept::screens {
 
@@ -26,6 +27,10 @@ class DocsScreen : public QWidget {
     void build_sidebar();
     void build_content_pages();
     void navigate_to(const QString& section_id);
+    /// Filter the sidebar tree by topic/category text (live, from the search box).
+    void apply_search(const QString& text);
+    /// Recompute the "N TOPICS | M CATEGORIES" chip from the actual tree.
+    void update_topic_count();
 
     /// Re-apply tr() lookups. Static documentation content (sidebar tree + all
     /// pages) is rebuilt from scratch on QEvent::LanguageChange — caching the
@@ -105,11 +110,11 @@ class DocsScreen : public QWidget {
     QSplitter* splitter_ = nullptr; // owns sidebar_ + pages_; reused on rebuild
     QTreeWidget* sidebar_ = nullptr;
     QStackedWidget* pages_ = nullptr;
-    QLabel* page_title_ = nullptr;
     QLabel* breadcrumb_ = nullptr;
-    // Command-bar labels (cached for retranslateUi)
+    // Command-bar widgets (cached for retranslateUi)
     QLabel* cmd_title_ = nullptr;
     QLabel* cmd_count_ = nullptr;
+    QLineEdit* search_input_ = nullptr;
     QMap<QString, int> page_index_; // section_id → stacked widget index
 };
 

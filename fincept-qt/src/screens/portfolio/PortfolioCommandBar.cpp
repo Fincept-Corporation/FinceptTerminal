@@ -8,6 +8,7 @@
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QMenu>
 #include <QScrollArea>
 #include <QToolButton>
@@ -97,8 +98,10 @@ void PortfolioCommandBar::build_row1(QHBoxLayout* layout) {
     refresh_btn_ = new QPushButton("\u21BB");
     refresh_btn_->setFixedSize(24, 22);
     refresh_btn_->setCursor(Qt::PointingHandCursor);
-    refresh_btn_->setToolTip(tr("Refresh portfolio data"));
+    refresh_btn_->setToolTip(tr("Refresh portfolio data (F5)"));
+    refresh_btn_->setAccessibleName(tr("Refresh portfolio data"));
     refresh_btn_->setObjectName("pfIconBtn");
+    refresh_btn_->setShortcut(QKeySequence(QKeySequence::Refresh)); // F5 / Ctrl+R
     connect(refresh_btn_, &QPushButton::clicked, this, &PortfolioCommandBar::refresh_requested);
     layout->addWidget(refresh_btn_);
 
@@ -310,6 +313,17 @@ void PortfolioCommandBar::build_trade_cluster(QHBoxLayout* layout) {
     make_trade_btn(buy_btn_, tr("BUY"), ui::colors::POSITIVE(), &PortfolioCommandBar::buy_requested);
     make_trade_btn(sell_btn_, tr("SELL"), ui::colors::NEGATIVE(), &PortfolioCommandBar::sell_requested);
     make_trade_btn(div_btn_, tr("DIV"), ui::colors::CYAN(), &PortfolioCommandBar::dividend_requested);
+
+    // Power-user keys. "DIV" in particular is unguessable from the label alone.
+    buy_btn_->setShortcut(QKeySequence(QStringLiteral("Ctrl+B")));
+    buy_btn_->setToolTip(tr("Buy / add to a position  (Ctrl+B)"));
+    buy_btn_->setAccessibleName(tr("Buy or add to a position"));
+    sell_btn_->setShortcut(QKeySequence(QStringLiteral("Ctrl+S")));
+    sell_btn_->setToolTip(tr("Sell / trim a position  (Ctrl+S)"));
+    sell_btn_->setAccessibleName(tr("Sell or trim a position"));
+    div_btn_->setShortcut(QKeySequence(QStringLiteral("Ctrl+D")));
+    div_btn_->setToolTip(tr("Record a dividend payment  (Ctrl+D)"));
+    div_btn_->setAccessibleName(tr("Record a dividend payment"));
 }
 
 void PortfolioCommandBar::build_detail_tabs(QHBoxLayout* layout) {
@@ -346,6 +360,11 @@ void PortfolioCommandBar::build_tools_cluster(QHBoxLayout* layout) {
     // colour discipline — only AMBER/CYAN/POSITIVE/NEGATIVE/WARNING are allowed.
     make_tool_btn(ai_btn_, tr("AI"), ui::colors::AMBER(), &PortfolioCommandBar::ai_analyze_requested);
     make_tool_btn(agent_btn_, tr("AGENT"), ui::colors::CYAN(), &PortfolioCommandBar::agent_run_requested);
+
+    ai_btn_->setToolTip(tr("Open AI analysis of this portfolio"));
+    ai_btn_->setAccessibleName(ai_btn_->toolTip());
+    agent_btn_->setToolTip(tr("Run a configured research agent against this portfolio"));
+    agent_btn_->setAccessibleName(agent_btn_->toolTip());
 }
 
 // ── Styling ──────────────────────────────────────────────────────────────────
@@ -417,13 +436,18 @@ void PortfolioCommandBar::apply_row2_styles() {
 // ── Dropdown ─────────────────────────────────────────────────────────────────
 
 void PortfolioCommandBar::toggle_dropdown() {
-    dropdown_visible_ = !dropdown_visible_;
+    // Track the popup's *actual* visibility rather than a local flag. The
+    // dropdown is a Qt::Popup: clicking outside it closes it and swallows the
+    // click, so the flag stayed true and the next click on the selector merely
+    // flipped it back to false — the user had to click twice to reopen.
+    const bool currently_visible = dropdown_->isVisible();
+    dropdown_visible_ = !currently_visible;
     if (dropdown_visible_) {
         QPoint pos = selector_btn_->mapToGlobal(QPoint(0, selector_btn_->height()));
         dropdown_->move(pos);
         dropdown_->show();
+        search_edit_->clear(); // resets the row filter from the previous open
         search_edit_->setFocus();
-        search_edit_->clear();
     } else {
         dropdown_->hide();
     }
@@ -436,7 +460,7 @@ void PortfolioCommandBar::update_selector_label() {
             return;
         }
     }
-    selector_btn_->setText(tr("SELECT PORTFOLIO  \u25BE"));
+    selector_btn_->setText(tr("SELECT PORTFOLIO \u25BE"));
 }
 
 // ── Public setters ───────────────────────────────────────────────────────────
@@ -484,7 +508,7 @@ void PortfolioCommandBar::set_has_portfolios(bool has) {
     tabs_container_->setVisible(false);
     tools_cluster_->setVisible(false);
     if (!has) {
-        selector_btn_->setText(tr("NO PORTFOLIOS \u2014 CREATE ONE  \u25BE"));
+        selector_btn_->setText(tr("NO PORTFOLIOS \u2014 CREATE ONE \u25BE"));
     }
 }
 
@@ -506,12 +530,15 @@ void PortfolioCommandBar::changeEvent(QEvent* event) {
 
 void PortfolioCommandBar::retranslateUi() {
     // Row 1 — selector label depends on portfolio state.
+    // NOTE: the source strings must match build_portfolio_selector() /
+    // update_selector_label() byte-for-byte, otherwise lupdate emits a second
+    // near-duplicate entry and one of the two is left untranslated.
     if (has_portfolios_ && !selected_id_.isEmpty()) {
         update_selector_label(); // re-emits "%1 (%2)  ▾" with the current portfolio
     } else if (has_portfolios_) {
-        selector_btn_->setText(tr("SELECT PORTFOLIO  ▾"));
+        selector_btn_->setText(tr("SELECT PORTFOLIO ▾"));
     } else if (selector_btn_) {
-        selector_btn_->setText(tr("NO PORTFOLIOS — CREATE ONE  ▾"));
+        selector_btn_->setText(tr("NO PORTFOLIOS — CREATE ONE ▾"));
     }
 
     if (search_edit_)
@@ -520,8 +547,10 @@ void PortfolioCommandBar::retranslateUi() {
         create_btn_->setText(tr("+ CREATE NEW"));
     if (delete_btn_)
         delete_btn_->setText(tr("DELETE"));
-    if (refresh_btn_)
-        refresh_btn_->setToolTip(tr("Refresh portfolio data"));
+    if (refresh_btn_) {
+        refresh_btn_->setToolTip(tr("Refresh portfolio data (F5)"));
+        refresh_btn_->setAccessibleName(tr("Refresh portfolio data"));
+    }
     if (interval_cb_)
         interval_cb_->setToolTip(tr("Auto-refresh interval"));
     if (overflow_btn_)
@@ -535,18 +564,35 @@ void PortfolioCommandBar::retranslateUi() {
         import_action_->setText(tr("Import JSON…"));
     if (ffn_action_)
         ffn_action_->setText(tr("FFN Analysis"));
+    if (backtest_action_) // was omitted — stayed English after a language switch
+        backtest_action_->setText(tr("Backtest Portfolio"));
 
     // Row 2 trade cluster
-    if (buy_btn_)
+    if (buy_btn_) {
         buy_btn_->setText(tr("BUY"));
-    if (sell_btn_)
+        buy_btn_->setToolTip(tr("Buy / add to a position  (Ctrl+B)"));
+        buy_btn_->setAccessibleName(tr("Buy or add to a position"));
+    }
+    if (sell_btn_) {
         sell_btn_->setText(tr("SELL"));
-    if (div_btn_)
+        sell_btn_->setToolTip(tr("Sell / trim a position  (Ctrl+S)"));
+        sell_btn_->setAccessibleName(tr("Sell or trim a position"));
+    }
+    if (div_btn_) {
         div_btn_->setText(tr("DIV"));
-    if (ai_btn_)
+        div_btn_->setToolTip(tr("Record a dividend payment  (Ctrl+D)"));
+        div_btn_->setAccessibleName(tr("Record a dividend payment"));
+    }
+    if (ai_btn_) {
         ai_btn_->setText(tr("AI"));
-    if (agent_btn_)
+        ai_btn_->setToolTip(tr("Open AI analysis of this portfolio"));
+        ai_btn_->setAccessibleName(ai_btn_->toolTip());
+    }
+    if (agent_btn_) {
         agent_btn_->setText(tr("AGENT"));
+        agent_btn_->setToolTip(tr("Run a configured research agent against this portfolio"));
+        agent_btn_->setAccessibleName(agent_btn_->toolTip());
+    }
 
     // Row 2 detail tabs — populated in kDetailButtons order, so iterate by index.
     constexpr int kDetailCount = static_cast<int>(sizeof(kDetailButtons) / sizeof(kDetailButtons[0]));

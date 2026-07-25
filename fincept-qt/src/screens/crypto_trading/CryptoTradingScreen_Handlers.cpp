@@ -187,6 +187,26 @@ void CryptoTradingScreen::switch_symbol(const QString& symbol) {
 
 void CryptoTradingScreen::on_mode_toggled() {
     const bool is_live = mode_btn_->isChecked();
+
+    // Arming LIVE turns every subsequent click on the ticket into real money
+    // on a real exchange. It used to happen silently on one toggle click, with
+    // only a colour change on a 22 px button to signal it. Require an explicit
+    // acknowledgement; on decline, snap the toggle back rather than leaving
+    // the button and the mode out of sync.
+    if (is_live && trading_mode_ != TradingMode::Live) {
+        const auto answer =
+            QMessageBox::warning(this, tr("Switch to LIVE trading"),
+                                 tr("LIVE mode places real orders on %1 with real funds.\n\n"
+                                    "Orders are irreversible once filled. Make sure the API key configured "
+                                    "for this exchange is the account you intend to trade.\n\nSwitch to LIVE?")
+                                     .arg(exchange_id_.toUpper()),
+                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes) {
+            mode_btn_->setChecked(false);
+            return;
+        }
+    }
+
     trading_mode_ = is_live ? TradingMode::Live : TradingMode::Paper;
     mode_btn_->setText(is_live ? tr("LIVE") : tr("PAPER"));
     mode_btn_->setProperty("mode", is_live ? "live" : "paper");
@@ -274,11 +294,35 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             // A live order is real money with no undo, and single orders previously
             // had NO confirmation — one click or a held Ctrl+Enter fired real funds.
             // Gate it behind an explicit confirm (close-all/cancel-all already do).
-            const QString px_txt = order_type == "market" ? tr("market price") : QString::number(price, 'f', 8);
-            const QString confirm_msg = tr("Place a LIVE %1 %2 order with real funds?\n\n%3   qty %4   @ %5")
-                                            .arg(side.toUpper(), order_type.toUpper(), selected_symbol_)
-                                            .arg(qty)
-                                            .arg(px_txt);
+            //
+            // The dialog must show every fact the user needs to catch a
+            // fat-finger: venue, pair, side, type, exact quantity and — most
+            // importantly — the resulting notional. `.arg(double)` defaults to
+            // %g with 6 significant digits, which rendered a quantity of
+            // 0.000012345678 as "1.23457e-05"; format explicitly instead.
+            const double ref_px =
+                (order_type == "market") ? ExchangeService::instance().get_cached_price(selected_symbol_).last : price;
+            const QString px_txt = order_type == "market" ? tr("market price") : crypto::format_price_plain(price);
+            QString confirm_msg = tr("Place a LIVE %1 %2 order with real funds?\n\n"
+                                     "Exchange   %3\n"
+                                     "Pair       %4\n"
+                                     "Quantity   %5\n"
+                                     "Price      %6")
+                                      .arg(side.toUpper(), order_type.toUpper(), exchange_id_.toUpper(),
+                                           selected_symbol_, crypto::format_size(qty), px_txt);
+            if (ref_px > 0.0) {
+                confirm_msg += tr("\nNotional   ≈ %1").arg(crypto::format_price_plain(qty * ref_px));
+            } else {
+                confirm_msg += tr("\nNotional   unknown — no live price for this pair yet");
+            }
+            if (stop_price > 0.0)
+                confirm_msg += tr("\nStop       %1").arg(crypto::format_price_plain(stop_price));
+            if (sl > 0.0)
+                confirm_msg += tr("\nStop loss  %1").arg(crypto::format_price_plain(sl));
+            if (tp > 0.0)
+                confirm_msg += tr("\nTake profit %1").arg(crypto::format_price_plain(tp));
+            if (order_entry_->reduce_only())
+                confirm_msg += tr("\nReduce-only");
             if (QMessageBox::question(this, tr("Confirm Live Order"), confirm_msg, QMessageBox::Yes | QMessageBox::No,
                                       QMessageBox::No) != QMessageBox::Yes)
                 return;

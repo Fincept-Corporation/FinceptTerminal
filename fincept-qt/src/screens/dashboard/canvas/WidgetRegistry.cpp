@@ -125,7 +125,13 @@ WidgetRegistry::WidgetRegistry() {
     register_widget({"watchlist", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Watchlist"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Portfolio"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Your saved symbols with live prices"), 6, 4,
-                     2, 3, [](const QJsonObject&) { return new widgets::WatchlistWidget; }});
+                     2, 3, [](const QJsonObject& cfg) {
+                         // The watchlist persists its user-edited symbol list
+                         // through the tile config; seed it before first show.
+                         auto* w = new widgets::WatchlistWidget;
+                         w->apply_config(cfg);
+                         return w;
+                     }});
 
     register_widget({"performance", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Performance"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Portfolio"),

@@ -136,10 +136,11 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     const QString async_url = fincept_base + "/research/llm/async";
     const QString status_base = fincept_base + "/research/llm/status/";
 
-    LOG_INFO(kLlmFinceptTag, QString("Fincept async: submitting to %1 (api_key=%2, prompt_len=%3)")
-                                 .arg(async_url)
-                                 .arg(api_key_.isEmpty() ? "EMPTY" : api_key_.left(12) + "...")
-                                 .arg(prompt.length()));
+    LOG_INFO(kLlmFinceptTag,
+             QString("Fincept async: submitting to %1 (api_key=%2, prompt_len=%3)")
+                 .arg(async_url)
+                 .arg(api_key_.isEmpty() ? QStringLiteral("EMPTY") : QStringLiteral("len=%1").arg(api_key_.size()))
+                 .arg(prompt.length()));
 
     QByteArray json_data = QJsonDocument(submit_body).toJson(QJsonDocument::Compact);
     auto submit = eventloop_request("POST", async_url, json_data, hdr, 30000);

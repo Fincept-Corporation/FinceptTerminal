@@ -196,12 +196,15 @@ struct MacroSeries {
     const char* label;
     const char* suffix;
 };
+// Labels are marked with QT_TRANSLATE_NOOP so lupdate can extract them — a
+// bare tr(m.label) on a runtime const char* is invisible to the extractor and
+// these five strings never reached the .ts files.
 const MacroSeries kMacroSeries[] = {
-    {"DGS10", "10Y Treasury Yield", "%"},
-    {"T10YIE", "Inflation (10Y breakeven)", "%"},
-    {"A191RL1Q225SBEA", "Real GDP Growth (annualised)", "%"},
-    {"DTWEXBGS", "USD Index (broad)", ""},
-    {"DCOILWTICO", "WTI Crude Oil", " $/bbl"},
+    {"DGS10", QT_TRANSLATE_NOOP("fincept::screens::EconomicsView", "10Y Treasury Yield"), "%"},
+    {"T10YIE", QT_TRANSLATE_NOOP("fincept::screens::EconomicsView", "Inflation (10Y breakeven)"), "%"},
+    {"A191RL1Q225SBEA", QT_TRANSLATE_NOOP("fincept::screens::EconomicsView", "Real GDP Growth (annualised)"), "%"},
+    {"DTWEXBGS", QT_TRANSLATE_NOOP("fincept::screens::EconomicsView", "USD Index (broad)"), ""},
+    {"DCOILWTICO", QT_TRANSLATE_NOOP("fincept::screens::EconomicsView", "WTI Crude Oil"), " $/bbl"},
 };
 } // namespace
 
@@ -316,7 +319,14 @@ void EconomicsView::retranslateUi() {
     }
 }
 
-// ── Sector inference (mirrors PortfolioSectorPanel, kept local) ───────────────
+// ── Sector inference — FALLBACK ONLY ─────────────────────────────────────────
+//
+// Prefer HoldingWithQuote::sector (populated from the import payload or the
+// SectorResolver) via sector_of() below. This static table only covers ~120 US
+// large caps and is what every other portfolio surface would disagree with:
+// PortfolioSectorPanel and AnalyticsSectorsView both read h.sector, so an
+// imported holding tagged "Consumer Staples" showed up here as "Consumer
+// Defensive" — or, for anything off this list, as "Other".
 static QString sector_for(const QString& sym) {
     const QString s = sym.toUpper();
     static const QHash<QString, QString> known = {
@@ -455,8 +465,60 @@ static QString sector_for(const QString& sym) {
     return "Other";
 }
 
+/// Resolved sector for a holding: the real one when we have it, the symbol
+/// heuristic otherwise.
+static QString sector_of(const portfolio::HoldingWithQuote& h) {
+    return h.sector.isEmpty() ? sector_for(h.symbol) : h.sector;
+}
+
+/// Maps the various sector vocabularies that can reach us (yfinance style,
+/// GICS style, import-file style) onto the keys used by the factor table in
+/// update_sensitivity(). Without this, a holding tagged "Financials" or
+/// "Consumer Discretionary" matched no row and its weight vanished from the
+/// exposure calculation entirely.
+static QString normalize_sector_key(const QString& sector) {
+    static const QHash<QString, QString> alias = {
+        {"financials", "Financial Services"},
+        {"financial", "Financial Services"},
+        {"consumer discretionary", "Consumer Cyclical"},
+        {"consumer staples", "Consumer Defensive"},
+        {"information technology", "Technology"},
+        {"tech", "Technology"},
+        {"health care", "Healthcare"},
+        {"communication services", "Communication"},
+        {"materials", "Basic Materials"},
+        {"industrial", "Industrials"},
+        {"etf", "ETF/Index"},
+        {"etf/index", "ETF/Index"},
+        {"index", "ETF/Index"},
+        {"us equity", "ETF/Index"},
+        {"crypto", "Cryptocurrency"},
+        {"bonds", "Other"},
+        {"fixed income", "Other"},
+        {"commodities", "Other"},
+        {"unclassified", "Other"},
+    };
+    const auto it = alias.find(sector.trimmed().toLower());
+    return it != alias.end() ? *it : sector;
+}
+
 void EconomicsView::update_indicators() {
     const auto& hv = summary_.holdings;
+
+    // Empty state — an empty grid gives the user nothing to act on.
+    indicators_table_->clearSpans();
+    if (hv.isEmpty()) {
+        indicators_table_->setRowCount(1);
+        indicators_table_->setRowHeight(0, 40);
+        auto* msg = new QTableWidgetItem(tr("No holdings in this portfolio yet."));
+        msg->setTextAlignment(Qt::AlignCenter);
+        msg->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
+        msg->setFlags(Qt::ItemIsEnabled);
+        indicators_table_->setItem(0, 0, msg);
+        indicators_table_->setSpan(0, 0, 1, indicators_table_->columnCount());
+        return;
+    }
+
     indicators_table_->setRowCount(hv.size());
 
     // Sort by market value descending
@@ -481,7 +543,7 @@ void EconomicsView::update_indicators() {
         const char* pnl_pct_color = h.unrealized_pnl_percent >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
 
         set(0, h.symbol, ui::colors::CYAN);
-        set(1, sector_for(h.symbol), ui::colors::TEXT_SECONDARY);
+        set(1, sector_of(h), ui::colors::TEXT_SECONDARY);
         set(2, QString("%1%").arg(QString::number(h.weight, 'f', 1)), ui::colors::TEXT_PRIMARY);
         set(3, QString("%1 %2").arg(currency_).arg(QString::number(h.cost_basis, 'f', 2)), ui::colors::TEXT_SECONDARY);
         set(4, QString("%1 %2").arg(currency_).arg(QString::number(h.market_value, 'f', 2)), ui::colors::WARNING);
@@ -530,10 +592,36 @@ void EconomicsView::update_sensitivity() {
         {"Other", -0.08, +0.06, -0.03, -0.02, +0.00},
     };
 
-    // Build sector weight map from actual holdings
+    // Build sector weight map from actual holdings. Uses the resolved sector so
+    // the factor exposures agree with the SECTOR column above and with the
+    // sector donut on the landing view.
     QHash<QString, double> sector_weights;
-    for (const auto& h : summary_.holdings)
-        sector_weights[sector_for(h.symbol)] += h.weight / 100.0;
+    for (const auto& h : summary_.holdings) {
+        const QString key = normalize_sector_key(sector_of(h));
+        sector_weights[key] += h.weight / 100.0;
+    }
+
+    // Anything that still does not match a factor row is folded into "Other"
+    // so the exposures always sum over 100% of the book.
+    {
+        QHash<QString, double> matched;
+        double other = sector_weights.value("Other", 0.0);
+        for (auto it = sector_weights.begin(); it != sector_weights.end(); ++it) {
+            bool known = false;
+            for (const auto& sf : kSectorFactors) {
+                if (it.key() == QLatin1String(sf.sector)) {
+                    known = true;
+                    break;
+                }
+            }
+            if (known && it.key() != QLatin1String("Other"))
+                matched.insert(it.key(), it.value());
+            else if (it.key() != QLatin1String("Other"))
+                other += it.value();
+        }
+        matched.insert(QStringLiteral("Other"), other);
+        sector_weights = matched;
+    }
 
     // Compute weighted portfolio sensitivities
     double w_rate = 0, w_growth = 0, w_infl = 0, w_usd = 0, w_oil = 0;

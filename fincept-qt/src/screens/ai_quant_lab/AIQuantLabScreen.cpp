@@ -11,6 +11,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
+#include <QSet>
 
 namespace fincept::screens {
 
@@ -114,6 +115,10 @@ QWidget* AIQuantLabScreen::build_top_bar() {
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(26);
+        // Short labels ("FACTOR", "BTEST") are meaningless to a screen reader —
+        // announce the full module name instead.
+        btn->setAccessibleName(mod.label);
+        btn->setAccessibleDescription(mod.description);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_module_selected(i); });
         bhl->addWidget(btn);
         badge_buttons_.append(btn);
@@ -182,6 +187,9 @@ QWidget* AIQuantLabScreen::build_left_sidebar() {
         auto* btn = new QPushButton(mod.label, list);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
+        btn->setToolTip(mod.description);
+        btn->setAccessibleName(mod.label);
+        btn->setAccessibleDescription(mod.description);
         connect(btn, &QPushButton::clicked, this, [this, i]() { on_module_selected(i); });
         left_items_layout_->addWidget(btn);
         module_buttons_.append(btn);
@@ -190,6 +198,7 @@ QWidget* AIQuantLabScreen::build_left_sidebar() {
     scroll->setWidget(list);
     vl->addWidget(scroll, 1);
 
+    left_panel_->setAccessibleName(tr("Quant module list"));
     return left_panel_;
 }
 
@@ -250,10 +259,16 @@ QWidget* AIQuantLabScreen::build_right_sidebar() {
         rl->addWidget(val);
         svl->addWidget(row);
     };
+    // "Python Scripts" was a hard-coded "25+". Derive it from the module table
+    // so the card can't drift away from what the terminal can actually run.
+    QSet<QString> distinct_scripts;
+    for (const auto& m : modules_)
+        distinct_scripts.insert(m.script);
+
     add_stat(stat_modules_lbl_, QString::number(modules_.size()));
     add_stat(stat_ml_lbl_, "30+");
-    add_stat(stat_rl_lbl_, "5");
-    add_stat(stat_py_lbl_, "25+");
+    add_stat(stat_rl_lbl_, "5"); // PPO, DQN, A2C, SAC, TD3 — see qlib_rl.py
+    add_stat(stat_py_lbl_, QString::number(distinct_scripts.size()));
     vl->addWidget(stats_card_);
 
     vl->addStretch();

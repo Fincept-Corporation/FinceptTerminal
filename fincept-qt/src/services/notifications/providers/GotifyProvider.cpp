@@ -1,4 +1,4 @@
-#include "services/notifications/providers/GotifyProvider.h"
+﻿#include "services/notifications/providers/GotifyProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -8,12 +8,12 @@ namespace fincept::notifications {
 
 void GotifyProvider::load_fields(SettingsRepository& r, const QString& cat) {
     server_url_ = get_str(r, cat + ".server_url");
-    app_token_ = get_str(r, cat + ".app_token");
+    app_token_ = get_secret(r, cat + ".app_token");
 }
 
 void GotifyProvider::save_fields(SettingsRepository& r, const QString& cat) {
     r.set(cat + ".server_url", server_url_, cat);
-    r.set(cat + ".app_token", app_token_, cat);
+    set_secret(r, cat + ".app_token", app_token_, cat);
 }
 
 void GotifyProvider::send(const NotificationRequest& req, std::function<void(bool, QString)> cb) {

@@ -46,7 +46,7 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
     vl->addWidget(build_input_row(tr("RL Algorithm"), algo, w));
 
     auto* ticker = new QLineEdit(w);
-    ticker->setPlaceholderText(tr("AAPL"));
+    ticker->setPlaceholderText(tr("e.g. AAPL — daily bars fetched from Yahoo Finance"));
     ticker->setStyleSheet(input_ss());
     text_inputs_["rl_ticker"] = ticker;
     vl->addWidget(build_input_row(tr("Ticker"), ticker, w));
@@ -68,8 +68,15 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
 
     rl_train_button_ = make_run_button(tr("TRAIN RL AGENT"), w);
     connect(rl_train_button_, &QPushButton::clicked, this, [this]() {
-        if (!rl_train_button_ || !rl_log_console_)
+        if (!rl_train_button_ || !rl_log_console_ || !rl_progress_bar_ || !rl_progress_stats_)
             return;
+        // A blank ticker used to be forwarded verbatim, so the run failed deep
+        // inside yfinance with an opaque traceback instead of here.
+        const QString tk = text_inputs_["rl_ticker"]->text().trimmed().toUpper();
+        if (tk.isEmpty()) {
+            display_error(tr("Enter a ticker (e.g. AAPL, SPY, MSFT) before training."));
+            return;
+        }
         rl_log_console_->clear();
         rl_progress_bar_->setValue(0);
         rl_progress_bar_->setVisible(true);
@@ -77,10 +84,11 @@ QWidget* QuantModulePanel::build_rl_trading_panel() {
         rl_progress_stats_->setVisible(true);
         rl_log_console_->setVisible(true);
         rl_train_button_->setEnabled(false);
-        status_label_->setText(tr("Training RL Agent..."));
+        status_label_->setText(
+            tr("Training %1 on %2 — this can take several minutes.").arg(combo_inputs_["rl_algo"]->currentText(), tk));
         QJsonObject params;
         params["algorithm"] = combo_inputs_["rl_algo"]->currentText();
-        params["ticker"] = text_inputs_["rl_ticker"]->text();
+        params["ticker"] = tk;
         params["episodes"] = int_inputs_["rl_episodes"]->value();
         params["learning_rate"] = double_inputs_["rl_learning_rate"]->value();
         params["initial_capital"] = double_inputs_["rl_capital"]->value();

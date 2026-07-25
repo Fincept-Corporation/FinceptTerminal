@@ -16,14 +16,19 @@
 //                               redirecting the user's active screen).
 //   ToolPolicy::None          — attach no tools at all (legacy use_tools=false).
 
+#include "core/config/AppConfig.h"
+#include "core/logging/Logger.h"
 #include "mcp/McpTypes.h"
+#include "mcp/ResultStore.h"
 #include "services/llm/LlmService.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
 #include <QString>
 
+#include <algorithm>
 #include <functional>
 
 namespace fincept::ai_chat::detail {
@@ -117,26 +122,135 @@ inline bool is_openai_family_model(const QString& model_lower) {
 // model surfaces (via tool_list) or commits to (via tool_describe) across the
 // turn, and feed them back into format_tools_for_openai so they become real,
 // callable functions on the next round.
+// ── Tool-result size discipline ───────────────────────────────────────────
+//
+// Tool results used to be spliced into the transcript verbatim, with no cap on
+// any of the four provider paths (OpenAI first round, OpenAI tool loop,
+// Anthropic tool loop, Gemini tool loop). Because every round re-posts the
+// whole message array, one oversized result is re-billed as input on every
+// remaining round of the turn — up to 200 of them (the `max_tool_rounds`
+// clamp). A single unshaped `edgar_get_filing` could dominate a turn's cost.
+//
+// The cap is a budget, not a guillotine: whatever doesn't fit is parked in the
+// ResultStore and the envelope tells the model how to page it back with
+// `result_fetch`. Detail is available on demand instead of by default.
+
+/// Byte ceiling for a single tool result in the transcript. 8 KB carries a
+/// realistic table or article list intact; beyond that the overflow store
+/// takes over. Overridable via `mcp/tool_result_max_chars`.
+inline int tool_result_budget_bytes() {
+    return std::clamp(AppConfig::instance().get("mcp/tool_result_max_chars", QVariant(8000)).toInt(), 512, 200000);
+}
+
+/// Shrink `payload` to the budget if needed, parking the original in the
+/// ResultStore and annotating the envelope with `result_id` + retrieval note.
+/// No-op when the payload already fits.
+inline void fit_llm_payload(const QString& tool_name, QJsonObject& payload) {
+    const QByteArray compact = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    const int budget = tool_result_budget_bytes();
+    if (compact.size() <= budget)
+        return;
+
+    const QString result_id = mcp::ResultStore::instance().put(tool_name, payload);
+
+    // Shrink the whole envelope rather than just `data`: some tools carry their
+    // bulk in `message` instead, and shaping only one leaves the other free to
+    // blow the budget. Reserve headroom for the keys added below.
+    QJsonValue shaped = QJsonValue(payload);
+    const mcp::ShrinkStats st = mcp::shrink_json(shaped, std::max(512, budget - 600));
+
+    payload = shaped.isObject() ? shaped.toObject() : QJsonObject{{"data", shaped}};
+    payload["truncated"] = true;
+    payload["result_id"] = result_id;
+    payload["full_bytes"] = st.original_bytes;
+    payload["note"] = QStringLiteral("Result truncated to fit context (%1 → %2 bytes). Call "
+                                     "result_fetch(result_id='%3', offset=0, limit=6000) to page the full payload.")
+                          .arg(st.original_bytes)
+                          .arg(st.final_bytes)
+                          .arg(result_id);
+
+    LOG_INFO("LlmService", QString("Tool '%1' returned %2 KB — shaped to %3 B, full payload parked as %4")
+                               .arg(tool_name)
+                               .arg(st.original_bytes / 1024)
+                               .arg(st.final_bytes)
+                               .arg(result_id));
+}
+
+/// Envelope for a tool result, shaped to the transcript budget.
+inline QJsonObject shape_tool_result_for_llm(const QString& tool_name, const mcp::ToolResult& tr) {
+    QJsonObject envelope = tr.to_json();
+    fit_llm_payload(tool_name, envelope);
+    return envelope;
+}
+
+/// Same, serialised — for the providers whose tool messages take a string.
+inline QString encode_tool_result_for_llm(const QString& tool_name, const mcp::ToolResult& tr) {
+    return QString::fromUtf8(QJsonDocument(shape_tool_result_for_llm(tool_name, tr)).toJson(QJsonDocument::Compact));
+}
+
+// Ceiling on how many discovered tools stay declared at once.
+//
+// Every activated tool re-enters the `tools` array on every subsequent round,
+// at full schema size. Left unbounded (the previous behaviour), a turn that
+// makes eight tool_list calls has ~40 extra schemas riding along by mid-turn —
+// which is roughly the whole catalogue Tier-0 exists to avoid sending, so the
+// ~85% saving quietly evaporates exactly when the turn is longest.
+//
+// 24 is comfortably above what any single turn genuinely juggles (top_k is
+// capped at 20 and defaults to 5) while keeping the tail bounded.
+inline constexpr int kMaxActivatedTools = 24;
+
+/// Insertion-ordered, capped set of tools the model has discovered this turn.
+/// Evicts least-recently-activated first, so a tool the model keeps coming back
+/// to survives while stale candidates from an early search age out.
+class ActivationTracker {
+  public:
+    ActivationTracker() = default;
+    explicit ActivationTracker(const QSet<QString>& seed) {
+        for (const auto& n : seed)
+            add(n);
+    }
+
+    void add(const QString& name) {
+        if (name.isEmpty())
+            return;
+        if (set_.contains(name)) {
+            order_.removeOne(name); // re-activation refreshes recency
+            order_.append(name);
+            return;
+        }
+        set_.insert(name);
+        order_.append(name);
+        while (order_.size() > kMaxActivatedTools)
+            set_.remove(order_.takeFirst());
+    }
+
+    const QSet<QString>& names() const { return set_; }
+    int size() const { return set_.size(); }
+
+  private:
+    QStringList order_; // least-recently-activated at the front
+    QSet<QString> set_;
+};
+
 inline void note_tool_activations(const QString& bare_tool_name, const QJsonObject& args, const mcp::ToolResult& result,
-                                  QSet<QString>& activated) {
+                                  ActivationTracker& activated) {
     if (!result.success)
         return;
     if (bare_tool_name == QLatin1String("tool_list")) {
         // Activate every candidate the search surfaced — the model may pick any.
         const QJsonArray rows = result.data.toObject().value("tools").toArray();
-        for (const auto& row : rows) {
-            const QString name = row.toObject().value("name").toString();
-            if (!name.isEmpty())
-                activated.insert(name);
-        }
+        for (const auto& row : rows)
+            activated.add(row.toObject().value("name").toString());
     } else if (bare_tool_name == QLatin1String("tool_describe")) {
         // The model committed to one tool — prefer the canonical name echoed in
-        // the result, fall back to the name it asked about.
+        // the result, fall back to the name it asked about. Adding it last also
+        // makes it the most-recently-used entry, so it outlives the rest of the
+        // search batch it came from.
         QString name = result.data.toObject().value("name").toString();
         if (name.isEmpty())
             name = args.value("name").toString();
-        if (!name.isEmpty())
-            activated.insert(name);
+        activated.add(name);
     }
 }
 

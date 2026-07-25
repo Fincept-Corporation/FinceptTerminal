@@ -48,6 +48,9 @@ namespace rep = ::fincept::report;
 using Service = ::fincept::services::ReportBuilderService;
 
 void ReportBuilderScreen::show_recent_dialog() {
+    // Opening a recent report replaces the document, same as File → Open.
+    if (!confirm_replace_document(tr("Recent Reports")))
+        return;
     QStringList recent = Service::instance().recent_files();
 
     auto* dlg = new QDialog(this);
@@ -402,11 +405,22 @@ void ReportBuilderScreen::show_metadata_dialog() {
 
 // ── File operations ──────────────────────────────────────────────────────────
 
+// Guard every document-replacing action behind one confirmation. The undo
+// stack's clean state is the closest thing the service exposes to a dirty flag:
+// non-clean means there are edits that have not been written to disk.
+bool ReportBuilderScreen::confirm_replace_document(const QString& title) {
+    auto* stack = Service::instance().undo_stack();
+    const bool dirty = stack && !stack->isClean() && stack->count() > 0;
+    if (!dirty && Service::instance().components().isEmpty())
+        return true; // nothing to lose
+    const auto answer =
+        QMessageBox::question(this, title, tr("The current report has unsaved changes.\n\nDiscard them?"),
+                              QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    return answer == QMessageBox::Discard;
+}
+
 void ReportBuilderScreen::on_new() {
-    auto answer =
-        QMessageBox::question(this, tr("New Report"), tr("Create a new report? Unsaved changes will be lost."),
-                              QMessageBox::Yes | QMessageBox::No);
-    if (answer != QMessageBox::Yes)
+    if (!confirm_replace_document(tr("New Report")))
         return;
     Service::instance().clear_document();
     selected_id_ = 0;
@@ -414,6 +428,10 @@ void ReportBuilderScreen::on_new() {
 }
 
 void ReportBuilderScreen::on_open() {
+    // on_new() confirmed before wiping the document but Open did not — it
+    // replaced unsaved work with no warning at all.
+    if (!confirm_replace_document(tr("Open Report")))
+        return;
     QString path =
         QFileDialog::getOpenFileName(this, tr("Open Report"), "", tr("Fincept Report (*.fincept);;JSON (*.json)"));
     if (path.isEmpty())
@@ -432,6 +450,11 @@ void ReportBuilderScreen::on_save() {
                                             tr("Fincept Report (*.fincept);;JSON (*.json)"));
         if (path.isEmpty())
             return;
+        // QFileDialog does not append the filter suffix on every platform; a
+        // report saved without one won't reopen through the *.fincept filter.
+        if (!path.endsWith(QLatin1String(".fincept"), Qt::CaseInsensitive) &&
+            !path.endsWith(QLatin1String(".json"), Qt::CaseInsensitive))
+            path += QLatin1String(".fincept");
     }
     auto r = svc.save_to(path);
     if (r.is_err()) {
@@ -439,6 +462,8 @@ void ReportBuilderScreen::on_save() {
                              tr("Could not save to:\n%1\n\n%2").arg(path, QString::fromStdString(r.error())));
         return;
     }
+    if (auto* stack = svc.undo_stack())
+        stack->setClean(); // saved state == clean state, so Open/New stop nagging
     services::FileManagerService::instance().import_file(path, "report_builder");
 }
 
@@ -447,6 +472,8 @@ void ReportBuilderScreen::on_export_pdf() {
     QString path = QFileDialog::getSaveFileName(this, tr("Export PDF"), m.title, tr("PDF (*.pdf)"));
     if (path.isEmpty())
         return;
+    if (!path.endsWith(QLatin1String(".pdf"), Qt::CaseInsensitive))
+        path += QLatin1String(".pdf");
     export_pdf_to(path);
     // export_pdf_to can fail without throwing (painter-begin failure, unwritable
     // path, disk full) — verify a non-empty PDF actually landed before claiming
@@ -508,6 +535,12 @@ void ReportBuilderScreen::export_pdf_to(const QString& path) {
             left = replace_tokens(left);
             center = replace_tokens(center);
             right = replace_tokens(right);
+
+            // "Show page numbers" only reserved footer space before: unless the
+            // user happened to type "{page}" into a footer field, ticking the
+            // box produced an empty footer band and no page numbers.
+            if (!is_header && m.show_page_numbers && left.isEmpty() && center.isEmpty() && right.isEmpty())
+                center = QStringLiteral("%1 / %2").arg(page).arg(total_pages);
 
             double y = is_header ? 4 : page_rect.height() - 16;
             QFont hf_font;

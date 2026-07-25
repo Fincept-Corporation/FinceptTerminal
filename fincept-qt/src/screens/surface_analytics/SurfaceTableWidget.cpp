@@ -179,9 +179,13 @@ void SurfaceTableWidget::show_greeks(const GreeksSurfaceData& d) {
 void SurfaceTableWidget::show_correlation(const CorrelationMatrixData& d) {
     if (d.z.empty())
         return;
-    int n = (int)d.assets.size();
-    // Last time slice is most recent
+    const int n = (int)d.assets.size();
+    // z rows are FLATTENED n×n matrices, one per time slice; the last is most
+    // recent. Guard the size — a truncated slice (basket edited between the
+    // generate and the render) would otherwise read past the end of the vector.
     const auto& last = d.z.back();
+    if (n <= 0 || (int)last.size() < n * n)
+        return;
     std::vector<std::vector<float>> mat(n, std::vector<float>(n));
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++)

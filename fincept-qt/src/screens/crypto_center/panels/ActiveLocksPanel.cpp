@@ -197,7 +197,7 @@ void ActiveLocksPanel::apply_theme() {
                        "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
                        "  padding:2px 8px; }"
                        "QLabel#activeLocksPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                       "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
+                       "  border:1px solid %11; font-family:%5; font-size:9px; font-weight:700;"
                        "  letter-spacing:1.2px; padding:2px 8px; }"
                        "QWidget#activeLocksBody { background:%1; }"
                        "QTableWidget#activeLocksTable { background:%1; color:%7; gridline-color:%3;"
@@ -215,6 +215,10 @@ void ActiveLocksPanel::apply_theme() {
                        "  font-weight:700; background:transparent; }"
                        "QLabel#activeLocksErrorText { color:%9; font-family:%5; font-size:11px;"
                        "  background:transparent; }")
+            // One arg per marker, in ascending marker order. QString::arg fills
+            // the LOWEST marker present, so a gap in the numbering silently
+            // shifts every later colour by one and warns "Argument missing" for
+            // the overflow.
             .arg(BG_BASE(),                  // %1
                  BG_SURFACE(),               // %2
                  BORDER_DIM(),               // %3
@@ -225,8 +229,7 @@ void ActiveLocksPanel::apply_theme() {
                  BG_RAISED(),                // %8
                  NEGATIVE())                 // %9
             .arg(BG_HOVER(),                 // %10
-                 BORDER_BRIGHT(),            // %11
-                 QStringLiteral("#78350f")); // %12 darker amber
+                 QStringLiteral("#78350f")); // %11 darker amber
     setStyleSheet(ss);
 }
 
@@ -310,7 +313,7 @@ void ActiveLocksPanel::rebuild_table() {
         table_->setRowCount(0);
         table_->hide();
         empty_state_->show();
-        summary_label_->setText(QStringLiteral("0 positions · 0 veFNCPT"));
+        summary_label_->setText(tr("0 positions · 0 veFNCPT"));
         update_demo_chip(false);
         return;
     }
@@ -349,10 +352,8 @@ void ActiveLocksPanel::rebuild_table() {
     table_->setItem(total_row, 3, new QTableWidgetItem(format_token(total_weight_ui, 1)));
     table_->setItem(total_row, 4, new QTableWidgetItem(format_usdc(total_yield_ui)));
 
-    summary_label_->setText(QStringLiteral("%1 position%2 · %3 veFNCPT")
-                                .arg(latest_.size())
-                                .arg(latest_.size() == 1 ? QString() : QStringLiteral("s"))
-                                .arg(format_token(total_weight_ui, 1)));
+    // Plural form is a translator's decision, not an English "s" suffix.
+    summary_label_->setText(tr("%n position(s) · %1 veFNCPT", "", latest_.size()).arg(format_token(total_weight_ui, 1)));
     update_demo_chip(any_mock);
     clear_error_strip();
 }

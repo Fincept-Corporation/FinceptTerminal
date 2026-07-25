@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QLocale>
 #include <QTimeZone>
 
 namespace fincept::screens {
@@ -93,7 +94,26 @@ void PortfolioStatusBar::stop_clock() {
 void PortfolioStatusBar::update_clock() {
     auto now = QDateTime::currentDateTime();
     time_label_->setText(now.toString("hh:mm:ss"));
-    tz_label_->setText(QString(" %1").arg(now.timeZone().abbreviation(now)));
+    // The timezone abbreviation is an expensive lookup and changes at most
+    // twice a year — do not recompute + re-set it every single second.
+    const QString abbrev = now.timeZone().abbreviation(now);
+    if (abbrev != tz_abbrev_) {
+        tz_abbrev_ = abbrev;
+        tz_label_->setText(QString(" %1").arg(abbrev));
+    }
+}
+
+void PortfolioStatusBar::set_feed_state(bool live, const QString& detail) {
+    feed_live_ = live;
+    if (!live_label_)
+        return;
+    live_label_->setText(QString("● ") + (live ? tr("LIVE") : tr("STALE")));
+    live_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.3px;")
+                                   .arg(live ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    live_label_->setToolTip(detail.isEmpty()
+                                ? (live ? tr("Market data refreshed successfully.")
+                                        : tr("The last refresh failed — values shown may be out of date."))
+                                : detail);
 }
 
 void PortfolioStatusBar::set_portfolio_name(const QString& name) {
@@ -102,7 +122,10 @@ void PortfolioStatusBar::set_portfolio_name(const QString& name) {
 
 void PortfolioStatusBar::set_summary(const portfolio::PortfolioSummary& s) {
     last_summary_ = s;
-    auto fmt = [](double v) { return QString::number(v, 'f', 2); };
+    // Thousands separators, matching PortfolioStatsRibbon. A bare
+    // QString::number rendered the NAV as "1234567.89" right next to the
+    // ribbon's "1,234,567.89".
+    auto fmt = [](double v) { return QLocale().toString(v, 'f', 2); };
 
     set_portfolio_name(s.portfolio.name);
     positions_label_->setText(tr("%1 positions").arg(s.total_positions));
@@ -124,8 +147,7 @@ void PortfolioStatusBar::changeEvent(QEvent* event) {
 void PortfolioStatusBar::retranslateUi() {
     if (version_label_)
         version_label_->setText(tr("PORTFOLIO TERMINAL v4.0"));
-    if (live_label_)
-        live_label_->setText("● " + tr("LIVE"));
+    set_feed_state(feed_live_); // re-renders LIVE/STALE + its tooltip
 
     if (last_summary_.has_value()) {
         // Re-render dynamic strings from cached summary.

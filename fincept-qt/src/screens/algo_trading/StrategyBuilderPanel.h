@@ -118,6 +118,12 @@ class StrategyBuilderPanel : public QWidget {
     // Identity of the strategy currently being edited (empty => not yet minted).
     QString loaded_strategy_id_;
 
+    // Re-entrancy guard for on_deploy(). The deploy path opens a modal dialog and
+    // then spins a bounded nested event loop (broker LTP probe), during which a
+    // second click on Deploy would otherwise re-enter and start a second live
+    // deployment of the same strategy.
+    bool deploying_ = false;
+
     // Right panel — backtest performance report (KPIs, equity, drawdown, trades)
     ui::algo::BacktestReportPanel* report_panel_ = nullptr;
 

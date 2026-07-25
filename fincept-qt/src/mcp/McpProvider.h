@@ -89,6 +89,34 @@ class McpProvider {
     /// thread cancellation tokens through here).
     QFuture<ToolResult> call_tool_async(const QString& name, const QJsonObject& args, ToolContext ctx = {});
 
+    /// Long-running-task entry point, for LLM-originated calls only.
+    ///
+    /// Behaves exactly like `call_tool` for tools that haven't opted into the
+    /// job protocol (`ToolDef::supports_async`), so the ~580 existing tools and
+    /// every internal C++ / workflow / agent-bridge caller are unaffected.
+    ///
+    /// For a tool that HAS opted in: the call runs under a `JobRegistry` job. If
+    /// it completes within `grace_ms` the real result is returned inline and the
+    /// job is retired — the common "it was fast this time" case costs nothing.
+    /// Otherwise the work keeps running in the background and this returns a
+    /// receipt:
+    ///
+    ///     { job_id: "job_00001f", status: "running", tool: "run_agent" }
+    ///
+    /// The caller (the LLM) then polls `job_status(job_id, wait_ms)` and collects
+    /// with `job_result(job_id)`. That turns a five-minute blocking tool call
+    /// into a ~40-token receipt plus a long-poll, instead of holding the
+    /// provider HTTP turn open until it times out.
+    ///
+    /// Cancellation and progress are wired to the job automatically: handlers
+    /// see `ctx.is_cancelled()` flip when `job_cancel` is called, and whatever
+    /// they report through `ctx.on_progress` shows up in `job_status`.
+    ToolResult call_tool_or_defer(const QString& name, const QJsonObject& args, int grace_ms = kMcpJobGraceMs);
+
+    /// True if `name` is registered, enabled, and eligible for the job protocol
+    /// (opted in AND has an async handler — a sync handler can't be backgrounded).
+    bool supports_async_jobs(const QString& name) const;
+
     // ── Phase 6.3: Authorization hook ──────────────────────────────────────
     /// Caller-supplied predicate that returns true iff the call should
     /// proceed. The hook receives the tool's required AuthLevel and

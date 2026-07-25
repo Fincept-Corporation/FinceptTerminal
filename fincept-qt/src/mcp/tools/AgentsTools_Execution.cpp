@@ -36,6 +36,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("query", "Natural-language query for the agent")
                              .required()
@@ -60,6 +65,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("query", "Natural-language query for the agent")
                              .required()
@@ -126,6 +136,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("query", "Query to fan out")
                              .required()
@@ -192,6 +207,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("symbol", "Ticker symbol (e.g. AAPL)")
                              .required()
@@ -216,6 +236,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .object("portfolio_data", "Portfolio snapshot (holdings, target weights, constraints)")
                              .build();
@@ -235,6 +260,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder().object("portfolio_data", "Portfolio snapshot").build();
         t.async_handler = [bridge_workflow_no_reqid](const QJsonObject& args, ToolContext ctx,
                                                      std::shared_ptr<QPromise<ToolResult>> promise) {
@@ -252,6 +282,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("analysis_type", "Analysis type identifier")
                              .required()
@@ -277,6 +312,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("query", "Query for the team")
                              .required()
@@ -302,6 +342,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("workflow_type", "Workflow type identifier")
                              .required()
@@ -327,6 +372,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("query", "Natural-language query")
                              .required()
@@ -374,6 +424,11 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
+        // Agent runs are the canonical long-running tool: a 5-minute budget that
+        // used to hold the LLM's HTTP turn open for its entire duration. Opting
+        // into the job protocol lets a slow run background itself and hand back a
+        // receipt; runs that finish inside the grace window still answer inline.
+        t.supports_async = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("query", "Natural-language query")
                              .required()

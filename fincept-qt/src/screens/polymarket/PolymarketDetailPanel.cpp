@@ -5,14 +5,21 @@
 #include "screens/polymarket/PolymarketPriceChart.h"
 #include "ui/theme/Theme.h"
 
+#include <QAbstractButton>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDoubleValidator>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLineEdit>
+#include <QLocale>
+#include <QMessageBox>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QTimeZone>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 namespace fincept::screens::polymarket {
 
@@ -49,6 +56,8 @@ void PolymarketDetailPanel::build_ui() {
         auto* btn = new QPushButton(tab_names[i]);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("active", i == 0);
+        btn->setAccessibleName(tab_names[i]);
+        btn->setAccessibleDescription(tr("Show the %1 panel for the selected market").arg(tab_names[i]));
         connect(btn, &QPushButton::clicked, this, [this, i]() { set_active_tab(i); });
         thl->addWidget(btn);
         tab_btns_.append(btn);
@@ -62,6 +71,10 @@ void PolymarketDetailPanel::build_ui() {
     stack_->addWidget(create_overview_page()); // 0
 
     orderbook_ = new PolymarketOrderBook;
+    // Click-to-price: a level click loads that price into the trade ticket.
+    // Without this connection the order book's price_clicked signal had no
+    // receiver, so clicking a level did nothing at all.
+    connect(orderbook_, &PolymarketOrderBook::price_clicked, this, &PolymarketDetailPanel::on_book_price_clicked);
     stack_->addWidget(orderbook_); // 1
 
     price_chart_ = new PolymarketPriceChart;
@@ -102,6 +115,9 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
                                            "line-height: 1.4;")
                                        .arg(colors::TEXT_PRIMARY()));
     question_label_->setWordWrap(true);
+    // Exchange-supplied text. QLabel's default Qt::AutoText renders anything
+    // markup-shaped as rich text, so pin the untrusted fields to PlainText.
+    question_label_->setTextFormat(Qt::PlainText);
     question_label_->setMinimumHeight(36);
     vl->addWidget(question_label_);
 
@@ -203,6 +219,7 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
                                               "border-top: 1px solid %2; padding-top: 12px;")
                                           .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM()));
     description_label_->setWordWrap(true);
+    description_label_->setTextFormat(Qt::PlainText); // untrusted market copy
     vl->addWidget(description_label_);
 
     vl->addStretch(1);
@@ -290,13 +307,17 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
         b->setCursor(Qt::PointingHandCursor);
         b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     }
+    ticket_buy_btn_->setAccessibleName(tr("Buy side"));
+    ticket_sell_btn_->setAccessibleName(tr("Sell side"));
     connect(ticket_buy_btn_, &QPushButton::clicked, this, [this]() {
         ticket_side_ = "BUY";
         refresh_ticket_side_style();
+        refresh_ticket_cost();
     });
     connect(ticket_sell_btn_, &QPushButton::clicked, this, [this]() {
         ticket_side_ = "SELL";
         refresh_ticket_side_style();
+        refresh_ticket_cost();
     });
     srl->addWidget(ticket_buy_btn_);
     srl->addWidget(ticket_sell_btn_);
@@ -326,6 +347,7 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     fl->addWidget(make_label(tr("OUTCOME")));
     ticket_outcome_cb_ = new QComboBox;
     ticket_outcome_cb_->setStyleSheet(input_ss);
+    ticket_outcome_cb_->setAccessibleName(tr("Order outcome"));
     fl->addWidget(ticket_outcome_cb_);
 
     // Price + Size row
@@ -341,6 +363,15 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     ticket_price_edit_ = new QLineEdit;
     ticket_price_edit_->setPlaceholderText("0.50");
     ticket_price_edit_->setStyleSheet(input_ss);
+    ticket_price_edit_->setAccessibleName(tr("Limit price between 0 and 1"));
+    // Reject non-numeric / out-of-range keystrokes up front — the submit path
+    // still re-validates, but this stops a fat-finger "5" ever reaching it.
+    {
+        auto* pv = new QDoubleValidator(0.0, 1.0, 6, ticket_price_edit_);
+        pv->setNotation(QDoubleValidator::StandardNotation);
+        pv->setLocale(QLocale::c());
+        ticket_price_edit_->setValidator(pv);
+    }
     price_col->addWidget(ticket_price_edit_);
 
     auto* size_col = new QVBoxLayout;
@@ -349,11 +380,28 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     ticket_size_edit_ = new QLineEdit;
     ticket_size_edit_->setPlaceholderText("10");
     ticket_size_edit_->setStyleSheet(input_ss);
+    ticket_size_edit_->setAccessibleName(tr("Order size in shares"));
+    {
+        auto* sv = new QDoubleValidator(0.0, 1e9, 4, ticket_size_edit_);
+        sv->setNotation(QDoubleValidator::StandardNotation);
+        sv->setLocale(QLocale::c());
+        ticket_size_edit_->setValidator(sv);
+    }
     size_col->addWidget(ticket_size_edit_);
 
     psl->addLayout(price_col);
     psl->addLayout(size_col);
     fl->addWidget(ps_row);
+
+    // Live notional readout — a prediction-market order's worst-case cost is
+    // price × size, and without it the user is doing mental arithmetic before
+    // committing real funds.
+    ticket_cost_lbl_ = new QLabel(QStringLiteral("—"));
+    ticket_cost_lbl_->setStyleSheet(
+        QString("color: %1; font-size: 10px; font-weight: 700; background: transparent;").arg(colors::TEXT_SECONDARY()));
+    fl->addWidget(ticket_cost_lbl_);
+    connect(ticket_price_edit_, &QLineEdit::textChanged, this, [this]() { refresh_ticket_cost(); });
+    connect(ticket_size_edit_, &QLineEdit::textChanged, this, [this]() { refresh_ticket_cost(); });
 
     // Order type
     fl->addWidget(make_label(tr("ORDER TYPE")));
@@ -362,14 +410,24 @@ QWidget* PolymarketDetailPanel::create_trade_page() {
     // not translated.
     ticket_type_cb_->addItems({"GTC", "FOK", "FAK"});
     ticket_type_cb_->setStyleSheet(input_ss);
+    ticket_type_cb_->setAccessibleName(tr("Order type"));
     fl->addWidget(ticket_type_cb_);
 
     // Submit button
     ticket_submit_btn_ = new QPushButton(tr("PLACE ORDER"));
     ticket_submit_btn_->setFixedHeight(34);
     ticket_submit_btn_->setCursor(Qt::PointingHandCursor);
+    ticket_submit_btn_->setAccessibleName(tr("Place order"));
     connect(ticket_submit_btn_, &QPushButton::clicked, this, &PolymarketDetailPanel::on_submit_clicked);
     fl->addWidget(ticket_submit_btn_);
+
+    // Tab order across the ticket so the form is fully keyboard-drivable.
+    QWidget::setTabOrder(ticket_buy_btn_, ticket_sell_btn_);
+    QWidget::setTabOrder(ticket_sell_btn_, ticket_outcome_cb_);
+    QWidget::setTabOrder(ticket_outcome_cb_, ticket_price_edit_);
+    QWidget::setTabOrder(ticket_price_edit_, ticket_size_edit_);
+    QWidget::setTabOrder(ticket_size_edit_, ticket_type_cb_);
+    QWidget::setTabOrder(ticket_type_cb_, ticket_submit_btn_);
 
     // Status label (feedback)
     ticket_status_lbl_ = new QLabel;
@@ -411,33 +469,133 @@ void PolymarketDetailPanel::refresh_ticket_side_style() {
                                                colors::BG_RAISED(), colors::TEXT_DIM()));
 }
 
+void PolymarketDetailPanel::refresh_ticket_cost() {
+    if (!ticket_cost_lbl_)
+        return;
+    bool price_ok = false, size_ok = false;
+    const double price = ticket_price_edit_ ? ticket_price_edit_->text().toDouble(&price_ok) : 0.0;
+    const double size = ticket_size_edit_ ? ticket_size_edit_->text().toDouble(&size_ok) : 0.0;
+    if (!price_ok || !size_ok || price <= 0.0 || size <= 0.0) {
+        ticket_cost_lbl_->setText(QStringLiteral("—"));
+        return;
+    }
+    const QString ccy = presentation_.currency_symbol.isEmpty() ? QStringLiteral("USD") : presentation_.currency_symbol;
+    // BUY costs price × size up front; SELL of held shares releases that
+    // notional. Either way it's the amount at stake on this ticket.
+    ticket_cost_lbl_->setText(ticket_side_ == QStringLiteral("BUY")
+                                  ? tr("≈ %1 %2 cost").arg(price * size, 0, 'f', 2).arg(ccy)
+                                  : tr("≈ %1 %2 proceeds").arg(price * size, 0, 'f', 2).arg(ccy));
+}
+
+void PolymarketDetailPanel::on_book_price_clicked(double price) {
+    if (!ticket_price_edit_ || !ticket_stack_)
+        return;
+    if (ticket_stack_->currentIndex() != 1)
+        return; // trading disabled — nothing to fill
+    if (price <= 0.0 || price >= 1.0)
+        return;
+    ticket_price_edit_->setText(QString::number(price, 'f', 4));
+    set_active_tab(kTabTrade);
+    ticket_price_edit_->setFocus();
+}
+
 void PolymarketDetailPanel::on_submit_clicked() {
     if (!has_last_market_)
         return;
+    // Hard double-submit guard — the button is also disabled while in flight,
+    // but a queued click (or a market refresh racing the disable) could still
+    // land here.
+    if (submit_in_flight_)
+        return;
+
+    auto reject = [this](const QString& msg) {
+        ticket_status_lbl_->setStyleSheet(
+            QString("color: %1; font-size: 10px; background: transparent;").arg(colors::NEGATIVE()));
+        ticket_status_lbl_->setText(msg);
+    };
+
     bool price_ok = false, size_ok = false;
     const double price = ticket_price_edit_->text().toDouble(&price_ok);
     const double size = ticket_size_edit_->text().toDouble(&size_ok);
     if (!price_ok || price <= 0.0 || price >= 1.0) {
-        ticket_status_lbl_->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(colors::NEGATIVE()));
-        ticket_status_lbl_->setText(tr("Invalid price — enter a value between 0 and 1"));
+        reject(tr("Invalid price — enter a value between 0 and 1"));
         return;
     }
     if (!size_ok || size <= 0.0) {
-        ticket_status_lbl_->setStyleSheet(
-            QString("color: %1; font-size: 10px; background: transparent;").arg(colors::NEGATIVE()));
-        ticket_status_lbl_->setText(tr("Invalid size — must be > 0"));
+        reject(tr("Invalid size — must be > 0"));
         return;
+    }
+    if (book_min_size_ > 0.0 && size < book_min_size_) {
+        reject(tr("Size below the exchange minimum of %1").arg(book_min_size_, 0, 'f', 2));
+        return;
+    }
+    // Tick alignment — an off-tick limit price is rejected by the CLOB after
+    // the round-trip, so catch it here and say exactly what's wrong.
+    if (book_tick_size_ > 0.0) {
+        const double ticks = price / book_tick_size_;
+        if (std::abs(ticks - std::round(ticks)) > 1e-6) {
+            const double snapped = std::round(ticks) * book_tick_size_;
+            reject(tr("Price must be a multiple of the %1 tick — try %2")
+                       .arg(book_tick_size_, 0, 'f', 4)
+                       .arg(snapped, 0, 'f', 4));
+            return;
+        }
     }
 
     const int outcome_idx = ticket_outcome_cb_->currentIndex();
-    const QString asset_id = (outcome_idx >= 0 && outcome_idx < last_market_.outcomes.size())
-                                 ? last_market_.outcomes[outcome_idx].asset_id
-                                 : QString{};
+    if (outcome_idx < 0 || outcome_idx >= last_market_.outcomes.size()) {
+        reject(tr("Select an outcome before placing an order"));
+        return;
+    }
+    const auto& outcome = last_market_.outcomes[outcome_idx];
+    if (outcome.asset_id.isEmpty()) {
+        // Without an asset id the exchange cannot know *which* side of the
+        // market this order is for — refuse rather than send an ambiguous one.
+        reject(tr("This outcome has no tradable asset id — cannot place order"));
+        return;
+    }
+    if (last_market_.closed) {
+        reject(tr("Market is closed — no further trading"));
+        return;
+    }
+
+    // Explicit confirmation. This is a real-money order on a real exchange;
+    // the previous flow fired straight from the button with no read-back of
+    // what was about to be sent.
+    const QString ccy = presentation_.currency_symbol.isEmpty() ? QStringLiteral("USD") : presentation_.currency_symbol;
+    // Built line by line rather than one chained arg() chain: exchange-supplied
+    // text (the question, the outcome name) can itself contain "%n", and a
+    // later .arg() would happily substitute into it.
+    QStringList lines;
+    lines << tr("%1  %2  ×  %3 shares  @  %4")
+                 .arg(ticket_side_, outcome.name, QString::number(size, 'f', 2),
+                      presentation_.format_price(price));
+    lines << QString();
+    lines << tr("Market: %1").arg(last_market_.question.left(120));
+    lines << tr("Order type: %1").arg(ticket_type_cb_->currentText());
+    lines << (ticket_side_ == QStringLiteral("BUY")
+                  ? tr("Cost: %1 %2").arg(QString::number(price * size, 'f', 2), ccy)
+                  : tr("Proceeds: %1 %2").arg(QString::number(price * size, 'f', 2), ccy));
+    const QString summary = lines.join(QLatin1Char('\n'));
+    QMessageBox confirm(this);
+    confirm.setWindowTitle(tr("Confirm order"));
+    confirm.setIcon(QMessageBox::Warning);
+    confirm.setText(tr("Place this order on %1?").arg(presentation_.display_name));
+    confirm.setInformativeText(summary);
+    confirm.setStandardButtons(QMessageBox::Cancel | QMessageBox::Ok);
+    confirm.setDefaultButton(QMessageBox::Cancel);
+    if (auto* ok_btn = confirm.button(QMessageBox::Ok))
+        ok_btn->setText(tr("Place order"));
+    if (confirm.exec() != QMessageBox::Ok) {
+        ticket_status_lbl_->setStyleSheet(
+            QString("color: %1; font-size: 10px; background: transparent;").arg(colors::TEXT_DIM()));
+        ticket_status_lbl_->setText(tr("Cancelled — no order sent"));
+        return;
+    }
 
     OrderRequest req;
     req.key = last_market_.key;
-    req.asset_id = asset_id;
+    req.asset_id = outcome.asset_id;
     req.side = ticket_side_;
     req.order_type = ticket_type_cb_->currentText();
     req.price = price;
@@ -446,6 +604,7 @@ void PolymarketDetailPanel::on_submit_clicked() {
     ticket_status_lbl_->setStyleSheet(
         QString("color: %1; font-size: 10px; background: transparent;").arg(colors::TEXT_DIM()));
     ticket_status_lbl_->setText(tr("Submitting…"));
+    submit_in_flight_ = true;
     ticket_submit_btn_->setEnabled(false);
     emit place_order(req);
 }
@@ -459,18 +618,48 @@ void PolymarketDetailPanel::set_balance(const AccountBalance& balance) {
 void PolymarketDetailPanel::set_positions(const QVector<PredictionPosition>& positions) {
     if (!ticket_position_lbl_ || !has_last_market_)
         return;
-    // Find the position matching the currently-displayed market.
-    double total_size = 0.0;
+    // Positions are per-outcome on a binary market. Summing YES and NO into a
+    // single "N shares" figure told the user they were long something they may
+    // in fact be flat on — break it out by outcome, and prefer the outcome
+    // currently selected in the ticket.
+    const int sel = ticket_outcome_cb_ ? ticket_outcome_cb_->currentIndex() : -1;
+    const QString sel_asset =
+        (sel >= 0 && sel < last_market_.outcomes.size()) ? last_market_.outcomes[sel].asset_id : QString();
+
+    double selected_size = 0.0;
+    double selected_avg = 0.0;
+    QStringList others;
     for (const auto& p : positions) {
-        if (p.market_id == last_market_.key.market_id)
-            total_size += p.size;
+        if (p.market_id != last_market_.key.market_id)
+            continue;
+        if (p.size <= 0.0)
+            continue;
+        if (!sel_asset.isEmpty() && p.asset_id == sel_asset) {
+            selected_size += p.size;
+            selected_avg = p.avg_price;
+        } else {
+            others << tr("%1 %2").arg(p.size, 0, 'f', 2).arg(p.outcome.isEmpty() ? tr("other") : p.outcome);
+        }
     }
-    ticket_position_lbl_->setText(total_size > 0.0 ? tr("%1 shares").arg(total_size, 0, 'f', 2) : tr("No position"));
+
+    QString text;
+    if (selected_size > 0.0) {
+        text = selected_avg > 0.0 ? tr("%1 @ %2").arg(selected_size, 0, 'f', 2).arg(presentation_.format_price(
+                                        selected_avg))
+                                  : tr("%1 shares").arg(selected_size, 0, 'f', 2);
+    } else {
+        text = tr("No position");
+    }
+    if (!others.isEmpty())
+        text += QStringLiteral("  (") + others.join(QStringLiteral(", ")) + QStringLiteral(")");
+    ticket_position_lbl_->setText(text);
+    ticket_position_lbl_->setToolTip(tr("Position in the outcome selected in the ticket; other outcomes in brackets."));
 }
 
 void PolymarketDetailPanel::on_order_result(const OrderResult& result) {
     if (!ticket_status_lbl_ || !ticket_submit_btn_)
         return;
+    submit_in_flight_ = false;
     ticket_submit_btn_->setEnabled(true);
     if (result.ok) {
         ticket_status_lbl_->setStyleSheet(
@@ -478,6 +667,7 @@ void PolymarketDetailPanel::on_order_result(const OrderResult& result) {
         ticket_status_lbl_->setText(tr("Order placed ✓  ID: %1").arg(result.order_id.left(12)));
         ticket_price_edit_->clear();
         ticket_size_edit_->clear();
+        refresh_ticket_cost();
     } else {
         ticket_status_lbl_->setStyleSheet(
             QString("color: %1; font-size: 10px; background: transparent;").arg(colors::NEGATIVE()));
@@ -572,7 +762,41 @@ void PolymarketDetailPanel::set_active_tab(int tab) {
 
 // ── Data setters ────────────────────────────────────────────────────────────
 
+void PolymarketDetailPanel::sync_ticket_outcomes(const PredictionMarket& market, bool same_market) {
+    if (!ticket_outcome_cb_)
+        return;
+    // Preserve the user's outcome choice across a same-market refresh. A naive
+    // clear()+addItem() silently snapped the selection back to index 0, which
+    // on a binary market turns a pending "buy NO" ticket into "buy YES".
+    const QString prev = same_market ? ticket_outcome_cb_->currentText() : QString();
+    QStringList names;
+    names.reserve(market.outcomes.size());
+    for (const auto& o : market.outcomes)
+        names << o.name;
+    if (same_market && names == ticket_outcome_names_)
+        return; // nothing changed — leave the widget (and selection) alone
+
+    const QSignalBlocker block(ticket_outcome_cb_);
+    ticket_outcome_cb_->clear();
+    ticket_outcome_cb_->addItems(names);
+    ticket_outcome_names_ = names;
+    if (!prev.isEmpty()) {
+        const int idx = ticket_outcome_cb_->findText(prev);
+        if (idx >= 0)
+            ticket_outcome_cb_->setCurrentIndex(idx);
+    }
+}
+
 void PolymarketDetailPanel::set_market(const PredictionMarket& market) {
+    // A live WS price tick re-enters here with the *same* market. Treat that
+    // as a price refresh, not a fresh selection: keep the trade ticket, the
+    // active tab, and any in-flight submit intact.
+    // Require a non-empty id: two different markets that both lack an id must
+    // never be treated as the same one (that would carry a stale ticket over).
+    const bool same_market = has_last_market_ && !market.key.market_id.isEmpty() &&
+                             market.key.market_id == last_market_.key.market_id &&
+                             market.key.exchange_id == last_market_.key.exchange_id;
+
     last_market_ = market;
     has_last_market_ = true;
 
@@ -580,25 +804,35 @@ void PolymarketDetailPanel::set_market(const PredictionMarket& market) {
     volume_label_->setText(presentation_.format_volume(market.volume));
     liquidity_label_->setText(presentation_.format_liquidity(market.liquidity));
     end_date_label_->setText(market.end_date_iso.left(10));
-    midpoint_label_->setText("—");
-    spread_label_->setText("—");
-    last_trade_label_->setText("—");
-    oi_label_->setText("—");
+    if (!same_market) {
+        midpoint_label_->setText("—");
+        spread_label_->setText("—");
+        last_trade_label_->setText("—");
+        oi_label_->setText("—");
+    }
 
     render_status_badge(market);
 
     // ── Populate ticket outcome combo ─────────────────────────────────────
-    if (ticket_outcome_cb_) {
-        ticket_outcome_cb_->clear();
-        for (const auto& o : market.outcomes)
-            ticket_outcome_cb_->addItem(o.name);
+    sync_ticket_outcomes(market, same_market);
+    if (!same_market) {
+        if (ticket_status_lbl_)
+            ticket_status_lbl_->clear();
+        if (ticket_submit_btn_)
+            ticket_submit_btn_->setEnabled(true);
+        submit_in_flight_ = false;
+        if (ticket_position_lbl_)
+            ticket_position_lbl_->setText("—");
+        // Constraints belong to the previous market's book — drop them until
+        // the new market's book arrives.
+        book_tick_size_ = 0.0;
+        book_min_size_ = 0.0;
+        if (ticket_price_edit_)
+            ticket_price_edit_->clear();
+        if (ticket_size_edit_)
+            ticket_size_edit_->clear();
+        refresh_ticket_cost();
     }
-    if (ticket_status_lbl_)
-        ticket_status_lbl_->clear();
-    if (ticket_submit_btn_)
-        ticket_submit_btn_->setEnabled(true);
-    if (ticket_position_lbl_)
-        ticket_position_lbl_->setText("—");
 
     // ── Rebuild outcome probability bars ──────────────────────────────────
     auto* layout = qobject_cast<QVBoxLayout*>(outcome_container_->layout());
@@ -685,9 +919,16 @@ void PolymarketDetailPanel::set_market(const PredictionMarket& market) {
     labels.reserve(market.outcomes.size());
     for (const auto& o : market.outcomes)
         labels.append(o.name);
-    price_chart_->set_outcome_labels(labels);
+    // set_outcome_labels() resets the chart's outcome combo to index 0, which
+    // on a same-market refresh would silently pull the chart back to the first
+    // outcome while the user is looking at another one.
+    if (!same_market)
+        price_chart_->set_outcome_labels(labels);
 
-    set_active_tab(0);
+    // Only jump back to OVERVIEW on an actual market change — a WS price tick
+    // used to yank the user out of the TRADE / ORDER BOOK tab mid-entry.
+    if (!same_market)
+        set_active_tab(0);
 }
 
 void PolymarketDetailPanel::set_price_summary(const pmx::PriceSummary& summary) {
@@ -698,6 +939,12 @@ void PolymarketDetailPanel::set_price_summary(const pmx::PriceSummary& summary) 
 
 void PolymarketDetailPanel::set_order_book(const PredictionOrderBook& book) {
     orderbook_->set_data(book);
+    // Capture the exchange's price/size constraints so the ticket can reject
+    // an off-tick or sub-minimum order locally instead of after a round-trip.
+    if (book.tick_size > 0.0)
+        book_tick_size_ = book.tick_size;
+    if (book.min_order_size > 0.0)
+        book_min_size_ = book.min_order_size;
 }
 
 void PolymarketDetailPanel::set_price_history(const PriceHistory& history) {
@@ -757,11 +1004,16 @@ void PolymarketDetailPanel::set_comments(const QVector<pmx::Comment>& comments) 
             cvl->setContentsMargins(10, 8, 10, 8);
             cvl->setSpacing(4);
 
+            // Comments are arbitrary user-generated text from the exchange —
+            // the single most hostile input on this screen. Render as plain
+            // text so markup can't restyle or spoof the panel.
             auto* author = new QLabel(c.author.isEmpty() ? c.author_address.left(12) + "…" : c.author);
+            author->setTextFormat(Qt::PlainText);
             author->setStyleSheet(
                 QString("color: %1; font-size: 9px; font-weight: 700; background: transparent;").arg(colors::AMBER()));
 
             auto* body = new QLabel(c.body.left(280));
+            body->setTextFormat(Qt::PlainText);
             body->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent; line-height: 1.4;")
                                     .arg(colors::TEXT_PRIMARY()));
             body->setWordWrap(true);
@@ -809,7 +1061,11 @@ void PolymarketDetailPanel::set_related_markets(const QVector<PredictionMarket>&
                                         "QPushButton:hover { background: %4; color: %5; border-color: %6; }")
                                     .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_DIM(),
                                          colors::BG_HOVER(), colors::TEXT_PRIMARY(), colors::BORDER_BRIGHT()));
-            card->setText(m.question.left(70) + (m.question.size() > 70 ? "…" : ""));
+            // Escape '&' so a question containing one doesn't turn into a
+            // button mnemonic (and lose the character).
+            card->setText(QString(m.question.left(70) + (m.question.size() > 70 ? "…" : "")).replace('&', "&&"));
+            card->setToolTip(m.question);
+            card->setAccessibleName(tr("Related market: %1").arg(m.question.left(80)));
             card->setCursor(Qt::PointingHandCursor);
             connect(card, &QPushButton::clicked, this, [this, m]() { emit related_market_clicked(m); });
             vl->addWidget(card);
@@ -868,6 +1124,21 @@ void PolymarketDetailPanel::set_polymarket_extras_enabled(bool enabled) {
 void PolymarketDetailPanel::clear() {
     has_last_market_ = false;
     last_market_ = {};
+    submit_in_flight_ = false;
+    book_tick_size_ = 0.0;
+    book_min_size_ = 0.0;
+    ticket_outcome_names_.clear();
+    if (ticket_outcome_cb_)
+        ticket_outcome_cb_->clear();
+    if (ticket_submit_btn_)
+        ticket_submit_btn_->setEnabled(true);
+    if (ticket_status_lbl_)
+        ticket_status_lbl_->clear();
+    if (ticket_price_edit_)
+        ticket_price_edit_->clear();
+    if (ticket_size_edit_)
+        ticket_size_edit_->clear();
+    refresh_ticket_cost();
     question_label_->setText(tr("Select a market to view details"));
     volume_label_->setText("—");
     liquidity_label_->setText("—");

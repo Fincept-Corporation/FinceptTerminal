@@ -13,6 +13,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QLineSeries>
 #include <QStackedWidget>
 #include <QTabBar>
@@ -139,6 +140,12 @@ void PortfolioFFNView::build_ui() {
                                      "  padding:0 10px; font-size:9px; font-weight:700; }"
                                      "QPushButton:hover { background:%1; color:%2; }")
                                  .arg(ui::colors::AMBER(), ui::colors::BG_BASE()));
+    // Esc is the expected "leave this full-screen view" key. The shortcut is
+    // owned by the button, so it is inert while this page is not the visible
+    // one in PortfolioScreen's stack.
+    back_btn_->setShortcut(QKeySequence(Qt::Key_Escape));
+    back_btn_->setToolTip(tr("Back to the portfolio workspace  (Esc)"));
+    back_btn_->setAccessibleName(tr("Back to the portfolio workspace"));
     connect(back_btn_, &QPushButton::clicked, this, &PortfolioFFNView::back_requested);
     h_layout->addWidget(back_btn_);
 
@@ -684,15 +691,18 @@ void PortfolioFFNView::update_optimization() {
         auto s = stats_obj[key].toObject();
         opt_stats_table_->setRowHeight(r, 28);
 
-        double tr = s["total_return"].toDouble();
+        // Named `total_ret`, not `tr` — a local called `tr` shadows QObject::tr()
+        // for the rest of the scope, so any future tr("…") added here would fail
+        // to compile with a baffling error.
+        double total_ret = s["total_return"].toDouble();
         double vol = s["volatility"].toDouble();
         double sh = s["sharpe"].toDouble();
         double dd = s["max_drawdown"].toDouble();
 
         opt_stats_table_->setItem(r, 0, make_item(name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::AMBER())));
         opt_stats_table_->setItem(r, 1,
-                                  make_item(pct_str(tr), Qt::AlignRight | Qt::AlignVCenter,
-                                            QColor(tr >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
+                                  make_item(pct_str(total_ret), Qt::AlignRight | Qt::AlignVCenter,
+                                            QColor(total_ret >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
         opt_stats_table_->setItem(
             r, 2, make_item(pct_str(vol), Qt::AlignRight | Qt::AlignVCenter, QColor(ui::colors::CYAN())));
         opt_stats_table_->setItem(r, 3,
@@ -718,19 +728,23 @@ void PortfolioFFNView::update_rebased() {
     chart->removeAllSeries();
     // Remove old axes
     const auto old_axes = chart->axes();
-    for (auto* ax : old_axes)
+    for (auto* ax : old_axes) {
+        // removeAxis() only detaches — the axis stays heap-allocated and
+        // leaked one QDateTimeAxis + one QValueAxis per re-run.
         chart->removeAxis(ax);
+        delete ax;
+    }
 
     auto* x_axis = new QDateTimeAxis;
     x_axis->setFormat("MMM yy");
-    x_axis->setTitleText("Date");
+    x_axis->setTitleText(tr("Date"));
     x_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
     x_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
     x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     auto* y_axis = new QValueAxis;
-    y_axis->setTitleText("Value (Base = 100)");
+    y_axis->setTitleText(tr("Value (Base = 100)"));
     y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
     y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
     y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
@@ -801,8 +815,12 @@ void PortfolioFFNView::update_drawdowns() {
     QChart* chart = drawdowns_chart_view_->chart();
     chart->removeAllSeries();
     const auto old_axes = chart->axes();
-    for (auto* ax : old_axes)
+    for (auto* ax : old_axes) {
+        // removeAxis() only detaches — the axis stays heap-allocated and
+        // leaked one QDateTimeAxis + one QValueAxis per re-run.
         chart->removeAxis(ax);
+        delete ax;
+    }
 
     auto* x_axis = new QDateTimeAxis;
     x_axis->setFormat("MMM yy");
@@ -812,14 +830,11 @@ void PortfolioFFNView::update_drawdowns() {
     x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     auto* y_axis = new QValueAxis;
-    y_axis->setTitleText("Drawdown");
+    y_axis->setTitleText(tr("Drawdown %"));
     y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
     y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
     y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
     y_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
-
-    auto* label_format_axis = y_axis;
-    Q_UNUSED(label_format_axis);
 
     chart->addAxis(x_axis, Qt::AlignBottom);
     chart->addAxis(y_axis, Qt::AlignLeft);
@@ -893,8 +908,12 @@ void PortfolioFFNView::update_rolling() {
     QChart* chart = rolling_chart_view_->chart();
     chart->removeAllSeries();
     const auto old_axes = chart->axes();
-    for (auto* ax : old_axes)
+    for (auto* ax : old_axes) {
+        // removeAxis() only detaches — the axis stays heap-allocated and
+        // leaked one QDateTimeAxis + one QValueAxis per re-run.
         chart->removeAxis(ax);
+        delete ax;
+    }
 
     auto* x_axis = new QDateTimeAxis;
     x_axis->setFormat("MMM yy");
@@ -904,7 +923,7 @@ void PortfolioFFNView::update_rolling() {
     x_axis->setLinePenColor(QColor(ui::colors::BORDER_MED()));
 
     auto* y_axis = new QValueAxis;
-    y_axis->setTitleText("Correlation");
+    y_axis->setTitleText(tr("Correlation"));
     y_axis->setRange(-1.0, 1.0);
     y_axis->setLabelsColor(QColor(ui::colors::TEXT_SECONDARY()));
     y_axis->setTitleBrush(QBrush(QColor(ui::colors::TEXT_TERTIARY())));
@@ -1026,8 +1045,11 @@ void PortfolioFFNView::changeEvent(QEvent* event) {
 }
 
 void PortfolioFFNView::retranslateUi() {
-    if (back_btn_)
+    if (back_btn_) {
         back_btn_->setText(tr("← BACK"));
+        back_btn_->setToolTip(tr("Back to the portfolio workspace  (Esc)"));
+        back_btn_->setAccessibleName(tr("Back to the portfolio workspace"));
+    }
     if (title_label_)
         title_label_->setText(tr("FFN ANALYTICS"));
     if (run_btn_)

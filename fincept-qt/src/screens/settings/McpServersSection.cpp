@@ -51,9 +51,18 @@ McpServersSection::McpServersSection(QWidget* parent) : QWidget(parent) {
 }
 
 void McpServersSection::reload() {
+    if (!tab_stack_)
+        return;
     load_servers();
     if (tab_stack_->currentIndex() == 1)
         load_tools();
+    if (tools_badge_)
+        tools_badge_->setText(tr("%1 internal tools active").arg(McpService::instance().tool_count()));
+}
+
+void McpServersSection::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    reload();
 }
 
 void McpServersSection::build_ui() {
@@ -241,13 +250,16 @@ QWidget* McpServersSection::build_servers_tab() {
     stop_btn_ = new QPushButton(tr("■  Stop"));
     stop_btn_->setEnabled(false);
     stop_btn_->setFixedHeight(32);
+    // Was red text on a red background — the label was invisible in the enabled
+    // state. Now the Obsidian danger-button spec: tinted surface, red label,
+    // solid red on hover.
     stop_btn_->setStyleSheet(
-        "QPushButton{background:" + QString(ui::colors::NEGATIVE()) + ";color:" + QString(ui::colors::NEGATIVE()) +
-        ";border:1px solid " + QString(ui::colors::NEGATIVE()) +
+        "QPushButton{background:rgba(220,38,38,0.1);color:" + QString(ui::colors::NEGATIVE()) + ";border:1px solid " +
+        QString(ui::colors::NEGATIVE_DIM()) +
         ";"
         "border-radius:4px;font-weight:600;padding:0 16px;}"
         "QPushButton:hover{background:" +
-        QString(ui::colors::BG_RAISED()) +
+        QString(ui::colors::NEGATIVE()) + ";color:" + QString(ui::colors::TEXT_PRIMARY()) +
         ";}"
         "QPushButton:disabled{color:" +
         QString(ui::colors::BORDER_BRIGHT()) + ";border-color:" + QString(ui::colors::BORDER_MED()) +
@@ -544,8 +556,12 @@ void McpServersSection::refresh_server_detail(const QString& server_id) {
                                      "</span><br>"
                                      "<span style='color:" +
                                      QString(ui::colors::TEXT_TERTIARY()) + ";'>" + tr("Auto-start: %6") + "</span>")
-                                 .arg(cfg.name, status_str, cfg.command, cfg.args.join(' '),
-                                      cfg.category.isEmpty() ? "-" : cfg.category,
+                                 // Server name / command / args are user-supplied and land in a
+                                 // rich-text QLabel — escape them so a stray '<' doesn't swallow
+                                 // the rest of the detail panel.
+                                 .arg(cfg.name.toHtmlEscaped(), status_str, cfg.command.toHtmlEscaped(),
+                                      cfg.args.join(' ').toHtmlEscaped(),
+                                      cfg.category.isEmpty() ? QStringLiteral("-") : cfg.category.toHtmlEscaped(),
                                       cfg.auto_start ? tr("Yes") : tr("No")));
 
         bool running = (cfg.status == ServerStatus::Running);
@@ -624,18 +640,13 @@ void McpServersSection::on_tab_changed(int idx) {
     if (idx == 1)
         load_tools();
 
-    // Update tab button states
-    QList<QPushButton*> btns = findChildren<QPushButton*>();
-    // The tab bar buttons are the first two checkable buttons
-    int checked_count = 0;
-    for (auto* btn : btns) {
-        if (btn->isCheckable()) {
-            btn->setChecked(checked_count == idx);
-            ++checked_count;
-            if (checked_count > 1)
-                break;
-        }
-    }
+    // Drive the two tab buttons directly. The previous version walked every
+    // QPushButton in the subtree and checked the first two checkable ones,
+    // which silently breaks the moment any other checkable button is added.
+    if (servers_tab_btn_)
+        servers_tab_btn_->setChecked(idx == 0);
+    if (tools_tab_btn_)
+        tools_tab_btn_->setChecked(idx == 1);
 }
 
 void McpServersSection::show_status(const QString& msg, bool error) {

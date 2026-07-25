@@ -430,6 +430,22 @@ QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString&
     return {};
 }
 
+qint64 ActionCenter::age_secs(const PendingOrder& po) {
+    if (!po.created_at.isValid())
+        return -1;
+    return po.created_at.secsTo(QDateTime::currentDateTime());
+}
+
+bool ActionCenter::is_expired(const PendingOrder& po) {
+    // Only a still-pending order can expire; approved/rejected rows are history.
+    if (po.status != QLatin1String("pending"))
+        return false;
+    const qint64 age = age_secs(po);
+    if (age < 0)
+        return false; // unparseable timestamp — don't block on a data defect
+    return age > static_cast<qint64>(kPendingOrderTtlMinutes) * 60;
+}
+
 void ActionCenter::approve_order(const QString& pending_id) {
     auto po_opt = get_order(pending_id);
     if (!po_opt) {
@@ -439,6 +455,28 @@ void ActionCenter::approve_order(const QString& pending_id) {
     PendingOrder po = *po_opt;
     if (po.status != "pending") {
         LOG_WARN(kLog, QString("approve_order: %1 is not pending (status=%2)").arg(pending_id, po.status));
+        return;
+    }
+
+    // Refuse a stale order outright. The UI flags these, but enforcing it here
+    // means no caller — the approval panel, a bulk approve, or a future
+    // automation path — can execute one by taking a different route.
+    if (is_expired(po)) {
+        const qint64 mins = age_secs(po) / 60;
+        const QString reason =
+            QString("Expired: queued %1 minutes ago (limit %2). The market has moved since this order was "
+                    "created — re-place it if you still want the trade.")
+                .arg(mins)
+                .arg(kPendingOrderTtlMinutes);
+        LOG_WARN(kLog, QString("approve_order: refusing expired order %1 (age %2m)").arg(pending_id).arg(mins));
+
+        auto r = Database::instance().execute(
+            "UPDATE pending_orders SET status = ?, rejected_at = ?, rejection_reason = ? WHERE id = ?",
+            {"rejected", iso(QDateTime::currentDateTime()), reason, pending_id});
+        if (r.is_err())
+            LOG_ERROR(kLog, QString("approve_order expiry update failed: %1").arg(QString::fromStdString(r.error())));
+
+        emit order_rejected(pending_id, reason);
         return;
     }
 

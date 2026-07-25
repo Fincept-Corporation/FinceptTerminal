@@ -18,6 +18,8 @@
 #include <QTimer>
 #include <QtConcurrent/QtConcurrent>
 
+#include <algorithm>
+
 namespace fincept::mcp {
 
 static constexpr const char* TAG = "McpService";
@@ -262,6 +264,16 @@ static const QSet<QString>& tier_0_tool_names() {
         // report-builder work — prevents new chats from accidentally appending
         // to the previous chat's report.
         "report_session_context",
+        // Redemption tools for the two deferral protocols. A model that has
+        // been handed a `{job_id, status:"running"}` receipt, or a truncated
+        // result envelope carrying a `result_id`, must be able to act on it
+        // immediately — forcing a tool_list round-trip first would cost more
+        // tokens than these five small schemas do.
+        "job_status",
+        "job_result",
+        "job_cancel",
+        "job_list",
+        "result_fetch",
     };
     return kTier0;
 }
@@ -360,6 +372,15 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const Q
         result.append(entry);
     }
 
+    // Bound the cache. In Tool RAG mode the key encodes the activated-tool set,
+    // which is different on almost every round of every turn — left unbounded
+    // this map grows for the life of the process, each entry holding a full
+    // serialised tool array. It's a memo, not a store: dropping it wholesale
+    // when it gets big costs one rebuild.
+    if (openai_format_cache_.size() >= kMaxFormatCacheEntries) {
+        LOG_DEBUG(TAG, QString("openai_format_cache_ hit %1 entries — clearing").arg(openai_format_cache_.size()));
+        openai_format_cache_.clear();
+    }
     openai_format_cache_.insert(key, result);
 
     if (use_rag) {
@@ -386,10 +407,20 @@ std::size_t McpService::tool_count() {
 // Tool Execution
 // ============================================================================
 
-ToolResult McpService::execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args) {
+ToolResult McpService::execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args,
+                                    bool allow_defer) {
     // Route to internal provider
-    if (server_id == INTERNAL_SERVER_ID)
-        return McpProvider::instance().call_tool(tool_name, args);
+    if (server_id == INTERNAL_SERVER_ID) {
+        if (!allow_defer)
+            return McpProvider::instance().call_tool(tool_name, args);
+        // How long a supports_async tool may run inline before it backgrounds
+        // itself. Clamped: below ~250 ms almost everything would background
+        // (costing an extra round-trip for nothing), above ~30 s the deferral
+        // stops buying anything over just blocking.
+        const int grace_ms =
+            std::clamp(AppConfig::instance().get("mcp/job_grace_ms", QVariant(kMcpJobGraceMs)).toInt(), 250, 30000);
+        return McpProvider::instance().call_tool_or_defer(tool_name, args, grace_ms);
+    }
 
     // Route to external server — through the same Phase 6.3 auth/destructive
     // gate internal tools get inside call_tool_async (previously this path
@@ -432,7 +463,8 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
     return ToolResult::ok(text);
 }
 
-ToolResult McpService::execute_openai_function(const QString& function_name, const QJsonObject& args) {
+ToolResult McpService::execute_openai_function(const QString& function_name, const QJsonObject& args,
+                                               bool allow_defer) {
     auto [server_id, tool_name] = McpProvider::parse_openai_function_name(function_name);
 
     if (server_id.isEmpty() || tool_name.isEmpty()) {
@@ -441,7 +473,7 @@ ToolResult McpService::execute_openai_function(const QString& function_name, con
     }
 
     LOG_INFO(TAG, QString("Dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
-    auto result = execute_tool(server_id, tool_name, args);
+    auto result = execute_tool(server_id, tool_name, args, allow_defer);
     LOG_INFO(TAG, QString("Dispatch result: %1 success=%2").arg(tool_name, result.success ? "true" : "false"));
     return result;
 }

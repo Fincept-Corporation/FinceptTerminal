@@ -12,8 +12,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QString>
 #include <QStringList>
@@ -106,7 +108,19 @@ QWidget* ProfilesSection::build_content() {
             auto* switch_btn = new QPushButton(tr("Switch"));
             switch_btn->setFixedWidth(72);
             switch_btn->setStyleSheet(btn_secondary_ss());
-            connect(switch_btn, &QPushButton::clicked, this, [name]() {
+            switch_btn->setAccessibleName(tr("Switch to profile %1").arg(name));
+            connect(switch_btn, &QPushButton::clicked, this, [this, name]() {
+                // Switching relaunches the process and quits this one. That is
+                // as destructive as closing the terminal, and it used to happen
+                // on a single unconfirmed click.
+                const auto reply = QMessageBox::question(
+                    this, tr("Switch Profile"),
+                    tr("Switch to profile \"%1\"?\n\nFincept Terminal will restart. Unsaved work in the "
+                       "current session may be lost.")
+                        .arg(name),
+                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                if (reply != QMessageBox::Yes)
+                    return;
                 const QString exe = QCoreApplication::applicationFilePath();
                 QProcess::startDetached(exe, {"--profile", name});
                 QCoreApplication::quit();
@@ -130,14 +144,39 @@ QWidget* ProfilesSection::build_content() {
     auto* name_input = new QLineEdit;
     name_input->setPlaceholderText(tr("profile-name  (alphanumeric, - and _ only)"));
     name_input->setStyleSheet(input_ss());
+    name_input->setMaxLength(32);
+    name_input->setAccessibleName(tr("New profile name"));
     new_hl->addWidget(name_input, 1);
 
     auto* create_btn = new QPushButton(tr("Create & Switch"));
     create_btn->setStyleSheet(btn_primary_ss());
-    connect(create_btn, &QPushButton::clicked, this, [name_input]() {
+    create_btn->setAccessibleName(tr("Create profile and switch to it"));
+    connect(name_input, &QLineEdit::returnPressed, create_btn, &QPushButton::click);
+    connect(create_btn, &QPushButton::clicked, this, [this, name_input]() {
         const QString name = name_input->text().trimmed().toLower();
-        if (name.isEmpty())
+        // The placeholder advertised a character set that nothing enforced.
+        // ProfileManager sanitises the name before using it as a directory, so
+        // an unsanitised value silently landed the user in a *differently
+        // named* profile than the one they typed.
+        static const QRegularExpression kValidName(QStringLiteral("^[a-z0-9_-]{1,32}$"));
+        if (name.isEmpty() || !kValidName.match(name).hasMatch()) {
+            QMessageBox::warning(this, tr("Invalid Profile Name"),
+                                 tr("Use 1-32 characters: lowercase letters, digits, hyphen or underscore."));
             return;
+        }
+        if (ProfileManager::instance().list_profiles().contains(name)) {
+            QMessageBox::warning(this, tr("Profile Exists"), tr("A profile named \"%1\" already exists.").arg(name));
+            return;
+        }
+        const auto reply =
+            QMessageBox::question(this, tr("Create Profile"),
+                                  tr("Create profile \"%1\" and switch to it?\n\nFincept Terminal will restart. "
+                                     "Unsaved work in the current session may be lost.")
+                                      .arg(name),
+                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (reply != QMessageBox::Yes)
+            return;
+
         ProfileManager::instance().create_profile(name);
         const QString exe = QCoreApplication::applicationFilePath();
         QProcess::startDetached(exe, {"--profile", name});

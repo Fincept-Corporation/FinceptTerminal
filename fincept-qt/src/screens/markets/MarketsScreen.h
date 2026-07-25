@@ -94,6 +94,12 @@ class MarketsScreen : public QWidget {
     QTimer* clock_timer_ = nullptr;
     QTimer* refresh_timeout_ = nullptr;
 
+    /// Lifetime guard for the per-refresh `refresh_finished` connections.
+    /// Destroying it disconnects every in-flight panel callback, so a cycle
+    /// that timed out cannot decrement the *next* cycle's counter.
+    QObject* refresh_counter_ = nullptr;
+    void abort_refresh_cycle();
+
     // State
     bool refresh_in_progress_ = false;
     bool auto_update_ = true;

@@ -46,7 +46,8 @@ class CryptoOrderBook : public QWidget {
     QLabel* title_label_ = nullptr;
     QLabel* spread_label_ = nullptr;
     bool has_spread_data_ = false; // gates whether spread_label_ shows live data vs placeholder
-    QWidget* canvas_ = nullptr;
+    // (Removed `canvas_`: never assigned or read — the book is painted
+    // directly onto this widget via `cache_`.)
 
     // Data (mutex-protected)
     QVector<QPair<double, double>> bids_;

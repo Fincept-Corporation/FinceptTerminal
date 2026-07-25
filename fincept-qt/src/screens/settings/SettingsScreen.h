@@ -11,6 +11,7 @@
 
 #include <QHideEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QList>
 #include <QPushButton>
 #include <QShowEvent>
@@ -56,11 +57,23 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
 
     /// Nav button → source key map used to retranslate button labels and
     /// scope headers without rebuilding the nav.
+    ///
+    /// `keywords` is a space-separated list of terms the section covers but
+    /// does not have in its label ("pin" → Security, "api key" → Credentials).
+    /// It backs the nav filter box: 16 sections spread over ~38 files are not
+    /// discoverable by reading a nav list alone.
     struct NavButton {
         QPushButton* btn;
         QString source_key;
+        QString keywords;
     };
     QList<NavButton> nav_buttons_;
+
+    QLineEdit* nav_filter_ = nullptr;
+    /// Show only nav entries matching `text` (label or keywords). Scope
+    /// headers are hidden while a filter is active — with a partial list they
+    /// no longer describe what sits under them.
+    void apply_nav_filter(const QString& text);
     QList<QLabel*> scope_headers_; // entries align with scope_header_keys_
     QList<QString> scope_header_keys_;
 

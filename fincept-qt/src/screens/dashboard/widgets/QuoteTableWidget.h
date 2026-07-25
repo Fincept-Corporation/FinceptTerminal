@@ -40,7 +40,6 @@ class QuoteTableWidget : public BaseWidget {
 
   private:
     void apply_styles();
-    void populate(const QVector<fincept::services::QuoteData>& quotes);
 
     /// Hub path: subscribe to every symbol's quote topic and apply updates
     /// into the row cache + redraw. Called from showEvent.

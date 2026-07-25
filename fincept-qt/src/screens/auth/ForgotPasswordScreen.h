@@ -39,6 +39,7 @@ class ForgotPasswordScreen : public QWidget {
     // OTP-sent page
     QLabel* sent_title_ = nullptr;
     QLabel* sent_sub_ = nullptr;
+    QLabel* sent_status_ = nullptr; ///< transient "code re-sent" confirmation
     QPushButton* sent_continue_btn_ = nullptr;
     QPushButton* sent_resend_btn_ = nullptr;
 
@@ -47,6 +48,7 @@ class ForgotPasswordScreen : public QWidget {
     QLabel* reset_code_lbl_ = nullptr;
     QLabel* reset_new_lbl_ = nullptr;
     QLabel* reset_confirm_lbl_ = nullptr;
+    QLabel* reset_error_ = nullptr; ///< inline validation + server errors
     QLineEdit* otp_input_ = nullptr;
     QLineEdit* new_password_ = nullptr;
     QLineEdit* confirm_password_ = nullptr;

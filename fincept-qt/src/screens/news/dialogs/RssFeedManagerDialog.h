@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QEvent>
 #include <QLabel>
+#include <QNetworkAccessManager>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QVector>
@@ -57,6 +58,11 @@ class RssFeedManagerDialog : public QDialog {
     QPushButton* test_btn_ = nullptr;
     QPushButton* close_btn_ = nullptr;
     QLabel* status_label_ = nullptr;
+
+    /// One QNetworkAccessManager for the dialog's URL probes (P10) rather than
+    /// a fresh one per test click. Created lazily, parented to the dialog.
+    QNetworkAccessManager* nam();
+    QNetworkAccessManager* nam_ = nullptr;
 
     QVector<services::NewsService::EditorFeed> rows_;
     bool dirty_ = false;

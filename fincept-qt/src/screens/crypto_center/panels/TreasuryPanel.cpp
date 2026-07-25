@@ -158,7 +158,7 @@ void TreasuryPanel::apply_theme() {
                                       "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
                                       "  padding:2px 8px; }"
                                       "QLabel#treasuryPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
+                                      "  border:1px solid %11; font-family:%5; font-size:9px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 8px; }"
                                       "QWidget#treasuryBody { background:%1; }"
                                       "QLabel#treasuryCaption { color:%6; font-family:%5; font-size:9px;"
@@ -171,7 +171,7 @@ void TreasuryPanel::apply_theme() {
                                       "QPushButton#treasuryMultisig { color:%4; font-family:%5; font-size:11px;"
                                       "  text-decoration:underline; background:transparent; border:none;"
                                       "  padding:0; text-align:right; }"
-                                      "QPushButton#treasuryMultisig:hover { color:%11; }"
+                                      "QPushButton#treasuryMultisig:hover { color:%10; }"
 
                                       "QFrame#treasuryErrorStrip { background:rgba(220,38,38,0.10);"
                                       "  border:1px solid %9; }"
@@ -188,9 +188,12 @@ void TreasuryPanel::apply_theme() {
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
                                 NEGATIVE())                 // %9
-                           .arg(BG_HOVER(),                 // %10
-                                BORDER_BRIGHT(),            // %11
-                                QStringLiteral("#78350f")); // %12 darker amber
+                           // One arg per marker, in ascending marker order —
+                           // QString::arg fills the LOWEST marker present, so a
+                           // spare arg shifts every later colour by one and
+                           // warns "Argument missing" for the overflow.
+                           .arg(BORDER_BRIGHT(),            // %10
+                                QStringLiteral("#78350f")); // %11 darker amber
 
     setStyleSheet(ss);
 }
@@ -282,7 +285,18 @@ void TreasuryPanel::on_topic_error(const QString& topic, const QString& error) {
 void TreasuryPanel::on_multisig_clicked() {
     if (multisig_url_.isEmpty())
         return;
-    QDesktopServices::openUrl(QUrl(multisig_url_));
+    // `multisig_url_` arrives from the treasury endpoint — untrusted remote
+    // data driving QDesktopServices::openUrl. Without a scheme check a
+    // compromised or misconfigured worker could hand us `file:///…` (opens a
+    // local file/executable path in the shell) or a custom-protocol URL.
+    // Restrict to https, which is the only thing a Squads deeplink needs.
+    const QUrl url(multisig_url_);
+    if (!url.isValid() || url.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) != 0) {
+        show_error_strip(tr("Refusing to open a non-https treasury link: %1").arg(multisig_url_.left(120)));
+        LOG_WARN("TreasuryPanel", "blocked non-https multisig url");
+        return;
+    }
+    QDesktopServices::openUrl(url);
 }
 
 void TreasuryPanel::show_error_strip(const QString& msg) {
@@ -304,9 +318,16 @@ void TreasuryPanel::update_demo_chip() {
     if (any_mock) {
         status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("treasuryPillDemo"));
+        // A fabricated reserve figure presented like a real one is the single
+        // most misleading thing this panel can do, so the title says so too —
+        // the pill alone is easy to miss next to a bold amber TOTAL USD.
+        if (title_)
+            title_->setText(tr("TREASURY · SAMPLE DATA"));
     } else {
         status_pill_->setText(tr("LIVE"));
         status_pill_->setObjectName(QStringLiteral("treasuryPill"));
+        if (title_)
+            title_->setText(tr("TREASURY"));
     }
     status_pill_->style()->unpolish(status_pill_);
     status_pill_->style()->polish(status_pill_);

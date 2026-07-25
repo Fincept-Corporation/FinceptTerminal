@@ -114,12 +114,15 @@ inline QString fmt_metric(const QString& key, const QJsonValue& val) {
     if (count_metric_keys().contains(key))
         return QString::number(static_cast<int>(v));
 
-    // Percentage metrics → show as "xx.xx%"
-    if (pct_metric_keys().contains(key)) {
-        if (std::abs(v) <= 1.0)
-            return QString("%1%").arg(v * 100.0, 0, 'f', 2);
-        return QString("%1%").arg(v, 0, 'f', 2);
-    }
+    // Percentage metrics → show as "xx.xx%".
+    //
+    // Every Python provider emits these as FRACTIONS (vbt_metrics.py divides
+    // "Max Drawdown [%]" by 100; win_rate is winning/total; zipline rounds the
+    // raw cum-return). The old `abs(v) <= 1.0 ? v*100 : v` heuristic therefore
+    // silently understated any result above 100% by a factor of 100 — a 150%
+    // total return rendered as "1.50%". Always scale: the contract is fixed.
+    if (pct_metric_keys().contains(key))
+        return QString("%1%").arg(v * 100.0, 0, 'f', 2);
 
     // Ratio metrics → show as-is with 2-4 decimals
     if (ratio_metric_keys().contains(key))

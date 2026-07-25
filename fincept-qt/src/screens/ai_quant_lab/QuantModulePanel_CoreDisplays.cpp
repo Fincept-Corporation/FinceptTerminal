@@ -14,6 +14,7 @@
 //     QuantModulePanel_Backtesting.cpp). The dispatch in on_result still
 //     routes there directly.
 #include "screens/ai_quant_lab/QuantModulePanel.h"
+#include "screens/ai_quant_lab/QuantModulePanel_AdvancedHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Common.h"
 #include "screens/ai_quant_lab/QuantModulePanel_GsHelpers.h"
 #include "screens/ai_quant_lab/QuantModulePanel_Styles.h"
@@ -49,32 +50,9 @@ using namespace fincept::services::quant;
 using namespace fincept::screens::quant_styles;
 using namespace fincept::screens::quant_common;
 using namespace fincept::screens::quant_gs_helpers;
-
-namespace {
-
-[[maybe_unused]] QString fmt_int_safe(const QJsonValue& v) {
-    if (v.isNull() || v.isUndefined())
-        return QStringLiteral("—");
-    return QString::number(v.toInt());
-}
-
-// Returns false if the payload was an error (already displayed via callback).
-bool check_success(const QJsonObject& payload, const std::function<void(const QString&)>& display_error_fn) {
-    if (!payload.value("success").toBool(false)) {
-        const QString err =
-            payload.value("error").toString(QCoreApplication::translate("QuantModulePanel", "Unknown error"));
-        const QString kind = payload.value("error_kind").toString();
-        const QString prefix = kind == "validation" ? QCoreApplication::translate("QuantModulePanel", "Input error: ")
-                               : kind == "runtime"
-                                   ? QCoreApplication::translate("QuantModulePanel", "Computation failed: ")
-                                   : QString();
-        display_error_fn(prefix + err);
-        return false;
-    }
-    return true;
-}
-
-} // namespace
+// check_success() / fmt_*_safe() used to be duplicated in a file-local
+// anonymous namespace here; they now come from the shared helper header.
+using namespace fincept::screens::quant_advanced_helpers;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. FACTOR DISCOVERY

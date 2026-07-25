@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QStackedWidget>
 #include <QTableWidget>
 #include <QWidget>
@@ -20,6 +21,11 @@ class McpServersSection : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    /// Refresh the server list (and, on the Tools tab, the tool table) each
+    /// time the section becomes visible. SettingsScreen's MCP event sync
+    /// re-shows the current section to trigger exactly this; reload() was
+    /// previously public but had no caller, so the panel never refreshed.
+    void showEvent(QShowEvent* e) override;
 
   private slots:
     void on_server_selected(int row);
@@ -57,7 +63,6 @@ class McpServersSection : public QWidget {
     void build_ui();
     QWidget* build_servers_tab();
     QWidget* build_tools_tab();
-    QWidget* build_add_server_form();
 
     void load_servers();
     void load_tools();

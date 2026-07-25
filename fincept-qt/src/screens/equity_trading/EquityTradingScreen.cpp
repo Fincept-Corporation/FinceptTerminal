@@ -60,6 +60,7 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QSplitter>
 #include <QStringListModel>
 #include <QTableWidget>
@@ -526,6 +527,40 @@ void EquityTradingScreen::setup_ui() {
     connect(chart_, &EquityChartPanel::add_to_watchlist_requested, this,
             &EquityTradingScreen::on_chart_add_to_watchlist);
     connect(chart_, &EquityChartPanel::exit_position_requested, this, &EquityTradingScreen::on_chart_exit_position);
+
+    // ── Accessibility + trader keyboard shortcuts ─────────────────────────────
+    account_btn_->setAccessibleName(tr("Focused broker account"));
+    symbol_input_->setAccessibleName(tr("Symbol search"));
+    symbol_input_->setToolTip(tr("Symbol (Ctrl+Shift+F to focus)"));
+    mode_btn_->setAccessibleName(tr("Paper or live trading mode"));
+    accounts_btn_->setAccessibleName(tr("Manage broker accounts"));
+    feeds_btn_->setAccessibleName(tr("Toggle feed monitor"));
+    unified_btn_->setAccessibleName(tr("Toggle all-accounts portfolio"));
+    conn_label_->setAccessibleName(tr("Broker connection status"));
+    clock_label_->setAccessibleName(tr("Clock"));
+    exchange_label_->setAccessibleName(tr("Exchange"));
+
+    {
+        auto* focus_sym = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), this);
+        focus_sym->setContext(Qt::WindowShortcut);
+        connect(focus_sym, &QShortcut::activated, this, [this]() {
+            symbol_input_->setFocus(Qt::ShortcutFocusReason);
+            symbol_input_->selectAll();
+        });
+
+        // CANCEL ALL is destructive, so the shortcut carries its own confirmation
+        // (the blotter button has one; a bare hotkey must not be the exception).
+        auto* cancel_all = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_K), this);
+        cancel_all->setContext(Qt::WindowShortcut);
+        connect(cancel_all, &QShortcut::activated, this, [this]() {
+            if (focused_account_id_.isEmpty())
+                return;
+            if (QMessageBox::warning(this, tr("Cancel All Orders"),
+                                     tr("Cancel ALL pending orders on this account?"),
+                                     QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes)
+                on_cancel_all_orders();
+        });
+    }
 }
 
 // ============================================================================

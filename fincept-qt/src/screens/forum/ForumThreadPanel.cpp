@@ -196,7 +196,9 @@ void ForumThreadPanel::build_ui() {
     t_author_lbl_->setStyleSheet(
         QString("color:%1;font-size:12px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(12)));
     connect(t_author_lbl_, &QLabel::linkActivated, this, [this](const QString& link) {
-        if (link.startsWith("author:"))
+        // Only ever act on our own scheme — never hand an arbitrary href from
+        // forum content to the shell.
+        if (link.startsWith(QLatin1String("author:")))
             emit author_clicked(link.mid(7));
     });
     hdr_vl->addWidget(t_author_lbl_);
@@ -459,7 +461,10 @@ void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
     t_meta_lbl_->setText(rel_time(detail.post.created_at));
     t_title_lbl_->setText(detail.post.title);
 
-    // Author with circular avatar
+    // Author with circular avatar.
+    // The label is RichText, so every interpolated value must be escaped —
+    // a display name containing '<' or a quote previously broke the markup
+    // (and let arbitrary forum-supplied HTML into the view).
     QString avc = det_color(detail.post.author_display_name);
     QString ini = detail.post.author_display_name.isEmpty() ? "?" : detail.post.author_display_name.left(2).toUpper();
     t_author_lbl_->setText(QString("<span style='background:%1;color:%2;font-size:10px;"
@@ -468,8 +473,9 @@ void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
                                    "&nbsp;&nbsp;"
                                    "<a href='author:%4' style='color:%5;text-decoration:none;"
                                    "font-family:Consolas;font-size:12px;font-weight:600;'>%6</a>")
-                               .arg(avc, ui::colors::BG_BASE(), ini, detail.post.author_name,
-                                    ui::colors::TEXT_SECONDARY(), detail.post.author_display_name));
+                               .arg(avc, ui::colors::BG_BASE(), ini.toHtmlEscaped(),
+                                    QString(detail.post.author_name).toHtmlEscaped(), ui::colors::TEXT_SECONDARY(),
+                                    detail.post.author_display_name.toHtmlEscaped()));
 
     t_body_lbl_->setText(detail.post.content);
 

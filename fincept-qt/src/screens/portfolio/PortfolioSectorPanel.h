@@ -57,6 +57,12 @@ class PortfolioSectorPanel : public QWidget {
     QString currency_ = "USD";
     QString selected_sector_;            // empty = no filter active
     QHash<QString, double> corr_matrix_; // real Pearson matrix, key="SYM1|SYM2"
+
+    /// Fingerprint of what the correlation grid currently renders (symbols +
+    /// values). update_correlation() rebuilds ~49 stylesheet-carrying QLabels,
+    /// so it bails out early when the fingerprint is unchanged — correlation
+    /// only moves when a new matrix lands, not on every price poll.
+    QString corr_signature_;
 };
 
 } // namespace fincept::screens

@@ -138,7 +138,21 @@ void OrderBookMiniWidget::populate(const QVector<trading::BrokerOrderInfo>& rows
         if (is_working(o.status))
             working.append(o);
     }
-    table_->setRowCount(working.size());
+    // Empty state — an account with nothing working used to render a blank
+    // grid that is indistinguishable from "still loading" / "broken".
+    table_->clearSpans();
+    if (working.isEmpty()) {
+        table_->setRowCount(1);
+        auto* msg = new QTableWidgetItem(tr("No working orders"));
+        msg->setTextAlignment(Qt::AlignCenter);
+        msg->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
+        table_->setItem(0, 0, msg);
+        table_->setSpan(0, 0, 1, table_->columnCount());
+        set_loading(false);
+        return;
+    }
+
+    table_->setRowCount(static_cast<int>(working.size()));
     for (int i = 0; i < working.size(); ++i) {
         const auto& o = working[i];
         auto* sym = new QTableWidgetItem(o.symbol);
@@ -156,15 +170,15 @@ void OrderBookMiniWidget::populate(const QVector<trading::BrokerOrderInfo>& rows
         table_->setItem(i, 3, price);
         table_->setItem(i, 4, status);
 
+        // Styling comes from the table-level stylesheet (see apply_styles) via
+        // the `obCancel` dynamic property — a per-row setStyleSheet here meant
+        // one full CSS reparse per working order on every order-book push.
         auto* cancel_btn = new QPushButton("×", table_);
+        cancel_btn->setProperty("obCancel", true);
         cancel_btn->setToolTip(tr("Cancel order %1").arg(o.order_id));
+        cancel_btn->setAccessibleName(tr("Cancel order %1").arg(o.order_id));
         cancel_btn->setCursor(Qt::PointingHandCursor);
         cancel_btn->setFixedHeight(18);
-        cancel_btn->setStyleSheet(
-            QString("QPushButton{color:%1;background:transparent;border:1px solid %2;"
-                    "border-radius:2px;font-size:11px;font-weight:bold;}"
-                    "QPushButton:hover{color:%3;border-color:%3;}")
-                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), ui::colors::NEGATIVE()));
         const QString oid = o.order_id;
         connect(cancel_btn, &QPushButton::clicked, this, [this, oid]() { cancel_order(oid); });
         table_->setCellWidget(i, 5, cancel_btn);
@@ -234,15 +248,23 @@ void OrderBookMiniWidget::apply_styles() {
         QString("QTableWidget{background:transparent;color:%1;gridline-color:%2;font-size:10px;border:none;}"
                 "QHeaderView::section{background:%3;color:%4;border:none;border-bottom:1px solid %2;"
                 "padding:2px 4px;font-size:9px;font-weight:bold;}"
-                "QTableWidget::item{padding:2px 4px;}")
+                "QTableWidget::item{padding:2px 4px;}"
+                "QPushButton[obCancel=\"true\"]{color:%4;background:transparent;border:1px solid %2;"
+                "border-radius:2px;font-size:11px;font-weight:bold;}"
+                "QPushButton[obCancel=\"true\"]:hover{color:%5;border-color:%5;}")
             .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
-                 ui::colors::TEXT_TERTIARY()));
+                 ui::colors::TEXT_TERTIARY(), ui::colors::NEGATIVE()));
 }
 
 void OrderBookMiniWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("WORKING ORDERS"));
-    hub_resubscribe(); // re-renders header hint + table in the new language
+    // Re-apply the actual strings (the old body called hub_resubscribe(),
+    // which rebuilds subscriptions and translates nothing).
+    if (table_)
+        table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Side"), tr("Qty"), tr("Price"), tr("Status"), QString()});
+    if (header_hint_ && account_id_.isEmpty())
+        header_hint_->setText(tr("No active account — click gear to configure"));
 }
 
 } // namespace fincept::screens::widgets

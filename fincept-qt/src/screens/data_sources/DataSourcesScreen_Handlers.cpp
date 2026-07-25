@@ -43,6 +43,7 @@ const QString TAG = "DataSources";
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStandardPaths>
+#include <QStyle>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTimer>
@@ -173,13 +174,30 @@ void DataSourcesScreen::on_connection_enabled_changed(const QString& conn_id, bo
 
 // ── Test connection (thin wrapper — implementation in ConnectionTester.cpp) ──
 void DataSourcesScreen::on_connection_test(const QString& conn_id) {
+    if (conn_id.isEmpty())
+        return;
+
+    // Loading state: the probe can block for up to 5s on a dead host, so make
+    // it visible that something is happening instead of leaving a dead button.
+    if (test_connection_btn_) {
+        test_connection_btn_->setEnabled(false);
+        test_connection_btn_->setText(tr("TESTING..."));
+    }
+    if (detail_last_status_value_) {
+        detail_last_status_value_->setText(tr("TESTING"));
+        detail_last_status_value_->setStyleSheet(
+            QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(col::WARNING()));
+    }
+
     QPointer<DataSourcesScreen> self = this;
     test_connection(this, conn_id, [self](const QString& id, bool ok, const QString& msg) {
         if (!self)
             return;
         self->live_status_cache_[id] = {ok, msg};
         self->update_connection_status_cell(id, ok, msg);
-        self->update_detail_panel();
+        if (self->test_connection_btn_)
+            self->test_connection_btn_->setText(DataSourcesScreen::tr("TEST"));
+        self->update_detail_panel(); // re-enables the button via update_action_states()
     });
 }
 
@@ -271,8 +289,11 @@ void DataSourcesScreen::update_connection_status_cell(const QString& conn_id, bo
         auto* lbl = qobject_cast<QLabel*>(connections_table_->cellWidget(row, 5));
         if (lbl) {
             lbl->setText(ok ? tr("OK") : tr("ERR"));
-            lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-                                   .arg(ok ? col::POSITIVE() : col::NEGATIVE()));
+            // Object-name variant, styled once in the screen stylesheet — no
+            // per-update CSS reparse. Re-polish so the new selector applies.
+            lbl->setObjectName(ok ? "dsStatusOk" : "dsStatusErr");
+            lbl->style()->unpolish(lbl);
+            lbl->style()->polish(lbl);
             lbl->setToolTip(msg);
         }
         break;
@@ -316,22 +337,49 @@ void DataSourcesScreen::on_connection_duplicate(const QString& conn_id) {
 
 void DataSourcesScreen::on_bulk_enable_all() {
     const auto rows = filtered_connection_rows();
+    int to_change = 0;
+    for (const auto& ds : rows)
+        if (!ds.enabled)
+            ++to_change;
+    if (to_change == 0)
+        return;
+
+    // Enabling a connection puts it into the background reachability poll, i.e.
+    // it starts contacting that provider. Confirm before doing it in bulk.
+    if (QMessageBox::question(this, tr("Enable Connections"),
+                              tr("Enable %n listed connection(s)?\n\nEnabled connections are contacted by the "
+                                 "background reachability check.",
+                                 "", to_change),
+                              QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
+        return;
+
     for (const auto& ds : rows) {
         if (!ds.enabled)
             DataSourceRepository::instance().set_enabled(ds.id, true);
     }
     refresh_connections();
-    LOG_INFO(TAG, QString("Bulk-enabled %1 connections").arg(rows.size()));
+    LOG_INFO(TAG, QString("Bulk-enabled %1 connections").arg(to_change));
 }
 
 void DataSourcesScreen::on_bulk_disable_all() {
     const auto rows = filtered_connection_rows();
+    int to_change = 0;
+    for (const auto& ds : rows)
+        if (ds.enabled)
+            ++to_change;
+    if (to_change == 0)
+        return;
+
+    if (QMessageBox::question(this, tr("Disable Connections"), tr("Disable %n listed connection(s)?", "", to_change),
+                              QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
+        return;
+
     for (const auto& ds : rows) {
         if (ds.enabled)
             DataSourceRepository::instance().set_enabled(ds.id, false);
     }
     refresh_connections();
-    LOG_INFO(TAG, QString("Bulk-disabled %1 connections").arg(rows.size()));
+    LOG_INFO(TAG, QString("Bulk-disabled %1 connections").arg(to_change));
 }
 
 void DataSourcesScreen::on_bulk_delete_selected() {
@@ -389,12 +437,32 @@ void DataSourcesScreen::on_download_template() {
 }
 
 void DataSourcesScreen::on_poll_timer() {
+    // Each probe is a blocking 3s TCP connect on a pooled thread. Fanning one
+    // out per enabled connection saturates the global QThreadPool (and hammers
+    // every configured provider) once a user has more than a handful of
+    // connections, so probe a bounded slice per tick and rotate through the
+    // list across ticks.
+    constexpr int kMaxProbesPerTick = 6;
+
+    QVector<DataSource> candidates;
     for (const auto& ds : connections_cache_) {
         if (!ds.enabled)
             continue;
         const auto* connector_cfg = find_connector_config(ds.provider);
         if (!connector_cfg || !connector_cfg->testable)
             continue;
+        candidates.append(ds);
+    }
+    if (candidates.isEmpty()) {
+        poll_cursor_ = 0;
+        return;
+    }
+    if (poll_cursor_ >= candidates.size())
+        poll_cursor_ = 0;
+
+    const int probes = qMin(kMaxProbesPerTick, static_cast<int>(candidates.size()));
+    for (int i = 0; i < probes; ++i) {
+        const auto& ds = candidates[(poll_cursor_ + i) % candidates.size()];
 
         const auto cfg_obj = QJsonDocument::fromJson(ds.config.toUtf8()).object();
         const QString probe_url = provider_probe_url(ds.provider, cfg_obj);
@@ -417,7 +485,9 @@ void DataSourcesScreen::on_poll_timer() {
         const QString conn_id = ds.id;
         const QString cap_host = host;
         const int cap_port = port;
-        const QString cap_probe = probe_url;
+        // The probe URL usually embeds the API key — redact before it can ever
+        // reach the status tooltip.
+        const QString cap_probe = redact_url(probe_url);
 
         (void)QtConcurrent::run([self, conn_id, cap_host, cap_port, cap_probe]() {
             QTcpSocket socket;
@@ -441,6 +511,7 @@ void DataSourcesScreen::on_poll_timer() {
                 Qt::QueuedConnection);
         });
     }
+    poll_cursor_ = static_cast<int>((poll_cursor_ + probes) % candidates.size());
 }
 
 } // namespace fincept::screens::datasources

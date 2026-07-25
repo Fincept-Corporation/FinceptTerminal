@@ -65,6 +65,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     config_btn_->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
     config_btn_->setIconSize(QSize(12, 12));
     config_btn_->setToolTip(tr("Configure widget"));
+    config_btn_->setAccessibleName(tr("Configure widget"));
     config_btn_->setCursor(Qt::PointingHandCursor);
     config_btn_->setVisible(false);
     config_btn_->setStyleSheet(
@@ -83,6 +84,7 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
     refresh_btn_->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
     refresh_btn_->setIconSize(QSize(12, 12));
     refresh_btn_->setToolTip(tr("Refresh widget data"));
+    refresh_btn_->setAccessibleName(tr("Refresh widget data"));
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setStyleSheet(
         QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
@@ -95,11 +97,13 @@ BaseWidget::BaseWidget(const QString& title, QWidget* parent, const QString& acc
 
     // Close button
     auto* close_btn = new QPushButton;
+    close_btn_ = close_btn;
     close_btn->setFixedSize(20, 20);
     close_btn->setText("");
     close_btn->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
     close_btn->setIconSize(QSize(11, 11));
     close_btn->setToolTip(tr("Close widget"));
+    close_btn->setAccessibleName(tr("Close widget"));
     close_btn->setCursor(Qt::PointingHandCursor);
     close_btn->setStyleSheet(
         QString("QPushButton { color: %1; background: %2; border: 1px solid %3; border-radius: 2px; "
@@ -236,11 +240,32 @@ void BaseWidget::set_error(const QString& error) {
 
 void BaseWidget::set_title(const QString& title) {
     title_label_->setText(title);
+    // Screen readers announce the tile by its title; without this the whole
+    // dashboard reads as a wall of unnamed frames.
+    setAccessibleName(title);
+    title_label_->setAccessibleName(title);
 }
 
 void BaseWidget::set_configurable(bool configurable) {
     if (config_btn_)
         config_btn_->setVisible(configurable);
+}
+
+void BaseWidget::schedule_render(std::function<void()> fn) {
+    pending_render_ = std::move(fn);
+    if (render_scheduled_)
+        return;
+    render_scheduled_ = true;
+    // `this` as context object: Qt drops the pending call if the widget dies.
+    QTimer::singleShot(0, this, [this]() {
+        render_scheduled_ = false;
+        // Move out first so a render that itself schedules another one
+        // doesn't get clobbered.
+        auto fn = std::move(pending_render_);
+        pending_render_ = nullptr;
+        if (fn)
+            fn();
+    });
 }
 
 void BaseWidget::on_config_clicked() {
@@ -302,13 +327,18 @@ void BaseWidget::changeEvent(QEvent* event) {
 }
 
 void BaseWidget::retranslateUi() {
-    if (config_btn_)
+    if (config_btn_) {
         config_btn_->setToolTip(tr("Configure widget"));
-    if (refresh_btn_)
+        config_btn_->setAccessibleName(tr("Configure widget"));
+    }
+    if (refresh_btn_) {
         refresh_btn_->setToolTip(tr("Refresh widget data"));
-    // Close button is a local in the ctor — its tooltip won't be retranslated
-    // dynamically. Acceptable tradeoff: it's an icon, the tooltip is short,
-    // and a runtime language switch is rare.
+        refresh_btn_->setAccessibleName(tr("Refresh widget data"));
+    }
+    if (close_btn_) {
+        close_btn_->setToolTip(tr("Close widget"));
+        close_btn_->setAccessibleName(tr("Close widget"));
+    }
     if (loading_label_ && loading_label_->isVisible())
         loading_label_->setText(tr("LOADING..."));
 }

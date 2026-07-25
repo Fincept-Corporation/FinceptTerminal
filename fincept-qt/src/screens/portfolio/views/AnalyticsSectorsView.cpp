@@ -12,6 +12,7 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLocale>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPieSeries>
 #include <QScrollArea>
@@ -65,16 +66,16 @@ class SectorCardClickForwarder : public QObject {
     QString sector_;
 };
 
-// English source keys returned by verdict_for_*. Translated to display strings
-// in the rendering code below (kept English here so verdict_color can pattern-
-// match without depending on the active locale).
-[[maybe_unused]] constexpr const char* kVerdictDiversified = "Diversified";
-[[maybe_unused]] constexpr const char* kVerdictBalanced = "Balanced";
-[[maybe_unused]] constexpr const char* kVerdictConcentrated = "Concentrated";
+// verdict_for_* return English source keys so verdict_color() can pattern-match
+// without depending on the active locale; the render code translates them for
+// display. (Three unused `kVerdict*` constants that duplicated these literals
+// were removed — they were dead and had to be kept in sync by hand.)
 
 QString verdict_for_hhi(double hhi) {
-    // HHI convention uses fractions of 10,000; we use percent-squared so
-    // divide by 100 to get the standard range. 1500-2500 = moderate, 2500+ = concentrated.
+    // Σ(weight%)² over sectors — already the standard 0…10 000 HHI scale, so
+    // the DOJ/FTC thresholds apply directly: <1500 unconcentrated,
+    // 1500–2500 moderate, >2500 concentrated. (The previous comment claimed a
+    // ÷100 rescale that the code never performed.)
     if (hhi < 1500)
         return QStringLiteral("Diversified");
     if (hhi < 2500)
@@ -550,6 +551,15 @@ void AnalyticsSectorsView::update_donut(const QVector<SectorInfo>& sectors) {
 }
 
 void AnalyticsSectorsView::update_sector_table(const QVector<SectorInfo>& sectors) {
+    // Preserve the highlighted sector across the (60 s) rebuild — an
+    // unconditional clearSelection() dropped it every poll even though the
+    // blotter stayed filtered by that sector.
+    QString prev_sector;
+    if (const int prev_row = sector_table_->currentRow(); prev_row >= 0) {
+        if (const auto* item = sector_table_->item(prev_row, 1))
+            prev_sector = item->text();
+    }
+
     sector_table_->setRowCount(sectors.size());
     sector_table_->clearSelection();
 
@@ -577,6 +587,9 @@ void AnalyticsSectorsView::update_sector_table(const QVector<SectorInfo>& sector
             (s.pnl >= 0 ? QStringLiteral("+") : QString()) + QLocale::system().toString(s.pnl, 'f', 2);
         set_text(5, pnl_text, pnl_color, Qt::AlignRight);
         set_text(6, format_pct(s.pnl_percent, true), pnl_color, Qt::AlignRight);
+
+        if (!prev_sector.isEmpty() && s.name == prev_sector)
+            sector_table_->selectRow(r);
     }
 }
 
@@ -898,8 +911,12 @@ void AnalyticsSectorsView::update_correlation() {
 }
 
 bool SectorCardClickForwarder::eventFilter(QObject* obj, QEvent* ev) {
-    if (ev->type() == QEvent::MouseButtonRelease && owner_)
-        emit owner_->sector_selected(sector_);
+    // Left button only — a right-click (context menu) or a middle-click used to
+    // silently re-filter the blotter.
+    if (ev->type() == QEvent::MouseButtonRelease && owner_) {
+        if (auto* me = static_cast<QMouseEvent*>(ev); me->button() == Qt::LeftButton)
+            emit owner_->sector_selected(sector_);
+    }
     return QObject::eventFilter(obj, ev);
 }
 

@@ -555,7 +555,22 @@ void StorageSection::build_ui() {
                 .arg(ui::colors::BORDER_DIM(), ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
 
         auto* results_widget = new QWidget(this);
-        results_widget->setStyleSheet("background:transparent;");
+        results_widget->setObjectName(QStringLiteral("sqlResults"));
+        // One stylesheet for the whole result grid, keyed by objectName. The
+        // previous code called setStyleSheet() on every header cell and every
+        // data cell — a 100-row × 10-column SELECT meant ~1100 CSS reparses per
+        // query execution. Every rule is selector-qualified (including the one
+        // for the container) because Qt does not accept a mix of bare
+        // declarations and rules in one sheet.
+        results_widget->setStyleSheet(QString("QWidget#sqlResults{background:transparent;}"
+                                              "QWidget#sqlHdrRow{background:%1;border-bottom:1px solid %2;}"
+                                              "QWidget#sqlRow{background:transparent;border-bottom:1px solid %2;}"
+                                              "QWidget#sqlRowAlt{background:%3;border-bottom:1px solid %2;}"
+                                              "QLabel#sqlHdrCell{color:%4;font-weight:700;background:transparent;}"
+                                              "QLabel#sqlCell{color:%5;background:transparent;}")
+                                          .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(),
+                                               ui::colors::ROW_ALT(), ui::colors::TEXT_DIM(),
+                                               ui::colors::TEXT_PRIMARY()));
         sql_results_layout_ = new QVBoxLayout(results_widget);
         sql_results_layout_->setContentsMargins(0, 0, 0, 0);
         sql_results_layout_->setSpacing(0);
@@ -648,18 +663,16 @@ void StorageSection::build_ui() {
                 return;
             }
 
-            // Column header
+            // Column header — styling comes from the results-widget stylesheet.
             auto* hdr_row = new QWidget(this);
+            hdr_row->setObjectName(QStringLiteral("sqlHdrRow"));
             hdr_row->setFixedHeight(22);
-            hdr_row->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                                       .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
             auto* hhl = new QHBoxLayout(hdr_row);
             hhl->setContentsMargins(6, 0, 6, 0);
             hhl->setSpacing(4);
             for (int c = 0; c < cols; ++c) {
                 auto* cl = new QLabel(rec.fieldName(c));
-                cl->setStyleSheet(
-                    QString("color:%1;font-weight:700;background:transparent;").arg(ui::colors::TEXT_DIM()));
+                cl->setObjectName(QStringLiteral("sqlHdrCell"));
                 hhl->addWidget(cl, 1);
             }
             sql_results_layout_->addWidget(hdr_row);
@@ -667,10 +680,8 @@ void StorageSection::build_ui() {
             int row_count = 0;
             while (query.next() && row_count < 100) {
                 auto* dr = new QWidget(this);
+                dr->setObjectName((row_count % 2) ? QStringLiteral("sqlRowAlt") : QStringLiteral("sqlRow"));
                 dr->setFixedHeight(20);
-                dr->setStyleSheet(
-                    QString("background:%1;border-bottom:1px solid %2;")
-                        .arg((row_count % 2) ? ui::colors::ROW_ALT() : "transparent", ui::colors::BORDER_DIM()));
                 auto* dhl = new QHBoxLayout(dr);
                 dhl->setContentsMargins(6, 0, 6, 0);
                 dhl->setSpacing(4);
@@ -679,7 +690,7 @@ void StorageSection::build_ui() {
                     if (val.length() > 60)
                         val = val.left(57) + "...";
                     auto* vl2 = new QLabel(val);
-                    vl2->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+                    vl2->setObjectName(QStringLiteral("sqlCell"));
                     dhl->addWidget(vl2, 1);
                 }
                 sql_results_layout_->addWidget(dr);

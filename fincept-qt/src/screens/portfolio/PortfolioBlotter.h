@@ -51,8 +51,15 @@ class PortfolioBlotter : public QWidget {
 
     // ── Pagination ──────────────────────────────────────────────────────────
     /// Filtered + sorted view (after filter/sector trim) used as the source
-    /// of truth for pagination math. Recomputed every populate_table().
-    QVector<portfolio::HoldingWithQuote> visible_view() const;
+    /// of truth for pagination math.
+    ///
+    /// Memoised: a single populate_table() used to call this five times (clamp
+    /// → total_pages → paged_view → update_pagination_controls → total_pages),
+    /// each one re-filtering and deep-copying the whole holdings vector, and
+    /// every live broker tick called it again per row.
+    const QVector<portfolio::HoldingWithQuote>& visible_view() const;
+    /// Drop the memoised view. Call whenever holdings/filter/sort change.
+    void invalidate_view_cache();
     /// Rows for the current page only — what actually goes into table_.
     QVector<portfolio::HoldingWithQuote> paged_view() const;
     /// Update footer labels + button enabled-states from current state.
@@ -85,6 +92,8 @@ class PortfolioBlotter : public QWidget {
 
     QVector<portfolio::HoldingWithQuote> holdings_;
     QVector<portfolio::HoldingWithQuote> sorted_;
+    mutable QVector<portfolio::HoldingWithQuote> view_cache_;
+    mutable bool view_cache_valid_ = false;
     QString selected_symbol_;
     QString filter_text_;
     QStringList sector_symbols_; // empty = no sector filter

@@ -21,15 +21,19 @@ QTableWidgetItem* cell(const QString& text, const QColor& fg, Qt::Alignment alig
     return it;
 }
 
-QPushButton* icon_btn(const QString& glyph, const QString& tip, const QString& color) {
+// `kind` selects the colour via a dynamic-property rule in the table-level
+// stylesheet. rebuild() runs on every marks tick (~1 Hz) for every agent, so a
+// per-button setStyleSheet() meant N*2 full CSS re-parses per tick; the rules
+// now live in one stylesheet set once in the constructor.
+QPushButton* icon_btn(const QString& glyph, const QString& tip, const char* kind) {
     auto* b = new QPushButton(glyph);
     b->setToolTip(tip);
+    b->setAccessibleName(tip);
     b->setCursor(Qt::PointingHandCursor);
     b->setFixedSize(20, 18);
     b->setFlat(true);
-    b->setStyleSheet(QStringLiteral("QPushButton{background:transparent;border:none;color:%1;font-size:11px;padding:0;}"
-                                    "QPushButton:hover{background:#2A2A2A;}")
-                         .arg(color));
+    b->setObjectName(QStringLiteral("arenaActBtn"));
+    b->setProperty("act", QString::fromLatin1(kind));
     return b;
 }
 
@@ -54,11 +58,20 @@ LeaderboardCards::LeaderboardCards(QWidget* parent) : QWidget(parent) {
     table_->setFocusPolicy(Qt::NoFocus);
     table_->setShowGrid(false);
     table_->setSortingEnabled(false); // caller order = rank (sorted by equity)
+    // Includes the ACT cell-widget rules — cell widgets are descendants of the
+    // table, so this one stylesheet covers every row's buttons and container.
     table_->setStyleSheet("QTableWidget{background:#0D0D0D;border:none;font-size:11px;"
                           " font-family:'Consolas','Courier New',monospace;}"
                           "QTableWidget::item{padding:0 6px;border-bottom:1px solid #1C1C1C;}"
                           "QHeaderView::section{background:#141414;color:#777;border:none;"
-                          " border-bottom:1px solid #2A2A2A;padding:2px 6px;font-size:10px;font-weight:700;}");
+                          " border-bottom:1px solid #2A2A2A;padding:2px 6px;font-size:10px;font-weight:700;}"
+                          "QWidget#arenaAct{background:#0D0D0D;}"
+                          "QWidget#arenaAct[sel=\"true\"]{background:#1F1A10;}"
+                          "QPushButton#arenaActBtn{background:transparent;border:none;font-size:11px;padding:0;}"
+                          "QPushButton#arenaActBtn:hover{background:#2A2A2A;}"
+                          "QPushButton#arenaActBtn[act=\"halt\"]{color:#E0A800;}"
+                          "QPushButton#arenaActBtn[act=\"resume\"]{color:#26A65B;}"
+                          "QPushButton#arenaActBtn[act=\"kill\"]{color:#E0245E;}");
     auto* hh = table_->horizontalHeader();
     hh->setSectionResizeMode(QHeaderView::ResizeToContents);
     hh->setSectionResizeMode(ColModel, QHeaderView::Stretch);
@@ -132,13 +145,14 @@ void LeaderboardCards::rebuild() {
         // refresh the dashboard, which calls set_data → rebuild and would
         // delete the clicked button under its own clicked() handler.
         auto* act = new QWidget;
-        act->setStyleSheet(QStringLiteral("background:%1;").arg(bg.name()));
+        act->setObjectName(QStringLiteral("arenaAct"));
+        act->setProperty("sel", selected);
         auto* h = new QHBoxLayout(act);
         h->setContentsMargins(2, 0, 2, 0);
         h->setSpacing(2);
         const QString id = d.agent_id;
         auto* toggle = icon_btn(active ? QStringLiteral("⏸") : QStringLiteral("▶"),
-                                active ? tr("Halt agent") : tr("Resume agent"), active ? "#E0A800" : "#26A65B");
+                                active ? tr("Halt agent") : tr("Resume agent"), active ? "halt" : "resume");
         connect(toggle, &QPushButton::clicked, this, [this, id, active]() {
             QMetaObject::invokeMethod(
                 this,
@@ -150,7 +164,7 @@ void LeaderboardCards::rebuild() {
                 },
                 Qt::QueuedConnection);
         });
-        auto* kill = icon_btn(QStringLiteral("✖"), tr("Close positions & halt (kill)"), "#E0245E");
+        auto* kill = icon_btn(QStringLiteral("✖"), tr("Close positions & halt (kill)"), "kill");
         connect(kill, &QPushButton::clicked, this, [this, id]() {
             QMetaObject::invokeMethod(this, [this, id]() { emit kill_requested(id); }, Qt::QueuedConnection);
         });

@@ -1,4 +1,4 @@
-#include "services/notifications/providers/PushoverProvider.h"
+﻿#include "services/notifications/providers/PushoverProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -7,13 +7,13 @@
 namespace fincept::notifications {
 
 void PushoverProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    api_token_ = get_str(r, cat + ".api_token");
-    user_key_ = get_str(r, cat + ".user_key");
+    api_token_ = get_secret(r, cat + ".api_token");
+    user_key_ = get_secret(r, cat + ".user_key");
 }
 
 void PushoverProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".api_token", api_token_, cat);
-    r.set(cat + ".user_key", user_key_, cat);
+    set_secret(r, cat + ".api_token", api_token_, cat);
+    set_secret(r, cat + ".user_key", user_key_, cat);
 }
 
 void PushoverProvider::send(const NotificationRequest& req, std::function<void(bool, QString)> cb) {

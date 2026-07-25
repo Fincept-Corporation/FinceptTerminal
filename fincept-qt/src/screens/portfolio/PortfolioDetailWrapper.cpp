@@ -14,6 +14,7 @@
 
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -30,9 +31,10 @@ void PortfolioDetailWrapper::build_ui() {
     // ── Header bar (36px) ────────────────────────────────────────────────────
     auto* header = new QWidget(this);
     header->setFixedHeight(36);
-    header->setStyleSheet(QString("background: qlineargradient(x1:0,x2:1, stop:0 %1, stop:1 %2);"
-                                  "border-bottom:1px solid %3;")
-                              .arg(ui::colors::BG_RAISED(), ui::colors::BG_SURFACE(), ui::colors::AMBER()));
+    // Flat fill — DESIGN_SYSTEM §9 forbids gradients ("depth comes from
+    // background layering only").
+    header->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
+                              .arg(ui::colors::BG_RAISED(), ui::colors::AMBER()));
 
     auto* h_layout = new QHBoxLayout(header);
     h_layout->setContentsMargins(8, 0, 8, 0);
@@ -46,6 +48,11 @@ void PortfolioDetailWrapper::build_ui() {
                                      "  padding:0 10px; font-size:9px; font-weight:700; letter-spacing:0.5px; }"
                                      "QPushButton:hover { background:%1; color:#000; }")
                                  .arg(ui::colors::AMBER()));
+    // Esc leaves the detail view. Owned by the button, so it is inert while
+    // this page is not the visible one in PortfolioScreen's stack.
+    back_btn_->setShortcut(QKeySequence(Qt::Key_Escape));
+    back_btn_->setToolTip(tr("Back to the portfolio workspace  (Esc)"));
+    back_btn_->setAccessibleName(tr("Back to the portfolio workspace"));
     connect(back_btn_, &QPushButton::clicked, this, &PortfolioDetailWrapper::back_requested);
     h_layout->addWidget(back_btn_);
 
@@ -237,8 +244,11 @@ void PortfolioDetailWrapper::changeEvent(QEvent* event) {
 }
 
 void PortfolioDetailWrapper::retranslateUi() {
-    if (back_btn_)
+    if (back_btn_) {
         back_btn_->setText(tr("← BACK"));
+        back_btn_->setToolTip(tr("Back to the portfolio workspace  (Esc)"));
+        back_btn_->setAccessibleName(tr("Back to the portfolio workspace"));
+    }
     if (title_label_)
         title_label_->setText(view_title(current_view_));
     // portfolio_label_ holds "NAME | CURRENCY" — pure portfolio data, no

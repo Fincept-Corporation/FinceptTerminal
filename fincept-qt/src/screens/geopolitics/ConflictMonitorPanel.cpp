@@ -10,7 +10,6 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QRandomGenerator>
 #include <QScrollArea>
 #include <QSet>
 #include <QSplitter>
@@ -146,6 +145,21 @@ void ConflictMonitorPanel::build_ui() {
     events_table_->setColumnHidden(5, true);
     events_table_->setColumnHidden(6, true);
     events_table_->verticalHeader()->setDefaultSectionSize(26);
+    events_table_->setAccessibleName(tr("Conflict events"));
+    events_table_->setAccessibleDescription(
+        tr("Geopolitical events from the news-events API. Arrow keys move between events; the detail panel and the "
+           "map selection follow the highlighted row."));
+    // Enter/double-click on a row opens the underlying source article, matching
+    // the OPEN SOURCE button in the detail panel.
+    connect(events_table_, &QTableWidget::cellActivated, this, [this](int row, int) {
+        if (row < 0)
+            return;
+        if (auto* it = events_table_->item(row, 3)) {
+            const QString url = it->data(Qt::UserRole + 1).toString();
+            if (!url.isEmpty())
+                QDesktopServices::openUrl(QUrl(url));
+        }
+    });
 
     events_table_->setStyleSheet(
         QString("QTableWidget { background:%1; color:%2; gridline-color:%3;"

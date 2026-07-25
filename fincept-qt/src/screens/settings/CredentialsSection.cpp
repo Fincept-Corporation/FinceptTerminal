@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QList>
+#include <QMessageBox>
 #include <QPair>
 #include <QPushButton>
 #include <QScrollArea>
@@ -96,26 +97,41 @@ void CredentialsSection::build_ui() {
     vl->addWidget(make_sep());
     vl->addSpacing(16);
 
+    // One page-level stylesheet keyed by objectName instead of ~6 inline
+    // setStyleSheet() calls per credential card. With 60+ providers in
+    // CRED_KEYS that was 350+ CSS parses every time this section is built —
+    // and SettingsScreen builds all 16 sections eagerly. Only the per-key
+    // status label keeps an inline style, because its colour is state-driven.
+    page->setStyleSheet(QString("QFrame#credCard{background:%1;border:1px solid %2;}"
+                                "QWidget#credHdr{background:%3;border-bottom:1px solid %2;}"
+                                "QLabel#credName{color:%4;font-weight:600;background:transparent;}"
+                                "QWidget#credBody{background:transparent;}"
+                                "QLineEdit#credField{background:%3;color:%4;border:1px solid %5;padding:6px;}"
+                                "QLineEdit#credField:focus{border:1px solid %6;}"
+                                "QPushButton#credSave{background:%6;color:%7;border:none;font-weight:700;"
+                                "padding:0 16px;}"
+                                "QPushButton#credSave:hover{background:%8;}")
+                            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
+                                 ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER(),
+                                 ui::colors::BG_BASE(), ui::colors::AMBER_DIM()));
+
     for (const auto& def : CRED_KEYS) {
         const QString& key = def.first;
         const QString& name = def.second;
 
         auto* card = new QFrame;
-        card->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:4px;}")
-                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        card->setObjectName(QStringLiteral("credCard"));
         auto* cvl = new QVBoxLayout(card);
         cvl->setContentsMargins(0, 0, 0, 0);
         cvl->setSpacing(0);
 
         auto* hdr = new QWidget(this);
+        hdr->setObjectName(QStringLiteral("credHdr"));
         hdr->setFixedHeight(34);
-        hdr->setStyleSheet(QString("background:%1;border-bottom:1px solid %2;")
-                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
         auto* hhl = new QHBoxLayout(hdr);
         hhl->setContentsMargins(12, 0, 12, 0);
         auto* name_lbl = new QLabel(name);
-        name_lbl->setStyleSheet(
-            QString("color:%1;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY()));
+        name_lbl->setObjectName(QStringLiteral("credName"));
         hhl->addWidget(name_lbl);
         hhl->addStretch();
 
@@ -127,28 +143,54 @@ void CredentialsSection::build_ui() {
         cvl->addWidget(hdr);
 
         auto* body = new QWidget(this);
-        body->setStyleSheet("background: transparent;");
+        body->setObjectName(QStringLiteral("credBody"));
         auto* bhl = new QHBoxLayout(body);
         bhl->setContentsMargins(12, 10, 12, 10);
         bhl->setSpacing(8);
 
         auto* field = new QLineEdit;
+        field->setObjectName(QStringLiteral("credField"));
         field->setEchoMode(QLineEdit::Password);
         field->setPlaceholderText(tr("Not configured"));
-        field->setStyleSheet(input_ss());
+        // Never let an API key end up in an IME candidate list, a predictive
+        // dictionary, or a drag-and-drop payload.
+        field->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
+        field->setDragEnabled(false);
+        field->setAcceptDrops(false);
+        field->setAccessibleName(tr("%1 API key").arg(name));
         cred_fields_[key] = field;
         bhl->addWidget(field, 1);
 
         auto* save_btn = new QPushButton(tr("Save"));
+        save_btn->setObjectName(QStringLiteral("credSave"));
         save_btn->setFixedHeight(30);
         save_btn->setFixedWidth(70);
-        save_btn->setStyleSheet(btn_primary_ss());
+        save_btn->setAccessibleName(tr("Save %1 API key").arg(name));
         bhl->addWidget(save_btn);
         cred_save_btns_[key] = save_btn;
 
-        connect(save_btn, &QPushButton::clicked, this, [key, field, status_lbl]() {
+        // Enter in the field is the same as clicking Save.
+        connect(field, &QLineEdit::returnPressed, save_btn, &QPushButton::click);
+        setTabOrder(field, save_btn);
+
+        connect(save_btn, &QPushButton::clicked, this, [this, key, name, field, status_lbl]() {
             QString val = field->text().trimmed();
             if (val.isEmpty()) {
+                // Saving an empty field deletes the stored key. That is a
+                // destructive, silent action when a key is already configured —
+                // confirm it rather than shredding a credential on a stray click.
+                const auto existing = SecureStorage::instance().retrieve(key);
+                const bool had_key = existing.is_ok() && !existing.value().isEmpty();
+                if (had_key) {
+                    const auto reply = QMessageBox::question(
+                        this, tr("Remove Credential"),
+                        tr("Remove the stored %1 key from the OS keychain?\n\nYou will need to paste it "
+                           "again to restore access.")
+                            .arg(name),
+                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+                    if (reply != QMessageBox::Yes)
+                        return;
+                }
                 SecureStorage::instance().remove(key);
                 field->setPlaceholderText(tr("Not configured"));
                 status_lbl->setText(tr("Cleared"));

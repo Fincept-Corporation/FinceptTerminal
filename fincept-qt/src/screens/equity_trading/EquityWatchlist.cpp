@@ -18,6 +18,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMutexLocker>
+#include <QScrollBar>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -235,6 +236,20 @@ EquityWatchlist::EquityWatchlist(QWidget* parent) : QWidget(parent) {
     connect(table_, &QTableWidget::customContextMenuRequested, this, &EquityWatchlist::on_table_context_menu);
     layout->addWidget(table_, 1);
 
+    // Accessibility — the watchlist is the primary symbol-selection surface.
+    setAccessibleName(tr("Watchlist"));
+    wl_combo_->setAccessibleName(tr("Active watchlist"));
+    wl_menu_btn_->setAccessibleName(tr("Watchlist actions"));
+    filter_edit_->setAccessibleName(tr("Filter watchlist"));
+    add_edit_->setAccessibleName(tr("Add symbol to watchlist"));
+    add_btn_->setAccessibleName(tr("Add symbol"));
+    count_label_->setAccessibleName(tr("Symbol count"));
+    table_->setAccessibleName(tr("Watchlist symbols"));
+    setTabOrder(wl_combo_, wl_menu_btn_);
+    setTabOrder(wl_menu_btn_, filter_edit_);
+    setTabOrder(filter_edit_, add_edit_);
+    setTabOrder(add_edit_, add_btn_);
+
     // Drag-out: hold-and-drag a symbol row to ship the ticker to any drop
     // target — drop it on the pushpin bar at the top to pin + broadcast it,
     // matching the standalone Watchlist tab (WatchlistScreen). The provider
@@ -439,6 +454,11 @@ void EquityWatchlist::on_filter_changed(const QString& text) {
 }
 
 void EquityWatchlist::rebuild_table() {
+    // Preserve the scroll offset — the list is rebuilt whenever the watchlist or
+    // the position/holding union changes, which happens while the user is
+    // scrolling through it.
+    const int scroll = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
+    table_->setUpdatesEnabled(false);
     table_->setRowCount(entries_.size());
     for (int i = 0; i < entries_.size(); ++i) {
         const auto& e = entries_[i];
@@ -460,6 +480,17 @@ void EquityWatchlist::rebuild_table() {
                                                   : QColor(fincept::ui::colors::NEGATIVE()));
         table_->setItem(i, 2, chg_item);
     }
+    table_->setUpdatesEnabled(true);
+
+    // The rebuild dropped both the active-row highlight and any live filter —
+    // the charted symbol appeared unselected and a filtered list silently
+    // re-showed every row. Re-apply both here so rebuild_table() is idempotent.
+    if (!active_symbol_.isEmpty())
+        set_active_symbol(active_symbol_);
+    if (filter_edit_ && !filter_edit_->text().trimmed().isEmpty())
+        on_filter_changed(filter_edit_->text());
+    if (table_->verticalScrollBar())
+        table_->verticalScrollBar()->setValue(qMin(scroll, table_->verticalScrollBar()->maximum()));
 }
 
 void EquityWatchlist::set_broker_id(const QString& broker_id) {

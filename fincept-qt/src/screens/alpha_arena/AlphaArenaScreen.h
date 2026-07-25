@@ -65,6 +65,9 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     QHash<QString, qint64> tokens_cache_;
     QHash<QString, double> last_mids_; // previously displayed mids (ticker arrows)
     double cap_ = 0;
+    // live_mode of the competition currently on screen — gates the extra
+    // confirmation on header actions that trigger real order flow.
+    bool live_mode_ = false;
     // Header
     QLabel* venue_badge_ = nullptr;
     QLabel* status_badge_ = nullptr;

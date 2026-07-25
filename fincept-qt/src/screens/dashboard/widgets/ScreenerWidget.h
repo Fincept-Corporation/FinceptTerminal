@@ -41,6 +41,10 @@ class ScreenerWidget : public BaseWidget {
 
     QComboBox* filter_combo_ = nullptr;
     QVBoxLayout* list_layout_ = nullptr;
+    /// Owner of `list_layout_`. Carries the ONE stylesheet that styles every
+    /// data row via object-name selectors (P7) — rows themselves never call
+    /// setStyleSheet.
+    QWidget* list_widget_ = nullptr;
     QVector<services::QuoteData> all_quotes_;
 
     // Widgets needing theme-aware restyling
@@ -50,6 +54,8 @@ class ScreenerWidget : public BaseWidget {
     QWidget* header_ = nullptr;
     QVector<QLabel*> header_labels_;
     QScrollArea* scroll_ = nullptr;
+    /// Placeholder shown when the screener has no data yet / all rows filtered.
+    QLabel* empty_lbl_ = nullptr;
 
     QHash<QString, services::QuoteData> row_cache_;
     bool hub_active_ = false;

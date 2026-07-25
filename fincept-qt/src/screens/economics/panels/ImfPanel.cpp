@@ -156,6 +156,11 @@ void ImfPanel::on_result(const QString& request_id, const services::EconomicsRes
         const QJsonArray rows = flatten_pivot(values, code, country);
         const QString title = (ind_item ? ind_item->text() : code) +
                               (country.isEmpty() ? tr(" — All Countries") : " — " + country_combo_->currentText());
+        // "All Countries" produces a wide cross-section (one row per country,
+        // one column per year). LATEST/CHANGE/MIN/MAX/AVG would then be computed
+        // over an arbitrary single year column across unrelated countries — hide
+        // them rather than show a number nobody can interpret.
+        set_stats_visible(!country.isEmpty());
         display(rows, title);
         LOG_INFO("ImfPanel", QString("Displayed %1 rows").arg(rows.size()));
     }
@@ -193,7 +198,9 @@ QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values, const QString& ind
             rows.append(row);
         }
     } else {
-        // Long format: one row per year for selected country
+        // Long format: one row per year for selected country.
+        // `years` is already sorted ascending, and rows carrying no observation
+        // are dropped entirely (never emitted as 0) so gaps stay gaps.
         const QJsonObject y_map = by_country[country_filter].toObject();
         for (const auto& y : years) {
             const QJsonValue v = y_map[y];

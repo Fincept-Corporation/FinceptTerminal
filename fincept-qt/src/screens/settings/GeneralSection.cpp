@@ -151,6 +151,12 @@ void GeneralSection::build_ui() {
         currency::CurrencyManager::instance().set_currency(code);
     });
 
+    // Accessibility: the row label is a sibling QLabel, not a buddy, so the
+    // combos read as anonymous without an explicit accessible name.
+    on_close_combo_->setAccessibleName(tr("On last window close"));
+    language_combo_->setAccessibleName(tr("Interface language"));
+    currency_combo_->setAccessibleName(tr("Display currency"));
+
     vl->addStretch();
 
     scroll->setWidget(page);

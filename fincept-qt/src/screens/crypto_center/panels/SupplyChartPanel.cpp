@@ -22,7 +22,9 @@
 #include <QVBoxLayout>
 #include <QValueAxis>
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace fincept::screens::panels {
 
@@ -176,7 +178,7 @@ void SupplyChartPanel::apply_theme() {
                                       "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
                                       "  padding:2px 8px; }"
                                       "QLabel#supplyChartPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
+                                      "  border:1px solid %10; font-family:%5; font-size:9px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 8px; }"
                                       "QWidget#supplyChartBody { background:%1; }"
 
@@ -195,9 +197,11 @@ void SupplyChartPanel::apply_theme() {
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
                                 NEGATIVE())                 // %9
-                           .arg(BG_HOVER(),                 // %10
-                                BORDER_BRIGHT(),            // %11
-                                QStringLiteral("#78350f")); // %12 darker amber
+                           // One arg per marker, in ascending marker order —
+                           // QString::arg fills the LOWEST marker present, so a
+                           // spare arg shifts every later colour by one and
+                           // warns "Argument missing" for the overflow.
+                           .arg(QStringLiteral("#78350f")); // %10 darker amber
 
     setStyleSheet(ss);
 }
@@ -316,9 +320,16 @@ void SupplyChartPanel::update_demo_chip(bool is_mock) {
     if (is_mock) {
         status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("supplyChartPillDemo"));
+        // The chart itself carries no visual mock cue, so name it in the
+        // title as well — a fabricated supply curve read as real is exactly
+        // the class of defect this panel must not ship.
+        if (title_)
+            title_->setText(tr("SUPPLY CHART · 12 MONTHS · SAMPLE DATA"));
     } else {
         status_pill_->setText(tr("LIVE"));
         status_pill_->setObjectName(QStringLiteral("supplyChartPill"));
+        if (title_)
+            title_->setText(tr("SUPPLY CHART · 12 MONTHS"));
     }
     status_pill_->style()->unpolish(status_pill_);
     status_pill_->style()->polish(status_pill_);

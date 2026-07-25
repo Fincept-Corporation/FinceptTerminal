@@ -14,10 +14,13 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QMessageBox>
 #include <QPointer>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QShortcut>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QTextStream>
 #include <QVBoxLayout>
@@ -172,6 +175,44 @@ void NotesScreen::build_ui() {
     splitter->setStretchFactor(2, 1);
 
     root->addWidget(splitter);
+
+    // ── Keyboard shortcuts ────────────────────────────────────────────────────
+    // A notes editor with no Ctrl+S is a data-loss trap. Scoped to this screen
+    // so they don't leak into other tabs.
+    auto add_sc = [this](const QKeySequence& seq, auto fn) {
+        auto* sc = new QShortcut(seq, this);
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, fn);
+    };
+    add_sc(QKeySequence(QKeySequence::Save), [this]() {
+        if (right_stack_ && right_stack_->currentIndex() == 2)
+            on_save_note();
+    });
+    add_sc(QKeySequence(QKeySequence::New), [this]() { on_new_note(); });
+    add_sc(QKeySequence(QKeySequence::Find), [this]() {
+        if (search_input_) {
+            search_input_->setFocus();
+            search_input_->selectAll();
+        }
+    });
+
+    // ── Accessibility ─────────────────────────────────────────────────────────
+    category_list_->setAccessibleName(tr("Note categories"));
+    notes_list_->setAccessibleName(tr("Notes"));
+    search_input_->setAccessibleName(tr("Search notes"));
+    edit_title_->setAccessibleName(tr("Note title"));
+    edit_content_->setAccessibleName(tr("Note content"));
+    edit_category_->setAccessibleName(tr("Note category"));
+    edit_priority_->setAccessibleName(tr("Note priority"));
+    edit_sentiment_->setAccessibleName(tr("Note sentiment"));
+    edit_tags_->setAccessibleName(tr("Note tags"));
+    edit_tickers_->setAccessibleName(tr("Note tickers"));
+    setTabOrder(edit_title_, edit_category_);
+    setTabOrder(edit_category_, edit_priority_);
+    setTabOrder(edit_priority_, edit_sentiment_);
+    setTabOrder(edit_sentiment_, edit_tags_);
+    setTabOrder(edit_tags_, edit_tickers_);
+    setTabOrder(edit_tickers_, edit_content_);
 
     // Populate empty-display combos/lists and apply all translatable text.
     retranslateUi();
@@ -369,6 +410,12 @@ QWidget* NotesScreen::build_editor_panel() {
     edit_cancel_btn_ = new QPushButton(tr("CANCEL"));
     edit_cancel_btn_->setStyleSheet(kSecondaryBtn());
     connect(edit_cancel_btn_, &QPushButton::clicked, this, [this]() {
+        if (has_unsaved_edits() &&
+            QMessageBox::question(this, tr("Discard changes"), tr("Discard the changes to this note?"),
+                                  QMessageBox::Discard | QMessageBox::Cancel,
+                                  QMessageBox::Cancel) != QMessageBox::Discard)
+            return;
+        editor_baseline_ = editor_fingerprint();
         if (selected_note_id_ > 0) {
             enter_view_mode();
         } else {
@@ -527,18 +574,71 @@ void NotesScreen::update_notes_list() {
 
 // ── Slots ────────────────────────────────────────────────────────────────────
 
+// ── Unsaved-edit protection ──────────────────────────────────────────────────
+// Every navigation path out of the editor (picking another note, switching
+// category, starting a new note) used to silently throw away whatever the user
+// had typed. Compare a fingerprint of the editor fields against the values that
+// were loaded into it and confirm before discarding.
+
+QString NotesScreen::editor_fingerprint() const {
+    if (!edit_title_)
+        return QString();
+    return edit_title_->text() + QLatin1Char('\x1f') + edit_content_->toPlainText() + QLatin1Char('\x1f') +
+           edit_category_->currentData().toString() + QLatin1Char('\x1f') + edit_priority_->currentText() +
+           QLatin1Char('\x1f') + edit_sentiment_->currentText() + QLatin1Char('\x1f') + edit_tags_->text() +
+           QLatin1Char('\x1f') + edit_tickers_->text();
+}
+
+bool NotesScreen::has_unsaved_edits() const {
+    if (!is_editing_ || !right_stack_ || right_stack_->currentIndex() != 2)
+        return false;
+    return editor_fingerprint() != editor_baseline_;
+}
+
+bool NotesScreen::confirm_leave_editor() {
+    if (!has_unsaved_edits())
+        return true;
+    const auto reply = QMessageBox::warning(
+        this, tr("Unsaved note"), tr("This note has unsaved changes.\n\nSave them before leaving?"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
+    if (reply == QMessageBox::Cancel)
+        return false;
+    if (reply == QMessageBox::Save) {
+        on_save_note();
+        // on_save_note() refuses an empty title; if it did, stay in the editor.
+        return !edit_title_->text().trimmed().isEmpty();
+    }
+    editor_baseline_ = editor_fingerprint(); // discarded — stop re-asking
+    return true;
+}
+
 void NotesScreen::on_category_selected(int row) {
     if (row < 0 || row >= kCategories.size())
         return;
+    if (!confirm_leave_editor()) {
+        // Put the sidebar selection back where it was.
+        if (category_list_) {
+            QSignalBlocker block(category_list_);
+            for (int i = 0; i < kCategories.size(); ++i)
+                if (kCategories[i].id == current_category_) {
+                    category_list_->setCurrentRow(i);
+                    break;
+                }
+        }
+        return;
+    }
     current_category_ = kCategories[row].id;
     update_notes_list();
     right_stack_->setCurrentIndex(0);
+    is_editing_ = false;
     selected_note_id_ = -1;
     ScreenStateManager::instance().notify_changed(this);
 }
 
 void NotesScreen::on_note_selected(int row) {
     if (row < 0 || row >= filtered_notes_.size())
+        return;
+    if (!confirm_leave_editor())
         return;
     const auto& note = filtered_notes_[row];
     selected_note_id_ = note.id;
@@ -548,6 +648,8 @@ void NotesScreen::on_note_selected(int row) {
 }
 
 void NotesScreen::on_new_note() {
+    if (!confirm_leave_editor())
+        return;
     selected_note_id_ = -1;
     clear_editor();
 
@@ -560,11 +662,16 @@ void NotesScreen::on_new_note() {
 
     is_editing_ = true;
     right_stack_->setCurrentIndex(2);
+    editor_baseline_ = editor_fingerprint();
+    edit_title_->setFocus();
 }
 
 void NotesScreen::on_save_note() {
     QString title = edit_title_->text().trimmed();
     if (title.isEmpty()) {
+        // Previously this just moved focus with no explanation, so SAVE looked
+        // like a dead button.
+        QMessageBox::information(this, tr("Title required"), tr("Give the note a title before saving."));
         edit_title_->setFocus();
         return;
     }
@@ -581,12 +688,14 @@ void NotesScreen::on_save_note() {
 
     auto& repo = fincept::NotesRepository::instance();
 
+    bool ok = true;
     if (selected_note_id_ > 0) {
         // Update existing
         note.id = selected_note_id_;
         auto r = repo.update(note);
         if (r.is_err()) {
             LOG_ERROR("Notes", "Failed to update note");
+            ok = false;
         }
     } else {
         // Create new
@@ -595,18 +704,38 @@ void NotesScreen::on_save_note() {
             selected_note_id_ = static_cast<int>(r.value());
         } else {
             LOG_ERROR("Notes", "Failed to create note");
+            ok = false;
         }
     }
+
+    if (!ok) {
+        // Never silently lose the user's writing — keep them in the editor.
+        QMessageBox::warning(this, tr("Save failed"),
+                             tr("The note could not be written to the local database. "
+                                "Your text is still in the editor."));
+        return;
+    }
+
+    // The editor now matches what is on disk.
+    editor_baseline_ = editor_fingerprint();
 
     load_notes();
 
     // Select the saved note
-    for (int i = 0; i < filtered_notes_.size(); ++i) {
-        if (filtered_notes_[i].id == selected_note_id_) {
-            notes_list_->setCurrentRow(i);
-            break;
+    {
+        QSignalBlocker block(notes_list_); // don't re-enter on_note_selected
+        for (int i = 0; i < filtered_notes_.size(); ++i) {
+            if (filtered_notes_[i].id == selected_note_id_) {
+                notes_list_->setCurrentRow(i);
+                break;
+            }
         }
     }
+    for (const auto& n : notes_)
+        if (n.id == selected_note_id_) {
+            show_note(n);
+            break;
+        }
     enter_view_mode();
 }
 
@@ -675,10 +804,13 @@ void NotesScreen::on_export_note() {
     QFile f(dest);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
         LOG_ERROR("Notes", "Failed to export note: " + dest);
+        // The button previously appeared to do nothing at all on failure.
+        QMessageBox::warning(this, tr("Export failed"), tr("Could not write the note to:\n%1").arg(dest));
         return;
     }
 
     QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8); // non-ASCII note bodies must survive
     out << "# " << title << "\n\n" << content << "\n";
     f.close();
 
@@ -686,6 +818,8 @@ void NotesScreen::on_export_note() {
     svc.register_file(stored_name, title + ".md", info.size(), "text/markdown", "notes");
 
     LOG_INFO("Notes", "Exported note to File Manager: " + stored_name);
+    QMessageBox::information(this, tr("Note exported"),
+                             tr("Saved as \"%1\" — it is now available in the File Manager.").arg(stored_name));
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -719,7 +853,10 @@ void NotesScreen::clear_editor() {
 
 void NotesScreen::enter_edit_mode() {
     is_editing_ = true;
-    // Find the note and populate editor
+    // Find the note and populate editor. If it isn't in notes_ (stale id after
+    // a delete elsewhere) start from a clean editor rather than leaving the
+    // previous note's text in the fields.
+    bool found = false;
     for (const auto& n : notes_) {
         if (n.id == selected_note_id_) {
             edit_title_->setText(n.title);
@@ -731,10 +868,14 @@ void NotesScreen::enter_edit_mode() {
             edit_sentiment_->setCurrentText(n.sentiment);
             edit_tags_->setText(n.tags);
             edit_tickers_->setText(n.tickers);
+            found = true;
             break;
         }
     }
+    if (!found)
+        clear_editor();
     right_stack_->setCurrentIndex(2);
+    editor_baseline_ = editor_fingerprint();
 }
 
 void NotesScreen::enter_view_mode() {

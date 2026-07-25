@@ -18,9 +18,13 @@
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QInputDialog>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QKeySequence>
 #include <QMessageBox>
 #include <QPointer>
 #include <QSet>
+#include <QShortcut>
 #include <QShowEvent>
 #include <QSplitter>
 #include <QTextStream>
@@ -138,6 +142,8 @@ void WatchlistScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     hub_unsubscribe_all();
     unsubscribe_mcp_events();
+    if (rebuild_timer_)
+        rebuild_timer_->stop(); // P3: no work while hidden
 }
 
 void WatchlistScreen::changeEvent(QEvent* event) {
@@ -386,17 +392,39 @@ QWidget* WatchlistScreen::build_main_panel() {
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    table_->setAccessibleName(tr("Watchlist quotes"));
+
     // When the user selects a row, publish its symbol into the linked group.
     // Use itemSelectionChanged rather than cellClicked so keyboard navigation
     // also propagates.
     connect(table_, &QTableWidget::itemSelectionChanged, this, &WatchlistScreen::publish_selection_to_group);
+
+    // Delete on a selected row removes the symbol (with the same confirmation
+    // as the REMOVE SELECTED button). Scoped to the table so it can't fire
+    // while the user is typing in the ADD box.
+    auto* del_sc = new QShortcut(QKeySequence::Delete, table_);
+    del_sc->setContext(Qt::WidgetShortcut);
+    connect(del_sc, &QShortcut::activated, this, &WatchlistScreen::on_remove_stock);
 
     // Drag-out: hold-and-drag a symbol row to broadcast the ticker to any
     // panel. The provider callback reads the current row at drag-start so
     // keyboard row-changes are reflected without reinstalling the filter.
     symbol_dnd::installDragSource(table_->viewport(), [this]() { return current_symbol(); }, link_group_);
 
-    lay->addWidget(table_, 1);
+    // Table + empty-state guidance share one slot; only one is visible.
+    auto* table_stack = new QWidget(main_panel_);
+    auto* ts_lay = new QVBoxLayout(table_stack);
+    ts_lay->setContentsMargins(0, 0, 0, 0);
+    ts_lay->setSpacing(0);
+    ts_lay->addWidget(table_, 1);
+
+    empty_label_ = new QLabel(table_stack);
+    empty_label_->setAlignment(Qt::AlignCenter);
+    empty_label_->setWordWrap(true);
+    empty_label_->setVisible(false);
+    ts_lay->addWidget(empty_label_, 1);
+
+    lay->addWidget(table_stack, 1);
 
     // Drop: dropping a symbol onto the watchlist body adds it to the current
     // watchlist. Happens on the main_panel_ so the drop target is generous
@@ -505,6 +533,12 @@ void WatchlistScreen::refresh_theme() {
 
     if (remove_btn_)
         remove_btn_->setStyleSheet(danger_btn_style());
+
+    if (empty_label_)
+        empty_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; background:transparent;")
+                                        .arg(colors::TEXT_TERTIARY())
+                                        .arg(fonts::SMALL)
+                                        .arg(fonts::DATA_FAMILY()));
 }
 
 // ── Data Loading ─────────────────────────────────────────────────────────────
@@ -538,10 +572,26 @@ void WatchlistScreen::load_watchlists() {
 
     wl_count_->setText(tr("%1 lists").arg(watchlists_.size()));
 
-    // Select first watchlist
-    if (!watchlists_.isEmpty()) {
-        wl_list_->setCurrentRow(0);
+    if (watchlists_.isEmpty())
+        return;
+
+    // Keep the user on the list they were viewing. This is reloaded from a
+    // cloud pull and from every MCP watchlist.* event, and the old code always
+    // jumped back to row 0 — so an LLM adding a symbol yanked the user out of
+    // whichever list they had open.
+    int row = 0;
+    if (!current_wl_id_.isEmpty()) {
+        for (int i = 0; i < watchlists_.size(); ++i) {
+            if (watchlists_[i].id == current_wl_id_) {
+                row = i;
+                break;
+            }
+        }
     }
+    if (wl_list_->currentRow() == row)
+        on_watchlist_selected(row); // same row → currentRowChanged won't fire
+    else
+        wl_list_->setCurrentRow(row);
 }
 
 void WatchlistScreen::load_stocks() {
@@ -563,6 +613,7 @@ void WatchlistScreen::fetch_quotes() {
     if (stocks_.isEmpty()) {
         table_->clear_data();
         hub_unsubscribe_all();
+        update_empty_state();
         return;
     }
 
@@ -571,6 +622,17 @@ void WatchlistScreen::fetch_quotes() {
     // in the table immediately. Real prices fill in as the hub delivers
     // quotes via the subscription callbacks.
     rebuild_from_cache();
+}
+
+void WatchlistScreen::schedule_table_rebuild() {
+    if (!rebuild_timer_) {
+        rebuild_timer_ = new QTimer(this);
+        rebuild_timer_->setSingleShot(true);
+        rebuild_timer_->setInterval(60); // one frame-ish; absorbs a whole hub burst
+        connect(rebuild_timer_, &QTimer::timeout, this, &WatchlistScreen::rebuild_from_cache);
+    }
+    if (!rebuild_timer_->isActive())
+        rebuild_timer_->start();
 }
 
 void WatchlistScreen::rebuild_from_cache() {
@@ -588,9 +650,26 @@ void WatchlistScreen::rebuild_from_cache() {
             table_->add_row({s.symbol, s.name, "--", "--", "--", "--", "--", "--"});
         }
         table_->setSortingEnabled(true);
+        update_empty_state();
         return;
     }
     populate_table(quotes);
+    update_empty_state();
+}
+
+void WatchlistScreen::update_empty_state() {
+    if (!empty_label_ || !table_)
+        return;
+    // An empty watchlist used to render as a blank grid with no explanation.
+    const bool show = current_wl_id_.isEmpty() || stocks_.isEmpty();
+    empty_label_->setVisible(show);
+    table_->setVisible(!show);
+    if (!show)
+        return;
+    empty_label_->setText(current_wl_id_.isEmpty()
+                              ? tr("Select a watchlist on the left, or press + to create one.")
+                              : tr("This watchlist is empty.\n\nType one or more tickers in the ADD box above\n"
+                                   "(comma-separated), or drag a symbol in from another panel."));
 }
 
 void WatchlistScreen::hub_resubscribe_stocks() {
@@ -611,16 +690,18 @@ void WatchlistScreen::hub_resubscribe_stocks() {
         const QString topic = QStringLiteral("market:quote:") + sym;
         topics.append(topic);
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
-            LOG_INFO(
-                "Watchlist",
-                QString("hub callback fired for %1 (canConvert=%2)").arg(sym).arg(v.canConvert<services::QuoteData>()));
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
-            rebuild_from_cache();
+            // Do NOT rebuild the whole table here. A hub delivery burst fans out
+            // one callback per symbol, so a 50-symbol watchlist used to run 50
+            // full clear_data()+50-row repopulations back-to-back (2500 row
+            // constructions) and lose the user's sort/selection each time.
+            // Coalesce into a single rebuild at the end of the burst.
+            schedule_table_rebuild();
         });
     }
-    LOG_INFO("Watchlist", QString("subscribed + requesting %1 topics: %2").arg(topics.size()).arg(topics.join(", ")));
+    LOG_DEBUG("Watchlist", QString("subscribed + requesting %1 quote topics").arg(topics.size()));
     // force=true: watchlist symbols change on user edit; bypass min_interval
     // so newly-added tickers resolve immediately instead of waiting for the
     // scheduler tick.
@@ -725,7 +806,9 @@ void WatchlistScreen::on_delete_watchlist() {
 
     fincept::WatchlistRepository::instance().remove(current_wl_id_);
     current_wl_id_.clear();
+    stocks_.clear();
     table_->clear_data();
+    update_empty_state();
     panel_title_->setText(tr("Select a watchlist"));
     stock_count_->clear();
     if (del_wl_btn_)
@@ -767,10 +850,16 @@ void WatchlistScreen::on_remove_stock() {
     // remove the WRONG symbol from the watchlist.
     const int row = table_->currentRow();
     auto* sym_item = (row >= 0) ? table_->item(row, 0) : nullptr;
-    if (!sym_item)
+    if (!sym_item) {
+        QMessageBox::information(this, tr("Remove symbol"), tr("Select a row in the table first."));
         return;
+    }
     const QString symbol = sym_item->text();
     if (symbol.isEmpty())
+        return;
+    // Destructive and previously one misclick away with no confirmation.
+    if (QMessageBox::question(this, tr("Remove symbol"), tr("Remove %1 from this watchlist?").arg(symbol),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
     fincept::WatchlistRepository::instance().remove_stock(current_wl_id_, symbol);
     load_stocks();

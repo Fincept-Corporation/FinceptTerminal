@@ -1,6 +1,7 @@
 // CryptoTickerBar.cpp — dense price ribbon with bid/ask/spread
 #include "screens/crypto_trading/CryptoTickerBar.h"
 
+#include "screens/crypto_trading/CryptoTypes.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -73,13 +74,15 @@ void CryptoTickerBar::set_symbol(const QString& symbol) {
     symbol_label_->setText(symbol);
 }
 
-// Round a value to the display precision (here 2 decimals). Two inputs that
-// round identically mean identical rendered text — no setText needed.
-static inline double round_pp(double v, int places = 2) {
-    double mul = 1.0;
-    for (int i = 0; i < places; ++i)
-        mul *= 10.0;
-    return std::round(v * mul) / mul;
+// Set `label`'s text only when the rendered string actually changed, using
+// `cache` as the last-rendered value. Replaces the old
+// "round to 2 dp and compare doubles" dedup, which never fired an update for
+// sub-cent assets because every tick rounded to the same 0.00.
+static inline void set_if_changed(QLabel* label, QString& cache, const QString& text) {
+    if (cache == text)
+        return;
+    cache = text;
+    label->setText(text);
 }
 
 void CryptoTickerBar::update_data(double price, double change_pct, double high, double low, double volume,
@@ -87,18 +90,11 @@ void CryptoTickerBar::update_data(double price, double change_pct, double high, 
     if (price <= 0)
         return;
 
-    const double price_disp = round_pp(price);
-    if (price_disp != last_price_display_) {
-        price_label_->setText(QString("$%1").arg(price_disp, 0, 'f', 2));
-        last_price_display_ = price_disp;
-    }
+    set_if_changed(price_label_, last_price_text_, format_price_usd(price));
 
     const bool positive = change_pct >= 0;
-    const double change_disp = round_pp(change_pct);
-    if (change_disp != last_change_display_) {
-        change_label_->setText(QString("%1%2%").arg(positive ? "+" : "").arg(change_disp, 0, 'f', 2));
-        last_change_display_ = change_disp;
-    }
+    set_if_changed(change_label_, last_change_text_,
+                   QString("%1%2%").arg(positive ? "+" : "").arg(change_pct, 0, 'f', 2));
 
     // Only update style on state flip — P7
     if (positive != last_positive_) {
@@ -108,58 +104,25 @@ void CryptoTickerBar::update_data(double price, double change_pct, double high, 
         last_positive_ = positive;
     }
 
-    const double high_disp = round_pp(high);
-    if (high_disp != last_high_display_) {
-        high_label_->setText(QString("H:%1").arg(high_disp, 0, 'f', 2));
-        last_high_display_ = high_disp;
-    }
-    const double low_disp = round_pp(low);
-    if (low_disp != last_low_display_) {
-        low_label_->setText(QString("L:%1").arg(low_disp, 0, 'f', 2));
-        last_low_display_ = low_disp;
-    }
+    set_if_changed(high_label_, last_high_text_, QStringLiteral("H:") + format_price_plain(high));
+    set_if_changed(low_label_, last_low_text_, QStringLiteral("L:") + format_price_plain(low));
 
-    int vol_unit;
-    double vol_disp;
     QString vol_text;
-    if (volume >= 1e9) {
-        vol_unit = 2;
-        vol_disp = round_pp(volume / 1e9);
-        vol_text = QString("Vol:%1B").arg(vol_disp, 0, 'f', 2);
-    } else if (volume >= 1e6) {
-        vol_unit = 1;
-        vol_disp = round_pp(volume / 1e6);
-        vol_text = QString("Vol:%1M").arg(vol_disp, 0, 'f', 2);
-    } else {
-        vol_unit = 0;
-        vol_disp = std::round(volume);
-        vol_text = QString("Vol:%1").arg(vol_disp, 0, 'f', 0);
-    }
-    if (vol_unit != last_volume_unit_ || vol_disp != last_volume_display_) {
-        volume_label_->setText(vol_text);
-        last_volume_unit_ = vol_unit;
-        last_volume_display_ = vol_disp;
-    }
+    if (volume >= 1e9)
+        vol_text = QString("Vol:%1B").arg(volume / 1e9, 0, 'f', 2);
+    else if (volume >= 1e6)
+        vol_text = QString("Vol:%1M").arg(volume / 1e6, 0, 'f', 2);
+    else
+        vol_text = QString("Vol:%1").arg(volume, 0, 'f', 0);
+    set_if_changed(volume_label_, last_volume_text_, vol_text);
 
     Q_UNUSED(ws_connected);
 }
 
 void CryptoTickerBar::update_bid_ask(double bid, double ask, double spread) {
-    const double b = round_pp(bid);
-    const double a = round_pp(ask);
-    const double s = round_pp(spread);
-    if (b != last_bid_display_) {
-        bid_label_->setText(QString("B:%1").arg(b, 0, 'f', 2));
-        last_bid_display_ = b;
-    }
-    if (a != last_ask_display_) {
-        ask_label_->setText(QString("A:%1").arg(a, 0, 'f', 2));
-        last_ask_display_ = a;
-    }
-    if (s != last_spread_display_) {
-        spread_label_->setText(QString("S:%1").arg(s, 0, 'f', 2));
-        last_spread_display_ = s;
-    }
+    set_if_changed(bid_label_, last_bid_text_, QStringLiteral("B:") + format_price_plain(bid));
+    set_if_changed(ask_label_, last_ask_text_, QStringLiteral("A:") + format_price_plain(ask));
+    set_if_changed(spread_label_, last_spread_text_, QStringLiteral("S:") + format_price_plain(spread));
 }
 
 void CryptoTickerBar::update_mark_price(double mark_price, double index_price) {
@@ -169,11 +132,11 @@ void CryptoTickerBar::update_mark_price(double mark_price, double index_price) {
         return;
     }
     if (mark_price > 0) {
-        mark_price_label_->setText(QString("Mk:%1").arg(mark_price, 0, 'f', 2));
+        mark_price_label_->setText(QStringLiteral("Mk:") + format_price_plain(mark_price));
         mark_price_label_->setVisible(true);
     }
     if (index_price > 0) {
-        index_price_label_->setText(QString("Idx:%1").arg(index_price, 0, 'f', 2));
+        index_price_label_->setText(QStringLiteral("Idx:") + format_price_plain(index_price));
         index_price_label_->setVisible(true);
     }
 }

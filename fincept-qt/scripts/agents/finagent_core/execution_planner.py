@@ -8,10 +8,62 @@ Similar to ValueCell's task planning capabilities.
 from typing import Dict, Any, Optional, List, Callable, Union
 from dataclasses import dataclass, field
 from enum import Enum
+import ast
 import logging
 import json
 
 logger = logging.getLogger(__name__)
+
+
+# ── Condition sandbox ────────────────────────────────────────────────────────
+# Branch conditions come from a plan built by an LLM, and the plan context is
+# interpolated into them before evaluation. eval() with {"__builtins__": {}}
+# does not contain that: `().__class__.__mro__[1].__subclasses__()` reaches the
+# whole class hierarchy and from there os/subprocess, so a poisoned plan (or
+# poisoned tool output interpolated into one) is arbitrary code execution.
+#
+# Conditions only ever need comparisons, boolean logic and arithmetic over
+# context values, so the grammar is restricted to exactly that. Attribute
+# access and calls are not in the allowlist, which removes the escape entirely
+# rather than trying to blocklist its spellings.
+_CONDITION_ALLOWED_NODES = (
+    ast.Expression, ast.BoolOp, ast.UnaryOp, ast.Compare, ast.BinOp,
+    ast.Name, ast.Load, ast.Constant, ast.List, ast.Tuple,
+    ast.And, ast.Or, ast.Not, ast.USub, ast.UAdd,
+    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod,
+    ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+    ast.In, ast.NotIn, ast.Is, ast.IsNot,
+)
+
+
+def _safe_eval_condition(condition: str, context: Dict[str, Any]) -> bool:
+    """Evaluate a branch condition under a restricted grammar.
+
+    Returns False for anything that fails to parse, uses disallowed syntax, or
+    raises — the same failure behaviour the previous bare eval() had.
+    """
+    if not condition or not condition.strip():
+        return False
+    try:
+        tree = ast.parse(condition, mode="eval")
+    except SyntaxError:
+        logger.warning("Condition rejected (syntax): %r", condition)
+        return False
+
+    for node in ast.walk(tree):
+        if not isinstance(node, _CONDITION_ALLOWED_NODES):
+            logger.warning("Condition rejected (%s not allowed): %r",
+                           type(node).__name__, condition)
+            return False
+        if isinstance(node, ast.Name) and node.id.startswith("_"):
+            logger.warning("Condition rejected (name %r): %r", node.id, condition)
+            return False
+
+    try:
+        return bool(eval(compile(tree, "<condition>", "eval"),  # noqa: S307
+                         {"__builtins__": {}}, context))
+    except Exception:
+        return False
 
 
 class StepStatus(Enum):
@@ -415,10 +467,7 @@ class ExecutionPlanner:
         # Simple condition evaluation using context
         condition = self._interpolate(condition, plan.context)
 
-        try:
-            result = eval(condition, {"__builtins__": {}}, plan.context)
-        except Exception:
-            result = False
+        result = _safe_eval_condition(condition, plan.context)
 
         next_step_id = if_true if result else if_false
 

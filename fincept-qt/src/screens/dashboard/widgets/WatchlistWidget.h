@@ -17,6 +17,11 @@ class WatchlistWidget : public BaseWidget {
   public:
     explicit WatchlistWidget(QWidget* parent = nullptr);
 
+    /// Per-instance config — the user's symbol list. Persisted with the
+    /// dashboard layout so an edited watchlist survives a restart.
+    QJsonObject config() const override;
+    void apply_config(const QJsonObject& cfg) override;
+
   protected:
     void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
@@ -26,7 +31,8 @@ class WatchlistWidget : public BaseWidget {
   private:
     void apply_styles();
     void refresh_data();
-    void populate(const QVector<services::QuoteData>& quotes);
+    /// Parse the input box into `symbols_`, re-wire the hub, and persist.
+    void commit_symbols();
 
     /// (Re)subscribe to the hub for the current `symbols_` set.
     void hub_resubscribe();

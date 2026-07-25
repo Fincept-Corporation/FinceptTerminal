@@ -136,13 +136,25 @@ QWidget* ContactScreen::build_page() {
         grid->setContentsMargins(14, 12, 14, 12);
         grid->setSpacing(10);
 
-        // Brand/contact values (email, phone, company name) are shown verbatim — not translated.
-        grid->addWidget(make_contact_card(tr("EMAIL SUPPORT"), "support@fincept.in", tr("Response within 4-6 hours")),
-                        0, 0);
-        grid->addWidget(make_contact_card(tr("PHONE SUPPORT"), "+1-800-FINCEPT", tr("Mon-Fri, 9AM-6PM EST")), 0, 1);
-        grid->addWidget(make_contact_card(tr("SUPPORT HOURS"), tr("Mon-Fri 9AM-6PM EST"), tr("Saturday 10AM-4PM EST")),
+        // Brand/contact values (email, handles, company name) are shown verbatim
+        // — not translated.
+        //
+        // Only channels that actually exist are listed. The previous version
+        // advertised a "+1-800-FINCEPT" phone line, staffed weekend support
+        // hours, a "response within 4-6 hours" SLA and a New York office —
+        // none of which are documented anywhere in this project. Publishing
+        // unreachable contact details on a contact page is worse than
+        // publishing none.
+        grid->addWidget(
+            make_contact_card(tr("EMAIL SUPPORT"), "support@fincept.in", tr("Primary support channel")), 0, 0);
+        grid->addWidget(make_contact_card(tr("COMMUNITY"), "discord.gg/ae87a8ygbN", tr("Discussion and peer help")), 0,
+                        1);
+        grid->addWidget(make_contact_card(tr("ISSUE TRACKER"), "github.com/Fincept-Corporation/FinceptTerminal",
+                                          tr("Bug reports and feature requests")),
                         1, 0);
-        grid->addWidget(make_contact_card(tr("OFFICE"), "Fincept Corporation", tr("New York, United States")), 1, 1);
+        grid->addWidget(make_contact_card(tr("IN-APP TICKETS"), tr("Support tab"),
+                                          tr("Open a tracked ticket from inside the terminal")),
+                        1, 1);
 
         pvl->addWidget(body);
         vl->addWidget(panel);
@@ -177,22 +189,27 @@ QWidget* ContactScreen::build_page() {
         };
 
         auto* email_btn = make_action(tr("Send Email"));
+        email_btn->setAccessibleName(tr("Send an email to support"));
         connect(email_btn, &QPushButton::clicked, this,
                 []() { QDesktopServices::openUrl(QUrl("mailto:support@fincept.in")); });
         hl->addWidget(email_btn);
 
         auto* discord_btn = make_action(tr("Join Discord"));
+        discord_btn->setAccessibleName(tr("Open the Fincept Discord server"));
         connect(discord_btn, &QPushButton::clicked, this,
                 []() { QDesktopServices::openUrl(QUrl("https://discord.gg/ae87a8ygbN")); });
         hl->addWidget(discord_btn);
 
         auto* github_btn = make_action(tr("GitHub Issues"));
+        github_btn->setAccessibleName(tr("Open the GitHub issue tracker"));
         connect(github_btn, &QPushButton::clicked, this, []() {
             QDesktopServices::openUrl(QUrl("https://github.com/Fincept-Corporation/FinceptTerminal/issues"));
         });
         hl->addWidget(github_btn);
 
         hl->addStretch();
+        setTabOrder(email_btn, discord_btn);
+        setTabOrder(discord_btn, github_btn);
         pvl->addWidget(body);
         vl->addWidget(panel);
     }

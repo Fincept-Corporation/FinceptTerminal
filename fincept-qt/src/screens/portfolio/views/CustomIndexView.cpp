@@ -302,18 +302,30 @@ void CustomIndexView::set_data(const portfolio::PortfolioSummary& summary, const
 }
 
 void CustomIndexView::update_constituents() {
+    // set_data() runs on every portfolio poll, so this table is rebuilt while
+    // the user is still ticking constituents. Snapshot their choices first and
+    // put them back \u2014 otherwise every unticked row silently re-ticked itself
+    // roughly once a minute.
+    QHash<QString, Qt::CheckState> prev_checks;
+    for (int r = 0; r < const_table_->rowCount(); ++r) {
+        const auto* sym_item = const_table_->item(r, 1);
+        const auto* chk = const_table_->item(r, 0);
+        if (sym_item && chk)
+            prev_checks.insert(sym_item->text(), chk->checkState());
+    }
+
     const_table_->setRowCount(static_cast<int>(summary_.holdings.size()));
 
     for (int r = 0; r < static_cast<int>(summary_.holdings.size()); ++r) {
         const auto& h = summary_.holdings[r];
         const_table_->setRowHeight(r, 28);
 
-        // Check box (text-based, ticked by default)
+        // Check box (text-based, ticked by default for newly-seen symbols)
         auto* check = new QTableWidgetItem("\u2611");
         check->setTextAlignment(Qt::AlignCenter);
         check->setForeground(QColor(ui::colors::POSITIVE()));
         check->setFlags(check->flags() | Qt::ItemIsUserCheckable);
-        check->setCheckState(Qt::Checked);
+        check->setCheckState(prev_checks.value(h.symbol, Qt::Checked));
         const_table_->setItem(r, 0, check);
 
         auto set_item = [&](int col, const QString& text, const char* color = nullptr) {
@@ -465,6 +477,16 @@ void CustomIndexView::delete_selected_index() {
 
     const auto& idx = loaded_indices_[row];
 
+    // Destructive and irreversible (the index and its whole value history go),
+    // and it was one click away with no confirmation at all.
+    const auto answer = QMessageBox::question(
+        this, tr("Delete Custom Index"),
+        tr("Delete the index \"%1\"?\n\nIts entire recorded value history will be removed. This cannot be undone.")
+            .arg(idx.name),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+        return;
+
     auto r = CustomIndexRepository::instance().remove(idx.id);
     if (r.is_err()) {
         LOG_ERROR("CustomIndex", "Delete failed: " + QString::fromStdString(r.error()));
@@ -506,8 +528,12 @@ void CustomIndexView::show_index_performance(const QString& index_id, const QStr
     auto* chart = perf_chart_view_->chart();
     chart->removeAllSeries();
     const auto old_axes = chart->axes();
-    for (auto* ax : old_axes)
+    for (auto* ax : old_axes) {
+        // removeAxis() only detaches — without the delete each re-render leaked
+        // a QDateTimeAxis + a QValueAxis.
         chart->removeAxis(ax);
+        delete ax;
+    }
 
     chart->addSeries(series);
     chart->setTitle(QString());

@@ -11,6 +11,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStyle>
@@ -279,12 +280,24 @@ void CodeEditorScreen::on_open_library_entry(int catalog_index) {
     if (catalog_index < 0 || catalog_index >= catalog.size())
         return;
     const NotebookCatalogEntry& e = catalog[catalog_index];
+
+    // Opening a library notebook replaces whatever is in the editor — same
+    // unsaved-work guard as File > Open.
+    if (!confirm_discard_changes(tr("Opening this library notebook")))
+        return;
+
     const QString path = NotebookLibraryService::instance().working_copy_for(e);
     if (path.isEmpty()) {
         LOG_WARN("CodeEditor", "Could not open library notebook: " + e.id);
+        QMessageBox::warning(this, tr("Open Notebook"),
+                             tr("Could not prepare a working copy of \"%1\".\n\n"
+                                "The bundled notebook may be missing from this build.")
+                                 .arg(e.title));
         return;
     }
-    open_notebook_path(path); // loads + switches to the editor view
+    if (!open_notebook_path(path)) { // loads + switches to the editor view
+        QMessageBox::warning(this, tr("Open Notebook"), tr("\"%1\" could not be parsed as a notebook.").arg(e.title));
+    }
 }
 
 } // namespace fincept::screens

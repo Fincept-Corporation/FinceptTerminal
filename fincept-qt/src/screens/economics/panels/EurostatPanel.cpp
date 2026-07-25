@@ -149,7 +149,11 @@ void EurostatPanel::on_fetch() {
 
     show_loading(tr("Fetching Eurostat: %1 — %2…").arg(dataset.label, country_combo_->currentText()));
 
-    QStringList args = {dataset.command};
+    // EconomicsService::execute() prepends `command` to the argv itself. Passing
+    // the command again here made the script read the command name as the
+    // country code (`industrial industrial DE` → country="industrial",
+    // nace="DE"), so the COUNTRY selector never reached Eurostat.
+    QStringList args;
     if (dataset.has_country)
         args << country;
 

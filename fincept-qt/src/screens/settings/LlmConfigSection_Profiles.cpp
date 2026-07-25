@@ -455,6 +455,21 @@ void LlmConfigSection::on_save_profile() {
 void LlmConfigSection::on_delete_profile() {
     if (editing_profile_id_.isEmpty())
         return;
+
+    // Deleting a profile is irreversible and silently detaches every agent /
+    // team assigned to it — the only destructive action on this tab that had
+    // no confirmation step (the provider Remove button already has one).
+    const QString name = profile_name_edit_ ? profile_name_edit_->text().trimmed() : QString();
+    const auto reply = QMessageBox::question(
+        this, tr("Delete Profile"),
+        name.isEmpty() ? tr("Delete this LLM profile?\n\nThis cannot be undone.")
+                       : tr("Delete the LLM profile \"%1\"?\n\nAgents assigned to it fall back to the "
+                            "default profile. This cannot be undone.")
+                             .arg(name),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
+
     auto r = LlmProfileRepository::instance().delete_profile(editing_profile_id_);
     if (r.is_ok()) {
         clear_profile_form();

@@ -60,10 +60,34 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
                                   "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
                               .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_HOVER(),
                                    colors::BG_RAISED(), colors::TEXT_SECONDARY()));
+    table_->setAccessibleName(tr("Trader leaderboard"));
     vl->addWidget(table_, 1);
+
+    // The panel is shown whenever the adapter advertises has_leaderboard, but
+    // nothing populates it yet — render an explicit empty state instead of a
+    // blank grid that reads as a broken widget.
+    show_empty_state(tr("Leaderboard data not available"));
+}
+
+void PolymarketLeaderboard::show_empty_state(const QString& message) {
+    if (!table_)
+        return;
+    table_->setSortingEnabled(false);
+    table_->setRowCount(1);
+    auto* item = new QTableWidgetItem(message);
+    item->setTextAlignment(Qt::AlignCenter);
+    item->setForeground(QColor(colors::TEXT_DIM()));
+    item->setFlags(Qt::ItemIsEnabled);
+    table_->setItem(0, 0, item);
+    table_->setSpan(0, 0, 1, table_->columnCount());
 }
 
 void PolymarketLeaderboard::set_entries(const QVector<LeaderboardEntry>& entries) {
+    table_->clearSpans();
+    if (entries.isEmpty()) {
+        show_empty_state(tr("No leaderboard entries"));
+        return;
+    }
     table_->setSortingEnabled(false);
     table_->setRowCount(entries.size());
 
@@ -96,7 +120,9 @@ void PolymarketLeaderboard::set_entries(const QVector<LeaderboardEntry>& entries
 
 void PolymarketLeaderboard::set_loading(bool loading) {
     if (loading) {
+        table_->clearSpans();
         table_->setRowCount(0);
+        show_empty_state(tr("Loading…"));
     }
 }
 

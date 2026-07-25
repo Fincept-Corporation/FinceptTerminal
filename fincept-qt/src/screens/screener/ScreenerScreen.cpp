@@ -11,8 +11,10 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -144,10 +146,16 @@ void ScreenerScreen::retranslate() {
     search_->setPlaceholderText(tr("Search symbol or name…"));
     refresh_btn_->setText(tr("REFRESH"));
 
+    search_->setAccessibleName(tr("Filter by symbol or company name"));
+    sort_combo_->setAccessibleName(tr("Sort order"));
+    refresh_btn_->setAccessibleName(tr("Refresh all quotes now"));
+
     const int prev = sort_combo_->currentIndex();
     QSignalBlocker block(sort_combo_);
     sort_combo_->clear();
-    sort_combo_->addItems({tr("% CHANGE ↑"), tr("% CHANGE ↓"), tr("VOLUME ↓"), tr("PRICE ↓"), tr("PRICE ↑")});
+    // Index 0/1 sort by change but the old "% CHANGE ↑ / ↓" labels read as sort
+    // direction while actually meaning gainers/losers — name the intent instead.
+    sort_combo_->addItems({tr("TOP GAINERS"), tr("TOP LOSERS"), tr("VOLUME ↓"), tr("PRICE ↓"), tr("PRICE ↑")});
     sort_combo_->setCurrentIndex(prev < 0 ? 0 : prev);
 
     table_->setHorizontalHeaderLabels(
@@ -172,10 +180,26 @@ void ScreenerScreen::changeEvent(QEvent* e) {
     QWidget::changeEvent(e);
     if (!e)
         return;
-    if (e->type() == QEvent::StyleChange || e->type() == QEvent::PaletteChange)
+    if (e->type() == QEvent::StyleChange || e->type() == QEvent::PaletteChange) {
+        // Re-entrancy guard — WITHOUT THIS THE PROCESS DIES WITH A STACK
+        // OVERFLOW (0xC00000FD).
+        //
+        // apply_styles() calls setStyleSheet() on header_bar_ and table_.
+        // setStyleSheet re-polishes the widget, which posts a fresh StyleChange
+        // — straight back into this handler, which calls apply_styles() again.
+        // Nothing breaks the loop, so it recurses until the stack is exhausted.
+        //
+        // Found by --smoke-test, which aborted deterministically while
+        // constructing this screen (the constructor calls apply_styles()
+        // directly). Reproduced across runs with different walk orders.
+        if (restyling_)
+            return;
+        restyling_ = true;
         apply_styles();
-    else if (e->type() == QEvent::LanguageChange)
+        restyling_ = false;
+    } else if (e->type() == QEvent::LanguageChange) {
         retranslate();
+    }
 }
 
 void ScreenerScreen::hub_subscribe_all() {
@@ -186,10 +210,27 @@ void ScreenerScreen::hub_subscribe_all() {
             if (!v.canConvert<services::QuoteData>())
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
-            rebuild_from_cache();
+            schedule_rebuild();
         });
     }
     hub_active_ = true;
+}
+
+void ScreenerScreen::schedule_rebuild() {
+    // 62 topics deliver 62 separate callbacks per refresh sweep. Rebuilding the
+    // whole table on each one meant ~62 full sorts and ~19,000 QTableWidgetItem
+    // allocations per sweep, and reset the scroll position 62 times. Coalesce
+    // into one rebuild on the next event-loop turn.
+    //
+    // This is a render coalescer, not a data-refresh timer (D3): it is a
+    // zero-delay single shot armed by an incoming hub delivery, never a cadence.
+    if (rebuild_pending_)
+        return;
+    rebuild_pending_ = true;
+    QTimer::singleShot(0, this, [this]() {
+        rebuild_pending_ = false;
+        rebuild_from_cache();
+    });
 }
 
 void ScreenerScreen::hub_unsubscribe_all() {
@@ -258,6 +299,15 @@ void ScreenerScreen::apply_filter() {
 }
 
 void ScreenerScreen::render_rows(const QVector<services::QuoteData>& rows) {
+    // Rebuilding every item drops the scroll offset and the selected row. Quotes
+    // arrive continuously, so without this the list jumps back to the top under
+    // the user's cursor on every sweep.
+    const int scroll_pos = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
+    const QString selected_symbol =
+        table_->currentRow() >= 0 && table_->item(table_->currentRow(), 0)
+            ? table_->item(table_->currentRow(), 0)->text()
+            : QString();
+
     table_->setRowCount(rows.size());
     for (int r = 0; r < rows.size(); ++r) {
         const auto& q = rows[r];
@@ -288,6 +338,17 @@ void ScreenerScreen::render_rows(const QVector<services::QuoteData>& rows) {
         vol->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         table_->setItem(r, 4, vol);
     }
+
+    if (!selected_symbol.isEmpty()) {
+        for (int r = 0; r < rows.size(); ++r) {
+            if (rows[r].symbol == selected_symbol) {
+                table_->selectRow(r);
+                break;
+            }
+        }
+    }
+    if (table_->verticalScrollBar())
+        table_->verticalScrollBar()->setValue(scroll_pos);
 }
 
 } // namespace fincept::screens

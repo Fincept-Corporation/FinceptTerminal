@@ -14,6 +14,7 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/workspace/WorkspaceDb.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
+#include "ui/theme/Theme.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -32,8 +33,10 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -42,6 +45,46 @@ namespace fincept::screens {
 
 namespace {
 constexpr const char* kLaunchpadTag = "Launchpad";
+
+// The Launchpad was styled with a hand-rolled Tailwind-ish palette (#111827,
+// #374151, #e5e7eb, #9ca3af …) that appears nowhere else in the terminal, plus
+// 4px radii that DESIGN_SYSTEM.md forbids outright. Everything below reads the
+// live Obsidian tokens instead so the portal window matches the product.
+QString lp_greeting_ss() {
+    return QString("color:%1;font-weight:700;letter-spacing:0.5px;background:transparent;").arg(ui::colors::AMBER());
+}
+QString lp_muted_ss() {
+    return QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY());
+}
+QString lp_banner_ss() {
+    return QString("QLabel#launchpadCrashBanner{background:%1;color:%2;border:1px solid %3;"
+                   "padding:8px 10px;font-weight:600;}")
+        .arg(ui::colors::BG_RAISED(), ui::colors::WARNING(), ui::colors::AMBER_DIM());
+}
+QString lp_primary_btn_ss() {
+    return QString("QPushButton#launchpadContinueBtn{background:%1;color:%2;font-weight:700;border:none;}"
+                   "QPushButton#launchpadContinueBtn:hover{background:%3;}")
+        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM());
+}
+QString lp_input_ss() {
+    return QString("QLineEdit{background:%1;border:1px solid %2;color:%3;padding:4px 6px;}"
+                   "QLineEdit:focus{border-color:%4;}")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER());
+}
+QString lp_list_ss() {
+    return QString("QListWidget{background:%1;border:1px solid %2;color:%3;}"
+                   "QListWidget::item{padding:6px 8px;}"
+                   "QListWidget::item:hover{background:%4;}"
+                   "QListWidget::item:selected{background:%4;color:%5;}")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(),
+             ui::colors::AMBER());
+}
+QString lp_card_ss() {
+    return QString("QPushButton{background:%1;border:1px solid %2;color:%3;padding:10px;text-align:left;"
+                   "font-weight:600;}"
+                   "QPushButton:hover{border-color:%4;color:%4;}")
+        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_MED(), ui::colors::TEXT_PRIMARY(), ui::colors::AMBER());
+}
 } // namespace
 
 LaunchpadScreen* LaunchpadScreen::instance() {
@@ -61,14 +104,19 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(16);
 
+    // Window chrome only — deliberately not a blanket `QWidget{}` rule, which
+    // would flatten every child that currently relies on its own style.
+    central->setObjectName(QStringLiteral("launchpadCentral"));
+    central->setStyleSheet(QString("QWidget#launchpadCentral{background:%1;}").arg(ui::colors::BG_BASE()));
+
     // Greeting text is set by retranslateUi() — it interpolates the active
     // profile name, which can also change at runtime via surface().
     greeting_ = new QLabel;
-    greeting_->setStyleSheet("font-size: 14px; color: #d97706; font-weight: 600;");
+    greeting_->setStyleSheet(lp_greeting_ss());
     vl->addWidget(greeting_);
 
     sub_label_ = new QLabel;
-    sub_label_->setStyleSheet("font-size: 11px; color: #9ca3af;");
+    sub_label_->setStyleSheet(lp_muted_ss());
     sub_label_->setWordWrap(true);
     vl->addWidget(sub_label_);
 
@@ -80,11 +128,7 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     crash_banner_->setVisible(false);
     crash_banner_->setWordWrap(true);
     crash_banner_->setObjectName("launchpadCrashBanner");
-    crash_banner_->setStyleSheet("QLabel#launchpadCrashBanner {"
-                                 "  background: #422006; color: #fbbf24;"
-                                 "  border: 1px solid #d97706; border-radius: 4px;"
-                                 "  padding: 8px 10px; font-size: 11px; font-weight: 600;"
-                                 "}");
+    crash_banner_->setStyleSheet(lp_banner_ss());
     vl->addWidget(crash_banner_);
 
     // "Continue from last session" — the most-common user intent on relaunch.
@@ -93,22 +137,27 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     btn_continue_ = new QPushButton;
     btn_continue_->setMinimumHeight(48);
     btn_continue_->setObjectName("launchpadContinueBtn");
-    btn_continue_->setStyleSheet("QPushButton#launchpadContinueBtn {"
-                                 "  background: #d97706; color: #fff;"
-                                 "  font-weight: 700; font-size: 13px;"
-                                 "  border: none; border-radius: 4px;"
-                                 "}"
-                                 "QPushButton#launchpadContinueBtn:hover { background: #b45309; }");
+    btn_continue_->setStyleSheet(lp_primary_btn_ss());
     connect(btn_continue_, &QPushButton::clicked, this, &LaunchpadScreen::on_continue);
     vl->addWidget(btn_continue_);
 
+    // Secondary buttons were left unstyled (native chrome on a dark window).
+    const QString secondary_ss =
+        QString("QPushButton{background:%1;color:%2;border:1px solid %3;font-weight:600;}"
+                "QPushButton:hover{background:%4;color:%5;}"
+                "QPushButton:disabled{color:%6;border-color:%3;}")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
+                 ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_DIM());
+
     btn_new_window_ = new QPushButton;
     btn_new_window_->setMinimumHeight(36);
+    btn_new_window_->setStyleSheet(secondary_ss);
     connect(btn_new_window_, &QPushButton::clicked, this, &LaunchpadScreen::on_new_window);
     vl->addWidget(btn_new_window_);
 
     btn_open_layout_ = new QPushButton;
     btn_open_layout_->setMinimumHeight(36);
+    btn_open_layout_->setStyleSheet(secondary_ss);
     // Enabled state is driven by refresh_recent_layouts() based on whether
     // any saved layouts exist.
     btn_open_layout_->setEnabled(false);
@@ -117,11 +166,12 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
 
     btn_switch_profile_ = new QPushButton;
     btn_switch_profile_->setMinimumHeight(36);
+    btn_switch_profile_->setStyleSheet(secondary_ss);
     connect(btn_switch_profile_, &QPushButton::clicked, this, &LaunchpadScreen::on_switch_profile);
     vl->addWidget(btn_switch_profile_);
 
     recent_label_ = new QLabel;
-    recent_label_->setStyleSheet("font-size: 11px; color: #9ca3af; margin-top: 8px;");
+    recent_label_->setStyleSheet(lp_muted_ss() + "margin-top:8px;");
     vl->addWidget(recent_label_);
 
     // Phase L6: keyboard-first filter. Up/Down/Enter/Esc are intercepted
@@ -130,9 +180,8 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     filter_edit_ = new QLineEdit;
     filter_edit_->setPlaceholderText(tr("Type to filter layouts…"));
     filter_edit_->setClearButtonEnabled(true);
-    filter_edit_->setStyleSheet("QLineEdit { background: #111827; border: 1px solid #374151;"
-                                "            color: #e5e7eb; padding: 4px 6px; }"
-                                "QLineEdit:focus { border-color: #d97706; }");
+    filter_edit_->setStyleSheet(lp_input_ss());
+    filter_edit_->setAccessibleName(tr("Filter saved layouts"));
     filter_edit_->installEventFilter(this);
     connect(filter_edit_, &QLineEdit::textChanged, this, [this](const QString& q) {
         if (!recent_layouts_)
@@ -153,10 +202,8 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     vl->addWidget(filter_edit_);
 
     recent_layouts_ = new QListWidget;
-    recent_layouts_->setStyleSheet("QListWidget { background: #111827; border: 1px solid #374151; color: #e5e7eb; }"
-                                   "QListWidget::item { padding: 6px 8px; }"
-                                   "QListWidget::item:hover { background: #1f2937; }"
-                                   "QListWidget::item:selected { background: #1f2937; color: #d97706; }");
+    recent_layouts_->setStyleSheet(lp_list_ss());
+    recent_layouts_->setAccessibleName(tr("Recent layouts"));
     vl->addWidget(recent_layouts_, /*stretch=*/1);
     refresh_recent_layouts();
 
@@ -170,7 +217,7 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
     picker_root->setSpacing(8);
 
     template_picker_label_ = new QLabel;
-    template_picker_label_->setStyleSheet("font-size: 11px; color: #9ca3af; margin-top: 8px;");
+    template_picker_label_->setStyleSheet(lp_muted_ss() + "margin-top:8px;");
     picker_root->addWidget(template_picker_label_);
 
     auto* grid = new QGridLayout;
@@ -183,10 +230,9 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
         auto* card = new QPushButton;
         card->setText(QString("%1\n\n%2").arg(p.display_name, p.description));
         card->setMinimumHeight(80);
-        card->setStyleSheet("QPushButton { background: #111827; border: 1px solid #374151;"
-                            "             color: #e5e7eb; padding: 10px; text-align: left;"
-                            "             font-size: 12px; font-weight: 600; }"
-                            "QPushButton:hover { border-color: #d97706; color: #d97706; }");
+        card->setStyleSheet(lp_card_ss());
+        card->setAccessibleName(p.display_name);
+        card->setAccessibleDescription(p.description);
         const QString persona_id = p.id;
         connect(card, &QPushButton::clicked, this, [this, persona_id]() { on_template_picked(persona_id); });
         grid->addWidget(card, i / 2, i % 2);
@@ -245,6 +291,21 @@ void LaunchpadScreen::retranslateUi() {
         btn_open_layout_->setText(tr("Open Saved Layout…"));
     if (btn_switch_profile_)
         btn_switch_profile_->setText(tr("Switch Profile…"));
+
+    // Accessible names track the visible label, so refresh them here rather
+    // than only at construction.
+    if (btn_continue_)
+        btn_continue_->setAccessibleName(btn_continue_->text());
+    if (btn_new_window_)
+        btn_new_window_->setAccessibleName(btn_new_window_->text());
+    if (btn_open_layout_)
+        btn_open_layout_->setAccessibleName(btn_open_layout_->text());
+    if (btn_switch_profile_)
+        btn_switch_profile_->setAccessibleName(btn_switch_profile_->text());
+    if (filter_edit_)
+        filter_edit_->setAccessibleName(tr("Filter saved layouts"));
+    if (recent_layouts_)
+        recent_layouts_->setAccessibleName(tr("Recent layouts"));
 
     if (recent_label_)
         recent_label_->setText(tr("Recent Layouts"));
@@ -373,15 +434,34 @@ void LaunchpadScreen::on_switch_profile() {
         bool name_ok = false;
         target = QInputDialog::getText(this, tr("Create Profile"), tr("New profile name:"), QLineEdit::Normal,
                                        QString(), &name_ok)
-                     .trimmed();
+                     .trimmed()
+                     .toLower();
         if (!name_ok || target.isEmpty())
             return;
+        // ProfileManager sanitises the name into a directory name, so an
+        // unchecked value silently lands the user in a differently-named
+        // profile than the one they typed.
+        static const QRegularExpression kValidName(QStringLiteral("^[a-z0-9_-]{1,32}$"));
+        if (!kValidName.match(target).hasMatch()) {
+            QMessageBox::warning(this, tr("Invalid Profile Name"),
+                                 tr("Use 1-32 characters: lowercase letters, digits, hyphen or underscore."));
+            return;
+        }
     }
 
     if (target == current) {
         LOG_INFO(kLaunchpadTag, "Switch Profile: target equals current — no-op");
         return;
     }
+
+    // Relaunching quits this process. Confirm first — it used to happen the
+    // instant the picker was dismissed with OK.
+    const auto reply = QMessageBox::question(
+        this, tr("Switch Profile"),
+        tr("Switch to profile \"%1\"?\n\nFincept Terminal will restart.").arg(target),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
 
     // Process-level switch today (set_active + relaunch). In-process switch
     // lands with Phase 1b's auth lift.
@@ -406,6 +486,9 @@ void LaunchpadScreen::on_open_layout() {
     auto r = LayoutCatalog::instance().load_workspace(id);
     if (r.is_err()) {
         LOG_WARN(kLaunchpadTag, QString("Open Layout failed: %1").arg(QString::fromStdString(r.error())));
+        // Was log-only: the row simply did nothing when double-clicked.
+        QMessageBox::warning(this, tr("Cannot open layout"),
+                             tr("That layout could not be loaded:\n%1").arg(QString::fromStdString(r.error())));
         return;
     }
     const layout::Workspace ws = r.value();
@@ -494,6 +577,10 @@ void LaunchpadScreen::on_template_picked(const QString& persona_id) {
     if (sr.is_err()) {
         LOG_WARN(kLaunchpadTag,
                  QString("Failed to save template '%1': %2").arg(persona_id, QString::fromStdString(sr.error())));
+        // First-run path: a silent return here left the user clicking a card
+        // that appeared to do nothing at all.
+        QMessageBox::warning(this, tr("Cannot start from this template"),
+                             tr("The template could not be saved:\n%1").arg(QString::fromStdString(sr.error())));
         return;
     }
     // save_workspace mints a fresh id if one wasn't set; pull the saved id

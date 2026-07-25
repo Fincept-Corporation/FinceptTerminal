@@ -5,6 +5,7 @@
 #include "screens/crypto_center/panels/HoldingsTable.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
+#include "storage/secure/SecureStorage.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
@@ -33,6 +34,33 @@ QString shorten_pubkey(const QString& pk) {
     if (pk.size() < 16)
         return pk;
     return pk.left(8) + QStringLiteral("…") + pk.right(8);
+}
+
+/// Which Solana cluster the configured RPC actually points at.
+///
+/// This chip used to be the literal string "MAINNET" regardless of the RPC
+/// override, so a user pointed at devnet saw balances and swap tickets
+/// labelled MAINNET — exactly the testnet/mainnet confusion that turns a
+/// "harmless" test into a real transfer (or the reverse). Derive it.
+QString cluster_label() {
+    auto r = SecureStorage::instance().retrieve(QStringLiteral("solana.rpc_url"));
+    if (r.is_ok()) {
+        const QString url = r.value().toLower();
+        if (!url.isEmpty()) {
+            if (url.contains(QStringLiteral("devnet")))
+                return QStringLiteral("DEVNET");
+            if (url.contains(QStringLiteral("testnet")))
+                return QStringLiteral("TESTNET");
+            if (url.contains(QStringLiteral("localhost")) || url.contains(QStringLiteral("127.0.0.1")))
+                return QStringLiteral("LOCALNET");
+            if (url.contains(QStringLiteral("mainnet")))
+                return QStringLiteral("MAINNET");
+            return QStringLiteral("CUSTOM RPC");
+        }
+    }
+    // No override — SolanaRpcClient falls back to Helius mainnet or the public
+    // mainnet-beta endpoint, both of which are mainnet.
+    return QStringLiteral("MAINNET");
 }
 
 QString relative_time(qint64 ts_ms) {
@@ -188,8 +216,10 @@ void HomeTab::build_ui() {
         mode_group_->addButton(mode_poll_button_);
         mode_group_->addButton(mode_stream_button_);
 
-        mode_label_ = new QLabel(tr("MAINNET"), head);
+        mode_label_ = new QLabel(cluster_label(), head);
         mode_label_->setObjectName(QStringLiteral("homeTabPanelStatus"));
+        mode_label_->setToolTip(tr("Solana cluster derived from the configured RPC endpoint "
+                                   "(Settings → Helius / solana.rpc_url)."));
 
         head_l->addWidget(holdings_title_);
         head_l->addStretch();
@@ -284,6 +314,18 @@ void HomeTab::build_ui() {
     }
     root->addWidget(roadmap_panel_);
     root->addStretch(1);
+
+    // ── Accessibility ─────────────────────────────────────────────────────
+    copy_button_->setAccessibleName(tr("Copy wallet address to clipboard"));
+    disconnect_button_->setAccessibleName(tr("Disconnect wallet"));
+    refresh_button_->setAccessibleName(tr("Refresh balances now"));
+    mode_poll_button_->setAccessibleName(tr("Poll balances on a timer"));
+    mode_stream_button_->setAccessibleName(tr("Stream balances over WebSocket"));
+    row_pubkey_value_->setAccessibleName(tr("Connected wallet address"));
+    setTabOrder(copy_button_, disconnect_button_);
+    setTabOrder(disconnect_button_, mode_poll_button_);
+    setTabOrder(mode_poll_button_, mode_stream_button_);
+    setTabOrder(mode_stream_button_, refresh_button_);
 
     // Wiring
     connect(copy_button_, &QPushButton::clicked, this, [this]() {
@@ -421,7 +463,12 @@ void HomeTab::apply_mode_to_buttons(bool is_stream) {
 
 void HomeTab::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    // HoldingsTable manages its own subscriptions; nothing else to do here.
+    // HoldingsTable manages its own subscriptions. The cluster chip is
+    // re-derived here because the RPC override can be changed on SETTINGS
+    // while this tab is hidden — a stale "MAINNET" after switching to devnet
+    // is the dangerous direction.
+    if (mode_label_)
+        mode_label_->setText(cluster_label());
 }
 
 void HomeTab::hideEvent(QHideEvent* e) {
@@ -458,8 +505,13 @@ void HomeTab::retranslateUi() {
         mode_poll_button_->setText(tr("POLL"));
     if (mode_stream_button_)
         mode_stream_button_->setText(tr("STREAM"));
-    if (mode_label_)
-        mode_label_->setText(tr("MAINNET"));
+    if (mode_label_) {
+        // Cluster name is derived data, not a translatable literal; only the
+        // tooltip needs re-rendering.
+        mode_label_->setText(cluster_label());
+        mode_label_->setToolTip(tr("Solana cluster derived from the configured RPC endpoint "
+                                   "(Settings → Helius / solana.rpc_url)."));
+    }
     if (refresh_button_)
         refresh_button_->setText(tr("REFRESH"));
 

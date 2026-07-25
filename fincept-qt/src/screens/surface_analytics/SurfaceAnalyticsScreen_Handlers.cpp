@@ -23,6 +23,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -63,8 +64,12 @@ void SurfaceAnalyticsScreen::on_category_clicked(int index) {
         }
     }
 
-    if (control_panel_)
+    if (control_panel_) {
+        // Badge first: set_capability renders the tier, and it must render DEMO
+        // when this surface has never been fetched.
+        sync_synthetic_badge();
         control_panel_->set_capability(active_chart_);
+    }
     load_dataset_range_for_active_capability();
     update_chart();
     update_metrics();
@@ -77,8 +82,10 @@ void SurfaceAnalyticsScreen::on_surface_clicked(int cat, int surf_index) {
     if (cat < (int)cats.size() && surf_index < (int)cats[cat].types.size())
         active_chart_ = cats[cat].types[surf_index];
     refresh_surface_bar();
-    if (control_panel_)
+    if (control_panel_) {
+        sync_synthetic_badge();
         control_panel_->set_capability(active_chart_);
+    }
     load_dataset_range_for_active_capability();
     update_chart();
     update_metrics();
@@ -110,10 +117,27 @@ void SurfaceAnalyticsScreen::on_import_csv() {
 }
 
 void SurfaceAnalyticsScreen::on_refresh() {
+    // REFRESH used to *always* re-roll SurfaceDemoData's rand() output, so on a
+    // Databento-backed surface it silently replaced real fetched data with new
+    // fabricated numbers under an unchanged badge. Route it to a real re-fetch
+    // whenever one is possible; only fall back to regenerating sample data for
+    // surfaces that genuinely have no source, and say so.
+    const auto& cap = capability_for(active_chart_);
+    const bool fetchable = cap.tier != SurfaceTier::DEMO && DatabentoService::instance().has_api_key();
+    if (fetchable) {
+        on_fetch_requested();
+        return;
+    }
     load_demo_data();
     update_chart();
     update_metrics();
     update_inspector_lineage();
+    if (data_inspector_) {
+        data_inspector_->set_status(cap.tier == SurfaceTier::DEMO
+                                        ? tr("Regenerated synthetic sample data — this surface has no live source.")
+                                        : tr("Regenerated synthetic sample data — no Databento API key configured."),
+                                    false);
+    }
 }
 
 void SurfaceAnalyticsScreen::on_controls_changed() {
@@ -204,44 +228,60 @@ void SurfaceAnalyticsScreen::on_fetch_requested() {
 }
 
 void SurfaceAnalyticsScreen::dispatch_csv(const QString& path) {
+    // Every failure path here used to `return` silently, so a malformed file, an
+    // unreadable path, or an unsupported surface all looked identical to a
+    // successful import that changed nothing.
+    auto report = [this](const QString& message, bool ok) {
+        if (!data_inspector_)
+            return;
+        data_inspector_->set_status(message, ok);
+        if (!ok)
+            data_inspector_->set_error(message);
+    };
+
     std::string err;
     auto rows = parse_csv_file(path, err);
-    if (rows.empty())
+    if (rows.empty()) {
+        const QString detail = err.empty() ? tr("no data rows found") : QString::fromStdString(err);
+        report(tr("CSV import failed: %1").arg(detail), false);
         return;
+    }
+
+    bool loaded = false;
     switch (active_chart_) {
         case ChartType::Volatility:
-            if (load_vol_surface(rows, vol_data_, err)) {
-                update_chart();
-                update_metrics();
-            }
+            loaded = load_vol_surface(rows, vol_data_, err);
             break;
         case ChartType::DeltaSurface:
-            if (load_greeks_surface(rows, delta_data_, err, "Delta")) {
-                update_chart();
-                update_metrics();
-            }
+            loaded = load_greeks_surface(rows, delta_data_, err, "Delta");
             break;
         case ChartType::GammaSurface:
-            if (load_greeks_surface(rows, gamma_data_, err, "Gamma")) {
-                update_chart();
-                update_metrics();
-            }
+            loaded = load_greeks_surface(rows, gamma_data_, err, "Gamma");
             break;
         case ChartType::VegaSurface:
-            if (load_greeks_surface(rows, vega_data_, err, "Vega")) {
-                update_chart();
-                update_metrics();
-            }
+            loaded = load_greeks_surface(rows, vega_data_, err, "Vega");
             break;
         case ChartType::ThetaSurface:
-            if (load_greeks_surface(rows, theta_data_, err, "Theta")) {
-                update_chart();
-                update_metrics();
-            }
+            loaded = load_greeks_surface(rows, theta_data_, err, "Theta");
             break;
         default:
-            break;
+            report(tr("CSV import is only implemented for the Vol / Delta / Gamma / Vega / Theta surfaces. "
+                      "Switch to one of those first."),
+                   false);
+            return;
     }
+
+    if (!loaded) {
+        report(tr("CSV import failed: %1").arg(QString::fromStdString(err)), false);
+        return;
+    }
+
+    // Imported data is real data — the surface must stop claiming DEMO.
+    mark_chart_real(active_chart_);
+    update_chart();
+    update_metrics();
+    update_inspector_lineage();
+    report(tr("Imported %1 rows from %2").arg(qint64(rows.size())).arg(QFileInfo(path).fileName()), true);
 }
 
 // ── Databento slots ───────────────────────────────────────────────────────────

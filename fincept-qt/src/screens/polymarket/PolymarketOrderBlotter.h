@@ -60,6 +60,9 @@ class PolymarketOrderBlotter : public QWidget {
   private:
     void rebuild_rows();
     void install_row_controls(int row, const fincept::services::prediction::OpenOrder& order);
+    /// Compose the table stylesheet, including object-name rules for the
+    /// per-row action buttons so those never need their own setStyleSheet.
+    void apply_table_style();
     void retranslateUi();
 
     QLabel* title_label_ = nullptr;

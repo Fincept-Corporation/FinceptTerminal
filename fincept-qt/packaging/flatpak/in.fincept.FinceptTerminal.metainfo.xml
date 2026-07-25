@@ -71,6 +71,11 @@
   </provides>
 
   <releases>
+    <release version="4.3.0" date="2026-07-25">
+      <description>
+        <p>MCP long-running tools now run as background jobs the assistant can poll, cancel, and watch progress on, instead of blocking a request for minutes. Oversized tool results are summarised and paged on demand rather than filling the conversation.</p>
+      </description>
+    </release>
     <release version="4.1.0" date="2026-06-09">
       <description>
         <p>Adds an optional NewsAPI.org provider for stock-specific company news in Equity Research, broker-sourced technical indicators, and assorted fixes. Removes the redundant TALIpp tab.</p>

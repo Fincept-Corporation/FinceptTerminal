@@ -101,6 +101,7 @@
 #include "trading/UnifiedPortfolioService.h"
 #include "trading/replication/PortfolioReplicationSelftest.h"
 #include "ui/notifications/DesktopNotifier.h"
+#include "ui/tables/LiveTableSelftest.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -791,14 +792,24 @@ int main(int argc, char* argv[]) {
             auto& tm = fincept::ui::ThemeManager::instance();
             auto r_family = repo.get("appearance.font_family");
             auto r_size = repo.get("appearance.font_size");
+            auto r_density = repo.get("appearance.density");
             QString family = r_family.is_ok() ? r_family.value() : "Consolas";
             QString size_s = r_size.is_ok() ? r_size.value() : "14px";
             int size_px = size_s.left(size_s.indexOf("px")).toInt();
             if (size_px <= 0)
                 size_px = 14;
-            tm.apply_font(family, size_px);
+            // Density must be restored here too. Settings → Appearance persists
+            // "appearance.density" and applies it live, but startup only ever
+            // read family+size — so the user's Compact/Comfortable choice
+            // silently reverted to Default on every relaunch.
+            // apply_typography_and_density() is deliberately used instead of
+            // apply_font() + apply_density(): it batches both into a single
+            // qApp->setStyleSheet() (see its docs re: the Plasma 6 / Wayland
+            // double-restyle crash, issue #247).
+            QString density = r_density.is_ok() && !r_density.value().isEmpty() ? r_density.value() : "Default";
+            tm.apply_typography_and_density(family, size_px, density);
             tm.apply_theme("Obsidian");
-            LOG_INFO("App", "Theme: Obsidian, font: " + family + " " + size_s);
+            LOG_INFO("App", "Theme: Obsidian, font: " + family + " " + size_s + ", density: " + density);
         }
 
         // Load persisted language and install the matching QTranslator before
@@ -911,6 +922,8 @@ int main(int argc, char* argv[]) {
             return fincept::feeds::run_feed_selftest();
         if (qstrcmp(argv[i], "--selftest-dock-layout") == 0)
             return fincept::layout::run_dock_layout_selftest();
+        if (qstrcmp(argv[i], "--selftest-live-table") == 0)
+            return fincept::ui::run_live_table_selftest();
         if (qstrcmp(argv[i], "--selftest-fno-algo") == 0)
             return fincept::algo::fno::run_fno_algo_selftest();
         if (qstrcmp(argv[i], "--selftest-universe-scan") == 0)

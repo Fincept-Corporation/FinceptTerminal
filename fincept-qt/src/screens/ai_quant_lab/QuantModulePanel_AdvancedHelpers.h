@@ -12,6 +12,7 @@
 
 #include <QAbstractItemView>
 #include <QColor>
+#include <QCoreApplication>
 #include <QHeaderView>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -64,11 +65,20 @@ inline QString verdict_color_for(const QString& v) {
 }
 
 // Returns false if the payload was an error (already displayed via callback) — caller should bail.
+//
+// Single implementation for every QuantModulePanel display TU. It used to be
+// copy-pasted into anonymous namespaces in CoreDisplays.cpp and
+// AIMLDisplays.cpp; those copies were translated while this one was not, so the
+// same message appeared translated on some panels and not on others.
 inline bool check_success(const QJsonObject& payload, const std::function<void(const QString&)>& display_error_fn) {
     if (!payload.value("success").toBool(false)) {
-        const QString err = payload.value("error").toString("Unknown error");
+        const QString err =
+            payload.value("error").toString(QCoreApplication::translate("QuantModulePanel", "Unknown error"));
         const QString kind = payload.value("error_kind").toString();
-        const QString prefix = kind == "validation" ? "Input error: " : kind == "runtime" ? "Computation failed: " : "";
+        const QString prefix = kind == "validation" ? QCoreApplication::translate("QuantModulePanel", "Input error: ")
+                               : kind == "runtime"
+                                   ? QCoreApplication::translate("QuantModulePanel", "Computation failed: ")
+                                   : QString();
         display_error_fn(prefix + err);
         return false;
     }
@@ -84,7 +94,9 @@ inline QTableWidget* build_weights_table(const QJsonObject& weights, QWidget* pa
               [](const auto& a, const auto& b) { return std::abs(a.second) > std::abs(b.second); });
 
     auto* table = new QTableWidget(rows.size(), 2, parent);
-    table->setHorizontalHeaderLabels({"Asset", "Weight"});
+    // These two were the only untranslated column headers in the panel family.
+    table->setHorizontalHeaderLabels({QCoreApplication::translate("QuantModulePanel", "Asset"),
+                                      QCoreApplication::translate("QuantModulePanel", "Weight")});
     table->verticalHeader()->setVisible(false);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);

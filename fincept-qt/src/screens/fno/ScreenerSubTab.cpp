@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QLocale>
 #include <QPointer>
+#include <QScrollBar>
 #include <QShowEvent>
 #include <QSpinBox>
 #include <QTableView>
@@ -89,6 +90,9 @@ QVariant ScreenedChainModel::data(const QModelIndex& index, int role) const {
     const OptionChainRow& r = rows_.at(index.row());
     const int col = index.column();
 
+    if (role == StrikeRole)
+        return r.strike;
+
     if (role == Qt::TextAlignmentRole) {
         if (col == ColStrike)
             return int(Qt::AlignCenter | Qt::AlignVCenter);
@@ -139,6 +143,25 @@ QVariant ScreenedChainModel::headerData(int section, Qt::Orientation orient, int
 }
 
 void ScreenedChainModel::set_rows(const QVector<OptionChainRow>& rows) {
+    // Fast path: same strike set (the overwhelmingly common case — a chain
+    // republish with unchanged filters). A full model reset on every publish
+    // yanks the user's scroll position back to the top and drops the selected
+    // row several times a minute, which makes the screener unusable as a live
+    // monitor. Merge in place and repaint instead.
+    bool same_rows = rows.size() == rows_.size() && !rows_.isEmpty();
+    if (same_rows) {
+        for (int i = 0; i < rows.size(); ++i) {
+            if (std::abs(rows[i].strike - rows_[i].strike) > 1e-6) {
+                same_rows = false;
+                break;
+            }
+        }
+    }
+    if (same_rows) {
+        rows_ = rows;
+        emit dataChanged(index(0, 0), index(rows_.size() - 1, ColCount - 1));
+        return;
+    }
     beginResetModel();
     rows_ = rows;
     endResetModel();
@@ -231,11 +254,22 @@ void ScreenerSubTab::setup_ui() {
     pe_oi_min_->setValue(0);
     add_kv(tr("PE OI ≥"), pe_oi_label_, pe_oi_min_);
 
+    iv_min_->setAccessibleName(tr("Minimum implied volatility"));
+    iv_max_->setAccessibleName(tr("Maximum implied volatility"));
+    distance_->setAccessibleName(tr("Maximum strikes away from at-the-money"));
+    ce_oi_min_->setAccessibleName(tr("Minimum call open interest in lakhs"));
+    pe_oi_min_->setAccessibleName(tr("Minimum put open interest in lakhs"));
+    setTabOrder(iv_min_, iv_max_);
+    setTabOrder(iv_max_, distance_);
+    setTabOrder(distance_, ce_oi_min_);
+    setTabOrder(ce_oi_min_, pe_oi_min_);
+
     hlay->addStretch(1);
     root->addWidget(header);
 
     // ── Body: table ───────────────────────────────────────────────────────
     table_ = new QTableView(this);
+    table_->setAccessibleName(tr("Screened strikes"));
     model_ = new ScreenedChainModel(this);
     table_->setModel(model_);
     table_->setShowGrid(false);
@@ -343,7 +377,10 @@ void ScreenerSubTab::on_filter_changed() {
 void ScreenerSubTab::apply_filters() {
     if (last_chain_.rows.isEmpty()) {
         model_->set_rows({});
-        count_label_->setText(tr("0 of 0 strikes match"));
+        // Distinguish "no chain loaded yet" from "chain loaded, nothing passes
+        // your filters" — they need completely different user actions.
+        count_label_->setText(tr("No chain loaded — open the Chain tab and pick a broker, "
+                                 "underlying and expiry first."));
         return;
     }
     int atm = 0;
@@ -378,8 +415,39 @@ void ScreenerSubTab::apply_filters() {
             continue;
         filtered.append(r);
     }
+
+    // Preserve the user's place across a filter change (which does force a
+    // model reset). Selection is remembered by STRIKE, not row index — the
+    // filtered set is a different length every time the thresholds move.
+    double keep_strike = 0;
+    if (const QModelIndex cur = table_->currentIndex(); cur.isValid() && cur.row() < model_->rowCount())
+        keep_strike = cur.data(ScreenedChainModel::StrikeRole).toDouble();
+    const int keep_scroll = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
+
     model_->set_rows(filtered);
-    count_label_->setText(tr("%1 of %2 strikes match").arg(filtered.size()).arg(last_chain_.rows.size()));
+
+    bool reselected = false;
+    if (keep_strike > 0) {
+        for (int i = 0; i < filtered.size(); ++i) {
+            if (std::abs(filtered[i].strike - keep_strike) < 1e-6) {
+                table_->selectRow(i);
+                table_->scrollTo(model_->index(i, 0), QAbstractItemView::PositionAtCenter);
+                reselected = true;
+                break;
+            }
+        }
+    }
+    // Nothing to re-centre on — hold the scroll position instead of snapping
+    // back to the top on every republish.
+    if (!reselected && table_->verticalScrollBar())
+        table_->verticalScrollBar()->setValue(qMin(keep_scroll, table_->verticalScrollBar()->maximum()));
+
+    if (filtered.isEmpty())
+        count_label_->setText(tr("No strikes match — widen the IV band, the ± strike range, "
+                                 "or lower the OI floors. (%1 strikes in the chain.)")
+                                  .arg(last_chain_.rows.size()));
+    else
+        count_label_->setText(tr("%1 of %2 strikes match").arg(filtered.size()).arg(last_chain_.rows.size()));
 }
 
 } // namespace fincept::screens::fno

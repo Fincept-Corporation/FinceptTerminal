@@ -269,6 +269,13 @@ void RssFeedManagerDialog::on_toggle_enabled() {
     reload_table();
 }
 
+QNetworkAccessManager* RssFeedManagerDialog::nam() {
+    // P10 — one manager per dialog, not one per test click.
+    if (!nam_)
+        nam_ = new QNetworkAccessManager(this);
+    return nam_;
+}
+
 void RssFeedManagerDialog::on_test_url() {
     const int row = selected_row();
     if (row < 0)
@@ -282,7 +289,6 @@ void RssFeedManagerDialog::on_test_url() {
     test_btn_->setEnabled(false);
     status_label_->setText(tr("Testing %1...").arg(rows_[row].feed.source));
 
-    auto* nam = new QNetworkAccessManager(this);
     QNetworkRequest req((QUrl(url)));
     req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
     req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
@@ -290,10 +296,9 @@ void RssFeedManagerDialog::on_test_url() {
     req.setTransferTimeout(6000);
 
     QPointer<RssFeedManagerDialog> self = this;
-    auto* reply = nam->get(req);
-    connect(reply, &QNetworkReply::finished, this, [self, reply, nam]() {
+    auto* reply = nam()->get(req);
+    connect(reply, &QNetworkReply::finished, this, [self, reply]() {
         reply->deleteLater();
-        nam->deleteLater();
         if (!self)
             return;
         self->test_btn_->setEnabled(true);

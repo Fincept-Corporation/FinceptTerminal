@@ -14,10 +14,13 @@
 #include <QLabel>
 #include <QLocale>
 #include <QPushButton>
+#include <QSet>
 #include <QShowEvent>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace fincept::screens::panels {
 

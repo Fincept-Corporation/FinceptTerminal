@@ -33,6 +33,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
 #include <QPalette>
 #include <QPointer>
 #include <QRandomGenerator>
@@ -242,6 +243,13 @@ void AiChatScreen::on_rename_session() {
 
 void AiChatScreen::on_delete_session() {
     if (streaming_ || active_session_id_.isEmpty())
+        return;
+    // Delete sits next to Rename in the sidebar and permanently drops the
+    // session and all of its messages from ChatRepository — confirm first.
+    const QString label = active_session_title_.isEmpty() ? active_session_id_.left(8) : active_session_title_;
+    if (QMessageBox::question(this, tr("Delete Session"),
+                              tr("Delete \"%1\" and all of its messages?\n\nThis cannot be undone.").arg(label),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
     ChatRepository::instance().delete_session(active_session_id_);
     active_session_id_.clear();

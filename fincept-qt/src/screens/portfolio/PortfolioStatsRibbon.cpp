@@ -82,6 +82,12 @@ QWidget* PortfolioStatsRibbon::build_hero(HeroCell& c, const QString& label_text
 }
 
 void PortfolioStatsRibbon::apply_hero_value_color(HeroCell& c, const char* color, int value_px) {
+    // Skip the restyle when the colour has not flipped. This runs on every
+    // poll and each setStyleSheet is a CSS reparse + repolish of the label.
+    const QString color_str = QString::fromLatin1(color);
+    if (c.value->property("colorTok").toString() == color_str)
+        return;
+    c.value->setProperty("colorTok", color_str);
     c.value->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700;"
                                    "  letter-spacing:0.2px; background:transparent;")
                                .arg(color)
@@ -116,9 +122,32 @@ QWidget* PortfolioStatsRibbon::build_risk_grid() {
     mdd_ = add_grid_chip(g, 2, 0, tr("MDD"));
     risk_ = add_grid_chip(g, 2, 1, tr("RISK"));
 
+    apply_chip_tooltips();
+
     outer->addLayout(g, 1);
 
     return risk_cell_;
+}
+
+void PortfolioStatsRibbon::apply_chip_tooltips() {
+    // Six four-letter labels with no explanation of window, benchmark or
+    // scale. Say what each number actually is.
+    auto set = [](GridChip& c, const QString& text) {
+        if (c.label)
+            c.label->setToolTip(text);
+        if (c.value) {
+            c.value->setToolTip(text);
+            c.value->setAccessibleDescription(text);
+        }
+    };
+    set(sharpe_, tr("Sharpe ratio — annualised excess return per unit of volatility, "
+                    "from daily portfolio snapshots against the live risk-free rate."));
+    set(conc_, tr("Concentration — combined weight of your three largest positions."));
+    set(beta_, tr("Beta — OLS regression of portfolio returns against the benchmark index. "
+                  "1.0 means it moves with the market."));
+    set(vol_, tr("Volatility — annualised standard deviation of the last 30 days of returns."));
+    set(mdd_, tr("Maximum drawdown — worst peak-to-trough decline in the snapshot history."));
+    set(risk_, tr("Composite risk score, 0–100. Lower is calmer; above 60 is aggressive."));
 }
 
 PortfolioStatsRibbon::GridChip PortfolioStatsRibbon::add_grid_chip(QGridLayout* g, int row, int col,
@@ -267,6 +296,8 @@ void PortfolioStatsRibbon::retranslateUi() {
     if (risk_.label)
         risk_.label->setText(tr("RISK"));
 
+    apply_chip_tooltips();
+
     if (last_summary_.has_value()) {
         // Re-render the "▲ %1 positions" sub-line under PORTFOLIO VALUE.
         if (value_cell_.sub)
@@ -277,6 +308,13 @@ void PortfolioStatsRibbon::retranslateUi() {
 void PortfolioStatsRibbon::refresh_theme() {
     setStyleSheet(QString("#portfolioStatsRibbon { background:%1; border-bottom:1px solid %2; }")
                       .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+
+    // Drop the "already this colour" memo in apply_hero_value_color(), or the
+    // hero values would keep the previous theme's palette.
+    for (HeroCell* c : {&value_cell_, &pnl_cell_, &day_cell_}) {
+        if (c->value)
+            c->value->setProperty("colorTok", QString());
+    }
     // Hero label/sub colors and chip label colors are static per-style; the
     // value colors get re-applied on the next set_summary/set_metrics call,
     // which always fires after a theme switch via PortfolioScreen's

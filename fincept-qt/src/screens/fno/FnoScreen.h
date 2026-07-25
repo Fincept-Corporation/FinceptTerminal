@@ -1,19 +1,15 @@
 #pragma once
 // FnoScreen — Sensibull-style F&O analytics tab.
 //
-// Top-level shell. Six sub-tabs hosted in a QStackedWidget; each sub-tab
+// Top-level shell. Seven sub-tabs hosted in a QStackedWidget; each sub-tab
 // is lazy-constructed on first reveal (P2 spirit — chain assembly + WS
 // subscriptions for the OI sub-tab don't fire until the user navigates
-// there).
+// there). Only Chain is built eagerly, so the screen shows data immediately.
 //
-// Phase 2 ships the Chain sub-tab fully wired. The other five render a
-// ComingSoon placeholder until their phase lands:
-//   - Chain         (Phase 2)  ✅
-//   - Builder       (Phase 5)
-//   - OI Analytics  (Phase 7)
-//   - Multi-Stra    (Phase 9)
-//   - FII / DII     (Phase 8)
-//   - Screener      (Phase 9)
+// All seven are implemented: Chain, Builder, OI Analytics, Multi-Straddle,
+// FII/DII, Screener, Positions. The QStackedWidget is seeded with placeholder
+// widgets purely so slot indices map 1:1 onto SubTab values; each is swapped
+// for the real widget before it can ever be shown.
 
 #include "core/symbol/IGroupLinked.h"
 #include "screens/common/IStatefulScreen.h"

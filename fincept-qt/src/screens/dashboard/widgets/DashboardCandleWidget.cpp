@@ -116,8 +116,11 @@ void CandleCanvas::rebuild_cache() {
 
     const QColor bull_color(ui::colors::POSITIVE.get());
     const QColor bear_color(ui::colors::NEGATIVE.get());
-    const QColor wick_bull("#2a9d5c");
-    const QColor wick_bear("#b83a3a");
+    // Wicks were two hardcoded hex literals that ignored the active theme.
+    // Derive them from the body colours instead (DESIGN_SYSTEM §2: no colour
+    // outside the token set).
+    const QColor wick_bull = bull_color.darker(115);
+    const QColor wick_bear = bear_color.darker(115);
 
     for (int i = 0; i < count; ++i) {
         const auto& c = candles_[start + i];

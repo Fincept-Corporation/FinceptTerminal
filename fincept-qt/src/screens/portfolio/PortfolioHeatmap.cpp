@@ -57,6 +57,14 @@ void PortfolioHeatmap::build_ui() {
     day_btn_ = make_mode_btn(tr("DAY"));
     pnl_btn_->setChecked(true);
 
+    // Two-letter labels are meaningless to a screen reader / new user.
+    pnl_btn_->setAccessibleName(tr("Colour blocks by unrealized profit and loss"));
+    pnl_btn_->setToolTip(pnl_btn_->accessibleName());
+    weight_btn_->setAccessibleName(tr("Colour blocks by portfolio weight"));
+    weight_btn_->setToolTip(weight_btn_->accessibleName());
+    day_btn_->setAccessibleName(tr("Colour blocks by today's change"));
+    day_btn_->setToolTip(day_btn_->accessibleName());
+
     auto set_mode = [this](portfolio::HeatmapMode m) {
         mode_ = m;
         pnl_btn_->setChecked(m == portfolio::HeatmapMode::Pnl);
@@ -143,7 +151,12 @@ void PortfolioHeatmap::set_selected_symbol(const QString& symbol) {
 }
 
 void PortfolioHeatmap::set_currency(const QString& currency) {
+    if (currency_ == currency)
+        return;
     currency_ = currency;
+    // Block tooltips carry the currency — refresh them when the selected
+    // portfolio switches to a different denomination.
+    rebuild_blocks();
 }
 
 QColor PortfolioHeatmap::block_color(const portfolio::HoldingWithQuote& h) const {
@@ -184,69 +197,100 @@ QColor PortfolioHeatmap::block_color(const portfolio::HoldingWithQuote& h) const
 }
 
 void PortfolioHeatmap::rebuild_blocks() {
-    // Clear existing blocks — delete children first, then layout
-    if (auto* old_layout = blocks_container_->layout()) {
-        QLayoutItem* item;
-        while ((item = old_layout->takeAt(0)) != nullptr) {
-            if (item->widget())
-                item->widget()->deleteLater();
-            delete item;
-        }
-        delete old_layout;
+    // Blocks are pooled: a refresh reuses the existing buttons and only touches
+    // the ones whose rendered state actually changed. Each setStyleSheet is a
+    // full CSS reparse + repolish, and this function runs on every 60 s poll,
+    // every selection change and every mode toggle — allocating and restyling
+    // one button per holding each time was the hot spot in this panel.
+    if (!blocks_container_)
+        return; // retranslate/theme events can arrive before build_ui() ran
+    if (!blocks_grid_) {
+        blocks_grid_ = new QGridLayout(blocks_container_);
+        blocks_grid_->setContentsMargins(0, 0, 0, 0);
+        blocks_grid_->setSpacing(2);
     }
 
-    auto* grid = new QGridLayout(blocks_container_);
-    grid->setContentsMargins(0, 0, 0, 0);
-    grid->setSpacing(2);
+    const int n = static_cast<int>(holdings_.size());
 
-    int col = 0, row = 0;
-    for (const auto& h : holdings_) {
-        auto* block = new QPushButton;
-        bool selected = (h.symbol == selected_symbol_);
+    for (int i = 0; i < n; ++i) {
+        const auto& h = holdings_[i];
+        const bool selected = (h.symbol == selected_symbol_);
 
-        int min_h = static_cast<int>(std::max(40.0, 40.0 + h.weight * 0.8));
+        QPushButton* block = nullptr;
+        if (i < blocks_.size()) {
+            block = blocks_[i];
+        } else {
+            block = new QPushButton(blocks_container_);
+            block->setCursor(Qt::PointingHandCursor);
+            // The symbol lives on the widget so the (single) connection stays
+            // valid when the block is recycled for a different holding.
+            connect(block, &QPushButton::clicked, this, [this, block]() {
+                const QString sym = block->property("symbol").toString();
+                if (sym.isEmpty())
+                    return;
+                selected_symbol_ = sym;
+                rebuild_blocks();
+                emit symbol_selected(sym);
+            });
+            blocks_.append(block);
+            blocks_grid_->addWidget(block, i / 2, i % 2);
+        }
+
+        block->setProperty("symbol", h.symbol);
+        block->show();
+
+        const int min_h = static_cast<int>(std::max(40.0, 40.0 + h.weight * 0.8));
         block->setFixedHeight(std::min(min_h, 70));
-        block->setCursor(Qt::PointingHandCursor);
 
-        QColor bg = block_color(h);
-        QString border_style = selected ? QString("border:2px solid %1;").arg(ui::colors::AMBER())
-                                        : QString("border:1px solid %1;").arg(ui::colors::BORDER_DIM());
+        const QColor bg = block_color(h);
+        const QString border_style = selected ? QString("border:2px solid %1;").arg(ui::colors::AMBER())
+                                              : QString("border:1px solid %1;").arg(ui::colors::BORDER_DIM());
 
         // Square corners (was border-radius:2px). Block label 11px (was 10px).
-        block->setStyleSheet(QString("QPushButton { background:rgb(%1,%2,%3); %4"
-                                     "  text-align:left; padding:4px 6px;"
-                                     "  color:%6; font-size:11px; font-weight:700; }"
-                                     "QPushButton:hover { border-color:%5; }")
-                                 .arg(bg.red())
-                                 .arg(bg.green())
-                                 .arg(bg.blue())
-                                 .arg(border_style, ui::colors::AMBER(), ui::colors::TEXT_PRIMARY()));
+        const QString qss = QString("QPushButton { background:rgb(%1,%2,%3); %4"
+                                    "  text-align:left; padding:4px 6px;"
+                                    "  color:%6; font-size:11px; font-weight:700; }"
+                                    "QPushButton:hover { border-color:%5; }")
+                                .arg(bg.red())
+                                .arg(bg.green())
+                                .arg(bg.blue())
+                                .arg(border_style, ui::colors::AMBER(), ui::colors::TEXT_PRIMARY());
+        if (block->property("qss").toString() != qss) {
+            block->setStyleSheet(qss);
+            block->setProperty("qss", qss);
+        }
 
         // Content
-        double chg_val = mode_ == portfolio::HeatmapMode::DayChange ? h.day_change_percent
-                         : mode_ == portfolio::HeatmapMode::Pnl     ? h.unrealized_pnl_percent
-                                                                    : h.weight;
-        QString chg_str = mode_ == portfolio::HeatmapMode::Weight
-                              ? QString("%1%").arg(QString::number(chg_val, 'f', 1))
-                              : QString("%1%2%").arg(chg_val >= 0 ? "+" : "").arg(QString::number(chg_val, 'f', 1));
+        const double chg_val = mode_ == portfolio::HeatmapMode::DayChange ? h.day_change_percent
+                               : mode_ == portfolio::HeatmapMode::Pnl     ? h.unrealized_pnl_percent
+                                                                         : h.weight;
+        const QString chg_str =
+            mode_ == portfolio::HeatmapMode::Weight
+                ? QString("%1%").arg(QString::number(chg_val, 'f', 1))
+                : QString("%1%2%").arg(chg_val >= 0 ? "+" : "").arg(QString::number(chg_val, 'f', 1));
 
         block->setText(QString("%1\n%2").arg(h.symbol, chg_str));
-
-        connect(block, &QPushButton::clicked, this, [this, sym = h.symbol]() {
-            selected_symbol_ = sym;
-            rebuild_blocks();
-            emit symbol_selected(sym);
-        });
-
-        grid->addWidget(block, row, col);
-        col++;
-        if (col >= 2) {
-            col = 0;
-            row++;
-        }
+        // Market value is the one number the compact block cannot show —
+        // surface it (and the portfolio currency) on hover.
+        block->setToolTip(tr("%1 — %2 %3  •  %4% of portfolio")
+                              .arg(h.symbol, currency_, QString::number(h.market_value, 'f', 2),
+                                   QString::number(h.weight, 'f', 1)));
+        block->setAccessibleName(h.symbol);
+        block->setAccessibleDescription(block->toolTip());
     }
 
-    grid->setRowStretch(row + 1, 1); // push blocks up
+    // Surplus blocks from a previously larger portfolio: hide (a hidden widget
+    // is skipped by QGridLayout so the rows collapse) and keep them pooled.
+    for (int i = n; i < blocks_.size(); ++i)
+        blocks_[i]->hide();
+
+    // Push blocks up. Reset the previous stretch row first or a shrinking
+    // portfolio leaves a stretched empty row mid-grid.
+    const int last_row = n > 0 ? ((n - 1) / 2) : 0;
+    if (stretch_row_ >= 0 && stretch_row_ != last_row + 1)
+        blocks_grid_->setRowStretch(stretch_row_, 0);
+    stretch_row_ = last_row + 1;
+    blocks_grid_->setRowStretch(stretch_row_, 1);
 }
 
 void PortfolioHeatmap::update_top_movers() {
@@ -289,8 +333,23 @@ void PortfolioHeatmap::retranslateUi() {
         weight_btn_->setText(tr("WT"));
     if (day_btn_)
         day_btn_->setText(tr("DAY"));
+    if (pnl_btn_) {
+        pnl_btn_->setAccessibleName(tr("Colour blocks by unrealized profit and loss"));
+        pnl_btn_->setToolTip(pnl_btn_->accessibleName());
+    }
+    if (weight_btn_) {
+        weight_btn_->setAccessibleName(tr("Colour blocks by portfolio weight"));
+        weight_btn_->setToolTip(weight_btn_->accessibleName());
+    }
+    if (day_btn_) {
+        day_btn_->setAccessibleName(tr("Colour blocks by today's change"));
+        day_btn_->setToolTip(day_btn_->accessibleName());
+    }
     if (movers_header_)
         movers_header_->setText(tr("TOP MOVERS"));
+    // Block labels/tooltips are formatted from data — re-render so the
+    // localized tooltip template picks up the new locale.
+    rebuild_blocks();
     // Block text is "SYMBOL\n+x.xx%" — pure data, no tr() needed.
     // top_gainer_/top_loser_ contents likewise are formatted from data; no
     // change on language switch.

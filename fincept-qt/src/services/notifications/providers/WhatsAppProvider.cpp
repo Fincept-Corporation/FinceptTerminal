@@ -1,4 +1,4 @@
-#include "services/notifications/providers/WhatsAppProvider.h"
+﻿#include "services/notifications/providers/WhatsAppProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -9,14 +9,14 @@ namespace fincept::notifications {
 
 void WhatsAppProvider::load_fields(SettingsRepository& r, const QString& cat) {
     account_sid_ = get_str(r, cat + ".account_sid");
-    auth_token_ = get_str(r, cat + ".auth_token");
+    auth_token_ = get_secret(r, cat + ".auth_token");
     from_number_ = get_str(r, cat + ".from_number");
     to_number_ = get_str(r, cat + ".to_number");
 }
 
 void WhatsAppProvider::save_fields(SettingsRepository& r, const QString& cat) {
     r.set(cat + ".account_sid", account_sid_, cat);
-    r.set(cat + ".auth_token", auth_token_, cat);
+    set_secret(r, cat + ".auth_token", auth_token_, cat);
     r.set(cat + ".from_number", from_number_, cat);
     r.set(cat + ".to_number", to_number_, cat);
 }
@@ -32,7 +32,7 @@ void WhatsAppProvider::send(const NotificationRequest& req, std::function<void(b
 
     const QString msg = QString("[Fincept] %1\n%2").arg(req.title, req.message);
 
-    // Twilio accepts form-encoded POST — encode as JSON fields for our HttpClient
+    // Twilio accepts form-encoded POST â€” encode as JSON fields for our HttpClient
     // Note: Twilio's API actually needs application/x-www-form-urlencoded;
     // we send JSON and the server-side relay handles encoding, or use a proxy.
     QJsonObject body;

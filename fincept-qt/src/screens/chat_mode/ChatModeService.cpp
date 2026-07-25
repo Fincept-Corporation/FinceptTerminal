@@ -661,11 +661,14 @@ QNetworkReply* ChatModeService::stream_task_activity(const QString& task_id, int
 }
 
 void ChatModeService::abort_task_activity_stream() {
-    if (task_sse_reply_) {
-        task_sse_reply_->abort();
-        task_sse_reply_->deleteLater();
-        task_sse_reply_ = nullptr;
-    }
+    // Same synchronous-finished() hazard as abort_stream() — detach before abort.
+    QNetworkReply* reply = task_sse_reply_;
+    if (!reply)
+        return;
+    task_sse_reply_ = nullptr;
+    disconnect(reply, nullptr, this, nullptr);
+    reply->abort();
+    reply->deleteLater();
 }
 
 void ChatModeService::handle_task_sse_line(const QByteArray& line) {
@@ -924,11 +927,19 @@ QNetworkReply* ChatModeService::stream_message(const QString& message, const QSt
 }
 
 void ChatModeService::abort_stream() {
-    if (sse_reply_) {
-        sse_reply_->abort();
-        sse_reply_->deleteLater();
-        sse_reply_ = nullptr;
-    }
+    // QNetworkReply::abort() emits finished() SYNCHRONOUSLY, and the finished
+    // handler below nulls sse_reply_ — so the old
+    //     sse_reply_->abort(); sse_reply_->deleteLater();
+    // sequence dereferenced a null member on the second line. Detach the reply
+    // first, drop our connections, then abort + delete it.
+    QNetworkReply* reply = sse_reply_;
+    if (!reply)
+        return; // nothing in flight — do NOT synthesise a terminal signal
+    sse_reply_ = nullptr;
+    disconnect(reply, nullptr, this, nullptr);
+    reply->abort();
+    reply->deleteLater();
+
     // A user-initiated Stop otherwise emits no terminal signal (the finished
     // handler skips OperationCanceledError), so the chat panel's input would
     // stay disabled forever. Emit one if none has gone out for this stream.

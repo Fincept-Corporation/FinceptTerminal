@@ -99,9 +99,12 @@ void GovDataScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (!initial_load_done_) {
         initial_load_done_ = true;
+        // Honour a provider already chosen by restore_state(); the old code
+        // unconditionally forced row 0 and discarded the restored selection.
+        const int row = (active_index_ >= 0 && active_index_ < provider_list_->count()) ? active_index_ : 0;
         if (provider_list_->count() > 0) {
-            provider_list_->setCurrentRow(0);
-            activate_provider(0);
+            provider_list_->setCurrentRow(row);
+            activate_provider(row);
         }
     }
     LOG_INFO("GovDataScreen", "shown");
@@ -136,11 +139,28 @@ void GovDataScreen::build_ui() {
     content_hl->addWidget(build_sidebar());
 
     panel_stack_ = new QStackedWidget;
-    const auto& providers = services::GovDataService::providers();
-    for (int i = 0; i < providers.size(); ++i) {
-        const auto& prov = providers[i];
-        QWidget* panel = nullptr;
+    // P2 — panels are lazy-constructed on first activation (see make_panel()).
+    // Eagerly building all provider panels here created every sub-widget tree,
+    // stylesheet and QTimer for portals the user never opens. Stack index 0 is
+    // a blank placeholder shown before any provider has been selected.
+    panel_stack_->addWidget(new QWidget(panel_stack_));
+    panels_.resize(services::GovDataService::providers().size());
+    panels_.fill(nullptr);
 
+    content_hl->addWidget(panel_stack_, 1);
+    root->addWidget(content, 1);
+    root->addWidget(build_status_bar());
+}
+
+// ── Lazy panel factory ───────────────────────────────────────────────────────
+
+QWidget* GovDataScreen::make_panel(int index) {
+    const auto& providers = services::GovDataService::providers();
+    if (index < 0 || index >= providers.size())
+        return nullptr;
+    const auto& prov = providers[index];
+    QWidget* panel = nullptr;
+    {
         if (prov.id == "us-treasury") {
             panel = new GovDataTreasuryPanel(panel_stack_);
         } else if (prov.id == "us-congress") {
@@ -167,12 +187,13 @@ void GovDataScreen::build_ui() {
             // openafrica, spain — still use generic until dedicated scripts exist
             panel = new GovDataProviderPanel(prov.script, prov.color, "Organizations", {}, panel_stack_);
         }
-        panel_stack_->addWidget(panel);
     }
-
-    content_hl->addWidget(panel_stack_, 1);
-    root->addWidget(content, 1);
-    root->addWidget(build_status_bar());
+    if (panel) {
+        panel_stack_->addWidget(panel);
+        panels_[index] = panel;
+        LOG_INFO("GovDataScreen", "Created panel for: " + prov.id);
+    }
+    return panel;
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
@@ -245,12 +266,16 @@ QWidget* GovDataScreen::build_sidebar() {
     // Provider list
     provider_list_ = new QListWidget;
     provider_list_->setObjectName("govProviderList");
+    provider_list_->setAccessibleName(tr("Sovereign open-data portals"));
 
     for (const auto& prov : providers) {
         auto* item = new QListWidgetItem(provider_list_);
         // Flag + name on first line, country on tooltip
         item->setText(QString("%1  %2").arg(prov.flag, prov.name));
         item->setToolTip(prov.description + "\n" + prov.country);
+        // Screen readers can't announce the flag emoji usefully — give the row
+        // a plain-text accessible label.
+        item->setData(Qt::AccessibleTextRole, QString("%1 — %2").arg(prov.name, prov.country));
         item->setData(Qt::UserRole, prov.id);
         item->setData(Qt::UserRole + 1, prov.color);
     }
@@ -411,14 +436,29 @@ void GovDataScreen::activate_provider(int index) {
     if (status_country_)
         status_country_->setText(prov.country);
 
-    // Switch panel
-    panel_stack_->setCurrentIndex(index);
+    // Keep the sidebar highlight in step — restore_state()/programmatic
+    // activation used to switch the panel without moving the list selection.
+    if (provider_list_ && provider_list_->currentRow() != index) {
+        QSignalBlocker block(provider_list_);
+        provider_list_->setCurrentRow(index);
+    }
+
+    // Switch panel (lazy-constructing it on first use)
+    QWidget* panel = (index < panels_.size()) ? panels_[index] : nullptr;
+    const bool first_open = (panel == nullptr);
+    if (!panel)
+        panel = make_panel(index);
+    if (panel)
+        panel_stack_->setCurrentWidget(panel);
 
     // Re-apply theme so provider-color accents on toolbar/badge reflect new selection
     refresh_theme();
 
-    // Trigger initial load — all panel types expose load_initial_data() as a public slot
-    QMetaObject::invokeMethod(panel_stack_->currentWidget(), "load_initial_data");
+    // Trigger the initial load only the first time a panel is opened — all
+    // panel types expose load_initial_data() as a public slot. Re-invoking it
+    // on every revisit threw away whatever the user had drilled into.
+    if (panel && first_open)
+        QMetaObject::invokeMethod(panel, "load_initial_data");
 
     LOG_INFO("GovDataScreen", "Activated: " + prov.id);
 }

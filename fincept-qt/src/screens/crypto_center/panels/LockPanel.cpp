@@ -11,6 +11,8 @@
 #include "ui/theme/Theme.h"
 
 #include <QButtonGroup>
+#include <QDateTime>
+#include <QDialog>
 #include <QDoubleValidator>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -26,6 +28,7 @@
 #include <QStyle>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::panels {
@@ -50,6 +53,27 @@ QString format_usd(double v, int dp = 0) {
 
 double atomic_to_ui(quint64 raw, int decimals) {
     return static_cast<double>(raw) / std::pow(10.0, std::max(0, decimals));
+}
+
+/// Format a token amount for injection into the amount QLineEdit.
+/// Floors (never rounds up past the held balance) and omits group separators
+/// so the value round-trips through `QLocale::toDouble()` unchanged. The old
+/// `format_token(balance, 0)` rounded half-up, so MAX on 12 304.7 $FNCPT
+/// produced "12305" and `recompute_preview()` then reported
+/// "Amount exceeds available $FNCPT" — the MAX button could not be used.
+QString lock_amount_for_input(double v, int decimals) {
+    if (v <= 0.0)
+        return QStringLiteral("0");
+    int dp = decimals;
+    if (dp < 0)
+        dp = 0;
+    if (dp > 9)
+        dp = 9;
+    const double scale = std::pow(10.0, dp);
+    const double floored = std::floor(v * scale) / scale;
+    QLocale loc = QLocale::system();
+    loc.setNumberOptions(loc.numberOptions() | QLocale::OmitGroupSeparator);
+    return loc.toString(floored, 'f', dp);
 }
 
 } // namespace
@@ -234,6 +258,35 @@ void LockPanel::build_ui() {
     connect(duration_group_, QOverload<int>::of(&QButtonGroup::idClicked), this, &LockPanel::on_duration_changed);
     connect(max_button_, &QPushButton::clicked, this, &LockPanel::on_max_clicked);
     connect(lock_button_, &QPushButton::clicked, this, &LockPanel::on_lock_clicked);
+
+    // ── Accessibility ─────────────────────────────────────────────────────
+    amount_input_->setAccessibleName(tr("Amount of FNCPT to lock"));
+    amount_input_->setAccessibleDescription(tr("Locked tokens cannot be withdrawn before the unlock date"));
+    max_button_->setAccessibleName(tr("Lock the maximum available balance"));
+    lock_button_->setAccessibleName(tr("Build and review lock transaction"));
+    available_label_->setAccessibleName(tr("Available FNCPT balance"));
+    weight_calc_->setAccessibleName(tr("Resulting veFNCPT weight"));
+    est_yield_->setAccessibleName(tr("Estimated yield upper bound"));
+    tier_preview_->setAccessibleName(tr("Billing tier after lock"));
+    status_label_->setAccessibleName(tr("Lock status"));
+    if (dur_3mo_)
+        dur_3mo_->setAccessibleName(tr("Lock for three months"));
+    if (dur_6mo_)
+        dur_6mo_->setAccessibleName(tr("Lock for six months"));
+    if (dur_1yr_)
+        dur_1yr_->setAccessibleName(tr("Lock for one year"));
+    if (dur_2yr_)
+        dur_2yr_->setAccessibleName(tr("Lock for two years"));
+    if (dur_4yr_)
+        dur_4yr_->setAccessibleName(tr("Lock for four years"));
+
+    setTabOrder(amount_input_, max_button_);
+    setTabOrder(max_button_, dur_3mo_);
+    setTabOrder(dur_3mo_, dur_6mo_);
+    setTabOrder(dur_6mo_, dur_1yr_);
+    setTabOrder(dur_1yr_, dur_2yr_);
+    setTabOrder(dur_2yr_, dur_4yr_);
+    setTabOrder(dur_4yr_, lock_button_);
 }
 
 void LockPanel::apply_theme() {
@@ -448,7 +501,9 @@ void LockPanel::on_vefncpt_update(const QVariant& v) {
 void LockPanel::on_revenue_update(const QVariant& v) {
     if (!v.canConvert<fincept::wallet::TreasuryRevenue>())
         return;
-    weekly_revenue_usd_ = v.value<fincept::wallet::TreasuryRevenue>().total_usd;
+    const auto rev = v.value<fincept::wallet::TreasuryRevenue>();
+    weekly_revenue_usd_ = rev.total_usd;
+    revenue_is_mock_ = rev.is_mock;
     recompute_preview();
 }
 
@@ -481,7 +536,7 @@ void LockPanel::on_max_clicked() {
     if (fncpt_balance_ui_ <= 0.0)
         return;
     QSignalBlocker b(amount_input_);
-    amount_input_->setText(format_token(fncpt_balance_ui_, 0));
+    amount_input_->setText(lock_amount_for_input(fncpt_balance_ui_, fncpt_decimals_));
     recompute_preview();
 }
 
@@ -529,10 +584,20 @@ void LockPanel::recompute_preview() {
     const double stake_usd = amount_ui * fncpt_usd_price_;
     const double pct_weekly = (stake_usd > 0.0) ? (100.0 * est_weekly / stake_usd) : 0.0;
     if (weekly_revenue_usd_ > 0.0 && fncpt_usd_price_ > 0.0) {
-        est_yield_->setText(tr("%1 / week (USDC) — %2% weekly real yield at %3 stake")
-                                .arg(format_usd(est_weekly, 0))
-                                .arg(QString::number(pct_weekly, 'f', 2))
-                                .arg(format_usd(stake_usd, 0)));
+        // The projection assumes the user is the ONLY locker (no global weight
+        // topic exists yet), so it is an upper bound, not an expectation. Say
+        // so on the line itself — an unqualified "$42 / week — 2.18% weekly
+        // real yield" reads as a forecast and is the kind of number people
+        // make irreversible 4-year lock decisions on. Prefix DEMO when the
+        // revenue feed is the producer's built-in mock.
+        QString yield_text = tr("≤ %1 / week (USDC) — ≤ %2% weekly at %3 stake "
+                                "· upper bound, assumes no other lockers")
+                                 .arg(format_usd(est_weekly, 0))
+                                 .arg(QString::number(pct_weekly, 'f', 2))
+                                 .arg(format_usd(stake_usd, 0));
+        if (revenue_is_mock_)
+            yield_text = tr("DEMO · ") + yield_text;
+        est_yield_->setText(yield_text);
     } else {
         est_yield_->setText(tr("waiting for revenue + spot price…"));
     }
@@ -589,7 +654,20 @@ void LockPanel::set_busy(bool busy) {
             btn->setEnabled(!busy);
     }
     max_button_->setEnabled(!busy);
-    lock_button_->setEnabled(!busy);
+    if (busy) {
+        lock_button_->setEnabled(false);
+        return;
+    }
+    // Un-busying must NOT blanket-enable LOCK: that re-armed the button in
+    // mock mode (fincept_lock not deployed), with an empty amount, or with an
+    // amount above the balance. Re-derive the gate instead. recompute_preview
+    // reads busy_ (already false) and applies program_is_configured() +
+    // amount/balance checks.
+    if (current_pubkey_.isEmpty()) {
+        lock_button_->setEnabled(false);
+        return;
+    }
+    recompute_preview();
 }
 
 // ── Submit flow ────────────────────────────────────────────────────────────
@@ -601,10 +679,18 @@ void LockPanel::on_lock_clicked() {
         return;
     const Duration d = current_duration();
 
-    // Build the atomic amount string for the program. Multiply at full
-    // precision via integer math to avoid double-rounding.
+    // Build the atomic amount string for the program.
+    //
+    // `static_cast<quint64>` TRUNCATES, and `amount_ui * 10^decimals` is not
+    // exact in binary: 8.7 × 1e6 evaluates to 8699999.999999999, which
+    // truncated escrows 8.699999 $FNCPT instead of 8.7. Round to the nearest
+    // atomic unit instead. Rounding can never exceed the balance because
+    // `amount_ui <= fncpt_balance_ui_` was checked above and the balance is
+    // itself an exact multiple of one atomic unit.
     const auto power = std::pow(10.0, fncpt_decimals_);
-    const QString amount_raw = QString::number(static_cast<quint64>(amount_ui * power));
+    const double atomic = amount_ui * power;
+    const QString amount_raw =
+        QString::number(atomic > 0.0 ? static_cast<quint64>(std::llround(atomic)) : static_cast<quint64>(0));
 
     set_busy(true);
     clear_error_strip();
@@ -633,6 +719,15 @@ void LockPanel::on_lock_clicked() {
             summary.rows.append(
                 {self->tr("AMOUNT"), QStringLiteral("%1 $FNCPT").arg(format_token(amount_ui, 0)), true});
             summary.rows.append({self->tr("DURATION"), fincept::wallet::StakingService::label_for(d), true});
+            // The exact unlock instant, not just "4 YR". This is the single
+            // most consequential fact about an irreversible lock and it was
+            // not shown anywhere before signing.
+            const qint64 unlock_ms =
+                QDateTime::currentMSecsSinceEpoch() + fincept::wallet::StakingService::seconds_for(d) * 1000LL;
+            summary.rows.append({self->tr("UNLOCKS ON"),
+                                 QDateTime::fromMSecsSinceEpoch(unlock_ms).toString(QStringLiteral("yyyy-MM-dd HH:mm")),
+                                 true});
+            summary.rows.append({self->tr("WALLET"), self->current_pubkey_, true});
             const double mult = fincept::wallet::StakingService::multiplier_for(d);
             summary.rows.append(
                 {self->tr("WEIGHT"), QStringLiteral("%1 veFNCPT").arg(format_token(amount_ui * mult, 1)), true});
@@ -661,13 +756,21 @@ void LockPanel::on_lock_clicked() {
                         }
                         const auto sig = sr.value();
                         LOG_INFO("LockPanel", "submitted: " + sig);
-                        self->status_label_->setText(QObject::tr("Sent: %1…").arg(sig.left(12)));
+                        // set_busy(false) re-derives the status line via
+                        // recompute_preview(), so the submitted-signature
+                        // message has to be written AFTER it or it is
+                        // immediately overwritten by "Choose an amount…".
                         self->set_busy(false);
                         self->amount_input_->clear();
+                        self->status_label_->setText(
+                            QObject::tr("Sent: %1… (not yet confirmed on-chain)").arg(sig.left(12)));
                         fincept::wallet::WalletService::instance().force_balance_refresh();
                     });
             });
-            QObject::connect(dlg, &WalletActionConfirmDialog::cancelled, self, [self]() {
+            // `cancelled()` only fires from the CANCEL button. Esc / the window
+            // close box left the panel permanently busy. `rejected()` covers
+            // every dismissal path; the handler is idempotent.
+            QObject::connect(dlg, &QDialog::rejected, self, [self]() {
                 if (!self)
                     return;
                 self->set_busy(false);

@@ -70,7 +70,6 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     void setup_ui();
     void apply_screen_styles();
     QWidget* build_screen_header();
-    QWidget* build_command_bar(); // stub — kept for compat
     QWidget* build_stats_strip();
     QWidget* build_tab_bar();
     QWidget* build_browse_page();
@@ -191,6 +190,10 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     int stat_filter_ = -1; // -1 = none, 0-3 = stat box index
     QString conn_search_text_;
     QMap<QString, QPair<bool, QString>> live_status_cache_;
+    // Round-robin cursor into the enabled-connection list so on_poll_timer
+    // probes a bounded slice per tick instead of fanning out one blocking
+    // worker thread per connection.
+    int poll_cursor_ = 0;
 };
 
 } // namespace fincept::screens::datasources

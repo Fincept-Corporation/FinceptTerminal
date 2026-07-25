@@ -42,7 +42,9 @@ IlostatPanel::IlostatPanel(QWidget* parent) : EconPanelBase(kIlostatSourceId, kI
 void IlostatPanel::activate() {
     show_empty(tr("Select a series, enter a country code, then click FETCH\n"
                   "Source: ILO ILOSTAT SDMX REST API (sdmx.ilo.org) — no API key required\n"
-                  "Country codes: USA, GBR, DEU, FRA, IND, CHN, JPN, BRA, ZAF, G7=CAN+USA+GBR+DEU+FRA+ITA+JPN"));
+                  "Series are ANNUAL, both sexes, age 15+, harmonised (modelled) estimates — percent.\n"
+                  "Country codes (ISO-3): USA, GBR, DEU, FRA, IND, CHN, JPN, BRA, ZAF · "
+                  "G7 = CAN+USA+GBR+DEU+FRA+ITA+JPN"));
 }
 
 void IlostatPanel::build_controls(QHBoxLayout* thl) {
@@ -64,10 +66,13 @@ void IlostatPanel::build_controls(QHBoxLayout* thl) {
     country_edit_ = new QLineEdit("USA");
     country_edit_->setFixedHeight(26);
     country_edit_->setFixedWidth(120);
-    country_edit_->setPlaceholderText(tr("ISO-2 code…"));
-    country_edit_->setToolTip(tr("ISO-2 country code, e.g. USA, GBR, DEU\n"
+    // ILOSTAT SDMX uses ISO-3166 alpha-3 (USA/GBR/DEU) — the field was
+    // mislabelled "ISO-2" while every example it gave was alpha-3.
+    country_edit_->setPlaceholderText(tr("ISO-3 code…"));
+    country_edit_->setToolTip(tr("ISO-3 country code, e.g. USA, GBR, DEU\n"
                                  "Multiple: CAN+USA+GBR\n"
                                  "All countries: ALL"));
+    country_edit_->setAccessibleName(tr("ILOSTAT country code"));
 
     start_edit_ = new QLineEdit("2010");
     start_edit_->setFixedHeight(26);
@@ -167,8 +172,8 @@ void IlostatPanel::retranslateUi() {
     if (to_lbl_)
         to_lbl_->setText(tr("TO"));
     if (country_edit_) {
-        country_edit_->setPlaceholderText(tr("ISO-2 code…"));
-        country_edit_->setToolTip(tr("ISO-2 country code, e.g. USA, GBR, DEU\n"
+        country_edit_->setPlaceholderText(tr("ISO-3 code…"));
+        country_edit_->setToolTip(tr("ISO-3 country code, e.g. USA, GBR, DEU\n"
                                      "Multiple: CAN+USA+GBR\n"
                                      "All countries: ALL"));
     }

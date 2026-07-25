@@ -52,6 +52,7 @@
 #include <QPromise>
 #include <QThread>
 
+#include <atomic>
 #include <functional>
 #include <memory>
 
@@ -78,8 +79,16 @@ class AsyncDispatch {
                                     BodyFn&& body) {
         // Wrap resolve so it's idempotent — the timeout watchdog and the
         // service callback can race; whichever fires first wins.
-        auto resolve = [promise](ToolResult r) {
-            if (promise->future().isFinished())
+        //
+        // The guard must be a compare-exchange, not a `future().isFinished()`
+        // test: the watchdog fires on the GUI thread while the service callback
+        // fires on its own thread, so both can observe "not finished" and then
+        // both addResult() — the loser writing after finish(), which Qt asserts
+        // on. Only the thread that flips the flag proceeds.
+        auto resolved = std::make_shared<std::atomic<bool>>(false);
+        auto resolve = [promise, resolved](ToolResult r) {
+            bool expected = false;
+            if (!resolved->compare_exchange_strong(expected, true))
                 return;
             promise->addResult(std::move(r));
             promise->finish();

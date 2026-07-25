@@ -135,31 +135,37 @@ QWidget* DataSourcesScreen::build_screen_header() {
     search_edit_->setObjectName("dsSearch");
     search_edit_->setPlaceholderText(tr("search connectors..."));
     search_edit_->setFixedSize(240, 26);
+    search_edit_->setClearButtonEnabled(true);
+    search_edit_->setAccessibleName(tr("Search connectors"));
     connect(search_edit_, &QLineEdit::textChanged, this, &DataSourcesScreen::on_search_changed);
     hl->addWidget(search_edit_);
 
     hl->addSpacing(12);
 
     // IO buttons (right side)
-    auto make_io_btn = [&](const QString& label) -> QPushButton* {
+    auto make_io_btn = [&](const QString& label, const QString& a11y, const QString& tip) -> QPushButton* {
         auto* btn = new QPushButton(label);
         btn->setObjectName("dsBtn");
         btn->setFixedHeight(26);
         btn->setCursor(Qt::PointingHandCursor);
+        btn->setAccessibleName(a11y);
+        btn->setToolTip(tip);
         return btn;
     };
 
-    import_btn_ = make_io_btn(tr("IMPORT"));
+    import_btn_ = make_io_btn(tr("IMPORT"), tr("Import connections"), tr("Load connections from a JSON file"));
     connect(import_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_import_connections);
     hl->addWidget(import_btn_);
     hl->addSpacing(4);
 
-    export_btn_ = make_io_btn(tr("EXPORT"));
+    export_btn_ = make_io_btn(tr("EXPORT"), tr("Export connections"),
+                              tr("Write connections to a JSON file (secrets are redacted by default)"));
     connect(export_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_export_connections);
     hl->addWidget(export_btn_);
     hl->addSpacing(4);
 
-    tpl_btn_ = make_io_btn(tr("TEMPLATE"));
+    tpl_btn_ = make_io_btn(tr("TEMPLATE"), tr("Download connector template"),
+                           tr("Write a blank JSON template containing every connector"));
     connect(tpl_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_download_template);
     hl->addWidget(tpl_btn_);
 
@@ -273,10 +279,10 @@ QWidget* DataSourcesScreen::build_tab_bar() {
     hl->addWidget(conns_tab_);
     hl->addStretch();
 
-    // Count label
-    count_label_ = new QLabel;
-    count_label_->setObjectName("dsScreenSubtitle");
-    hl->addWidget(count_label_);
+    // NOTE: count_label_ deliberately lives in build_connector_panel(), not
+    // here. This bar used to create its own QLabel and assign it to the same
+    // member, which the connector panel then overwrote — leaving an orphaned,
+    // permanently-blank label in the tab bar.
 
     return bar;
 }
@@ -588,6 +594,7 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     new_connection_btn_->setFixedHeight(28);
     new_connection_btn_->setCursor(Qt::PointingHandCursor);
     new_connection_btn_->setEnabled(false);
+    new_connection_btn_->setAccessibleName(tr("Add connection for the selected connector"));
     connect(new_connection_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_connection_add);
     act_vl->addWidget(new_connection_btn_);
 
@@ -599,6 +606,7 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     edit_connection_btn_->setFixedHeight(26);
     edit_connection_btn_->setCursor(Qt::PointingHandCursor);
     edit_connection_btn_->setEnabled(false);
+    edit_connection_btn_->setAccessibleName(tr("Edit selected connection"));
     connect(edit_connection_btn_, &QPushButton::clicked, this,
             [this]() { on_connection_edit(effective_detail_connection_id()); });
     edit_test_hl->addWidget(edit_connection_btn_);
@@ -608,6 +616,8 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     test_connection_btn_->setFixedHeight(26);
     test_connection_btn_->setCursor(Qt::PointingHandCursor);
     test_connection_btn_->setEnabled(false);
+    test_connection_btn_->setAccessibleName(tr("Test selected connection"));
+    test_connection_btn_->setToolTip(tr("Opens a TCP connection to the endpoint. Does not validate API keys."));
     connect(test_connection_btn_, &QPushButton::clicked, this,
             [this]() { on_connection_test(effective_detail_connection_id()); });
     edit_test_hl->addWidget(test_connection_btn_);
@@ -670,16 +680,21 @@ QWidget* DataSourcesScreen::build_connections_page() {
     conn_search_edit_->setObjectName("dsSearchConn");
     conn_search_edit_->setPlaceholderText(tr("filter connections..."));
     conn_search_edit_->setFixedSize(220, 22);
+    conn_search_edit_->setClearButtonEnabled(true);
+    conn_search_edit_->setAccessibleName(tr("Filter saved connections"));
     connect(conn_search_edit_, &QLineEdit::textChanged, this, &DataSourcesScreen::on_connections_search_changed);
     tb_hl->addWidget(conn_search_edit_);
 
     tb_hl->addStretch();
 
-    // Bulk buttons
+    // Bulk buttons. ENABLE ALL / DISABLE ALL act on the *filtered* rows, not
+    // the whole store — say so, because the labels imply otherwise.
     bulk_enable_btn_ = new QPushButton(tr("ENABLE ALL"));
     bulk_enable_btn_->setObjectName("dsBtnGreen");
     bulk_enable_btn_->setFixedHeight(22);
     bulk_enable_btn_->setCursor(Qt::PointingHandCursor);
+    bulk_enable_btn_->setAccessibleName(tr("Enable all listed connections"));
+    bulk_enable_btn_->setToolTip(tr("Enables every connection currently listed (the filter applies)"));
     connect(bulk_enable_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_enable_all);
     tb_hl->addWidget(bulk_enable_btn_);
 
@@ -687,6 +702,8 @@ QWidget* DataSourcesScreen::build_connections_page() {
     bulk_disable_btn_->setObjectName("dsBtn");
     bulk_disable_btn_->setFixedHeight(22);
     bulk_disable_btn_->setCursor(Qt::PointingHandCursor);
+    bulk_disable_btn_->setAccessibleName(tr("Disable all listed connections"));
+    bulk_disable_btn_->setToolTip(tr("Disables every connection currently listed (the filter applies)"));
     connect(bulk_disable_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_disable_all);
     tb_hl->addWidget(bulk_disable_btn_);
 
@@ -694,6 +711,7 @@ QWidget* DataSourcesScreen::build_connections_page() {
     bulk_delete_btn_->setObjectName("dsBtnDanger");
     bulk_delete_btn_->setFixedHeight(22);
     bulk_delete_btn_->setCursor(Qt::PointingHandCursor);
+    bulk_delete_btn_->setAccessibleName(tr("Delete selected connections"));
     connect(bulk_delete_btn_, &QPushButton::clicked, this, &DataSourcesScreen::on_bulk_delete_selected);
     tb_hl->addWidget(bulk_delete_btn_);
 
@@ -735,22 +753,10 @@ QWidget* DataSourcesScreen::build_connections_page() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Command bar stub (unused — kept for ABI compat)
-// ─────────────────────────────────────────────────────────────────────────────
-
-QWidget* DataSourcesScreen::build_command_bar() {
-    auto* w = new QWidget(this);
-    w->setFixedHeight(0);
-    return w;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// apply_screen_styles — no-op (styles applied inline in setup_ui)
+// apply_screen_styles — no-op (styles applied once in setup_ui via
+// screen_stylesheet(); kept because it is part of the class's build contract)
 // ─────────────────────────────────────────────────────────────────────────────
 
 void DataSourcesScreen::apply_screen_styles() {}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Config dialog (thin wrapper — implementation in ConnectionConfigDialog.cpp)
-// ─────────────────────────────────────────────────────────────────────────────
 } // namespace fincept::screens::datasources

@@ -153,6 +153,8 @@ void PortfolioPerfChart::build_ui() {
         if (p == current_period_)
             btn->setChecked(true);
 
+        btn->setAccessibleName(tr("Show %1 of performance history").arg(p));
+
         connect(btn, &QPushButton::clicked, this, [this, period = p]() { set_period(period); });
 
         slot->addWidget(btn);
@@ -166,6 +168,7 @@ void PortfolioPerfChart::build_ui() {
     benchmark_btn_->setCheckable(true);
     benchmark_btn_->setCursor(Qt::PointingHandCursor);
     benchmark_btn_->setToolTip(tr("Overlay benchmark index (auto-selected by portfolio currency)"));
+    benchmark_btn_->setAccessibleName(tr("Toggle benchmark overlay"));
     benchmark_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                 "  font-size:11px; font-weight:700; }"
@@ -188,6 +191,7 @@ void PortfolioPerfChart::build_ui() {
     indexed_btn_->setCursor(Qt::PointingHandCursor);
     indexed_btn_->setToolTip(tr("Indexed view: rebase portfolio and benchmark to 100 at the start of\n"
                                 "the selected period. Use when comparing different currencies."));
+    indexed_btn_->setAccessibleName(tr("Toggle base-100 indexed view"));
     indexed_btn_->setStyleSheet(
         QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                 "  font-size:11px; font-weight:700; }"
@@ -269,7 +273,13 @@ void PortfolioPerfChart::set_snapshots(const QVector<portfolio::PortfolioSnapsho
 }
 
 void PortfolioPerfChart::set_currency(const QString& currency) {
+    if (currency_ == currency)
+        return;
     currency_ = currency;
+    // NAV / COST labels and the crosshair tooltip are currency-prefixed. The
+    // owner calls set_summary() before set_currency(), so without this the
+    // labels kept the previous portfolio's currency until the next poll.
+    update_chart();
 }
 
 void PortfolioPerfChart::set_spy_history(const QStringList& dates, const QVector<double>& closes) {
@@ -548,9 +558,13 @@ void PortfolioPerfChart::update_chart() {
     chart_view_->set_series_data(nav_line->points(), indexed_mode_ ? QStringLiteral("idx") : currency_);
 
     // ── Benchmark overlay ─────────────────────────────────────────────────────
+    // Set below, after the info labels are written — appending to nav_label_
+    // here was dead code because nav_label_->setText() further down overwrote
+    // it, so the user never saw the "loading…" hint.
+    QString benchmark_note;
     if (show_benchmark_ && nav_line->count() >= 2) {
         if (spy_dates_.isEmpty() || spy_closes_.isEmpty()) {
-            nav_label_->setText(nav_label_->text() + tr("  |  %1: loading…").arg(benchmark_symbol_));
+            benchmark_note = tr("  |  %1: loading…").arg(benchmark_symbol_);
         } else {
             const QDate start_date =
                 QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(nav_line->at(0).x()), QTimeZone::UTC).date();
@@ -622,7 +636,7 @@ void PortfolioPerfChart::update_chart() {
         tr("TOTAL  %1%2%").arg(total_pnl_pct >= 0 ? "+" : "").arg(QString::number(total_pnl_pct, 'f', 2)));
     total_return_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(total_color));
 
-    nav_label_->setText(tr("NAV %1 %2").arg(currency_).arg(QString::number(live_nav, 'f', 2)));
+    nav_label_->setText(tr("NAV %1 %2").arg(currency_).arg(QString::number(live_nav, 'f', 2)) + benchmark_note);
     if (cost_basis_label_) {
         if (cost_basis > 0)
             cost_basis_label_->setText(tr("COST %1 %2").arg(currency_).arg(QString::number(cost_basis, 'f', 2)));

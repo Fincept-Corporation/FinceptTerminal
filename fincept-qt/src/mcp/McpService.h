@@ -48,11 +48,22 @@ class McpService {
 
     // ── Unified Tool Execution ──────────────────────────────────────────
 
-    /// Route to internal or external server
-    ToolResult execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args);
+    /// Route to internal or external server.
+    ///
+    /// `allow_defer` opts the call into the long-running-job protocol: an
+    /// internal tool that declares `supports_async` and overruns its grace
+    /// window returns a `{job_id, status:"running"}` receipt instead of
+    /// blocking. Only the interactive LLM tool loop passes true — it is the
+    /// only caller that knows about the `job_*` tools. Workflow nodes, the
+    /// Python agent bridge, and internal C++ callers leave it false and keep
+    /// blocking semantics. External servers never defer: the MCP wire carries
+    /// no async metadata.
+    ToolResult execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args,
+                            bool allow_defer = false);
 
     /// Execute from OpenAI function-call format ("serverId__toolName")
-    ToolResult execute_openai_function(const QString& function_name, const QJsonObject& args);
+    ToolResult execute_openai_function(const QString& function_name, const QJsonObject& args,
+                                       bool allow_defer = false);
 
     /// Phase 4: async equivalent of execute_openai_function. Returns a
     /// QFuture<ToolResult> so callers (LlmService dispatch loops in
@@ -94,6 +105,10 @@ class McpService {
     // ~150 KB OpenAI JSON schema on every LLM turn.
     QHash<QByteArray, std::vector<UnifiedTool>> filtered_tools_cache_;
     QHash<QByteArray, QJsonArray> openai_format_cache_;
+    // In Tool RAG mode the format-cache key encodes the activated-tool set, so
+    // it varies per round and the map would otherwise grow unbounded across a
+    // session. Cleared wholesale on overflow — it is a memo, not a store.
+    static constexpr int kMaxFormatCacheEntries = 64;
 
     void refresh_cache();        // requires mutex_ held
     bool is_cache_valid() const; // requires mutex_ held

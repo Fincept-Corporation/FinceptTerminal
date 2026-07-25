@@ -37,6 +37,8 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
+#include <QSet>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStandardPaths>
@@ -95,8 +97,27 @@ void DataSourcesScreen::build_connector_table() {
     const auto filtered = filtered_connectors();
     int preferred_row = -1;
 
+    // Empty state for the browse grid — a search with no hits used to render a
+    // blank table with no explanation.
+    if (filtered.isEmpty()) {
+        QSignalBlocker blocker(connector_table_);
+        connector_table_->clearSpans();
+        connector_table_->setRowCount(1);
+        auto* msg = make_item(tr("No connectors match the current search or filter."), QColor(col::TEXT_TERTIARY()),
+                              Qt::AlignCenter);
+        msg->setFlags(Qt::NoItemFlags);
+        connector_table_->setItem(0, 0, msg);
+        if (connector_table_->columnCount() > 0)
+            connector_table_->setSpan(0, 0, 1, connector_table_->columnCount());
+        if (count_label_)
+            count_label_->setText(QString("0 / %1").arg(ConnectorRegistry::instance().count()));
+        update_detail_panel();
+        return;
+    }
+
     {
         QSignalBlocker blocker(connector_table_);
+        connector_table_->clearSpans();
         connector_table_->setRowCount(filtered.size());
 
         for (int row = 0; row < filtered.size(); ++row) {
@@ -162,7 +183,36 @@ void DataSourcesScreen::build_connections_table() {
 
     const auto rows = filtered_connection_rows();
 
+    // Preserve what the user had selected and where they were scrolled to —
+    // this is a full teardown/rebuild and both were previously lost on every
+    // refresh (which the 30s poll timer triggers indirectly).
+    QSet<QString> previously_selected;
+    const auto selected_items = connections_table_->selectedItems();
+    for (auto* item : selected_items) {
+        if (item->column() == 1)
+            previously_selected.insert(item->data(Qt::UserRole).toString());
+    }
+    const int scroll_pos =
+        connections_table_->verticalScrollBar() ? connections_table_->verticalScrollBar()->value() : 0;
+
     QSignalBlocker blocker(connections_table_);
+
+    // Empty state — the table used to render as a blank grey slab with no hint
+    // about why, whether for "nothing configured" or "filter matched nothing".
+    if (rows.isEmpty()) {
+        connections_table_->clearSpans();
+        connections_table_->setRowCount(1);
+        const bool filtered = !conn_search_text_.trimmed().isEmpty() || stat_filter_ >= 0;
+        auto* msg = make_item(filtered ? tr("No connections match the current filter.")
+                                       : tr("No connections yet — use + ADD to configure a data source."),
+                              QColor(col::TEXT_TERTIARY()), Qt::AlignCenter);
+        msg->setFlags(Qt::NoItemFlags);
+        connections_table_->setItem(0, 0, msg);
+        if (connections_table_->columnCount() > 0)
+            connections_table_->setSpan(0, 0, 1, connections_table_->columnCount());
+        return;
+    }
+    connections_table_->clearSpans();
     connections_table_->setRowCount(rows.size());
 
     for (int r = 0; r < rows.size(); ++r) {
@@ -175,6 +225,7 @@ void DataSourcesScreen::build_connections_table() {
         toggle->setChecked(ds.enabled);
         toggle->setProperty("conn_id", ds.id);
         toggle->setCursor(Qt::PointingHandCursor);
+        toggle->setAccessibleName(tr("Enable %1").arg(ds.display_name));
         connect(toggle, &QCheckBox::toggled, this,
                 [this, id = ds.id](bool checked) { on_connection_enabled_changed(id, checked); });
         connections_table_->setCellWidget(r, 0, toggle);
@@ -195,16 +246,13 @@ void DataSourcesScreen::build_connections_table() {
         connections_table_->setItem(
             r, 4, make_item(cfg ? connector_transport(*cfg) : ds.type, QColor(col::TEXT_TERTIARY()), Qt::AlignCenter));
 
-        // Col 5: live status
+        // Col 5: live status — styled by object name (see DataSourcesStyles.h),
+        // not by a per-row setStyleSheet() CSS reparse.
         const bool has_status = live_status_cache_.contains(ds.id);
         const bool ok = has_status ? live_status_cache_[ds.id].first : false;
         auto* status_lbl = new QLabel(has_status ? (ok ? tr("OK") : tr("ERR")) : QStringLiteral("--"));
         status_lbl->setAlignment(Qt::AlignCenter);
-        status_lbl->setObjectName("dsStatusDot");
-        status_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;")
-                                      .arg(!has_status ? col::TEXT_TERTIARY()
-                                           : ok        ? col::POSITIVE()
-                                                       : col::NEGATIVE()));
+        status_lbl->setObjectName(!has_status ? "dsStatusDot" : (ok ? "dsStatusOk" : "dsStatusErr"));
         if (has_status)
             status_lbl->setToolTip(live_status_cache_[ds.id].second);
         connections_table_->setCellWidget(r, 5, status_lbl);
@@ -215,6 +263,20 @@ void DataSourcesScreen::build_connections_table() {
         // Col 7: updated_at
         connections_table_->setItem(r, 7, make_item(ds.updated_at.left(16), QColor(col::TEXT_TERTIARY())));
     }
+
+    // Restore selection + scroll. setRangeSelected() adds to the selection;
+    // selectRow() would clear it, which breaks multi-row restore.
+    if (!previously_selected.isEmpty() && connections_table_->columnCount() > 0) {
+        for (int r = 0; r < connections_table_->rowCount(); ++r) {
+            auto* item = connections_table_->item(r, 1);
+            if (item && previously_selected.contains(item->data(Qt::UserRole).toString())) {
+                connections_table_->setRangeSelected(
+                    QTableWidgetSelectionRange(r, 0, r, connections_table_->columnCount() - 1), true);
+            }
+        }
+    }
+    if (connections_table_->verticalScrollBar())
+        connections_table_->verticalScrollBar()->setValue(scroll_pos);
 }
 
 void DataSourcesScreen::update_stats_strip() {

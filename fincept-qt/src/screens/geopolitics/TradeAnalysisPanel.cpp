@@ -58,6 +58,37 @@ static QString spin_style() {
         .arg(ui::colors::WARNING());
 }
 
+// ── Backend-routing honesty notice ───────────────────────────────────────────
+//
+// The "Trading Blocs" and "Barrier Removal" tabs collect their own parameters
+// but the service only exposes analyze_trade_benefits / analyze_trade_restrictions
+// today, so both are routed to the benefits/costs mode and their inputs are
+// dropped. That was documented only in a code comment; the user saw plausible
+// numbers that did not respond to what they typed. Say so on-screen.
+QString TradeAnalysisPanel::kBlocsNotice() {
+    return tr("Note: results come from the benefits/costs model. The dedicated trading-blocs mode is not exposed by "
+              "the service yet, so the integration type, trade-creation and trade-diversion inputs below are not sent "
+              "to the backend — read the output as a general welfare estimate, not a bloc-specific one.");
+}
+
+QString TradeAnalysisPanel::kBarrierNotice() {
+    return tr("Note: results come from the benefits/costs model. The dedicated barrier-removal mode is not exposed by "
+              "the service yet, so the liberalization scope, tariff-reduction and GDP inputs below are not sent to "
+              "the backend — read the output as a general welfare estimate, not a liberalization-specific one.");
+}
+
+QLabel* TradeAnalysisPanel::make_routing_notice(QWidget* parent) {
+    auto* lbl = new QLabel(parent);
+    lbl->setWordWrap(true);
+    lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 8px;"
+                               "background:rgba(%4,0.10); border:1px solid %1;")
+                           .arg(ui::colors::WARNING())
+                           .arg(ui::fonts::TINY)
+                           .arg(ui::fonts::DATA_FAMILY())
+                           .arg(warn_rgb()));
+    return lbl;
+}
+
 static QWidget* make_field(const QString& label_text, QWidget* input, QWidget* parent, const QString& hint = {}) {
     auto* group = new QWidget(parent);
     auto* vl = new QVBoxLayout(group);
@@ -317,6 +348,9 @@ void TradeAnalysisPanel::build_ui() {
         {hint2, QStringLiteral(
                     "Analyzes trade creation vs. diversion effects for regional trade blocs and economic unions.")});
     p2l->addWidget(hint2);
+    blocs_notice_ = make_routing_notice(p2);
+    blocs_notice_->setText(kBlocsNotice());
+    p2l->addWidget(blocs_notice_);
 
     auto* bloc_combo = new QComboBox;
     bloc_combo->setStyleSheet(combo_style());
@@ -387,6 +421,9 @@ void TradeAnalysisPanel::build_ui() {
     i18n_labels_.append(
         {hint3, QStringLiteral("Assesses FDI, employment, wage, and GDP impact of removing trade barriers.")});
     p3l->addWidget(hint3);
+    barrier_notice_ = make_routing_notice(p3);
+    barrier_notice_->setText(kBarrierNotice());
+    p3l->addWidget(barrier_notice_);
 
     auto* lib_combo = new QComboBox;
     lib_combo->setStyleSheet(combo_style());
@@ -592,6 +629,12 @@ void TradeAnalysisPanel::retranslateUi() {
         tabs_->setTabText(2, tr("Trading Blocs"));
         tabs_->setTabText(3, tr("Barrier Removal"));
     }
+
+    // Backend-routing notices.
+    if (blocs_notice_)
+        blocs_notice_->setText(kBlocsNotice());
+    if (barrier_notice_)
+        barrier_notice_->setText(kBarrierNotice());
 
     // Run buttons
     for (auto* btn : run_buttons_)

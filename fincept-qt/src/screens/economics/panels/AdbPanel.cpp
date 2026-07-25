@@ -10,6 +10,7 @@
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
 
+#include <QCompleter>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -64,7 +65,9 @@ AdbPanel::AdbPanel(QWidget* parent) : EconPanelBase(kAdbSourceId, kAdbColor, par
 
 void AdbPanel::activate() {
     show_empty(tr("Select an economy and data category, then click FETCH\n"
-                  "ADB data is free — no API key required"));
+                  "Source: Asian Development Bank — Key Indicators Database (KIDB), SDMX\n"
+                  "Free, no API key required. Values are in the economy's own currency unless\n"
+                  "the indicator code says otherwise (…_XDC = domestic currency, …_PT = percent)"));
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -94,6 +97,24 @@ void AdbPanel::build_controls(QHBoxLayout* thl) {
     indicator_input_->setText(kAdbCategories[0].default_indicator);
     indicator_input_->setFixedHeight(26);
     indicator_input_->setFixedWidth(130);
+    indicator_input_->setAccessibleName(tr("ADB indicator code"));
+    // The curated KIDB indicator list existed but was never surfaced anywhere —
+    // expose it as an inline completer (code and human label both match) so the
+    // free-text field is discoverable instead of guess-only.
+    {
+        QStringList completions;
+        QString tips;
+        for (const auto& gi : kGdpIndicators) {
+            completions << gi.second;
+            tips += gi.first + "\n";
+        }
+        auto* completer = new QCompleter(completions, indicator_input_);
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+        completer->setFilterMode(Qt::MatchContains);
+        completer->setCompletionMode(QCompleter::PopupCompletion);
+        indicator_input_->setCompleter(completer);
+        indicator_input_->setToolTip(tr("Common KIDB indicator codes:\n%1").arg(tips.trimmed()));
+    }
 
     start_input_ = new QLineEdit;
     start_input_->setPlaceholderText(tr("Start year"));

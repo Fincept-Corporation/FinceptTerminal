@@ -23,6 +23,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fincept::screens::fno {
 
@@ -145,6 +146,11 @@ void MultiStraddleSubTab::setup_ui() {
     add_btn_->setObjectName("fnoMSAdd");
     add_btn_->setCursor(Qt::PointingHandCursor);
     add_btn_->setEnabled(false);
+    type_combo_->setAccessibleName(tr("Straddle or strangle type"));
+    strike_combo_->setAccessibleName(tr("Anchor strike"));
+    add_btn_->setAccessibleName(tr("Add this straddle to the chart"));
+    setTabOrder(type_combo_, strike_combo_);
+    setTabOrder(strike_combo_, add_btn_);
     hlay->addWidget(add_btn_);
     hlay->addStretch(1);
     root->addWidget(header);
@@ -224,51 +230,72 @@ void MultiStraddleSubTab::retranslateUi() {
             type_combo_->setCurrentIndex(keep);
     }
     // Rebuild the strike combo so the "(ATM)" suffix re-translates.
-    if (strike_combo_ && strike_combo_->count() > 0 && !last_chain_.rows.isEmpty()) {
-        const int keep = strike_combo_->currentIndex();
+    // rebuild_strike_combo re-selects by strike value, so the anchor sticks.
+    if (strike_combo_ && strike_combo_->count() > 0 && !last_chain_.rows.isEmpty())
         rebuild_strike_combo(last_chain_);
-        if (keep >= 0 && keep < strike_combo_->count())
-            strike_combo_->setCurrentIndex(keep);
-    }
 }
 
 void MultiStraddleSubTab::on_chain_published(const QVariant& v) {
     if (!v.canConvert<OptionChain>())
         return;
     last_chain_ = v.value<OptionChain>();
-    if (last_chain_.underlying != current_underlying_) {
+    const bool series_changed =
+        last_chain_.underlying != current_underlying_ || last_chain_.expiry != current_expiry_;
+    if (series_changed) {
         current_underlying_ = last_chain_.underlying;
+        current_expiry_ = last_chain_.expiry;
         rebuild_strike_combo(last_chain_);
-        // Drop existing selections — they're stale for the new underlying.
+        // Drop existing selections — their tokens belong to the previous series.
         for (int i = selections_.size() - 1; i >= 0; --i)
             remove_selection(i);
-    }
-    if (strike_combo_->count() == 0)
+    } else if (strike_combo_->count() != last_chain_.rows.size()) {
+        // Same series, resized ladder (the chain window slides with the ATM).
+        // Rebuild so the anchor list matches the rows we index into; existing
+        // selections are token-keyed and stay valid.
         rebuild_strike_combo(last_chain_);
+    }
     add_btn_->setEnabled(strike_combo_->count() > 0);
 }
 
 void MultiStraddleSubTab::rebuild_strike_combo(const OptionChain& chain) {
     QSignalBlocker block(strike_combo_);
+    // Preserve the user's anchor by STRIKE across rebuilds; a row index would
+    // point at a different strike as soon as the ladder window shifts.
+    const double keep_strike = strike_combo_->count() > 0 ? strike_combo_->currentData().toDouble() : 0.0;
     strike_combo_->clear();
     int atm_idx = 0;
+    int keep_idx = -1;
     for (int i = 0; i < chain.rows.size(); ++i) {
         const auto& r = chain.rows[i];
-        strike_combo_->addItem(strike_label(r), QVariant(int(i)));
+        strike_combo_->addItem(strike_label(r), QVariant(r.strike));
         if (r.is_atm)
             atm_idx = i;
+        if (keep_strike > 0 && std::abs(r.strike - keep_strike) < 1e-6)
+            keep_idx = i;
     }
     if (chain.rows.isEmpty())
         return;
-    strike_combo_->setCurrentIndex(atm_idx);
+    strike_combo_->setCurrentIndex(keep_idx >= 0 ? keep_idx : atm_idx);
 }
 
 void MultiStraddleSubTab::on_add_clicked() {
     if (last_chain_.rows.isEmpty())
         return;
-    const int anchor_idx = strike_combo_->currentData().toInt();
-    if (anchor_idx < 0 || anchor_idx >= last_chain_.rows.size())
+    // Resolve the anchor by strike value, then derive the wings from its
+    // position in the *current* ladder.
+    const double anchor_strike = strike_combo_->currentData().toDouble();
+    int anchor_idx = -1;
+    for (int i = 0; i < last_chain_.rows.size(); ++i) {
+        if (std::abs(last_chain_.rows[i].strike - anchor_strike) < 1e-6) {
+            anchor_idx = i;
+            break;
+        }
+    }
+    if (anchor_idx < 0) {
+        LOG_WARN("FnoMultiStraddle", "Anchor strike is no longer in the chain — reselect it.");
+        selection_list_->setToolTip(tr("That anchor strike is no longer in the chain. Pick another."));
         return;
+    }
     const int type_idx = type_combo_->currentIndex();
     if (type_idx < 0 || type_idx >= int(sizeof(kTypeDefs) / sizeof(kTypeDefs[0])))
         return;
@@ -278,6 +305,10 @@ void MultiStraddleSubTab::on_add_clicked() {
     const int pe_idx = anchor_idx - wing;
     if (ce_idx < 0 || ce_idx >= last_chain_.rows.size() || pe_idx < 0 || pe_idx >= last_chain_.rows.size()) {
         LOG_WARN("FnoMultiStraddle", "Selected wings fall outside the chain — pick a closer anchor or smaller wing.");
+        // Surface it — a silent no-op on a button press reads as a broken UI.
+        add_btn_->setToolTip(tr("The ±%1 wings fall outside the loaded strike range. "
+                                "Pick a strike nearer the middle of the chain, or a narrower strangle.")
+                                 .arg(wing));
         return;
     }
 
@@ -287,8 +318,11 @@ void MultiStraddleSubTab::on_add_clicked() {
     sel.pe_token = last_chain_.rows[pe_idx].pe_token;
     if (sel.ce_token == 0 || sel.pe_token == 0) {
         LOG_WARN("FnoMultiStraddle", "Anchor row missing CE or PE token — pick a different strike.");
+        add_btn_->setToolTip(tr("This provider published no instrument token for one side of that strike, "
+                                "so its intraday history can't be fetched. Pick another strike."));
         return;
     }
+    add_btn_->setToolTip(QString());
     if (wing == 0) {
         sel.label = tr("Straddle %1").arg(last_chain_.rows[anchor_idx].strike, 0, 'f', 0);
     } else {

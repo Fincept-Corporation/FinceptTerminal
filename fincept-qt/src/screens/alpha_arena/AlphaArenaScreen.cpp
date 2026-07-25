@@ -101,7 +101,18 @@ QWidget* AlphaArenaScreen::build_header() {
             QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
     });
     force_btn_ = new QPushButton(tr("⚡ FORCE ROUND"));
-    connect(force_btn_, &QPushButton::clicked, this, []() { ArenaEngine::instance().force_round(); });
+    connect(force_btn_, &QPushButton::clicked, this, [this]() {
+        // Forcing a round makes every agent decide and trade immediately. In
+        // paper mode that is free; in live mode it is an out-of-band real order
+        // burst, so confirm. KILL ALL already confirms for the same reason.
+        if (live_mode_ &&
+            QMessageBox::warning(this, tr("Alpha Arena — LIVE"),
+                                 tr("Force an immediate trading round?\n\nThis competition is LIVE — every active "
+                                    "agent will place real orders now."),
+                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+            return;
+        ArenaEngine::instance().force_round();
+    });
     kill_btn_ = new QPushButton(tr("✖ KILL ALL"));
     kill_btn_->setStyleSheet("background:#C72020;color:#FFF;font-weight:700;");
     connect(kill_btn_, &QPushButton::clicked, this, [this]() {
@@ -327,14 +338,42 @@ void AlphaArenaScreen::maybe_offer_crash_recovery() {
     const QStringList ids = eng.pending_crash_recoveries();
     if (ids.isEmpty() || !eng.active_competition_id().isEmpty())
         return;
+    // Resuming restarts real order flow if the recovered competition was in live
+    // mode. The generic "Resume the most recent one?" prompt never said so —
+    // a Yes could put real funds back to work without the word LIVE appearing.
+    // Name the competition and, when it is live, demand an explicit Yes on a
+    // warning-styled prompt that defaults to No.
+    const QString resume_id = ids.first();
+    QString resume_name = resume_id.left(8);
+    bool resume_is_live = false;
+    if (auto c = ArenaStore::instance().competition(resume_id); c.is_ok()) {
+        resume_name = c.value().name;
+        resume_is_live = c.value().live_mode;
+    }
+
     prompt_open = true;
-    const auto pick = QMessageBox::question(
-        this, tr("Alpha Arena — Crash Recovery"),
-        tr("The previous session left %1 competition(s) running.\nResume the most recent one?").arg(ids.size()));
+    QMessageBox::StandardButton pick;
+    if (resume_is_live) {
+        pick = QMessageBox::warning(
+            this, tr("Alpha Arena — Resume LIVE Competition"),
+            tr("\"%1\" was running in LIVE mode on Hyperliquid with real funds.\n\n"
+               "Resuming restarts automated order placement immediately — agents may open, "
+               "close and reverse real positions without further prompts.\n\n"
+               "Resume live trading now?")
+                .arg(resume_name),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    } else {
+        pick = QMessageBox::question(
+            this, tr("Alpha Arena — Crash Recovery"),
+            tr("The previous session left %1 competition(s) running.\nResume \"%2\" (paper mode)?")
+                .arg(ids.size())
+                .arg(resume_name),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    }
     prompt_open = false;
     if (pick == QMessageBox::Yes) {
-        if (auto r = eng.start(ids.first()); r.is_ok())
-            show_competition(ids.first());
+        if (auto r = eng.start(resume_id); r.is_ok())
+            show_competition(resume_id);
     } else {
         for (const auto& id : ids)
             eng.dismiss_crash_recovery(id);
@@ -356,15 +395,20 @@ void AlphaArenaScreen::reload_competitions() {
 
 void AlphaArenaScreen::show_competition(const QString& id) {
     if (id.isEmpty()) {
+        live_mode_ = false;
         body_->setCurrentIndex(0);
         return;
     }
     competition_id_ = id;
     auto comp = ArenaStore::instance().competition(id);
     if (comp.is_err()) {
+        live_mode_ = false;
         body_->setCurrentIndex(0);
         return;
     }
+    // Cached so header actions (FORCE ROUND) can gate on real-money mode
+    // without a store round-trip on every click.
+    live_mode_ = comp.value().live_mode;
     body_->setCurrentIndex(1);
     grid_->set_competition(id, comp.value().live_mode);
     disclaimer_->setVisible(comp.value().live_mode);

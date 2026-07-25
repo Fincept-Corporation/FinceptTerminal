@@ -322,6 +322,14 @@ Result<Strategy> instantiate(const StrategyTemplate& tpl, const OptionChain& cha
         leg.type = recipe.type;
         leg.strike = row.strike;
         leg.expiry = chain.expiry;
+        // CONTRACT: this can legitimately be 0. Several providers omit lot size
+        // from the chain payload entirely (Fyers options-chain-v3 always does),
+        // and 0 is propagated deliberately rather than defaulted to 1 — a
+        // fabricated lot size of 1 silently dispatches "1 lot" as "1 unit" and
+        // understates every payoff and Greek by the real multiplier.
+        // CALLERS MUST BACKFILL before dispatch or analytics (see
+        // BuilderSubTab::backfill_lot_sizes, which resolves via InstrumentService).
+        // Resolving here would drag a trading/ dependency into services/options.
         leg.lot_size = row.lot_size;
         leg.lots = recipe.lots * lot_mul;
         leg.is_active = true;

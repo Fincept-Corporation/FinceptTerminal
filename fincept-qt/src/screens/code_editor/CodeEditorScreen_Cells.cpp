@@ -137,7 +137,8 @@ void CellWidget::build_ui() {
         auto* btn = new QPushButton(text, toolbar_);
         btn->setFixedHeight(20);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setVisible(false); // hidden until hover
+        btn->setAccessibleName(text); // two-letter labels are opaque to a screen reader alone
+        btn->setVisible(false);       // hidden until hover
         btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
                                    " font-family:%2; font-size:%3px; font-weight:600; padding:0 8px;"
                                    " letter-spacing:0.5px; }"
@@ -149,24 +150,30 @@ void CellWidget::build_ui() {
     };
 
     run_btn_ = make_tool_btn(tr("RUN"), colors::POSITIVE);
+    run_btn_->setAccessibleName(tr("Run this cell"));
     connect(run_btn_, &QPushButton::clicked, this, [this]() { emit run_requested(cell_id_); });
     tb_layout->addWidget(run_btn_);
 
     type_btn_ = make_tool_btn(tr("TYPE"), colors::CYAN);
+    type_btn_->setAccessibleName(tr("Switch between code and markdown"));
+    type_btn_->setToolTip(tr("Switch between code and markdown (clears this cell's output)"));
     connect(type_btn_, &QPushButton::clicked, this, [this]() { emit toggle_type_requested(cell_id_); });
     tb_layout->addWidget(type_btn_);
 
     up_btn_ = make_tool_btn(tr("UP"), colors::TEXT_SECONDARY);
+    up_btn_->setAccessibleName(tr("Move this cell up"));
     connect(up_btn_, &QPushButton::clicked, this, [this]() { emit move_up_requested(cell_id_); });
     tb_layout->addWidget(up_btn_);
 
     dn_btn_ = make_tool_btn(tr("DN"), colors::TEXT_SECONDARY);
+    dn_btn_->setAccessibleName(tr("Move this cell down"));
     connect(dn_btn_, &QPushButton::clicked, this, [this]() { emit move_down_requested(cell_id_); });
     tb_layout->addWidget(dn_btn_);
 
     tb_layout->addStretch();
 
     del_btn_ = make_tool_btn(tr("DEL"), colors::NEGATIVE);
+    del_btn_->setAccessibleName(tr("Delete this cell"));
     connect(del_btn_, &QPushButton::clicked, this, [this]() { emit delete_requested(cell_id_); });
     tb_layout->addWidget(del_btn_);
 
@@ -193,6 +200,9 @@ void CellWidget::build_ui() {
                                .arg(fonts::DATA)
                                .arg(colors::AMBER_DIM(), colors::BORDER_BRIGHT()));
     editor_->document()->setDocumentMargin(2);
+    editor_->setAccessibleName(tr("Notebook cell source"));
+    editor_->setAccessibleDescription(
+        tr("Python source. Ctrl+Enter runs this cell, Shift+Enter runs it and moves to the next."));
 
     // Keyboard shortcuts
     connect(editor_, &CodeTextEdit::run_shortcut, this, [this]() { emit run_requested(cell_id_); });
@@ -218,8 +228,12 @@ void CellWidget::build_ui() {
                                    .arg(fonts::DATA)
                                    .arg(colors::BORDER_BRIGHT()));
 
-    // Click on preview to edit
+    // Click on the rendered preview to drop back into the source editor.
+    // QTextBrowser swallows the press, so CellWidget::mousePressEvent never
+    // fires for it — the filter below (see eventFilter) is what makes this work.
     md_preview_->installEventFilter(this);
+    md_preview_->setCursor(Qt::IBeamCursor);
+    md_preview_->setToolTip(tr("Click to edit this markdown cell"));
 
     editor_vbox->addWidget(md_preview_);
 
@@ -746,6 +760,25 @@ void CellWidget::leaveEvent(QEvent* /*event*/) {
 void CellWidget::mousePressEvent(QMouseEvent* event) {
     emit cell_clicked(cell_id_);
     QWidget::mousePressEvent(event);
+}
+
+bool CellWidget::eventFilter(QObject* watched, QEvent* event) {
+    // The markdown preview is read-only and consumes its own mouse events, so
+    // without this a rendered markdown cell could only be re-opened from the
+    // navigator. installEventFilter() was already in place but no override
+    // existed, so nothing happened.
+    if (watched == md_preview_ && event->type() == QEvent::MouseButtonPress) {
+        emit cell_clicked(cell_id_); // selecting a markdown cell switches it to edit mode
+        if (!md_editing_) {
+            md_editing_ = true;
+            md_preview_->setVisible(false);
+            editor_->setVisible(true);
+            editor_->setFocus(Qt::MouseFocusReason);
+            adjust_editor_height();
+        }
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

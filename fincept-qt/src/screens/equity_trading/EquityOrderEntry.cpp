@@ -10,13 +10,16 @@
 #include "ui/theme/Theme.h"
 
 #include <QCheckBox>
+#include <QDateTime>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QMenu>
 #include <QMetaObject>
 #include <QPointer>
 #include <QScrollArea>
+#include <QShortcut>
 #include <QStyle>
 #include <QTimer>
 #include <QToolButton>
@@ -29,6 +32,15 @@
 namespace fincept::screens::equity {
 
 using namespace fincept::ui;
+
+namespace {
+// A quote older than this is flagged STALE in the ticket. Chosen so a normally
+// ticking symbol never flickers, while a dead feed is obvious within seconds.
+constexpr qint64 kStaleQuoteMs = 12000;
+// Failsafe release for the send lock: if a placement result never comes back
+// (broker hang, dropped callback) the ticket must not stay disabled forever.
+constexpr int kSendUnlockFailsafeMs = 20000;
+} // namespace
 
 EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     setObjectName("eqOrderEntry");
@@ -436,24 +448,15 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
                                           "QPushButton:hover { background: %3; color: %2; }")
                                       .arg(colors::BG_RAISED(), colors::AMBER(), colors::BORDER_MED()));
     connect(broadcast_btn_, &QPushButton::clicked, this, [this]() {
-        const double qty = qty_edit_->text().toDouble();
-        if (qty <= 0) {
-            status_label_->setText(tr("Enter a valid quantity"));
-            status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+        // The broadcast path fires the SAME order at N accounts, so it must run
+        // the SAME validation as the focused submit. It previously checked only
+        // the quantity, so a blank limit price sent price=0 as a LIMIT order to
+        // every selected broker (and the dialog even labelled it "MKT").
+        double qty = 0.0;
+        if (!validate_entry(qty))
             return;
-        }
-        trading::UnifiedOrder order;
-        order.symbol = current_symbol_;
-        order.exchange = exchange_combo_->currentText();
-        order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
-        order.order_type = selected_order_type();
-        order.quantity = qty;
-        order.price = price_edit_->text().toDouble();
-        order.stop_price = stop_price_edit_->text().toDouble();
-        order.stop_loss = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
-        order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
-        order.product_type = selected_product_type();
-        emit broadcast_requested(order);
+        Q_UNUSED(qty);
+        emit broadcast_requested(build_order());
     });
     submit_row->addWidget(broadcast_btn_, 1);
     form->addLayout(submit_row);
@@ -473,6 +476,108 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     connect(margin_timer_, &QTimer::timeout, this, &EquityOrderEntry::fetch_margin_async);
     connect(qty_edit_, &QLineEdit::textChanged, this, [this]() { margin_timer_->start(); });
     connect(price_edit_, &QLineEdit::textChanged, this, [this]() { margin_timer_->start(); });
+
+    // Send-lock failsafe (see set_send_locked). Interval only — never started
+    // from the constructor (P3); armed on submit, disarmed on the result.
+    submit_failsafe_ = new QTimer(this);
+    submit_failsafe_->setSingleShot(true);
+    submit_failsafe_->setInterval(kSendUnlockFailsafeMs);
+    connect(submit_failsafe_, &QTimer::timeout, this, [this]() {
+        if (submit_locked_) {
+            set_send_locked(false);
+            status_label_->setText(tr("No confirmation from the broker — check the order book before retrying"));
+            status_label_->setStyleSheet(QString("color: %1;").arg(colors::WARNING()));
+        }
+    });
+
+    // Stale-quote watchdog. Interval only here; started in showEvent / stopped in
+    // hideEvent so a hidden ticket costs nothing (P3).
+    stale_timer_ = new QTimer(this);
+    stale_timer_->setInterval(2000);
+    connect(stale_timer_, &QTimer::timeout, this, &EquityOrderEntry::update_stale_state);
+
+    // ── Accessibility + keyboard (order entry is where this matters most) ──────
+    setAccessibleName(tr("Order entry ticket"));
+    buy_tab_->setAccessibleName(tr("Buy side"));
+    sell_tab_->setAccessibleName(tr("Sell side"));
+    const QString type_names[] = {tr("Market order"), tr("Limit order"), tr("Stop-loss market order"),
+                                  tr("Stop-loss limit order")};
+    for (int i = 0; i < 4; ++i)
+        type_btns_[i]->setAccessibleName(type_names[i]);
+    product_combo_->setAccessibleName(tr("Product type"));
+    exchange_combo_->setAccessibleName(tr("Exchange"));
+    qty_edit_->setAccessibleName(tr("Quantity"));
+    price_edit_->setAccessibleName(tr("Limit price"));
+    stop_price_edit_->setAccessibleName(tr("Trigger price"));
+    sl_edit_->setAccessibleName(tr("Stop loss price"));
+    tp_edit_->setAccessibleName(tr("Take profit price"));
+    submit_btn_->setAccessibleName(tr("Submit order"));
+    broadcast_btn_->setAccessibleName(tr("Broadcast order to multiple accounts"));
+    brokers_btn_->setAccessibleName(tr("Target broker accounts"));
+    baskets_btn->setAccessibleName(tr("Saved order baskets"));
+    market_price_label_->setAccessibleName(tr("Last traded price"));
+    balance_label_->setAccessibleName(tr("Available balance"));
+    cost_label_->setAccessibleName(tr("Estimated order value"));
+    status_label_->setAccessibleName(tr("Order status"));
+    place_strategy_btn_->setAccessibleName(tr("Place options strategy"));
+
+    // Explicit ticket tab order: side → type → qty → price → trigger → product →
+    // exchange → submit. Qt's creation order would otherwise walk the collapsed
+    // advanced/strategy sections in between.
+    setTabOrder(buy_tab_, sell_tab_);
+    setTabOrder(sell_tab_, type_btns_[0]);
+    setTabOrder(type_btns_[0], type_btns_[1]);
+    setTabOrder(type_btns_[1], type_btns_[2]);
+    setTabOrder(type_btns_[2], type_btns_[3]);
+    setTabOrder(type_btns_[3], qty_edit_);
+    setTabOrder(qty_edit_, price_edit_);
+    setTabOrder(price_edit_, stop_price_edit_);
+    setTabOrder(stop_price_edit_, product_combo_);
+    setTabOrder(product_combo_, exchange_combo_);
+    setTabOrder(exchange_combo_, submit_btn_);
+    setTabOrder(submit_btn_, broadcast_btn_);
+
+    // Trader shortcuts (window-scoped so they work from anywhere on the tab).
+    auto add_shortcut = [this](const QKeySequence& keys, auto&& fn) {
+        auto* sc = new QShortcut(keys, this);
+        sc->setContext(Qt::WindowShortcut);
+        connect(sc, &QShortcut::activated, this, fn);
+        return sc;
+    };
+    // Ctrl+Shift+… avoids the platform-reserved Ctrl+Q (quit) / Ctrl+Esc (Start menu).
+    add_shortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Q), [this]() { focus_quantity(); });
+    add_shortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B), [this]() {
+        set_buy_side(true);
+        focus_quantity();
+    });
+    add_shortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), [this]() {
+        set_buy_side(false);
+        focus_quantity();
+    });
+    buy_tab_->setToolTip(tr("Buy side (Ctrl+Shift+B)"));
+    sell_tab_->setToolTip(tr("Sell side (Ctrl+Shift+S)"));
+    qty_edit_->setToolTip(tr("Quantity (Ctrl+Shift+Q to focus, Esc to clear the ticket)"));
+
+    // Escape clears the ticket — the trader's "abort what I typed" reflex. Scoped
+    // to this widget so it can't steal Escape from the rest of the window.
+    {
+        auto* clear_sc = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+        clear_sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(clear_sc, &QShortcut::activated, this, [this]() {
+            qty_edit_->clear();
+            price_edit_->clear();
+            stop_price_edit_->clear();
+            if (sl_edit_)
+                sl_edit_->clear();
+            if (tp_edit_)
+                tp_edit_->clear();
+            status_label_->setText(tr("Ticket cleared"));
+            status_label_->setStyleSheet(QString("color: %1;").arg(colors::TEXT_SECONDARY()));
+            update_cost_preview();
+        });
+    }
+
+    render_price_label();
 }
 
 void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profile) {
@@ -511,7 +616,11 @@ void EquityOrderEntry::configure_for_broker(const trading::BrokerProfile& profil
         tp_edit_->clear();
     status_label_->clear();
     current_price_ = 0;
+    last_price_ms_ = 0;
+    price_is_stale_ = false;
     balance_ = 0;
+    set_send_locked(false); // a broker switch must never leave the ticket wedged
+    render_price_label();
     update_cost_preview();
 }
 
@@ -525,6 +634,7 @@ void EquityOrderEntry::set_buy_side(bool is_buy) {
     sell_tab_->style()->polish(sell_tab_);
 
     submit_btn_->setText(is_buy ? tr("BUY %1").arg(current_symbol_) : tr("SELL %1").arg(current_symbol_));
+    submit_btn_->setAccessibleName(is_buy ? tr("Buy %1").arg(current_symbol_) : tr("Sell %1").arg(current_symbol_));
     submit_btn_->setObjectName(is_buy ? "eqBuySubmit" : "eqSellSubmit");
     submit_btn_->style()->unpolish(submit_btn_);
     submit_btn_->style()->polish(submit_btn_);
@@ -550,7 +660,10 @@ void EquityOrderEntry::set_balance(double balance) {
 
 void EquityOrderEntry::set_current_price(double price) {
     current_price_ = price;
-    market_price_label_->setText(tr("LTP %1%2").arg(currency_symbol(current_currency_)).arg(price, 0, 'f', 2));
+    if (price > 0.0)
+        last_price_ms_ = QDateTime::currentMSecsSinceEpoch();
+    update_stale_state(); // clears the STALE marker on the first fresh tick
+    render_price_label();
     update_cost_preview();
 }
 
@@ -563,10 +676,22 @@ void EquityOrderEntry::set_mode(bool is_paper) {
 }
 
 void EquityOrderEntry::set_symbol(const QString& symbol) {
+    const bool changed = (symbol != current_symbol_);
     current_symbol_ = symbol;
     submit_btn_->setText(is_buy_side_ ? tr("BUY %1").arg(symbol) : tr("SELL %1").arg(symbol));
+    submit_btn_->setAccessibleName(is_buy_side_ ? tr("Buy %1").arg(symbol) : tr("Sell %1").arg(symbol));
     if (symbol_label_)
         symbol_label_->setText(QStringLiteral("%1 · %2").arg(symbol, current_exchange_));
+    if (changed) {
+        // The cached LTP belongs to the PREVIOUS symbol. Showing it under the new
+        // ticker is a wrong price on an order ticket — clear until the new
+        // symbol's first quote arrives.
+        current_price_ = 0.0;
+        last_price_ms_ = 0;
+        price_is_stale_ = false;
+        render_price_label();
+        update_cost_preview();
+    }
 }
 
 void EquityOrderEntry::set_exchange(const QString& exchange) {
@@ -595,62 +720,126 @@ trading::ProductType EquityOrderEntry::selected_product_type() const {
     return trading::ProductType::Intraday;
 }
 
-void EquityOrderEntry::on_submit() {
-    const double qty = qty_edit_->text().toDouble();
-    if (qty <= 0) {
-        status_label_->setText(tr("Enter a valid quantity"));
+bool EquityOrderEntry::validate_entry(double& qty_out) {
+    auto fail = [this](const QString& msg) {
+        status_label_->setText(msg);
         status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
-        return;
-    }
+        return false;
+    };
+
+    // QString::toDouble() is locale-independent and returns 0.0 on ANY parse
+    // failure, so "1,000" / "12 " / "abc" all silently became zero. Check the
+    // flag explicitly and say what is wrong instead of a generic message.
+    bool ok = false;
+    const double qty = qty_edit_->text().trimmed().toDouble(&ok);
+    if (!ok || !std::isfinite(qty))
+        return fail(tr("Quantity is not a number (use plain digits, no separators)"));
+    if (qty <= 0.0)
+        return fail(tr("Enter a valid quantity"));
+    qty_out = qty;
 
     // Validate price/trigger for the order types that require them. Without this
     // a blank Limit price sends price=0 to the broker (and a paper SELL-limit @0
     // would fill at market).
     const trading::OrderType otype = selected_order_type();
-    const double limit_px = price_edit_->text().toDouble();
-    const double trigger_px = stop_price_edit_->text().toDouble();
-    if ((otype == trading::OrderType::Limit || otype == trading::OrderType::StopLossLimit) && limit_px <= 0.0) {
-        status_label_->setText(tr("Enter a valid limit price"));
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
-        return;
+    if (otype == trading::OrderType::Limit || otype == trading::OrderType::StopLossLimit) {
+        bool px_ok = false;
+        const double limit_px = price_edit_->text().trimmed().toDouble(&px_ok);
+        if (!px_ok || !std::isfinite(limit_px) || limit_px <= 0.0)
+            return fail(tr("Enter a valid limit price"));
     }
-    if ((otype == trading::OrderType::StopLoss || otype == trading::OrderType::StopLossLimit) && trigger_px <= 0.0) {
-        status_label_->setText(tr("Enter a valid trigger price"));
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
-        return;
+    if (otype == trading::OrderType::StopLoss || otype == trading::OrderType::StopLossLimit) {
+        bool tp_ok = false;
+        const double trigger_px = stop_price_edit_->text().trimmed().toDouble(&tp_ok);
+        if (!tp_ok || !std::isfinite(trigger_px) || trigger_px <= 0.0)
+            return fail(tr("Enter a valid trigger price"));
     }
+    return true;
+}
 
-    // Double-submit guard: in Auto mode there is no confirm dialog, so a rapid
-    // double-click would emit two live orders. Briefly disable the button; a
-    // single-shot timer re-enables it.
-    if (submit_btn_) {
-        if (!submit_btn_->isEnabled())
-            return;
-        submit_btn_->setEnabled(false);
-        QPointer<EquityOrderEntry> self = this;
-        QTimer::singleShot(1000, this, [self]() {
-            if (self && self->submit_btn_)
-                self->submit_btn_->setEnabled(true);
-        });
-    }
+trading::UnifiedOrder EquityOrderEntry::build_order() const {
+    const trading::OrderType otype = selected_order_type();
+    const bool uses_limit = (otype == trading::OrderType::Limit || otype == trading::OrderType::StopLossLimit);
+    const bool uses_trigger = (otype == trading::OrderType::StopLoss || otype == trading::OrderType::StopLossLimit);
 
     trading::UnifiedOrder order;
     order.symbol = current_symbol_;
     order.exchange = exchange_combo_->currentText();
     order.side = is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell;
-
     order.order_type = otype;
-    order.quantity = qty;
-    order.price = price_edit_->text().toDouble();
-    order.stop_price = stop_price_edit_->text().toDouble();
-    order.stop_loss = sl_edit_ ? sl_edit_->text().toDouble() : 0.0;
-    order.take_profit = tp_edit_ ? tp_edit_->text().toDouble() : 0.0;
+    order.quantity = qty_edit_->text().trimmed().toDouble();
+    // The price/trigger boxes keep their text when disabled, so a value typed for
+    // a LIMIT order used to ride along on a MARKET order (brokers differ on
+    // whether they ignore it). Send only the fields the order type actually uses.
+    order.price = uses_limit ? price_edit_->text().trimmed().toDouble() : 0.0;
+    order.stop_price = uses_trigger ? stop_price_edit_->text().trimmed().toDouble() : 0.0;
+    order.stop_loss = sl_edit_ ? sl_edit_->text().trimmed().toDouble() : 0.0;
+    order.take_profit = tp_edit_ ? tp_edit_->text().trimmed().toDouble() : 0.0;
     order.product_type = selected_product_type();
+    order.validity = QStringLiteral("DAY");
+    return order;
+}
 
-    if (!broadcast_ids_.isEmpty()) {
+void EquityOrderEntry::set_send_locked(bool locked) {
+    submit_locked_ = locked;
+    if (submit_btn_)
+        submit_btn_->setEnabled(!locked);
+    if (broadcast_btn_)
+        broadcast_btn_->setEnabled(!locked);
+    if (place_strategy_btn_)
+        place_strategy_btn_->setEnabled(!locked);
+    if (!submit_failsafe_)
+        return;
+    if (locked)
+        submit_failsafe_->start();
+    else
+        submit_failsafe_->stop();
+}
+
+void EquityOrderEntry::on_submit() {
+    // Double-submit guard. The previous version re-enabled after a fixed 1s,
+    // but a live placement round-trip regularly exceeds that — a second click
+    // then sent a SECOND real order. Stay locked until the placement result
+    // arrives via show_order_status(), with a failsafe timer so the ticket can
+    // never wedge.
+    if (submit_locked_)
+        return;
+
+    double qty = 0.0;
+    if (!validate_entry(qty))
+        return;
+
+    const trading::UnifiedOrder order = build_order();
+
+    // Drop any account the user ticked in the BROKERS menu that has since been
+    // removed or deactivated — the menu only prunes when it is re-opened, so a
+    // stale id could otherwise be broadcast to.
+    QStringList targets;
+    const bool multi_armed = !broadcast_ids_.isEmpty();
+    if (multi_armed) {
+        QSet<QString> alive;
+        for (const auto& account : trading::AccountManager::instance().active_accounts())
+            alive.insert(account.account_id);
+        for (const auto& id : broadcast_ids_)
+            if (alive.contains(id))
+                targets << id;
+        broadcast_ids_ = QSet<QString>(targets.begin(), targets.end());
+        update_brokers_btn();
+        if (targets.isEmpty()) {
+            // Every ticked account is gone. Silently falling through would route
+            // the order to the FOCUSED account instead — never guess a destination.
+            status_label_->setText(tr("Selected broker accounts no longer exist — pick targets again"));
+            status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
+            return;
+        }
+    }
+
+    set_send_locked(true);
+
+    if (!targets.isEmpty()) {
         // Multi-broker route: the same order to every checked account; the
         // screen confirms, gates per-account (Semi-Auto), and broadcasts.
-        emit multi_broker_submit(order, QStringList(broadcast_ids_.begin(), broadcast_ids_.end()));
+        emit multi_broker_submit(order, targets);
         return;
     }
 
@@ -712,9 +901,85 @@ void EquityOrderEntry::update_brokers_btn() {
 }
 
 void EquityOrderEntry::show_order_status(const QString& msg, bool success) {
+    // A placement outcome (or a cancellation) is the signal that the in-flight
+    // order is resolved — release the send lock here rather than on a timer.
+    set_send_locked(false);
     status_label_->setText(msg);
     status_label_->setStyleSheet(QString("color: %1;").arg(success ? colors::POSITIVE() : colors::NEGATIVE()));
     QTimer::singleShot(5000, status_label_, [this]() { status_label_->clear(); });
+}
+
+void EquityOrderEntry::set_limit_price(double price) {
+    if (!price_edit_ || price <= 0.0)
+        return;
+    // A depth-ladder click is only meaningful as a LIMIT: on MKT the price box is
+    // disabled and the value would be both invisible and unused.
+    if (active_type_ != 1 && active_type_ != 3)
+        set_order_type(1); // LMT
+    price_edit_->setText(QString::number(price, 'f', 2));
+    update_cost_preview();
+    if (status_label_) {
+        status_label_->setText(tr("Limit price %1 taken from market depth").arg(price, 0, 'f', 2));
+        status_label_->setStyleSheet(QString("color: %1;").arg(colors::TEXT_SECONDARY()));
+    }
+}
+
+void EquityOrderEntry::focus_quantity() {
+    if (!qty_edit_)
+        return;
+    qty_edit_->setFocus(Qt::ShortcutFocusReason);
+    qty_edit_->selectAll();
+}
+
+void EquityOrderEntry::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (stale_timer_)
+        stale_timer_->start(); // P3: cadence only while the ticket is on screen
+    update_stale_state();
+}
+
+void EquityOrderEntry::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    if (stale_timer_)
+        stale_timer_->stop();
+}
+
+// Text only — this runs on every tick, so it must never touch the stylesheet
+// (each setStyleSheet is a full CSS reparse; see CLAUDE.md P7).
+void EquityOrderEntry::render_price_label() {
+    if (!market_price_label_)
+        return;
+    if (current_price_ <= 0.0) {
+        market_price_label_->setText(tr("LTP --"));
+        return;
+    }
+    const QString sym = currency_symbol(current_currency_);
+    market_price_label_->setText(price_is_stale_
+                                     ? tr("LTP %1%2  \xe2\x9a\xa0 STALE").arg(sym).arg(current_price_, 0, 'f', 2)
+                                     : tr("LTP %1%2").arg(sym).arg(current_price_, 0, 'f', 2));
+}
+
+// Owns the stale flag AND its styling; the stylesheet is only reparsed on the
+// rare transition, never per tick.
+void EquityOrderEntry::update_stale_state() {
+    if (!market_price_label_)
+        return;
+    const bool stale = current_price_ > 0.0 && last_price_ms_ > 0 &&
+                       (QDateTime::currentMSecsSinceEpoch() - last_price_ms_) > kStaleQuoteMs;
+    if (stale == price_is_stale_)
+        return; // no churn on the common path
+    price_is_stale_ = stale;
+    if (stale) {
+        market_price_label_->setStyleSheet(QString("color: %1; font-weight:700;").arg(colors::WARNING()));
+        market_price_label_->setToolTip(
+            tr("This price has not updated for over %1s — the feed may be down or the market closed. "
+               "Do not treat it as the live price.")
+                .arg(kStaleQuoteMs / 1000));
+    } else {
+        market_price_label_->setStyleSheet(QString()); // back to the global sheet
+        market_price_label_->setToolTip(tr("Last traded price"));
+    }
+    render_price_label();
 }
 
 void EquityOrderEntry::update_cost_preview() {
@@ -777,6 +1042,10 @@ void EquityOrderEntry::fetch_margin_async() {
             return;
         }
         auto result = broker->get_order_margins(creds, order);
+        // QMetaObject::invokeMethod asserts on a null receiver — the widget can be
+        // torn down while the (blocking) broker call is in flight (P8).
+        if (!self)
+            return;
         QMetaObject::invokeMethod(
             self,
             [self, result]() {
@@ -893,12 +1162,15 @@ void EquityOrderEntry::refresh_strategy_preview() {
 }
 
 void EquityOrderEntry::on_place_strategy() {
+    if (submit_locked_)
+        return; // a placement is already in flight
     trading::OptionsStrategy strat;
     if (!build_strategy(strat)) {
         status_label_->setText(tr("Select a strategy and enter valid expiry / strike / width"));
         status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
     }
+    set_send_locked(true); // released by show_order_status() on the result
 
     // Product type from profile-driven combo (same mapping as on_submit)
     trading::ProductType product = trading::ProductType::Intraday;
@@ -1001,6 +1273,7 @@ void EquityOrderEntry::retranslateUi() {
     // Recompute data-derived previews so they re-render in the new language.
     refresh_strategy_preview();
     update_cost_preview();
+    render_price_label();
 }
 
 } // namespace fincept::screens::equity

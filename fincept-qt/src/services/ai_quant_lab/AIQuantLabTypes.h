@@ -40,8 +40,29 @@ inline QVector<QuantModule> all_quant_modules() {
          "ai_quant_lab/qlib_online_learning.py", "Incremental learning with concept drift detection"},
         {"meta_learning", "Meta Learning", "META", "AI_ML", QColor("#E040FB"), "ai_quant_lab/qlib_meta_learning.py",
          "Few-shot learning, model selection, AutoML"},
-        {"pattern_intelligence", "Pattern Intelligence", "PATTERN", "AI_ML", QColor("#FF9100"),
-         "Analytics/technical_indicators.py", "Technical pattern recognition and scoring"},
+        // REMOVED: {"pattern_intelligence", …, "Analytics/technical_indicators.py"}
+        //
+        // The module was registered — so it appeared in the AI Quant Lab sidebar
+        // and could be opened and run — but it could not work, in two
+        // independent ways:
+        //
+        //   1. No panel or result display is wired for it (see the note at the
+        //      top of QuantModulePanel_AIMLDisplays.cpp), so it fell through to
+        //      build_generic_panel().
+        //   2. Its target, scripts/Analytics/technical_indicators.py, is a
+        //      LIBRARY. Its main() accepts exactly one command — "test" — which
+        //      fabricates prices with np.random.seed(42) and returns indicators
+        //      computed over that synthetic series. Every other command returns
+        //      {"error": "Unknown command: …"}.
+        //
+        // So the module either errored or, on the one command it accepts,
+        // returned indicators derived from random numbers with no indication
+        // they were synthetic. Removed rather than left shipping.
+        //
+        // To restore it properly: give technical_indicators.py a real command
+        // surface over user-supplied OHLCV (the uniform
+        // `python <script> <command> [args…] → JSON` ABI the other 21 modules
+        // use), then add a panel + display and re-register here.
 
         // ADVANCED
         {"hft", "High Frequency Trading", "HFT", "ADVANCED", QColor("#F44336"), "ai_quant_lab/qlib_high_frequency.py",

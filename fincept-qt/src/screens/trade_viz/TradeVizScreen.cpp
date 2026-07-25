@@ -304,11 +304,14 @@ QWidget* TradeVizScreen::build_tab_bar() {
         const char* label;
         bool active;
     };
+    // QT_TR_NOOP marks the literals for extraction; tr(t.label) below does the
+    // runtime lookup. Without it lupdate never sees these strings and the tab
+    // labels stayed English in every locale.
     Tab tabs[] = {
-        {"21)", "Table", false},
-        {"22)", "Settings", false},
-        {"23)", "Export", false},
-        {"24)", "Notes", false},
+        {"21)", QT_TR_NOOP("Table"), false},
+        {"22)", QT_TR_NOOP("Settings"), false},
+        {"23)", QT_TR_NOOP("Export"), false},
+        {"24)", QT_TR_NOOP("Notes"), false},
     };
 
     for (const auto& t : tabs) {

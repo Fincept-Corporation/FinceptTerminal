@@ -141,11 +141,26 @@ QWidget* TrademarksScreen::build_page() {
     pvl->addWidget(bullet(tr("News data from licensed news aggregation services")));
     pvl->addWidget(bullet(tr("Geopolitical data from HDX and public sources")));
     pvl->addWidget(bullet(tr("Crypto data from exchange APIs (Kraken, HyperLiquid, etc.)")));
+    // OpenStreetMap tiles carry a mandatory ODbL attribution requirement and the
+    // terminal renders them (QGeoView / maritime + relationship maps) — this was
+    // missing entirely.
+    pvl->addWidget(bullet(tr("Map data © OpenStreetMap contributors, available under the Open "
+                             "Database License (ODbL)")));
 
-    pvl->addWidget(heading("6", tr("REPORTING INFRINGEMENT")));
+    pvl->addWidget(heading("6", tr("THIRD-PARTY SOFTWARE")));
+    pvl->addWidget(body(tr("Fincept Terminal is built on the following open source components, "
+                           "used under their respective licenses:")));
+    // Component/license names are proper nouns — shown verbatim.
+    pvl->addWidget(bullet("Qt 6 — The Qt Company (LGPL-3.0)"));
+    pvl->addWidget(bullet("CPython 3.11 — Python Software Foundation (PSF License)"));
+    pvl->addWidget(bullet("QXlsx — QtExcel (MIT)"));
+    pvl->addWidget(bullet("QGeoView — AmonRaNet (LGPL-3.0)"));
+    pvl->addWidget(bullet("SQLite — public domain"));
+
+    pvl->addWidget(heading("7", tr("REPORTING INFRINGEMENT")));
     pvl->addWidget(body(tr("To report trademark infringement, contact: support@fincept.in")));
 
-    pvl->addWidget(heading("7", tr("LEGAL DEPARTMENT")));
+    pvl->addWidget(heading("8", tr("LEGAL DEPARTMENT")));
     pvl->addWidget(body(tr("Fincept Corporation — Legal Department")));
     pvl->addWidget(body(tr("Email: support@fincept.in")));
 

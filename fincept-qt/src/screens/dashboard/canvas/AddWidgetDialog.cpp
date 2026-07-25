@@ -8,7 +8,6 @@
 #include <QMouseEvent>
 #include <QScrollArea>
 #include <QSet>
-#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -148,6 +147,31 @@ AddWidgetDialog::AddWidgetDialog(QWidget* parent) : QDialog(parent) {
     bot->addWidget(add_btn_);
     root->addLayout(bot);
 
+    // ── Accessibility + keyboard ──
+    // Enter in the search box adds the selected widget; explicit tab order
+    // walks search → categories → cancel → add.
+    search_bar_->setAccessibleName(tr("Search widgets"));
+    add_btn_->setAccessibleName(tr("Add the selected widget"));
+    add_btn_->setDefault(true);
+    add_btn_->setAutoDefault(true);
+    cancel_btn_->setAccessibleName(tr("Cancel"));
+    cancel_btn_->setAutoDefault(false);
+    // No explicit returnPressed hook on the search box: QLineEdit ignores the
+    // Return key event after emitting, so the dialog's default button already
+    // fires. Wiring both would emit widget_selected twice and add two tiles.
+
+    QWidget* prev = search_bar_;
+    for (auto* b : cat_buttons_) {
+        if (!b)
+            continue;
+        b->setAccessibleName(b->text());
+        setTabOrder(prev, b);
+        prev = b;
+    }
+    setTabOrder(prev, cancel_btn_);
+    setTabOrder(cancel_btn_, add_btn_);
+    search_bar_->setFocus();
+
     // ── Initial population ──
     populate_cards();
 }
@@ -247,7 +271,13 @@ void AddWidgetDialog::card_clicked(const QString& type_id) {
 void AddWidgetDialog::confirm() {
     if (selected_id_.isEmpty())
         return;
-    emit widget_selected(selected_id_);
+    // Clear before emitting: a double-activation (double-click + default
+    // button, Enter + click) would otherwise add the same widget twice.
+    const QString id = selected_id_;
+    selected_id_.clear();
+    if (add_btn_)
+        add_btn_->setEnabled(false);
+    emit widget_selected(id);
     accept();
 }
 
@@ -255,6 +285,38 @@ void AddWidgetDialog::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
     QDialog::changeEvent(event);
+}
+
+bool AddWidgetDialog::eventFilter(QObject* obj, QEvent* event) {
+    auto* w = qobject_cast<QWidget*>(obj);
+    if (!w)
+        return QDialog::eventFilter(obj, event);
+
+    // The click overlay covers the card, so events can arrive on either.
+    QWidget* card = nullptr;
+    if (w->objectName() == QLatin1String("widgetCard"))
+        card = w;
+    else if (w->objectName() == QLatin1String("cardClick"))
+        card = w->parentWidget();
+    if (!card)
+        return QDialog::eventFilter(obj, event);
+
+    if (w == card && (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+        if (auto* btn = card->findChild<QPushButton*>(QStringLiteral("cardClick"), Qt::FindDirectChildrenOnly)) {
+            btn->setGeometry(card->rect());
+            btn->raise();
+        }
+    } else if (event->type() == QEvent::MouseButtonDblClick) {
+        // Double-click a card = select + add, matching every other
+        // "pick from a list" dialog in the terminal.
+        const QString wtype = card->property("wtype").toString();
+        if (!wtype.isEmpty()) {
+            card_clicked(wtype);
+            confirm();
+            return true;
+        }
+    }
+    return QDialog::eventFilter(obj, event);
 }
 
 void AddWidgetDialog::retranslateUi() {
@@ -298,6 +360,7 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
 
     int col = 0;
     int row = 0;
+    int added = 0;
 
     for (const auto& meta : metas) {
         // Filter by search text — match against both English (storage) and the
@@ -382,22 +445,42 @@ void AddWidgetDialog::populate_cards(const QString& filter, const QString& categ
 
         // Connect click — capture type_id by value
         const QString tid = meta.type_id;
+        click_btn->setObjectName("cardClick");
+        click_btn->setFocusPolicy(Qt::NoFocus); // the card list is driven by mouse/search
+        click_btn->setAccessibleName(name_tr);
+        click_btn->setToolTip(QString("%1\n%2").arg(name_tr, desc_tr));
         connect(click_btn, &QPushButton::clicked, this, [this, tid]() { card_clicked(tid); });
 
         // Place button on grid
         card_grid_->addWidget(card, row, col);
 
-        // When the card is shown, resize the overlay button to fill it
-        connect(click_btn, &QPushButton::destroyed, this, []() {}); // prevent warning
-        QTimer::singleShot(0, card, [click_btn, card]() {
-            click_btn->setGeometry(card->rect());
-            click_btn->raise();
-        });
+        // Keep the transparent overlay exactly on top of the card. A one-shot
+        // singleShot(0) (the previous approach) fired before the grid had laid
+        // the card out at its final size, so on some paths the clickable area
+        // did not match the visible card.
+        card->installEventFilter(this);
+        click_btn->installEventFilter(this); // the overlay swallows double-clicks
+        click_btn->setGeometry(card->rect());
+        click_btn->raise();
 
+        ++added;
         if (++col >= 2) {
             col = 0;
             ++row;
         }
+    }
+
+    // Empty state — a filter that matches nothing used to leave a blank panel
+    // with no explanation.
+    if (added == 0) {
+        auto* empty = new QLabel(filter.isEmpty() ? tr("No widgets in this category.")
+                                                  : tr("No widgets match \"%1\".").arg(filter));
+        empty->setAlignment(Qt::AlignCenter);
+        empty->setWordWrap(true);
+        empty->setStyleSheet(QString("color: %1; font-size: 11px; padding: 24px; background: transparent;")
+                                 .arg(ui::colors::TEXT_TERTIARY()));
+        card_grid_->addWidget(empty, 0, 0, 1, 2);
+        ++row;
     }
 
     // Add stretch at the bottom

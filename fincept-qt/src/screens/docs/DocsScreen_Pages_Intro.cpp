@@ -9,6 +9,7 @@
 #include "screens/docs/DocsScreen_internal.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -36,7 +37,10 @@ QWidget* DocsScreen::page_welcome() {
     vl->setSpacing(12);
 
     vl->addWidget(make_heading(tr("FINCEPT TERMINAL  —  DOCUMENTATION")));
-    vl->addWidget(make_muted_label(tr("v4.0.0  |  Native C++ Financial Intelligence Terminal")));
+    // Version comes from the running application — the hardcoded "v4.0.0" was
+    // already stale against the shipped 4.0.1.
+    vl->addWidget(make_muted_label(
+        tr("v%1  |  Native C++ Financial Intelligence Terminal").arg(QCoreApplication::applicationVersion())));
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
@@ -49,8 +53,8 @@ QWidget* DocsScreen::page_welcome() {
                               "built in native C++ with Qt6. It provides institutional-quality market data, "
                               "trading capabilities, quantitative research tools, and AI-powered analytics — "
                               "all in a single unified terminal interface.\n\n"
-                              "With 45+ integrated screens, real-time WebSocket feeds, embedded Python analytics, "
-                              "and support for 15+ broker integrations, Fincept Terminal bridges the gap between "
+                              "With 50+ integrated screens, real-time WebSocket feeds, embedded Python analytics, "
+                              "and 16 broker integrations, Fincept Terminal bridges the gap between "
                               "retail and institutional tooling."),
                            ui::colors::AMBER));
 
@@ -58,7 +62,7 @@ QWidget* DocsScreen::page_welcome() {
                                      tr("■  Real-time market data across equities, crypto, forex, commodities\n"
                                         "■  Multi-exchange crypto trading (Kraken, HyperLiquid, Binance, etc.)\n"
                                         "■  Paper trading engine with simulated order matching\n"
-                                        "■  100+ Python analytics scripts (equity, portfolio, derivatives)\n"
+                                        "■  1300+ Python analytics scripts (equity, portfolio, derivatives)\n"
                                         "■  18-module QuantLib quantitative analysis suite (590+ endpoints)\n"
                                         "■  AI Quant Lab with ML models, factor discovery, HFT, RL trading\n"
                                         "■  Multiple AI agent frameworks (Geopolitics, Economic, Hedge Fund)\n"

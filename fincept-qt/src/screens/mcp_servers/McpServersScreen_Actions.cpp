@@ -45,125 +45,9 @@ using namespace fincept::ui;
 
 static const QList<fincept::mcp::MarketplaceEntry>& g_catalog = fincept::mcp::marketplace_catalog();
 
-[[maybe_unused]] inline QString kStyle() {
-    return QString(
-
-               // Screen / header
-               "#mcpScreen  { background: %1; }"
-               "#mcpHeader  { background: %2; border-bottom: 2px solid %3; }"
-               "#mcpHeaderTitle { color:%4; font-weight:700; background:transparent; }"
-
-               // Tab buttons
-               "#mcpViewBtn { background:transparent; color:%5; border:1px solid %8; "
-               "  font-weight:700; padding:4px 14px; }"
-               "#mcpViewBtn:hover { color:%4; border-color:%9; }"
-               "#mcpViewBtn[active=\"true\"] { background:%3; color:%1; border-color:%3; }"
-
-               // Search / refresh
-               "#mcpSearchInput { background:%1; color:%4; border:1px solid %8; "
-               "  padding:4px 8px; min-width:200px; }"
-               "#mcpSearchInput:focus { border-color:%9; }"
-               "#mcpRefreshBtn { background:%7; color:%5; border:1px solid %8; "
-               "  padding:4px 10px; font-weight:700; }"
-               "#mcpRefreshBtn:hover { color:%4; }"
-
-               // ── Marketplace cards ──
-               "#mktCard { background:%7; border:1px solid %8; min-height:130px; }"
-               "#mktCard:hover { border-color:%9; }"
-               "#mktCardName  { color:%4; font-weight:700; background:transparent; }"
-               "#mktCardDesc  { color:%5; background:transparent; }"
-               "#mktCardCmd   { color:%13; font-family:monospace; background:transparent; }"
-               "#mktCardEnv   { color:%3; background:transparent; }"
-               "#mktCatBadge  { color:%3; font-weight:700; "
-               "  background:rgba(217,119,6,0.12); padding:1px 6px; border:1px solid rgba(217,119,6,0.3); }"
-               "#mktAddBtn    { background:%3; color:%1; border:none; padding:5px 16px; "
-               "  font-weight:700; }"
-               "#mktAddBtn:hover { background:%10; }"
-               "#mktInstalledBadge { color:%6; font-weight:700; "
-               "  background:rgba(22,163,74,0.12); padding:5px 12px; border:1px solid rgba(22,163,74,0.3); }"
-
-               // Category filter sidebar
-               "#catList { background:%2; border:none; outline:none; }"
-               "#catList::item { color:%5; font-weight:700; padding:6px 12px; }"
-               "#catList::item:hover { color:%4; background:%12; }"
-               "#catList::item:selected { color:%3; background:rgba(217,119,6,0.1); "
-               "  border-left:2px solid %3; }"
-
-               // ── Installed server cards ──
-               "#srvCard { background:%7; border:1px solid %8; margin:4px 0px; }"
-               "#srvCard:hover { border-color:%9; }"
-               "#srvCardName  { color:%4; font-weight:700; background:transparent; }"
-               "#srvCardDesc  { color:%5; background:transparent; }"
-               "#srvCardCmd   { color:%13; font-family:monospace; background:transparent; }"
-               "#srvCardCat   { color:%5; background:transparent; }"
-               "#pillRunning  { color:%6; font-weight:700; "
-               "  background:rgba(22,163,74,0.15); padding:2px 10px; "
-               "  border:1px solid rgba(22,163,74,0.4); }"
-               "#pillStopped  { color:%14; font-weight:700; "
-               "  background:rgba(220,38,38,0.10); padding:2px 10px; "
-               "  border:1px solid rgba(220,38,38,0.4); }"
-               "#pillError    { color:%14; font-weight:700; "
-               "  background:rgba(220,38,38,0.10); padding:2px 10px; "
-               "  border:1px solid rgba(220,38,38,0.4); }"
-               "#pillAutoOn   { color:%6; background:transparent; }"
-               "#pillAutoOff  { color:%11; background:transparent; }"
-
-               // Inline card buttons
-               "#cardToggleOn  { background:rgba(22,163,74,0.15); color:%6; "
-               "  border:1px solid rgba(22,163,74,0.5); "
-               "  padding:4px 12px; font-weight:700; }"
-               "#cardToggleOn:hover  { background:rgba(22,163,74,0.25); }"
-               "#cardToggleOff { background:%7; color:%5; border:1px solid %8; "
-               "  padding:4px 12px; font-weight:700; }"
-               "#cardToggleOff:hover { color:%4; border-color:%9; }"
-               "#cardLogsBtn   { background:transparent; color:%5; border:1px solid %8; "
-               "  padding:4px 12px; font-weight:700; }"
-               "#cardLogsBtn:hover   { color:%4; }"
-               "#cardRemoveBtn { background:transparent; color:%14; border:1px solid %14; "
-               "  padding:4px 12px; font-weight:700; }"
-               "#cardRemoveBtn:hover { background:rgba(220,38,38,0.12); }"
-
-               // Add server button (full-width sticky)
-               "#addSrvBtn { background:%3; color:%1; border:none; "
-               "  padding:8px; font-weight:700; }"
-               "#addSrvBtn:hover { background:%10; }"
-
-               // Log expander inside card
-               "QTextEdit { background:%1; color:%13; border:none; font-family:monospace; }"
-
-               // Tools table
-               "QTableWidget { background:%1; color:%4; border:none; gridline-color:%8; }"
-               "QTableWidget::item { padding:2px 6px; border-bottom:1px solid %8; }"
-               "QHeaderView::section { background:%2; color:%5; border:none; "
-               "  border-bottom:1px solid %8; border-right:1px solid %8; "
-               "  padding:4px 6px; font-weight:700; }"
-
-               // Status bar
-               "#mcpStatusBar { background:%2; border-top:1px solid %8; }"
-               "#mcpStatusText      { color:%5;  background:transparent; }"
-               "#mcpStatusHighlight { color:%13; background:transparent; }"
-
-               // Scroll
-               "QScrollBar:vertical { background:%1; width:6px; }"
-               "QScrollBar::handle:vertical { background:%8; min-height:20px; }"
-               "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
-               "QScrollArea { border:none; background:transparent; }")
-        .arg(colors::BG_BASE())        // %1
-        .arg(colors::BG_RAISED())      // %2
-        .arg(colors::AMBER())          // %3
-        .arg(colors::TEXT_PRIMARY())   // %4
-        .arg(colors::TEXT_SECONDARY()) // %5
-        .arg(colors::POSITIVE())       // %6
-        .arg(colors::BG_SURFACE())     // %7
-        .arg(colors::BORDER_DIM())     // %8
-        .arg(colors::BORDER_BRIGHT())  // %9
-        .arg(colors::AMBER_DIM())      // %10
-        .arg(colors::TEXT_DIM())       // %11
-        .arg(colors::BG_HOVER())       // %12
-        .arg(colors::CYAN())           // %13
-        .arg(colors::NEGATIVE())       // %14
-        ;
-}
+// NOTE: the screen stylesheet (kStyle) lives in McpServersScreen.cpp and is
+// applied once to the whole screen. This translation unit used to carry a
+// byte-identical [[maybe_unused]] copy (~120 lines) that nothing referenced.
 
 } // namespace
 
@@ -171,6 +55,56 @@ namespace fincept::screens {
 
 using namespace fincept::mcp;
 using namespace fincept::ui;
+
+namespace {
+
+/// Split a command-line argument string the way a shell would: whitespace
+/// separates, single/double quotes group. `args_edit->text().split(' ')` broke
+/// every path containing a space (e.g. --dir "C:\Program Files\x").
+QStringList split_args(const QString& text) {
+    QStringList out;
+    QString current;
+    QChar quote;
+    bool in_token = false;
+    for (const QChar c : text) {
+        if (!quote.isNull()) {
+            if (c == quote)
+                quote = QChar();
+            else
+                current += c;
+            continue;
+        }
+        if (c == QLatin1Char('"') || c == QLatin1Char('\'')) {
+            quote = c;
+            in_token = true;
+            continue;
+        }
+        if (c.isSpace()) {
+            if (in_token) {
+                out << current;
+                current.clear();
+                in_token = false;
+            }
+            continue;
+        }
+        current += c;
+        in_token = true;
+    }
+    if (in_token)
+        out << current;
+    return out;
+}
+
+/// Environment variable names that should never be echoed on screen.
+bool env_key_is_secret(const QString& key) {
+    const QString k = key.toUpper();
+    return k.contains(QLatin1String("KEY")) || k.contains(QLatin1String("TOKEN")) ||
+           k.contains(QLatin1String("SECRET")) || k.contains(QLatin1String("PASSWORD")) ||
+           k.contains(QLatin1String("CREDENTIAL")) || k.contains(QLatin1String("AUTH")) ||
+           k.contains(QLatin1String("DSN")) || k.contains(QLatin1String("CONNECTION_STRING"));
+}
+
+} // namespace
 
 void McpServersScreen::on_view_changed(int view) {
     active_view_ = view;
@@ -225,17 +159,47 @@ void McpServersScreen::on_install_server(int index) {
         for (int ki = 0; ki < e.env_keys.size(); ++ki) {
             const QString& key = e.env_keys[ki];
             auto* field = new QLineEdit;
-            if (ki < e.env_placeholders.size()) {
+            const bool secret = env_key_is_secret(key);
+            if (secret) {
+                // These are almost always API keys; don't render them in the
+                // clear over the user's shoulder. Toggle reveals on demand.
+                field->setEchoMode(QLineEdit::Password);
+                field->setPlaceholderText(tr("Enter %1").arg(key));
+            } else if (ki < e.env_placeholders.size()) {
                 // Pre-fill with sample so user edits in-place rather than typing blind
                 field->setText(e.env_placeholders[ki]);
                 field->selectAll(); // highlight so first keystroke replaces it
             } else {
                 field->setPlaceholderText(tr("Enter %1").arg(key));
             }
+            field->setAccessibleName(key);
             // env-var key (e.g. "OPENAI_API_KEY") is the API contract — pass through verbatim.
-            form->addRow(key, field);
+            if (secret) {
+                auto* row = new QWidget(dlg);
+                auto* rl = new QHBoxLayout(row);
+                rl->setContentsMargins(0, 0, 0, 0);
+                rl->setSpacing(6);
+                rl->addWidget(field, 1);
+                auto* reveal = new QPushButton(tr("SHOW"), row);
+                reveal->setCheckable(true);
+                reveal->setCursor(Qt::PointingHandCursor);
+                reveal->setAccessibleName(tr("Reveal %1").arg(key));
+                QObject::connect(reveal, &QPushButton::toggled, field, [field, reveal](bool on) {
+                    field->setEchoMode(on ? QLineEdit::Normal : QLineEdit::Password);
+                    reveal->setText(on ? QObject::tr("HIDE") : QObject::tr("SHOW"));
+                });
+                rl->addWidget(reveal);
+                form->addRow(key, row);
+            } else {
+                form->addRow(key, field);
+            }
             env_fields.append({key, field});
         }
+        auto* env_note = new QLabel(tr("Values are stored locally and handed to the server process as environment "
+                                       "variables."));
+        env_note->setWordWrap(true);
+        env_note->setStyleSheet(QString("color:%1;font-size:9px;").arg(colors::TEXT_DIM()));
+        form->addRow(env_note);
     }
 
     // Combo items stay as API keys (saved to McpServerConfig.category).
@@ -268,7 +232,7 @@ void McpServersScreen::on_install_server(int index) {
     cfg.name = name;
     cfg.description = desc_edit->text().trimmed();
     cfg.command = cmd_edit->text().trimmed();
-    cfg.args = args_edit->text().trimmed().split(' ', Qt::SkipEmptyParts);
+    cfg.args = split_args(args_edit->text().trimmed());
     cfg.category = cat_combo->currentText();
     cfg.enabled = true;
     cfg.auto_start = autostart_check->isChecked();
@@ -278,95 +242,39 @@ void McpServersScreen::on_install_server(int index) {
             cfg.env[key] = val;
     }
 
+    // save_server() upserts on id, and the id is derived from the name — a
+    // second server called the same thing silently replaced the first one.
+    for (const auto& existing : McpManager::instance().get_servers()) {
+        if (existing.id != cfg.id)
+            continue;
+        if (QMessageBox::question(
+                this, tr("Replace Server"),
+                tr("A server named \"%1\" already exists and will be overwritten.\n\nContinue?").arg(existing.name),
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) {
+            dlg->deleteLater();
+            return;
+        }
+        break;
+    }
+
     const auto r = McpManager::instance().save_server(cfg);
     if (r.is_ok()) {
         LOG_INFO("McpServers", "Added from catalog: " + name);
         populate_marketplace();
         on_view_changed(1);
     } else {
-        LOG_ERROR("McpServers", "Add failed: " + QString::fromStdString(r.error()));
+        const QString err = QString::fromStdString(r.error());
+        LOG_ERROR("McpServers", "Add failed: " + err);
+        QMessageBox::warning(this, tr("Add Server"), tr("Could not save \"%1\":\n\n%2").arg(name, err));
     }
     dlg->deleteLater();
 }
 
-void McpServersScreen::on_start_server() {
-    if (selected_server_id_.isEmpty())
-        return;
-    const QString id = selected_server_id_;
-    QPointer<McpServersScreen> self = this;
-    (void)QtConcurrent::run([id, self]() {
-        const auto result = McpManager::instance().start_server(id);
-        QMetaObject::invokeMethod(
-            self,
-            [self, result]() {
-                if (!self)
-                    return;
-                if (result.is_err())
-                    LOG_ERROR("McpServers", "Start failed: " + QString::fromStdString(result.error()));
-                self->refresh_installed();
-                self->update_status_bar();
-            },
-            Qt::QueuedConnection);
-    });
-}
-
-void McpServersScreen::on_stop_server() {
-    if (selected_server_id_.isEmpty())
-        return;
-    const QString id = selected_server_id_;
-    QPointer<McpServersScreen> self = this;
-    (void)QtConcurrent::run([id, self]() {
-        McpManager::instance().stop_server(id);
-        QMetaObject::invokeMethod(
-            self,
-            [self]() {
-                if (!self)
-                    return;
-                self->refresh_installed();
-                self->update_status_bar();
-            },
-            Qt::QueuedConnection);
-    });
-}
-
-void McpServersScreen::on_remove_server() {
-    if (selected_server_id_.isEmpty())
-        return;
-    const QString id = selected_server_id_;
-    QString name;
-    for (const auto& s : McpManager::instance().get_servers())
-        if (s.id == id) {
-            name = s.name;
-            break;
-        }
-
-    QMessageBox mb(QMessageBox::Question, tr("Remove Server"), tr("Remove \"%1\"?\nThis cannot be undone.").arg(name),
-                   QMessageBox::Yes | QMessageBox::Cancel, this);
-    if (mb.exec() != QMessageBox::Yes)
-        return;
-
-    McpManager::instance().stop_server(id);
-    McpManager::instance().remove_server(id);
-    selected_server_id_.clear();
-    refresh_installed();
-    update_status_bar();
-}
-
-void McpServersScreen::on_toggle_autostart() {
-    if (selected_server_id_.isEmpty())
-        return;
-    auto servers = McpManager::instance().get_servers();
-    for (auto& s : servers) {
-        if (s.id != selected_server_id_)
-            continue;
-        s.auto_start = !s.auto_start;
-        McpManager::instance().save_server(s);
-        refresh_installed();
-        break;
-    }
-}
-
-void McpServersScreen::on_server_selected(QListWidgetItem*) {} // unused — cards are self-contained
+// NOTE: start / stop / remove / autostart are driven from the per-server card
+// (see build_server_card in McpServersScreen_Layout.cpp), which owns its own
+// server id. The screen-level variants of those slots were never connected and
+// keyed off a `selected_server_id_` that nothing ever assigned, so they have
+// been removed rather than left as decoys.
 
 void McpServersScreen::on_refresh() {
     if (active_view_ == 0)
@@ -398,10 +306,6 @@ void McpServersScreen::on_search_changed(const QString& text) {
         refresh_installed();
 }
 
-void McpServersScreen::on_view_logs() {
-    // Handled inline per card — this slot kept for compat
-}
-
 void McpServersScreen::on_add_server() {
     auto* dlg = new QDialog(this);
     dlg->setWindowTitle(tr("Add Custom MCP Server"));
@@ -429,14 +333,28 @@ void McpServersScreen::on_add_server() {
     auto* env_edit = new QLineEdit;
     // "KEY=value" is shell-syntax sample — keep ASCII so user knows the literal format.
     env_edit->setPlaceholderText(tr("KEY=value KEY2=value2"));
+    env_edit->setEchoMode(QLineEdit::Password); // this field routinely holds API keys
+    env_edit->setAccessibleName(tr("Environment variables"));
     form->addRow(tr("Env Vars"), env_edit);
+
+    auto* env_reveal = new QCheckBox(tr("Show env values"));
+    connect(env_reveal, &QCheckBox::toggled, env_edit,
+            [env_edit](bool on) { env_edit->setEchoMode(on ? QLineEdit::Normal : QLineEdit::Password); });
+    form->addRow("", env_reveal);
 
     auto* cat_combo = new QComboBox;
     cat_combo->addItems({"utilities", "developer", "database"});
     form->addRow(tr("Category"), cat_combo);
 
     auto* autostart_check = new QCheckBox(tr("Auto-start on launch"));
+    autostart_check->setToolTip(tr("Launches this server at terminal startup without asking for confirmation."));
     form->addRow("", autostart_check);
+
+    auto* warn = new QLabel(tr("This runs a program on your machine and exposes its tools to the assistant. "
+                               "Only add servers you trust."));
+    warn->setWordWrap(true);
+    warn->setStyleSheet(QString("color:%1;font-size:9px;").arg(colors::WARNING()));
+    form->addRow(warn);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     connect(btns, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
@@ -459,15 +377,35 @@ void McpServersScreen::on_add_server() {
     cfg.name = name;
     cfg.description = desc_edit->text().trimmed();
     cfg.command = cmd_edit->text().trimmed();
-    cfg.args = args_edit->text().trimmed().split(' ', Qt::SkipEmptyParts);
+    cfg.args = split_args(args_edit->text().trimmed());
     cfg.category = cat_combo->currentText();
     cfg.enabled = true;
     cfg.auto_start = autostart_check->isChecked();
 
-    for (const auto& pair : env_edit->text().trimmed().split(' ', Qt::SkipEmptyParts)) {
+    if (cfg.command.isEmpty()) {
+        QMessageBox::warning(this, tr("Add Server"), tr("A command is required — this is the program to run."));
+        dlg->deleteLater();
+        return;
+    }
+
+    // Quote-aware so a value containing spaces survives (KEY="a b c").
+    for (const auto& pair : split_args(env_edit->text().trimmed())) {
         const int eq = pair.indexOf('=');
         if (eq > 0)
             cfg.env[pair.left(eq)] = pair.mid(eq + 1);
+    }
+
+    for (const auto& existing : McpManager::instance().get_servers()) {
+        if (existing.id != cfg.id)
+            continue;
+        if (QMessageBox::question(
+                this, tr("Replace Server"),
+                tr("A server named \"%1\" already exists and will be overwritten.\n\nContinue?").arg(existing.name),
+                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) {
+            dlg->deleteLater();
+            return;
+        }
+        break;
     }
 
     const auto r = McpManager::instance().save_server(cfg);
@@ -476,7 +414,9 @@ void McpServersScreen::on_add_server() {
         refresh_installed();
         update_status_bar();
     } else {
-        LOG_ERROR("McpServers", "Failed: " + QString::fromStdString(r.error()));
+        const QString err = QString::fromStdString(r.error());
+        LOG_ERROR("McpServers", "Failed: " + err);
+        QMessageBox::warning(this, tr("Add Server"), tr("Could not save \"%1\":\n\n%2").arg(name, err));
     }
     dlg->deleteLater();
 }

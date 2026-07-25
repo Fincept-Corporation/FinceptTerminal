@@ -61,6 +61,10 @@ class DashboardScreen : public QWidget {
     bool pulse_visible_ = true;
     bool layout_restored_ = false;
     bool split_sized_ = false;
+    /// COMPACT toggle state. Was a function-local `static bool` in the lambda,
+    /// i.e. shared by every DashboardScreen instance and out of sync with the
+    /// canvas after a screen rebuild.
+    bool compact_rows_ = false;
 
     QHash<QString, services::QuoteData> ticker_cache_;
     QStringList ticker_subscribed_;

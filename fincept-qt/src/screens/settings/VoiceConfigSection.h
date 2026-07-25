@@ -12,9 +12,11 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QEvent>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -34,6 +36,12 @@ class VoiceConfigSection : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    /// Re-read AppConfig + SecureStorage each time the section is shown, so a
+    /// key rotated elsewhere (or by an MCP tool) is reflected here.
+    void showEvent(QShowEvent* e) override;
+    /// Re-mask the API key when the section leaves view — pressing "Show" used
+    /// to leave the secret rendered in plaintext for the rest of the session.
+    void hideEvent(QHideEvent* e) override;
 
   private slots:
     void on_provider_changed();

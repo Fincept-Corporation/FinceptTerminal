@@ -573,7 +573,65 @@ QWidget* CreateAgentPanel::build_form_panel() {
     vl->addWidget(status_lbl_);
     vl->addStretch();
 
+    // ── Accessibility ────────────────────────────────────────────────────────
+    // The form is a long scroll of unlabelled inputs; screen readers announced
+    // only the placeholder (or nothing, for the combos and lists).
+    name_edit_->setAccessibleName(tr("Agent name"));
+    category_combo_->setAccessibleName(tr("Agent category"));
+    desc_edit_->setAccessibleName(tr("Agent description"));
+    llm_profile_combo_->setAccessibleName(tr("LLM profile"));
+    instructions_edit_->setAccessibleName(tr("System instructions"));
+    tool_search_edit_->setAccessibleName(tr("Filter tools"));
+    tools_list_->setAccessibleName(tr("Available tools"));
+    terminal_tools_check_->setAccessibleName(tr("Enable internal terminal tools"));
+    terminal_destructive_check_->setAccessibleName(tr("Allow destructive tools"));
+    terminal_destructive_check_->setAccessibleDescription(
+        tr("Lets this agent call tools that place orders, delete data or change settings."));
+    terminal_external_check_->setAccessibleName(tr("Include external MCP servers"));
+    terminal_dry_run_check_->setAccessibleName(tr("Dry-run mode"));
+    terminal_categories_list_->setAccessibleName(tr("Terminal tool category whitelist"));
+    terminal_exclude_cats_edit_->setAccessibleName(tr("Excluded tool categories"));
+    terminal_name_include_edit_->setAccessibleName(tr("Tool name include pattern"));
+    terminal_name_exclude_edit_->setAccessibleName(tr("Tool name exclude pattern"));
+    terminal_max_tools_spin_->setAccessibleName(tr("Maximum tools"));
+    mcp_servers_list_->setAccessibleName(tr("MCP servers"));
+    save_btn_->setAccessibleName(tr("Save agent"));
+    clear_btn_->setAccessibleName(tr("Clear form"));
+
     scroll->setWidget(content);
+
+    // Explicit tab order — set after the final reparent so the focus chain is
+    // built on the widgets' real hierarchy. Creation order alone puts the
+    // terminal-tool filters between the feature tags and their sub-sections.
+    setTabOrder(name_edit_, category_combo_);
+    setTabOrder(category_combo_, desc_edit_);
+    setTabOrder(desc_edit_, llm_profile_combo_);
+    setTabOrder(llm_profile_combo_, instructions_edit_);
+    setTabOrder(instructions_edit_, tool_search_edit_);
+    setTabOrder(tool_search_edit_, tools_list_);
+    setTabOrder(tools_list_, terminal_tools_check_);
+    setTabOrder(terminal_tools_check_, terminal_destructive_check_);
+    setTabOrder(terminal_destructive_check_, terminal_external_check_);
+    setTabOrder(terminal_external_check_, terminal_dry_run_check_);
+    setTabOrder(terminal_dry_run_check_, terminal_categories_list_);
+    setTabOrder(terminal_categories_list_, terminal_exclude_cats_edit_);
+    setTabOrder(terminal_exclude_cats_edit_, terminal_name_include_edit_);
+    setTabOrder(terminal_name_include_edit_, terminal_name_exclude_edit_);
+    setTabOrder(terminal_name_exclude_edit_, terminal_max_tools_spin_);
+    setTabOrder(terminal_max_tools_spin_, reasoning_check_);
+    setTabOrder(reasoning_check_, memory_check_);
+    setTabOrder(memory_check_, knowledge_check_);
+    setTabOrder(knowledge_check_, guardrails_check_);
+    setTabOrder(guardrails_check_, agentic_memory_check_);
+    setTabOrder(agentic_memory_check_, storage_check_);
+    setTabOrder(storage_check_, tracing_check_);
+    setTabOrder(tracing_check_, compression_check_);
+    setTabOrder(compression_check_, hooks_check_);
+    setTabOrder(hooks_check_, evaluation_check_);
+    setTabOrder(evaluation_check_, mcp_servers_list_);
+    setTabOrder(mcp_servers_list_, save_btn_);
+    setTabOrder(save_btn_, clear_btn_);
+
     return scroll;
 }
 
@@ -615,6 +673,7 @@ QWidget* CreateAgentPanel::build_test_panel() {
 
     test_query_edit_ = new QPlainTextEdit;
     test_query_edit_->setPlaceholderText(tr("Enter test query..."));
+    test_query_edit_->setAccessibleName(tr("Test query"));
     test_query_edit_->setFixedHeight(72);
     test_query_edit_->setStyleSheet(
         QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;padding:6px;font-size:12px;}")
@@ -628,6 +687,7 @@ QWidget* CreateAgentPanel::build_test_panel() {
                                      "QPushButton:hover{background:%1;color:%2;}"
                                      "QPushButton:disabled{color:%3;border-color:%3;}")
                                  .arg(ui::colors::CYAN(), ui::colors::BG_BASE(), ui::colors::TEXT_TERTIARY()));
+    test_btn_->setAccessibleName(tr("Run test query"));
     connect(test_btn_, &QPushButton::clicked, this, &CreateAgentPanel::test_agent);
     bl->addWidget(test_btn_);
 
@@ -653,6 +713,7 @@ QWidget* CreateAgentPanel::build_test_panel() {
     bl->addWidget(test_result_, 1);
 
     vl->addWidget(body, 1);
+    setTabOrder(test_query_edit_, test_btn_);
     return p;
 }
 

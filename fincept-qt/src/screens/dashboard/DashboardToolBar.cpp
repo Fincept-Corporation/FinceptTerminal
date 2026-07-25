@@ -96,12 +96,14 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
     compact_btn_ = new QPushButton(tr("COMPACT"));
     compact_btn_->setFixedHeight(20);
     compact_btn_->setObjectName("dtBtn");
+    compact_btn_->setToolTip(tr("Toggle compact row height"));
     connect(compact_btn_, &QPushButton::clicked, this, &DashboardToolBar::toggle_compact_clicked);
     rl->addWidget(compact_btn_);
 
     pulse_btn_ = new QPushButton(tr("PULSE"));
     pulse_btn_->setFixedHeight(20);
     pulse_btn_->setObjectName("dtBtn");
+    pulse_btn_->setToolTip(tr("Show / hide the Market Pulse panel (Ctrl+P)"));
     connect(pulse_btn_, &QPushButton::clicked, this, &DashboardToolBar::toggle_pulse_clicked);
     rl->addWidget(pulse_btn_);
 
@@ -110,27 +112,34 @@ DashboardToolBar::DashboardToolBar(QWidget* parent) : QWidget(parent) {
     refresh_btn_ = new QPushButton(tr("REFRESH"));
     refresh_btn_->setFixedHeight(20);
     refresh_btn_->setObjectName("dtBtn");
-    refresh_btn_->setToolTip(tr("Force-refresh all live data on the dashboard"));
+    refresh_btn_->setToolTip(tr("Force-refresh all live data on the dashboard (F5)"));
     connect(refresh_btn_, &QPushButton::clicked, this, &DashboardToolBar::refresh_clicked);
     rl->addWidget(refresh_btn_);
 
     add_btn_ = new QPushButton(tr("+ ADD"));
     add_btn_->setFixedHeight(20);
     add_btn_->setObjectName("dtAddBtn");
+    add_btn_->setToolTip(tr("Add a widget to the dashboard (Ctrl+N)"));
     connect(add_btn_, &QPushButton::clicked, this, &DashboardToolBar::add_widget_clicked);
     rl->addWidget(add_btn_);
 
     save_btn_ = new QPushButton(tr("SAVE"));
     save_btn_->setFixedHeight(20);
     save_btn_->setObjectName("dtBtn");
+    save_btn_->setToolTip(tr("Save the current widget layout (Ctrl+S)"));
     connect(save_btn_, &QPushButton::clicked, this, &DashboardToolBar::save_layout_clicked);
     rl->addWidget(save_btn_);
 
     reset_btn_ = new QPushButton(tr("RESET"));
     reset_btn_->setFixedHeight(20);
     reset_btn_->setObjectName("dtResetBtn");
+    reset_btn_->setToolTip(tr("Replace the current layout with a template"));
     connect(reset_btn_, &QPushButton::clicked, this, &DashboardToolBar::reset_layout_clicked);
     rl->addWidget(reset_btn_);
+
+    // Accessible names + an explicit tab order: the terminal shipped with zero
+    // of either, so the toolbar was unreachable/unannounced by keyboard.
+    apply_accessibility();
 
     hl->addWidget(right);
 
@@ -150,6 +159,39 @@ void DashboardToolBar::hideEvent(QHideEvent* event) {
     clock_timer_.stop();
 }
 
+void DashboardToolBar::apply_accessibility() {
+    struct Named {
+        QWidget* w;
+        QString name;
+    };
+    const Named named[] = {
+        {clock_btn_, tr("Clock — click to toggle UTC / local time")},
+        {status_text_, tr("Feed status")},
+        {widget_count_, tr("Widget count")},
+        {compact_btn_, tr("Toggle compact row height")},
+        {pulse_btn_, tr("Show or hide the Market Pulse panel")},
+        {refresh_btn_, tr("Refresh all dashboard data")},
+        {add_btn_, tr("Add widget")},
+        {save_btn_, tr("Save layout")},
+        {reset_btn_, tr("Reset layout from a template")},
+    };
+    for (const auto& n : named) {
+        if (n.w)
+            n.w->setAccessibleName(n.name);
+    }
+
+    // Left-to-right tab order across the action buttons.
+    QWidget* chain[] = {clock_btn_, compact_btn_, pulse_btn_, refresh_btn_, add_btn_, save_btn_, reset_btn_};
+    QWidget* prev = nullptr;
+    for (QWidget* w : chain) {
+        if (!w)
+            continue;
+        if (prev)
+            setTabOrder(prev, w);
+        prev = w;
+    }
+}
+
 void DashboardToolBar::refresh_theme() {
     const QColor surface(ui::colors::BG_SURFACE());
     apply_solid_background(this, surface);
@@ -163,7 +205,6 @@ void DashboardToolBar::refresh_theme() {
                 "#dtBrand { color:%4; font-weight:bold; letter-spacing:1px; background:transparent; }"
                 "#dtSub { color:%5; font-weight:bold; background:transparent; }"
                 "#dtStatus { color:%6; font-weight:bold; background:transparent; }"
-                "#dtClock { color:%7; background:transparent; }"
                 "#dtWidgetCount { color:%8; font-weight:bold; background:transparent; }"
                 "#dtBtn { background:%9; border:1px solid %3; color:%7; padding:0 10px; font-weight:bold; }"
                 "#dtBtn:hover { background:%10; color:%11; border-color:%12; }"
@@ -246,14 +287,25 @@ void DashboardToolBar::retranslateUi() {
         pulse_btn_->setText(tr("PULSE"));
     if (refresh_btn_) {
         refresh_btn_->setText(tr("REFRESH"));
-        refresh_btn_->setToolTip(tr("Force-refresh all live data on the dashboard"));
+        refresh_btn_->setToolTip(tr("Force-refresh all live data on the dashboard (F5)"));
     }
-    if (add_btn_)
+    if (add_btn_) {
         add_btn_->setText(tr("+ ADD"));
-    if (save_btn_)
+        add_btn_->setToolTip(tr("Add a widget to the dashboard (Ctrl+N)"));
+    }
+    if (save_btn_) {
         save_btn_->setText(tr("SAVE"));
-    if (reset_btn_)
+        save_btn_->setToolTip(tr("Save the current widget layout (Ctrl+S)"));
+    }
+    if (reset_btn_) {
         reset_btn_->setText(tr("RESET"));
+        reset_btn_->setToolTip(tr("Replace the current layout with a template"));
+    }
+    if (compact_btn_)
+        compact_btn_->setToolTip(tr("Toggle compact row height"));
+    if (pulse_btn_)
+        pulse_btn_->setToolTip(tr("Show / hide the Market Pulse panel (Ctrl+P)"));
+    apply_accessibility();
     update_clock();
 }
 

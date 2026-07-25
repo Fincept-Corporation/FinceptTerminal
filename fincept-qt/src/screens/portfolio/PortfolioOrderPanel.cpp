@@ -4,7 +4,10 @@
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
+#include <QHBoxLayout>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 namespace fincept::screens {
 
@@ -57,39 +60,17 @@ void PortfolioOrderPanel::build_ui() {
     sell_tab_->setCheckable(true);
     side_row->addWidget(sell_tab_);
 
-    auto update_tabs = [this]() {
-        bool is_buy = (side_ == "BUY");
-        const char* active_color = is_buy ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        const char* inactive_color = ui::colors::TEXT_TERTIARY;
+    buy_tab_->setAccessibleName(tr("Buy side"));
+    sell_tab_->setAccessibleName(tr("Sell side"));
 
-        buy_tab_->setChecked(is_buy);
-        sell_tab_->setChecked(!is_buy);
-
-        buy_tab_->setStyleSheet(
-            QString("QPushButton { background:%1; color:%2; border:none;"
-                    "  font-size:10px; font-weight:700; }")
-                .arg(is_buy ? ui::colors::POSITIVE() : ui::colors::BG_RAISED(), is_buy ? "#000" : inactive_color));
-        sell_tab_->setStyleSheet(
-            QString("QPushButton { background:%1; color:%2; border:none;"
-                    "  font-size:10px; font-weight:700; }")
-                .arg(!is_buy ? ui::colors::NEGATIVE() : ui::colors::BG_RAISED(), !is_buy ? "#fff" : inactive_color));
-
-        // Update header and border color
-        setStyleSheet(QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE(), active_color));
-        auto* title_w = findChild<QLabel*>();
-        if (title_w && title_w->text() == "ORDER ENTRY") {
-            // skip — the title might have been found differently
-        }
-    };
-
-    connect(buy_tab_, &QPushButton::clicked, this, [this, update_tabs]() {
+    connect(buy_tab_, &QPushButton::clicked, this, [this]() {
         side_ = "BUY";
-        update_tabs();
+        apply_side_styles();
         update_display(); // refresh the submit button label/colour for the new side
     });
-    connect(sell_tab_, &QPushButton::clicked, this, [this, update_tabs]() {
+    connect(sell_tab_, &QPushButton::clicked, this, [this]() {
         side_ = "SELL";
-        update_tabs();
+        apply_side_styles();
         update_display();
     });
 
@@ -142,26 +123,56 @@ void PortfolioOrderPanel::build_ui() {
     note_label_->setStyleSheet(QString("color:%1; font-size:8px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(note_label_);
 
-    update_tabs();
+    apply_side_styles();
+}
+
+void PortfolioOrderPanel::apply_side_styles() {
+    const bool is_buy = (side_ == "BUY");
+    const char* active_color = is_buy ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+    const char* inactive_color = ui::colors::TEXT_TERTIARY;
+
+    buy_tab_->setChecked(is_buy);
+    sell_tab_->setChecked(!is_buy);
+
+    buy_tab_->setStyleSheet(
+        QString("QPushButton { background:%1; color:%2; border:none;"
+                "  font-size:10px; font-weight:700; }")
+            .arg(is_buy ? ui::colors::POSITIVE() : ui::colors::BG_RAISED(), is_buy ? "#000" : inactive_color));
+    sell_tab_->setStyleSheet(
+        QString("QPushButton { background:%1; color:%2; border:none;"
+                "  font-size:10px; font-weight:700; }")
+            .arg(!is_buy ? ui::colors::NEGATIVE() : ui::colors::BG_RAISED(), !is_buy ? "#fff" : inactive_color));
+
+    // Panel edge + panel title both follow the active side. The title was
+    // previously stuck on POSITIVE green even while the SELL tab was active.
+    setStyleSheet(QString("background:%1; border-left:2px solid %2;").arg(ui::colors::BG_SURFACE(), active_color));
+    if (title_label_)
+        title_label_->setStyleSheet(
+            QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(active_color));
 }
 
 void PortfolioOrderPanel::set_holding(const portfolio::HoldingWithQuote* holding) {
-    holding_ = holding;
+    if (holding)
+        holding_ = *holding; // copy — see the note on holding_ in the header
+    else
+        holding_.reset();
     update_display();
 }
 
 void PortfolioOrderPanel::set_currency(const QString& currency) {
+    if (currency_ == currency)
+        return;
     currency_ = currency;
+    update_display(); // MKT VAL is currency-prefixed
 }
 
 void PortfolioOrderPanel::set_side(const QString& side) {
-    side_ = side;
-    // Trigger tab update
-    buy_tab_->setChecked(side == "BUY");
-    sell_tab_->setChecked(side == "SELL");
-    buy_tab_->click(); // Will trigger the lambda and update styling
-    if (side == "SELL")
-        sell_tab_->click();
+    // Assign directly instead of synthesising clicks. The old implementation
+    // always click()ed the BUY tab first — even when opening the SELL panel —
+    // which emitted a spurious clicked() and flashed the panel green->red.
+    side_ = (side == "SELL") ? QStringLiteral("SELL") : QStringLiteral("BUY");
+    apply_side_styles();
+    update_display();
 }
 
 void PortfolioOrderPanel::update_display() {
@@ -170,8 +181,13 @@ void PortfolioOrderPanel::update_display() {
         price_label_->setText("--");
         qty_label_->setText("--");
         mv_label_->setText("--");
+        // Keep the submit button honest about the current side even with no
+        // selection — it used to keep the previous side's label and colour.
+        submit_btn_->setText(side_ == "BUY" ? tr("OPEN BUY ORDER") : tr("OPEN SELL ORDER"));
+        submit_btn_->setEnabled(side_ == "BUY"); // nothing to sell without a holding
         return;
     }
+    submit_btn_->setEnabled(true);
 
     symbol_label_->setText(holding_->symbol);
     price_label_->setText(QString::number(holding_->current_price, 'f', 2));
@@ -198,10 +214,14 @@ void PortfolioOrderPanel::changeEvent(QEvent* event) {
 void PortfolioOrderPanel::retranslateUi() {
     if (title_label_)
         title_label_->setText(tr("ORDER ENTRY"));
-    if (buy_tab_)
+    if (buy_tab_) {
         buy_tab_->setText(tr("BUY"));
-    if (sell_tab_)
+        buy_tab_->setAccessibleName(tr("Buy side"));
+    }
+    if (sell_tab_) {
         sell_tab_->setText(tr("SELL"));
+        sell_tab_->setAccessibleName(tr("Sell side"));
+    }
     if (price_prefix_)
         price_prefix_->setText(tr("PRICE"));
     if (qty_prefix_)

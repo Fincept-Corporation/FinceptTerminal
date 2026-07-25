@@ -34,6 +34,7 @@ class UnComtradePanel : public EconPanelBase {
     QLabel* reporter_lbl_ = nullptr;
     QLabel* flow_lbl_ = nullptr;
     QLabel* year_lbl_ = nullptr;
+    QLabel* cmd_lbl_ = nullptr;
 };
 
 } // namespace fincept::screens

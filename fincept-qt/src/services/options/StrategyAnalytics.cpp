@@ -15,8 +15,14 @@ using fincept::trading::InstrumentType;
 
 namespace {
 
-/// Days-to-expiry for a leg, actual/365. Floors at 1 day so expiry-day
-/// strategies don't collapse the target curve into intrinsic immediately.
+/// Days-to-expiry for a leg, actual/365.
+///
+/// Returns 0 for an expiry that is today or already past — on expiry day the
+/// target curve SHOULD collapse to intrinsic, because that is what the position
+/// is actually worth. (An earlier comment here claimed a 1-day floor; no such
+/// floor was ever implemented, and adding one would overstate the remaining
+/// time value of a 0-DTE position.) The literal 1 below is only the
+/// unparseable-date fallback, where assuming "expires today" would be worse.
 int days_to_expiry(const QString& expiry) {
     QDate exp = QDate::fromString(expiry, "dd-MMM-yy");
     if (!exp.isValid())
@@ -118,12 +124,21 @@ QVector<PayoffPoint> compute_payoff(const Strategy& s, const PayoffComputeOption
     // Pick the strategy's nearest-expiry leg as the BSM time-to-expiry anchor.
     // All single-expiry templates share a date; for hand-edited mixed-expiry
     // strategies we use the leg-specific expiry inside leg_pnl_target.
-    int dte_strategy = 0;
+    // Plain minimum over the ACTIVE legs. The previous form
+    //     if (dte_strategy == 0 || (d > 0 && d < dte_strategy))
+    // skipped any leg with d == 0 unless it happened to come first, so a
+    // 0-DTE leg in a multi-expiry strategy failed to clamp days_to_target —
+    // the target curve then priced an already-expired leg as if it still had
+    // time value. Inactive legs are excluded so a toggled-off leg can't drag
+    // the whole strategy's time anchor.
+    int dte_strategy = std::numeric_limits<int>::max();
     for (const auto& leg : s.legs) {
-        const int d = days_to_expiry(leg.expiry);
-        if (dte_strategy == 0 || (d > 0 && d < dte_strategy))
-            dte_strategy = d;
+        if (!leg.is_active)
+            continue;
+        dte_strategy = std::min(dte_strategy, days_to_expiry(leg.expiry));
     }
+    if (dte_strategy == std::numeric_limits<int>::max())
+        dte_strategy = 0; // no active legs — nothing to project forward
     const int days_target_capped = std::clamp(opts.days_to_target, 0, dte_strategy);
 
     out.reserve(n);
@@ -181,14 +196,35 @@ MaxPnL compute_max_pnl(const QVector<PayoffPoint>& curve, const Strategy& s) {
         if (p.pnl_expiry < m.max_loss)
             m.max_loss = p.pnl_expiry;
     }
+    // Downside tail: the sampled curve only spans roughly spot ±30%, but the
+    // true worst case for any position with net-short puts sits at S = 0, far
+    // outside that window. Reporting the value at 0.7*spot as "Max Loss"
+    // understates a short put badly — a trader sizing off the ribbon or the
+    // order-confirm dialog under-reserves margin. The expiry payoff is
+    // piecewise-linear and, below the lowest strike, monotonically decreasing
+    // in S for a net-short-put book, so S = 0 IS the minimum. Evaluating it
+    // exactly is cheap and correct, so do it unconditionally and let it
+    // compete with the sampled minimum.
+    double pnl_at_zero = 0.0;
+    for (const auto& leg : s.legs) {
+        if (!leg.is_active || leg.lots == 0)
+            continue;
+        pnl_at_zero += leg_pnl_expiry(leg, 0.0);
+    }
+    if (pnl_at_zero < m.max_loss)
+        m.max_loss = pnl_at_zero;
+
     const double net_calls = net_call_lots(s);
     if (net_calls > 0) {
         m.profit_unbounded = true;
         m.max_profit = std::numeric_limits<double>::infinity();
     } else if (net_calls < 0) {
+        // Short calls: loss grows without bound as S -> infinity.
         m.loss_unbounded = true;
         m.max_loss = -std::numeric_limits<double>::infinity();
     }
+    // Note: net-short PUTS do NOT make the loss unbounded — the payoff floors
+    // at S = 0, which is exactly what pnl_at_zero above now captures.
     return m;
 }
 

@@ -22,6 +22,7 @@
 #include <QScrollArea>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -94,6 +95,7 @@ void LoggingSection::build_ui() {
     vl->addWidget(fmt_desc_);
 
     log_json_mode_ = new QCheckBox(tr("Emit structured JSON lines"));
+    log_json_mode_->setStyleSheet(check_ss()); // was the only unstyled control on this page
     log_json_mode_->setChecked(AppConfig::instance().get("log/json_mode", false).toBool());
     vl->addWidget(log_json_mode_);
     vl->addWidget(make_sep());
@@ -154,7 +156,12 @@ void LoggingSection::build_ui() {
 
     auto& cfg = AppConfig::instance();
     const int count = cfg.get("log/tag_count", 0).toInt();
-    auto add_tag_row = [this, &level_to_idx](const QString& tag, const QString& level) {
+    // level_to_idx is captured BY VALUE: add_tag_row is copied into the
+    // "+ Add Tag Override" click handler, which runs long after build_ui() has
+    // returned. Capturing by reference left that copy holding a dangling
+    // reference to a destroyed stack lambda — undefined behaviour on every
+    // click of the Add button.
+    auto add_tag_row = [this, level_to_idx](const QString& tag, const QString& level) {
         using namespace settings_styles;
         auto* row = new QWidget(this);
         auto* rl = new QHBoxLayout(row);
@@ -240,6 +247,13 @@ void LoggingSection::build_ui() {
             ++saved;
         }
         cfg.set("log/tag_count", saved);
+
+        // Saving previously produced no on-screen acknowledgement at all.
+        save_btn_->setText(tr("Saved ✓"));
+        QTimer::singleShot(2000, save_btn_, [this]() {
+            if (save_btn_)
+                save_btn_->setText(tr("Apply & Save"));
+        });
 
         LOG_INFO("Settings", QString("Logging config saved: global=%1, tags=%2").arg(gl).arg(saved));
     });

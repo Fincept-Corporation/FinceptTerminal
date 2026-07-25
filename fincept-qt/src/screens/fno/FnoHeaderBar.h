@@ -15,6 +15,8 @@
 #include <QString>
 #include <QWidget>
 
+class QTimer;
+
 namespace fincept::screens::fno {
 
 class FnoHeaderBar : public QWidget {
@@ -53,10 +55,17 @@ class FnoHeaderBar : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private:
     void setup_ui();
     void retranslateUi();
+
+    /// Re-render the "Updated hh:mm:ss" status with an age-based freshness
+    /// state (live / stale / no feed). Driven by `freshness_timer_`, which is a
+    /// pure display timer — it never requests data (D3).
+    void update_freshness();
 
     QComboBox* broker_combo_ = nullptr;
     QComboBox* under_combo_ = nullptr;
@@ -88,6 +97,19 @@ class FnoHeaderBar : public QWidget {
     QLabel* key_ce_oi_ = nullptr;
     QLabel* key_pe_oi_ = nullptr;
     QLabel* key_iv_pctile_ = nullptr;
+
+    /// Timestamp of the last chain snapshot rendered (0 = none yet). Drives the
+    /// stale-quote indicator — an option quote is worthless within seconds, so
+    /// "when did this last tick" has to be on screen, not inferable.
+    qint64 last_chain_ts_ms_ = 0;
+    QTimer* freshness_timer_ = nullptr;
+
+    /// One-entry memo for the IV-percentile query. `update_from_chain` runs on
+    /// every publish and the percentile only moves once per trading day, so the
+    /// synchronous SQLite window read is done once per (underlying, day).
+    QString iv_pctile_cache_key_;
+    QString iv_pctile_cache_text_;
+    QString iv_pctile_cache_tip_;
 };
 
 } // namespace fincept::screens::fno

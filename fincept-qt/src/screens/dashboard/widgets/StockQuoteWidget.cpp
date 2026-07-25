@@ -4,9 +4,20 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "ui/theme/Theme.h"
 
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <QFrame>
+#include <QLineEdit>
 
 namespace fincept::screens::widgets {
+
+namespace {
+QString normalize_symbol(const QString& s) {
+    const QString t = s.trimmed().toUpper();
+    return t.isEmpty() ? QStringLiteral("AAPL") : t;
+}
+} // namespace
 
 StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
     : BaseWidget(tr("QUOTE: %1").arg(symbol.toUpper()), parent), symbol_(symbol.toUpper()) {
@@ -53,15 +64,16 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
     gl->setContentsMargins(0, 0, 0, 0);
     gl->setSpacing(6);
 
-    auto make_stat = [&](int row, int col, const QString& label, QLabel*& val_out) {
+    auto make_stat = [&](int row, int col, const char* key, QLabel*& val_out) {
         auto* cell = new QWidget(this);
         stat_cells_.append(cell);
         auto* cl = new QVBoxLayout(cell);
         cl->setContentsMargins(8, 6, 8, 6);
         cl->setSpacing(2);
 
-        auto* lbl = new QLabel(label);
+        auto* lbl = new QLabel(tr(key));
         stat_labels_.append(lbl);
+        stat_label_keys_.append(QString::fromLatin1(key));
         cl->addWidget(lbl);
 
         val_out = new QLabel("--");
@@ -71,19 +83,59 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
         gl->addWidget(cell, row, col);
     };
 
-    make_stat(0, 0, tr("OPEN"), open_val_);
-    make_stat(0, 1, tr("PREV CLOSE"), prev_val_);
-    make_stat(1, 0, tr("HIGH"), high_val_);
-    make_stat(1, 1, tr("LOW"), low_val_);
-    make_stat(2, 0, tr("VOLUME"), volume_val_);
+    make_stat(0, 0, QT_TR_NOOP("OPEN"), open_val_);
+    make_stat(0, 1, QT_TR_NOOP("PREV CLOSE"), prev_val_);
+    make_stat(1, 0, QT_TR_NOOP("HIGH"), high_val_);
+    make_stat(1, 1, QT_TR_NOOP("LOW"), low_val_);
+    make_stat(2, 0, QT_TR_NOOP("VOLUME"), volume_val_);
 
     vl->addWidget(stats);
     vl->addStretch();
 
+    set_configurable(true);
     connect(this, &BaseWidget::refresh_requested, this, &StockQuoteWidget::refresh_data);
 
     apply_styles();
     set_loading(true);
+}
+
+QJsonObject StockQuoteWidget::config() const {
+    QJsonObject o;
+    o.insert("symbol", symbol_);
+    return o;
+}
+
+void StockQuoteWidget::apply_config(const QJsonObject& cfg) {
+    const QString next = normalize_symbol(cfg.value("symbol").toString(symbol_));
+    if (next == symbol_)
+        return;
+    set_symbol(next);
+}
+
+QDialog* StockQuoteWidget::make_config_dialog(QWidget* parent) {
+    auto* dlg = new QDialog(parent);
+    dlg->setWindowTitle(tr("Configure — Stock Quote"));
+    auto* form = new QFormLayout(dlg);
+
+    auto* edit = new QLineEdit(dlg);
+    edit->setText(symbol_);
+    edit->setPlaceholderText(tr("e.g. AAPL"));
+    edit->setAccessibleName(tr("Symbol"));
+    form->addRow(tr("Symbol"), edit);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
+    form->addRow(buttons);
+    dlg->setTabOrder(edit, buttons);
+
+    connect(buttons, &QDialogButtonBox::accepted, dlg, [this, dlg, edit]() {
+        QJsonObject cfg;
+        cfg.insert("symbol", normalize_symbol(edit->text()));
+        apply_config(cfg);
+        emit config_changed(cfg);
+        dlg->accept();
+    });
+    connect(buttons, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
+    return dlg;
 }
 
 void StockQuoteWidget::apply_styles() {
@@ -123,12 +175,24 @@ void StockQuoteWidget::hideEvent(QHideEvent* e) {
 }
 
 void StockQuoteWidget::set_symbol(const QString& symbol) {
-    symbol_ = symbol.toUpper();
+    symbol_ = normalize_symbol(symbol);
     set_title(tr("QUOTE: %1").arg(symbol_));
+    ticker_label_->setText(symbol_);
+
+    // Blank the previous symbol's numbers immediately — leaving AAPL's price
+    // under an "MSFT" heading until the first delivery is actively misleading.
+    price_label_->setText(QStringLiteral("--"));
+    change_label_->setText(QStringLiteral("--"));
+    arrow_label_->setText(QString());
+    for (auto* v : stat_values_)
+        v->setText(QStringLiteral("--"));
+
     // Re-subscribe to the new topic; old sub for previous symbol is
     // dropped wholesale by `unsubscribe(this)` inside hub_resubscribe().
-    if (isVisible())
+    if (isVisible()) {
+        set_loading(true);
         hub_resubscribe();
+    }
 }
 
 void StockQuoteWidget::refresh_data() {
@@ -174,7 +238,12 @@ void StockQuoteWidget::populate(const services::QuoteData& q) {
         QString("color: %1; font-size: 28px; font-weight: bold; background: transparent;").arg(color));
 
     auto fmt = [](double v) { return v > 0 ? QString("$%1").arg(v, 0, 'f', 2) : QString("--"); };
-    open_val_->setText(fmt(q.high)); // yfinance batch returns high but not open separately — use high
+    // The batch quote snapshot carries last/change/high/low/volume but no
+    // session open. Showing `high` here (as this did previously) prints a
+    // wrong number under an "OPEN" heading — on a trading terminal that is
+    // worse than showing nothing.
+    open_val_->setText(QStringLiteral("--"));
+    open_val_->setToolTip(tr("Session open is not available in the batch quote feed"));
     high_val_->setText(fmt(q.high));
     low_val_->setText(fmt(q.low));
     prev_val_->setText(fmt(q.price - q.change));
@@ -193,7 +262,11 @@ void StockQuoteWidget::populate(const services::QuoteData& q) {
 void StockQuoteWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("QUOTE: %1").arg(symbol_));
-    refresh_data(); // re-renders stat cell labels in the new language
+    // Re-run tr() on the kept stat-cell headings. (This previously called
+    // refresh_data(), which fires a network request and never touched a
+    // single label.)
+    for (int i = 0; i < stat_labels_.size() && i < stat_label_keys_.size(); ++i)
+        stat_labels_[i]->setText(tr(stat_label_keys_[i].toUtf8().constData()));
 }
 
 } // namespace fincept::screens::widgets

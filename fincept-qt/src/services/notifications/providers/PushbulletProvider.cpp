@@ -1,4 +1,4 @@
-#include "services/notifications/providers/PushbulletProvider.h"
+﻿#include "services/notifications/providers/PushbulletProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -7,12 +7,12 @@
 namespace fincept::notifications {
 
 void PushbulletProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    api_key_ = get_str(r, cat + ".api_key");
+    api_key_ = get_secret(r, cat + ".api_key");
     channel_tag_ = get_str(r, cat + ".channel_tag");
 }
 
 void PushbulletProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".api_key", api_key_, cat);
+    set_secret(r, cat + ".api_key", api_key_, cat);
     r.set(cat + ".channel_tag", channel_tag_, cat);
 }
 

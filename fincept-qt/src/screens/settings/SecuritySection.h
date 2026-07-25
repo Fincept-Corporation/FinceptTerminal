@@ -5,10 +5,12 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QEvent>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QWidget>
 
 namespace fincept::screens {
@@ -23,6 +25,10 @@ class SecuritySection : public QWidget {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    /// Wipe the three PIN entry fields and collapse the change-PIN form when
+    /// the section leaves view — a typed-but-unsubmitted PIN must not sit in a
+    /// QLineEdit for the rest of the session.
+    void hideEvent(QHideEvent* e) override;
     void changeEvent(QEvent* event) override;
 
   private:
@@ -57,6 +63,10 @@ class SecuritySection : public QWidget {
     QLabel* audit_note_ = nullptr;
     QPushButton* save_pin_btn_ = nullptr;
     QPushButton* save_btn_ = nullptr;
+    /// Inline confirmation / warning for the "Save Security Settings" button.
+    /// Saving previously produced no visible feedback at all, and enabling
+    /// auto-lock without a configured PIN silently did nothing.
+    QLabel* save_status_ = nullptr;
     QPushButton* refresh_audit_btn_ = nullptr;
 
     QLabel* row_pin_status_lbl_ = nullptr;

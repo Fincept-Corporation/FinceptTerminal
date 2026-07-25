@@ -30,9 +30,13 @@ NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def) {
         adjust_edges_for_node(id);
         emit node_position_changed(id, x, y);
     });
-    connect(item, &NodeItem::delete_requested, this, &NodeScene::remove_node);
+    // Deletes/moves are announced, not applied: NodeEditorScreen wraps them in
+    // QUndoCommands so Ctrl+Z can put the node (and its wiring) back.
+    connect(item, &NodeItem::delete_requested, this, &NodeScene::node_delete_requested);
     connect(item, &NodeItem::duplicate_requested, this, &NodeScene::node_duplicate_requested);
     connect(item, &NodeItem::execute_from_requested, this, &NodeScene::node_execute_from_requested);
+    connect(item, &NodeItem::move_started, this, &NodeScene::node_move_started);
+    connect(item, &NodeItem::move_finished, this, &NodeScene::node_move_finished);
 
     // Wire port connection signals
     for (auto* port : item->input_ports()) {
@@ -63,7 +67,7 @@ EdgeItem* NodeScene::add_edge(const EdgeDef& def) {
     edges_.insert(def.id, edge);
 
     connect(edge, &EdgeItem::edge_selected, this, [](const QString& id) { Q_UNUSED(id); });
-    connect(edge, &EdgeItem::delete_requested, this, &NodeScene::remove_edge);
+    connect(edge, &EdgeItem::delete_requested, this, &NodeScene::edge_delete_requested);
 
     emit edge_added(def.id);
     return edge;
@@ -191,10 +195,28 @@ void NodeScene::finish_temp_edge(PortItem* target) {
         ed.target_node = in_port->parent_node()->node_def().id;
         ed.source_port = out_port->def().id;
         ed.target_port = in_port->def().id;
-        add_edge(ed);
+        // Announce rather than add — NodeEditorScreen pushes an AddEdgeCommand so
+        // a mis-drag is one Ctrl+Z away.
+        emit edge_create_requested(ed);
     }
 
     cancel_temp_edge();
+}
+
+EdgeDef NodeScene::edge_def(const QString& edge_id) const {
+    EdgeDef out;
+    auto it = edges_.constFind(edge_id);
+    if (it == edges_.constEnd())
+        return out;
+    auto* edge = it.value();
+    if (!edge->source_port() || !edge->target_port())
+        return out;
+    out.id = edge->edge_id();
+    out.source_node = edge->source_port()->parent_node()->node_def().id;
+    out.target_node = edge->target_port()->parent_node()->node_def().id;
+    out.source_port = edge->source_port()->def().id;
+    out.target_port = edge->target_port()->def().id;
+    return out;
 }
 
 void NodeScene::cancel_temp_edge() {

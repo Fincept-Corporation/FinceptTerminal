@@ -192,6 +192,8 @@ QWidget* DBnomicsSelectionPanel::build_search_section() {
     global_search_input_->setStyleSheet(kInputStyle());
     global_search_input_->setFixedHeight(28);
     global_search_input_->setPlaceholderText(tr("Search providers, datasets..."));
+    global_search_input_->setAccessibleName(tr("Global DBnomics search"));
+    global_search_input_->setClearButtonEnabled(true);
     layout->addWidget(global_search_input_);
 
     // Loading spinner (hidden by default, appears between input and results)
@@ -265,10 +267,15 @@ QWidget* DBnomicsSelectionPanel::build_provider_section() {
     provider_filter_input_->setStyleSheet(kInputStyle());
     provider_filter_input_->setFixedHeight(26);
     provider_filter_input_->setPlaceholderText(tr("Filter providers..."));
+    provider_filter_input_->setAccessibleName(tr("Filter provider list"));
+    provider_filter_input_->setClearButtonEnabled(true);
     pc_layout->addWidget(provider_filter_input_);
 
     provider_list_ = make_styled_list(130);
+    provider_list_->setAccessibleName(tr("DBnomics providers"));
     pc_layout->addWidget(provider_list_);
+
+    QWidget::setTabOrder(provider_filter_input_, provider_list_);
 
     layout->addWidget(prov_content_);
 
@@ -316,6 +323,7 @@ QWidget* DBnomicsSelectionPanel::build_dataset_section() {
     dc_layout->setSpacing(0);
 
     dataset_list_ = make_styled_list(130);
+    dataset_list_->setAccessibleName(tr("Datasets published by the selected provider"));
     dc_layout->addWidget(dataset_list_);
 
     dataset_load_more_btn_ = make_load_more_button();
@@ -361,10 +369,15 @@ QWidget* DBnomicsSelectionPanel::build_series_section() {
     series_search_input_->setStyleSheet(kInputStyle());
     series_search_input_->setFixedHeight(26);
     series_search_input_->setPlaceholderText(tr("Search series..."));
+    series_search_input_->setAccessibleName(tr("Search series within the selected dataset"));
+    series_search_input_->setClearButtonEnabled(true);
     sc_layout->addWidget(series_search_input_);
 
     series_list_ = make_styled_list(130);
+    series_list_->setAccessibleName(tr("Series in the selected dataset"));
     sc_layout->addWidget(series_list_);
+
+    QWidget::setTabOrder(series_search_input_, series_list_);
 
     series_load_more_btn_ = make_load_more_button();
     sc_layout->addWidget(series_load_more_btn_);
@@ -798,9 +811,16 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
         }
     }
 
-    // Dot colors for series rows
-    static const QStringList dot_colors = {"#ea580c", "#d97706", "#16a34a", "#2563eb",
-                                           "#0891b2", "#9333ea", "#dc2626", "#ca8a04"};
+    // Row chrome is identical for every series \u2014 build the two stylesheet
+    // strings once instead of re-formatting them per row.
+    const QString name_style = QString("color: %1; font-size: 10px; "
+                                       "font-family: 'Consolas','Courier New',monospace;")
+                                   .arg(col::TEXT_SECONDARY());
+    const QString remove_style =
+        QString("QPushButton { background: transparent; color: %1; border: none; font-size: 10px; }"
+                "QPushButton:hover { color: %2; }")
+            .arg(col::TEXT_TERTIARY())
+            .arg(col::NEGATIVE());
 
     for (int i = 0; i < series.size(); ++i) {
         const auto& dp = series[i];
@@ -810,10 +830,12 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
         row_layout->setContentsMargins(0, 0, 0, 0);
         row_layout->setSpacing(4);
 
-        // Colored dot
-        const QString dot_color = dot_colors[i % dot_colors.size()];
+        // Legend dot \u2014 use the series' OWN assigned colour. It used to be
+        // pulled from a second, different hard-coded palette, so from the 2nd
+        // series onward the sidebar legend named the wrong colour for the
+        // wrong line in the chart.
         auto* dot = new QLabel("\u25CF");
-        dot->setStyleSheet(QString("color: %1; font-size: 8px;").arg(dot_color));
+        dot->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent;").arg(dp.color.name()));
         dot->setFixedWidth(12);
         row_layout->addWidget(dot);
 
@@ -823,9 +845,7 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
             name = name.left(19) + "...";
         }
         auto* name_label = new QLabel(name);
-        name_label->setStyleSheet(QString("color: %1; font-size: 10px; "
-                                          "font-family: 'Consolas','Courier New',monospace;")
-                                      .arg(col::TEXT_SECONDARY()));
+        name_label->setStyleSheet(name_style);
         name_label->setToolTip(dp.series_name);
         row_layout->addWidget(name_label, 1);
 
@@ -833,11 +853,9 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
         const QString series_id = dp.series_id;
         auto* remove_btn = new QPushButton("\u00D7");
         remove_btn->setFixedSize(14, 14);
-        remove_btn->setStyleSheet(
-            QString("QPushButton { background: transparent; color: %1; border: none; font-size: 10px; }"
-                    "QPushButton:hover { color: %2; }")
-                .arg(col::TEXT_TERTIARY())
-                .arg(col::NEGATIVE()));
+        remove_btn->setAccessibleName(tr("Remove %1 from this slot").arg(dp.series_name));
+        remove_btn->setToolTip(tr("Remove %1").arg(dp.series_name));
+        remove_btn->setStyleSheet(remove_style);
         connect(remove_btn, &QPushButton::clicked, this, [this, slot_widget, series_id]() {
             const int idx = slots_layout_->indexOf(slot_widget);
             if (idx >= 0)

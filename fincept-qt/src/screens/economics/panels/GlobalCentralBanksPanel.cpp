@@ -98,14 +98,138 @@ static const QList<CbBank> kBanks = {
          {"Exchange Rates (NOK)", "exchange_rates"},
          {"NIBOR / Interest Rates", "interest_rates"},
      }},
+    // ── Central & Eastern Europe, Middle East, SE Asia ───────────────────────
+    // These eight connectors already shipped in scripts/ and were already
+    // exposed as MCP tools (DataConnectorManifest.inc) — the AI could query
+    // them, a human could not. None requires an API key. Commands below are
+    // taken verbatim from that manifest.
+    {"CNB — Czech National Bank",
+     "cnb_data.py",
+     "cnb",
+     {
+         {"PRIBOR (History)", "pribor_history"},
+         {"PRIBOR (Year)", "pribor_year"},
+         {"PRIBOR (Latest)", "pribor"},
+         {"CZEONIA (Year)", "czeonia_year"},
+         {"CZEONIA (Latest)", "czeonia"},
+         {"Exchange Rates (Year)", "exchange_rates_y"},
+         {"Exchange Rates (Latest)", "exchange_rates"},
+         {"Monthly Average FX", "monthly_avg"},
+         {"Open Market Operations", "omo"},
+         {"Overview", "overview"},
+     }},
+    {"NBP — National Bank of Poland",
+     "nbp_data.py",
+     "nbp",
+     {
+         {"Exchange Rates (Range)", "range"},
+         {"Major Currencies", "major"},
+         {"USD/PLN", "usd"},
+         {"EUR/PLN", "eur"},
+         {"Bid/Ask Spreads", "bid_ask"},
+         {"Single Currency", "currency"},
+         {"Today", "today"},
+         {"Overview", "overview"},
+     }},
+    {"MNB — National Bank of Hungary",
+     "mnb_data.py",
+     "mnb",
+     {
+         {"Exchange Rates (Range)", "range"},
+         {"Major Currencies", "major"},
+         {"USD/HUF", "usd"},
+         {"EUR/HUF", "eur"},
+         {"Single Currency", "currency"},
+         {"Today", "today"},
+         {"Overview", "overview"},
+     }},
+    {"BNR — National Bank of Romania",
+     "bnr_data.py",
+     "bnr",
+     {
+         {"Exchange Rates (Year)", "year"},
+         {"Exchange Rates (Range)", "range"},
+         {"Single Currency", "currency"},
+         {"Major Currencies", "major"},
+         {"Today", "today"},
+         {"Overview", "overview"},
+     }},
+    {"HNB — Croatian National Bank",
+     "hnb_data.py",
+     "hnb",
+     {
+         {"Exchange Rates (Range)", "range"},
+         {"Single Currency", "currency"},
+         {"USD/EUR", "usd"},
+         {"GBP", "gbp"},
+         {"Today", "today"},
+         {"Overview", "overview"},
+     }},
+    {"TCMB — Central Bank of Türkiye",
+     "tcmb_data.py",
+     "tcmb",
+     {
+         {"Exchange Rates (Range)", "range"},
+         {"Major Currencies", "major"},
+         {"Single Currency", "currency"},
+         {"By Date", "date"},
+         {"Today", "today"},
+         {"Overview", "overview"},
+     }},
+    {"BOI — Bank of Israel",
+     "boi_data.py",
+     "boi",
+     {
+         {"All Exchange Rates", "all"},
+         {"USD/ILS", "usd"},
+         {"EUR/ILS", "eur"},
+         {"Today", "today"},
+         {"Overview", "overview"},
+     }},
+    {"BNM — Bank Negara Malaysia",
+     "bnm_data.py",
+     "bnm",
+     {
+         {"Overnight Policy Rate (OPR)", "opr"},
+         {"Major Currencies", "major"},
+         {"ASEAN Currencies", "asean"},
+         {"Single Currency", "currency"},
+         {"Trading Sessions", "sessions"},
+         {"Overview", "overview"},
+     }},
 };
 
 // ── Flatten helpers ──────────────────────────────────────────────────────────
 
-// All bank response shapes have a "data" array of objects with a "date" key
-// and one or more numeric value columns. We keep all columns as-is.
+// Bank responses put their payload under "data" with a "date" key and one or
+// more numeric value columns. We keep all columns as-is.
+//
+// The shape is NOT uniform per script — it varies per COMMAND. Series commands
+// ("year", "range", "currency", "pribor_history") return an array of rows, but
+// point-in-time commands ("today", "date", "overview", "skd") return a single
+// object: e.g. bnr_data.py returns `"data": latest`, cnb_data.py returns
+// `"data": rows[0] if rows else {}`, tcmb_data.py returns `"data": snapshot`.
+// A bare .toArray() silently yields an empty array for all of those, so the
+// panel rendered "no data" for a request that actually succeeded. Normalise
+// both into a row list.
 static QJsonArray extract_cb_rows(const QJsonObject& data) {
-    return data["data"].toArray();
+    const QJsonValue payload = data["data"];
+    if (payload.isArray())
+        return payload.toArray();
+    if (payload.isObject()) {
+        const QJsonObject obj = payload.toObject();
+        if (obj.isEmpty())
+            return {};
+        // Some point-in-time payloads nest the real rows one level down
+        // (boi_data.py "overview" → {"data": {"rates": [...]}}). Prefer a
+        // nested array over presenting the wrapper object as a single row.
+        for (auto it = obj.begin(); it != obj.end(); ++it) {
+            if (it.value().isArray() && !it.value().toArray().isEmpty())
+                return it.value().toArray();
+        }
+        return QJsonArray{obj}; // genuine single row
+    }
+    return {};
 }
 
 // ── Panel ────────────────────────────────────────────────────────────────────
@@ -119,7 +243,9 @@ GlobalCentralBanksPanel::GlobalCentralBanksPanel(QWidget* parent)
 
 void GlobalCentralBanksPanel::activate() {
     show_empty(tr("Select a central bank and series, then click FETCH\n"
-                  "Sources: BOE, RBA, Bank of Canada, Riksbank, SNB, Norges Bank\n"
+                  "Sources: BOE, RBA, Bank of Canada, Riksbank, SNB, Norges Bank,\n"
+                  "CNB (Czechia), NBP (Poland), MNB (Hungary), BNR (Romania),\n"
+                  "HNB (Croatia), TCMB (Türkiye), BOI (Israel), BNM (Malaysia)\n"
                   "No API key required for any source"));
 }
 

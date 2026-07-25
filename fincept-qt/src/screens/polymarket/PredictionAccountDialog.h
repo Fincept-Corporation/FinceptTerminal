@@ -32,6 +32,11 @@ class PredictionAccountDialog : public QDialog {
     /// Select which tab is shown initially.
     void set_active_exchange(const QString& exchange_id);
 
+    /// Report the outcome of a "Test Connection" round-trip back into the
+    /// dialog's per-exchange status line. Without this the Test button gave
+    /// no visible feedback at all.
+    void set_test_result(const QString& exchange_id, bool ok, const QString& message);
+
   signals:
     /// Emitted after the user clicks Save and credentials are persisted.
     /// `exchange_id` is "polymarket" or "kalshi". Screens should reload

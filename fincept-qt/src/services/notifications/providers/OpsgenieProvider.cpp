@@ -1,4 +1,4 @@
-#include "services/notifications/providers/OpsgenieProvider.h"
+﻿#include "services/notifications/providers/OpsgenieProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -7,11 +7,11 @@
 namespace fincept::notifications {
 
 void OpsgenieProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    api_key_ = get_str(r, cat + ".api_key");
+    api_key_ = get_secret(r, cat + ".api_key");
 }
 
 void OpsgenieProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".api_key", api_key_, cat);
+    set_secret(r, cat + ".api_key", api_key_, cat);
 }
 
 void OpsgenieProvider::send(const NotificationRequest& req, std::function<void(bool, QString)> cb) {

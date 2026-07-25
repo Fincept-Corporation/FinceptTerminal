@@ -71,8 +71,8 @@ class ActivityTab : public QWidget {
     QString current_pubkey_;
     QString current_topic_;
     QVector<Activity> latest_;
-    Kind active_filter_kind_ = Kind::Other; // sentinel — `filter_all_` checked = no filter
-    bool show_all_ = true;
+    // (Removed `active_filter_kind_` / `show_all_`: never read or written —
+    // `rebuild_table()` derives the active filter from the chips directly.)
 };
 
 } // namespace fincept::screens

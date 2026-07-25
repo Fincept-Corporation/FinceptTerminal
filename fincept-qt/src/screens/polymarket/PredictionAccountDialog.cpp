@@ -44,6 +44,23 @@ void PredictionAccountDialog::set_active_exchange(const QString& exchange_id) {
         tabs_->setCurrentIndex(0);
 }
 
+void PredictionAccountDialog::set_test_result(const QString& exchange_id, bool ok, const QString& message) {
+    QLabel* target = (exchange_id == QStringLiteral("kalshi")) ? ks_status_ : pm_status_;
+    if (!target)
+        return;
+    const QString color = ok ? QStringLiteral("#16a34a") : QStringLiteral("#dc2626");
+    const QString head = ok ? tr("Connection OK") : tr("Connection failed");
+    target->setText(QStringLiteral("<span style='color:%1'>%2%3</span>")
+                        .arg(color, head, message.isEmpty() ? QString() : QStringLiteral(" — ") + message.toHtmlEscaped()));
+    // Re-enable the button so the user can retry.
+    if (exchange_id == QStringLiteral("kalshi")) {
+        if (ks_test_btn_)
+            ks_test_btn_->setEnabled(true);
+    } else if (pm_test_btn_) {
+        pm_test_btn_->setEnabled(true);
+    }
+}
+
 // ── UI ──────────────────────────────────────────────────────────────────────
 
 void PredictionAccountDialog::build_ui() {

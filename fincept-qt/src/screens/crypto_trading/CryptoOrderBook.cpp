@@ -185,7 +185,7 @@ void CryptoOrderBook::set_data(const QVector<QPair<double, double>>& bids, const
         spread_ = spread;
         spread_pct_ = spread_pct;
     }
-    spread_label_->setText(tr("SPREAD  %1  (%2%)").arg(spread, 0, 'f', 2).arg(spread_pct, 0, 'f', 4));
+    spread_label_->setText(tr("SPREAD  %1  (%2%)").arg(format_price_plain(spread)).arg(spread_pct, 0, 'f', 4));
     has_spread_data_ = true;
     cache_dirty_ = true;
     if (repaint_timer_ && !repaint_timer_->isActive())
@@ -214,20 +214,31 @@ void CryptoOrderBook::mousePressEvent(QMouseEvent* event) {
         return;
 
     const int row = paint_y / ROW_H;
-    QMutexLocker lock(&mutex_);
-    const int ask_count = std::min(static_cast<int>(asks_.size()), OB_MAX_DISPLAY_LEVELS);
-    const int bid_count = std::min(static_cast<int>(bids_.size()), OB_MAX_DISPLAY_LEVELS);
 
-    if (row < ask_count) {
-        // Clicked an ask row (displayed in reverse)
-        const int src = ask_count - 1 - row;
-        if (src < asks_.size())
-            emit price_clicked(asks_[src].first);
-    } else if (row < ask_count + bid_count) {
-        const int bid_idx = row - ask_count;
-        if (bid_idx < bids_.size())
-            emit price_clicked(bids_[bid_idx].first);
+    // Resolve the price under the lock, then RELEASE it before emitting.
+    // `price_clicked` runs its receiver synchronously (same thread) and the
+    // receiver is free to call back into set_data(), which takes the same
+    // non-recursive QMutex — emitting while holding it is a self-deadlock
+    // waiting for a future caller to arrange.
+    double clicked_price = 0.0;
+    {
+        QMutexLocker lock(&mutex_);
+        const int ask_count = std::min(static_cast<int>(asks_.size()), OB_MAX_DISPLAY_LEVELS);
+        const int bid_count = std::min(static_cast<int>(bids_.size()), OB_MAX_DISPLAY_LEVELS);
+
+        if (row < ask_count) {
+            // Clicked an ask row (displayed in reverse)
+            const int src = ask_count - 1 - row;
+            if (src >= 0 && src < asks_.size())
+                clicked_price = asks_[src].first;
+        } else if (row < ask_count + bid_count) {
+            const int bid_idx = row - ask_count;
+            if (bid_idx >= 0 && bid_idx < bids_.size())
+                clicked_price = bids_[bid_idx].first;
+        }
     }
+    if (clicked_price > 0.0)
+        emit price_clicked(clicked_price);
 }
 
 void CryptoOrderBook::paintEvent(QPaintEvent* /*event*/) {
@@ -320,15 +331,16 @@ void CryptoOrderBook::rebuild_cache() {
             const bool hot = bids[i].second >= p75 && p75 > 0;
             p.fillRect(half_w - 1 - bar_w, y, bar_w, ROW_H, hot ? kBidBarHot() : kBidBar());
 
-            // Price text
+            // Price text — precision follows the magnitude so sub-cent pairs
+            // don't collapse into a column of identical "0.00" levels.
             p.setPen(kColorBid());
             p.drawText(QRect(4, y, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
-                       QString::number(bids[i].first, 'f', 2));
+                       format_price_plain(bids[i].first));
 
             // Amount text
             p.setPen(kTextSecondary());
             p.drawText(QRect(4, y, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
-                       QString::number(bids[i].second, 'f', 4));
+                       format_size(bids[i].second));
         }
 
         // Draw ask side (right) — prices ascending from center
@@ -346,12 +358,12 @@ void CryptoOrderBook::rebuild_cache() {
             // Price text
             p.setPen(kColorAsk());
             p.drawText(QRect(half_w + 4, y, price_col_w, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
-                       QString::number(asks[i].first, 'f', 2));
+                       format_price_plain(asks[i].first));
 
             // Amount text
             p.setPen(kTextSecondary());
             p.drawText(QRect(half_w + 4, y, half_w - 8, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
-                       QString::number(asks[i].second, 'f', 4));
+                       format_size(asks[i].second));
         }
 
         // Center divider line

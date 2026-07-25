@@ -7,14 +7,21 @@
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QDateTime>
+#include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
 #include <QTabBar>
+#include <QTextStream>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 #ifdef FINCEPT_HAS_QXLSX
 #    include <xlsxdocument.h>
@@ -82,8 +89,16 @@ void ExcelScreen::build_ui() {
     // Add initial sheet
     auto* sheet1 = new SpreadsheetWidget("Sheet1", 100, 26, sheet_tabs_);
     sheet_tabs_->addTab(sheet1, "Sheet1");
+    watch_sheet(sheet1);
 
     connect(sheet_tabs_, &QTabWidget::currentChanged, this, &ExcelScreen::on_tab_changed);
+
+    // Ctrl+S saves back to the current file path (or prompts on first save) —
+    // previously the only way to persist work was the EXPORT button, which
+    // always re-asked for a filename.
+    auto* save_sc = new QShortcut(QKeySequence::Save, this);
+    save_sc->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(save_sc, &QShortcut::activated, this, &ExcelScreen::on_export);
 
     root->addWidget(sheet_tabs_, 1);
 
@@ -189,17 +204,110 @@ QWidget* ExcelScreen::build_toolbar() {
 // Import (XLSX via QXlsx)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Split one CSV line honouring RFC-4180 quoting (""-escaped quotes inside a
+// quoted field). Kept local — the watchlist screen has its own copy but lives
+// in a different slice.
+static QStringList split_csv_line(const QString& line) {
+    QStringList fields;
+    QString cur;
+    bool in_quotes = false;
+    for (int i = 0; i < line.length(); ++i) {
+        const QChar c = line[i];
+        if (c == '"') {
+            if (in_quotes && i + 1 < line.length() && line[i + 1] == '"') {
+                cur += '"';
+                ++i;
+            } else {
+                in_quotes = !in_quotes;
+            }
+        } else if (c == ',' && !in_quotes) {
+            fields.append(cur);
+            cur.clear();
+        } else {
+            cur += c;
+        }
+    }
+    fields.append(cur);
+    return fields;
+}
+
+bool ExcelScreen::import_csv(const QString& path) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Import failed"), tr("Could not open file for reading:\n%1").arg(path));
+        return false;
+    }
+    QTextStream in(&f);
+    in.setEncoding(QStringConverter::Utf8);
+
+    QVector<QVector<QString>> cells;
+    // Hard cap so a pathological file can't allocate millions of table items
+    // and freeze the UI thread.
+    constexpr int kMaxRows = 20000;
+    while (!in.atEnd() && cells.size() < kMaxRows) {
+        const QStringList fields = split_csv_line(in.readLine());
+        QVector<QString> row;
+        row.reserve(fields.size());
+        for (const auto& v : fields)
+            row.append(v);
+        cells.append(row);
+    }
+    const bool truncated = !in.atEnd();
+
+    const QString name = QFileInfo(path).completeBaseName();
+    auto* sheet = new SpreadsheetWidget(name, std::max<int>(100, static_cast<int>(cells.size())), 26, sheet_tabs_);
+    sheet->set_data(cells);
+
+    // Replace the current sheet set with the imported file (matches the XLSX path).
+    while (sheet_tabs_->count() > 0) {
+        auto* w = sheet_tabs_->widget(0);
+        sheet_tabs_->removeTab(0);
+        w->deleteLater();
+    }
+    sheet_tabs_->addTab(sheet, name);
+    connect(sheet, &SpreadsheetWidget::data_changed, this, &ExcelScreen::mark_dirty);
+
+    file_name_ = QFileInfo(path).fileName();
+    file_path_ = path;
+    if (auto* fname = findChild<QLabel*>("excelFileName"))
+        fname->setText(file_name_);
+    dirty_ = false;
+    update_status();
+    LOG_INFO("ExcelScreen", QString("Imported %1 CSV rows from %2").arg(cells.size()).arg(file_name_));
+    services::FileManagerService::instance().import_file(path, "excel");
+
+    if (truncated)
+        QMessageBox::information(this, tr("Import truncated"),
+                                 tr("Only the first %1 rows were imported.").arg(kMaxRows));
+    return true;
+}
+
 void ExcelScreen::on_import() {
+    if (!confirm_discard(tr("Import a different file")))
+        return;
+
     QString path = QFileDialog::getOpenFileName(this, tr("Import Spreadsheet"), {},
                                                 tr("Spreadsheet Files (*.xlsx *.xls *.csv);;All Files (*)"));
     if (path.isEmpty())
         return;
+
+    // CSV is advertised in the file filter (and in the no-QXlsx message) but was
+    // never actually handled — QXlsx::Document on a .csv just reported "no
+    // sheets" to the log and the screen silently did nothing.
+    if (QFileInfo(path).suffix().compare(QLatin1String("csv"), Qt::CaseInsensitive) == 0) {
+        import_csv(path);
+        return;
+    }
 
 #ifdef FINCEPT_HAS_QXLSX
     QXlsx::Document xlsx(path);
     QStringList sheet_names = xlsx.sheetNames();
     if (sheet_names.isEmpty()) {
         LOG_ERROR("ExcelScreen", "No sheets found in file");
+        QMessageBox::warning(this, tr("Import failed"),
+                             tr("No sheets could be read from:\n%1\n\nThe file may be corrupt or "
+                                "in an unsupported format.")
+                                 .arg(path));
         return;
     }
 
@@ -210,6 +318,13 @@ void ExcelScreen::on_import() {
         w->deleteLater();
     }
 
+    // Every cell becomes a heap-allocated SpreadsheetItem, so an unbounded
+    // dimension (a stray value in row 1,000,000) would allocate tens of millions
+    // of items and hang the UI. Cap the import window.
+    constexpr int kMaxImportRows = 20000;
+    constexpr int kMaxImportCols = 512;
+    bool truncated = false;
+
     for (const auto& name : sheet_names) {
         xlsx.selectSheet(name);
 
@@ -217,6 +332,14 @@ void ExcelScreen::on_import() {
         auto dim = xlsx.dimension();
         int max_row = std::max(dim.lastRow(), 100);
         int max_col = std::max(dim.lastColumn(), 26);
+        if (max_row > kMaxImportRows) {
+            max_row = kMaxImportRows;
+            truncated = true;
+        }
+        if (max_col > kMaxImportCols) {
+            max_col = kMaxImportCols;
+            truncated = true;
+        }
 
         auto* sheet = new SpreadsheetWidget(name, max_row, max_col, sheet_tabs_);
 
@@ -231,6 +354,7 @@ void ExcelScreen::on_import() {
         }
         sheet->set_data(cells);
         sheet_tabs_->addTab(sheet, name);
+        connect(sheet, &SpreadsheetWidget::data_changed, this, &ExcelScreen::mark_dirty);
     }
 
     // Update file info
@@ -240,12 +364,19 @@ void ExcelScreen::on_import() {
     if (fname)
         fname->setText(file_name_);
 
-    sheet_counter_ = sheet_names.size() + 1;
+    dirty_ = false;
     update_status();
     LOG_INFO("ExcelScreen", QString("Imported %1 sheets from %2").arg(sheet_names.size()).arg(file_name_));
 
     // Register with File Manager so it appears in the Files tab
     services::FileManagerService::instance().import_file(path, "excel");
+
+    if (truncated)
+        QMessageBox::information(this, tr("Import truncated"),
+                                 tr("This workbook is larger than the %1 × %2 import window; "
+                                    "only that region was loaded.")
+                                     .arg(kMaxImportRows)
+                                     .arg(kMaxImportCols));
 #else
     QMessageBox::information(this, tr("Excel Import"),
                              tr("Excel (.xlsx) import requires Qt6 private headers.\n"
@@ -263,6 +394,9 @@ void ExcelScreen::on_export() {
     QString path = QFileDialog::getSaveFileName(this, tr("Export as XLSX"), file_name_, tr("Excel Files (*.xlsx)"));
     if (path.isEmpty())
         return;
+    // QFileDialog on Linux/macOS does not always append the filter suffix.
+    if (!path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive))
+        path += QLatin1String(".xlsx");
 
     QXlsx::Document xlsx;
 
@@ -306,12 +440,20 @@ void ExcelScreen::on_export() {
         auto* fname = findChild<QLabel*>("excelFileName");
         if (fname)
             fname->setText(file_name_);
+        dirty_ = false;
+        update_status();
         LOG_INFO("ExcelScreen", QString("Exported to %1").arg(path));
 
         // Register with File Manager so it appears in the Files tab
         services::FileManagerService::instance().import_file(path, "excel");
     } else {
         LOG_ERROR("ExcelScreen", "Failed to save XLSX file");
+        // Silently logging a failed save is the worst possible outcome — the
+        // user believes their workbook is on disk when it isn't.
+        QMessageBox::warning(this, tr("Export failed"),
+                             tr("Could not write the workbook to:\n%1\n\nCheck that the file is not "
+                                "open in another application and that you have write permission.")
+                                 .arg(path));
     }
 #else
     QMessageBox::information(this, tr("Excel Export"),
@@ -382,8 +524,34 @@ void ExcelScreen::on_add_sheet() {
     QString name = generate_sheet_name();
     auto* sheet = new SpreadsheetWidget(name, 100, 26, sheet_tabs_);
     sheet_tabs_->addTab(sheet, name);
+    watch_sheet(sheet);
     sheet_tabs_->setCurrentIndex(sheet_tabs_->count() - 1);
+    mark_dirty();
     update_status();
+}
+
+// ── Dirty tracking ───────────────────────────────────────────────────────────
+
+void ExcelScreen::watch_sheet(SpreadsheetWidget* sheet) {
+    if (sheet)
+        connect(sheet, &SpreadsheetWidget::data_changed, this, &ExcelScreen::mark_dirty);
+}
+
+void ExcelScreen::mark_dirty() {
+    if (dirty_)
+        return;
+    dirty_ = true;
+    update_status();
+}
+
+bool ExcelScreen::confirm_discard(const QString& action) {
+    if (!dirty_)
+        return true;
+    const auto reply =
+        QMessageBox::warning(this, tr("Unsaved changes"),
+                             tr("\"%1\" has unsaved changes.\n\n%2 will discard them.").arg(file_name_, action),
+                             QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    return reply == QMessageBox::Discard;
 }
 
 void ExcelScreen::on_delete_sheet() {
@@ -402,6 +570,7 @@ void ExcelScreen::on_delete_sheet() {
         auto* w = sheet_tabs_->widget(idx);
         sheet_tabs_->removeTab(idx);
         w->deleteLater();
+        mark_dirty();
         update_status();
     }
 }
@@ -415,13 +584,24 @@ void ExcelScreen::on_rename_sheet() {
     QString current = sheet_tabs_->tabText(idx);
     QString name = QInputDialog::getText(this, tr("Rename Sheet"), tr("New name:"), QLineEdit::Normal, current, &ok);
 
-    if (ok && !name.trimmed().isEmpty()) {
-        sheet_tabs_->setTabText(idx, name.trimmed());
-        auto* sheet = qobject_cast<SpreadsheetWidget*>(sheet_tabs_->widget(idx));
-        if (sheet)
-            sheet->set_sheet_name(name.trimmed());
-        update_status();
+    if (!ok || name.trimmed().isEmpty())
+        return;
+    name = name.trimmed();
+
+    // Sheet names must be unique — QXlsx::addSheet() fails on a duplicate, which
+    // used to silently drop a sheet on export.
+    for (int i = 0; i < sheet_tabs_->count(); ++i) {
+        if (i != idx && sheet_tabs_->tabText(i).compare(name, Qt::CaseInsensitive) == 0) {
+            QMessageBox::warning(this, tr("Rename Sheet"), tr("A sheet named \"%1\" already exists.").arg(name));
+            return;
+        }
     }
+
+    sheet_tabs_->setTabText(idx, name);
+    if (auto* sheet = qobject_cast<SpreadsheetWidget*>(sheet_tabs_->widget(idx)))
+        sheet->set_sheet_name(name);
+    mark_dirty();
+    update_status();
 }
 
 void ExcelScreen::on_tab_changed(int index) {
@@ -439,17 +619,29 @@ SpreadsheetWidget* ExcelScreen::current_sheet() const {
 }
 
 QString ExcelScreen::generate_sheet_name() const {
-    int n = sheet_tabs_->count() + 1;
-    QString name;
-    do {
-        name = QString("Sheet%1").arg(n++);
-    } while (sheet_tabs_->indexOf(sheet_tabs_->findChild<QWidget*>(name)) >= 0 || n > 999);
-    return name;
+    // Compare against the TAB TEXT. The old loop asked findChild<QWidget*>(name)
+    // — sheets never have an objectName, so it always returned nullptr and the
+    // uniqueness check was a no-op: deleting "Sheet2" from Sheet1/2/3 and adding
+    // a sheet produced a duplicate "Sheet3".
+    auto taken = [this](const QString& n) {
+        for (int i = 0; i < sheet_tabs_->count(); ++i)
+            if (sheet_tabs_->tabText(i).compare(n, Qt::CaseInsensitive) == 0)
+                return true;
+        return false;
+    };
+    for (int n = sheet_tabs_->count() + 1; n <= 999; ++n) {
+        const QString name = QString("Sheet%1").arg(n);
+        if (!taken(name))
+            return name;
+    }
+    return QString("Sheet%1").arg(QDateTime::currentMSecsSinceEpoch());
 }
 
 void ExcelScreen::update_status() {
     auto* sheet = current_sheet();
-    QString info = tr("File: %1  |  Sheets: %2").arg(file_name_).arg(sheet_tabs_->count());
+    QString info = tr("File: %1%2  |  Sheets: %3")
+                       .arg(file_name_, dirty_ ? QStringLiteral(" *") : QString())
+                       .arg(sheet_tabs_->count());
     if (sheet) {
         info += tr("  |  Active: %1  |  %2 rows x %3 cols")
                     .arg(sheet->sheet_name())

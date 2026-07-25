@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QHideEvent>
 #include <QJsonObject>
@@ -21,6 +22,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -329,6 +331,14 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     /// Dispatch a run on the next event-loop tick. Used by the auto-run path so
     /// freshly-populated strategy combos/params settle before on_run() reads them.
     void trigger_auto_run();
+
+    // Long-run feedback: ticks the status chip with elapsed seconds while a
+    // command is in flight so a 3-minute walk-forward never looks frozen.
+    // Started in on_run(), stopped on result/error/hide (P3).
+    QTimer* run_timer_ = nullptr;
+    QElapsedTimer run_elapsed_;
+    void start_run_ticker();
+    void stop_run_ticker();
 
     QJsonArray pending_weights_;
     bool first_show_ = true;

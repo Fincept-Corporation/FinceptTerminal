@@ -120,6 +120,22 @@ QWidget* QuantModulePanel::build_hft_panel() {
     top_hl->addWidget(latency_lbl);
     vl->addWidget(top_bar);
 
+    // Shared pre-flight guard. Every HFT action forwards the symbol straight to
+    // ccxt; a blank field used to surface as an opaque exchange traceback.
+    // Returns an empty string (after showing the error) when unusable.
+    auto require_symbol = [this]() -> QString {
+        const QString s = text_inputs_["hft_symbol"]->text().trimmed().toUpper();
+        if (s.isEmpty()) {
+            display_error(tr("Enter a symbol (e.g. BTC/USDT) before running."));
+            return {};
+        }
+        if (!s.contains('/')) {
+            display_error(tr("'%1' is not a valid pair. Use BASE/QUOTE form, e.g. BTC/USDT.").arg(s));
+            return {};
+        }
+        return s;
+    };
+
     // ── Tab widget ────────────────────────────────────────────────────────────
     auto* tabs = new QTabWidget(w);
     tabs->setStyleSheet(tab_ss(accent));
@@ -136,11 +152,14 @@ QWidget* QuantModulePanel::build_hft_panel() {
     auto* ob_ctrl = new QHBoxLayout;
     ob_ctrl->setSpacing(8);
     auto* ob_fetch = make_run_button(tr("FETCH LIVE ORDER BOOK"), ob_tab);
-    connect(ob_fetch, &QPushButton::clicked, this, [this]() {
+    connect(ob_fetch, &QPushButton::clicked, this, [this, require_symbol]() {
+        const QString sym = require_symbol();
+        if (sym.isEmpty())
+            return;
         status_label_->setText(tr("Fetching live order book..."));
         QJsonObject p;
         p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
-        p["symbol"] = text_inputs_["hft_symbol"]->text().trimmed();
+        p["symbol"] = sym;
         p["depth"] = combo_inputs_["hft_depth"]->currentText().toInt();
         AIQuantLabService::instance().hft_create_orderbook(p);
     });
@@ -280,7 +299,8 @@ QWidget* QuantModulePanel::build_hft_panel() {
     auto* mm_params = new QHBoxLayout;
     mm_params->setSpacing(8);
     auto* inv_spin = make_double_spin(-1000, 1000, 0.0, 4, " units", mm_section);
-    int_inputs_["hft_inventory"] = nullptr;
+    // NOTE: do not insert nullptr sentinels into int_inputs_ — every other read
+    // site dereferences these hashes unconditionally.
     double_inputs_["hft_inventory_d"] = inv_spin;
     mm_params->addWidget(build_input_row(tr("Inventory"), inv_spin, mm_section));
     auto* spread_spin = make_double_spin(1.0, 10.0, 1.5, 2, "×", mm_section);
@@ -292,11 +312,14 @@ QWidget* QuantModulePanel::build_hft_panel() {
     mm_vl->addLayout(mm_params);
 
     auto* mm_run = make_run_button(tr("CALCULATE OPTIMAL QUOTES"), mm_section);
-    connect(mm_run, &QPushButton::clicked, this, [this]() {
+    connect(mm_run, &QPushButton::clicked, this, [this, require_symbol]() {
+        const QString sym = require_symbol();
+        if (sym.isEmpty())
+            return;
         status_label_->setText(tr("Fetching live data + computing quotes..."));
         QJsonObject p;
         p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
-        p["symbol"] = text_inputs_["hft_symbol"]->text().trimmed();
+        p["symbol"] = sym;
         p["inventory"] = double_inputs_["hft_inventory_d"]->value();
         p["spread_multiplier"] = double_inputs_["hft_spread_mult"]->value();
         p["risk_aversion"] = double_inputs_["hft_risk_aversion"]->value();
@@ -350,11 +373,14 @@ QWidget* QuantModulePanel::build_hft_panel() {
     tox_vl->addLayout(tox_params);
 
     auto* tox_run = make_run_button(tr("DETECT TOXIC FLOW"), tox_section);
-    connect(tox_run, &QPushButton::clicked, this, [this]() {
+    connect(tox_run, &QPushButton::clicked, this, [this, require_symbol]() {
+        const QString sym = require_symbol();
+        if (sym.isEmpty())
+            return;
         status_label_->setText(tr("Fetching trades + analyzing flow..."));
         QJsonObject p;
         p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
-        p["symbol"] = text_inputs_["hft_symbol"]->text().trimmed();
+        p["symbol"] = sym;
         p["limit"] = combo_inputs_["hft_tox_limit"]->currentText().toInt();
         AIQuantLabService::instance().hft_detect_toxic(p);
     });
@@ -424,11 +450,14 @@ QWidget* QuantModulePanel::build_hft_panel() {
     slip_vl->addLayout(slip_params);
 
     auto* slip_run = make_run_button(tr("ESTIMATE SLIPPAGE"), slip_section);
-    connect(slip_run, &QPushButton::clicked, this, [this]() {
+    connect(slip_run, &QPushButton::clicked, this, [this, require_symbol]() {
+        const QString sym = require_symbol();
+        if (sym.isEmpty())
+            return;
         status_label_->setText(tr("Walking order book..."));
         QJsonObject p;
         p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
-        p["symbol"] = text_inputs_["hft_symbol"]->text().trimmed();
+        p["symbol"] = sym;
         p["side"] = combo_inputs_["hft_slip_side"]->currentText();
         p["quantity"] = double_inputs_["hft_slip_qty"]->value();
         AIQuantLabService::instance().hft_execute_order(p);
@@ -487,11 +516,14 @@ QWidget* QuantModulePanel::build_hft_panel() {
     auto* analyze_btn = make_run_button(tr("⚡ FULL ANALYSIS — FETCH ALL & COMPUTE"), bottom_bar);
     analyze_btn->setToolTip(tr("Fetches live order book + trades, computes book metrics, market making quotes, toxic "
                                "flow, and slippage in one call"));
-    connect(analyze_btn, &QPushButton::clicked, this, [this]() {
+    connect(analyze_btn, &QPushButton::clicked, this, [this, require_symbol]() {
+        const QString sym = require_symbol();
+        if (sym.isEmpty())
+            return;
         status_label_->setText(tr("Running full microstructure analysis..."));
         QJsonObject p;
         p["exchange"] = combo_inputs_["hft_exchange"]->currentText();
-        p["symbol"] = text_inputs_["hft_symbol"]->text().trimmed();
+        p["symbol"] = sym;
         p["depth"] = combo_inputs_["hft_depth"]->currentText().toInt();
         p["limit"] = combo_inputs_["hft_tox_limit"]->currentText().toInt();
         p["inventory"] = double_inputs_["hft_inventory_d"]->value();

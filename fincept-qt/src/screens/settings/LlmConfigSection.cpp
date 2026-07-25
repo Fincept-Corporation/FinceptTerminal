@@ -81,6 +81,11 @@ void LlmConfigSection::reload() {
     load_profiles();
 }
 
+void LlmConfigSection::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    reload();
+}
+
 void LlmConfigSection::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);

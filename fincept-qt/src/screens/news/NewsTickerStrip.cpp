@@ -53,6 +53,19 @@ void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breakin
     }
 
     offset_ = 0;
+    // resume() is called from the screen's showEvent, before any articles have
+    // arrived — with an empty entries_ it left the timer stopped, so the strip
+    // never scrolled for the whole session. Re-evaluate the timer whenever the
+    // content changes.
+    if (!paused_ && !entries_.isEmpty())
+        scroll_timer_.start();
+    else if (entries_.isEmpty())
+        scroll_timer_.stop();
+    setAccessibleName(tr("Breaking news ticker"));
+    setAccessibleDescription(
+        entries_.isEmpty()
+            ? tr("No breaking headlines")
+            : tr("%n breaking headline(s); click to open one", "", static_cast<int>(entries_.size())));
     update();
 }
 

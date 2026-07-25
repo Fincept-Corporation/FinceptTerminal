@@ -145,8 +145,14 @@ class SwapPanel : public QWidget {
     QString pending_from_mint_;
     QHash<QString, double> price_usd_;    ///< mint → USD per 1 token
     QHash<QString, double> price_sol_;    ///< mint → SOL per 1 token
+    QHash<QString, qint64> price_ts_;     ///< mint → unix ms of the last valid quote
     QHash<QString, QString> price_topic_; ///< mint → topic (for unsubscribe)
     bool busy_ = false;
+
+    /// Age (ms) of the oldest leg price used by the last `recompute_estimate`.
+    /// Surfaced in the ticket and repeated in the confirm dialog so the user
+    /// never sizes a swap on a silently-frozen quote. -1 = unknown.
+    qint64 last_quote_age_ms_ = -1;
 };
 
 } // namespace fincept::screens::panels

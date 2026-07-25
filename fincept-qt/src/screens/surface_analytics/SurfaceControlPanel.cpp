@@ -172,7 +172,7 @@ void SurfaceControlPanel::setup_ui() {
         name_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:Consolas;").arg(colors::TEXT_PRIMARY()));
         name_lbl->setMinimumWidth(80);
         row->addWidget(name_lbl);
-        auto* state_lbl = new QLabel("not configured", providers_box_);
+        auto* state_lbl = new QLabel(tr("not configured"), providers_box_);
         state_lbl->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_DIM()));
         row->addWidget(state_lbl, 1);
         auto* detail_lbl = new QLabel("", providers_box_);
@@ -219,6 +219,7 @@ void SurfaceControlPanel::setup_ui() {
     fetch_btn_ = new QPushButton(tr("FETCH"), footer);
     fetch_btn_->setStyleSheet(fetch_btn_qss(true));
     fetch_btn_->setMinimumHeight(34);
+    fetch_btn_->setAccessibleName(tr("Fetch this surface from Databento"));
     connect(fetch_btn_, &QPushButton::clicked, this, &SurfaceControlPanel::on_fetch_clicked);
     footer_layout->addWidget(fetch_btn_);
     outer->addWidget(footer);
@@ -272,7 +273,12 @@ QGroupBox* SurfaceControlPanel::build_asset_section() {
     spot_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(colors::TEXT_DIM()));
     l->addWidget(spot_label_);
 
+    symbol_edit_->setAccessibleName(tr("Underlying symbol"));
+    dataset_combo_->setAccessibleName(tr("Databento dataset"));
+    spot_label_->setAccessibleName(tr("Spot price"));
+
     tier_badge_ = new QLabel("DEMO", gb);
+    tier_badge_->setAccessibleName(tr("Data tier"));
     tier_badge_->setAlignment(Qt::AlignCenter);
     tier_badge_->setStyleSheet(QString("background:%1; color:#000; font-size:9px; font-weight:bold; "
                                        "padding:2px 6px; border-radius:2px; max-width:80px;")
@@ -561,7 +567,8 @@ void SurfaceControlPanel::update_metrics(const std::vector<std::vector<float>>& 
         return;
     }
     std::sort(flat.begin(), flat.end());
-    double n = (double)flat.size();
+    const size_t count = flat.size();
+    double n = (double)count;
     double sum = 0;
     for (float v : flat)
         sum += v;
@@ -577,7 +584,11 @@ void SurfaceControlPanel::update_metrics(const std::vector<std::vector<float>>& 
     double std_dev = std::sqrt(var);
     double skew = (std_dev > 0) ? (m3 / n) / std::pow(std_dev, 3) : 0.0;
     double kurt = (std_dev > 0) ? (m4 / n) / std::pow(std_dev, 4) - 3.0 : 0.0;
-    double median = flat[flat.size() / 2];
+    // Even-sized samples take the mean of the two central values; the old
+    // flat[size/2] silently reported the upper middle as "median".
+    const double median = (count % 2 == 0)
+                              ? 0.5 * (double(flat[count / 2 - 1]) + double(flat[count / 2]))
+                              : double(flat[count / 2]);
 
     QString suffix = units.isEmpty() ? QString() : QStringLiteral(" ") + units;
     set_metric(metrics_count_, QString::number((qint64)n));
@@ -593,6 +604,13 @@ void SurfaceControlPanel::update_metrics(const std::vector<std::vector<float>>& 
 void SurfaceControlPanel::update_lineage(const QString& line) {
     if (lineage_label_)
         lineage_label_->setText(line.isEmpty() ? "—" : line);
+}
+
+void SurfaceControlPanel::set_spot(double spot) {
+    last_spot_ = spot;
+    if (!spot_label_)
+        return;
+    spot_label_->setText(spot > 0 ? tr("Spot: %1").arg(spot, 0, 'f', 2) : tr("Spot: —"));
 }
 
 void SurfaceControlPanel::apply_state(const SurfaceControlsState& s) {
@@ -770,14 +788,25 @@ void SurfaceControlPanel::set_provider_status(const QString& provider_name, cons
     auto* dt = provider_detail_.value(provider_name, nullptr);
     if (!dot || !lbl)
         return;
+    // `provider_state` is a protocol token from the caller; the pill shows a
+    // translated rendering of it rather than the raw token.
     QString color = colors::TEXT_DIM();
     QString text = provider_state;
-    if (provider_state == "connected")
+    if (provider_state == "connected") {
         color = colors::POSITIVE();
-    else if (provider_state == "disconnected" || provider_state == "error")
+        text = tr("connected");
+    } else if (provider_state == "disconnected") {
         color = colors::NEGATIVE();
-    else if (provider_state == "configured")
+        text = tr("disconnected");
+    } else if (provider_state == "error") {
+        color = colors::NEGATIVE();
+        text = tr("error");
+    } else if (provider_state == "configured") {
         color = QString("rgb(217,164,6)"); // amber, key set but not yet tested
+        text = tr("configured");
+    } else if (provider_state == "not configured") {
+        text = tr("not configured");
+    }
     dot->setStyleSheet(QString("color:%1; font-size:11px;").arg(color));
     lbl->setText(text);
     lbl->setStyleSheet(QString("color:%1; font-size:9px;").arg(color));
@@ -817,8 +846,8 @@ void SurfaceControlPanel::retranslateUi() {
         symbol_edit_->setPlaceholderText(tr("Underlying / parent symbol"));
     if (dataset_lbl_)
         dataset_lbl_->setText(tr("Dataset:"));
-    if (spot_label_)
-        spot_label_->setText(tr("Spot: —"));
+    // Re-render the live value rather than blanking it back to a dash.
+    set_spot(last_spot_);
 
     // Date + option field labels
     if (start_lbl_)

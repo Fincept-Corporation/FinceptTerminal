@@ -8,6 +8,8 @@
 #include <QPainter>
 #include <QShowEvent>
 
+#include <algorithm>
+
 namespace fincept::screens::crypto {
 
 using namespace fincept::ui;
@@ -44,7 +46,13 @@ CryptoTimeSales::CryptoTimeSales(QWidget* parent) : QWidget(parent) {
     repaint_timer_->setSingleShot(true);
     repaint_timer_->setInterval(50); // max 20fps
     connect(repaint_timer_, &QTimer::timeout, this, [this]() { update(); });
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() { update(); });
+    // The tape is a cached QPixmap: without marking the cache dirty a theme
+    // change re-blitted the OLD pixmap and the tape kept the previous
+    // palette until the next trade arrived.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this]() {
+        cache_dirty_ = true;
+        update();
+    });
 }
 
 void CryptoTimeSales::showEvent(QShowEvent* e) {
@@ -116,10 +124,11 @@ void CryptoTimeSales::rebuild_cache() {
 
     // Header row
     p.setPen(kTextDim());
-    p.drawText(QRect(4, 0, 70, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, "TIME");
-    p.drawText(QRect(74, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "PRICE");
-    p.drawText(QRect(74 + w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, "QTY");
-    p.drawText(QRect(w - 30, 0, 26, ROW_H), Qt::AlignCenter | Qt::AlignVCenter, "S");
+    p.drawText(QRect(4, 0, 70, ROW_H), Qt::AlignLeft | Qt::AlignVCenter, tr("TIME"));
+    p.drawText(QRect(74, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("PRICE"));
+    p.drawText(QRect(74 + w / 3, 0, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, tr("QTY"));
+    p.drawText(QRect(w - 30, 0, 26, ROW_H), Qt::AlignCenter | Qt::AlignVCenter,
+               tr("S", "column header: trade side (buy/sell)"));
 
     const int max_rows = (h - ROW_H) / ROW_H;
     const int count = std::min(static_cast<int>(snapshot.size()), max_rows);
@@ -138,18 +147,19 @@ void CryptoTimeSales::rebuild_cache() {
         p.drawText(QRect(4, y, 70, ROW_H), Qt::AlignLeft | Qt::AlignVCenter,
                    QDateTime::fromMSecsSinceEpoch(t.timestamp).toString("HH:mm:ss"));
 
-        // Price
+        // Price — magnitude-scaled precision; a fixed 2 dp printed every fill
+        // on a sub-cent pair as "0.00", making the tape useless.
         p.setPen(price_color);
-        p.drawText(QRect(74, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, QString::number(t.price, 'f', 2));
+        p.drawText(QRect(74, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, format_price_plain(t.price));
 
         // Quantity
         p.setPen(kTextSec());
-        p.drawText(QRect(74 + w / 3, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter,
-                   QString::number(t.amount, 'f', 4));
+        p.drawText(QRect(74 + w / 3, y, w / 3, ROW_H), Qt::AlignRight | Qt::AlignVCenter, format_size(t.amount));
 
         // Side indicator
         p.setPen(price_color);
-        p.drawText(QRect(w - 30, y, 26, ROW_H), Qt::AlignCenter | Qt::AlignVCenter, is_buy ? "B" : "S");
+        p.drawText(QRect(w - 30, y, 26, ROW_H), Qt::AlignCenter | Qt::AlignVCenter,
+                   is_buy ? tr("B", "trade side: buy") : tr("S", "trade side: sell"));
     }
 
     if (count == 0) {

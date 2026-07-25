@@ -67,6 +67,10 @@ void MarketPanelEditor::build_ui() {
     title_edit_ = new QLineEdit(config_.title);
     title_edit_->setPlaceholderText(tr("e.g. My Tech Stocks"));
     title_edit_->setStyleSheet(input_ss());
+    connect(title_edit_, &QLineEdit::textChanged, this, [this](const QString&) {
+        if (error_lbl_)
+            error_lbl_->setVisible(false);
+    });
     root->addWidget(title_edit_);
 
     auto make_sep = [&]() {
@@ -145,7 +149,21 @@ void MarketPanelEditor::build_ui() {
                 "QPushButton:hover{border-color:%4;color:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
     connect(btns, &QDialogButtonBox::accepted, this, [this]() {
-        config_.title = title_edit_->text().trimmed();
+        const QString title = title_edit_->text().trimmed();
+        // MarketPanelStore::load() drops any config with an empty title, so a
+        // panel saved without one vanished at the next restart with no warning.
+        // Block it at the source instead.
+        if (title.isEmpty()) {
+            show_validation_error(tr("Enter a panel title."));
+            title_edit_->setFocus();
+            return;
+        }
+        if (ticker_list_->count() == 0) {
+            show_validation_error(tr("Add at least one ticker."));
+            search_edit_->setFocus();
+            return;
+        }
+        config_.title = title;
         config_.symbols.clear();
         for (int i = 0; i < ticker_list_->count(); ++i)
             config_.symbols << ticker_list_->item(i)->text();
@@ -158,9 +176,37 @@ void MarketPanelEditor::build_ui() {
         hide_dropdown();
         reject();
     });
+    // Inline validation message (hidden until something is wrong) — a modal
+    // QMessageBox for "you forgot a title" is heavier than the problem.
+    error_lbl_ = new QLabel;
+    error_lbl_->setWordWrap(true);
+    error_lbl_->setVisible(false);
+    error_lbl_->setStyleSheet(
+        QString("color:%1;background:transparent;font-size:11px;font-weight:bold;").arg(ui::colors::NEGATIVE()));
+    root->addWidget(error_lbl_);
+
     root->addWidget(btns);
 
+    // ── Accessibility + keyboard ──
+    title_edit_->setAccessibleName(tr("Panel title"));
+    search_edit_->setAccessibleName(tr("Search for a ticker to add"));
+    ticker_list_->setAccessibleName(tr("Tickers in this panel"));
+    remove_btn_->setAccessibleName(tr("Remove the selected ticker"));
+    dropdown_->setAccessibleName(tr("Ticker search results"));
+    setTabOrder(title_edit_, ticker_list_);
+    setTabOrder(ticker_list_, remove_btn_);
+    setTabOrder(remove_btn_, search_edit_);
+    setTabOrder(search_edit_, btns);
+    title_edit_->setFocus();
+
     refresh_ticker_list();
+}
+
+void MarketPanelEditor::show_validation_error(const QString& message) {
+    if (!error_lbl_)
+        return;
+    error_lbl_->setText(message);
+    error_lbl_->setVisible(true);
 }
 
 void MarketPanelEditor::reposition_dropdown() {
@@ -277,6 +323,8 @@ void MarketPanelEditor::on_add_symbol(const QString& symbol) {
     if (sym.isEmpty() || config_.symbols.contains(sym))
         return;
     config_.symbols << sym;
+    if (error_lbl_)
+        error_lbl_->setVisible(false);
     refresh_ticker_list();
     search_edit_->clear();
     hide_dropdown();

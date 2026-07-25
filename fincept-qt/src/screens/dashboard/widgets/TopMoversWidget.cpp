@@ -16,6 +16,8 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget(tr("TOP MOVERS"),
 
     gainers_btn_ = new QPushButton(QString(QChar(0x25B2)) + " " + tr("GAINERS"));
     losers_btn_ = new QPushButton(QString(QChar(0x25BC)) + " " + tr("LOSERS"));
+    gainers_btn_->setAccessibleName(tr("Show top gainers"));
+    losers_btn_->setAccessibleName(tr("Show top losers"));
 
     connect(gainers_btn_, &QPushButton::clicked, this, [this]() { show_tab(true); });
     connect(losers_btn_, &QPushButton::clicked, this, [this]() { show_tab(false); });
@@ -40,7 +42,8 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget(tr("TOP MOVERS"),
 }
 
 void TopMoversWidget::apply_styles() {
-    // Apply styles based on current tab state
+    // Theme changed → force the tab-button stylesheets to be re-applied.
+    tab_style_applied_ = false;
     show_tab(showing_gainers_);
 }
 
@@ -79,7 +82,8 @@ void TopMoversWidget::hub_subscribe_all() {
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             set_loading_progress(row_cache_.size(), symbols_.size());
-            rebuild_from_cache();
+            // One sort + redraw per delivery burst, not one per symbol.
+            schedule_render([this]() { rebuild_from_cache(); });
         });
     }
     hub_active_ = true;
@@ -104,20 +108,28 @@ void TopMoversWidget::rebuild_from_cache() {
 }
 
 void TopMoversWidget::show_tab(bool gainers) {
+    // show_tab() runs on every hub delivery (via rebuild_from_cache), but the
+    // two tab-button stylesheets only depend on `gainers` + the theme. Each
+    // setStyleSheet is a full CSS reparse, so re-applying them per tick was
+    // pure waste — only touch them when the state actually changed.
+    const bool tab_style_dirty = (!tab_style_applied_ || showing_gainers_ != gainers);
     showing_gainers_ = gainers;
 
-    auto active_g = QString("QPushButton { background: %1; color: %2; border: none; "
-                            "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE());
-    auto active_l = QString("QPushButton { background: %1; color: %2; border: none; "
-                            "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE());
-    auto inactive = QString("QPushButton { background: %1; color: %2; border: none; "
-                            "font-size: 9px; font-weight: bold; padding: 4px; }")
-                        .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY());
+    if (tab_style_dirty) {
+        tab_style_applied_ = true;
+        auto active_g = QString("QPushButton { background: %1; color: %2; border: none; "
+                                "font-size: 9px; font-weight: bold; padding: 4px; }")
+                            .arg(ui::colors::POSITIVE(), ui::colors::BG_BASE());
+        auto active_l = QString("QPushButton { background: %1; color: %2; border: none; "
+                                "font-size: 9px; font-weight: bold; padding: 4px; }")
+                            .arg(ui::colors::NEGATIVE(), ui::colors::BG_BASE());
+        auto inactive = QString("QPushButton { background: %1; color: %2; border: none; "
+                                "font-size: 9px; font-weight: bold; padding: 4px; }")
+                            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY());
 
-    gainers_btn_->setStyleSheet(gainers ? active_g : inactive);
-    losers_btn_->setStyleSheet(gainers ? inactive : active_l);
+        gainers_btn_->setStyleSheet(gainers ? active_g : inactive);
+        losers_btn_->setStyleSheet(gainers ? inactive : active_l);
+    }
 
     table_->clear_data();
 
@@ -143,11 +155,21 @@ void TopMoversWidget::show_tab(bool gainers) {
 void TopMoversWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("TOP MOVERS"));
-    if (gainers_btn_)
-        gainers_btn_->setText(tr("GAINERS"));
-    if (losers_btn_)
-        losers_btn_->setText(tr("LOSERS"));
-    rebuild_from_cache(); // re-renders table headers in the new language
+    // Keep the ▲ / ▼ glyph prefixes the constructor applied — dropping them
+    // here silently changed the button labels on any language switch.
+    if (gainers_btn_) {
+        gainers_btn_->setText(QString(QChar(0x25B2)) + " " + tr("GAINERS"));
+        gainers_btn_->setAccessibleName(tr("Show top gainers"));
+    }
+    if (losers_btn_) {
+        losers_btn_->setText(QString(QChar(0x25BC)) + " " + tr("LOSERS"));
+        losers_btn_->setAccessibleName(tr("Show top losers"));
+    }
+    // Table headers are set once in the ctor — re-apply them here, which the
+    // old rebuild_from_cache() call never did.
+    if (table_)
+        table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG%")});
+    rebuild_from_cache();
 }
 
 } // namespace fincept::screens::widgets

@@ -3,6 +3,7 @@
 #include "auth/AuthApi.h"
 #include "auth/AuthManager.h"
 #include "core/currency/Currency.h"
+#include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
@@ -10,11 +11,13 @@
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHideEvent>
 #include <QJsonArray>
 #include <QScrollArea>
 #include <QUrl>
 
 #include <algorithm>
+#include <memory>
 
 namespace fincept::screens {
 
@@ -175,11 +178,9 @@ void PricingScreen::showEvent(QShowEvent* event) {
         user_info_label_->hide();
 
         // Fetch fresh user data from API, then render once with accurate data
-        auth.refresh_user_data();
-        auto* conn = new QMetaObject::Connection;
+        auto conn = std::make_shared<QMetaObject::Connection>();
         *conn = connect(&auth, &auth::AuthManager::auth_state_changed, this, [this, conn]() {
             disconnect(*conn);
-            delete conn;
 
             loading_label_->hide();
 
@@ -197,6 +198,10 @@ void PricingScreen::showEvent(QShowEvent* event) {
             fetch_plans();
             update_footer();
         });
+        // Connect first, then fire — a cached/synchronous reply would otherwise
+        // emit auth_state_changed before we were listening and leave the screen
+        // stuck on "Updating plan status...".
+        auth.refresh_user_data();
     } else {
         user_info_label_->hide();
         fetched_ = false;
@@ -529,12 +534,18 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
             awaiting_plan_id_ = plan_id;
             pre_payment_plan_ = auth::AuthManager::instance().session().account_type().toLower();
 
-            // Start polling every 5 seconds to detect plan change
+            // Poll for the plan change. The interval used to be 1000ms despite
+            // the "every 5 seconds" intent, and each tick issued a fresh
+            // refresh_user_data() regardless of whether the previous one had
+            // come back — a request storm against the account endpoint.
+            payment_poll_ticks_ = 0;
+            payment_poll_in_flight_ = false;
             if (!payment_poll_timer_) {
                 payment_poll_timer_ = new QTimer(this);
-                payment_poll_timer_->setInterval(1000);
+                payment_poll_timer_->setInterval(kPaymentPollIntervalMs);
                 connect(payment_poll_timer_, &QTimer::timeout, this, &PricingScreen::poll_payment_status);
             }
+            payment_poll_timer_->setInterval(kPaymentPollIntervalMs);
             payment_poll_timer_->start();
 
             // Also check on focus return for faster detection
@@ -548,17 +559,37 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
         });
 }
 
+void PricingScreen::stop_payment_polling() {
+    awaiting_payment_ = false;
+    payment_poll_in_flight_ = false;
+    payment_poll_ticks_ = 0;
+    if (payment_poll_timer_)
+        payment_poll_timer_->stop();
+    if (focus_connection_) {
+        disconnect(focus_connection_);
+        focus_connection_ = {};
+    }
+}
+
 void PricingScreen::poll_payment_status() {
     if (!awaiting_payment_)
         return;
+    // One request at a time — see payment_poll_in_flight_ in the header.
+    if (payment_poll_in_flight_)
+        return;
+    if (++payment_poll_ticks_ > kMaxPaymentPolls) {
+        LOG_INFO("Pricing", "Payment polling gave up after the maximum window");
+        stop_payment_polling();
+        return;
+    }
 
     auto& auth = auth::AuthManager::instance();
-    auth.refresh_user_data();
+    payment_poll_in_flight_ = true;
 
-    auto* conn = new QMetaObject::Connection;
+    auto conn = std::make_shared<QMetaObject::Connection>();
     *conn = connect(&auth, &auth::AuthManager::auth_state_changed, this, [this, conn]() {
         disconnect(*conn);
-        delete conn;
+        payment_poll_in_flight_ = false;
 
         auto& mgr = auth::AuthManager::instance();
 
@@ -574,11 +605,7 @@ void PricingScreen::poll_payment_status() {
 
         if (new_plan != pre_payment_plan_) {
             // Plan changed — stop polling, re-render, show confetti
-            awaiting_payment_ = false;
-            if (payment_poll_timer_)
-                payment_poll_timer_->stop();
-            if (focus_connection_)
-                disconnect(focus_connection_);
+            stop_payment_polling();
 
             fetched_ = false;
             fetch_plans();
@@ -588,10 +615,25 @@ void PricingScreen::poll_payment_status() {
             confetti_->show_confetti();
         }
     });
+
+    auth.refresh_user_data();
 }
 
 void PricingScreen::on_app_focus_returned() {
     poll_payment_status();
+}
+
+void PricingScreen::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    // P3: the poll timer must not survive the screen leaving the stack. It used
+    // to keep firing a network request every second for the rest of the session
+    // if the user navigated away from an abandoned checkout.
+    if (event && event->spontaneous())
+        return;
+    if (awaiting_payment_) {
+        LOG_INFO("Pricing", "Pricing screen hidden — stopping payment polling");
+        stop_payment_polling();
+    }
 }
 
 // ── Footer ───────────────────────────────────────────────────────────────────

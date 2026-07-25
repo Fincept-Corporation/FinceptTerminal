@@ -17,10 +17,12 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
 #include <QShowEvent>
 #include <QSplitter>
 #include <QTimeZone>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 namespace fincept::screens {
 
@@ -64,13 +66,29 @@ MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
     connect(refresh_timeout_, &QTimer::timeout, this, [this]() {
         if (!refresh_in_progress_)
             return;
-        refresh_in_progress_ = false;
-        pending_refreshes_ = 0;
+        // Tear the cycle's connections down. Without this, a late
+        // refresh_finished() from the timed-out cycle still decremented
+        // pending_refreshes_ — which by then belonged to the NEXT cycle — and
+        // flipped the badge to READY before that cycle's data had arrived.
+        abort_refresh_cycle();
         status_state_ = StatusState::Timeout;
         if (status_label_) {
             status_label_->setText(tr("● TIMEOUT"));
             status_label_->setStyleSheet(lbl_ss(ui::colors::NEGATIVE(), true));
         }
+    });
+
+    // F5 / F9 — the header buttons are literally labelled "[F5] REFRESH" and
+    // "[F9] AUTO", but no shortcut was ever registered for either.
+    auto* f5 = new QShortcut(QKeySequence(Qt::Key_F5), this);
+    f5->setContext(Qt::WindowShortcut);
+    connect(f5, &QShortcut::activated, this, &MarketsScreen::refresh_all);
+
+    auto* f9 = new QShortcut(QKeySequence(Qt::Key_F9), this);
+    f9->setContext(Qt::WindowShortcut);
+    connect(f9, &QShortcut::activated, this, [this]() {
+        if (auto_btn_)
+            auto_btn_->click();
     });
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
@@ -119,6 +137,17 @@ void MarketsScreen::build_splitter_layout() {
         if (!has_panel) {
             auto* placeholder = new QWidget;
             placeholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+            // Empty state: with every panel deleted the screen was three blank
+            // columns and no hint about how to get anything back.
+            if (panels_.isEmpty() && col == 0) {
+                auto* pl = new QVBoxLayout(placeholder);
+                pl->setAlignment(Qt::AlignCenter);
+                auto* hint = new QLabel(tr("No market panels.\nUse [+] PANEL to add one, or RESET for the defaults."));
+                hint->setAlignment(Qt::AlignCenter);
+                hint->setWordWrap(true);
+                hint->setStyleSheet(lbl_ss(ui::colors::TEXT_DIM(), false, 12));
+                pl->addWidget(hint);
+            }
             col_splitters_[col]->addWidget(placeholder);
         }
     }
@@ -184,7 +213,9 @@ void MarketsScreen::save_splitter_state() {
     // Save only horizontal splitter state (column widths).
     // Vertical row heights are always equal-distributed on build.
     const QString state = QString::fromLatin1(h_splitter_->saveState().toBase64());
-    SettingsRepository::instance().set("markets_splitter_state", state);
+    // hideEvent() runs on every tab switch — keep the sqlite write off the UI
+    // thread so leaving the Markets tab never stalls the frame (P1).
+    (void)QtConcurrent::run([state]() { SettingsRepository::instance().set("markets_splitter_state", state); });
 }
 
 void MarketsScreen::restore_splitter_state() {
@@ -461,6 +492,25 @@ QWidget* MarketsScreen::build_header_bar() {
     status_label_->setStyleSheet(lbl_ss(ui::colors::POSITIVE(), true));
     h->addWidget(status_label_);
 
+    // ── Accessibility ──
+    // The terminal shipped with no accessible names anywhere; screen readers
+    // announced every one of these as an unnamed button.
+    refresh_btn_->setAccessibleName(tr("Refresh all market panels"));
+    refresh_btn_->setToolTip(tr("Refresh all market panels (F5)"));
+    auto_btn_->setAccessibleName(tr("Toggle auto-refresh"));
+    auto_btn_->setToolTip(tr("Toggle auto-refresh (F9)"));
+    interval_combo_->setAccessibleName(tr("Auto-refresh interval"));
+    interval_combo_->setToolTip(tr("Auto-refresh interval"));
+    add_panel_btn_->setAccessibleName(tr("Add a market panel"));
+    reset_btn_->setAccessibleName(tr("Reset all panels to defaults"));
+    status_label_->setAccessibleName(tr("Refresh status"));
+    last_upd_label_->setAccessibleName(tr("Last update time"));
+    session_label_->setAccessibleName(tr("US market session"));
+
+    QWidget* chain[] = {refresh_btn_, auto_btn_, interval_combo_, add_panel_btn_, reset_btn_};
+    for (int i = 1; i < 5; ++i)
+        setTabOrder(chain[i - 1], chain[i]);
+
     return w;
 }
 
@@ -582,13 +632,29 @@ void MarketsScreen::hideEvent(QHideEvent* event) {
 // Refresh
 // ---------------------------------------------------------------------------
 
+void MarketsScreen::abort_refresh_cycle() {
+    refresh_in_progress_ = false;
+    pending_refreshes_ = 0;
+    refresh_timeout_->stop();
+    if (refresh_counter_) {
+        // Dropping the context object retires this cycle. The
+        // `counter != refresh_counter_` guard in the slot makes any callback
+        // that lands before deleteLater() runs a no-op (P13: never `delete`
+        // a QObject from inside signal delivery).
+        refresh_counter_->deleteLater();
+        refresh_counter_ = nullptr;
+    }
+}
+
 void MarketsScreen::refresh_all() {
     if (refresh_in_progress_)
         return;
     if (panels_.isEmpty())
         return;
+
+    abort_refresh_cycle(); // clear any leftovers from a previous cycle
     refresh_in_progress_ = true;
-    pending_refreshes_ = panels_.size();
+    pending_refreshes_ = static_cast<int>(panels_.size());
 
     status_state_ = StatusState::Loading;
     if (status_label_) {
@@ -598,17 +664,24 @@ void MarketsScreen::refresh_all() {
 
     refresh_timeout_->start();
 
-    auto* counter = new QObject(this);
+    refresh_counter_ = new QObject(this);
+    QObject* counter = refresh_counter_;
+    // Wire every panel BEFORE kicking any of them: MarketPanel::refresh()
+    // emits refresh_finished() synchronously for a symbol-less panel, and
+    // with connect-after-refresh that signal was missed — the counter then
+    // never drained and the badge sat on LOADING until the 10 s timeout.
     for (auto* p : panels_) {
-        p->refresh();
         connect(
             p, &MarketPanel::refresh_finished, counter,
             [this, counter]() {
+                if (counter != refresh_counter_)
+                    return; // stale cycle
                 if (--pending_refreshes_ > 0)
                     return;
                 refresh_timeout_->stop();
                 refresh_in_progress_ = false;
                 last_refresh_time_ = QDateTime::currentDateTime();
+                refresh_counter_ = nullptr;
                 counter->deleteLater();
                 status_state_ = StatusState::Ready;
                 if (status_label_) {
@@ -623,6 +696,8 @@ void MarketsScreen::refresh_all() {
             },
             Qt::SingleShotConnection);
     }
+    for (auto* p : panels_)
+        p->refresh();
 }
 
 // ---------------------------------------------------------------------------

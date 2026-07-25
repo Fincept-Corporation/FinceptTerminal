@@ -31,12 +31,15 @@ class PaperBlotterPanel : public QWidget {
 
   protected:
     void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
 
   private:
     void build_ui();
     void schedule_refresh(); // coalesce bursts of mark signals into one reload
     void square_off_all();
     void square_off_one(const QString& account_id, const QString& symbol, const QString& product);
+    // Render the header summary; only touches the label stylesheet on a state flip.
+    void update_summary(int open_count, double total_pnl, const QString& glyph);
 
     QTabWidget* tabs_ = nullptr;
     QTableWidget* positions_ = nullptr;
@@ -46,7 +49,18 @@ class PaperBlotterPanel : public QWidget {
     QPushButton* square_all_btn_ = nullptr;
 
     QTimer* refresh_timer_ = nullptr; // throttle live refreshes
+    QTimer* poll_timer_ = nullptr;    // visibility-gated safety-net poll (P3)
     bool refresh_armed_ = false;
+
+    // Cached summary-label state so a live blotter doesn't reparse the label's
+    // CSS on every tick. -1 = never applied, 0 = neutral, 1 = gain, 2 = loss.
+    int summary_state_ = -1;
+
+    // Last row counts per table — resizeColumnsToContents() is O(rows x cols)
+    // text measurement, so only re-run it when the shape actually changed.
+    int last_positions_rows_ = -1;
+    int last_orders_rows_ = -1;
+    int last_trades_rows_ = -1;
 };
 
 } // namespace fincept::screens::common

@@ -16,6 +16,7 @@
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QMessageBox>
+#include <QPointer>
 #include <QScrollArea>
 #include <QTimer>
 
@@ -421,7 +422,22 @@ QWidget* ProfileScreen::build_security() {
         sb->setText(api_key_visible_ ? tr("HIDE") : tr("SHOW"));
         sec_api_key_->setText(api_key_visible_ ? auth::AuthManager::instance().session().api_key
                                                : QString(20, QChar(0x2022)));
+        // Auto re-mask. A revealed key otherwise stays on screen for the rest
+        // of the session — through screen shares, shoulder-surfing, and the
+        // terminal's own auto-lock, which does not repaint this panel.
+        if (api_key_visible_) {
+            QPointer<ProfileScreen> self = this;
+            QTimer::singleShot(30000, sb, [self, sb]() {
+                if (!self || !self->api_key_visible_)
+                    return;
+                self->api_key_visible_ = false;
+                sb->setText(tr("SHOW"));
+                if (self->sec_api_key_)
+                    self->sec_api_key_->setText(QString(20, QChar(0x2022)));
+            });
+        }
     });
+    sb->setAccessibleName(tr("Show or hide the API key"));
     krl->addWidget(sb);
     auto* cb = new QPushButton(tr("COPY"));
     cb->setFixedHeight(22);
@@ -432,12 +448,25 @@ QWidget* ProfileScreen::build_security() {
                  ui::colors::TEXT_PRIMARY()));
     connect(cb, &QPushButton::clicked, this, [cb]() {
         auto key = auth::AuthManager::instance().session().api_key;
-        if (!key.isEmpty()) {
-            QApplication::clipboard()->setText(key);
-            cb->setText(tr("COPIED"));
-            QTimer::singleShot(1500, cb, [cb]() { cb->setText(tr("COPY")); });
-        }
+        if (key.isEmpty())
+            return;
+        QApplication::clipboard()->setText(key);
+        cb->setText(tr("COPIED"));
+        QTimer::singleShot(1500, cb, [cb]() { cb->setText(tr("CLEARS 60s")); });
+        // The API key is a bearer credential. Leaving it on the system
+        // clipboard indefinitely puts it in Windows clipboard history and in
+        // reach of every other process on the machine, so drop it once the
+        // user has had time to paste it. Only clear if the clipboard still
+        // holds exactly this key — never stomp on something the user copied
+        // afterwards.
+        QTimer::singleShot(60000, cb, [cb, key]() {
+            auto* clip = QApplication::clipboard();
+            if (clip && clip->text() == key)
+                clip->clear();
+            cb->setText(tr("COPY"));
+        });
     });
+    cb->setAccessibleName(tr("Copy the API key to the clipboard"));
     krl->addWidget(cb);
     auto* rg = new QPushButton(tr("REGENERATE"));
     rg->setFixedHeight(22);
@@ -796,6 +825,11 @@ void ProfileScreen::show_edit_profile_dialog() {
             data["phone"] = ph->text().trimmed();
         if (!co->text().trimmed().isEmpty())
             data["country"] = co->text().trimmed();
+        if (data.isEmpty()) {
+            QMessageBox::information(dlg_ptr ? static_cast<QWidget*>(dlg_ptr) : nullptr, tr("Edit Profile"),
+                                     tr("Nothing to save — change at least one field."));
+            return;
+        }
         auth::UserApi::instance().update_user_profile(data, [self, dlg_ptr](auth::ApiResponse r) {
             if (!self)
                 return;
@@ -803,7 +837,15 @@ void ProfileScreen::show_edit_profile_dialog() {
                 auth::AuthManager::instance().refresh_user_data();
                 if (dlg_ptr)
                     dlg_ptr->accept();
+                return;
             }
+            // The failure branch was empty: a rejected update (duplicate
+            // username, invalid phone) left the dialog sitting there as if
+            // the click had never happened.
+            LOG_WARN("Profile", "Profile update failed: " + r.error);
+            QMessageBox::warning(dlg_ptr ? static_cast<QWidget*>(dlg_ptr) : static_cast<QWidget*>(self),
+                                 tr("Update Failed"),
+                                 r.error.isEmpty() ? tr("Could not update your profile. Please try again.") : r.error);
         });
     });
     brl->addWidget(sv);
@@ -819,16 +861,35 @@ void ProfileScreen::show_logout_confirm() {
 }
 
 void ProfileScreen::show_regen_confirm() {
-    if (QMessageBox::warning(this, tr("Regenerate API Key"), tr("Your current API key will be invalidated. Continue?"),
-                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes) {
-        auth::UserApi::instance().regenerate_api_key([this](auth::ApiResponse r) {
-            if (r.success) {
-                auth::AuthManager::instance().refresh_user_data();
-                api_key_visible_ = false;
-                sec_api_key_->setText(QString(20, QChar(0x2022)));
-            }
-        });
-    }
+    if (QMessageBox::warning(this, tr("Regenerate API Key"),
+                             tr("Your current API key will be invalidated immediately. Anything using it — scripts, "
+                                "integrations, other machines — stops working until you paste the new key.\n\n"
+                                "Continue?"),
+                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    QPointer<ProfileScreen> self = this;
+    auth::UserApi::instance().regenerate_api_key([self](auth::ApiResponse r) {
+        // Guarded: regeneration is a network round trip and the screen can be
+        // rebuilt (language change) or destroyed while it is in flight.
+        if (!self)
+            return;
+        if (r.success) {
+            auth::AuthManager::instance().refresh_user_data();
+            self->api_key_visible_ = false;
+            if (self->sec_api_key_)
+                self->sec_api_key_->setText(QString(20, QChar(0x2022)));
+            LOG_INFO("Profile", "API key regenerated");
+            return;
+        }
+        // Previously a silent no-op — the user could not tell whether their
+        // key had been rotated or not.
+        LOG_ERROR("Profile", "API key regeneration failed: " + r.error);
+        QMessageBox::warning(self, tr("Regeneration Failed"),
+                             r.error.isEmpty() ? tr("Could not regenerate your API key. Your existing key is "
+                                                    "still valid.")
+                                               : r.error);
+    });
 }
 
 void ProfileScreen::show_delete_account_dialog() {

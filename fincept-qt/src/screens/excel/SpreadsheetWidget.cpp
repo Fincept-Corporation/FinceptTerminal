@@ -7,15 +7,20 @@
 #include <QClipboard>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
+#include <QKeySequence>
 #include <QLabel>
 #include <QMenu>
 #include <QMimeData>
 #include <QRegularExpression>
 #include <QSet>
+#include <QShortcut>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
+#include <functional>
 #include <numeric>
 
 namespace fincept::screens {
@@ -211,9 +216,16 @@ QVariant SpreadsheetItem::evaluate_formula() const {
             return true;
         };
 
-        auto apply_op = [&]() {
+        // Returns false when the expression is malformed (an operator with no
+        // operands, e.g. "=1++2" or "=3*-5"). The old version returned void and
+        // silently did NOT pop the operator, so the `while (precedence(...) >=
+        // ...) apply_op();` loops below spun forever and HUNG the whole UI
+        // thread on any double-operator formula. Signalling failure lets the
+        // caller bail out with #ERR instead.
+        bool div_zero = false;
+        auto apply_op = [&]() -> bool {
             if (ops.isEmpty() || nums.size() < 2)
-                return;
+                return false;
             double b = nums.takeLast();
             double a = nums.takeLast();
             QChar op = ops.takeLast();
@@ -223,8 +235,16 @@ QVariant SpreadsheetItem::evaluate_formula() const {
                 nums.append(a - b);
             else if (op == '*')
                 nums.append(a * b);
-            else if (op == '/')
-                nums.append(b != 0 ? a / b : 0);
+            else if (op == '/') {
+                if (b == 0.0) {
+                    div_zero = true;
+                    return false;
+                }
+                nums.append(a / b);
+            } else {
+                return false; // stray '(' — unbalanced parentheses
+            }
+            return true;
         };
 
         auto precedence = [](QChar op) -> int {
@@ -237,14 +257,19 @@ QVariant SpreadsheetItem::evaluate_formula() const {
 
         for (int i = 0; i < eval_expr.length(); ++i) {
             QChar ch = eval_expr[i];
-            if (ch.isDigit() || ch == '.' || ch == 'e' || ch == 'E' ||
-                (ch == '-' && (i == 0 || eval_expr[i - 1] == '('))) {
+            // A '-' is unary (part of the number) at the start of the expression,
+            // right after '(', or right after another operator — "3*-5", "2^-1".
+            const bool unary_minus =
+                ch == '-' && (i == 0 || eval_expr[i - 1] == '(' || eval_expr[i - 1] == '+' ||
+                              eval_expr[i - 1] == '-' || eval_expr[i - 1] == '*' || eval_expr[i - 1] == '/');
+            if (ch.isDigit() || ch == '.' || ch == 'e' || ch == 'E' || unary_minus) {
                 num_buf += ch;
             } else if (ch == '+' || ch == '-' || ch == '*' || ch == '/') {
                 if (!flush_num())
                     return QVariant("#ERR");
-                while (!ops.isEmpty() && precedence(ops.last()) >= precedence(ch)) {
-                    apply_op();
+                while (!ops.isEmpty() && ops.last() != '(' && precedence(ops.last()) >= precedence(ch)) {
+                    if (!apply_op())
+                        return QVariant(div_zero ? "#DIV/0!" : "#ERR");
                 }
                 ops.append(ch);
             } else if (ch == '(') {
@@ -253,23 +278,30 @@ QVariant SpreadsheetItem::evaluate_formula() const {
                 if (!flush_num())
                     return QVariant("#ERR");
                 while (!ops.isEmpty() && ops.last() != '(') {
-                    apply_op();
+                    if (!apply_op())
+                        return QVariant(div_zero ? "#DIV/0!" : "#ERR");
                 }
-                if (!ops.isEmpty())
-                    ops.removeLast(); // remove '('
+                if (ops.isEmpty())
+                    return QVariant("#ERR"); // ')' with no matching '('
+                ops.removeLast();            // remove '('
             }
         }
         if (!flush_num())
             return QVariant("#ERR");
         while (!ops.isEmpty()) {
-            apply_op();
+            if (!apply_op())
+                return QVariant(div_zero ? "#DIV/0!" : "#ERR");
         }
 
         if (nums.size() == 1) {
             double result = nums.first();
+            if (!std::isfinite(result))
+                return QVariant("#NUM!");
             if (std::floor(result) == result && std::abs(result) < 1e15)
                 return static_cast<qlonglong>(result);
-            return QString::number(result, 'f', 6);
+            // 'g' with 12 significant digits: 2.5 renders as "2.5", not
+            // "2.500000", while still keeping precision on long decimals.
+            return QString::number(result, 'g', 12);
         }
     } catch (...) {
         // fall through
@@ -371,6 +403,44 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
                                    colors::TEXT_SECONDARY())); // %7 header text
 
     root->addWidget(table_, 1);
+
+    table_->setAccessibleName(tr("Spreadsheet grid"));
+    formula_bar_->setAccessibleName(tr("Formula bar"));
+    cell_ref_label_->setAccessibleName(tr("Active cell reference"));
+    setTabOrder(formula_bar_, table_);
+
+    install_shortcuts();
+}
+
+// ── Keyboard shortcuts ───────────────────────────────────────────────────────
+// QTableWidget ships with no clipboard or find handling, so a spreadsheet
+// without these bindings feels broken: Ctrl+C did nothing and Delete did
+// nothing. Scoped to this widget so they don't collide with other screens.
+
+void SpreadsheetWidget::install_shortcuts() {
+    // WidgetWithChildrenShortcut also covers the in-place cell editor, so every
+    // grid-level binding must stand down while a cell is being edited —
+    // otherwise Delete would blank the whole selection mid-keystroke and Ctrl+C
+    // would copy cells instead of the selected characters.
+    auto add = [this](QKeySequence::StandardKey key, std::function<void()> fn) {
+        auto* sc = new QShortcut(QKeySequence(key), this);
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, [this, fn = std::move(fn)]() {
+            // QAbstractItemView::state() is protected, so detect an open in-place
+            // editor via focus instead: the delegate's editor is a child widget of
+            // the table, and it (not the table) holds focus while editing.
+            const QWidget* fw = QApplication::focusWidget();
+            if (fw && fw != table_ && table_->isAncestorOf(fw))
+                return;
+            fn();
+        });
+    };
+    add(QKeySequence::Copy, [this]() { copy_selection(false); });
+    add(QKeySequence::Cut, [this]() { copy_selection(true); });
+    add(QKeySequence::Paste, [this]() { paste_clipboard(); });
+    add(QKeySequence::Delete, [this]() { clear_selection(); });
+    add(QKeySequence::Find, [this]() { find_next(true); });
+    add(QKeySequence::FindNext, [this]() { find_next(false); });
 }
 
 void SpreadsheetWidget::setup_headers(int cols) {
@@ -411,7 +481,11 @@ void SpreadsheetWidget::set_data(const QVector<QVector<QString>>& cells) {
     table_->blockSignals(true);
 
     int rows = cells.size();
-    int cols = rows > 0 ? cells[0].size() : 26;
+    // Take the WIDEST row, not row 0 — a ragged import (CSV with a short header
+    // line) previously truncated every following row to the header's width.
+    int cols = 0;
+    for (const auto& row : cells)
+        cols = std::max<int>(cols, row.size());
 
     // Ensure minimum size
     rows = std::max(rows, 100);
@@ -517,26 +591,12 @@ void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
                            .arg(colors::BORDER_MED(), colors::TEXT_PRIMARY(), colors::TEXT_DIM(), fonts::DATA_FAMILY,
                                 colors::TEXT_DIM()));
 
-    menu.addAction(tr("Cut"), this, [this]() {
-        auto* item = table_->currentItem();
-        if (!item)
-            return;
-        QApplication::clipboard()->setText(item->data(Qt::DisplayRole).toString());
-        set_cell(table_->currentRow(), table_->currentColumn(), "");
-    });
-    menu.addAction(tr("Copy"), this, [this]() {
-        auto* item = table_->currentItem();
-        if (!item)
-            return;
-        QApplication::clipboard()->setText(item->data(Qt::DisplayRole).toString());
-    });
-    menu.addAction(tr("Paste"), this, [this]() {
-        QString text = QApplication::clipboard()->text();
-        if (text.isEmpty())
-            return;
-        set_cell(table_->currentRow(), table_->currentColumn(), text);
-        recalculate();
-    });
+    // Route the menu through the same range-aware clipboard the Ctrl+X/C/V
+    // shortcuts use — the old handlers only ever touched the single active cell
+    // and copied the *displayed* value, so copying a formula lost the formula.
+    menu.addAction(tr("Cut"), this, [this]() { copy_selection(true); });
+    menu.addAction(tr("Copy"), this, [this]() { copy_selection(false); });
+    menu.addAction(tr("Paste"), this, [this]() { paste_clipboard(); });
     menu.addSeparator();
     menu.addAction(tr("Insert Row Above"), this, &SpreadsheetWidget::insert_row_above);
     menu.addAction(tr("Insert Row Below"), this, &SpreadsheetWidget::insert_row_below);
@@ -546,17 +606,9 @@ void SpreadsheetWidget::on_context_menu(const QPoint& pos) {
     menu.addAction(tr("Delete Selected Rows"), this, &SpreadsheetWidget::delete_selected_rows);
     menu.addAction(tr("Delete Selected Columns"), this, &SpreadsheetWidget::delete_selected_cols);
     menu.addSeparator();
-    menu.addAction(tr("Clear Cell"), this, [this]() {
-        auto ranges = table_->selectedRanges();
-        for (const auto& range : ranges) {
-            for (int r = range.topRow(); r <= range.bottomRow(); ++r) {
-                for (int c = range.leftColumn(); c <= range.rightColumn(); ++c) {
-                    set_cell(r, c, "");
-                }
-            }
-        }
-        recalculate();
-    });
+    menu.addAction(tr("Clear Cell"), this, [this]() { clear_selection(); });
+    menu.addSeparator();
+    menu.addAction(tr("Find…"), this, [this]() { find_next(true); });
 
     menu.exec(table_->viewport()->mapToGlobal(pos));
 }
@@ -571,6 +623,7 @@ void SpreadsheetWidget::insert_row_above() {
     for (int c = 0; c < table_->columnCount(); ++c) {
         table_->setItem(row, c, new SpreadsheetItem());
     }
+    emit data_changed(); // structure edits are edits — mark the sheet dirty
 }
 
 void SpreadsheetWidget::insert_row_below() {
@@ -579,6 +632,7 @@ void SpreadsheetWidget::insert_row_below() {
     for (int c = 0; c < table_->columnCount(); ++c) {
         table_->setItem(row, c, new SpreadsheetItem());
     }
+    emit data_changed();
 }
 
 void SpreadsheetWidget::insert_col_left() {
@@ -590,6 +644,7 @@ void SpreadsheetWidget::insert_col_left() {
         table_->setItem(r, col, new SpreadsheetItem());
     }
     setup_headers(table_->columnCount());
+    emit data_changed();
 }
 
 void SpreadsheetWidget::insert_col_right() {
@@ -599,6 +654,7 @@ void SpreadsheetWidget::insert_col_right() {
         table_->setItem(r, col, new SpreadsheetItem());
     }
     setup_headers(table_->columnCount());
+    emit data_changed();
 }
 
 void SpreadsheetWidget::delete_selected_rows() {
@@ -610,10 +666,13 @@ void SpreadsheetWidget::delete_selected_rows() {
                 rows.append(r);
         }
     }
+    if (rows.isEmpty())
+        return;
     std::sort(rows.begin(), rows.end(), std::greater<int>());
     for (int r : rows) {
         table_->removeRow(r);
     }
+    emit data_changed();
 }
 
 void SpreadsheetWidget::delete_selected_cols() {
@@ -625,11 +684,154 @@ void SpreadsheetWidget::delete_selected_cols() {
                 cols.append(c);
         }
     }
+    if (cols.isEmpty())
+        return;
     std::sort(cols.begin(), cols.end(), std::greater<int>());
     for (int c : cols) {
         table_->removeColumn(c);
     }
     setup_headers(table_->columnCount());
+    emit data_changed();
+}
+
+// ── Clipboard (TSV, Excel-compatible) ────────────────────────────────────────
+
+void SpreadsheetWidget::copy_selection(bool cut) {
+    const auto ranges = table_->selectedRanges();
+    if (ranges.isEmpty()) {
+        auto* item = table_->currentItem();
+        if (!item)
+            return;
+        QApplication::clipboard()->setText(cell_text(table_->currentRow(), table_->currentColumn()));
+        if (cut) {
+            set_cell(table_->currentRow(), table_->currentColumn(), QString());
+            recalculate();
+            emit data_changed();
+        }
+        return;
+    }
+
+    // Use the bounding box of the selection so a rectangular copy round-trips
+    // through Excel / Google Sheets unchanged.
+    int top = INT_MAX, left = INT_MAX, bottom = -1, right = -1;
+    for (const auto& r : ranges) {
+        top = std::min(top, r.topRow());
+        left = std::min(left, r.leftColumn());
+        bottom = std::max(bottom, r.bottomRow());
+        right = std::max(right, r.rightColumn());
+    }
+
+    QStringList lines;
+    lines.reserve(bottom - top + 1);
+    for (int r = top; r <= bottom; ++r) {
+        QStringList row;
+        row.reserve(right - left + 1);
+        for (int c = left; c <= right; ++c)
+            row << cell_text(r, c);
+        lines << row.join('\t');
+    }
+    QApplication::clipboard()->setText(lines.join('\n'));
+
+    if (cut) {
+        for (int r = top; r <= bottom; ++r)
+            for (int c = left; c <= right; ++c)
+                set_cell(r, c, QString());
+        recalculate();
+        emit data_changed();
+    }
+}
+
+void SpreadsheetWidget::paste_clipboard() {
+    const QString text = QApplication::clipboard()->text();
+    if (text.isEmpty())
+        return;
+    int row = table_->currentRow();
+    int col = table_->currentColumn();
+    if (row < 0)
+        row = 0;
+    if (col < 0)
+        col = 0;
+
+    // Split on \n but tolerate CRLF from Windows apps; a single value with no
+    // separators still pastes into the one active cell.
+    const QStringList lines = text.split('\n');
+    for (int i = 0; i < lines.size(); ++i) {
+        QString line = lines[i];
+        if (line.endsWith('\r'))
+            line.chop(1);
+        // A trailing newline shouldn't create a phantom blank row.
+        if (line.isEmpty() && i == lines.size() - 1)
+            break;
+        const QStringList cells = line.split('\t');
+        const int target_row = row + i;
+        if (target_row >= table_->rowCount())
+            table_->setRowCount(target_row + 1);
+        for (int j = 0; j < cells.size(); ++j) {
+            const int target_col = col + j;
+            if (target_col >= table_->columnCount()) {
+                table_->setColumnCount(target_col + 1);
+                setup_headers(table_->columnCount());
+            }
+            set_cell(target_row, target_col, cells[j]);
+        }
+    }
+    recalculate();
+    emit data_changed();
+}
+
+void SpreadsheetWidget::clear_selection() {
+    const auto ranges = table_->selectedRanges();
+    if (ranges.isEmpty()) {
+        if (table_->currentRow() < 0)
+            return;
+        set_cell(table_->currentRow(), table_->currentColumn(), QString());
+    } else {
+        for (const auto& range : ranges)
+            for (int r = range.topRow(); r <= range.bottomRow(); ++r)
+                for (int c = range.leftColumn(); c <= range.rightColumn(); ++c)
+                    set_cell(r, c, QString());
+    }
+    recalculate();
+    emit data_changed();
+}
+
+// ── Find ─────────────────────────────────────────────────────────────────────
+
+void SpreadsheetWidget::find_next(bool prompt) {
+    if (prompt || last_find_.isEmpty()) {
+        bool ok = false;
+        const QString term =
+            QInputDialog::getText(this, tr("Find"), tr("Find text:"), QLineEdit::Normal, last_find_, &ok);
+        if (!ok || term.isEmpty())
+            return;
+        last_find_ = term;
+    }
+
+    const int rows = table_->rowCount();
+    const int cols = table_->columnCount();
+    if (rows == 0 || cols == 0)
+        return;
+
+    // Start just after the active cell so repeated F3 walks the sheet, wrapping
+    // once back to the origin.
+    const int start = std::max(0, table_->currentRow()) * cols + std::max(0, table_->currentColumn()) + 1;
+    const int total = rows * cols;
+    for (int n = 0; n < total; ++n) {
+        const int idx = (start + n) % total;
+        const int r = idx / cols;
+        const int c = idx % cols;
+        auto* item = table_->item(r, c);
+        if (!item)
+            continue;
+        // Match on what the user SEES (the evaluated value) as well as the raw
+        // formula text, so searching "1500" finds a cell showing =SUM(A1:A9).
+        if (item->data(Qt::DisplayRole).toString().contains(last_find_, Qt::CaseInsensitive) ||
+            cell_text(r, c).contains(last_find_, Qt::CaseInsensitive)) {
+            table_->setCurrentCell(r, c);
+            table_->scrollToItem(item, QAbstractItemView::PositionAtCenter);
+            return;
+        }
+    }
 }
 
 } // namespace fincept::screens

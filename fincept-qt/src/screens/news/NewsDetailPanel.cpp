@@ -13,12 +13,14 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGridLayout>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
+#include <QtConcurrent>
 
 namespace fincept::screens {
 
@@ -106,10 +108,14 @@ QWidget* NewsDetailPanel::build_content_view() {
     layout->setContentsMargins(12, 10, 12, 10);
     layout->setSpacing(8);
 
-    // Headline
+    // Headline. Feed-supplied text is untrusted: QLabel's default Qt::AutoText
+    // renders anything that looks like markup as rich text, so a publisher (or
+    // an injected item) could restyle/mangle the panel or hide content behind
+    // tags. Every label that carries feed or model text is pinned to PlainText.
     headline_label_ = new QLabel(content);
     headline_label_->setObjectName("newsDetailHeadline");
     headline_label_->setWordWrap(true);
+    headline_label_->setTextFormat(Qt::PlainText);
     layout->addWidget(headline_label_);
 
     // Badge row
@@ -148,10 +154,11 @@ QWidget* NewsDetailPanel::build_content_view() {
     source_layout->addStretch();
     layout->addWidget(source_row);
 
-    // Summary
+    // Summary (untrusted feed text — see the headline note).
     summary_label_ = new QLabel(content);
     summary_label_->setObjectName("newsDetailSummary");
     summary_label_->setWordWrap(true);
+    summary_label_->setTextFormat(Qt::PlainText);
     layout->addWidget(summary_label_);
 
     // Impact
@@ -273,14 +280,23 @@ QWidget* NewsDetailPanel::build_content_view() {
             return;
         translate_btn_->setText(tr("..."));
         translate_btn_->setEnabled(false);
+        // The service callback is not lifetime-bound to this widget, so a raw
+        // [this] capture would dangle if the panel is destroyed while the
+        // translation is in flight (P8). Guard with QPointer, and pin the
+        // article id so a late result can't overwrite a different article.
+        QPointer<NewsDetailPanel> self = this;
+        const QString for_article = current_article_.id;
         services::NewsNlpService::instance().translate_text(
             current_article_.headline + "\n\n" + current_article_.summary, "en",
-            [this](bool ok, QString translated, QString detected_lang) {
-                translate_btn_->setText(tr("TRANSLATE"));
-                translate_btn_->setEnabled(true);
-                if (ok && !translated.isEmpty()) {
-                    summary_label_->setText(tr("[%1 -> EN] %2").arg(detected_lang, translated));
-                }
+            [self, for_article](bool ok, QString translated, QString detected_lang) {
+                if (!self)
+                    return;
+                self->translate_btn_->setText(self->tr("TRANSLATE"));
+                self->translate_btn_->setEnabled(true);
+                if (self->current_article_.id != for_article)
+                    return; // user moved on to another article
+                if (ok && !translated.isEmpty())
+                    self->summary_label_->setText(self->tr("[%1 -> EN] %2").arg(detected_lang, translated));
             });
     });
 
@@ -313,6 +329,7 @@ QWidget* NewsDetailPanel::build_content_view() {
     ai_summary_ = new QLabel(analysis_section_);
     ai_summary_->setObjectName("newsDetailAiSummary");
     ai_summary_->setWordWrap(true);
+    ai_summary_->setTextFormat(Qt::PlainText); // model output is untrusted text
     analysis_layout->addWidget(ai_summary_);
 
     // Metric pills — laid out in a wrapping 2-column grid so a long urgency /
@@ -560,20 +577,38 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     analyze_btn_->setEnabled(true);
     analyze_timeout_->stop();
 
-    // Reflect saved state from DB
+    // Reflect saved state from DB. load_saved() is a SQLite read; running it
+    // synchronously here stuttered the UI on every article click (P1). Run it
+    // on a worker and post the answer back, guarded so a late result can't
+    // stamp the wrong article's bookmark state (P8).
+    bookmark_btn_->setChecked(false);
+    bookmark_btn_->setText(tr("BOOKMARK"));
     {
-        auto r = fincept::NewsArticleRepository::instance().load_saved();
-        bool is_saved = false;
-        if (r.is_ok()) {
-            for (const auto& a : r.value()) {
-                if (a.id == article.id) {
-                    is_saved = true;
-                    break;
+        QPointer<NewsDetailPanel> self = this;
+        const QString article_id = article.id;
+        (void)QtConcurrent::run([self, article_id]() {
+            auto r = fincept::NewsArticleRepository::instance().load_saved();
+            bool is_saved = false;
+            if (r.is_ok()) {
+                for (const auto& a : r.value()) {
+                    if (a.id == article_id) {
+                        is_saved = true;
+                        break;
+                    }
                 }
             }
-        }
-        bookmark_btn_->setChecked(is_saved);
-        bookmark_btn_->setText(is_saved ? tr("BOOKMARKED") : tr("BOOKMARK"));
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, article_id, is_saved]() {
+                    if (!self || self->current_article_.id != article_id)
+                        return;
+                    self->bookmark_btn_->setChecked(is_saved);
+                    self->bookmark_btn_->setText(is_saved ? self->tr("BOOKMARKED") : self->tr("BOOKMARK"));
+                },
+                Qt::QueuedConnection);
+        });
     }
 
     // Clear related and monitors
@@ -582,7 +617,7 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
 }
 
 void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
-    analyze_btn_->setText("ANALYZE");
+    analyze_btn_->setText(tr("ANALYZE"));
     analyze_btn_->setEnabled(true);
     analyze_timeout_->stop();
 
@@ -635,6 +670,7 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
         auto* lbl = new QLabel(QString("•  %1").arg(point), analysis_section_);
         lbl->setObjectName("newsDetailKeyPoint");
         lbl->setWordWrap(true);
+        lbl->setTextFormat(Qt::PlainText);
         key_points_layout_->addWidget(lbl);
     }
     // Hide the heading + container entirely when there's nothing to show, so
@@ -676,6 +712,7 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
             auto* det = new QLabel(sig.details, row);
             det->setObjectName("newsDetailRiskDetail");
             det->setWordWrap(true);
+            det->setTextFormat(Qt::PlainText);
             rl->addWidget(det);
         }
         risk_layout_->addWidget(row);
@@ -735,6 +772,7 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
         auto* lbl = new QLabel(text, analysis_section_);
         lbl->setObjectName("newsDetailEntity");
         lbl->setWordWrap(true);
+        lbl->setTextFormat(Qt::PlainText);
         ai_entities_layout_->addWidget(lbl);
     };
     for (const auto& o : analysis.organizations)
@@ -794,8 +832,11 @@ void NewsDetailPanel::show_related(const QVector<services::NewsArticle>& related
         auto* btn = new QPushButton(related_section_);
         btn->setObjectName("newsRelatedBtn");
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setText(QString("%1 - %2").arg(article.source, article.headline.left(55)));
+        // Strip '&' so a headline containing one doesn't render as an
+        // accidental mnemonic underline (and swallow the character).
+        btn->setText(QString("%1 - %2").arg(article.source, article.headline.left(55)).replace('&', "&&"));
         btn->setToolTip(article.headline);
+        btn->setAccessibleName(tr("Related article: %1").arg(article.headline.left(80)));
 
         connect(btn, &QPushButton::clicked, this, [this, article]() { emit related_article_clicked(article); });
 

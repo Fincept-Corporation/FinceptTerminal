@@ -576,6 +576,14 @@ void AIQuantLabService::run_deep_agent(const QJsonObject& params) {
     payload["agent_type"] = params.contains("agent_type") ? params["agent_type"] : QJsonValue("general");
     if (params.contains("thread_id"))
         payload["thread_id"] = params["thread_id"];
+    // The LLM credentials block MUST be forwarded. deepagents/cli.py reads
+    // `params.get("config", {})` in execute_task and hands it to create_model();
+    // dropping it here meant the agent always ran with an empty config even
+    // though the Deep Analysis panel refuses to start until the user picks an
+    // LLM profile. Symptom was a provider/credential error that looked like a
+    // Python fault rather than a plumbing bug.
+    if (params.contains("config"))
+        payload["config"] = params["config"];
 
     auto json = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     run_python("agents/deepagents/cli.py", {"execute_task", json}, "deep_agent", "execute_task");

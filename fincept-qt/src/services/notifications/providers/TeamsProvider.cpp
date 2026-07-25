@@ -1,4 +1,4 @@
-#include "services/notifications/providers/TeamsProvider.h"
+﻿#include "services/notifications/providers/TeamsProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -8,11 +8,11 @@
 namespace fincept::notifications {
 
 void TeamsProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    webhook_url_ = get_str(r, cat + ".webhook_url");
+    webhook_url_ = get_secret(r, cat + ".webhook_url");
 }
 
 void TeamsProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".webhook_url", webhook_url_, cat);
+    set_secret(r, cat + ".webhook_url", webhook_url_, cat);
 }
 
 void TeamsProvider::send(const NotificationRequest& req, std::function<void(bool, QString)> cb) {

@@ -20,6 +20,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSet>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QToolButton>
@@ -78,10 +79,91 @@ QColor order_status_color(const QString& status) {
     return {fincept::ui::colors::AMBER()}; // pending / partial / open / accepted
 }
 
+// Terminal (dead) order statuses across the broker adapters. Everything else is
+// still working at the exchange and MUST expose EDIT + CANCEL.
+//
+// The previous check was an exact, case-sensitive whitelist of Alpaca's four
+// statuses ("new"/"accepted"/"partially_filled"/"pending_new"), so a live OPEN
+// order on Zerodha ("OPEN"/"TRIGGER PENDING"), Fyers ("open"/"transit"),
+// Dhan ("pending"/"transit") or Upstox ("open") showed NO cancel button at all —
+// the trader could not pull a resting order from the blotter. Blacklisting the
+// terminal states instead is correct for every broker, including future ones.
+bool order_is_terminal(const QString& status) {
+    static const QSet<QString> kTerminal = {
+        QStringLiteral("complete"),   QStringLiteral("completed"), QStringLiteral("filled"),
+        QStringLiteral("traded"),     QStringLiteral("executed"),  QStringLiteral("cancelled"),
+        QStringLiteral("canceled"),   QStringLiteral("rejected"),  QStringLiteral("expired"),
+        QStringLiteral("closed"),     QStringLiteral("replaced"),  QStringLiteral("done_for_day"),
+        QStringLiteral("stopped"),    QStringLiteral("suspended"),
+    };
+    return kTerminal.contains(status.trimmed().toLower());
+}
+
+// Per-row action buttons used to carry an inline setStyleSheet each — a full CSS
+// reparse per button per blotter refresh, on a table that ticks constantly. The
+// variants now live in ONE panel-level sheet keyed off the `act` property, so a
+// row rebuild only sets a dynamic property (CLAUDE.md P7).
+QString table_btn_styles() {
+    namespace c = fincept::ui::colors;
+    return QString("QPushButton#eqTableBtn{border:1px solid %1;font-size:10px;padding:0 6px;border-radius:2px;}"
+                   "QPushButton#eqTableBtn[act=\"sell\"]{background:rgba(239,68,68,0.15);color:%2;}"
+                   "QPushButton#eqTableBtn[act=\"sell\"]:hover{background:rgba(239,68,68,0.30);}"
+                   "QPushButton#eqTableBtn[act=\"cover\"]{background:rgba(22,163,74,0.15);color:%3;}"
+                   "QPushButton#eqTableBtn[act=\"cover\"]:hover{background:rgba(22,163,74,0.30);}"
+                   "QPushButton#eqTableBtn[act=\"cnc\"]{background:rgba(37,99,235,0.15);color:%4;}"
+                   "QPushButton#eqTableBtn[act=\"cnc\"]:hover{background:rgba(37,99,235,0.30);}"
+                   "QPushButton#eqTableBtn[act=\"edit\"]{background:rgba(217,119,6,0.15);color:%5;border-color:%6;}"
+                   "QPushButton#eqTableBtn[act=\"edit\"]:hover{background:rgba(217,119,6,0.30);}"
+                   "QPushButton#eqTableBtn[act=\"cancel\"]{background:rgba(220,38,38,0.12);color:%2;border-color:%7;}"
+                   "QPushButton#eqTableBtn[act=\"cancel\"]:hover{background:rgba(220,38,38,0.28);}")
+        .arg(c::BORDER_MED(), c::NEGATIVE(), c::POSITIVE(), c::INFO(), c::AMBER(), c::AMBER_DIM(), c::NEGATIVE_DIM());
+}
+
+// Selection + scroll survive a rebuild. setRowCount()/setItem() throw away the
+// current row, so a trader mid-click on a position lost it on every refresh.
+struct TableViewState {
+    QString key;
+    int scroll = 0;
+};
+
+TableViewState capture_view(QTableWidget* t, int key_col) {
+    TableViewState s;
+    if (!t)
+        return s;
+    if (auto* bar = t->verticalScrollBar())
+        s.scroll = bar->value();
+    const int row = t->currentRow();
+    if (row >= 0)
+        if (auto* it = t->item(row, key_col))
+            s.key = it->text();
+    return s;
+}
+
+void restore_view(QTableWidget* t, int key_col, const TableViewState& s) {
+    if (!t)
+        return;
+    if (!s.key.isEmpty()) {
+        for (int r = 0; r < t->rowCount(); ++r) {
+            auto* it = t->item(r, key_col);
+            if (it && it->text() == s.key) {
+                t->selectRow(r); // selectRow() does not emit cellClicked
+                break;
+            }
+        }
+    }
+    if (auto* bar = t->verticalScrollBar())
+        bar->setValue(qMin(s.scroll, bar->maximum()));
+}
+
 } // namespace
 
 EquityBottomPanel::EquityBottomPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("eqBottomPanel");
+    // One sheet for every per-row action button (see table_btn_styles). Re-applied
+    // on theme change so runtime theme switches still recolour the buttons.
+    setStyleSheet(table_btn_styles());
+    connect(&fincept::ui::ThemeManager::instance(), &fincept::ui::ThemeManager::theme_changed, this,
+            [this]() { setStyleSheet(table_btn_styles()); });
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -184,9 +266,11 @@ void EquityBottomPanel::retranslateUi() {
             tabs_->setTabText(calendar_tab_idx_, tr("CALENDAR"));
     }
 
-    // Table headers
+    // Table headers. Column 2 shows the open time in paper mode and the exchange
+    // in live mode — the data setters own it, so mirror the current mode here.
     if (positions_table_)
-        positions_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Product"), tr("Opened"), tr("Side"), tr("Qty"),
+        positions_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Product"),
+                                                     is_paper_ ? tr("Opened") : tr("Exchange"), tr("Side"), tr("Qty"),
                                                      tr("Avg Price"), tr("LTP"), tr("P&L"), tr("P&L %"), tr("Action")});
     if (holdings_table_)
         holdings_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("Qty"), tr("Avg Price"), tr("LTP"), tr("Invested"),
@@ -805,6 +889,12 @@ void EquityBottomPanel::update_positions_summary() {
 
 void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& positions) {
     last_paper_positions_ = positions; // keep row-aligned for live-quote patching
+    const auto view = capture_view(positions_table_, 0);
+    positions_table_->setUpdatesEnabled(false);
+    // Column 2 holds the open timestamp in paper mode (see the live setter, which
+    // puts the exchange there) — keep the header honest about what it shows.
+    if (auto* h2 = positions_table_->horizontalHeaderItem(2); !h2 || h2->text() != tr("Opened"))
+        positions_table_->setHorizontalHeaderItem(2, new QTableWidgetItem(tr("Opened")));
     const QColor pos_color(fincept::ui::colors::POSITIVE());
     const QColor neg_color(fincept::ui::colors::NEGATIVE());
     positions_table_->setRowCount(positions.size());
@@ -843,10 +933,14 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
                                         make_positions_action_cell(p.symbol, p.product, p.quantity, p.side,
                                                                    trading::product_is_intraday(p.product), p.id));
     }
+    positions_table_->setUpdatesEnabled(true);
+    restore_view(positions_table_, 0, view);
     update_positions_summary();
 }
 
 void EquityBottomPanel::set_paper_orders(const QVector<trading::PtOrder>& orders) {
+    const auto view = capture_view(orders_table_, 0);
+    orders_table_->setUpdatesEnabled(false);
     orders_table_->setRowCount(orders.size());
     for (int i = 0; i < orders.size(); ++i) {
         const auto& o = orders[i];
@@ -868,6 +962,8 @@ void EquityBottomPanel::set_paper_orders(const QVector<trading::PtOrder>& orders
         orders_table_->setCellWidget(i, 9, nullptr);
         ensure_item(orders_table_, i, 9)->setText("");
     }
+    orders_table_->setUpdatesEnabled(true);
+    restore_view(orders_table_, 0, view);
 }
 
 void EquityBottomPanel::set_funds_view(const EquityFundsView& v) {
@@ -962,15 +1058,15 @@ QWidget* EquityBottomPanel::make_positions_action_cell(const QString& symbol, co
                              side.compare(QStringLiteral("sell"), Qt::CaseInsensitive) == 0;
     auto* sell = new QPushButton(exit_is_buy ? tr("BUY") : tr("SELL"));
     sell->setObjectName("eqTableBtn");
+    // Direction is colour-coded (green = buy/cover, red = sell) so a wrong-way
+    // click on an exit button is visually obvious before it is pressed.
+    sell->setProperty("act", exit_is_buy ? "cover" : "sell");
     sell->setFixedHeight(18);
     sell->setCursor(Qt::PointingHandCursor);
+    sell->setAccessibleName(exit_is_buy ? tr("Buy to cover %1").arg(symbol) : tr("Sell to exit %1").arg(symbol));
     sell->setToolTip(exit_is_buy
                          ? tr("Buy / cover %1 — opens an order ticket pre-filled with the held quantity").arg(symbol)
                          : tr("Sell / exit %1 — opens an order ticket pre-filled with the held quantity").arg(symbol));
-    sell->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(239,68,68,0.15);color:%1;"
-                                "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
-                                "QPushButton#eqTableBtn:hover{background:rgba(239,68,68,0.30);}")
-                            .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::BORDER_MED()));
     const double held = qAbs(qty);
     const QString prod = product.isEmpty() ? QStringLiteral("MIS") : product;
     connect(sell, &QPushButton::clicked, this, [this, symbol, prod, held, exit_is_buy]() {
@@ -985,13 +1081,11 @@ QWidget* EquityBottomPanel::make_positions_action_cell(const QString& symbol, co
     if (show_convert && !paper_pid.isEmpty()) {
         auto* cnc = new QPushButton(tr("→ CNC"));
         cnc->setObjectName("eqTableBtn");
+        cnc->setProperty("act", "cnc");
         cnc->setFixedHeight(18);
         cnc->setCursor(Qt::PointingHandCursor);
+        cnc->setAccessibleName(tr("Convert %1 to delivery").arg(symbol));
         cnc->setToolTip(tr("Convert to CNC delivery (carry overnight, locks full cash)"));
-        cnc->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(37,99,235,0.15);color:%1;"
-                                   "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
-                                   "QPushButton#eqTableBtn:hover{background:rgba(37,99,235,0.30);}")
-                               .arg(fincept::ui::colors::INFO(), fincept::ui::colors::BORDER_MED()));
         connect(cnc, &QPushButton::clicked, this, [this, paper_pid, symbol]() {
             emit convert_position_requested(paper_pid, symbol, QStringLiteral("CNC"));
         });
@@ -1003,6 +1097,12 @@ QWidget* EquityBottomPanel::make_positions_action_cell(const QString& symbol, co
 
 void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& positions) {
     last_positions_ = positions; // keep row-aligned for live-quote patching
+    const auto view = capture_view(positions_table_, 0);
+    positions_table_->setUpdatesEnabled(false);
+    // Live rows put the EXCHANGE in column 2 (brokers don't return an open time),
+    // so the shared "Opened" header was simply wrong in live mode.
+    if (auto* h2 = positions_table_->horizontalHeaderItem(2); !h2 || h2->text() != tr("Exchange"))
+        positions_table_->setHorizontalHeaderItem(2, new QTableWidgetItem(tr("Exchange")));
     const QColor pos_color(fincept::ui::colors::POSITIVE());
     const QColor neg_color(fincept::ui::colors::NEGATIVE());
     positions_table_->setRowCount(positions.size());
@@ -1028,6 +1128,8 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
         positions_table_->setCellWidget(
             i, 9, make_positions_action_cell(p.symbol, p.product_type, p.quantity, p.side, false, QString()));
     }
+    positions_table_->setUpdatesEnabled(true);
+    restore_view(positions_table_, 0, view);
     update_positions_summary();
 }
 
@@ -1219,6 +1321,8 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
         holdings_square_off_btn_->setEnabled(!holdings.isEmpty());
 
     // Disable sorting during population so setItem assignments stay at intended rows.
+    const auto view = capture_view(holdings_table_, 0);
+    holdings_table_->setUpdatesEnabled(false);
     const bool was_sorting = holdings_table_->isSortingEnabled();
     holdings_table_->setSortingEnabled(false);
     holdings_table_->setRowCount(holdings.size());
@@ -1274,13 +1378,11 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
         action_lay->setSpacing(4);
         auto* sell_btn = new QPushButton(tr("SELL"));
         sell_btn->setObjectName("eqTableBtn");
+        sell_btn->setProperty("act", "sell");
         sell_btn->setFixedHeight(18);
         sell_btn->setCursor(Qt::PointingHandCursor);
+        sell_btn->setAccessibleName(tr("Square off holding %1").arg(h.symbol));
         sell_btn->setToolTip(tr("Square off %1 — sells the full holding at market").arg(h.symbol));
-        sell_btn->setStyleSheet(QString("QPushButton#eqTableBtn{background:rgba(239,68,68,0.15);color:%1;"
-                                        "border:1px solid %2;font-size:10px;padding:0 6px;border-radius:2px;}"
-                                        "QPushButton#eqTableBtn:hover{background:rgba(239,68,68,0.30);}")
-                                    .arg(fincept::ui::colors::NEGATIVE(), fincept::ui::colors::BORDER_MED()));
         const QString row_sym = h.symbol;
         const QString row_exch = h.exchange;
         connect(sell_btn, &QPushButton::clicked, this, [this, row_sym, row_exch]() {
@@ -1327,9 +1429,13 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
     }
 
     holdings_table_->setSortingEnabled(was_sorting);
+    holdings_table_->setUpdatesEnabled(true);
+    restore_view(holdings_table_, 0, view);
 }
 
 void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orders) {
+    const auto view = capture_view(orders_table_, 0);
+    orders_table_->setUpdatesEnabled(false);
     orders_table_->setRowCount(orders.size());
     for (int i = 0; i < orders.size(); ++i) {
         const auto& o = orders[i];
@@ -1339,24 +1445,21 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
         ensure_item(orders_table_, i, 3)->setText(o.side.toUpper());
         ensure_item(orders_table_, i, 4)->setText(o.order_type.toUpper());
         ensure_item(orders_table_, i, 5)->setText(QString::number(o.quantity, 'f', 0));
-        ensure_item(orders_table_, i, 6)->setText(QString::number(o.price, 'f', 2));
+        // A market order has no price; "0.00" reads as a real (absurd) limit.
+        ensure_item(orders_table_, i, 6)->setText(o.price > 0.0 ? QString::number(o.price, 'f', 2) : tr("MKT"));
         auto* status_item = ensure_item(orders_table_, i, 7);
         status_item->setText(o.status.toUpper());
         status_item->setForeground(order_status_color(o.status));
         ensure_item(orders_table_, i, 8)->setText(o.timestamp);
 
-        // Action column — MODIFY button for open/pending orders
-        const bool modifiable = (o.status == "new" || o.status == "partially_filled" || o.status == "accepted" ||
-                                 o.status == "pending_new");
+        // Action column — EDIT + CANCEL for every order that is still working.
+        const bool modifiable = !order_is_terminal(o.status);
         if (modifiable) {
             auto* btn = new QPushButton(tr("EDIT"));
             btn->setObjectName("eqTableBtn");
+            btn->setProperty("act", "edit");
             btn->setFixedHeight(18);
-            btn->setStyleSheet(QString("QPushButton#eqTableBtn { background: rgba(217,119,6,0.15); "
-                                       "color: %1; border: 1px solid %2; font-size: 10px; "
-                                       "padding: 0 6px; border-radius: 2px; }")
-                                   .arg(fincept::ui::colors::AMBER())
-                                   .arg(fincept::ui::colors::AMBER_DIM()));
+            btn->setAccessibleName(tr("Modify order %1").arg(o.order_id.left(12)));
             btn->setCursor(Qt::PointingHandCursor);
             const QString oid = o.order_id;
             const double qty = o.quantity;
@@ -1398,10 +1501,21 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
                                               .arg(fincept::ui::colors::NEGATIVE_DIM()));
 
                 connect(ok_btn, &QPushButton::clicked, dlg, [dlg, this, oid, qty_edit, prc_edit]() {
-                    const double new_qty = qty_edit->text().toDouble();
-                    const double new_prc = prc_edit->text().toDouble();
-                    if (new_qty > 0)
-                        emit modify_order_requested(oid, new_qty, new_prc);
+                    // A garbage quantity used to close the dialog with no order
+                    // change and no message — the trader believed the modify had
+                    // gone through. Refuse and say so instead.
+                    bool qty_ok = false, prc_ok = false;
+                    const double new_qty = qty_edit->text().trimmed().toDouble(&qty_ok);
+                    const double new_prc = prc_edit->text().trimmed().toDouble(&prc_ok);
+                    if (!qty_ok || new_qty <= 0.0) {
+                        QMessageBox::warning(dlg, tr("Modify Order"), tr("Enter a valid quantity."));
+                        return;
+                    }
+                    if (!prc_ok || new_prc < 0.0) {
+                        QMessageBox::warning(dlg, tr("Modify Order"), tr("Enter a valid price."));
+                        return;
+                    }
+                    emit modify_order_requested(oid, new_qty, new_prc);
                     dlg->accept();
                 });
                 connect(cancel_btn, &QPushButton::clicked, dlg, &QDialog::reject);
@@ -1420,12 +1534,9 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
             // cancels immediately with no downstream prompt and equity orders are live.
             auto* cancel_row_btn = new QPushButton(tr("CANCEL"));
             cancel_row_btn->setObjectName("eqTableBtn");
+            cancel_row_btn->setProperty("act", "cancel");
             cancel_row_btn->setFixedHeight(18);
-            cancel_row_btn->setStyleSheet(QString("QPushButton#eqTableBtn { background: rgba(220,38,38,0.12); "
-                                                  "color: %1; border: 1px solid %2; font-size: 10px; "
-                                                  "padding: 0 6px; border-radius: 2px; }")
-                                              .arg(fincept::ui::colors::NEGATIVE())
-                                              .arg(fincept::ui::colors::NEGATIVE_DIM()));
+            cancel_row_btn->setAccessibleName(tr("Cancel order %1").arg(o.order_id.left(12)));
             cancel_row_btn->setCursor(Qt::PointingHandCursor);
             const QString cancel_oid = o.order_id;
             connect(cancel_row_btn, &QPushButton::clicked, this, [this, cancel_oid]() {
@@ -1446,6 +1557,8 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
             orders_table_->setCellWidget(i, 9, nullptr);
         }
     }
+    orders_table_->setUpdatesEnabled(true);
+    restore_view(orders_table_, 0, view);
 }
 
 // ── Auctions Tab ────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 #include "screens/equity_trading/BasketOrdersDialog.h"
 
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/UnifiedTrading.h"
 #include "ui/theme/Theme.h"
@@ -347,13 +348,38 @@ void BasketOrdersDialog::on_execute() {
     if (ret != QMessageBox::Yes)
         return;
 
-    execute_btn_->setEnabled(false);
-    status_label_->setText(tr("Executing on %1 account(s)…").arg(selected.size()));
-    status_label_->setStyleSheet("color:#d97706;font-size:11px;");
-
     trading::BasketOrderRequest req;
     req.orders = b->legs;
     req.strategy_name = b->name;
+
+    // Semi-Auto gate. Every other order path in the terminal (order ticket,
+    // BroadcastOrderDialog, options strategies) consults ActionCenter before
+    // sending; this one did not, so a basket bypassed the approval queue on an
+    // account explicitly configured to require approval.
+    QStringList immediate;
+    int queued = 0;
+    for (const QString& acct_id : selected) {
+        if (trading::ActionCenter::instance().should_queue(acct_id, "basketorder")) {
+            const QString pid = trading::ActionCenter::instance().queue_order(
+                acct_id, "basketorder", trading::ActionCenter::serialize_basket_order(req));
+            if (!pid.isEmpty())
+                ++queued;
+        } else {
+            immediate.append(acct_id);
+        }
+    }
+    if (immediate.isEmpty()) {
+        status_label_->setText(tr("%1 basket(s) queued for approval").arg(queued));
+        status_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::AMBER()));
+        return;
+    }
+
+    execute_btn_->setEnabled(false);
+    status_label_->setText(queued > 0 ? tr("Executing on %1 account(s); %2 queued for approval…")
+                                            .arg(immediate.size())
+                                            .arg(queued)
+                                      : tr("Executing on %1 account(s)…").arg(immediate.size()));
+    status_label_->setStyleSheet("color:#d97706;font-size:11px;");
 
     // place_basket_orders runs on its own background thread per call and
     // invokes the callback on this (caller's) thread. Aggregate across accounts.
@@ -364,13 +390,13 @@ void BasketOrdersDialog::on_execute() {
         QStringList errors;
     };
     auto tally = std::make_shared<Tally>();
-    tally->pending = int(selected.size());
+    tally->pending = int(immediate.size());
 
     QPointer<BasketOrdersDialog> self(this);
-    for (const QString& acct_id : selected) {
+    for (const QString& acct_id : immediate) {
         const QString label = trading::AccountManager::instance().get_account(acct_id).display_name;
         trading::UnifiedTrading::instance().place_basket_orders(
-            acct_id, req, [self, tally, label](const trading::BasketOrderResult& r) {
+            acct_id, req, [self, tally, label, queued](const trading::BasketOrderResult& r) {
                 if (!self)
                     return;
                 tally->ok += r.successful;
@@ -380,6 +406,8 @@ void BasketOrdersDialog::on_execute() {
                         tally->errors << QString("%1/%2: %3").arg(label, or_.symbol, or_.error);
                 if (--tally->pending == 0) {
                     QString msg = tr("✓ %1 leg(s) placed").arg(tally->ok);
+                    if (queued > 0)
+                        msg += tr(", %1 basket(s) queued for approval").arg(queued);
                     if (tally->fail > 0)
                         msg += tr(" — ✗ %1 failed: %2").arg(tally->fail).arg(tally->errors.join("; "));
                     self->status_label_->setText(msg);

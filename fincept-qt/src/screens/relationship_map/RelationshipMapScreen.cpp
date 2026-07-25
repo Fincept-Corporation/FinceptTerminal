@@ -109,6 +109,8 @@ void RelationshipMapScreen::build_ui() {
     // Search with autocomplete
     search_input_ = new QLineEdit;
     search_input_->setPlaceholderText(tr("Search assets (AAPL, Tesla, RELIANCE...)"));
+    search_input_->setAccessibleName(tr("Search assets"));
+    search_input_->setClearButtonEnabled(true);
     search_input_->setFixedWidth(320);
     search_input_->setStyleSheet(
         QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
@@ -123,15 +125,29 @@ void RelationshipMapScreen::build_ui() {
 
     // Autocomplete dropdown — child widget, no window flags that steal focus
     search_dropdown_ = new QListWidget(this);
+    search_dropdown_->setAccessibleName(tr("Asset suggestions"));
     search_dropdown_->setFocusPolicy(Qt::NoFocus);
     search_dropdown_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     search_dropdown_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    // One stylesheet for the dropdown AND its per-row item widgets. Item
+    // widgets are descendants of the list, so object-name rules here replace
+    // four setStyleSheet() calls per row (i.e. ~40 full CSS reparses on every
+    // debounced keystroke of the search box).
     search_dropdown_->setStyleSheet(
         QString("QListWidget { background: %1; border: 1px solid %2; font-size: 11px; %3 }"
                 "QListWidget::item { padding: 4px 8px; border-bottom: 1px solid %4; }"
                 "QListWidget::item:selected { background: %5; }"
-                "QListWidget::item:hover { background: %5; }")
-            .arg(colors::BG_SURFACE(), colors::AMBER_DIM(), MF(), colors::BORDER_DIM(), colors::BG_RAISED()));
+                "QListWidget::item:hover { background: %5; }"
+                "QWidget#relmapRow { background: transparent; }"
+                "QLabel { background: transparent; %3 }"
+                "QLabel#relmapSym { color: %6; font-size: 12px; font-weight: 700; }"
+                "QLabel#relmapName { color: %7; font-size: 11px; }"
+                "QLabel#relmapExch { color: %8; font-size: 9px; }"
+                "QLabel#relmapType { color: %6; font-size: 8px; font-weight: 700;"
+                "  background: %5; padding: 1px 4px; border-radius: 2px; }"
+                "QLabel#relmapEmpty { color: %8; font-size: 11px; }")
+            .arg(colors::BG_SURFACE(), colors::AMBER_DIM(), MF(), colors::BORDER_DIM(), colors::BG_RAISED(),
+                 colors::AMBER(), colors::TEXT_SECONDARY(), colors::TEXT_TERTIARY()));
     search_dropdown_->setFixedWidth(420);
     search_dropdown_->setMaximumHeight(320);
     search_dropdown_->hide();
@@ -357,7 +373,9 @@ QWidget* RelationshipMapScreen::build_filter_panel() {
 
     make_check(tr("Peers"), filters_.show_peers, NodeCategory::Peer);
     make_check(tr("Institutional"), filters_.show_institutional, NodeCategory::Institutional);
-    make_check(tr("Mutual Funds"), filters_.show_institutional, NodeCategory::MutualFund);
+    // Was bound to show_institutional — the same flag as the row above, so the
+    // two checkboxes fought each other and neither reflected the graph.
+    make_check(tr("Mutual Funds"), filters_.show_mutual_funds, NodeCategory::MutualFund);
     make_check(tr("Insiders"), filters_.show_insiders, NodeCategory::Insider);
     make_check(tr("Officers"), filters_.show_officers, NodeCategory::Officer);
     make_check(tr("Analysts"), filters_.show_analysts, NodeCategory::Analyst);
@@ -563,12 +581,11 @@ void RelationshipMapScreen::on_asset_results(const QList<fincept::services::Mark
         auto* item = new QListWidgetItem(search_dropdown_);
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName(QStringLiteral("relmapRow"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
         auto* lbl = new QLabel(tr("No results found"));
-        lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;%2;background:transparent;").arg(ui::colors::TEXT_TERTIARY.get(), MF()));
+        lbl->setObjectName(QStringLiteral("relmapEmpty"));
         rl->addWidget(lbl);
         item->setSizeHint(QSize(0, 28));
         search_dropdown_->setItemWidget(item, row);
@@ -591,38 +608,40 @@ void RelationshipMapScreen::on_asset_results(const QList<fincept::services::Mark
         auto* item = new QListWidgetItem(search_dropdown_);
         item->setData(Qt::UserRole, yf_symbol);
 
+        // Styling comes from the dropdown-level stylesheet via object names —
+        // no per-label setStyleSheet in this loop.
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName(QStringLiteral("relmapRow"));
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(8, 3, 8, 3);
         hl->setSpacing(8);
 
         auto* sym_lbl = new QLabel(yf_symbol);
-        sym_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;%2;background:transparent;")
-                                   .arg(ui::colors::AMBER.get(), MF()));
+        sym_lbl->setObjectName(QStringLiteral("relmapSym"));
         sym_lbl->setFixedWidth(100);
         hl->addWidget(sym_lbl);
 
         auto* name_lbl = new QLabel(name);
-        name_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;%2;background:transparent;").arg(ui::colors::TEXT_SECONDARY.get(), MF()));
+        name_lbl->setObjectName(QStringLiteral("relmapName"));
+        name_lbl->setTextFormat(Qt::PlainText); // provider-supplied text
         name_lbl->setMaximumWidth(180);
         hl->addWidget(name_lbl, 1);
 
         if (!exchange.isEmpty()) {
             auto* exch_lbl = new QLabel(exchange);
-            exch_lbl->setStyleSheet(QString("color:%1;font-size:9px;%2;background:transparent;")
-                                        .arg(ui::colors::TEXT_TERTIARY.get(), MF()));
+            exch_lbl->setObjectName(QStringLiteral("relmapExch"));
             hl->addWidget(exch_lbl);
         }
 
         auto* type_lbl = new QLabel(type.toUpper());
-        type_lbl->setStyleSheet(QString("color:%1;font-size:8px;font-weight:700;%2;"
-                                        "background:%3;padding:1px 4px;border-radius:2px;")
-                                    .arg(ui::colors::AMBER.get(), MF(), ui::colors::BG_RAISED.get()));
+        type_lbl->setObjectName(QStringLiteral("relmapType"));
         hl->addWidget(type_lbl);
 
         item->setSizeHint(QSize(0, 30));
+        // Accessible text only — the row's visuals come from the item widget,
+        // so this must not be setText() (that would paint underneath it).
+        item->setData(Qt::AccessibleTextRole, QStringLiteral("%1 — %2").arg(yf_symbol, name));
+        item->setToolTip(QStringLiteral("%1 — %2").arg(yf_symbol, name));
         search_dropdown_->setItemWidget(item, row);
     }
 
@@ -654,6 +673,9 @@ void RelationshipMapScreen::hide_dropdown() {
 void RelationshipMapScreen::on_progress(int percent, const QString& message) {
     progress_bar_->setValue(percent);
     progress_label_->setText(message);
+    // on_fetch_failed() paints this label red; without resetting it here every
+    // subsequent successful fetch still reported progress in error red.
+    progress_label_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::TEXT_DIM(), MF()));
 
     if (percent >= 100) {
         progress_bar_->hide();
@@ -682,8 +704,13 @@ void RelationshipMapScreen::on_data_ready(const RelationshipData& payload) {
 
 void RelationshipMapScreen::on_fetch_failed(const QString& error) {
     progress_bar_->hide();
-    progress_label_->setText(tr("Error: %1").arg(error));
+    progress_label_->setText(tr("Error: %1 — press ANALYZE to retry").arg(error.simplified().left(90)));
+    progress_label_->setToolTip(error);
     progress_label_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::NEGATIVE(), MF()));
+    // Leave the previous graph up rather than a blank canvas; the status bar
+    // still reports what is on screen.
+    if (status_nodes_ && !has_data_)
+        status_nodes_->setText(tr("NO DATA"));
 }
 
 void RelationshipMapScreen::rebuild_graph() {

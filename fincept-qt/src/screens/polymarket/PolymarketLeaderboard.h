@@ -26,6 +26,9 @@ class PolymarketLeaderboard : public QWidget {
 
   private:
     void retranslateUi();
+    /// Render a single full-width row carrying `message`. Used when no
+    /// leaderboard data is available so the panel never shows a bare grid.
+    void show_empty_state(const QString& message);
 
     QLabel* header_ = nullptr;
     QTableWidget* table_ = nullptr;

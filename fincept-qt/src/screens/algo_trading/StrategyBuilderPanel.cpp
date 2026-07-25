@@ -695,6 +695,22 @@ void StrategyBuilderPanel::on_backtest() {
 }
 
 void StrategyBuilderPanel::on_deploy() {
+    // Re-entrancy: exec() and the LTP probe below both run nested event loops, so
+    // a second click would otherwise open a second dialog and deploy twice.
+    if (deploying_)
+        return;
+    deploying_ = true;
+    if (deploy_btn_)
+        deploy_btn_->setEnabled(false);
+    struct DeployGuard {
+        StrategyBuilderPanel* self;
+        ~DeployGuard() {
+            self->deploying_ = false;
+            if (self->deploy_btn_)
+                self->deploy_btn_->setEnabled(true);
+        }
+    } deploy_guard{this};
+
     // Guards use a visible dialog/banner: the status label lives in the right-hand
     // backtest card, far from the Deploy button, so a silent setText() there reads
     // as "Deploy did nothing".
@@ -715,15 +731,19 @@ void StrategyBuilderPanel::on_deploy() {
 
     auto* dialog = new AlgoDeployDialog(strat, this);
     dialog->set_symbol(symbol_combo_->currentText()); // carry the builder's symbol in
+    // Seed size/limits from the risk panel BEFORE exec(). Previously these were
+    // stamped onto the result AFTER the dialog closed, so the Quantity and Max
+    // Order Value the user reviewed (and, for live, confirmed) were silently
+    // replaced by the builder's values on the way to the engine.
+    dialog->set_risk_defaults(risk_panel_->quantity(), risk_panel_->max_order_value());
     if (instrument_type_combo_ && instrument_type_combo_->currentData().toString() != QLatin1String("equity")) {
         dialog->set_fno_context(instrument_type_combo_->currentData().toString(),
                                 underlying_combo_ ? underlying_combo_->currentText() : QString(),
                                 expiry_mode_combo_ ? expiry_mode_combo_->currentData().toString() : QString());
     }
     if (dialog->exec() == QDialog::Accepted) {
+        // Take the dialog's values verbatim — what the user reviewed is what deploys.
         auto deployment = dialog->deployment();
-        deployment.quantity = risk_panel_->quantity();
-        deployment.max_order_value = risk_panel_->max_order_value();
 
         // Sanity check (non-blocking, bounded): warn if a rule can't fire at the
         // current price — e.g. 'crosses_above 280.45' on a stock trading at 1204.

@@ -28,6 +28,12 @@ class DashboardStatusBar : public QWidget {
     void set_widget_count(int count);
     void set_connected(bool connected);
 
+  signals:
+    /// Emitted when the API health probe flips between reachable and
+    /// unreachable. DashboardScreen forwards it to the toolbar so the "LIVE"
+    /// badge stops claiming a live feed while the backend is down.
+    void connectivity_changed(bool connected);
+
   protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
@@ -55,6 +61,9 @@ class DashboardStatusBar : public QWidget {
     int layout_count_ = 0;
     bool feeds_connected_ = true;
     int last_latency_ms_ = -2; // -2 = uninitialised, -1 = error
+    /// Last colour applied to mem_label_ — the probe ticks every 5s but the
+    /// colour bucket almost never changes, so skip the CSS reparse.
+    QString mem_color_applied_;
 
     PendingOrdersBadge* pending_badge_ = nullptr;
     fincept::ui::NotifBell* notif_bell_ = nullptr;

@@ -26,6 +26,7 @@ QMap<QString, QString> SectorHeatmapWidget::sector_labels() {
 
 SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget(tr("SECTOR HEATMAP"), parent) {
     grid_container_ = new QWidget(this);
+    grid_container_->setObjectName("sectorHeatGrid");
     grid_ = new QGridLayout(grid_container_);
     grid_->setContentsMargins(4, 4, 4, 4);
     grid_->setSpacing(3);
@@ -39,16 +40,28 @@ SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget(tr("SECTO
 }
 
 void SectorHeatmapWidget::apply_styles() {
-    // The grid cells are rebuilt dynamically in populate() using current tokens.
-    // Re-populate with existing data to pick up new theme colors.
-    // If no data yet, nothing to restyle.
+    if (!grid_container_)
+        return;
+    // Static cell chrome lives in ONE parent stylesheet with object-name
+    // selectors (P7) instead of an inline setStyleSheet per label per refresh.
+    // Only the data-driven bits (tile tint, +/- colour) are still set
+    // per-widget, and only when they actually change.
+    grid_container_->setStyleSheet(
+        QString("#sectorHeatGrid QLabel#sectorName{color:%1;font-size:9px;font-weight:bold;background:transparent;}"
+                "#sectorHeatGrid QLabel#sectorChg{font-size:11px;font-weight:bold;background:transparent;}")
+            .arg(ui::colors::TEXT_PRIMARY()));
+    // Force the data-driven colours to be re-applied against the new tokens.
+    for (auto& c : cells_) {
+        c.last_bg.clear();
+        c.last_sign = 0;
+    }
 }
 
 void SectorHeatmapWidget::on_theme_changed() {
     apply_styles();
-    // Re-populate the grid with current data so cells pick up new token values
-    if (grid_->count() > 0)
-        refresh_data();
+    // Re-render from the cache. This used to call refresh_data(), which fires
+    // a forced network fetch for 12 symbols just because the palette changed.
+    rebuild_from_cache();
 }
 
 void SectorHeatmapWidget::showEvent(QShowEvent* e) {
@@ -82,7 +95,8 @@ void SectorHeatmapWidget::hub_subscribe_all() {
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             set_loading_progress(row_cache_.size(), total);
-            rebuild_from_cache();
+            // One grid update per delivery burst, not one per sector ETF.
+            schedule_render([this]() { rebuild_from_cache(); });
         });
     }
     hub_active_ = true;
@@ -105,48 +119,72 @@ void SectorHeatmapWidget::rebuild_from_cache() {
         populate(quotes);
 }
 
-void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
-    // Clear grid
-    QLayoutItem* item;
-    while ((item = grid_->takeAt(0)) != nullptr) {
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+SectorHeatmapWidget::Cell& SectorHeatmapWidget::cell_at(int index) {
+    while (cells_.size() <= index) {
+        Cell c;
+        c.frame = new QFrame(grid_container_);
+        c.frame->setMinimumSize(80, 40);
 
-    auto labels = sector_labels();
-    int idx = 0;
-    for (const auto& q : quotes) {
-        auto* cell = new QFrame;
-        cell->setMinimumSize(80, 40);
-
-        int intensity = static_cast<int>(std::min(std::abs(q.change_pct) * 60.0, 200.0));
-        QColor tint(q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
-        tint.setAlpha(40 + intensity);
-        QString bg_color = tint.name(QColor::HexArgb);
-
-        cell->setStyleSheet(QString("background: %1; border: 1px solid %2; border-radius: 2px;")
-                                .arg(bg_color, ui::colors::BORDER_DIM()));
-
-        auto* cl = new QVBoxLayout(cell);
+        auto* cl = new QVBoxLayout(c.frame);
         cl->setContentsMargins(4, 2, 4, 2);
         cl->setSpacing(0);
 
-        auto* name = new QLabel(labels.value(q.symbol, q.symbol));
-        name->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                                .arg(ui::colors::TEXT_PRIMARY()));
-        name->setAlignment(Qt::AlignCenter);
-        cl->addWidget(name);
+        c.name = new QLabel(c.frame);
+        c.name->setObjectName("sectorName");
+        c.name->setAlignment(Qt::AlignCenter);
+        cl->addWidget(c.name);
 
-        auto* chg = new QLabel(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
-        chg->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                               .arg(q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-        chg->setAlignment(Qt::AlignCenter);
-        cl->addWidget(chg);
+        c.chg = new QLabel(c.frame);
+        c.chg->setObjectName("sectorChg");
+        c.chg->setAlignment(Qt::AlignCenter);
+        cl->addWidget(c.chg);
 
-        grid_->addWidget(cell, idx / 3, idx % 3);
-        ++idx;
+        const int i = static_cast<int>(cells_.size());
+        grid_->addWidget(c.frame, i / 3, i % 3);
+        cells_.append(c);
     }
+    return cells_[index];
+}
+
+void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
+    const auto labels = sector_labels();
+
+    const int n = static_cast<int>(quotes.size());
+    for (int idx = 0; idx < n; ++idx) {
+        const auto& q = quotes[idx];
+        Cell& c = cell_at(idx);
+        c.frame->setVisible(true);
+
+        const int intensity = static_cast<int>(std::min(std::abs(q.change_pct) * 60.0, 200.0));
+        QColor tint(q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
+        tint.setAlpha(40 + intensity);
+        const QString bg = QString("background: %1; border: 1px solid %2; border-radius: 2px;")
+                               .arg(tint.name(QColor::HexArgb), ui::colors::BORDER_DIM());
+        // Skip the CSS reparse when the tint is unchanged (the common case
+        // for a quiet sector between two refresh ticks).
+        if (bg != c.last_bg) {
+            c.last_bg = bg;
+            c.frame->setStyleSheet(bg);
+        }
+
+        const QString display = labels.value(q.symbol, q.symbol);
+        if (c.name->text() != display)
+            c.name->setText(display);
+        c.name->setToolTip(QString("%1  (%2)").arg(display, q.symbol));
+
+        c.chg->setText(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
+        const int sign = q.change_pct >= 0 ? 1 : -1;
+        if (sign != c.last_sign) {
+            c.last_sign = sign;
+            c.chg->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
+                                     .arg(sign > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+        }
+    }
+
+    // Hide (don't destroy) any cells beyond the current data set so a shorter
+    // payload doesn't leave stale tiles on screen.
+    for (int i = n; i < static_cast<int>(cells_.size()); ++i)
+        cells_[i].frame->setVisible(false);
 }
 
 void SectorHeatmapWidget::retranslateUi() {

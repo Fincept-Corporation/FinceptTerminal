@@ -1,4 +1,4 @@
-#include "services/notifications/providers/MattermostProvider.h"
+﻿#include "services/notifications/providers/MattermostProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -7,13 +7,13 @@
 namespace fincept::notifications {
 
 void MattermostProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    webhook_url_ = get_str(r, cat + ".webhook_url");
+    webhook_url_ = get_secret(r, cat + ".webhook_url");
     channel_ = get_str(r, cat + ".channel");
     username_ = get_str(r, cat + ".username");
 }
 
 void MattermostProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".webhook_url", webhook_url_, cat);
+    set_secret(r, cat + ".webhook_url", webhook_url_, cat);
     r.set(cat + ".channel", channel_, cat);
     r.set(cat + ".username", username_, cat);
 }

@@ -7,6 +7,7 @@
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QLocale>
 #include <QPalette>
 #include <QScrollBar>
@@ -156,8 +157,17 @@ QWidget* ChatMessagePanel::build_messages_area() {
 
     // Scroll persistence signal — emitted when the user scrolls within the
     // message history; ChatModeScreen listens and debounces a save.
+    //
+    // The same handler drives scroll pinning: while a stream is running we only
+    // auto-follow the bottom if the user is already there. Scrolling up to read
+    // an earlier answer used to be fought by every 120 ms render tick.
     if (auto* vbar = scroll_area_->verticalScrollBar())
-        connect(vbar, &QScrollBar::valueChanged, this, [this](int) { emit scroll_changed(); });
+        connect(vbar, &QScrollBar::valueChanged, this, [this, vbar](int value) {
+            // 24 px of slack so a partially-rendered last line still counts as
+            // "at the bottom".
+            scroll_locked_ = (vbar->maximum() - value) > 24;
+            emit scroll_changed();
+        });
 
     return scroll_area_;
 }
@@ -264,6 +274,9 @@ QWidget* ChatMessagePanel::build_input_area() {
                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                                        FONT, ui::colors::BORDER_BRIGHT(), ui::colors::BORDER_MED()));
     input_box_->installEventFilter(this);
+    input_box_->setAccessibleName(tr("Message the Fincept agent"));
+    input_box_->setAccessibleDescription(
+        tr("Type a question. Enter or Ctrl+Enter sends, Shift+Enter inserts a new line."));
     vl->addWidget(input_box_);
 
     auto* bottom = new QHBoxLayout;
@@ -308,6 +321,10 @@ QWidget* ChatMessagePanel::build_input_area() {
     stop_btn_ = new QPushButton(tr("Stop"));
     stop_btn_->setFixedHeight(26);
     stop_btn_->setVisible(false);
+    stop_btn_->setAccessibleName(tr("Stop generating"));
+    stop_btn_->setToolTip(tr("Stop generating (Esc)"));
+    // Only reachable while visible — i.e. exactly while a stream is running.
+    stop_btn_->setShortcut(QKeySequence(Qt::Key_Escape));
     stop_btn_->setStyleSheet(QString("QPushButton{background:rgba(50,12,12,0.7);color:%1;"
                                      "border:1px solid rgba(220,38,38,0.2);border-radius:0px;"
                                      "font-size:12px;padding:0 12px;font-family:%2;}"
@@ -318,6 +335,7 @@ QWidget* ChatMessagePanel::build_input_area() {
 
     send_btn_ = new QPushButton(tr("Send"));
     send_btn_->setFixedHeight(26);
+    send_btn_->setAccessibleName(tr("Send message"));
     send_btn_->setStyleSheet(
         QString("QPushButton{background:%1;color:%2;border:none;"
                 "border-radius:0px;font-size:12px;font-weight:600;padding:0 16px;"
@@ -329,6 +347,14 @@ QWidget* ChatMessagePanel::build_input_area() {
     bottom->addWidget(send_btn_);
 
     vl->addLayout(bottom);
+
+    // Explicit tab order — the composer is the entry point, then the actions in
+    // the order they appear. Without this, Qt walks creation order, which puts
+    // Optimize before the input box.
+    setTabOrder(input_box_, optimize_btn_);
+    setTabOrder(optimize_btn_, stop_btn_);
+    setTabOrder(stop_btn_, send_btn_);
+
     return container;
 }
 
@@ -347,6 +373,28 @@ void ChatMessagePanel::load_messages(const QVector<ChatMessage>& messages) {
 }
 
 void ChatMessagePanel::clear_messages() {
+    // A stream in flight belongs to the session we are about to leave. Tear it
+    // down BEFORE the widgets go away: otherwise the deltas kept arriving for a
+    // bubble that no longer existed, the header title was overwritten by the old
+    // session's `session-meta`, and the composer stayed disabled until the old
+    // stream happened to finish. Local state is reset first so the synthetic
+    // stream_finish(0) that abort_stream() emits is a no-op re-entrancy-wise.
+    if (streaming_) {
+        streaming_ = false;
+        streaming_bubble_ = nullptr;
+        streaming_buffer_.clear();
+        pending_thinking_.clear();
+        pending_tools_.clear();
+        render_timer_->stop();
+        show_typing(false);
+        set_input_enabled(true);
+        send_btn_->setVisible(true);
+        optimize_btn_->setVisible(true);
+        stop_btn_->setVisible(false);
+        ChatModeService::instance().abort_stream();
+    }
+    scroll_locked_ = false;
+
     while (messages_layout_->count() > 0) {
         auto* item = messages_layout_->takeAt(0);
         if (item->widget() && item->widget() != welcome_panel_)
@@ -585,13 +633,15 @@ void ChatMessagePanel::on_stream_finish(int total_tokens) {
     streaming_ = false;
     streaming_bubble_ = nullptr;
     streaming_buffer_.clear();
-    scroll_locked_ = false;
     show_typing(false);
     set_input_enabled(true);
     send_btn_->setVisible(true);
     optimize_btn_->setVisible(true);
     stop_btn_->setVisible(false);
-    scroll_to_bottom();
+    // Don't yank the viewport back down if the user scrolled up to read.
+    // on_send_clicked() clears the lock when the next message goes out.
+    if (!scroll_locked_)
+        scroll_to_bottom();
 }
 
 void ChatMessagePanel::on_stream_error(const QString& message) {
@@ -741,7 +791,13 @@ void ChatMessagePanel::retranslateUi() {
 bool ChatMessagePanel::eventFilter(QObject* obj, QEvent* ev) {
     if (obj == input_box_ && ev->type() == QEvent::KeyPress) {
         auto* ke = static_cast<QKeyEvent*>(ev);
-        if (ke->key() == Qt::Key_Return && !(ke->modifiers() & Qt::ShiftModifier)) {
+        const bool enter = (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter);
+        // Ctrl+Enter sends too — muscle memory from every other chat client.
+        if (enter && (ke->modifiers() & Qt::ControlModifier)) {
+            on_send_clicked();
+            return true;
+        }
+        if (enter && !(ke->modifiers() & Qt::ShiftModifier)) {
             on_send_clicked();
             return true;
         }

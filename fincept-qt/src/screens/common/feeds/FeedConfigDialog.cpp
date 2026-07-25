@@ -165,10 +165,33 @@ FeedConfigDialog::FeedConfigDialog(const FeedSubscription& initial, QWidget* par
     connect(addFieldBtn, &QPushButton::clicked, this, [this]() { add_field_row({}); });
     connect(testBtn, &QPushButton::clicked, this, &FeedConfigDialog::on_test);
     connect(bb, &QDialogButtonBox::accepted, this, [this]() {
+        // A feed with no URL is unusable and used to be saved silently
+        // (FeedPanel then dropped it, so Save looked like it had done nothing).
+        if (url_->text().trimmed().isEmpty()) {
+            QMessageBox::information(this, tr("URL required"), tr("Enter the address of the feed you want to add."));
+            url_->setFocus();
+            return;
+        }
         sub_ = collect();
         accept();
     });
     connect(bb, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+    // ── Accessibility ─────────────────────────────────────────────────────────
+    name_->setAccessibleName(tr("Feed name"));
+    url_->setAccessibleName(tr("Feed URL"));
+    refresh_->setAccessibleName(tr("Refresh interval in seconds"));
+    display_->setAccessibleName(tr("Display mode"));
+    parse_->setAccessibleName(tr("Parse mode"));
+    format_->setAccessibleName(tr("Feed format"));
+    setTabOrder(name_, url_);
+    setTabOrder(url_, refresh_);
+    setTabOrder(refresh_, display_);
+    setTabOrder(display_, parse_);
+    setTabOrder(parse_, format_);
+    setTabOrder(format_, persist_);
+    setTabOrder(persist_, testBtn);
+    setTabOrder(testBtn, bb);
 }
 
 void FeedConfigDialog::update_manual_visibility() {
@@ -340,12 +363,23 @@ void FeedConfigDialog::apply_discovery(const DiscoveredSchema& schema) {
 }
 
 void FeedConfigDialog::on_test() {
+    if (url_->text().trimmed().isEmpty()) {
+        test_result_->setText(tr("✗ Enter a feed URL first."));
+        url_->setFocus();
+        return;
+    }
     test_result_->setText(tr("Testing…"));
-    FeedMonitor::instance().fetch_once(collect(), [this](bool ok, const QString& msg, const QVector<FeedItem>& items) {
+    // QPointer guard: fetch_once is async and the user can close the dialog
+    // before it returns. on_discover() already did this; on_test() captured a
+    // raw `this` and would write into a destroyed dialog.
+    QPointer<FeedConfigDialog> self(this);
+    FeedMonitor::instance().fetch_once(collect(), [self](bool ok, const QString& msg, const QVector<FeedItem>& items) {
+        if (!self)
+            return;
         QString detail = msg;
         for (int i = 0; i < items.size() && i < 3; ++i)
             detail += "\n• " + (items[i].title.isEmpty() ? items[i].link : items[i].title);
-        test_result_->setText((ok ? QStringLiteral("✓ ") : QStringLiteral("✗ ")) + detail);
+        self->test_result_->setText((ok ? QStringLiteral("✓ ") : QStringLiteral("✗ ")) + detail);
     });
 }
 

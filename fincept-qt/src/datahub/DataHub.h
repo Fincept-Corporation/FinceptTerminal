@@ -161,6 +161,20 @@ class DataHub : public QObject {
 
     // ── Introspection ───────────────────────────────────────────────────────
 
+    /// Wall-clock ms of this topic's last publish, or 0 if it has never
+    /// published / is unknown. Cheap O(1) hash lookup — `stats()` walks every
+    /// topic and is far too heavy to call from a per-widget refresh.
+    ///
+    /// Exists so consumers can render a freshness indicator. A financial
+    /// terminal showing a price with no indication of its age is actively
+    /// misleading: the user cannot distinguish a live quote from one frozen
+    /// twenty minutes ago by a dead producer.
+    qint64 last_publish_ms(const QString& topic) const;
+
+    /// Convenience: ms since the last publish, or -1 if never published.
+    /// Compare against the topic's TTL to decide "fresh / stale / dead".
+    qint64 age_ms(const QString& topic) const;
+
     QVector<TopicStats> stats() const;
 
     /// Diagnostic: list the QObject owners currently subscribed to `topic`.

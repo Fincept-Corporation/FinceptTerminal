@@ -32,6 +32,11 @@ class NodePropertiesPanel : public QWidget {
     void param_changed(const QString& node_id, const QString& key, QJsonValue value);
     void name_changed(const QString& node_id, const QString& new_name);
     void delete_requested(const QString& node_id);
+    /// Node-level execution flags from the SETTINGS block. `flag` is "disabled"
+    /// or "continue_on_fail". Previously these two checkboxes were rendered but
+    /// never connected, so toggling "Disabled" silently did nothing and the node
+    /// still executed.
+    void node_flag_changed(const QString& node_id, const QString& flag, bool value);
 
   private:
     void build_ui();

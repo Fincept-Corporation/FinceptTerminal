@@ -116,6 +116,16 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
         }
         status_label_->setText(tr("Running..."));
         clear_results();
+        // The result lands in agent_output_, so put the in-flight message there
+        // too — otherwise the box keeps showing the previous run's answer and
+        // the user has no signal that anything is happening. (show_loading()
+        // would paint a spinner into the results pane below the 300px output
+        // box, and the execute_task result branch never clears it.)
+        if (agent_output_)
+            agent_output_->setPlainText(
+                tr("Running multi-agent analysis...\n\n"
+                   "The LangGraph orchestrator delegates to specialist subagents and calls the LLM "
+                   "several times; this typically takes a few minutes. Results replace this message."));
         QJsonObject params;
         params["task"] = task;
         params["agent_type"] = agent_type->currentText();
@@ -212,32 +222,50 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     });
     sbl->addWidget(ui_btn);
 
-    auto* mcp_btn = new QPushButton(tr("MCP TOOLS"), status_bar);
+    // Not checkable: there is no rd_agent "stop MCP server" command, so a
+    // toggle that un-checks would claim to have stopped a server that is still
+    // running. Plain action + a status query instead.
+    auto* mcp_btn = new QPushButton(tr("START MCP TOOLS"), status_bar);
     mcp_btn->setCursor(Qt::PointingHandCursor);
-    mcp_btn->setCheckable(true);
-    mcp_btn->setToolTip(tr("Start/stop the Fincept MCP tool server\n"
+    mcp_btn->setToolTip(tr("Start the Fincept MCP tool server.\n"
                            "Gives RD-Agent loops access to market data,\n"
-                           "financial news and economics tools."));
+                           "financial news and economics tools.\n"
+                           "The server keeps running until the terminal exits."));
     mcp_btn->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %1;"
                                    "font-family:%2; font-size:%3px; padding:2px 8px; border-radius:2px; }"
-                                   "QPushButton:checked { background:%4; color:%5; border-color:%4; }"
-                                   "QPushButton:hover { background:%1; color:%5; }")
+                                   "QPushButton:hover { background:%1; color:%4; }")
                                .arg(ui::colors::TEXT_TERTIARY())
                                .arg(ui::fonts::DATA_FAMILY)
                                .arg(ui::fonts::TINY)
-                               .arg(module_.color.name())
                                .arg(ui::colors::BG_BASE()));
-    connect(mcp_btn, &QPushButton::toggled, this, [mcp_btn, status_txt](bool checked) {
-        if (checked) {
-            status_txt->setText(tr("Starting MCP tool server..."));
-            AIQuantLabService::instance().rd_agent_start_mcp_server();
-        } else {
-            status_txt->setText(tr("MCP tool server stopped"));
-            mcp_btn->setText(tr("MCP TOOLS"));
-        }
+    connect(mcp_btn, &QPushButton::clicked, this, [status_txt]() {
+        status_txt->setText(tr("Starting MCP tool server..."));
+        AIQuantLabService::instance().rd_agent_start_mcp_server();
     });
     sbl->addWidget(mcp_btn);
+
+    auto* mcp_status_btn = new QPushButton(tr("MCP STATUS"), status_bar);
+    mcp_status_btn->setCursor(Qt::PointingHandCursor);
+    mcp_status_btn->setToolTip(tr("Report whether the MCP tool server is installed and which ports are live."));
+    mcp_status_btn->setStyleSheet(mcp_btn->styleSheet());
+    connect(mcp_status_btn, &QPushButton::clicked, this, [status_txt]() {
+        status_txt->setText(tr("Querying MCP status..."));
+        AIQuantLabService::instance().rd_agent_mcp_status();
+    });
+    sbl->addWidget(mcp_status_btn);
     vl->addWidget(status_bar);
+
+    // Validation errors raised from the RD-Agent sub-tabs must NOT go through
+    // display_error(): that paints into the Deep Analysis tab's results pane,
+    // which is on the other page of the outer QTabWidget and therefore invisible
+    // to whoever just clicked. Surface them in this tab instead.
+    auto rd_error = [this, status_txt](const QString& msg) {
+        status_txt->setText(msg);
+        if (rd_agent_output_)
+            rd_agent_output_->setPlainText(msg);
+        if (status_label_)
+            status_label_->setText(tr("Error"));
+    };
 
     // ── Sub-tab 1: Factor Mining ─────────────────────────────────────────────
     auto* fm_w = new QWidget(sub);
@@ -270,34 +298,35 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* fm_iter = new QSpinBox(fm_w);
     fm_iter->setRange(1, 100);
     fm_iter->setValue(10);
-    fm_iter->setStyleSheet(input_ss());
+    fm_iter->setStyleSheet(spinbox_ss());
     fm_vl->addWidget(build_input_row(tr("Max Iterations"), fm_iter, fm_w));
 
     auto* fm_ic = make_double_spin(0.01, 0.50, 0.05, 3, "", fm_w);
     fm_vl->addWidget(build_input_row(tr("Target IC"), fm_ic, fm_w));
 
     auto* fm_run = make_run_button(tr("START FACTOR MINING"), fm_w);
-    connect(fm_run, &QPushButton::clicked, this, [this, fm_task, fm_market, fm_iter, fm_ic, status_txt, llm_combo]() {
-        auto desc_text = fm_task->toPlainText().trimmed();
-        if (desc_text.isEmpty()) {
-            display_error(tr("Enter a task description."));
-            return;
-        }
-        auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) {
-            display_error(tr("Select an LLM profile before running."));
-            return;
-        }
-        status_label_->setText(tr("Starting..."));
-        status_txt->setText(tr("Factor mining started..."));
-        QJsonObject params;
-        params["task_description"] = desc_text;
-        params["target_market"] = fm_market->currentText();
-        params["max_iterations"] = fm_iter->value();
-        params["target_ic"] = fm_ic->value();
-        params["config"] = cfg;
-        AIQuantLabService::instance().rd_agent_start_factor_mining(params);
-    });
+    connect(fm_run, &QPushButton::clicked, this,
+            [this, fm_task, fm_market, fm_iter, fm_ic, status_txt, llm_combo, rd_error]() {
+                auto desc_text = fm_task->toPlainText().trimmed();
+                if (desc_text.isEmpty()) {
+                    rd_error(tr("Enter a task description."));
+                    return;
+                }
+                auto cfg = llm_config_from_combo(llm_combo);
+                if (cfg.isEmpty()) {
+                    rd_error(tr("Select an LLM profile before running (Settings → LLM Config)."));
+                    return;
+                }
+                status_label_->setText(tr("Starting..."));
+                status_txt->setText(tr("Factor mining started..."));
+                QJsonObject params;
+                params["task_description"] = desc_text;
+                params["target_market"] = fm_market->currentText();
+                params["max_iterations"] = fm_iter->value();
+                params["target_ic"] = fm_ic->value();
+                params["config"] = cfg;
+                AIQuantLabService::instance().rd_agent_start_factor_mining(params);
+            });
     fm_vl->addWidget(fm_run);
     fm_vl->addStretch();
     sub->addTab(fm_w, tr("Factor Mining"));
@@ -332,25 +361,26 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* mo_iter = new QSpinBox(mo_w);
     mo_iter->setRange(1, 100);
     mo_iter->setValue(10);
-    mo_iter->setStyleSheet(input_ss());
+    mo_iter->setStyleSheet(spinbox_ss());
     mo_vl->addWidget(build_input_row(tr("Max Iterations"), mo_iter, mo_w));
 
     auto* mo_run = make_run_button(tr("START MODEL OPTIMIZATION"), mo_w);
-    connect(mo_run, &QPushButton::clicked, this, [this, mo_model, mo_target, mo_iter, status_txt, llm_combo]() {
-        auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) {
-            display_error(tr("Select an LLM profile before running."));
-            return;
-        }
-        status_label_->setText(tr("Starting..."));
-        status_txt->setText(tr("Model optimization started..."));
-        QJsonObject params;
-        params["model_type"] = mo_model->currentText();
-        params["optimization_target"] = mo_target->currentText();
-        params["max_iterations"] = mo_iter->value();
-        params["config"] = cfg;
-        AIQuantLabService::instance().rd_agent_start_model_optimization(params);
-    });
+    connect(mo_run, &QPushButton::clicked, this,
+            [this, mo_model, mo_target, mo_iter, status_txt, llm_combo, rd_error]() {
+                auto cfg = llm_config_from_combo(llm_combo);
+                if (cfg.isEmpty()) {
+                    rd_error(tr("Select an LLM profile before running (Settings → LLM Config)."));
+                    return;
+                }
+                status_label_->setText(tr("Starting..."));
+                status_txt->setText(tr("Model optimization started..."));
+                QJsonObject params;
+                params["model_type"] = mo_model->currentText();
+                params["optimization_target"] = mo_target->currentText();
+                params["max_iterations"] = mo_iter->value();
+                params["config"] = cfg;
+                AIQuantLabService::instance().rd_agent_start_model_optimization(params);
+            });
     mo_vl->addWidget(mo_run);
     mo_vl->addStretch();
     sub->addTab(mo_w, tr("Model Optimization"));
@@ -386,30 +416,31 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     auto* qr_iter = new QSpinBox(qr_w);
     qr_iter->setRange(1, 100);
     qr_iter->setValue(15);
-    qr_iter->setStyleSheet(input_ss());
+    qr_iter->setStyleSheet(spinbox_ss());
     qr_vl->addWidget(build_input_row(tr("Max Iterations"), qr_iter, qr_w));
 
     auto* qr_run = make_run_button(tr("START QUANT RESEARCH"), qr_w);
-    connect(qr_run, &QPushButton::clicked, this, [this, qr_goal, qr_market, qr_iter, status_txt, llm_combo]() {
-        auto goal = qr_goal->toPlainText().trimmed();
-        if (goal.isEmpty()) {
-            display_error(tr("Enter a research goal."));
-            return;
-        }
-        auto cfg = llm_config_from_combo(llm_combo);
-        if (cfg.isEmpty()) {
-            display_error(tr("Select an LLM profile before running."));
-            return;
-        }
-        status_label_->setText(tr("Starting..."));
-        status_txt->setText(tr("Quant research started..."));
-        QJsonObject params;
-        params["research_goal"] = goal;
-        params["target_market"] = qr_market->currentText();
-        params["max_iterations"] = qr_iter->value();
-        params["config"] = cfg;
-        AIQuantLabService::instance().rd_agent_start_quant_research(params);
-    });
+    connect(qr_run, &QPushButton::clicked, this,
+            [this, qr_goal, qr_market, qr_iter, status_txt, llm_combo, rd_error]() {
+                auto goal = qr_goal->toPlainText().trimmed();
+                if (goal.isEmpty()) {
+                    rd_error(tr("Enter a research goal."));
+                    return;
+                }
+                auto cfg = llm_config_from_combo(llm_combo);
+                if (cfg.isEmpty()) {
+                    rd_error(tr("Select an LLM profile before running (Settings → LLM Config)."));
+                    return;
+                }
+                status_label_->setText(tr("Starting..."));
+                status_txt->setText(tr("Quant research started..."));
+                QJsonObject params;
+                params["research_goal"] = goal;
+                params["target_market"] = qr_market->currentText();
+                params["max_iterations"] = qr_iter->value();
+                params["config"] = cfg;
+                AIQuantLabService::instance().rd_agent_start_quant_research(params);
+            });
     qr_vl->addWidget(qr_run);
     qr_vl->addStretch();
     sub->addTab(qr_w, tr("Quant Research"));
@@ -492,6 +523,20 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
             .arg(ui::fonts::TINY)
             .arg(ui::colors::BG_BASE()));
     tm_hl->addWidget(factors_btn);
+
+    // GET MODEL / STATUS were referenced by the output placeholder text and by
+    // on_result() (get_optimized_model / get_task_status branches) but had no
+    // button — the service calls were unreachable from the UI.
+    auto* model_btn = new QPushButton(tr("GET MODEL"), tm_toolbar);
+    model_btn->setCursor(Qt::PointingHandCursor);
+    model_btn->setStyleSheet(factors_btn->styleSheet());
+    tm_hl->addWidget(model_btn);
+
+    auto* status_btn = new QPushButton(tr("TASK STATUS"), tm_toolbar);
+    status_btn->setCursor(Qt::PointingHandCursor);
+    status_btn->setStyleSheet(factors_btn->styleSheet());
+    tm_hl->addWidget(status_btn);
+
     tm_hl->addStretch();
     tm_vl->addWidget(tm_toolbar);
 
@@ -515,42 +560,65 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     tm_vl->addWidget(rd_agent_output_);
 
     // Wire toolbar buttons
-    connect(refresh_btn, &QPushButton::clicked, this, [filter_combo]() {
-        auto filter = filter_combo->currentData().toString();
+    connect(refresh_btn, &QPushButton::clicked, this, [filter_combo, status_txt]() {
+        const auto filter = filter_combo->currentData().toString();
+        status_txt->setText(tr("Refreshing task list..."));
         AIQuantLabService::instance().rd_agent_list_tasks(filter == "All" ? QString{} : filter);
     });
 
-    connect(stop_btn, &QPushButton::clicked, this, [this, task_id_input]() {
-        auto tid = task_id_input->text().trimmed();
-        if (tid.isEmpty() && rd_task_table_->currentRow() >= 0)
+    // Resolve the target task: the text field wins, otherwise the selected row.
+    // Errors go to rd_agent_output_ (visible in this tab) — display_error()
+    // paints into the Deep Analysis tab's results pane, which is hidden here.
+    auto resolve_task_id = [this, task_id_input, status_txt]() -> QString {
+        QString tid = task_id_input->text().trimmed();
+        if (tid.isEmpty() && rd_task_table_->currentRow() >= 0 && rd_task_table_->item(rd_task_table_->currentRow(), 0))
             tid = rd_task_table_->item(rd_task_table_->currentRow(), 0)->text();
         if (tid.isEmpty()) {
-            display_error(tr("Select or enter a task ID."));
-            return;
+            status_txt->setText(tr("Select a row or type a task ID first."));
+            if (rd_agent_output_)
+                rd_agent_output_->setPlainText(tr("Select a task row (or paste a task ID) before using this action."));
         }
+        return tid;
+    };
+
+    connect(stop_btn, &QPushButton::clicked, this, [resolve_task_id, status_txt]() {
+        const QString tid = resolve_task_id();
+        if (tid.isEmpty())
+            return;
+        status_txt->setText(tr("Stopping %1...").arg(tid));
         AIQuantLabService::instance().rd_agent_stop_task(tid);
     });
 
-    connect(resume_btn, &QPushButton::clicked, this, [this, task_id_input]() {
-        auto tid = task_id_input->text().trimmed();
-        if (tid.isEmpty() && rd_task_table_->currentRow() >= 0)
-            tid = rd_task_table_->item(rd_task_table_->currentRow(), 0)->text();
-        if (tid.isEmpty()) {
-            display_error(tr("Select or enter a task ID."));
+    connect(resume_btn, &QPushButton::clicked, this, [resolve_task_id, status_txt]() {
+        const QString tid = resolve_task_id();
+        if (tid.isEmpty())
             return;
-        }
+        status_txt->setText(tr("Resuming %1...").arg(tid));
         AIQuantLabService::instance().rd_agent_resume_task(tid);
     });
 
-    connect(factors_btn, &QPushButton::clicked, this, [this, task_id_input]() {
-        auto tid = task_id_input->text().trimmed();
-        if (tid.isEmpty() && rd_task_table_->currentRow() >= 0)
-            tid = rd_task_table_->item(rd_task_table_->currentRow(), 0)->text();
-        if (tid.isEmpty()) {
-            display_error(tr("Select or enter a task ID."));
+    connect(factors_btn, &QPushButton::clicked, this, [resolve_task_id, status_txt]() {
+        const QString tid = resolve_task_id();
+        if (tid.isEmpty())
             return;
-        }
+        status_txt->setText(tr("Loading factors for %1...").arg(tid));
         AIQuantLabService::instance().rd_agent_get_discovered_factors(tid);
+    });
+
+    connect(model_btn, &QPushButton::clicked, this, [resolve_task_id, status_txt]() {
+        const QString tid = resolve_task_id();
+        if (tid.isEmpty())
+            return;
+        status_txt->setText(tr("Loading optimized model for %1...").arg(tid));
+        AIQuantLabService::instance().rd_agent_get_optimized_model(tid);
+    });
+
+    connect(status_btn, &QPushButton::clicked, this, [resolve_task_id, status_txt]() {
+        const QString tid = resolve_task_id();
+        if (tid.isEmpty())
+            return;
+        status_txt->setText(tr("Querying %1...").arg(tid));
+        AIQuantLabService::instance().rd_agent_get_task_status(tid);
     });
 
     // Populate task_id_input on row click

@@ -173,7 +173,12 @@ void EquityTradingScreen::hub_subscribe_quotes() {
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<BrokerQuote>())
                 return;
-            const auto quote = v.value<BrokerQuote>();
+            auto quote = v.value<BrokerQuote>();
+            // Some broker adapters leave BrokerQuote.symbol empty (the topic
+            // already carries it). The watchlist matches rows on quote.symbol, so
+            // an unset one silently stopped that row from ever updating.
+            if (quote.symbol.isEmpty())
+                quote.symbol = sym;
 
             // Open-positions table (bottom sheet): patch LTP / P&L from the SAME
             // quote that feeds the ticker bar, so the header and the position row
@@ -359,7 +364,7 @@ void EquityTradingScreen::on_stream_candles_fetched(const QString& account_id, c
     // blocks (#338). Keep the current series unless it belongs to a symbol or
     // timeframe the user has already left.
     if (chart_symbol_ != key) {
-        chart_->clear();
+        chart_->clear_candles();
         chart_symbol_.clear();
     }
     LOG_WARN("EquityTrading", QString("no candles returned for %1 — keeping existing chart").arg(key));

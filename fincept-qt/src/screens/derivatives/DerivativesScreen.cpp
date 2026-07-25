@@ -405,20 +405,22 @@ QWidget* DerivativesScreen::create_equity_options_panel() {
 
     opt_market_price_ = create_spin(15.0, 0, 1e8, 4);
 
-    auto* iv_spot = create_spin(105.0, 0, 1e8, 2);
-    auto* iv_strike = create_spin(100.0, 0, 1e8, 2);
-    auto* iv_time = create_spin(1.0, 0.001, 30, 4);
-    auto* iv_rate = create_spin(5.0, -20, 100, 2, "%");
-    auto* iv_div = create_spin(2.0, 0, 100, 2, "%");
-    auto* iv_type = create_combo({"Call", "Put"});
+    // Held as members — on_calculate_secondary() reads these, not the
+    // Black-Scholes panel's fields.
+    iv_spot_ = create_spin(105.0, 0, 1e8, 2);
+    iv_strike_ = create_spin(100.0, 0, 1e8, 2);
+    iv_time_ = create_spin(1.0, 0.001, 30, 4);
+    iv_rate_ = create_spin(5.0, -20, 100, 2, "%");
+    iv_div_ = create_spin(2.0, 0, 100, 2, "%");
+    iv_type_ = create_combo({"Call", "Put"});
 
     ivbl->addWidget(
-        create_two_col(create_input_row(tr("SPOT PRICE"), iv_spot), create_input_row(tr("STRIKE PRICE"), iv_strike)));
+        create_two_col(create_input_row(tr("SPOT PRICE"), iv_spot_), create_input_row(tr("STRIKE PRICE"), iv_strike_)));
     ivbl->addWidget(create_input_row(tr("MARKET OPTION PRICE"), opt_market_price_));
-    ivbl->addWidget(create_two_col(create_input_row(tr("TIME TO EXPIRY (years)"), iv_time),
-                                   create_input_row(tr("RISK-FREE RATE (%)"), iv_rate)));
-    ivbl->addWidget(create_two_col(create_input_row(tr("DIVIDEND YIELD (%)"), iv_div),
-                                   create_input_row(tr("OPTION TYPE"), iv_type)));
+    ivbl->addWidget(create_two_col(create_input_row(tr("TIME TO EXPIRY (years)"), iv_time_),
+                                   create_input_row(tr("RISK-FREE RATE (%)"), iv_rate_)));
+    ivbl->addWidget(create_two_col(create_input_row(tr("DIVIDEND YIELD (%)"), iv_div_),
+                                   create_input_row(tr("OPTION TYPE"), iv_type_)));
 
     auto* iv_btn = create_calc_button(tr("CALCULATE IMPLIED VOL"));
     connect(iv_btn, &QPushButton::clicked, this, &DerivativesScreen::on_calculate_secondary);
@@ -885,22 +887,26 @@ void DerivativesScreen::on_calculate_secondary() {
                                     });
             break;
         }
-        case 1: { // Implied volatility
+        case 1: { // Implied volatility — solved from the IV card's OWN inputs.
+            if (opt_market_price_->value() <= 0) {
+                display_error(tr("Enter the option's market price — implied volatility is solved from it."));
+                return;
+            }
             run_pricing("implied_vol", {
                                            "--spot",
-                                           QString::number(opt_spot_->value()),
+                                           QString::number(iv_spot_->value()),
                                            "--strike",
-                                           QString::number(opt_strike_->value()),
+                                           QString::number(iv_strike_->value()),
                                            "--time",
-                                           QString::number(opt_time_->value()),
+                                           QString::number(iv_time_->value()),
                                            "--rate",
-                                           QString::number(opt_rate_->value()),
+                                           QString::number(iv_rate_->value()),
                                            "--market-price",
                                            QString::number(opt_market_price_->value()),
                                            "--div-yield",
-                                           QString::number(opt_div_->value()),
+                                           QString::number(iv_div_->value()),
                                            "--type",
-                                           opt_type_->currentText().toLower(),
+                                           iv_type_->currentText().toLower(),
                                        });
             break;
         }
@@ -927,6 +933,18 @@ void DerivativesScreen::run_pricing(const QString& command, const QStringList& a
     loading_ = true;
     clear_results();
 
+    // Loading state — the results panel was simply emptied, so a slow Python
+    // start looked identical to "the button did nothing".
+    if (status_engine_)
+        status_engine_->setText(tr("CALCULATING…"));
+    {
+        auto* busy = new QLabel(tr("Calculating %1 …").arg(command), this);
+        busy->setObjectName("derivResultLabel");
+        busy->setContentsMargins(12, 10, 12, 10);
+        results_container_->layout()->addWidget(busy);
+        results_container_->show();
+    }
+
     QPointer<DerivativesScreen> self = this;
 
     services::python_cli::PythonCliService::instance().run(
@@ -936,6 +954,8 @@ void DerivativesScreen::run_pricing(const QString& command, const QStringList& a
                 return;
 
             self->loading_ = false;
+            if (self->status_engine_)
+                self->status_engine_->setText(DerivativesScreen::tr("PYTHON ENGINE"));
 
             if (!r.success) {
                 self->display_error(r.error.isEmpty() ? DerivativesScreen::tr("Pricing failed") : r.error);
@@ -997,6 +1017,19 @@ void DerivativesScreen::display_error(const QString& error) {
 }
 
 void DerivativesScreen::display_results(const QJsonObject& result) {
+    // The pricing script reports solver failures in-band, e.g. implied_vol
+    // returns {"error": "Could not converge on implied volatility"} with a zero
+    // exit code. Without this the message fell through to the generic key dump
+    // and rendered as a result card titled "ERROR" — indistinguishable from a
+    // successful calculation at a glance.
+    if (result.contains("error") && result.value("error").isString()) {
+        const QString msg = result.value("error").toString();
+        if (!msg.isEmpty()) {
+            display_error(msg);
+            return;
+        }
+    }
+
     clear_results();
 
     auto* body = new QWidget(this);

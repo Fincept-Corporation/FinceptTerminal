@@ -702,6 +702,11 @@ QWidget* PortfolioScreen::build_main_view() {
     connect(order_panel_, &PortfolioOrderPanel::close_requested, this, &PortfolioScreen::on_order_panel_close);
     connect(order_panel_, &PortfolioOrderPanel::buy_submitted, this, [this]() {
         AddAssetDialog dlg(this);
+        // The order panel always opens against a selected position — carry that
+        // ticker (and its live price) into the dialog instead of making the user
+        // retype a symbol the terminal is already showing.
+        if (const auto* h = find_holding(selected_symbol_))
+            dlg.preset(h->symbol, h->current_price);
         if (dlg.exec() == QDialog::Accepted) {
             services::PortfolioService::instance().add_asset(selected_id_, dlg.symbol(), dlg.quantity(), dlg.price());
         }
@@ -744,11 +749,18 @@ void PortfolioScreen::update_main_view_data() {
 
     order_panel_->set_currency(currency);
 
-    // Re-select the current symbol
+    // Re-select the current symbol. find_holding() returns nullptr once the
+    // position is gone (sold out, portfolio emptied) — always push the result
+    // through so the order panel drops its stale copy instead of keeping a row
+    // that no longer exists.
     if (!selected_symbol_.isEmpty()) {
         heatmap_->set_selected_symbol(selected_symbol_);
         blotter_->set_selected_symbol(selected_symbol_);
         order_panel_->set_holding(find_holding(selected_symbol_));
+        if (!find_holding(selected_symbol_))
+            selected_symbol_.clear();
+    } else {
+        order_panel_->set_holding(nullptr);
     }
 }
 

@@ -9,6 +9,7 @@
 #include <QValueAxis>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace fincept::screens::fno {
@@ -97,9 +98,14 @@ void MaxPainChart::set_chain(const OptionChain& chain) {
     categories.reserve(hi - lo + 1);
     pain_vals.reserve(hi - lo + 1);
 
-    // Per-strike pain — O(N²) on the windowed slice. Cheap for 20 strikes.
+    // Per-strike pain — total intrinsic value writers would owe if the
+    // underlying expired at S:
+    //   pain(S) = Σ_{K<S} (S−K)·CE_OI(K)  +  Σ_{K>S} (K−S)·PE_OI(K)
+    // summed over the WHOLE chain (not just the drawn window), so the profile
+    // is correct even though only ±strike_window_ bars are rendered.
     double min_pain = std::numeric_limits<double>::infinity();
     int min_idx = 0;
+    int chain_max_pain_idx = -1;
     for (int i = lo; i <= hi; ++i) {
         const double S = chain.rows[i].strike;
         double pain = 0;
@@ -115,7 +121,15 @@ void MaxPainChart::set_chain(const OptionChain& chain) {
             min_pain = pain;
             min_idx = i - lo;
         }
+        if (chain.max_pain > 0 && std::abs(S - chain.max_pain) < 1e-6)
+            chain_max_pain_idx = i - lo;
     }
+    // Highlight the chain's own max-pain strike when it falls inside the drawn
+    // window. The local minimum of a clipped window can be a different strike
+    // from the producer's full-chain answer, which is what the header ribbon
+    // shows — two different "max pain" numbers on one screen is worse than one.
+    if (chain_max_pain_idx >= 0)
+        min_idx = chain_max_pain_idx;
 
     // Stack the two sets so each strike has a value in exactly one of them.
     for (int i = 0; i < pain_vals.size(); ++i) {

@@ -69,15 +69,15 @@ State-of-the-art financial intelligence platform with institutional-grade financ
 <!-- DOWNLOAD-TABLE-START -->
 ### Option 1 — Download Installer (Recommended)
 
-Latest release: **v4.2.0** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.2.0)
+Latest release: **v4.3.0** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.3.0)
 
 | Platform | Download | Run |
 |----------|----------|-----|
-| **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.2.0/FinceptTerminal-4.2.0-windows-x64-setup.exe) | Run installer → launch `FinceptTerminal.exe` |
-| **Linux x64 (AppImage)** | [FinceptTerminal-Linux-x64.run](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.2.0/FinceptTerminal-4.2.0-linux-x64-setup.run) | `chmod +x` → run installer |
-| **Linux x64 (Debian/Ubuntu)** | [FinceptTerminal-Linux-x64.deb](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.2.0/FinceptTerminal-4.2.0-linux-x64.deb) | `sudo apt install ./FinceptTerminal-4.2.0-linux-x64.deb` |
-| **Linux x64 (Fedora/RHEL)** | [FinceptTerminal-Linux-x64.rpm](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.2.0/FinceptTerminal-4.2.0-linux-x64.rpm) | `sudo dnf install ./FinceptTerminal-4.2.0-linux-x64.rpm` |
-| **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.2.0/FinceptTerminal-4.2.0-macos-arm64-setup.dmg) | Open DMG → drag to Applications |
+| **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.3.0/FinceptTerminal-4.3.0-windows-x64-setup.exe) | Run installer → launch `FinceptTerminal.exe` |
+| **Linux x64 (AppImage)** | [FinceptTerminal-Linux-x64.run](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.3.0/FinceptTerminal-4.3.0-linux-x64-setup.run) | `chmod +x` → run installer |
+| **Linux x64 (Debian/Ubuntu)** | [FinceptTerminal-Linux-x64.deb](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.3.0/FinceptTerminal-4.3.0-linux-x64.deb) | `sudo apt install ./FinceptTerminal-4.3.0-linux-x64.deb` |
+| **Linux x64 (Fedora/RHEL)** | [FinceptTerminal-Linux-x64.rpm](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.3.0/FinceptTerminal-4.3.0-linux-x64.rpm) | `sudo dnf install ./FinceptTerminal-4.3.0-linux-x64.rpm` |
+| **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.3.0/FinceptTerminal-4.3.0-macos-arm64-setup.dmg) | Open DMG → drag to Applications |
 <!-- DOWNLOAD-TABLE-END -->
 
 ---

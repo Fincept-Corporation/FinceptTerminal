@@ -55,7 +55,14 @@ QString validate_typed(const QString& /*key*/, const ToolParam& p, const QJsonVa
         if (!p.enum_values.isEmpty() && !p.enum_values.contains(s))
             return "must be one of [" + p.enum_values.join(",") + "]";
         if (!p.pattern.isEmpty()) {
-            QRegularExpression rx(p.pattern);
+            // anchoredPattern() wraps in \A(?:...)\z so the pattern must match
+            // the WHOLE value. QRegularExpression::match() is a substring
+            // search: an unanchored pattern like "[a-z]+" would happily accept
+            // "../../etc/passwd", and even an "^...$" pattern accepts a
+            // trailing newline because $ matches before a final \n. Tool
+            // patterns are a security control (see run_python_script), so they
+            // must be full-string.
+            QRegularExpression rx(QRegularExpression::anchoredPattern(p.pattern));
             if (!rx.match(s).hasMatch())
                 return "does not match pattern " + p.pattern;
         }
@@ -91,7 +98,8 @@ QString validate_legacy(const QString& /*key*/, const QJsonObject& spec, const Q
         }
     }
     if (expected == "string" && spec.contains("pattern")) {
-        QRegularExpression rx(spec["pattern"].toString());
+        // Full-string match — see the note in validate_typed().
+        QRegularExpression rx(QRegularExpression::anchoredPattern(spec["pattern"].toString()));
         if (!rx.match(v.toString()).hasMatch())
             return "does not match pattern " + spec["pattern"].toString();
     }

@@ -65,9 +65,8 @@ void FiscalDataPanel::on_fetch() {
 
     show_loading(tr("Fetching FiscalData: %1…").arg(series.label));
 
-    QStringList args = {series.command};
-    args << series.args;
-
+    // EconomicsService::execute() prepends `command` to the argv — pass only
+    // the extra flags here.
     services::EconomicsService::instance().execute(kFiscalDataSourceId, kFiscalDataScript, series.command, series.args,
                                                    "fiscal_" + QString(series.command).replace('-', '_'));
 }

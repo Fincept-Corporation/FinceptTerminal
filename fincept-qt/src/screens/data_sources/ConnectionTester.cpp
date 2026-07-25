@@ -22,6 +22,7 @@
 #include <QStringList>
 #include <QTcpSocket>
 #include <QUrl>
+#include <QUrlQuery>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
@@ -317,6 +318,40 @@ QString provider_probe_url(const QString& provider_id, const QJsonObject& cfg) {
     return {};
 }
 
+// Most provider probe URLs above carry the connection's API key in the query
+// string. Everything that reaches a dialog, a tooltip or the log file must go
+// through here first — see P14 ("never log sensitive data").
+QString redact_url(const QString& url) {
+    if (url.isEmpty())
+        return url;
+
+    QUrl u(url);
+    if (!u.isValid() || u.scheme().isEmpty())
+        return url;
+
+    if (!u.userInfo().isEmpty())
+        u.setUserInfo(QStringLiteral("***"));
+
+    const QUrlQuery query(u);
+    if (!query.isEmpty()) {
+        QUrlQuery masked;
+        const auto items = query.queryItems(QUrl::FullyDecoded);
+        for (const auto& item : items) {
+            const QString lower_key = item.first.toLower();
+            const bool is_secret = lower_key.contains(QLatin1String("key")) ||
+                                   lower_key.contains(QLatin1String("token")) ||
+                                   lower_key.contains(QLatin1String("secret")) ||
+                                   lower_key.contains(QLatin1String("pass")) ||
+                                   lower_key.contains(QLatin1String("auth")) ||
+                                   lower_key.contains(QLatin1String("sig")) ||
+                                   lower_key.contains(QLatin1String("credential"));
+            masked.addQueryItem(item.first, (is_secret && !item.second.isEmpty()) ? QStringLiteral("***") : item.second);
+        }
+        u.setQuery(masked);
+    }
+    return u.toString();
+}
+
 namespace {
 
 QString simple_dialog_qss() {
@@ -398,8 +433,11 @@ void show_result_dialog(QWidget* parent, const QString& display, bool success, c
 
 void test_connection(QWidget* parent, const QString& conn_id, const TestResultCallback& on_result) {
     const auto get_result = DataSourceRepository::instance().get(conn_id);
-    if (get_result.is_err())
+    if (get_result.is_err()) {
+        if (on_result)
+            on_result(conn_id, false, QObject::tr("Connection not found: %1").arg(conn_id));
         return;
+    }
 
     const auto ds = get_result.value();
     const auto cfg_doc = QJsonDocument::fromJson(ds.config.toUtf8());
@@ -407,8 +445,13 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
 
     const auto* connector_cfg = find_connector_config(ds.provider);
     if (connector_cfg && !connector_cfg->testable) {
-        show_message_dialog(parent, QObject::tr("Test: %1").arg(ds.display_name),
-                            QObject::tr("This connector does not support connectivity testing."));
+        const QString msg = QObject::tr("This connector does not support connectivity testing.");
+        // Always settle the callback, even on the early-exit paths — the caller
+        // puts its TEST button into a "testing..." state before calling us and
+        // relies on the callback to clear it.
+        if (on_result)
+            on_result(conn_id, false, msg);
+        show_message_dialog(parent, QObject::tr("Test: %1").arg(ds.display_name), msg);
         return;
     }
 
@@ -547,9 +590,11 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
     }
 
     if (test_url.isEmpty() && (host.isEmpty() || port <= 0)) {
-        show_message_dialog(parent, QObject::tr("Test: %1").arg(display),
-                            QObject::tr("No testable endpoint found in the saved configuration.\n"
-                                        "Ensure required fields (URL, host, or API key) are filled in."));
+        const QString msg = QObject::tr("No testable endpoint found in the saved configuration.\n"
+                                        "Ensure required fields (URL, host, or API key) are filled in.");
+        if (on_result)
+            on_result(conn_id, false, msg);
+        show_message_dialog(parent, QObject::tr("Test: %1").arg(display), msg);
         return;
     }
 
@@ -577,9 +622,11 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
         };
 
         if (!captured_test_url.isEmpty()) {
+            // Never surface the raw probe URL — it usually embeds the API key.
+            const QString safe_url = redact_url(captured_test_url);
             const QUrl url(captured_test_url);
             if (!url.isValid() || url.host().isEmpty()) {
-                message = QObject::tr("Invalid URL: %1").arg(captured_test_url);
+                message = QObject::tr("Invalid URL: %1").arg(safe_url);
             } else {
                 const QString url_host = url.host();
                 const QString scheme = url.scheme().toLower();
@@ -587,7 +634,7 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
                 const int url_port = url.port(default_port);
                 auto [ok, msg] = tcp_probe(url_host, url_port, 5000);
                 success = ok;
-                message = ok ? QObject::tr("Endpoint reachable: %1").arg(captured_test_url) : msg;
+                message = ok ? QObject::tr("Endpoint reachable: %1").arg(safe_url) : msg;
             }
         } else if (!captured_host.isEmpty() && captured_port > 0) {
             auto [ok, msg] = tcp_probe(captured_host, captured_port, 3000);

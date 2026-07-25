@@ -44,7 +44,14 @@ void MiniMap::update_viewport_rect() {
 
     // Add margin
     items_rect.adjust(-100, -100, 100, 100);
-    fitInView(items_rect, Qt::KeepAspectRatio);
+
+    // P9: fitInView resets the transform and forces a full re-render of the whole
+    // scene into this 200x150 view. At 5 Hz with a static graph that was pure
+    // waste — only re-fit when the graph's extent actually moved.
+    if (items_rect != fitted_rect_) {
+        fitted_rect_ = items_rect;
+        fitInView(items_rect, Qt::KeepAspectRatio);
+    }
 
     viewport()->update();
 }

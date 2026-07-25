@@ -71,6 +71,9 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void hub_resubscribe_stocks();
     void hub_unsubscribe_all();
     void rebuild_from_cache();
+    /// Coalesce a burst of per-symbol hub callbacks into ONE table rebuild.
+    void schedule_table_rebuild();
+    QTimer* rebuild_timer_ = nullptr;
 
     // Data
     QVector<fincept::Watchlist> watchlists_;
@@ -100,7 +103,11 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     QPushButton* add_btn_ = nullptr;
     QPushButton* remove_btn_ = nullptr;
     ui::DataTable* table_ = nullptr;
+    QLabel* empty_label_ = nullptr; // guidance shown in place of a blank grid
     QSplitter* splitter_ = nullptr;
+
+    /// Show/hide the empty-state guidance based on the current selection.
+    void update_empty_state();
 
     QHash<QString, services::QuoteData> row_cache_;
     bool hub_active_ = false;

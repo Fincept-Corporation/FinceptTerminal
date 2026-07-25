@@ -35,6 +35,16 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
 /// Provider-specific probe URL synthesis. Exposed for the background poll
 /// timer in DataSourcesScreen, which derives host/port without showing a
 /// dialog. Returns {} when no HTTP probe is applicable.
+///
+/// SECURITY: the returned URL frequently embeds the connection's API key or
+/// token (that is how most REST health checks authenticate). Never show it in
+/// the UI or write it to the log without passing it through redact_url().
 QString provider_probe_url(const QString& provider_id, const QJsonObject& cfg);
+
+/// Mask credential material in a URL so it is safe to display or log.
+/// Strips any userinfo component and replaces the value of every query
+/// parameter whose key looks like a secret (key / token / secret / password /
+/// auth / sig / credential) with "***". Non-URL input is returned unchanged.
+QString redact_url(const QString& url);
 
 } // namespace fincept::screens::datasources

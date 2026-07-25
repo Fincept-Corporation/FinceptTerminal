@@ -41,6 +41,9 @@ class TopMoversWidget : public BaseWidget {
     QPushButton* losers_btn_ = nullptr;
     QVector<services::QuoteData> all_quotes_;
     bool showing_gainers_ = true;
+    /// Guards the tab-button stylesheet reparse — show_tab() runs on every
+    /// hub delivery but the button CSS only changes with tab/theme.
+    bool tab_style_applied_ = false;
 
     QHash<QString, services::QuoteData> row_cache_;
     QStringList symbols_;

@@ -1,0 +1,6 @@
+{
+  "setStyleSheet_total": 5200,
+  "stylesheet_in_loop": 460,
+  "untranslated_total": 120,
+  "_note": "Architecture ratchets \u2014 these may only DECREASE. Regenerate with --update-baseline ONLY when lowering them (i.e. after cleanup), never to make a new violation pass."
+}

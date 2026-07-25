@@ -117,17 +117,23 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
 
     // ── Leg table ─────────────────────────────────────────────────────────
     legs_table_ = new QTableWidget(this);
-    legs_table_->setColumnCount(5);
-    legs_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("B/S"), tr("Qty"), tr("Type"), tr("Entry")});
+    legs_table_->setColumnCount(6);
+    legs_table_->setHorizontalHeaderLabels(
+        {tr("Symbol"), tr("B/S"), tr("Lots"), tr("Qty"), tr("Type"), tr("Entry")});
     legs_table_->verticalHeader()->setVisible(false);
     legs_table_->setSelectionMode(QAbstractItemView::NoSelection);
     legs_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     legs_table_->setShowGrid(false);
     legs_table_->setFocusPolicy(Qt::NoFocus);
+    legs_table_->setAccessibleName(tr("Order legs"));
     legs_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     legs_table_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     legs_table_->verticalHeader()->setDefaultSectionSize(24);
     root->addWidget(legs_table_, 1);
+
+    legs_note_ = new QLabel(this);
+    legs_note_->setObjectName("confirmSub");
+    root->addWidget(legs_note_);
 
     // ── Summary block ─────────────────────────────────────────────────────
     auto add_kv = [this](QHBoxLayout* lay, QLabel*& v_out, QLabel*& k_out, const QString& key) {
@@ -168,34 +174,70 @@ void OrderConfirmDialog::setup_ui(double premium, double max_profit, double max_
     cancel_btn_ = new QPushButton(tr("CANCEL"), this);
     cancel_btn_->setObjectName("confirmCancel");
     cancel_btn_->setCursor(Qt::PointingHandCursor);
+    cancel_btn_->setAccessibleName(tr("Cancel without placing orders"));
     place_btn_ = new QPushButton(tr("PLACE PAPER ORDERS"), this);
     place_btn_->setObjectName("confirmPlace");
     place_btn_->setCursor(Qt::PointingHandCursor);
+    place_btn_->setAccessibleName(tr("Place the listed legs as paper orders"));
     btn_row->addWidget(cancel_btn_);
     btn_row->addWidget(place_btn_);
     root->addLayout(btn_row);
+
+    // Cancel is the default: a stray Return on a modal that dispatches a
+    // leveraged multi-leg basket must not place it. Placing takes a click
+    // (or an explicit Tab to the button, then Space).
+    cancel_btn_->setDefault(true);
+    cancel_btn_->setAutoDefault(true);
+    place_btn_->setAutoDefault(false);
+    setTabOrder(cancel_btn_, place_btn_);
 
     connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
     connect(place_btn_, &QPushButton::clicked, this, &QDialog::accept);
 }
 
 void OrderConfirmDialog::populate_legs() {
+    // Every leg the strategy carries is listed, but a leg that will NOT be
+    // submitted (toggled off, or zero lots) is rendered dim and explicitly
+    // tagged so the preview can never claim more than the dispatcher places.
+    // The caller's submit loop uses exactly the same predicate.
     legs_table_->setRowCount(strategy_.legs.size());
+    int placeable = 0;
     for (int i = 0; i < strategy_.legs.size(); ++i) {
         const StrategyLeg& leg = strategy_.legs.at(i);
+        const bool will_place = leg.is_active && leg.lots != 0;
+        if (will_place)
+            ++placeable;
+        const QColor dim(colors::TEXT_DIM());
         auto set_cell = [&](int col, const QString& txt, const QColor& fg = QColor()) {
             auto* item = new QTableWidgetItem(txt);
             item->setFlags(item->flags() & ~Qt::ItemIsEditable);
-            if (fg.isValid())
+            if (!will_place)
+                item->setForeground(dim);
+            else if (fg.isValid())
                 item->setForeground(fg);
+            if (!will_place)
+                item->setToolTip(tr("Not submitted — leg is switched off or has zero lots."));
             legs_table_->setItem(i, col, item);
         };
-        set_cell(0, leg.symbol);
+        const int lot_size = leg.lot_size > 0 ? leg.lot_size : 0;
+        const qint64 qty = qint64(std::abs(leg.lots)) * qint64(lot_size);
         const bool buy = leg.lots >= 0;
+        set_cell(0, will_place ? leg.symbol : tr("%1  (skipped)").arg(leg.symbol));
         set_cell(1, buy ? tr("BUY") : tr("SELL"), buy ? QColor(colors::POSITIVE()) : QColor(colors::NEGATIVE()));
-        set_cell(2, QString::number(std::abs(leg.lots) * leg.lot_size));
-        set_cell(3, leg.type == InstrumentType::CE ? "CE" : leg.type == InstrumentType::PE ? "PE" : "FUT");
-        set_cell(4, QString::number(leg.entry_price, 'f', 2));
+        set_cell(2, QString::number(std::abs(leg.lots)));
+        // Lot size is spelled out: an F&O quantity is meaningless without it,
+        // and a leg whose lot size never resolved (0) must be visibly broken
+        // rather than quietly submitted as a 1-unit order.
+        set_cell(3, lot_size > 0 ? tr("%1  (×%2)").arg(QString::number(qty), QString::number(lot_size))
+                                 : tr("— lot size unknown"),
+                 lot_size > 0 ? QColor() : QColor(colors::NEGATIVE()));
+        set_cell(4, leg.type == InstrumentType::CE ? "CE" : leg.type == InstrumentType::PE ? "PE" : "FUT");
+        set_cell(5, QString::number(leg.entry_price, 'f', 2));
+    }
+    if (legs_note_) {
+        legs_note_->setText(tr("%1 of %2 legs will be placed as market orders at the shown entry premium.")
+                                .arg(placeable)
+                                .arg(strategy_.legs.size()));
     }
 }
 
@@ -210,7 +252,9 @@ void OrderConfirmDialog::start_margin_fetch() {
     QVector<UnifiedOrder> orders;
     orders.reserve(strategy_.legs.size());
     for (const auto& leg : strategy_.legs) {
-        if (!leg.is_active)
+        // Same predicate the dispatcher uses — margin must be quoted for the
+        // basket that is actually going to be sent, not for the full leg list.
+        if (!leg.is_active || leg.lots == 0)
             continue;
         orders.append(leg_to_unified(leg));
     }
@@ -275,8 +319,11 @@ void OrderConfirmDialog::retranslateUi() {
                                 .arg(strategy_.underlying)
                                 .arg(strategy_.expiry)
                                 .arg(chain_.spot, 0, 'f', 2));
-    if (legs_table_)
-        legs_table_->setHorizontalHeaderLabels({tr("Symbol"), tr("B/S"), tr("Qty"), tr("Type"), tr("Entry")});
+    if (legs_table_) {
+        legs_table_->setHorizontalHeaderLabels(
+            {tr("Symbol"), tr("B/S"), tr("Lots"), tr("Qty"), tr("Type"), tr("Entry")});
+        populate_legs(); // re-renders the per-row "(skipped)" / lot-size strings
+    }
     if (key_premium_)
         key_premium_->setText(tr("Net Premium").toUpper());
     if (key_max_pnl_)

@@ -62,7 +62,11 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
                                       "}"
                                       "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
                                   .arg(colors::BG_BASE(), colors::BG_SURFACE(), colors::BORDER_BRIGHT()));
+    list_view_->setAccessibleName(tr("Market list"));
     connect(list_view_, &QListView::clicked, this, &PolymarketBrowsePanel::on_item_clicked);
+    // Keyboard: Enter/Return on the highlighted card opens it, matching the
+    // click path. Without this the list was mouse-only.
+    connect(list_view_, &QListView::activated, this, &PolymarketBrowsePanel::on_item_clicked);
     vl->addWidget(list_view_, 1);
 
     // ── Pagination bar ────────────────────────────────────────────────────
@@ -92,6 +96,8 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     prev_btn_->setStyleSheet(nav_btn_css);
     prev_btn_->setFixedSize(30, 22);
     prev_btn_->setCursor(Qt::PointingHandCursor);
+    prev_btn_->setToolTip(tr("Previous page"));
+    prev_btn_->setAccessibleName(tr("Previous page"));
     connect(prev_btn_, &QPushButton::clicked, this, &PolymarketBrowsePanel::on_prev);
 
     page_label_ = new QLabel("1 / 1");
@@ -103,6 +109,8 @@ PolymarketBrowsePanel::PolymarketBrowsePanel(QWidget* parent) : QWidget(parent) 
     next_btn_->setStyleSheet(nav_btn_css);
     next_btn_->setFixedSize(30, 22);
     next_btn_->setCursor(Qt::PointingHandCursor);
+    next_btn_->setToolTip(tr("Next page"));
+    next_btn_->setAccessibleName(tr("Next page"));
     connect(next_btn_, &QPushButton::clicked, this, &PolymarketBrowsePanel::on_next);
 
     phl->addWidget(prev_btn_);
@@ -192,9 +200,20 @@ void PolymarketBrowsePanel::on_next() {
 void PolymarketBrowsePanel::update_page() {
     int total = model_->rowCount();
     int pages = qMax(1, (total + PAGE_SIZE - 1) / PAGE_SIZE);
+    if (current_page_ >= pages)
+        current_page_ = pages - 1;
     page_label_->setText(QString("%1 / %2").arg(current_page_ + 1).arg(pages));
     prev_btn_->setEnabled(current_page_ > 0);
     next_btn_->setEnabled(current_page_ + 1 < pages);
+    // The ◀ / ▶ buttons previously only relabelled themselves — the list view
+    // never moved, so paging was a no-op control. Scroll the view to the first
+    // row of the page so the buttons actually navigate.
+    if (list_view_ && total > 0) {
+        const int row = qBound(0, current_page_ * PAGE_SIZE, total - 1);
+        const auto idx = model_->index(row, 0);
+        if (idx.isValid())
+            list_view_->scrollTo(idx, QAbstractItemView::PositionAtTop);
+    }
 }
 
 void PolymarketBrowsePanel::changeEvent(QEvent* event) {

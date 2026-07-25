@@ -58,10 +58,6 @@ namespace {
 
 static const QString TAG = "DataSources";
 
-static const QStringList kCategoryLabels = {
-    "All Connectors", "Databases",   "APIs",   "Files",      "Streaming",        "Cloud",
-    "Time Series",    "Market Data", "Search", "Warehouses", "Alternative Data", "Open Banking"};
-
 } // anonymous namespace
 
 // ─────────────────────────────────────────────────────────────────────────────

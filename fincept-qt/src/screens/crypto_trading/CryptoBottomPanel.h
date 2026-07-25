@@ -135,10 +135,13 @@ class CryptoBottomPanel : public QWidget {
     QLabel* stat_values_[5] = {};
     QLabel* stat_titles_[5] = {};
 
-    // Live balance
+    // Live balance (cards built on the STATS tab by setup_stats_tab)
     QLabel* live_balance_label_ = nullptr;
     QLabel* live_equity_label_ = nullptr;
     QLabel* live_margin_label_ = nullptr;
+    QLabel* live_balance_title_ = nullptr;
+    QLabel* live_equity_title_ = nullptr;
+    QLabel* live_margin_title_ = nullptr;
 
     // Bulk action buttons
     class QPushButton* cancel_all_btn_ = nullptr;

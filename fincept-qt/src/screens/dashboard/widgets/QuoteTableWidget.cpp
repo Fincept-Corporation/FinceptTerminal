@@ -74,7 +74,8 @@ void QuoteTableWidget::hub_subscribe_all() {
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             set_loading_progress(row_cache_.size(), symbols_.size());
-            render_from_cache();
+            // One render per delivery burst, not one per symbol (P9/P10).
+            schedule_render([this]() { render_from_cache(); });
         });
     }
     hub_active_ = true;
@@ -94,23 +95,6 @@ void QuoteTableWidget::render_from_cache() {
         if (it == row_cache_.constEnd())
             continue;
         const auto& q = it.value();
-        QString display_name = label_map_.value(q.symbol, q.symbol);
-        QString price_str = QString::number(q.price, 'f', price_decimals_);
-        double chg_abs = q.change;
-        QString chg_str = QString("%1%2").arg(chg_abs >= 0 ? "+" : "").arg(chg_abs, 0, 'f', price_decimals_);
-        QString pct_str = QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2);
-
-        table_->add_row({display_name, price_str, chg_str, pct_str});
-        int row = table_->rowCount() - 1;
-        table_->set_cell_color(row, 2, ui::change_color(q.change_pct));
-        table_->set_cell_color(row, 3, ui::change_color(q.change_pct));
-    }
-}
-
-void QuoteTableWidget::populate(const QVector<services::QuoteData>& quotes) {
-    table_->clear_data();
-
-    for (const auto& q : quotes) {
         QString display_name = label_map_.value(q.symbol, q.symbol);
         QString price_str = QString::number(q.price, 'f', price_decimals_);
         double chg_abs = q.change;

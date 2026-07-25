@@ -7,8 +7,6 @@
 #include <QStackedWidget>
 #include <QWidget>
 
-#include <functional>
-
 namespace fincept::screens {
 
 /// Container for full-screen detail views with a 36px header bar (back button + title).

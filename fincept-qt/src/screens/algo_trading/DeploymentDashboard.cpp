@@ -12,6 +12,7 @@
 #include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
@@ -83,10 +84,23 @@ void DeploymentDashboard::connect_service() {
     connect(&svc, &AlgoTradingService::error_occurred, this, &DeploymentDashboard::on_error);
 
     // Ticks the "updated Ns ago" labels once a second.
+    // P3: interval + connection only — showEvent()/hideEvent() own start/stop.
     age_timer_ = new QTimer(this);
     age_timer_->setInterval(1000);
     connect(age_timer_, &QTimer::timeout, this, &DeploymentDashboard::refresh_ages);
-    age_timer_->start();
+}
+
+void DeploymentDashboard::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    if (age_timer_)
+        age_timer_->start();
+    refresh_ages();
+}
+
+void DeploymentDashboard::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    if (age_timer_)
+        age_timer_->stop();
 }
 
 // ── Build summary stat card ─────────────────────────────────────────────────
@@ -344,21 +358,48 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
         auto* stop_btn = new QPushButton(tr("STOP"), card);
         stop_btn->setCursor(Qt::PointingHandCursor);
         stop_btn->setFixedHeight(26);
+        stop_btn->setAccessibleName(tr("Stop deployment %1 on %2").arg(d.strategy_name, d.symbol));
         stop_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
                                         " font-size: %2px; font-weight: 700; %3 padding: 2px 16px; }"
-                                        "QPushButton:hover { background: rgba(220,38,38,0.1); }")
+                                        "QPushButton:hover { background: rgba(220,38,38,0.1); }"
+                                        "QPushButton:disabled { color: %4; border-color: %4; }")
                                     .arg(fincept::ui::colors::NEGATIVE())
                                     .arg(fincept::ui::fonts::TINY)
-                                    .arg(kMonoFont()));
-        connect(stop_btn, &QPushButton::clicked, card, [dep_id = d.id]() {
-            algo_ns::AlgoEngine::instance().stop_deployment(dep_id);
-            LOG_INFO("AlgoTrading", QString("Stop requested: %1").arg(dep_id));
-        });
+                                    .arg(kMonoFont())
+                                    .arg(fincept::ui::colors::TEXT_DIM()));
+        // A live strategy that is stopped mid-position leaves that position
+        // unmanaged at the broker, so confirm — and state whether it's live.
+        // The button then latches disabled until the engine reports the stop, so
+        // the card can never show STOP while a stop is already in flight.
+        const bool live = (d.mode == QLatin1String("live"));
+        connect(stop_btn, &QPushButton::clicked, card,
+                [this, stop_btn, dep_id = d.id, name = d.strategy_name, sym = d.symbol, live]() {
+                    const QString detail =
+                        live ? tr("Stop LIVE deployment \"%1\" on %2?\n\n"
+                                  "The runner will stop placing orders immediately. Any position it is\n"
+                                  "currently holding at the broker is NOT closed — you must flatten it\n"
+                                  "yourself from Equity Trading.")
+                                   .arg(name, sym)
+                             : tr("Stop paper deployment \"%1\" on %2?").arg(name, sym);
+                    const auto ans = QMessageBox::question(this, tr("Stop deployment"), detail,
+                                                           QMessageBox::Yes | QMessageBox::Cancel,
+                                                           QMessageBox::Cancel);
+                    if (ans != QMessageBox::Yes)
+                        return;
+                    stop_btn->setEnabled(false);
+                    stop_btn->setText(tr("STOPPING…"));
+                    auto it = cards_.find(dep_id);
+                    if (it != cards_.end())
+                        it.value().stop_pending = true;
+                    algo_ns::AlgoEngine::instance().stop_deployment(dep_id);
+                    LOG_INFO("AlgoTrading", QString("Stop requested: %1").arg(dep_id));
+                });
         btn_row->addWidget(stop_btn);
     } else {
         auto* remove_btn = new QPushButton(tr("REMOVE"), card);
         remove_btn->setCursor(Qt::PointingHandCursor);
         remove_btn->setFixedHeight(26);
+        remove_btn->setAccessibleName(tr("Remove deployment %1 on %2").arg(d.strategy_name, d.symbol));
         remove_btn->setStyleSheet(QString("QPushButton { background: transparent; color: %1; border: 1px solid %1;"
                                           " font-size: %2px; font-weight: 700; %3 padding: 2px 16px; }"
                                           "QPushButton:hover { background: rgba(120,120,120,0.1); }")
@@ -382,15 +423,30 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
 void DeploymentDashboard::update_summary(const QVector<AlgoDeployment>& deployments) {
 
     int active = 0;
-    double pnl_sum = 0;
+    int active_live = 0;
+    // Paper P&L is simulated money and live P&L is real money — summing them into
+    // one "TOTAL P&L" tile produced a number that means nothing. Track separately.
+    double live_pnl = 0;
+    double paper_pnl = 0;
+    int live_count = 0;
     int trades_sum = 0;
     double win_rate_sum = 0;
     int win_rate_count = 0;
 
     for (const auto& d : deployments) {
-        if (d.status == "running" || d.status == "starting")
+        const bool running = (d.status == "running" || d.status == "starting");
+        const bool is_live = (d.mode == QLatin1String("live"));
+        if (running) {
             ++active;
-        pnl_sum += d.total_pnl + d.unrealized_pnl;
+            if (is_live)
+                ++active_live;
+        }
+        if (is_live) {
+            live_pnl += d.total_pnl + d.unrealized_pnl;
+            ++live_count;
+        } else {
+            paper_pnl += d.total_pnl + d.unrealized_pnl;
+        }
         trades_sum += d.total_trades;
         if (d.total_trades > 0) {
             win_rate_sum += d.win_rate;
@@ -401,17 +457,27 @@ void DeploymentDashboard::update_summary(const QVector<AlgoDeployment>& deployme
     double avg_wr = (win_rate_count > 0) ? (win_rate_sum / win_rate_count) : 0;
 
     if (active_count_)
-        active_count_->setText(QString::number(active));
+        active_count_->setText(active_live > 0 ? tr("%1  ·  %2 LIVE").arg(active).arg(active_live)
+                                               : QString::number(active));
 
     if (total_pnl_) {
-        QString sum_cs = deployments.isEmpty() ? cur::symbol() : currency_symbol(deployments.first().broker_id);
-        total_pnl_->setText(QString("%1%2%3").arg(pnl_sum >= 0 ? "+" : "-", sum_cs).arg(std::abs(pnl_sum), 0, 'f', 2));
-        total_pnl_->setStyleSheet(
-            QString("color: %1; font-size: %2px; font-weight: 700; %3"
-                    " background: transparent; border: none;")
-                .arg(pnl_sum >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE())
-                .arg(fincept::ui::fonts::TITLE)
-                .arg(kMonoFont()));
+        const QString sum_cs = deployments.isEmpty() ? cur::symbol() : currency_symbol(deployments.first().broker_id);
+        const bool show_live = (live_count > 0);
+        const double shown = show_live ? live_pnl : paper_pnl;
+        total_pnl_->setText(QString("%1%2%3").arg(shown >= 0 ? "+" : "-", sum_cs).arg(std::abs(shown), 0, 'f', 2));
+        total_pnl_->setToolTip(tr("Live: %1%2%3    Paper: %4%5%6")
+                                   .arg(live_pnl >= 0 ? "+" : "-", sum_cs)
+                                   .arg(std::abs(live_pnl), 0, 'f', 2)
+                                   .arg(paper_pnl >= 0 ? "+" : "-", sum_cs)
+                                   .arg(std::abs(paper_pnl), 0, 'f', 2));
+        if (total_pnl_caption_)
+            total_pnl_caption_->setText(show_live ? tr("TOTAL P&L (LIVE)") : tr("TOTAL P&L (PAPER)"));
+        total_pnl_->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: 700; %3"
+                                          " background: transparent; border: none;")
+                                      .arg(shown >= 0 ? fincept::ui::colors::POSITIVE()
+                                                      : fincept::ui::colors::NEGATIVE())
+                                      .arg(fincept::ui::fonts::TITLE)
+                                      .arg(kMonoFont()));
     }
 
     if (total_trades_)
@@ -505,6 +571,7 @@ void DeploymentDashboard::build_ui() {
                                     .arg(fincept::ui::fonts::TINY)
                                     .arg(kMonoFont())
                                     .arg(fincept::ui::colors::BG_HOVER(), fincept::ui::colors::TEXT_PRIMARY()));
+    refresh_btn_->setAccessibleName(tr("Refresh deployment list"));
     connect(refresh_btn_, &QPushButton::clicked, this, []() { algo_ns::AlgoEngine::instance().list_deployments(); });
     control_bar->addWidget(refresh_btn_);
 
@@ -521,7 +588,38 @@ void DeploymentDashboard::build_ui() {
             .arg(fincept::ui::fonts::TINY)
             .arg(kMonoFont())
             .arg(fincept::ui::colors::TEXT_PRIMARY()));
-    connect(stop_all_btn_, &QPushButton::clicked, this, []() {
+    stop_all_btn_->setAccessibleName(tr("Stop all running deployments"));
+    connect(stop_all_btn_, &QPushButton::clicked, this, [this]() {
+        // Count what is actually at risk so the prompt is concrete, and never
+        // fire a blanket kill without confirmation.
+        // card_order_ entries are "<deployment id>|<status>" (see on_deployments_loaded).
+        int running = 0;
+        int live_running = 0;
+        for (const QString& sig : card_order_) {
+            const QString status = sig.section(QLatin1Char('|'), 1, 1);
+            if (status != QLatin1String("running") && status != QLatin1String("starting"))
+                continue;
+            ++running;
+            const auto it = cards_.constFind(sig.section(QLatin1Char('|'), 0, 0));
+            if (it != cards_.constEnd() && it.value().mode == QLatin1String("live"))
+                ++live_running;
+        }
+        if (running == 0) {
+            QMessageBox::information(this, tr("Stop all"), tr("No deployments are running."));
+            return;
+        }
+        const QString body =
+            live_running > 0
+                ? tr("Stop ALL %1 deployment(s), including %2 LIVE one(s)?\n\n"
+                     "Open positions are NOT closed — flatten them yourself in Equity Trading.")
+                      .arg(running)
+                      .arg(live_running)
+                : tr("Stop ALL %1 deployment(s)?").arg(running);
+        const auto ans =
+            QMessageBox::question(this, tr("Stop all"), body, QMessageBox::Yes | QMessageBox::Cancel,
+                                  QMessageBox::Cancel);
+        if (ans != QMessageBox::Yes)
+            return;
         algo_ns::AlgoEngine::instance().stop_all();
         LOG_INFO("AlgoTrading", "Stop all deployments requested");
     });
@@ -707,17 +805,46 @@ void DeploymentDashboard::on_live_update(const QString& deployment_id, const fin
 }
 
 void DeploymentDashboard::refresh_ages() {
+    // A card that keeps saying RUNNING while its snapshots stopped arriving is
+    // the worst kind of lie on this screen: the user believes the strategy is
+    // watching the market when the runner may be dead or the feed disconnected.
+    // Past kStaleSecs the age line turns amber, past kDeadSecs it turns red and
+    // says so explicitly.
+    constexpr int kStaleSecs = 30;
+    constexpr int kDeadSecs = 120;
+
     const int64_t now = QDateTime::currentMSecsSinceEpoch();
     for (auto it = cards_.begin(); it != cards_.end(); ++it) {
         CardHandles& h = it.value();
         if (!h.updated)
             continue;
-        if (h.last_update_ms <= 0) {
-            h.updated->setText(tr("waiting for data…"));
-            continue;
+
+        QString text;
+        QString color = fincept::ui::colors::TEXT_TERTIARY();
+        if (h.stop_pending) {
+            text = tr("stop requested — waiting for the engine to confirm…");
+            color = fincept::ui::colors::WARNING();
+        } else if (h.last_update_ms <= 0) {
+            text = tr("waiting for data…");
+        } else {
+            const int secs = static_cast<int>((now - h.last_update_ms) / 1000);
+            text = secs <= 1 ? tr("updated just now") : tr("updated %1s ago").arg(secs);
+            if (secs >= kDeadSecs) {
+                text = tr("NO DATA FOR %1s — this deployment may not be running. Verify at your broker.").arg(secs);
+                color = fincept::ui::colors::NEGATIVE();
+            } else if (secs >= kStaleSecs) {
+                text = tr("stale — last update %1s ago").arg(secs);
+                color = fincept::ui::colors::WARNING();
+            }
         }
-        const int secs = static_cast<int>((now - h.last_update_ms) / 1000);
-        h.updated->setText(secs <= 1 ? tr("updated just now") : tr("updated %1s ago").arg(secs));
+
+        h.updated->setText(text);
+        const QString ss = QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
+                               .arg(color)
+                               .arg(fincept::ui::fonts::TINY)
+                               .arg(kMonoFont());
+        if (h.updated->styleSheet() != ss)
+            h.updated->setStyleSheet(ss); // P7: only reparse when the state actually changed
     }
 }
 

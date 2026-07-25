@@ -52,6 +52,14 @@ class NewsFeedPanel : public QWidget {
     void remove_skeleton();
     bool is_banner_duplicate(const QString& headline) const;
 
+    /// Capture / restore the reading position across a model reset. A feed
+    /// refresh (auto-refresh, live WS article, filter re-apply) resets the
+    /// model, which drops the QListView back to row 0 — scrolling a user away
+    /// from the item they were reading. We anchor on the article that was at
+    /// the top of the viewport and re-scroll to it once the reset completes.
+    void capture_scroll_anchor();
+    void restore_scroll_anchor();
+
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
@@ -89,6 +97,11 @@ class NewsFeedPanel : public QWidget {
     QWidget* empty_state_ = nullptr;
     QLabel* empty_state_title_ = nullptr;
     QLabel* empty_state_hint_ = nullptr;
+
+    // Scroll/selection preservation across model resets.
+    QString anchor_article_id_;  // article at the top of the viewport
+    QString current_article_id_; // article under the keyboard cursor
+    bool anchor_was_at_top_ = true;
 };
 
 } // namespace fincept::screens

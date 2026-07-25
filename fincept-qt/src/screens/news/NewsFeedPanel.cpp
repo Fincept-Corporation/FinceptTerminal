@@ -73,8 +73,23 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
 
     root->addWidget(stack, 1);
 
+    // Accessibility — a news reader is exactly the surface a screen reader
+    // user needs named, and the list must be reachable by keyboard.
+    list_view_->setAccessibleName(tr("News feed"));
+    list_view_->setAccessibleDescription(
+        tr("Article list. Use the arrow keys to move, Enter to open the article in a browser."));
+    list_view_->setFocusPolicy(Qt::StrongFocus);
+    empty_state_->setAccessibleName(tr("Empty news feed"));
+    banner_widget_->setAccessibleName(tr("Breaking news banner"));
+
     // Connect clicks
     connect(list_view_, &QListView::clicked, this, &NewsFeedPanel::on_item_clicked);
+    // Keyboard: Enter/Return on the highlighted row opens it, same as a click.
+    connect(list_view_, &QListView::activated, this, &NewsFeedPanel::on_item_clicked);
+
+    // Preserve the reading position across model resets (see the header note).
+    connect(model_, &QAbstractItemModel::modelAboutToBeReset, this, &NewsFeedPanel::capture_scroll_anchor);
+    connect(model_, &QAbstractItemModel::modelReset, this, &NewsFeedPanel::restore_scroll_anchor);
 
     // Scroll-to-bottom detection for lazy loading
     connect(list_view_->verticalScrollBar(), &QScrollBar::valueChanged, this, &NewsFeedPanel::check_scroll_position);
@@ -239,6 +254,45 @@ void NewsFeedPanel::set_empty_state(bool empty) {
     } else if (stack_->currentWidget() == empty_state_) {
         stack_->setCurrentWidget(list_view_);
     }
+}
+
+void NewsFeedPanel::capture_scroll_anchor() {
+    anchor_article_id_.clear();
+    current_article_id_.clear();
+    anchor_was_at_top_ = true;
+    if (!list_view_ || !model_)
+        return;
+    auto* sb = list_view_->verticalScrollBar();
+    anchor_was_at_top_ = !sb || sb->value() <= 0;
+
+    // Anchor on whatever row is currently at the top of the viewport. Doing
+    // this by article id (not pixel offset) keeps the anchor correct even when
+    // rows are inserted above it by the refresh.
+    const QModelIndex top = list_view_->indexAt(QPoint(4, 4));
+    if (top.isValid())
+        anchor_article_id_ = model_->article_at(top.row()).id;
+
+    const QModelIndex cur = list_view_->currentIndex();
+    if (cur.isValid())
+        current_article_id_ = model_->article_at(cur.row()).id;
+}
+
+void NewsFeedPanel::restore_scroll_anchor() {
+    if (!list_view_ || !model_)
+        return;
+    // Restore the keyboard cursor first — setCurrentIndex() ensure-visible
+    // scrolls, so doing it after the anchor scroll would undo it.
+    if (!current_article_id_.isEmpty()) {
+        const auto cur = model_->index_for_article(current_article_id_);
+        if (cur.isValid())
+            list_view_->setCurrentIndex(cur);
+    }
+    // At the very top the user wants to see the newest items — leave it there.
+    if (anchor_was_at_top_ || anchor_article_id_.isEmpty())
+        return;
+    const auto anchor = model_->index_for_article(anchor_article_id_);
+    if (anchor.isValid())
+        list_view_->scrollTo(anchor, QAbstractItemView::PositionAtTop);
 }
 
 void NewsFeedPanel::scroll_to(const QString& article_id) {

@@ -67,6 +67,15 @@ QString make_gov_panel_style(const QString& color, const QString& extra_qss) {
              .arg(t.text_secondary, t.border_dim);
     s += QString("#govCsvBtn:hover { color:%1; background:%2; }").arg(t.text_primary, t.bg_hover);
 
+    // Per-row "OPEN" link button in the resources table. Hoisted here so
+    // populate_resources() only has to setObjectName() — the old code called
+    // setStyleSheet() once per row, forcing a full CSS reparse + repolish for
+    // every resource in a dataset.
+    s += QString("#govOpenBtn { color:%1; font-size:10px; font-weight:700;"
+                 "  background:transparent; border:none; padding:2px 6px; }"
+                 "#govOpenBtn:hover { color:%1; text-decoration:underline; }")
+             .arg(color);
+
     // Search
     s += QString("#govSearch { background:%1; color:%2; border:none;"
                  "  border-bottom:1px solid %3; padding:4px 10px; font-size:11px; }")
@@ -331,11 +340,14 @@ QWidget* GovDataProviderPanel::build_toolbar() {
     search_input_->setObjectName("govSearch");
     search_input_->setFixedWidth(210);
     search_input_->setFixedHeight(24);
+    search_input_->setAccessibleName(tr("Search datasets"));
+    search_input_->setClearButtonEnabled(true);
     connect(search_input_, &QLineEdit::returnPressed, this, &GovDataProviderPanel::on_search);
     hl->addWidget(search_input_);
 
     fetch_btn_ = new QPushButton;
     fetch_btn_->setObjectName("govFetchBtn");
+    fetch_btn_->setAccessibleName(tr("Fetch"));
     fetch_btn_->setCursor(Qt::PointingHandCursor);
     connect(fetch_btn_, &QPushButton::clicked, this, [this]() {
         if (!search_input_->text().trimmed().isEmpty())
@@ -349,9 +361,16 @@ QWidget* GovDataProviderPanel::build_toolbar() {
 
     export_btn_ = new QPushButton;
     export_btn_->setObjectName("govCsvBtn");
+    export_btn_->setAccessibleName(tr("Export current view as CSV"));
     export_btn_->setCursor(Qt::PointingHandCursor);
     connect(export_btn_, &QPushButton::clicked, this, &GovDataProviderPanel::on_export_csv);
     hl->addWidget(export_btn_);
+
+    // Explicit keyboard traversal: tabs → search → FETCH → CSV.
+    QWidget::setTabOrder(orgs_btn_, datasets_btn_);
+    QWidget::setTabOrder(datasets_btn_, search_input_);
+    QWidget::setTabOrder(search_input_, fetch_btn_);
+    QWidget::setTabOrder(fetch_btn_, export_btn_);
 
     return bar;
 }
@@ -609,12 +628,11 @@ void GovDataProviderPanel::populate_resources(const QJsonArray& json) {
             resources_table_->setItem(i, 4, no_url);
         } else {
             auto* open_btn = new QPushButton(tr("↗ OPEN"));
+            open_btn->setObjectName("govOpenBtn"); // styled once via make_gov_panel_style()
             open_btn->setCursor(Qt::PointingHandCursor);
             open_btn->setFlat(true);
-            open_btn->setStyleSheet(QString("QPushButton { color:%1; font-size:10px; font-weight:700;"
-                                            "  background:transparent; border:none; padding:2px 6px; }"
-                                            "QPushButton:hover { color:%1; text-decoration:underline; }")
-                                        .arg(color_));
+            open_btn->setAccessibleName(tr("Open resource %1 in browser").arg(name));
+            open_btn->setToolTip(url);
             connect(open_btn, &QPushButton::clicked, this, [url]() { QDesktopServices::openUrl(QUrl(url)); });
             resources_table_->setCellWidget(i, 4, open_btn);
         }

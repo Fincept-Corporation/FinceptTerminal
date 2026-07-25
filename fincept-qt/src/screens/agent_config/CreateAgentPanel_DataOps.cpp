@@ -350,9 +350,17 @@ void CreateAgentPanel::save_agent() {
 }
 
 void CreateAgentPanel::delete_agent() {
-    int row = saved_list_->currentRow();
-    if (row >= 0 && row < saved_agents_.size())
-        services::AgentService::instance().delete_config(saved_agents_[row].id);
+    const int row = saved_list_->currentRow();
+    if (row < 0 || row >= saved_agents_.size())
+        return;
+    // "DEL" is a 3-character button directly beside "LOAD" — it deleted the
+    // selected agent config with no confirmation and no undo.
+    if (QMessageBox::question(
+            this, tr("Delete Agent"),
+            tr("Delete the saved agent \"%1\"?\n\nThis cannot be undone.").arg(saved_agents_[row].name),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+    services::AgentService::instance().delete_config(saved_agents_[row].id);
 }
 
 void CreateAgentPanel::test_agent() {
@@ -378,8 +386,15 @@ void CreateAgentPanel::export_json() {
     out["category"] = category_combo_->currentText();
     out["config"] = build_config_json();
     QFile file(path);
-    if (file.open(QIODevice::WriteOnly))
-        file.write(QJsonDocument(out).toJson(QJsonDocument::Indented));
+    // Previously the status said "Exported" even when open() failed and nothing
+    // was written — a silent data-loss report.
+    if (!file.open(QIODevice::WriteOnly)) {
+        status_lbl_->setText(tr("Export failed: cannot write %1").arg(path));
+        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
+        return;
+    }
+    file.write(QJsonDocument(out).toJson(QJsonDocument::Indented));
+    file.close();
     status_lbl_->setText(tr("Exported: %1").arg(path));
     status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::POSITIVE()));
 }
@@ -389,9 +404,23 @@ void CreateAgentPanel::import_json() {
     if (path.isEmpty())
         return;
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly))
+    if (!file.open(QIODevice::ReadOnly)) {
+        status_lbl_->setText(tr("Import failed: cannot read %1").arg(path));
+        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
         return;
-    const QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
+    }
+    // A malformed file used to load as an empty object, silently wiping the form.
+    QJsonParseError perr{};
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &perr);
+    file.close();
+    if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+        status_lbl_->setText(tr("Import failed: %1")
+                                 .arg(perr.error == QJsonParseError::NoError ? tr("top level must be a JSON object")
+                                                                             : perr.errorString()));
+        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
+        return;
+    }
+    const QJsonObject obj = doc.object();
     AgentConfig cfg;
     cfg.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     cfg.name = obj["name"].toString();

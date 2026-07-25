@@ -19,6 +19,8 @@
 #include "ui/widgets/LoadingOverlay.h"
 #include "ui/widgets/WorldMapWidget.h"
 
+#include <QCoreApplication>
+#include <QDateTime>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
@@ -30,11 +32,57 @@
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTime>
+#include <QTimeZone>
 
 namespace fincept::screens {
 
 using namespace fincept::services::maritime;
 using namespace fincept::screens::maritime_internal;
+
+namespace {
+
+/// Parse the API's `last_updated` stamp and describe how stale it is. AIS
+/// positions are frequently hours or days old; rendering a lat/lng with no age
+/// invites reading a stale fix as a live one.
+struct PositionAge {
+    bool known = false;
+    qint64 minutes = 0;
+    QDateTime when;
+};
+
+PositionAge position_age(const QString& last_updated) {
+    PositionAge a;
+    if (last_updated.trimmed().isEmpty())
+        return a;
+    QDateTime dt = QDateTime::fromString(last_updated, Qt::ISODate);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(last_updated, QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    if (!dt.isValid())
+        return a;
+    if (dt.timeSpec() == Qt::LocalTime)
+        dt.setTimeZone(QTimeZone::UTC); // API stamps are UTC when unqualified
+    a.known = true;
+    a.when = dt;
+    a.minutes = dt.secsTo(QDateTime::currentDateTimeUtc()) / 60;
+    return a;
+}
+
+QString age_text(const PositionAge& a) {
+    if (!a.known)
+        return QCoreApplication::translate("MaritimeScreen", "position age unknown");
+    if (a.minutes < 0)
+        return QCoreApplication::translate("MaritimeScreen", "just now");
+    if (a.minutes < 60)
+        return QCoreApplication::translate("MaritimeScreen", "%n min old", "", static_cast<int>(a.minutes));
+    if (a.minutes < 60 * 48)
+        return QCoreApplication::translate("MaritimeScreen", "%n hour(s) old", "", static_cast<int>(a.minutes / 60));
+    return QCoreApplication::translate("MaritimeScreen", "%n day(s) old", "", static_cast<int>(a.minutes / 1440));
+}
+
+/// Anything older than this is flagged so the user doesn't trust the fix.
+constexpr qint64 kStaleMinutes = 6 * 60;
+
+} // namespace
 
 void MaritimeScreen::load_global_sample() {
     // World bbox — the API caps at ±90 lat / ±180 lng, but stays well-behaved
@@ -252,13 +300,23 @@ void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
     for (int i = 0; i < render_n; ++i) {
         const auto& v = page.vessels[i];
 
+        const PositionAge age = position_age(v.last_updated);
+        const bool stale = !age.known || age.minutes >= kStaleMinutes;
+
+        // Flag stale fixes by colouring the name amber (plus an age tooltip) so
+        // a days-old AIS position can't be mistaken for a live one. Deliberately
+        // no text prefix — that would corrupt sorting on the Name column.
         auto* name_item = new QTableWidgetItem(v.name);
-        name_item->setForeground(QBrush(QColor(ui::colors::TEXT_PRIMARY.get())));
+        name_item->setForeground(QBrush(QColor(stale ? ui::colors::AMBER.get() : ui::colors::TEXT_PRIMARY.get())));
+        name_item->setToolTip(
+            tr("%1\nIMO %2\nPosition reported: %3 (%4)")
+                .arg(v.name, v.imo, age.known ? age.when.toString(Qt::ISODate) : tr("unknown"), age_text(age)));
         vessels_table_->setItem(i, 0, name_item);
         vessels_table_->setItem(i, 1, new QTableWidgetItem(v.imo));
 
         auto* lat = new QTableWidgetItem(QString::number(v.latitude, 'f', 4));
         lat->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        lat->setToolTip(age_text(age));
         vessels_table_->setItem(i, 2, lat);
 
         auto* lng = new QTableWidgetItem(QString::number(v.longitude, 'f', 4));
@@ -319,7 +377,14 @@ void MaritimeScreen::on_vessel_found(VesselData vessel) {
     search_result_label_->setVisible(false);
     sr_name_->setText(vessel.name);
     sr_imo_->setText(tr("IMO: %1").arg(vessel.imo));
-    sr_position_->setText(tr("Position: %1, %2").arg(vessel.latitude, 0, 'f', 4).arg(vessel.longitude, 0, 'f', 4));
+    // Always state the age of the fix next to the coordinates.
+    const PositionAge age = position_age(vessel.last_updated);
+    sr_position_->setText(tr("Position: %1, %2  ·  %3")
+                              .arg(vessel.latitude, 0, 'f', 4)
+                              .arg(vessel.longitude, 0, 'f', 4)
+                              .arg(age_text(age)));
+    sr_position_->setToolTip(age.known ? tr("Reported %1 UTC").arg(age.when.toString(Qt::ISODate))
+                                       : tr("The API did not report a position timestamp for this vessel."));
     sr_speed_->setText(tr("Speed: %1 kn").arg(vessel.speed, 0, 'f', 1));
     sr_from_->setText(tr("From: %1").arg(vessel.from_port.isEmpty() ? QStringLiteral("—") : vessel.from_port));
     sr_to_->setText(tr("To: %1").arg(vessel.to_port.isEmpty() ? QStringLiteral("—") : vessel.to_port));
@@ -508,7 +573,12 @@ void MaritimeScreen::update_map(const QVector<VesselData>& vessels) {
         // detail card.
         const int id = rendered_vessels_.size();
         rendered_vessels_.append(v);
-        pins.append({v.latitude, v.longitude, QString("%1 (%2)").arg(v.name, v.imo), ui::colors::POSITIVE, 5.5, id});
+        // Pin label carries the fix age so hovering a pin tells the user how
+        // old the position is; stale fixes are drawn amber instead of green.
+        const PositionAge age = position_age(v.last_updated);
+        const bool stale = !age.known || age.minutes >= kStaleMinutes;
+        pins.append({v.latitude, v.longitude, QString("%1 (%2) — %3").arg(v.name, v.imo, age_text(age)),
+                     QColor(stale ? ui::colors::AMBER.get() : ui::colors::POSITIVE.get()), 5.5, id});
         // Track unique destination ports for the DEST PORTS stat.
         if (!v.to_port.isEmpty())
             port_seen.insert(v.to_port);

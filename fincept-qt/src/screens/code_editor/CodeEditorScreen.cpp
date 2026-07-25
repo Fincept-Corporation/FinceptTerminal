@@ -33,10 +33,12 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyle>
@@ -175,6 +177,22 @@ void CodeEditorScreen::build_ui() {
     view_stack_->addWidget(library_page_);       // 0 — Library
     view_stack_->addWidget(build_editor_page()); // 1 — Editor
     root->addWidget(view_stack_, 1);
+
+    // The status bar advertises Ctrl+S but nothing was ever bound to it, and
+    // there was no keyboard route to New/Open/Run-all either. Scoped to this
+    // screen so they don't fight other tabs' bindings.
+    auto bind = [this](const QKeySequence& seq, void (CodeEditorScreen::*slot)()) {
+        auto* sc = new QShortcut(seq, this);
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, slot);
+    };
+    bind(QKeySequence(QKeySequence::Save), &CodeEditorScreen::on_save_notebook);
+    bind(QKeySequence(QKeySequence::Open), &CodeEditorScreen::on_open_notebook);
+    bind(QKeySequence(QKeySequence::New), &CodeEditorScreen::on_new_notebook);
+    // Deliberately NOT F5 — KeyConfigManager binds F5 to the global Refresh
+    // action with Qt::ApplicationShortcut, and a second F5 would make both
+    // ambiguous (Qt fires activatedAmbiguously and neither handler runs).
+    bind(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return), &CodeEditorScreen::on_run_all);
 }
 
 // Header bar: title + LIBRARY/EDITOR tabs + Library search + NEW button.
@@ -320,24 +338,32 @@ QWidget* CodeEditorScreen::build_toolbar() {
     };
 
     btn_new_ = make_btn(tr("NEW"));
+    btn_new_->setAccessibleName(tr("New notebook"));
+    btn_new_->setToolTip(tr("New notebook (%1)").arg(QKeySequence(QKeySequence::New).toString()));
     connect(btn_new_, &QPushButton::clicked, this, &CodeEditorScreen::on_new_notebook);
     hl->addWidget(btn_new_);
 
     btn_open_ = make_btn(tr("OPEN"));
+    btn_open_->setAccessibleName(tr("Open notebook"));
+    btn_open_->setToolTip(tr("Open notebook (%1)").arg(QKeySequence(QKeySequence::Open).toString()));
     connect(btn_open_, &QPushButton::clicked, this, &CodeEditorScreen::on_open_notebook);
     hl->addWidget(btn_open_);
 
     btn_save_ = make_btn(tr("SAVE"));
+    btn_save_->setAccessibleName(tr("Save notebook"));
+    btn_save_->setToolTip(tr("Save notebook (%1)").arg(QKeySequence(QKeySequence::Save).toString()));
     connect(btn_save_, &QPushButton::clicked, this, &CodeEditorScreen::on_save_notebook);
     hl->addWidget(btn_save_);
 
     add_sep();
 
     btn_add_cell_ = make_btn(tr("+ CELL"), "nbAccentBtn");
+    btn_add_cell_->setAccessibleName(tr("Add cell below the selected cell"));
     connect(btn_add_cell_, &QPushButton::clicked, this, &CodeEditorScreen::on_add_cell);
     hl->addWidget(btn_add_cell_);
 
     btn_clear_out_ = make_btn(tr("CLEAR OUT"));
+    btn_clear_out_->setAccessibleName(tr("Clear all cell outputs"));
     connect(btn_clear_out_, &QPushButton::clicked, this, &CodeEditorScreen::on_clear_outputs);
     hl->addWidget(btn_clear_out_);
 
@@ -345,12 +371,16 @@ QWidget* CodeEditorScreen::build_toolbar() {
 
     btn_run_all_ = make_btn(tr("▶  RUN ALL"), "nbPrimaryBtn");
     btn_run_all_->setStyleSheet(QString("font-family:%1; font-size:%2px;").arg(fonts::DATA_FAMILY).arg(fonts::TINY));
+    btn_run_all_->setAccessibleName(tr("Run every code cell"));
+    btn_run_all_->setToolTip(tr("Run every code cell (Ctrl+Shift+Enter). Cells execute as separate processes and "
+                                "do not share state with each other."));
     connect(btn_run_all_, &QPushButton::clicked, this, &CodeEditorScreen::on_run_all);
     hl->addWidget(btn_run_all_);
 
     hl->addStretch();
 
     btn_sidebar_ = make_btn(tr("SIDEBAR"));
+    btn_sidebar_->setAccessibleName(tr("Toggle the cell navigator sidebar"));
     connect(btn_sidebar_, &QPushButton::clicked, this, &CodeEditorScreen::on_toggle_sidebar);
     hl->addWidget(btn_sidebar_);
 
@@ -386,7 +416,9 @@ QWidget* CodeEditorScreen::build_status_bar() {
     hl->addStretch();
 
     shortcuts_label_ =
-        new QLabel(tr("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE"), bar);
+        new QLabel(tr("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE  |  "
+                   "Ctrl+Shift+Enter: RUN ALL"),
+                   bar);
     shortcuts_label_->setStyleSheet(QString("color:%1; font-family:%2; font-size:10px; letter-spacing:0.3px;")
                                         .arg(colors::TEXT_DIM(), fonts::DATA_FAMILY));
     hl->addWidget(shortcuts_label_);
@@ -398,7 +430,65 @@ QWidget* CodeEditorScreen::build_status_bar() {
 // Notebook management
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Unsaved-change tracking ──────────────────────────────────────────────────
+
+void CodeEditorScreen::sync_cells_from_widgets() {
+    for (int i = 0; i < cells_.size(); ++i) {
+        auto* cw = find_cell_widget(cells_[i].id);
+        if (!cw)
+            continue;
+        const NotebookCell live = cw->cell_data();
+        cells_[i].source = live.source;
+        cells_[i].cell_type = live.cell_type;
+        cells_[i].title = live.title;
+    }
+}
+
+QString CodeEditorScreen::notebook_fingerprint() const {
+    QString fp;
+    fp.reserve(1024);
+    for (const auto& c : cells_) {
+        fp += c.cell_type;
+        fp += QLatin1Char('\x1f');
+        fp += c.title;
+        fp += QLatin1Char('\x1f');
+        fp += c.source;
+        fp += QLatin1Char('\x1e');
+    }
+    return fp;
+}
+
+bool CodeEditorScreen::confirm_discard_changes(const QString& action) {
+    sync_cells_from_widgets();
+    if (notebook_fingerprint() == clean_fingerprint_)
+        return true;
+
+    const QString name = notebook_path_.isEmpty() ? tr("this notebook") : QFileInfo(notebook_path_).fileName();
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Warning);
+    box.setWindowTitle(tr("Unsaved Changes"));
+    box.setText(tr("%1 has unsaved changes.").arg(name));
+    box.setInformativeText(tr("%1 will discard them.").arg(action));
+    box.setStandardButtons(QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+    box.setDefaultButton(QMessageBox::Save);
+    const int choice = box.exec();
+    if (choice == QMessageBox::Cancel)
+        return false;
+    if (choice == QMessageBox::Save) {
+        on_save_notebook();
+        // on_save_notebook() only updates clean_fingerprint_ on a real write —
+        // a cancelled Save dialog must not silently drop the edits.
+        return notebook_fingerprint() == clean_fingerprint_;
+    }
+    return true;
+}
+
 void CodeEditorScreen::on_new_notebook() {
+    // Guarded, except for the very first call from the constructor (no widgets
+    // exist yet, so the fingerprint is empty and the guard passes silently).
+    if (!confirm_discard_changes(tr("Creating a new notebook")))
+        return;
+
     cells_.clear();
     execution_counter_ = 0;
     notebook_path_.clear();
@@ -414,6 +504,7 @@ void CodeEditorScreen::on_new_notebook() {
 
     selected_cell_id_ = cell.id;
     rebuild_cells();
+    clean_fingerprint_ = notebook_fingerprint();
     update_status();
     update_navigator();
 }
@@ -449,6 +540,17 @@ void CodeEditorScreen::add_cell_after(const QString& after_id, const QString& ty
 void CodeEditorScreen::on_delete_cell(const QString& cell_id) {
     if (cells_.size() <= 1)
         return;
+
+    // There is no undo for cell deletion — confirm before dropping real content.
+    if (auto* cw = find_cell_widget(cell_id)) {
+        if (!cw->cell_data().source.trimmed().isEmpty()) {
+            if (QMessageBox::question(this, tr("Delete Cell"),
+                                      tr("Delete this cell and its contents?\n\nThis cannot be undone."),
+                                      QMessageBox::Yes | QMessageBox::Cancel,
+                                      QMessageBox::Cancel) != QMessageBox::Yes)
+                return;
+        }
+    }
 
     int idx = find_cell_index(cell_id);
     if (idx >= 0) {
@@ -591,10 +693,13 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
 
     auto* cw = find_cell_widget(cell_id);
     if (cw) {
+        const auto outputs = cells_[idx].outputs;
         cells_[idx] = cw->cell_data();
-        cw->set_running(true);
+        cells_[idx].outputs = outputs;
     }
 
+    // Bail out BEFORE flipping the running indicator — marking a markdown or
+    // empty cell as running left its gutter stuck on "[*]" forever.
     if (cells_[idx].cell_type != "code")
         return;
 
@@ -602,9 +707,13 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
     if (code.trimmed().isEmpty())
         return;
 
+    if (cw)
+        cw->set_running(true);
+
     ++execution_counter_;
     int exec_num = execution_counter_;
 
+    ++pending_runs_;
     kernel_busy_ = true;
     refresh_kernel_label();
 
@@ -614,6 +723,13 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
     python::PythonRunner::instance().run_code(code, [self, cid, exec_num](python::PythonResult result) {
         if (!self)
             return;
+
+        // Settle the busy counter even if the cell was deleted mid-run,
+        // otherwise the kernel badge sticks on BUSY.
+        if (self->pending_runs_ > 0)
+            --self->pending_runs_;
+        self->kernel_busy_ = (self->pending_runs_ > 0);
+        self->refresh_kernel_label();
 
         int idx = self->find_cell_index(cid);
         if (idx < 0)
@@ -658,9 +774,6 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
             widget->set_running(false);
         }
 
-        self->kernel_busy_ = false;
-        self->refresh_kernel_label();
-
         self->update_status();
         self->update_navigator();
     });
@@ -672,10 +785,16 @@ void CodeEditorScreen::on_run_and_advance(const QString& cell_id) {
 }
 
 void CodeEditorScreen::on_run_all() {
+    // Snapshot the ids first — on_run_cell() can mutate cells_ (it syncs the
+    // widget text back), and iterating the live container while it is being
+    // written to is how iterator invalidation bugs start.
+    QStringList code_cell_ids;
     for (const auto& cell : cells_) {
         if (cell.cell_type == "code")
-            on_run_cell(cell.id);
+            code_cell_ids << cell.id;
     }
+    for (const auto& id : code_cell_ids)
+        on_run_cell(id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -683,11 +802,18 @@ void CodeEditorScreen::on_run_all() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void CodeEditorScreen::on_open_notebook() {
+    if (!confirm_discard_changes(tr("Opening another notebook")))
+        return;
     const QString path =
         QFileDialog::getOpenFileName(this, tr("Open Notebook"), {}, tr("Fincept Notebooks (*.ipynb);;All Files (*)"));
     if (path.isEmpty())
         return;
-    open_notebook_path(path);
+    if (!open_notebook_path(path)) {
+        QMessageBox::warning(this, tr("Open Notebook"),
+                             tr("Could not read a notebook from:\n%1\n\n"
+                                "The file must be valid JSON in .ipynb (nbformat) shape.")
+                                 .arg(path));
+    }
 }
 
 // Public entry point: load an .ipynb from disk and switch to the editor view.
@@ -748,6 +874,7 @@ bool CodeEditorScreen::load_notebook_from_path(const QString& path) {
     notebook_path_ = path;
     selected_cell_id_ = cells_.first().id;
     rebuild_cells();
+    clean_fingerprint_ = notebook_fingerprint(); // freshly loaded == no unsaved edits
     update_status();
     update_navigator();
     LOG_INFO("CodeEditor", "Opened notebook: " + path);
@@ -758,8 +885,13 @@ bool CodeEditorScreen::load_notebook_from_path(const QString& path) {
 void CodeEditorScreen::on_save_notebook() {
     for (int i = 0; i < cells_.size(); ++i) {
         auto* cw = find_cell_widget(cells_[i].id);
-        if (cw)
+        if (cw) {
+            // cell_data() does not carry outputs — preserve the executed
+            // results instead of dropping them on every save.
+            const auto outputs = cells_[i].outputs;
             cells_[i] = cw->cell_data();
+            cells_[i].outputs = outputs;
+        }
     }
 
     QString path = notebook_path_;
@@ -809,8 +941,15 @@ void CodeEditorScreen::on_save_notebook() {
         file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
         file.close();
         notebook_path_ = path;
+        clean_fingerprint_ = notebook_fingerprint();
         LOG_INFO("CodeEditor", "Saved notebook: " + path);
         services::FileManagerService::instance().import_file(path, "code_editor");
+    } else {
+        // Silently failing a save is how work gets lost — say what happened.
+        LOG_ERROR("CodeEditor", "Save failed: " + path + " — " + file.errorString());
+        QMessageBox::warning(this, tr("Save Notebook"),
+                             tr("Could not write to:\n%1\n\n%2").arg(path, file.errorString()));
+        return;
     }
     update_status();
 }
@@ -942,11 +1081,16 @@ void CodeEditorScreen::retranslateUi() {
 
     // Status bar
     if (shortcuts_label_)
-        shortcuts_label_->setText(tr("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE"));
+        shortcuts_label_->setText(
+            tr("Ctrl+Enter: RUN  |  Shift+Enter: RUN & NEXT  |  Tab: 4 SPACES  |  Ctrl+S: SAVE  |  "
+                   "Ctrl+Shift+Enter: RUN ALL"));
     update_status(); // re-renders the cell-count summary in the new language
 
     // Cell widgets carry their own translatable chrome — rebuild so they
-    // re-create with the new language (cell source/outputs are data, preserved).
+    // re-create with the new language. rebuild_cells() renders from cells_, so
+    // pull the live editor text back first; without this, switching language
+    // mid-edit silently reverted every cell to its last-committed source.
+    sync_cells_from_widgets();
     rebuild_cells();
 }
 

@@ -8,7 +8,6 @@
 
 #include <QComboBox>
 #include <QLabel>
-#include <QStackedWidget>
 
 namespace fincept::screens {
 
@@ -44,7 +43,9 @@ class CftcPanel : public EconPanelBase {
     QLabel* sent_comm_net_ = nullptr;
     QLabel* sent_noncomm_net_ = nullptr;
 
-    QStackedWidget* content_stack_ = nullptr; // 0=base table, 1=sentiment
+    // Index of the sentiment page inside EconPanelBase's shared content stack
+    // (-1 until build_sentiment_widget() registers it).
+    int sentiment_page_ = -1;
 
     // Cached for retranslateUi — toolbar labels
     QLabel* market_lbl_ = nullptr;

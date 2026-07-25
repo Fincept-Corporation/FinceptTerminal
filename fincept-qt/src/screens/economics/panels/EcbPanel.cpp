@@ -73,7 +73,12 @@ void EcbPanel::on_fetch() {
 
     show_loading(tr("Fetching ECB data: %1…").arg(series.label));
 
-    QStringList args = {series.command};
+    // EconomicsService::execute() already prepends `command` to the argv, so
+    // args must carry ONLY the extra positional arguments. Repeating the
+    // command here shifted every parameter by one — the CLI read
+    // `exchange_rates exchange_rates USD` as currency="exchange_rates",
+    // freq="USD", so every ECB fetch silently queried a bogus series.
+    QStringList args;
     if (!series.arg.isEmpty())
         args << series.arg;
 

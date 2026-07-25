@@ -83,6 +83,23 @@ void RssFeedEditDialog::retranslateUi() {
     // test_status_ reflects the last async test result — refreshed on next test.
 }
 
+QNetworkAccessManager* RssFeedEditDialog::nam() {
+    // P10 — one manager per dialog, not one per request. Parented to the
+    // dialog so it dies with it.
+    if (!nam_)
+        nam_ = new QNetworkAccessManager(this);
+    return nam_;
+}
+
+QNetworkRequest RssFeedEditDialog::probe_request(const QString& url) const {
+    QNetworkRequest req((QUrl(url)));
+    req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
+    req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setTransferTimeout(kTestTimeoutMs);
+    return req;
+}
+
 void RssFeedEditDialog::build_ui() {
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(16, 16, 16, 12);
@@ -118,6 +135,15 @@ void RssFeedEditDialog::build_ui() {
 
     url_input_ = new QLineEdit(initial_.url, this);
     url_input_->setPlaceholderText("https://example.com/rss.xml");
+    // Editing the URL invalidates any earlier probe. Without this, testing one
+    // URL, then typing a different one, and saving reused the *previous* URL's
+    // pass/fail verdict — so a broken feed could be saved as "validated".
+    connect(url_input_, &QLineEdit::textEdited, this, [this](const QString&) {
+        test_run_ = false;
+        last_test_ok_ = false;
+        if (test_status_)
+            test_status_->hide();
+    });
     form->addRow(tr("URL"), url_input_);
 
     category_combo_ = new QComboBox(this);
@@ -205,18 +231,10 @@ void RssFeedEditDialog::on_test() {
     test_status_->setStyleSheet("color:#6b7280;");
     test_status_->show();
 
-    auto* nam = new QNetworkAccessManager(this);
-    QNetworkRequest req((QUrl(url)));
-    req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
-    req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    req.setTransferTimeout(kTestTimeoutMs);
-
     QPointer<RssFeedEditDialog> self = this;
-    auto* reply = nam->get(req);
-    connect(reply, &QNetworkReply::finished, this, [self, reply, nam]() {
+    auto* reply = nam()->get(probe_request(url));
+    connect(reply, &QNetworkReply::finished, this, [self, reply]() {
         reply->deleteLater();
-        nam->deleteLater();
         if (!self)
             return;
 
@@ -284,17 +302,10 @@ void RssFeedEditDialog::try_accept() {
         test_status_->setStyleSheet("color:#6b7280;");
         test_status_->show();
 
-        auto* nam = new QNetworkAccessManager(this);
-        QNetworkRequest req((QUrl(f.url)));
-        req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
-        req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-        req.setTransferTimeout(kTestTimeoutMs);
         QPointer<RssFeedEditDialog> self = this;
-        auto* reply = nam->get(req);
-        connect(reply, &QNetworkReply::finished, this, [self, reply, nam]() {
+        auto* reply = nam()->get(probe_request(f.url));
+        connect(reply, &QNetworkReply::finished, this, [self, reply]() {
             reply->deleteLater();
-            nam->deleteLater();
             if (!self)
                 return;
             self->test_btn_->setEnabled(true);

@@ -816,6 +816,20 @@ QVariant DataHub::peek_raw(const QString& topic) const {
     return it == topics_.end() ? QVariant{} : it->value;
 }
 
+qint64 DataHub::last_publish_ms(const QString& topic) const {
+    QMutexLocker lock(&mutex_);
+    auto it = topics_.find(topic);
+    return it == topics_.end() ? 0 : it->last_publish_ms;
+}
+
+qint64 DataHub::age_ms(const QString& topic) const {
+    QMutexLocker lock(&mutex_);
+    auto it = topics_.find(topic);
+    if (it == topics_.end() || it->last_publish_ms <= 0)
+        return -1;
+    return now_ms() - it->last_publish_ms;
+}
+
 void DataHub::request(const QString& topic, bool force) {
     request(QStringList{topic}, force);
 }

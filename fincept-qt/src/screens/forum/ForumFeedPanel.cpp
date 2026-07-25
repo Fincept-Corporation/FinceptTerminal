@@ -214,6 +214,21 @@ void ForumFeedPanel::set_loading(bool on) {
     }
 }
 
+// P3: a request that never returns used to leave the 350 ms skeleton animation
+// (a setStyleSheet storm across ~18 widgets per tick) running forever behind a
+// hidden screen.
+void ForumFeedPanel::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    if (skeleton_w_ && skeleton_timer_)
+        skeleton_timer_->start();
+}
+
+void ForumFeedPanel::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    if (skeleton_timer_)
+        skeleton_timer_->stop();
+}
+
 void ForumFeedPanel::clear_active() {
     active_uuid_.clear();
 }
@@ -505,10 +520,12 @@ void ForumFeedPanel::rebuild_posts() {
 
     posts_vl_->addWidget(grid);
 
-    // ── Load more button ──────────────────────────────────────────────────────
+    // ── Next-page button ──────────────────────────────────────────────────────
+    // This is pagination, not infinite scroll: load_more_requested() re-fetches
+    // and REPLACES the feed with the next page. The old "Load N more posts"
+    // label promised appending and reported a bogus N (total minus one page).
     if (page_.page < page_.pages) {
-        int remaining = page_.total - page_.posts.size();
-        auto* more = new QPushButton(tr("Load %1 more posts").arg(remaining));
+        auto* more = new QPushButton(tr("Next page  (%1 of %2)").arg(page_.page + 1).arg(page_.pages));
         more->setFixedHeight(36);
         more->setCursor(Qt::PointingHandCursor);
         more->setStyleSheet(QString("QPushButton{background:%1;color:%2;"

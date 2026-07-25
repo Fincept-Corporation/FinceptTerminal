@@ -15,6 +15,7 @@
 #include <QShowEvent>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens::panels {

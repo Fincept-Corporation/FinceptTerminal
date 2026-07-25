@@ -743,6 +743,10 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                         QMessageBox::warning(this, tr("Export Failed"), QString::fromStdString(r.error()));
                 }
             }
+        } else if (action == "check_updates") {
+            // Help ▸ Check for Updates. silent=false so the user gets a result
+            // either way — a menu-triggered check that says nothing reads as broken.
+            services::UpdateService::instance().check_for_updates(/*silent=*/false);
         } else if (action == "screenshot") {
             QScreen* scr = this->screen();
             if (!scr)

@@ -40,8 +40,12 @@ namespace fincept::screens::panels {
 ///   1. Calls `StakingService::build_lock_tx(...)` — fails fast in mock mode.
 ///   2. On success, opens `WalletActionConfirmDialog` with decoded summary.
 ///   3. On confirm, forwards to `WalletService::sign_and_send`.
-///   4. Polls `getSignatureStatuses` until confirmed (reuses the SwapPanel
-///      pattern; encapsulated in `start_status_poll`).
+///   4. **Not implemented yet:** unlike `SwapPanel`, this panel does NOT poll
+///      `getSignatureStatuses`. The status line reads "Sent … (not yet
+///      confirmed on-chain)" and the balance is refreshed optimistically. A
+///      lock that is rejected on-chain therefore shows no failure here — the
+///      user has to check the explorer. Wire `start_status_poll` (copy the
+///      SwapPanel implementation) when the fincept_lock program ships.
 ///
 /// In mock mode the LOCK button is disabled with status "DEMO — fincept_lock
 /// not deployed yet" and clicking it shows the explanation in the error strip.
@@ -122,6 +126,11 @@ class LockPanel : public QWidget {
     int fncpt_decimals_ = 6;
     double fncpt_usd_price_ = 0.0;
     double weekly_revenue_usd_ = 0.0;
+    /// True when the `treasury:revenue` payload the yield projection is built
+    /// from is the producer's built-in mock (worker endpoint unconfigured).
+    /// Drives the "DEMO" prefix on the EST. YIELD line — a fabricated revenue
+    /// figure must never be rendered as if it were a real projection.
+    bool revenue_is_mock_ = false;
     quint64 current_user_weight_raw_ = 0;
     fincept::wallet::TierStatus::Tier current_tier_ = fincept::wallet::TierStatus::Tier::Free;
 

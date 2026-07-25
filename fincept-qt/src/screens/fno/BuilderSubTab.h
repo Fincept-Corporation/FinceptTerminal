@@ -85,6 +85,13 @@ class BuilderSubTab : public QWidget {
     fincept::services::options::OptionChain last_chain_;
     bool chain_subscribed_ = false;
 
+    /// P3: chain publishes keep arriving while the Builder tab is hidden (the
+    /// service signal is connected for the widget's lifetime). Cache the
+    /// snapshot but defer the payoff/POP/Greeks recompute until the tab is
+    /// actually visible — compute_pop alone samples 1001 points per publish.
+    bool is_visible_ = false;
+    bool analytics_dirty_ = false;
+
     qint64 loaded_strategy_id_ = 0;
     QString loaded_strategy_name_;
 };

@@ -11,6 +11,7 @@
 
 #include <QHBoxLayout>
 #include <QJsonDocument>
+#include <QMessageBox>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QStackedWidget>
@@ -271,8 +272,18 @@ QWidget* AgentsViewPanel::build_config_panel() {
                                            "font-weight:700;}QPushButton:hover{background:%3;}")
                                        .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::ORANGE()));
     connect(json_apply_btn_, &QPushButton::clicked, this, [this, stack]() {
-        const QJsonDocument doc = QJsonDocument::fromJson(json_editor_->toPlainText().toUtf8());
-        if (!doc.isNull() && selected_agent_idx_ >= 0) {
+        // Malformed JSON used to be swallowed: the editor closed and the form
+        // silently kept the old values, so the user believed their edit applied.
+        QJsonParseError perr{};
+        const QJsonDocument doc = QJsonDocument::fromJson(json_editor_->toPlainText().toUtf8(), &perr);
+        if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+            QMessageBox::warning(this, tr("Apply JSON"),
+                                 tr("Could not parse the JSON at offset %1: %2").arg(perr.offset).arg(
+                                     perr.error == QJsonParseError::NoError ? tr("top level must be an object")
+                                                                            : perr.errorString()));
+            return; // stay in the editor so the user can fix it
+        }
+        if (selected_agent_idx_ >= 0) {
             filtered_agents_[selected_agent_idx_].config = doc.object();
             load_agent_into_editor(filtered_agents_[selected_agent_idx_]);
         }
@@ -439,7 +450,14 @@ void AgentsViewPanel::setup_connections() {
             });
 
     connect(&svc, &services::AgentService::agent_result, this, [this](services::AgentExecutionResult r) {
-        if (r.request_id != pending_request_id_)
+        // Auto-Route dispatches two calls: route_query() (whose id we keep) and
+        // execute_routed_query(), which is void and emits agent_result with an
+        // EMPTY request_id. The strict id compare therefore dropped the only
+        // terminal event Auto-Route ever produces, leaving the panel pinned at
+        // "Executing..." with RUN AGENT disabled forever. Accept the unlabelled
+        // result while an auto-routed run is outstanding.
+        const bool routed_reply = executing_ && r.request_id.isEmpty() && auto_route_check_->isChecked();
+        if (r.request_id != pending_request_id_ && !routed_reply)
             return;
         executing_ = false;
         pending_request_id_.clear();
@@ -505,6 +523,22 @@ void AgentsViewPanel::setup_connections() {
                                              .arg(static_cast<int>(r.confidence * 100)));
             routing_info_label_->show();
         }
+    });
+
+    // A failure that never produces agent_result / agent_stream_done (Python
+    // crash, spawn failure, bad config) otherwise left RUN AGENT disabled and
+    // `executing_` stuck true for the rest of the session. Same guard
+    // TeamsViewPanel / WorkflowsViewPanel already carry.
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString&, const QString& msg) {
+        if (!executing_)
+            return;
+        executing_ = false;
+        pending_request_id_.clear();
+        run_btn_->setEnabled(true);
+        run_btn_->setText(tr("RUN AGENT"));
+        result_display_->setPlainText(tr("Error: %1").arg(msg));
+        result_status_->setText(tr("ERROR"));
+        result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
     });
 
     // Reload profile combo when LLM config changes
@@ -773,6 +807,13 @@ void AgentsViewPanel::save_current_config() {
 
 void AgentsViewPanel::delete_current_config() {
     if (selected_agent_idx_ < 0 || selected_agent_idx_ >= filtered_agents_.size())
+        return;
+    // Deleting an agent config is irreversible and was a single unguarded click
+    // right next to SAVE CONFIG.
+    const QString name = filtered_agents_[selected_agent_idx_].name;
+    if (QMessageBox::question(this, tr("Delete Agent"),
+                              tr("Delete the agent configuration \"%1\"?\n\nThis cannot be undone.").arg(name),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
     services::AgentService::instance().delete_config(filtered_agents_[selected_agent_idx_].id);
     result_status_->setText(tr("Config deleted"));

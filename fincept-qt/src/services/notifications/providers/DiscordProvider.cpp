@@ -1,4 +1,4 @@
-#include "services/notifications/providers/DiscordProvider.h"
+﻿#include "services/notifications/providers/DiscordProvider.h"
 
 #include "network/http/HttpClient.h"
 
@@ -8,11 +8,11 @@
 namespace fincept::notifications {
 
 void DiscordProvider::load_fields(SettingsRepository& r, const QString& cat) {
-    webhook_url_ = get_str(r, cat + ".webhook_url");
+    webhook_url_ = get_secret(r, cat + ".webhook_url");
 }
 
 void DiscordProvider::save_fields(SettingsRepository& r, const QString& cat) {
-    r.set(cat + ".webhook_url", webhook_url_, cat);
+    set_secret(r, cat + ".webhook_url", webhook_url_, cat);
 }
 
 void DiscordProvider::send(const NotificationRequest& req, std::function<void(bool, QString)> cb) {
@@ -47,7 +47,7 @@ void DiscordProvider::send(const NotificationRequest& req, std::function<void(bo
     body["embeds"] = embeds;
 
     HttpClient::instance().post(webhook_url_, body, [cb](Result<QJsonDocument> res) {
-        // Discord returns 204 No Content on success — HttpClient may return empty body
+        // Discord returns 204 No Content on success â€” HttpClient may return empty body
         if (res.is_err()) {
             const auto& err = res.error();
             // "HTTP_204" is a successful empty response

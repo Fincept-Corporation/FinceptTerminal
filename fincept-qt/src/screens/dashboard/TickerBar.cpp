@@ -14,6 +14,8 @@
 #include <QResizeEvent>
 #include <QtConcurrent>
 
+#include <cmath>
+
 namespace fincept::screens {
 
 static constexpr int kItemSpacing = 40;
@@ -29,6 +31,9 @@ static const char* kSettingsCategory = "dashboard";
 TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(kEditBarHeight);
     setContextMenuPolicy(Qt::DefaultContextMenu);
+    setAccessibleName(tr("Market ticker"));
+    setAccessibleDescription(tr("Scrolling price ticker. Right-click to edit the symbol list."));
+    setToolTip(tr("Right-click to edit ticker symbols"));
 
     auto apply_bg = [this]() { setStyleSheet(QString("background-color: %1;").arg(ui::colors::BG_BASE())); };
     apply_bg();
@@ -61,6 +66,7 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     hl->addWidget(edit_label_);
 
     edit_input_ = new QLineEdit(edit_bar_);
+    edit_input_->setAccessibleName(tr("Ticker symbols"));
     edit_input_->setPlaceholderText(tr("AAPL, MSFT, ^GSPC, BTC-USD ..."));
     edit_input_->setStyleSheet(
         QString("QLineEdit { background:%1; color:%2; border:1px solid %3;"
@@ -81,6 +87,10 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
 
     edit_cancel_ = new QPushButton("✕", edit_bar_);
     edit_cancel_->setFixedWidth(24);
+    edit_cancel_->setAccessibleName(tr("Cancel"));
+    edit_ok_->setAccessibleName(tr("Apply ticker symbols"));
+    setTabOrder(edit_input_, edit_ok_);
+    setTabOrder(edit_ok_, edit_cancel_);
     edit_cancel_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:none;"
                                         " font-size:11px; padding:2px; }"
                                         "QPushButton:hover { color:%2; }")
@@ -139,8 +149,8 @@ void TickerBar::save_symbols() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void TickerBar::set_data(const QVector<Entry>& entries) {
+    const bool symbols_changed = entries.size() != entries_.size();
     entries_ = entries;
-    offset_ = 0;
 
     // Cache total width — paintEvent runs every 50ms, no per-frame allocation.
     QFont font(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
@@ -154,8 +164,19 @@ void TickerBar::set_data(const QVector<Entry>& entries) {
         total_width_ += symbol_w + kSegmentGap + price_w + kSegmentGap + change_w + kItemSpacing;
     }
 
+    // Preserve the scroll position across price updates. set_data() is called
+    // on EVERY per-symbol hub delivery (rebuild_ticker_from_cache), so zeroing
+    // the offset made the ticker visibly snap back to the start several times
+    // a second. Only reset when the symbol set itself changed.
+    if (symbols_changed || total_width_ <= 0)
+        offset_ = 0;
+    else if (offset_ >= total_width_)
+        offset_ = std::fmod(offset_, static_cast<double>(total_width_));
+
     if (total_width_ > 0 && isVisible() && !edit_bar_->isVisible())
         scroll_timer_.start();
+    else if (total_width_ <= 0)
+        scroll_timer_.stop();
 
     update();
 }

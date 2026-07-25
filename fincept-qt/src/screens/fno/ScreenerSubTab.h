@@ -44,6 +44,11 @@ class ScreenedChainModel : public QAbstractTableModel {
         ColCount,
     };
 
+    /// Raw strike of a row. Lets the view remember "which strike was selected"
+    /// instead of "which row index", which is meaningless once the filter set
+    /// changes length.
+    enum Role : int { StrikeRole = Qt::UserRole + 1 };
+
     explicit ScreenedChainModel(QObject* parent = nullptr);
 
     int rowCount(const QModelIndex& parent = {}) const override;

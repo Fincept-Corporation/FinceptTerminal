@@ -54,6 +54,9 @@ class OrderConfirmDialog : public QDialog {
     QTableWidget* legs_table_ = nullptr;
     QLabel* title_label_ = nullptr;
     QLabel* sub_label_ = nullptr;
+    /// "N of M legs will be placed" — makes preview/submission divergence
+    /// impossible to miss when some legs are toggled off or have zero lots.
+    QLabel* legs_note_ = nullptr;
     QLabel* lbl_premium_ = nullptr;
     QLabel* lbl_max_pnl_ = nullptr;
     QLabel* lbl_margin_ = nullptr;

@@ -324,11 +324,29 @@ void WindowFrame::on_terminal_unlocked() {
                 guard.set_timeout_minutes(minutes);
         }
     }
-    if (!guard.is_enabled()) {
-        qApp->installEventFilter(&guard);
-        guard.set_enabled(true);
+    // Honour the user's Settings → Security → "Enable auto-lock" choice.
+    // This previously enabled the guard unconditionally, so switching
+    // auto-lock OFF was silently reverted on the very next unlock/login —
+    // the setting persisted but nothing ever read it. Auto-lock is also
+    // pointless without a PIN (there would be nothing to unlock with), so
+    // both conditions gate it. Default is ON when the key is absent, which
+    // preserves the previous behaviour for existing users.
+    const bool autolock_wanted = [] {
+        auto r = SettingsRepository::instance().get("security.autolock_enabled");
+        if (r.is_ok() && !r.value().isEmpty())
+            return r.value().compare(QLatin1String("false"), Qt::CaseInsensitive) != 0;
+        return true; // unset → previous default
+    }();
+
+    if (autolock_wanted && auth::PinManager::instance().has_pin()) {
+        if (!guard.is_enabled()) {
+            qApp->installEventFilter(&guard);
+            guard.set_enabled(true);
+        }
+        guard.reset_timer();
+    } else if (guard.is_enabled()) {
+        guard.set_enabled(false);
     }
-    guard.reset_timer();
 
     // Reset PIN lockout on successful unlock
     auth::PinManager::instance().reset_lockout();

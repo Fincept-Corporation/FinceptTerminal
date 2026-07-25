@@ -2,6 +2,7 @@
 // Crypto Price Ribbon — dense single-line: price, change, bid/ask, spread, high/low/volume, WS status
 
 #include <QLabel>
+#include <QString>
 #include <QWidget>
 
 namespace fincept::screens::crypto {
@@ -29,19 +30,23 @@ class CryptoTickerBar : public QWidget {
     QLabel* mark_price_label_ = nullptr;
     QLabel* index_price_label_ = nullptr;
 
-    // State cache — avoid redundant setText calls at ticker rate. Values are
-    // rounded to the display precision before comparing so we only repaint on
-    // a pixel-visible change.
+    // State cache — avoid redundant setText calls at ticker rate.
+    //
+    // Cached as the *rendered strings*, not as values rounded to a fixed 2 dp.
+    // The old scheme compared `round(v, 2)`, so on a sub-cent pair every tick
+    // rounded to the same 0.00 and the labels were never updated at all: the
+    // ribbon looked frozen for exactly the assets whose price moves most.
+    // Comparing the final text is both correct at every magnitude and still
+    // suppresses repaints when nothing visible changed.
     bool last_positive_ = true;
-    double last_price_display_ = -1;
-    double last_change_display_ = 1e300;
-    double last_high_display_ = -1;
-    double last_low_display_ = -1;
-    double last_volume_display_ = -1;
-    int last_volume_unit_ = -1; // 0=raw, 1=M, 2=B
-    double last_bid_display_ = -1;
-    double last_ask_display_ = -1;
-    double last_spread_display_ = -1;
+    QString last_price_text_;
+    QString last_change_text_;
+    QString last_high_text_;
+    QString last_low_text_;
+    QString last_volume_text_;
+    QString last_bid_text_;
+    QString last_ask_text_;
+    QString last_spread_text_;
 };
 
 } // namespace fincept::screens::crypto

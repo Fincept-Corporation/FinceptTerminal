@@ -33,8 +33,10 @@ UnComtradePanel::UnComtradePanel(QWidget* parent) : EconPanelBase(kUnComtradeSou
 }
 
 void UnComtradePanel::activate() {
-    show_empty(tr("Select reporter, flow, and period, then click FETCH\n"
-                  "(Free tier: up to 250 records per request)"));
+    show_empty(tr("Select reporter, flow, year and commodity level, then click FETCH\n"
+                  "Source: UN Comtrade — annual (A) merchandise trade, HS classification\n"
+                  "Values are current US dollars. Free tier: up to 500 records per request;\n"
+                  "set UN_COMTRADE_API_KEY for 100,000 records/call (register at comtradedeveloper.un.org)"));
 }
 
 void UnComtradePanel::build_controls(QHBoxLayout* thl) {
@@ -64,8 +66,8 @@ void UnComtradePanel::build_controls(QHBoxLayout* thl) {
     period_combo_->setFixedHeight(26);
 
     cmd_combo_ = new QComboBox;
-    cmd_combo_->addItem(tr("All Commodities"), "AG2");
-    cmd_combo_->addItem(tr("Total (all)"), "TOTAL");
+    cmd_combo_->addItem(tr("Total (all commodities)"), "TOTAL");
+    cmd_combo_->addItem(tr("HS 2-digit chapters"), "AG2");
     cmd_combo_->setFixedHeight(26);
 
     thl->addWidget(reporter_lbl_ = lbl(tr("REPORTER")));
@@ -74,17 +76,29 @@ void UnComtradePanel::build_controls(QHBoxLayout* thl) {
     thl->addWidget(flow_combo_);
     thl->addWidget(year_lbl_ = lbl(tr("YEAR")));
     thl->addWidget(period_combo_);
+    // The commodity selector used to be built but never added to the toolbar —
+    // an unreachable, un-parented widget that also leaked.
+    thl->addWidget(cmd_lbl_ = lbl(tr("COMMODITY")));
+    thl->addWidget(cmd_combo_);
 }
 
 void UnComtradePanel::on_fetch() {
     const QString reporter = reporter_combo_->currentData().toString();
     const QString period = period_combo_->currentData().toString();
     const QString flow = flow_combo_->currentData().toString();
+    const QString cmd_code = cmd_combo_->currentData().toString();
 
-    show_loading(tr("Fetching UN Comtrade data…"));
-    services::EconomicsService::instance().execute(kUnComtradeSourceId, kUnComtradeScript, "trade_balance",
-                                                   {reporter, period},
-                                                   "comtrade_" + reporter + "_" + period + "_" + flow);
+    // Was: `trade_balance <reporter> <period>` — that endpoint takes NO flow
+    // argument (so the FLOW selector only changed the title, never the data)
+    // and it requires a UN_COMTRADE_API_KEY, so the key-free default path
+    // always errored. `trade_data` honours flow + commodity and works on the
+    // free preview tier.
+    // CLI: trade_data <reporter_code> <period> [flow_code] [cmd_code]
+    show_loading(tr("Fetching UN Comtrade: %1 %2 %3…")
+                     .arg(reporter_combo_->currentText(), flow_combo_->currentText(), period));
+    services::EconomicsService::instance().execute(kUnComtradeSourceId, kUnComtradeScript, "trade_data",
+                                                   {reporter, period, flow, cmd_code},
+                                                   "comtrade_" + reporter + "_" + period + "_" + flow + "_" + cmd_code);
 }
 
 void UnComtradePanel::on_result(const QString& request_id, const services::EconomicsResult& result) {
@@ -97,8 +111,17 @@ void UnComtradePanel::on_result(const QString& request_id, const services::Econo
 
     if (request_id.startsWith("comtrade_")) {
         const QJsonArray arr = result.data["data"].toArray();
-        const QString title =
-            reporter_combo_->currentText() + " — " + flow_combo_->currentText() + " " + period_combo_->currentText();
+        if (arr.isEmpty()) {
+            show_empty(tr("No trade records returned for this reporter/flow/year.\n"
+                          "Free tier is capped at 500 records — set UN_COMTRADE_API_KEY for full access."));
+            return;
+        }
+        // One row per commodity line for a single year is a cross-section, not a
+        // time series — the aggregate stat cards would be meaningless.
+        set_stats_visible(cmd_combo_->currentData().toString() == QLatin1String("TOTAL"));
+        const QString title = "UN Comtrade: " + reporter_combo_->currentText() + " — " +
+                              flow_combo_->currentText() + " " + period_combo_->currentText() + " (" +
+                              cmd_combo_->currentText() + ")";
         display(arr, title);
         LOG_INFO("UnComtradePanel", QString("Displayed %1 rows").arg(arr.size()));
     }
@@ -119,15 +142,17 @@ void UnComtradePanel::retranslateUi() {
         flow_lbl_->setText(tr("FLOW"));
     if (year_lbl_)
         year_lbl_->setText(tr("YEAR"));
-    if (flow_combo_) {
+    if (cmd_lbl_)
+        cmd_lbl_->setText(tr("COMMODITY"));
+    if (flow_combo_ && flow_combo_->count() >= 4) {
         flow_combo_->setItemText(0, tr("Exports"));
         flow_combo_->setItemText(1, tr("Imports"));
         flow_combo_->setItemText(2, tr("Re-exports"));
         flow_combo_->setItemText(3, tr("Re-imports"));
     }
-    if (cmd_combo_) {
-        cmd_combo_->setItemText(0, tr("All Commodities"));
-        cmd_combo_->setItemText(1, tr("Total (all)"));
+    if (cmd_combo_ && cmd_combo_->count() >= 2) {
+        cmd_combo_->setItemText(0, tr("Total (all commodities)"));
+        cmd_combo_->setItemText(1, tr("HS 2-digit chapters"));
     }
     EconPanelBase::retranslateUi();
 }

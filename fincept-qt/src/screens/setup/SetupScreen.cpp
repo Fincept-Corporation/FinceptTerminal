@@ -495,6 +495,16 @@ void SetupScreen::mark_step_active(const QString& key) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void SetupScreen::on_begin_setup() {
+    // When the environment is already fully installed the button is the exit,
+    // not the installer. Previously this state disabled the button entirely,
+    // leaving the user stranded on the setup screen until the 45-second Skip
+    // link appeared.
+    if (begin_btn_state_ == BeginBtnState::Launch || begin_btn_state_ == BeginBtnState::AlreadyComplete) {
+        LOG_INFO("SetupScreen", "Environment already complete — launching");
+        emit setup_complete();
+        return;
+    }
+
     begin_btn_->setEnabled(false);
     begin_btn_state_ = BeginBtnState::SettingUp;
     update_begin_button();
@@ -644,6 +654,11 @@ void SetupScreen::prefill_completed_steps() {
     QPointer<SetupScreen> self = this;
     (void)QtConcurrent::run([self]() {
         const auto status = python::PythonSetupManager::instance().check_status();
+        // check_status() can take ~15s; the screen may already be gone. Passing
+        // a null context to invokeMethod is undefined behaviour, so re-check the
+        // guard before dispatching, not just inside the posted lambda.
+        if (!self)
+            return;
         QMetaObject::invokeMethod(
             self,
             [self, status]() {
@@ -671,8 +686,10 @@ void SetupScreen::prefill_completed_steps() {
 
                 if (all_done) {
                     self->subtitle_state_ = SubtitleState::AlreadyConfigured;
-                    self->begin_btn_state_ = BeginBtnState::AlreadyComplete;
-                    self->begin_btn_->setEnabled(false);
+                    // Offer LAUNCH rather than a disabled "ALREADY COMPLETE" —
+                    // on_begin_setup() short-circuits to setup_complete() here.
+                    self->begin_btn_state_ = BeginBtnState::Launch;
+                    self->begin_btn_->setEnabled(true);
                     self->status_state_ = StatusState::Custom;
                     self->status_detail_ = self->tr("Everything is installed and ready to go.");
                 } else if (any_done) {

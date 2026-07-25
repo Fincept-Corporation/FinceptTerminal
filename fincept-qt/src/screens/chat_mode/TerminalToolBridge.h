@@ -46,6 +46,27 @@ class TerminalToolBridge : public QObject {
 
     // UI-only categories to exclude from registration
     static const QStringList EXCLUDED_CATEGORIES;
+
+    /// Categories that can move real money or execute arbitrary local code.
+    /// Never registered with — and never executed for — the cloud agent.
+    ///
+    /// Rationale: the LOCAL agent path (mcp::TerminalMcpBridge) marks its calls
+    /// with a thread-local flag that AgentService's McpProvider auth checker
+    /// reads, so `is_destructive` tools are denied unless that agent's config
+    /// carries the per-agent destructive capability token (CreateAgentPanel's
+    /// "Allow destructive tools" checkbox). This bridge dispatches calls that
+    /// originate from the *cloud* Finagent backend and sets no such flag, so
+    /// every tool it runs is treated as a user-driven chat call and skips the
+    /// gate entirely. Until an equivalent opt-in exists, fail closed on the
+    /// classes where a mistake is unrecoverable.
+    static const QStringList BLOCKED_CATEGORIES;
+
+    /// Individually blocked tools whose category also holds harmless read-only
+    /// tools (so a whole-category block would be too broad).
+    static const QStringList BLOCKED_TOOLS;
+
+    /// True when `name` / `category` names a tool the remote agent must not run.
+    static bool is_remote_blocked(const QString& name, const QString& category);
 };
 
 } // namespace fincept::chat_mode

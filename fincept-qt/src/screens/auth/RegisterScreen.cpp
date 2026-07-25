@@ -10,6 +10,8 @@
 #include <QHBoxLayout>
 #include <QHideEvent>
 #include <QPainter>
+#include <QRegularExpression>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -162,6 +164,29 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
 
 void RegisterScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+
+    // Window-manager hides (minimise / workspace switch) must not destroy a
+    // half-filled form; only wipe when the user navigates away in-app.
+    if (event && event->spontaneous())
+        return;
+
+    for (QLineEdit* w :
+         {first_name_, last_name_, username_, email_, phone_, country_code_, password_, confirm_pw_, otp_input_}) {
+        if (w)
+            w->clear();
+    }
+    if (password_)
+        password_->setEchoMode(QLineEdit::Password);
+    if (confirm_pw_)
+        confirm_pw_->setEchoMode(QLineEdit::Password);
+    update_password_strength();
+    reset_resend_cooldown(); // P3: no timers while the screen is off-stack
+    if (error_label_)
+        error_label_->hide();
+    if (otp_error_)
+        otp_error_->hide();
+    if (pages_)
+        pages_->setCurrentIndex(0);
 }
 
 void RegisterScreen::changeEvent(QEvent* event) {
@@ -346,6 +371,47 @@ void RegisterScreen::build_form_page() {
     lrl->addWidget(signin_btn_);
     vl->addWidget(login_row);
 
+    // ── Input limits ─────────────────────────────────────────────────────────
+    // Client-side caps mirroring the register endpoint's constraints, so an
+    // over-long value is stopped at the keyboard instead of on a round trip.
+    first_name_->setMaxLength(100);
+    last_name_->setMaxLength(100);
+    username_->setMaxLength(50);
+    email_->setMaxLength(254); // RFC 5321 maximum
+    country_code_->setMaxLength(5);
+    phone_->setMaxLength(20);
+    password_->setMaxLength(128);
+    confirm_pw_->setMaxLength(128);
+
+    // ── Accessibility + keyboard order ───────────────────────────────────────
+    // The form is built from nested column layouts (name row, phone row), so
+    // the natural focus chain jumps sideways. Pin it to reading order.
+    first_name_->setAccessibleName(tr("First name"));
+    last_name_->setAccessibleName(tr("Last name"));
+    username_->setAccessibleName(tr("Username"));
+    email_->setAccessibleName(tr("Email address"));
+    country_code_->setAccessibleName(tr("Country calling code"));
+    phone_->setAccessibleName(tr("Phone number"));
+    password_->setAccessibleName(tr("Password"));
+    confirm_pw_->setAccessibleName(tr("Confirm password"));
+    register_btn_->setAccessibleName(tr("Create account"));
+    signin_btn_->setAccessibleName(tr("Go to sign in"));
+    error_label_->setAccessibleName(tr("Registration error"));
+
+    setTabOrder(first_name_, last_name_);
+    setTabOrder(last_name_, username_);
+    setTabOrder(username_, email_);
+    setTabOrder(email_, country_code_);
+    setTabOrder(country_code_, phone_);
+    setTabOrder(phone_, password_);
+    setTabOrder(password_, confirm_pw_);
+    setTabOrder(confirm_pw_, register_btn_);
+    setTabOrder(register_btn_, signin_btn_);
+
+    // Enter anywhere in the form submits, matching the login screen.
+    for (QLineEdit* w : {first_name_, last_name_, username_, email_, country_code_, phone_, password_, confirm_pw_})
+        connect(w, &QLineEdit::returnPressed, this, &RegisterScreen::on_register);
+
     pages_->addWidget(page);
 }
 
@@ -428,6 +494,17 @@ void RegisterScreen::build_otp_page() {
 
     vl->addStretch();
     connect(otp_input_, &QLineEdit::returnPressed, this, &RegisterScreen::on_verify_otp);
+
+    otp_input_->setMaxLength(12);
+    otp_input_->setAccessibleName(tr("Email verification code"));
+    otp_error_->setAccessibleName(tr("Verification error"));
+    verify_btn_->setAccessibleName(tr("Verify email"));
+    resend_btn_->setAccessibleName(tr("Resend verification code"));
+    back_to_form_btn_->setAccessibleName(tr("Back to the registration form"));
+    setTabOrder(otp_input_, verify_btn_);
+    setTabOrder(verify_btn_, resend_btn_);
+    setTabOrder(resend_btn_, back_to_form_btn_);
+
     pages_->addWidget(page);
 }
 
@@ -485,8 +562,11 @@ void RegisterScreen::retranslateUi() {
         otp_input_->setPlaceholderText(tr("enter code from email"));
     if (verify_btn_)
         verify_btn_->setText(tr("  VERIFY  "));
-    if (resend_btn_)
+    // Don't clobber a live cooldown countdown with the idle label.
+    if (resend_btn_ && resend_cooldown_left_ <= 0)
         resend_btn_->setText(tr("DIDN'T RECEIVE? RESEND"));
+    else if (resend_btn_)
+        resend_btn_->setText(tr("RESEND IN %1s").arg(resend_cooldown_left_));
     if (back_to_form_btn_)
         back_to_form_btn_->setText(tr("BACK TO FORM"));
 }
@@ -494,12 +574,28 @@ void RegisterScreen::retranslateUi() {
 // ── Password Strength ────────────────────────────────────────────────────────
 
 void RegisterScreen::update_password_strength() {
+    if (!password_)
+        return;
     auto s = auth::validate_password(password_->text());
-    pw_len_->setStyleSheet(s.min_length ? check_on() : check_off());
-    pw_up_->setStyleSheet(s.has_upper ? check_on() : check_off());
-    pw_low_->setStyleSheet(s.has_lower ? check_on() : check_off());
-    pw_num_->setStyleSheet(s.has_number ? check_on() : check_off());
-    pw_spec_->setStyleSheet(s.has_special ? check_on() : check_off());
+
+    // This runs on every keystroke. setStyleSheet is a full CSS reparse plus a
+    // repaint of the label, so only touch a hint whose state actually flipped —
+    // the steady state (user typing past the threshold) becomes a no-op.
+    auto set_hint = [](QLabel* lbl, bool ok) {
+        if (!lbl)
+            return;
+        const QVariant prev = lbl->property("hintOk");
+        if (prev.isValid() && prev.toBool() == ok)
+            return;
+        lbl->setProperty("hintOk", ok);
+        lbl->setStyleSheet(ok ? check_on() : check_off());
+    };
+
+    set_hint(pw_len_, s.min_length);
+    set_hint(pw_up_, s.has_upper);
+    set_hint(pw_low_, s.has_lower);
+    set_hint(pw_num_, s.has_number);
+    set_hint(pw_spec_, s.has_special);
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────
@@ -579,12 +675,49 @@ void RegisterScreen::on_verify_otp() {
 }
 
 void RegisterScreen::on_resend_otp() {
+    // Guard against double-submits: the endpoint re-runs the whole signup, and
+    // hammering it is the fastest way to trip a server-side rate limit with no
+    // way for the user to tell why.
+    if (resend_btn_ && !resend_btn_->isEnabled())
+        return;
+
     QString username = auth::sanitize_input(username_->text()).toLower();
     QString cc = country_code_->text().trimmed();
     if (!cc.isEmpty() && !cc.startsWith('+'))
         cc = '+' + cc;
     auth::AuthManager::instance().signup(username, email_->text().trimmed(), password_->text(),
                                          phone_->text().trimmed(), {}, cc);
+    start_resend_cooldown();
+}
+
+void RegisterScreen::start_resend_cooldown() {
+    if (!resend_btn_)
+        return;
+    resend_cooldown_left_ = 30;
+    if (!resend_timer_) {
+        resend_timer_ = new QTimer(this);
+        resend_timer_->setInterval(1000);
+        connect(resend_timer_, &QTimer::timeout, this, [this]() {
+            if (--resend_cooldown_left_ <= 0) {
+                reset_resend_cooldown();
+                return;
+            }
+            resend_btn_->setText(tr("RESEND IN %1s").arg(resend_cooldown_left_));
+        });
+    }
+    resend_btn_->setEnabled(false);
+    resend_btn_->setText(tr("RESEND IN %1s").arg(resend_cooldown_left_));
+    resend_timer_->start();
+}
+
+void RegisterScreen::reset_resend_cooldown() {
+    resend_cooldown_left_ = 0;
+    if (resend_timer_)
+        resend_timer_->stop();
+    if (resend_btn_) {
+        resend_btn_->setEnabled(true);
+        resend_btn_->setText(tr("DIDN'T RECEIVE? RESEND"));
+    }
 }
 
 } // namespace fincept::screens

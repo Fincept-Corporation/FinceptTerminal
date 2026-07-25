@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerLogRedact.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/brokers/zerodha/ZerodhaAutoLogin.h"
 #include "trading/instruments/InstrumentService.h"
@@ -160,10 +161,12 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
     QMap<QString, QString> headers = {{"X-Kite-Version", kite_api_version}};
     auto resp = BrokerHttp::instance().post_form(QString(base_url()) + "/session/token", params, headers);
 
+    // Redacted: a successful /session/token body carries access_token,
+    // public_token and the account email — never log it verbatim.
     LOG_INFO("Zerodha", QString("exchange_token HTTP %1 success=%2 body=%3")
                             .arg(resp.status_code)
                             .arg(resp.success)
-                            .arg(resp.raw_body.left(500)));
+                            .arg(redact_body(resp.raw_body)));
 
     TokenExchangeResponse result;
     if (!resp.success) {

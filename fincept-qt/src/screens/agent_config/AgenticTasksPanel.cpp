@@ -803,6 +803,13 @@ void AgenticTasksPanel::on_cancel_clicked() {
 void AgenticTasksPanel::on_delete_clicked() {
     if (selected_task_id_.isEmpty())
         return;
+    // Cancels a possibly-running subprocess and drops the record permanently —
+    // it deserves the same confirmation the schedule dialog already asks for.
+    if (QMessageBox::question(this, tr("Delete Task"),
+                              tr("Cancel and permanently delete this task?\n\nAny recurring schedule attached to it "
+                                 "is removed as well. This cannot be undone."),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
     auto& svc = services::AgentService::instance();
     const QString id = selected_task_id_;
     // Cancel first (signals a running subprocess to stop), then actually remove the

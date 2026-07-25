@@ -81,6 +81,9 @@ class PortfolioSummaryWidget : public BaseWidget {
 
     // ── Holdings list layout ────────────────────────────────────────────────
     QVBoxLayout* list_layout_ = nullptr;
+    /// Owner of `list_layout_` — carries the single stylesheet that styles
+    /// every holdings row via object-name selectors (P7).
+    QWidget* list_widget_ = nullptr;
 
     // ── Theme-tracked widgets ──────────────────────────────────────────────
     QWidget* summary_card_ = nullptr;

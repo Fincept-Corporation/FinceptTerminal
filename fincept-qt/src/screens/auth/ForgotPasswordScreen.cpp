@@ -125,6 +125,10 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
             confirm_password_->setEchoMode(QLineEdit::Password);
         if (error_label_)
             error_label_->hide();
+        if (reset_error_)
+            reset_error_->hide();
+        if (reset_btn_)
+            reset_btn_->setEnabled(true);
         pages_->setCurrentIndex(3);
     });
     connect(&auth, &auth::AuthManager::password_reset_failed, this, [this](const QString& err) {
@@ -137,6 +141,28 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
 
 void ForgotPasswordScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+
+    // Only wipe on real in-app navigation — a minimise must not throw away a
+    // reset code the user is halfway through typing.
+    if (event && event->spontaneous())
+        return;
+
+    for (QLineEdit* w : {email_input_, otp_input_, new_password_, confirm_password_}) {
+        if (w)
+            w->clear();
+    }
+    if (new_password_)
+        new_password_->setEchoMode(QLineEdit::Password);
+    if (confirm_password_)
+        confirm_password_->setEchoMode(QLineEdit::Password);
+    if (error_label_)
+        error_label_->hide();
+    if (reset_error_)
+        reset_error_->hide();
+    if (sent_status_)
+        sent_status_->clear();
+    if (pages_)
+        pages_->setCurrentIndex(0);
 }
 
 void ForgotPasswordScreen::changeEvent(QEvent* event) {
@@ -234,6 +260,15 @@ void ForgotPasswordScreen::build_email_page() {
     vl->addWidget(back_login_btn_, 0, Qt::AlignCenter);
 
     vl->addStretch();
+
+    email_input_->setMaxLength(254); // RFC 5321 maximum
+    email_input_->setAccessibleName(tr("Email address"));
+    send_btn_->setAccessibleName(tr("Send verification code"));
+    back_login_btn_->setAccessibleName(tr("Back to sign in"));
+    error_label_->setAccessibleName(tr("Password reset error"));
+    setTabOrder(email_input_, send_btn_);
+    setTabOrder(send_btn_, back_login_btn_);
+
     pages_->addWidget(page);
 }
 
@@ -280,7 +315,22 @@ void ForgotPasswordScreen::build_otp_sent_page() {
     connect(sent_resend_btn_, &QPushButton::clicked, this, &ForgotPasswordScreen::on_resend);
     vl->addWidget(sent_resend_btn_, 0, Qt::AlignCenter);
 
+    // Resend previously gave no acknowledgement at all — the user had no way to
+    // know whether the click registered.
+    sent_status_ = new QLabel;
+    sent_status_->setWordWrap(true);
+    sent_status_->setAlignment(Qt::AlignCenter);
+    sent_status_->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent;"
+                                        "font-family: 'Consolas','Courier New',monospace;")
+                                    .arg(ui::colors::POSITIVE()));
+    vl->addWidget(sent_status_);
+
     vl->addStretch();
+
+    sent_continue_btn_->setAccessibleName(tr("I have the code"));
+    sent_resend_btn_->setAccessibleName(tr("Resend the verification code"));
+    setTabOrder(sent_continue_btn_, sent_resend_btn_);
+
     pages_->addWidget(page);
 }
 
@@ -328,18 +378,22 @@ void ForgotPasswordScreen::build_reset_page() {
     new_password_ = add_field(reset_new_lbl_, true);
     confirm_password_ = add_field(reset_confirm_lbl_, true);
 
-    auto* err = new QLabel;
-    err->setWordWrap(true);
-    err->setStyleSheet(QString("color: %1; font-size: 13px;"
-                               "background: rgba(220,38,38,0.08);"
-                               "border: 1px solid #7f1d1d; padding: 6px 8px;"
-                               "font-family: 'Consolas','Courier New',monospace;")
-                           .arg(ui::colors::NEGATIVE()));
-    err->hide();
-    vl->addWidget(err);
-    connect(&auth::AuthManager::instance(), &auth::AuthManager::password_reset_failed, this, [err](const QString& e) {
-        err->setText(e);
-        err->show();
+    reset_error_ = new QLabel;
+    reset_error_->setWordWrap(true);
+    reset_error_->setStyleSheet(QString("color: %1; font-size: 13px;"
+                                        "background: rgba(220,38,38,0.08);"
+                                        "border: 1px solid #7f1d1d; padding: 6px 8px;"
+                                        "font-family: 'Consolas','Courier New',monospace;")
+                                    .arg(ui::colors::NEGATIVE()));
+    reset_error_->hide();
+    vl->addWidget(reset_error_);
+    connect(&auth::AuthManager::instance(), &auth::AuthManager::password_reset_failed, this, [this](const QString& e) {
+        if (!reset_error_)
+            return;
+        reset_error_->setText(e);
+        reset_error_->show();
+        if (reset_btn_)
+            reset_btn_->setEnabled(true);
     });
 
     reset_btn_ = new QPushButton;
@@ -349,6 +403,25 @@ void ForgotPasswordScreen::build_reset_page() {
     vl->addWidget(reset_btn_);
 
     vl->addStretch();
+
+    otp_input_->setMaxLength(12);
+    new_password_->setMaxLength(128);
+    confirm_password_->setMaxLength(128);
+
+    otp_input_->setAccessibleName(tr("Verification code from email"));
+    new_password_->setAccessibleName(tr("New password"));
+    confirm_password_->setAccessibleName(tr("Confirm new password"));
+    reset_btn_->setAccessibleName(tr("Reset password"));
+    reset_error_->setAccessibleName(tr("Password reset error"));
+
+    setTabOrder(otp_input_, new_password_);
+    setTabOrder(new_password_, confirm_password_);
+    setTabOrder(confirm_password_, reset_btn_);
+
+    // Enter submits from any field on this page.
+    for (QLineEdit* w : {otp_input_, new_password_, confirm_password_})
+        connect(w, &QLineEdit::returnPressed, this, &ForgotPasswordScreen::on_reset_password);
+
     pages_->addWidget(page);
 }
 
@@ -472,16 +545,51 @@ void ForgotPasswordScreen::on_send_code() {
 }
 
 void ForgotPasswordScreen::on_reset_password() {
-    QString otp = otp_input_->text().trimmed();
-    QString pw = new_password_->text();
-    QString cpw = confirm_password_->text();
-    if (otp.isEmpty() || pw.length() < 8 || pw != cpw)
+    // Previously every failed precondition was a bare `return`: clicking RESET
+    // PASSWORD with mismatched or short passwords did nothing at all, with no
+    // message, which reads as a broken button.
+    if (!reset_error_)
         return;
+    reset_error_->hide();
+
+    const QString otp = otp_input_->text().trimmed();
+    const QString pw = new_password_->text();
+    const QString cpw = confirm_password_->text();
+
+    auto fail = [this](const QString& msg, QLineEdit* focus) {
+        reset_error_->setText(msg);
+        reset_error_->show();
+        if (focus)
+            focus->setFocus();
+    };
+
+    if (otp.isEmpty()) {
+        fail(tr("Enter the verification code from your email"), otp_input_);
+        return;
+    }
+    if (pw.isEmpty()) {
+        fail(tr("Enter a new password"), new_password_);
+        return;
+    }
+    if (pw.length() < 8) {
+        fail(tr("Password must be at least 8 characters"), new_password_);
+        return;
+    }
+    if (pw != cpw) {
+        confirm_password_->clear();
+        fail(tr("Passwords do not match"), confirm_password_);
+        return;
+    }
+
+    reset_btn_->setEnabled(false);
     auth::AuthManager::instance().reset_password(email_input_->text().trimmed(), otp, pw);
 }
 
 void ForgotPasswordScreen::on_resend() {
-    auth::AuthManager::instance().forgot_password(email_input_->text().trimmed());
+    const QString email = email_input_->text().trimmed();
+    auth::AuthManager::instance().forgot_password(email);
+    if (sent_status_)
+        sent_status_->setText(tr("Verification code re-sent to %1").arg(email));
 }
 
 } // namespace fincept::screens

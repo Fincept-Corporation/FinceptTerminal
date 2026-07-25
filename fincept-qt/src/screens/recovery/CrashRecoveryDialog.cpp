@@ -534,18 +534,30 @@ void CrashRecoveryDialog::on_restore_clicked() {
     }
 
     const qint64 id = item->data(Qt::UserRole).toLongLong();
+
+    // Every failure below used to be a silent `return` that only greyed the row
+    // out: clicking RESTORE on a corrupt snapshot looked like a dead button.
+    // Tell the user what happened and why the entry is now disabled.
+    auto reject_snapshot = [this, item](const QString& reason) {
+        item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        QMessageBox::warning(this, tr("Cannot restore this session"),
+                             tr("%1\n\nThis snapshot has been disabled. Pick another one, or Skip to start "
+                                "with a fresh workspace.")
+                                 .arg(reason));
+    };
+
     auto payload_r = ring_->load_payload(id);
     if (payload_r.is_err()) {
         LOG_ERROR(kRecoveryTag,
                   QString("load_payload(%1) failed: %2").arg(id).arg(QString::fromStdString(payload_r.error())));
-        item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        reject_snapshot(tr("The snapshot could not be read: %1").arg(QString::fromStdString(payload_r.error())));
         return;
     }
 
     const QByteArray payload = payload_r.value();
     if (payload.isEmpty()) {
         LOG_WARN(kRecoveryTag, QString("snapshot %1 has empty payload — skipping").arg(id));
-        item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        reject_snapshot(tr("The snapshot is empty."));
         return;
     }
 
@@ -553,14 +565,14 @@ void CrashRecoveryDialog::on_restore_clicked() {
     const auto doc = QJsonDocument::fromJson(payload, &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
         LOG_ERROR(kRecoveryTag, QString("snapshot %1 JSON parse error: %2").arg(id).arg(err.errorString()));
-        item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        reject_snapshot(tr("The snapshot is corrupt: %1").arg(err.errorString()));
         return;
     }
 
     layout::Workspace ws = layout::Workspace::from_json(doc.object());
     if (ws.frames.isEmpty()) {
         LOG_WARN(kRecoveryTag, QString("snapshot %1 decoded with zero frames — nothing to restore").arg(id));
-        item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+        reject_snapshot(tr("The snapshot contains no windows to restore."));
         return;
     }
 
@@ -572,7 +584,15 @@ void CrashRecoveryDialog::on_restore_clicked() {
     const int applied = layout::WorkspaceShell::apply(ws);
     LOG_INFO(kRecoveryTag, QString("WorkspaceShell::apply returned %1/%2 frames").arg(applied).arg(ws.frames.size()));
 
-    restored_ = (applied > 0);
+    if (applied == 0) {
+        // apply() reporting zero frames means nothing was restored; closing the
+        // dialog with was_restored() == false silently drops the user into an
+        // empty workspace with no explanation.
+        reject_snapshot(tr("The workspace could not be applied — no windows were restored."));
+        return;
+    }
+
+    restored_ = true;
     accept();
 }
 

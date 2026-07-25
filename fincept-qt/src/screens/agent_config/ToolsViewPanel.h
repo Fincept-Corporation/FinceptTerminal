@@ -9,7 +9,9 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSet>
 #include <QTextEdit>
+#include <QTimer>
 #include <QTreeWidget>
 #include <QWidget>
 
@@ -104,6 +106,19 @@ class ToolsViewPanel : public QWidget {
     QVector<services::AgentInfo> agent_configs_;
     bool data_loaded_ = false;
     QString current_tool_; // tool shown in detail panel
+
+    // Flat name set of every agent-service tool, rebuilt once per
+    // populate_tools(). filter_tools() used to re-scan every category's
+    // QJsonArray for each MCP tool on every keystroke.
+    QSet<QString> agent_tool_names_;
+    // Tools already assigned to the current target. Refreshed when the target
+    // changes or an assign completes — filter_tools() previously hit
+    // AgentConfigRepository (a DB read) on every keystroke.
+    QStringList assigned_cache_;
+    void refresh_assigned_cache();
+    // 180 ms debounce so a fast typist rebuilds the ~600-node tree once,
+    // not once per character.
+    QTimer* search_debounce_ = nullptr;
 };
 
 } // namespace fincept::screens

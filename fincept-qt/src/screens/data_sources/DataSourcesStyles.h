@@ -251,7 +251,12 @@ inline const QString& screen_stylesheet() {
         border: 1px solid %7; background: %2;
     }
     #dsEnableToggle::indicator:checked { background: %13; border-color: %13; }
-    #dsStatusDot { font-size: 11px; font-weight: 700; background: transparent; }
+    /* Per-row status pill. Object-name variants instead of a per-row
+       setStyleSheet() call — a connections table with N rows used to trigger N
+       full CSS reparses on every refresh. */
+    #dsStatusDot { font-size: 11px; font-weight: 700; background: transparent; color: %8; }
+    #dsStatusOk { font-size: 11px; font-weight: 700; background: transparent; color: %13; }
+    #dsStatusErr { font-size: 11px; font-weight: 700; background: transparent; color: %14; }
 
     /* ── Splitters ── */
     #dsBrowseSplitter::handle, #dsConnsSplitter::handle {

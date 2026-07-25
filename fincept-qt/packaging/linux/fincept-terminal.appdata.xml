@@ -28,6 +28,11 @@
     <binary>FinceptTerminal</binary>
   </provides>
   <releases>
+    <release version="4.3.0" date="2026-07-25">
+      <description>
+        <p>Version 4.3.0 — MCP long-running tools now run as background jobs the assistant can poll and cancel, and oversized tool results are paged on demand instead of filling the conversation.</p>
+      </description>
+    </release>
     <release version="4.1.0" date="2026-06-09">
       <description>
         <p>Version 4.1.0 — Optional NewsAPI.org news provider, broker-sourced technicals, and fixes.</p>

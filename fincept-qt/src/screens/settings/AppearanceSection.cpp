@@ -228,8 +228,18 @@ void AppearanceSection::build_ui() {
     vl->addSpacing(16);
 
     // ── SAVE ──────────────────────────────────────────────────────────────────
+    // Accessibility: every control here is a bare combo/checkbox next to a
+    // separate QLabel, which screen readers do not associate automatically.
+    app_font_size_->setAccessibleName(tr("Font size"));
+    app_font_family_->setAccessibleName(tr("Font family"));
+    app_density_->setAccessibleName(tr("Content density"));
+    chat_bubble_toggle_->setAccessibleName(tr("Show AI chat bubble"));
+    ticker_bar_toggle_->setAccessibleName(tr("Show ticker bar"));
+    animations_toggle_->setAccessibleName(tr("Enable animations"));
+
     save_btn_ = new QPushButton(tr("Save Settings"));
     save_btn_->setFixedWidth(160);
+    save_btn_->setAccessibleName(tr("Save appearance settings"));
     save_btn_->setStyleSheet(btn_primary_ss());
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();

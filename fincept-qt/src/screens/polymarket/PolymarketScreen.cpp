@@ -19,10 +19,13 @@
 #include "services/prediction/polymarket/PolymarketAdapter.h"
 #include "ui/theme/Theme.h"
 
+#include <QDateTime>
+#include <QPointer>
 #include <QSplitter>
 #include <QVBoxLayout>
 
 #include <cmath>
+#include <memory>
 
 namespace fincept::screens {
 
@@ -231,10 +234,15 @@ void PolymarketScreen::build_ui() {
             command_bar_->set_account_status(any, label);
             LOG_INFO("PredictionMarkets", "Credentials saved for " + id);
         });
-        connect(dlg, &PredictionAccountDialog::test_requested, this, [](const QString& id) {
+        QPointer<PredictionAccountDialog> dlg_guard = dlg;
+        connect(dlg, &PredictionAccountDialog::test_requested, this, [dlg_guard](const QString& id) {
             auto* adapter = pred::PredictionExchangeRegistry::instance().adapter(id);
-            if (!adapter)
+            if (!adapter) {
+                if (dlg_guard)
+                    dlg_guard->set_test_result(id, false,
+                                               PolymarketScreen::tr("No adapter registered for %1").arg(id));
                 return;
+            }
             if (id == kPolymarketId()) {
                 if (auto* pm = dynamic_cast<pred::polymarket_ns::PolymarketAdapter*>(adapter))
                     pm->reload_credentials();
@@ -243,6 +251,32 @@ void PolymarketScreen::build_ui() {
                     if (auto creds = pred::PredictionCredentialStore::load_kalshi())
                         ks->set_credentials(*creds);
                 }
+            }
+            // Report the round-trip back into the dialog. Previously the Test
+            // button fired fetch_balance() and the user saw nothing at all.
+            // Both connections are scoped to the dialog and one-shot.
+            if (dlg_guard) {
+                auto ok_conn = std::make_shared<QMetaObject::Connection>();
+                auto err_conn = std::make_shared<QMetaObject::Connection>();
+                *ok_conn = QObject::connect(
+                    adapter, &pred::PredictionExchangeAdapter::balance_ready, dlg_guard.data(),
+                    [dlg_guard, id, ok_conn, err_conn](const pred::AccountBalance& b) {
+                        QObject::disconnect(*ok_conn);
+                        QObject::disconnect(*err_conn);
+                        if (dlg_guard)
+                            dlg_guard->set_test_result(
+                                id, true, QStringLiteral("%1 %2").arg(b.available, 0, 'f', 2).arg(b.currency));
+                    });
+                *err_conn = QObject::connect(
+                    adapter, &pred::PredictionExchangeAdapter::error_occurred, dlg_guard.data(),
+                    [dlg_guard, id, ok_conn, err_conn](const QString& ctx, const QString& msg) {
+                        if (!ctx.contains(QStringLiteral("balance"), Qt::CaseInsensitive))
+                            return; // unrelated adapter error — keep waiting
+                        QObject::disconnect(*ok_conn);
+                        QObject::disconnect(*err_conn);
+                        if (dlg_guard)
+                            dlg_guard->set_test_result(id, false, msg);
+                    });
             }
             adapter->fetch_balance();
         });

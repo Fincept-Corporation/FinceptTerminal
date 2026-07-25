@@ -7,7 +7,7 @@ namespace fincept::screens {
 
 NewsCommandBar::NewsCommandBar(QWidget* parent) : QWidget(parent) {
     setObjectName("newsCommandBar");
-    setFixedHeight(60); // 32px command row + 28px intel strip
+    setFixedHeight(kBaseHeight); // 32px command row + 28px intel strip
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -16,11 +16,36 @@ NewsCommandBar::NewsCommandBar(QWidget* parent) : QWidget(parent) {
     build_command_row(root);
     build_intel_row(root);
 
-    // Summary display label (hidden, shown below command bar)
-    summary_label_ = new QLabel(this);
+    // AI-brief summary row. This used to be a bare child QLabel that was never
+    // added to a layout, so show_summary() painted it at (0,0) on top of the
+    // command row inside a widget with a hard 60px height — i.e. the AI brief
+    // was unreadable and undismissable. It now lives in the layout, with a
+    // close button, and the bar grows to fit while it is shown.
+    summary_row_ = new QWidget(this);
+    summary_row_->setObjectName("newsSummaryRow");
+    auto* srl = new QHBoxLayout(summary_row_);
+    srl->setContentsMargins(8, 4, 6, 4);
+    srl->setSpacing(6);
+
+    summary_label_ = new QLabel(summary_row_);
     summary_label_->setObjectName("newsDetailAiSummary");
     summary_label_->setWordWrap(true);
-    summary_label_->hide();
+    summary_label_->setTextFormat(Qt::PlainText); // model output is untrusted text
+    summary_label_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    summary_label_->setAccessibleName(tr("AI headline brief"));
+    srl->addWidget(summary_label_, 1);
+
+    summary_close_btn_ = new QPushButton("x", summary_row_);
+    summary_close_btn_->setObjectName("newsDetailCloseBtn");
+    summary_close_btn_->setFixedSize(18, 18);
+    summary_close_btn_->setCursor(Qt::PointingHandCursor);
+    summary_close_btn_->setToolTip(tr("Dismiss the AI brief"));
+    summary_close_btn_->setAccessibleName(tr("Dismiss AI brief"));
+    connect(summary_close_btn_, &QPushButton::clicked, this, &NewsCommandBar::hide_summary);
+    srl->addWidget(summary_close_btn_, 0, Qt::AlignTop);
+
+    summary_row_->hide();
+    root->addWidget(summary_row_);
 }
 
 void NewsCommandBar::changeEvent(QEvent* event) {
@@ -41,6 +66,12 @@ void NewsCommandBar::retranslateUi() {
         sources_btn_->setToolTip(tr("Manage RSS feed sources"));
     if (summarize_btn_)
         summarize_btn_->setToolTip(tr("AI Brief — summarize headlines"));
+    if (summary_close_btn_) {
+        summary_close_btn_->setToolTip(tr("Dismiss the AI brief"));
+        summary_close_btn_->setAccessibleName(tr("Dismiss AI brief"));
+    }
+    if (summary_label_)
+        summary_label_->setAccessibleName(tr("AI headline brief"));
     // Pills (category/time/sort/view) and combo entries carry logical code
     // values used in filter logic — intentionally not retranslated.
 
@@ -108,6 +139,8 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     search_input_->setPlaceholderText(tr("Search..."));
     search_input_->setFixedWidth(120);
     search_input_->setFixedHeight(20);
+    search_input_->setAccessibleName(tr("Search headlines"));
+    search_input_->setClearButtonEnabled(true);
     hl->addWidget(search_input_);
 
     connect(search_input_, &QLineEdit::textChanged, this, [this](const QString& text) { emit search_changed(text); });
@@ -118,6 +151,7 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     QStringList categories = {"ALL", "MKT", "EARN", "ECO", "TECH", "NRG", "CRPT", "GEO", "DEF"};
     for (const auto& cat : categories) {
         auto* btn = make_pill(cat, cat, hl);
+        btn->setAccessibleName(tr("Category %1").arg(cat));
         category_btns_.append(btn);
         connect(btn, &QPushButton::clicked, this, [this, cat]() {
             active_category_ = cat;
@@ -136,15 +170,18 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
 
     hl->addSpacing(2);
 
-    // Time range pills
+    // Time range pills. NOTE: the loop variable was previously named `tr`,
+    // which shadows QObject::tr() inside the loop body — any tr("…") added
+    // there would have failed to compile in a confusing way.
     QStringList time_ranges = {"1H", "6H", "24H", "48H", "7D", "30D"};
-    for (const auto& tr : time_ranges) {
-        auto* btn = make_pill(tr, tr, hl);
+    for (const auto& range : time_ranges) {
+        auto* btn = make_pill(range, range, hl);
+        btn->setAccessibleName(tr("Time range %1").arg(range));
         time_btns_.append(btn);
-        connect(btn, &QPushButton::clicked, this, [this, tr]() {
-            active_time_ = tr;
+        connect(btn, &QPushButton::clicked, this, [this, range]() {
+            active_time_ = range;
             update_pill_group(time_btns_, active_time_);
-            emit time_range_changed(tr);
+            emit time_range_changed(range);
         });
     }
     update_pill_group(time_btns_, active_time_);
@@ -276,8 +313,32 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     refresh_btn_ = new QPushButton(tr("REFRESH"), row);
     refresh_btn_->setObjectName("newsCommandBarRefresh");
     refresh_btn_->setFixedHeight(20);
+    refresh_btn_->setAccessibleName(tr("Refresh news feed"));
     hl->addWidget(refresh_btn_);
     connect(refresh_btn_, &QPushButton::clicked, this, &NewsCommandBar::refresh_clicked);
+
+    // Keyboard order across the bar: search → category pills → time pills →
+    // sort → view → controls. Without this, tab order followed construction
+    // order through the invisible scroll-area viewport.
+    QWidget* prev = search_input_;
+    for (auto* b : category_btns_) {
+        QWidget::setTabOrder(prev, b);
+        prev = b;
+    }
+    for (auto* b : time_btns_) {
+        QWidget::setTabOrder(prev, b);
+        prev = b;
+    }
+    for (QWidget* w : {static_cast<QWidget*>(sort_relevance_), static_cast<QWidget*>(sort_newest_),
+                       static_cast<QWidget*>(view_wire_), static_cast<QWidget*>(view_clusters_),
+                       static_cast<QWidget*>(lang_filter_combo_), static_cast<QWidget*>(variant_combo_),
+                       static_cast<QWidget*>(summarize_btn_), static_cast<QWidget*>(refresh_combo_),
+                       static_cast<QWidget*>(sources_btn_), static_cast<QWidget*>(refresh_btn_)}) {
+        if (w) {
+            QWidget::setTabOrder(prev, w);
+            prev = w;
+        }
+    }
 
     scroll->setWidget(row);
     root->addWidget(scroll);
@@ -470,14 +531,25 @@ void NewsCommandBar::set_unseen_count(int count) {
 }
 
 void NewsCommandBar::show_summary(const QString& summary) {
+    if (summary.trimmed().isEmpty()) {
+        hide_summary();
+        return;
+    }
     summary_label_->setText(summary);
-    summary_label_->show();
+    summary_row_->show();
+    // Grow the bar to fit the wrapped brief (capped so a long summary can't
+    // swallow the feed), then restore the fixed height on dismiss.
+    const int text_w = qMax(120, width() - 40);
+    const int text_h = summary_label_->heightForWidth(text_w);
+    setFixedHeight(kBaseHeight + qBound(20, text_h + 10, 140));
     summarize_btn_->setText(tr("AI"));
     summarize_btn_->setEnabled(true);
 }
 
 void NewsCommandBar::hide_summary() {
-    summary_label_->hide();
+    if (summary_row_)
+        summary_row_->hide();
+    setFixedHeight(kBaseHeight);
 }
 
 void NewsCommandBar::set_summarizing(bool busy) {

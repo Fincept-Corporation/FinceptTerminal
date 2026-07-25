@@ -53,10 +53,13 @@ void SurfaceAnalyticsScreen::refresh_surface_bar() {
 
 // ── Data loading ─────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::load_demo_data() {
-    // This fills every surface with rand() sample data — tell the badge so it shows
-    // DEMO instead of the surface's LIVE/COMPUTED capability tier.
-    if (control_panel_)
-        control_panel_->mark_synthetic(true);
+    // This overwrites EVERY surface with rand() sample data, so every prior
+    // fetch/import is discarded and every surface is synthetic again. The badge
+    // is driven off `real_data_charts_` rather than a single screen-wide flag,
+    // because a fetch only ever replaces one or two grids — the rest stay fake
+    // and must keep saying DEMO when the user clicks over to them.
+    real_data_charts_.clear();
+    sync_synthetic_badge();
     QString qsym = current_symbol_or_default();
     std::string sym = qsym.toStdString();
     float spot = spot_for(qsym);
@@ -495,13 +498,23 @@ void SurfaceAnalyticsScreen::update_chart() {
             break;
         }
         case ChartType::Correlation: {
-            int n = (int)corr_data_.assets.size();
-            if (corr_data_.z.empty() || (int)corr_data_.z.size() < n)
+            // CorrelationMatrixData::z is [time_slice][n*n] — one FLATTENED n×n
+            // matrix per observation window (see generate_correlation, and the
+            // table view's show_correlation which already reads it that way).
+            // Indexing it as z[row][col] pulled the first n entries of the first
+            // n *time slices*, i.e. row 0 of the matrix sampled at n different
+            // times, and rendered that as a correlation matrix. Take the most
+            // recent slice and unflatten it, matching the table view exactly.
+            const int n = (int)corr_data_.assets.size();
+            if (n <= 0 || corr_data_.z.empty())
+                break;
+            const auto& last = corr_data_.z.back();
+            if ((int)last.size() < n * n)
                 break;
             std::vector<std::vector<float>> slice(n, std::vector<float>(n));
             for (int r = 0; r < n; r++)
                 for (int c = 0; c < n; c++)
-                    slice[r][c] = corr_data_.z[r][c];
+                    slice[r][c] = last[r * n + c];
             surface_3d_->set_surface(slice, "ASSET", "CORR", "ASSET", -1.f, 1.f, true);
             break;
         }
@@ -596,6 +609,9 @@ void SurfaceAnalyticsScreen::update_metrics() {
         control_panel_->update_metrics(*z);
     else
         control_panel_->update_metrics({});
+    // The panel's "Spot:" readout had no writer at all — it always showed a
+    // dash. Fill it from the same resolver the fetch path uses.
+    control_panel_->set_spot(double(spot_for(current_symbol_or_default())));
 }
 
 const std::vector<std::vector<float>>* SurfaceAnalyticsScreen::active_z_grid() const {

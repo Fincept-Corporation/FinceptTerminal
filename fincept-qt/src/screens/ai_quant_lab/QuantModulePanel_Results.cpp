@@ -481,6 +481,10 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             display_error(payload["error"].toString());
             return;
         }
+        // HFT paints into fixed in-tab cards rather than the results pane, so
+        // nothing else clears a previously shown error banner — do it here or a
+        // stale red box sits under a successful run forever.
+        clear_results();
 
         // Helper: find a named child label in this panel and set its text
         auto set_card = [this](const QString& name, const QString& text, const QString& color = {}) {
@@ -948,8 +952,11 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             hdr->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;").arg(ui::colors::TEXT_PRIMARY()));
             results_layout_->addWidget(hdr);
 
-            // Table of windows
-            auto* tbl = new QTableWidget(total, 4, this);
+            // Table of windows. Sized from the returned array, not from
+            // total_windows — the Python side caps the preview list, so a larger
+            // `total` produced silently blank trailing rows (and a smaller one
+            // dropped windows because setItem() past rowCount is a no-op).
+            auto* tbl = new QTableWidget(int(windows.size()), 4, this);
             tbl->setStyleSheet(table_ss());
             tbl->setHorizontalHeaderLabels({"#", tr("Train Start"), tr("Train End"), tr("Test Period")});
             tbl->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);

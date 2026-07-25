@@ -16,6 +16,7 @@
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerLogRedact.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -143,10 +144,12 @@ QString DhanBroker::checked_error(const BrokerHttpResponse& resp, const QString&
 // and it logs the raw response so any disconnect is fully diagnosable.
 SessionCheck DhanBroker::validate_session(const BrokerCredentials& creds) {
     auto resp = BrokerHttp::instance().get(BASE + "/v2/profile", auth_headers(creds));
+    // Redacted: /v2/profile carries the client id/name and account PII.
+    // tokenValidity survives redaction — it is the field expiry bugs need.
     LOG_INFO(TAG, QString("validate_session GET /v2/profile → status=%1 success=%2 body=%3")
                       .arg(resp.status_code)
                       .arg(resp.success)
-                      .arg(resp.raw_body.left(300)));
+                      .arg(redact_body(resp.raw_body, 300)));
 
     // A 200 carrying the client id means the token is live. Parse the real
     // tokenValidity ("DD/MM/YYYY HH:mm", IST) so the persisted expiry hint is

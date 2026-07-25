@@ -16,6 +16,7 @@
 #include "trading/ActionCenter.h"
 
 #include <QComboBox>
+#include <QDateTime>
 #include <QEvent>
 #include <QLabel>
 #include <QPoint>
@@ -52,9 +53,24 @@ class PendingOrdersPanel : public QWidget {
     void on_order_rejected(const QString& pending_id, const QString& reason);
     void on_stats_updated(const QString& account_id);
 
-    // Row actions.
-    void approve_row(const QString& pending_id);
-    void reject_row(const QString& pending_id);
+    // Row actions. Return true when the action was dispatched (or the row is
+    // gone), false when the user cancelled and the row buttons should re-enable.
+    bool approve_row(const QString& pending_id);
+    bool reject_row(const QString& pending_id);
+
+    // Age of a queued order as display text; sets *stale_out when the order has
+    // been waiting long enough that executing it at market is questionable.
+    static QString order_age_text(const QDateTime& created, bool* stale_out = nullptr);
+
+    // A queued order older than this is flagged in the table and in the approval
+    // confirmation — and REFUSED by ActionCenter::approve_order().
+    //
+    // Derived from ActionCenter's constant rather than duplicated: this panel's
+    // warning copy and the engine's enforcement must describe the same
+    // threshold. If they drifted, the UI would either nag about orders that
+    // still execute fine, or stay silent about ones about to be refused —
+    // both worse than no warning at all.
+    static constexpr qint64 kStaleOrderSecs = fincept::trading::ActionCenter::kPendingOrderTtlMinutes * 60;
 
     // ── Widgets ──────────────────────────────────────────────────────────────
     QLabel* title_label_ = nullptr;

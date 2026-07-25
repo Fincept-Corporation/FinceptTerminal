@@ -4,9 +4,11 @@
 #include "services/geopolitics/GeopoliticsService.h"
 #include "ui/theme/Theme.h"
 
+#include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QScrollArea>
+#include <QUrl>
 
 namespace fincept::screens {
 
@@ -32,16 +34,28 @@ void HDXDataPanel::connect_service() {
 }
 
 void HDXDataPanel::on_error(const QString& context, const QString& message) {
-    Q_UNUSED(context);
+    // GeopoliticsService::error_occurred is a shared channel — an events or
+    // categories failure used to blank this table and replace it with an "HDX
+    // failed" message that had nothing to do with HDX. Only react to our own
+    // contexts.
+    static const QStringList kHdxContexts = {QStringLiteral("conflicts"), QStringLiteral("humanitarian"),
+                                             QStringLiteral("search"), QStringLiteral("topic"),
+                                             QStringLiteral("country")};
+    if (!kHdxContexts.contains(context) && !context.startsWith(QStringLiteral("hdx")))
+        return;
+
     // Stop the perpetual spinner and surface the failure in its place.
     if (datasets_table_)
         datasets_table_->setRowCount(0);
     if (dataset_count_)
         dataset_count_->setText(QStringLiteral("0"));
     if (loading_label_) {
-        loading_label_->setText(tr("Failed to load HDX data:\n%1").arg(message));
+        loading_label_->setText(tr("Failed to load HDX data (%1):\n%2\n\nAdjust the query and search again.")
+                                    .arg(context, message));
         loading_label_->show();
     }
+    if (datasets_table_)
+        datasets_table_->setVisible(false);
 }
 
 void HDXDataPanel::build_ui() {
@@ -158,6 +172,22 @@ void HDXDataPanel::build_ui() {
             .arg(ui::colors::TEXT_SECONDARY())
             .arg(ui::colors::ROW_ALT()));
 
+    datasets_table_->setAccessibleName(tr("HDX datasets"));
+    datasets_table_->setAccessibleDescription(
+        tr("Humanitarian Data Exchange datasets. Press Enter on a row to open it on data.humdata.org."));
+    // Open the dataset's HDX page. Every CKAN dataset is addressable by its
+    // name/id, so a row is actionable rather than a dead end.
+    connect(datasets_table_, &QTableWidget::cellActivated, this, [this](int row, int) {
+        if (row < 0)
+            return;
+        auto* it = datasets_table_->item(row, 0);
+        if (!it)
+            return;
+        const QString url = it->data(Qt::UserRole).toString();
+        if (!url.isEmpty())
+            QDesktopServices::openUrl(QUrl(url));
+    });
+
     // Loading overlay
     loading_label_ = new QLabel(tr("Loading HDX data..."), this);
     loading_label_->setAlignment(Qt::AlignCenter);
@@ -241,6 +271,26 @@ void HDXDataPanel::build_ui() {
     ehl->addStretch();
 
     root->addWidget(explorer_bar_);
+
+    // Source + licence attribution. HDX redistribution terms require the
+    // source and the per-dataset licence to travel with the data; the panel
+    // previously showed dataset rows with neither.
+    attribution_lbl_ = new QLabel(this);
+    attribution_lbl_->setTextFormat(Qt::RichText);
+    attribution_lbl_->setOpenExternalLinks(true);
+    attribution_lbl_->setWordWrap(true);
+    attribution_lbl_->setText(tr("Source: <a href=\"https://data.humdata.org\">Humanitarian Data Exchange (HDX)</a>, "
+                                 "OCHA. Each dataset carries its own licence and attribution — open the dataset page "
+                                 "before redistributing or citing it."));
+    attribution_lbl_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:4px 16px;"
+                                            "background:%4; border-top:1px solid %5;")
+                                        .arg(ui::colors::TEXT_TERTIARY())
+                                        .arg(ui::fonts::TINY)
+                                        .arg(ui::fonts::DATA_FAMILY())
+                                        .arg(ui::colors::BG_SURFACE())
+                                        .arg(ui::colors::BORDER_DIM()));
+    root->addWidget(attribution_lbl_);
+
     on_view_changed(0);
 }
 
@@ -335,9 +385,28 @@ void HDXDataPanel::populate_table(const QVector<HDXDataset>& datasets) {
     for (int i = 0; i < datasets.size(); ++i) {
         const auto& d = datasets[i];
         auto* title_item = new QTableWidgetItem(d.title);
-        title_item->setToolTip(d.notes);
+        // Per-dataset licence + link. HDX carries licence metadata on the CKAN
+        // record; surface whatever the payload has so the user can see the
+        // terms without leaving the terminal, and stash the dataset URL for
+        // the row-activation handler.
+        const QString licence = d.raw.value(QStringLiteral("license_title")).toString();
+        const QString name = d.raw.value(QStringLiteral("name")).toString();
+        const QString url = !name.isEmpty() ? QStringLiteral("https://data.humdata.org/dataset/") + name
+                            : !d.id.isEmpty() ? QStringLiteral("https://data.humdata.org/dataset/") + d.id
+                                              : QString();
+        title_item->setData(Qt::UserRole, url);
+        QString tip = d.notes;
+        if (!licence.isEmpty())
+            tip += (tip.isEmpty() ? QString() : QStringLiteral("\n\n")) + tr("Licence: %1").arg(licence);
+        if (!url.isEmpty())
+            tip += (tip.isEmpty() ? QString() : QStringLiteral("\n")) + url;
+        title_item->setToolTip(tip);
         datasets_table_->setItem(i, 0, title_item);
-        datasets_table_->setItem(i, 1, new QTableWidgetItem(d.organization));
+
+        auto* org_item = new QTableWidgetItem(d.organization);
+        if (!licence.isEmpty())
+            org_item->setToolTip(tr("Licence: %1").arg(licence));
+        datasets_table_->setItem(i, 1, org_item);
         datasets_table_->setItem(i, 2, new QTableWidgetItem(d.date));
 
         auto* res_item = new QTableWidgetItem(QString::number(d.num_resources));
@@ -349,6 +418,13 @@ void HDXDataPanel::populate_table(const QVector<HDXDataset>& datasets) {
 
     datasets_table_->setSortingEnabled(true);
     dataset_count_->setText(tr("%1 datasets").arg(datasets.size()));
+
+    // Empty result is a state, not a silent blank grid.
+    if (datasets.isEmpty() && loading_label_) {
+        loading_label_->setText(tr("No HDX datasets matched this query.\nTry a broader term or a different country."));
+        loading_label_->show();
+        datasets_table_->setVisible(false);
+    }
 }
 
 void HDXDataPanel::changeEvent(QEvent* event) {
@@ -386,6 +462,12 @@ void HDXDataPanel::retranslateUi() {
     if (datasets_table_)
         datasets_table_->setHorizontalHeaderLabels(
             {tr("Title"), tr("Organization"), tr("Date"), tr("Resources"), tr("Tags")});
+
+    if (attribution_lbl_)
+        attribution_lbl_->setText(
+            tr("Source: <a href=\"https://data.humdata.org\">Humanitarian Data Exchange (HDX)</a>, "
+               "OCHA. Each dataset carries its own licence and attribution — open the dataset page "
+               "before redistributing or citing it."));
 
     // dataset_count_ reflects the last populate_table() and refreshes on next load.
 }

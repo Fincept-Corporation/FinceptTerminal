@@ -423,11 +423,16 @@ void AiChatScreen::reset_thinking_state() {
 void AiChatScreen::clear_messages() {
     streaming_bubble_.clear();
     reset_thinking_state(); // card widgets are deleted by the loop below
-    while (messages_layout_->count() > 1) {
-        QLayoutItem* item = messages_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
+    // Skip the welcome panel — it is a permanent fixture reused across sessions
+    // (it is only shown/hidden). Everything else is a message row.
+    for (int i = messages_layout_->count() - 1; i >= 0; --i) {
+        QLayoutItem* item = messages_layout_->itemAt(i);
+        QWidget* w = item ? item->widget() : nullptr;
+        if (!w || w == welcome_panel_)
+            continue; // trailing stretch has no widget
+        QLayoutItem* taken = messages_layout_->takeAt(i);
+        w->deleteLater();
+        delete taken;
     }
 }
 

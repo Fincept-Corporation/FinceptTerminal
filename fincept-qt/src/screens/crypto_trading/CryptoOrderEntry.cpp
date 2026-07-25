@@ -23,6 +23,8 @@
 
 #include "screens/crypto_trading/CryptoOrderEntry.h"
 
+#include "screens/crypto_trading/CryptoTypes.h"
+
 #include <QComboBox>
 #include <QDoubleValidator>
 #include <QFrame>
@@ -38,6 +40,14 @@
 namespace fincept::screens::crypto {
 
 namespace {
+
+// Taker fee assumption used for the on-screen estimate AND for the % quick-fill
+// sizing. Real fees come back from the exchange post-fill. Shared so the two
+// can't drift: sizing 100 % against the bare balance produced an order whose
+// total (notional + fee) always exceeded the balance, so the ticket
+// immediately flagged "Insufficient balance for this order" — the 100 %
+// button could never produce a submittable order.
+constexpr double kAssumedFeeRate = 0.0007; // 7 bps / 0.07 %
 
 QFrame* make_card(const QString& object_name = "cryptoOeCard") {
     auto* card = new QFrame;
@@ -236,9 +246,9 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
         }
         form->addLayout(pct_row);
 
-        // Symbol-change signal will update the unit label.
-        connect(this, &CryptoOrderEntry::destroyed, unit, []() {});
-        // Repurpose set_symbol's path: we keep a reference to update later.
+        // Tag the suffix label so set_symbol() can find and update it.
+        // (A no-op `connect(this, &CryptoOrderEntry::destroyed, unit, []{})`
+        // used to sit here; it did nothing and has been removed.)
         unit->setProperty("ftRoleUnit", true);
     }
 
@@ -442,6 +452,47 @@ CryptoOrderEntry::CryptoOrderEntry(QWidget* parent) : QWidget(parent) {
     form->addStretch();
     root->addWidget(content, 1);
 
+    // ── Accessibility ───────────────────────────────────────────────────────
+    // Every field that sizes or prices a real order gets a spoken name, and
+    // the ticket gets an explicit tab order: side → type → quantity → price →
+    // stop → SL → TP → submit. Without setTabOrder the focus chain follows
+    // construction order, which interleaves the collapsed advanced/futures
+    // sections and drops the user into hidden widgets.
+    buy_tab_->setAccessibleName(tr("Buy side"));
+    sell_tab_->setAccessibleName(tr("Sell side"));
+    for (int i = 0; i < 4; ++i) {
+        if (type_btns_[i])
+            type_btns_[i]->setAccessibleName(tr("Order type: %1").arg(type_btns_[i]->text()));
+    }
+    qty_edit_->setAccessibleName(tr("Order quantity"));
+    qty_edit_->setAccessibleDescription(tr("Quantity in the base asset of the selected pair"));
+    price_edit_->setAccessibleName(tr("Limit price"));
+    stop_price_edit_->setAccessibleName(tr("Stop trigger price"));
+    sl_edit_->setAccessibleName(tr("Stop loss trigger price"));
+    tp_edit_->setAccessibleName(tr("Take profit trigger price"));
+    submit_btn_->setAccessibleName(tr("Submit order"));
+    balance_label_->setAccessibleName(tr("Account balance"));
+    market_price_label_->setAccessibleName(tr("Mark price"));
+    avail_label_->setAccessibleName(tr("Balance available after this order"));
+    mode_label_->setAccessibleName(tr("Trading mode, paper or live"));
+    status_label_->setAccessibleName(tr("Order validation message"));
+    submit_subtitle_->setAccessibleName(tr("Order preview"));
+    if (leverage_spin_)
+        leverage_spin_->setAccessibleName(tr("Leverage multiplier"));
+    if (margin_mode_combo_)
+        margin_mode_combo_->setAccessibleName(tr("Margin mode"));
+    if (reduce_only_check_)
+        reduce_only_check_->setAccessibleName(tr("Reduce only — never increase position size"));
+
+    // Side/type buttons and the advanced toggle are Qt::NoFocus by design
+    // (they're click targets, not stops in the keyboard chain), so only the
+    // focusable fields are linked here.
+    setTabOrder(qty_edit_, price_edit_);
+    setTabOrder(price_edit_, stop_price_edit_);
+    setTabOrder(stop_price_edit_, sl_edit_);
+    setTabOrder(sl_edit_, tp_edit_);
+    setTabOrder(tp_edit_, submit_btn_);
+
     update_cost_preview();
 }
 
@@ -505,7 +556,10 @@ void CryptoOrderEntry::set_balance(double balance) {
 
 void CryptoOrderEntry::set_current_price(double price) {
     current_price_ = price;
-    market_price_label_->setText(QString("$%1").arg(price, 0, 'f', 2));
+    // Magnitude-scaled: a fixed 2 dp rendered the MARK of every sub-cent pair
+    // as "$0.00", which is both useless and dangerous next to a live BUY
+    // button.
+    market_price_label_->setText(format_price_usd(price));
     update_cost_preview();
 }
 
@@ -616,9 +670,18 @@ void CryptoOrderEntry::on_pct_clicked(int pct) {
             basis = limit_p;
     }
     const int leverage = (is_futures_ && leverage_spin_) ? leverage_spin_->value() : 1;
-    const double max_qty = (balance_ * leverage) / basis;
+    // Leave headroom for the taker fee. Sizing against the bare balance made
+    // "100 %" cost balance × (1 + fee), which the ticket then rejected as
+    // insufficient — so the button never yielded a usable order.
+    const double cost_per_unit = basis * (1.0 + kAssumedFeeRate);
+    if (cost_per_unit <= 0.0)
+        return;
+    const double max_qty = (balance_ * leverage) / cost_per_unit;
     const double qty = max_qty * pct / 100.0;
-    qty_edit_->setText(QString::number(qty, 'f', 6));
+    // Truncate rather than round — rounding the last digit up can push the
+    // notional back over the balance.
+    const double truncated = std::floor(qty * 1e8) / 1e8;
+    qty_edit_->setText(QString::number(truncated, 'f', 8));
 }
 
 void CryptoOrderEntry::set_futures_mode(bool is_futures) {
@@ -651,10 +714,7 @@ void CryptoOrderEntry::update_cost_preview() {
         const int leverage = (is_futures_ && leverage_spin_) ? leverage_spin_->value() : 1;
         const double margin = notional / std::max(1, leverage);
 
-        // Taker fee assumption — used purely for the on-screen estimate. Real
-        // fees come back from the exchange post-fill.
-        constexpr double kAssumedFeeBps = 0.0007; // 7 bps / 0.07 %
-        const double fee = notional * kAssumedFeeBps;
+        const double fee = notional * kAssumedFeeRate;
         const double total = margin + fee;
         const double pct = balance_ > 0 ? (margin / balance_) * 100.0 : 0.0;
         const double avail = std::max(0.0, balance_ - total);
@@ -680,8 +740,14 @@ void CryptoOrderEntry::update_cost_preview() {
             status_label_->setProperty("severity", "warning");
             status_label_->setVisible(true);
             repolish(status_label_);
-        } else if (status_label_->property("severity").toString() != QLatin1String("error")) {
+        } else {
+            // Also clear a sticky "error" severity here. Previously an error
+            // set by on_submit() (e.g. "Enter a valid quantity") latched the
+            // severity property forever, so the message stayed on screen even
+            // after the user typed a perfectly valid ticket.
+            status_label_->setProperty("severity", QString());
             status_label_->setVisible(false);
+            repolish(status_label_);
         }
     } else {
         cost_label_->setText(QStringLiteral("--"));

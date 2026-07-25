@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QGraphicsView>
+#include <QRectF>
 #include <QTimer>
 
 namespace fincept::workflow {
@@ -37,6 +38,9 @@ class MiniMap : public QGraphicsView {
 
     QGraphicsView* main_view_ = nullptr;
     QTimer* update_timer_ = nullptr;
+    /// Extent the minimap is currently fitted to — re-fitting is skipped while
+    /// the graph's bounding rect is unchanged (see update_viewport_rect()).
+    QRectF fitted_rect_;
 };
 
 } // namespace fincept::workflow

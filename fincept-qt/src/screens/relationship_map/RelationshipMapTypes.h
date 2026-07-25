@@ -378,6 +378,10 @@ struct RelationshipData {
 struct FilterState {
     bool show_peers = true;
     bool show_institutional = true;
+    /// Mutual-fund holders. Previously the "Mutual Funds" checkbox was bound to
+    /// show_institutional, so the two filters were the same switch under two
+    /// labels — toggling one silently moved the other.
+    bool show_mutual_funds = true;
     bool show_insiders = true;
     bool show_officers = true;
     bool show_analysts = true;

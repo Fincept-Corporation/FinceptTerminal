@@ -18,6 +18,8 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <cmath>
+
 namespace fincept::screens::panels {
 
 namespace {
@@ -233,7 +235,7 @@ void BuybackBurnPanel::apply_theme() {
                                       "  font-family:%5; font-size:9px; font-weight:700; letter-spacing:1.2px;"
                                       "  padding:2px 8px; }"
                                       "QLabel#buybackBurnPillDemo { color:%4; background:rgba(217,119,6,0.10);"
-                                      "  border:1px solid %12; font-family:%5; font-size:9px; font-weight:700;"
+                                      "  border:1px solid %11; font-family:%5; font-size:9px; font-weight:700;"
                                       "  letter-spacing:1.2px; padding:2px 8px; }"
 
                                       "QWidget#buybackBurnBody { background:%1; }"
@@ -251,7 +253,7 @@ void BuybackBurnPanel::apply_theme() {
                                       "QPushButton#buybackBurnSig { color:%4; font-family:%5; font-size:11px;"
                                       "  text-decoration:underline; background:transparent; border:none;"
                                       "  padding:0; text-align:right; }"
-                                      "QPushButton#buybackBurnSig:hover { color:%11; }"
+                                      "QPushButton#buybackBurnSig:hover { color:%10; }"
 
                                       "QFrame#buybackBurnSeparator { color:%3; background:%3; }"
 
@@ -270,9 +272,13 @@ void BuybackBurnPanel::apply_theme() {
                                 TEXT_PRIMARY(),             // %7
                                 BG_RAISED(),                // %8
                                 NEGATIVE())                 // %9
-                           .arg(BG_HOVER(),                 // %10 (unused but reserved)
-                                BORDER_BRIGHT(),            // %11
-                                QStringLiteral("#78350f")); // %12 darker amber
+                           // One arg per marker, in ascending marker order — a
+                           // marker cannot be "reserved" by passing an unused
+                           // arg: QString::arg fills the LOWEST marker present,
+                           // so the spare shifts every later colour by one and
+                           // warns "Argument missing" for the overflow.
+                           .arg(BORDER_BRIGHT(),            // %10
+                                QStringLiteral("#78350f")); // %11 darker amber
 
     setStyleSheet(ss);
 }
@@ -343,8 +349,12 @@ void BuybackBurnPanel::on_epoch_update(const QVariant& v) {
     epoch_is_mock_ = e.is_mock;
     update_demo_chip(epoch_is_mock_ || burn_total_is_mock_);
 
-    epoch_window_->setText(
-        QStringLiteral("epoch %1 · %2").arg(e.epoch_no).arg(format_window(e.start_ts_ms, e.end_ts_ms)));
+    // The DEMO pill sits at the far right of the head; on a wide panel it is
+    // easy to miss while reading dollar figures on the left. State it inline
+    // too — every number below is fabricated in this mode.
+    const QString window_text =
+        QStringLiteral("epoch %1 · %2").arg(e.epoch_no).arg(format_window(e.start_ts_ms, e.end_ts_ms));
+    epoch_window_->setText(e.is_mock ? tr("SAMPLE DATA · %1").arg(window_text) : window_text);
 
     revenue_total_->setText(format_usd(e.revenue_total_usd));
     revenue_split_->setText(tr("subs %1 · pred-mkt %2 · misc %3")
@@ -397,11 +407,15 @@ void BuybackBurnPanel::on_topic_error(const QString& topic, const QString& error
 void BuybackBurnPanel::on_burn_signature_clicked() {
     if (current_burn_signature_.isEmpty())
         return;
-    if (current_burn_signature_.startsWith(QStringLiteral("FinceptTreasury")) ||
+    // Authoritative mock test is the producer's own `is_mock` flag, not a
+    // guess at the shape of the fabricated signature string. The old
+    // name-sniffing missed any mock signature that didn't literally contain
+    // "FinceptTreasury"/"Mock" and sent the user to a 404 Solscan page for a
+    // burn that never happened.
+    if (epoch_is_mock_ || current_burn_signature_.startsWith(QStringLiteral("FinceptTreasury")) ||
         current_burn_signature_.contains(QStringLiteral("Mock"))) {
-        // Mock signature — Solscan would 404. Skip the navigation and
-        // give a tooltip cue.
-        burn_signature_link_->setToolTip(tr("Demo signature — connect a treasury endpoint for a real burn tx."));
+        burn_signature_link_->setToolTip(tr("Demo signature — no such transaction exists on-chain. "
+                                            "Configure fincept.treasury_endpoint for real burn data."));
         return;
     }
     QDesktopServices::openUrl(QUrl(QStringLiteral("https://solscan.io/tx/") + current_burn_signature_));

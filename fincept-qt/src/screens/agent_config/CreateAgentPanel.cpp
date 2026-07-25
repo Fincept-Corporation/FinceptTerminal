@@ -136,6 +136,18 @@ void CreateAgentPanel::setup_connections() {
                 QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
         }
     });
+    // A failure that never produces agent_result / agent_stream_done left
+    // RUN TEST disabled and pending_request_id_ set for the rest of the session.
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString&, const QString& msg) {
+        if (pending_request_id_.isEmpty())
+            return;
+        pending_request_id_.clear();
+        test_btn_->setEnabled(true);
+        test_btn_->setText(tr("RUN TEST"));
+        test_result_->setPlainText(tr("Error: %1").arg(msg));
+        test_status_lbl_->setText(tr("Failed"));
+        test_status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+    });
     connect(&svc, &services::AgentService::tools_loaded, this, [this](services::AgentToolsInfo info) {
         available_tools_.clear();
         for (const auto& cat : info.categories) {

@@ -368,8 +368,17 @@ void AccountManagementDialog::setup_ui() {
     approval_mode_combo_->addItem(tr("Auto — execute immediately"), "auto");
     approval_mode_combo_->addItem(tr("Semi-Auto — require approval"), "semi_auto");
     approval_mode_combo_->setEnabled(false); // enabled once an account is selected
+    approval_mode_combo_->setAccessibleName(tr("Order approval mode"));
     approval_row->addWidget(approval_mode_combo_, 1);
     right_col->addLayout(approval_row);
+
+    // Auto is the default, and on a LIVE account it means the BUY/SELL button
+    // sends a real order with no confirmation at all. Say so, in place.
+    approval_warning_ = new QLabel;
+    approval_warning_->setWordWrap(true);
+    approval_warning_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;").arg(colors::NEGATIVE()));
+    approval_warning_->setVisible(false);
+    right_col->addWidget(approval_warning_);
 
     // Persist immediately on change (independent of the async CONNECT flow).
     connect(approval_mode_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
@@ -377,9 +386,31 @@ void AccountManagementDialog::setup_ui() {
             return;
         ActionCenter::instance().set_order_mode(selected_account_id_,
                                                 parse_order_mode(approval_mode_combo_->currentData().toString()));
+        update_approval_warning();
     });
 
     root->addLayout(right_col, 2);
+}
+
+// Auto mode on a LIVE account means orders leave for the exchange with no
+// confirmation step anywhere in the UI. Make that explicit where the setting is.
+void AccountManagementDialog::update_approval_warning() {
+    if (!approval_warning_ || !approval_mode_combo_)
+        return;
+    if (selected_account_id_.isEmpty()) {
+        approval_warning_->setVisible(false);
+        return;
+    }
+    const auto account = AccountManager::instance().get_account(selected_account_id_);
+    const bool is_live = account.trading_mode == QLatin1String("live");
+    const bool is_auto = approval_mode_combo_->currentData().toString() == QLatin1String("auto");
+    if (is_live && is_auto) {
+        approval_warning_->setText(tr("\xe2\x9a\xa0  LIVE + Auto: BUY / SELL sends a real order immediately, with no "
+                                      "confirmation dialog. Choose Semi-Auto to review every order first."));
+        approval_warning_->setVisible(true);
+    } else {
+        approval_warning_->setVisible(false);
+    }
 }
 
 void AccountManagementDialog::changeEvent(QEvent* event) {
@@ -414,6 +445,7 @@ void AccountManagementDialog::retranslateUi() {
         approval_mode_combo_->setItemText(0, tr("Auto — execute immediately"));
         approval_mode_combo_->setItemText(1, tr("Semi-Auto — require approval"));
     }
+    update_approval_warning();
 
     // Per-broker form bottom buttons (built lazily — guarded). Their dynamic
     // status text and the account-driven titles are reapplied by
@@ -461,6 +493,7 @@ void AccountManagementDialog::on_account_selected(int row) {
         if (approval_mode_combo_)
             approval_mode_combo_->setEnabled(false);
         selected_account_id_.clear();
+        update_approval_warning();
         return;
     }
 
@@ -475,6 +508,7 @@ void AccountManagementDialog::on_account_selected(int row) {
         approval_mode_combo_->setCurrentIndex(mode == OrderMode::SemiAuto ? 1 : 0);
         approval_mode_combo_->setEnabled(true);
     }
+    update_approval_warning();
 
     auto account = AccountManager::instance().get_account(selected_account_id_);
     auto* broker = BrokerRegistry::instance().get(account.broker_id);
@@ -1262,7 +1296,11 @@ void AccountManagementDialog::on_connect_zerodha_manual_paste() {
         return;
     }
     // Accept either a raw token or the full redirect URL (e.g. "https://127.0.0.1/?request_token=...&status=success").
-    LOG_INFO("Zerodha", QString("manual paste input (%1 chars): %2").arg(token.length()).arg(token));
+    // NEVER log the pasted text itself — it is (or contains) a live broker
+    // request_token, i.e. a credential. Log only its shape (CLAUDE.md P14).
+    LOG_INFO("Zerodha", QString("manual paste input: %1 chars, looks like a URL: %2")
+                            .arg(token.length())
+                            .arg(token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive) ? "yes" : "no"));
     if (token.contains(QStringLiteral("request_token"), Qt::CaseInsensitive)) {
         const QUrl url = token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive)
                              ? QUrl(token)
@@ -1271,7 +1309,7 @@ void AccountManagementDialog::on_connect_zerodha_manual_paste() {
         if (!extracted.isEmpty())
             token = extracted;
     }
-    LOG_INFO("Zerodha", QString("manual paste extracted token: %1").arg(token));
+    LOG_INFO("Zerodha", QString("manual paste: extracted a %1-char request_token").arg(token.length()));
     if (token.contains(QLatin1Char('/')) || token.contains(QLatin1Char('?')) || token.contains(QLatin1Char('='))) {
         z_status_->setText(tr("Could not find request_token in pasted text"));
         z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
@@ -1540,7 +1578,10 @@ void AccountManagementDialog::on_connect_fyers_manual_paste() {
         f_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
         return;
     }
-    LOG_INFO("Fyers", QString("manual paste input (%1 chars): %2").arg(token.length()).arg(token));
+    // The pasted text is a live auth_code — log its shape only, never the value.
+    LOG_INFO("Fyers", QString("manual paste input: %1 chars, looks like a URL: %2")
+                          .arg(token.length())
+                          .arg(token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive) ? "yes" : "no"));
     if (token.contains(QStringLiteral("auth_code"), Qt::CaseInsensitive)) {
         const QUrl url = token.startsWith(QStringLiteral("http"), Qt::CaseInsensitive)
                              ? QUrl(token)
@@ -1549,7 +1590,7 @@ void AccountManagementDialog::on_connect_fyers_manual_paste() {
         if (!extracted.isEmpty())
             token = extracted;
     }
-    LOG_INFO("Fyers", QString("manual paste extracted token: %1").arg(token.left(40) + "..."));
+    LOG_INFO("Fyers", QString("manual paste: extracted a %1-char auth_code").arg(token.length()));
 
     BrokerCredentials creds;
     creds.broker_id = "fyers";

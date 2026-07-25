@@ -84,6 +84,22 @@ void NodePalette::build_ui() {
                               .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_DIM()));
 
     categories_container_ = new QWidget(this);
+    // P7: rebuild_categories() runs on every keystroke in the search box and
+    // recreates a button + icon + name label per node type. The button and name
+    // skins are constant, so they live here (one parse, at construction) and the
+    // rows only set an objectName. Only the icon keeps an inline stylesheet —
+    // its colour is the per-category accent.
+    categories_container_->setStyleSheet(
+        QString("QPushButton#npNodeBtn {"
+                "  background: %1; color: %2; border: none;"
+                "  border-bottom: 1px solid %3; font-family: Consolas;"
+                "  font-size: 11px; text-align: left; padding: 0 10px;"
+                "}"
+                "QPushButton#npNodeBtn:hover { background: %3; color: %2; }"
+                "QLabel#npNodeName { color: %2; font-family: Consolas; font-size: 11px; background: transparent; }"
+                "QLabel#npCatCount { color: %4; font-family: Consolas; font-size: 10px; background: transparent; }")
+            .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(),
+                 ui::colors::TEXT_TERTIARY()));
     categories_layout_ = new QVBoxLayout(categories_container_);
     categories_layout_->setContentsMargins(0, 0, 0, 0);
     categories_layout_->setSpacing(0);
@@ -138,8 +154,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
         chl->addWidget(cat_label);
 
         auto* count_label = new QLabel(QString::number(filtered.size()));
-        count_label->setStyleSheet(
-            QString("color: %1; font-family: Consolas; font-size: 10px;").arg(ui::colors::TEXT_TERTIARY()));
+        count_label->setObjectName(QStringLiteral("npCatCount"));
         chl->addStretch();
         chl->addWidget(count_label);
 
@@ -149,20 +164,11 @@ void NodePalette::rebuild_categories(const QString& filter) {
         // Node buttons
         for (const auto& n : filtered) {
             auto* btn = new QPushButton;
+            btn->setObjectName(QStringLiteral("npNodeBtn"));
             btn->setFixedHeight(32);
             btn->setCursor(Qt::OpenHandCursor);
-            btn->setStyleSheet(QString("QPushButton {"
-                                       "  background: %1; color: %2; border: none;"
-                                       "  border-bottom: 1px solid %3; font-family: Consolas;"
-                                       "  font-size: 11px; text-align: left; padding: 0 10px;"
-                                       "}"
-                                       "QPushButton:hover {"
-                                       "  background: %4; color: %2;"
-                                       "}")
-                                   .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER(),
-                                        ui::colors::BG_HOVER()));
-
             btn->setToolTip(n.description);
+            btn->setAccessibleName(tr("Add %1 node — drag onto the canvas").arg(n.display_name));
 
             // Layout inside button: icon + name
             auto* bl = new QHBoxLayout(btn);
@@ -178,8 +184,7 @@ void NodePalette::rebuild_categories(const QString& filter) {
             bl->addWidget(icon);
 
             auto* name = new QLabel(n.display_name);
-            name->setStyleSheet(
-                QString("color: %1; font-family: Consolas; font-size: 11px;").arg(ui::colors::TEXT_PRIMARY()));
+            name->setObjectName(QStringLiteral("npNodeName"));
             name->setAttribute(Qt::WA_TransparentForMouseEvents);
             bl->addWidget(name, 1);
 

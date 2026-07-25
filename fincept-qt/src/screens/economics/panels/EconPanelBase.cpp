@@ -5,15 +5,21 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QColor>
+#include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonObject>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QScrollBar>
 #include <QTextStream>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
+#include <utility>
 
 namespace fincept::screens {
 
@@ -24,7 +30,23 @@ QString EconPanelBase::panel_style() const {
     int r = QColor(color_).red();
     int g = QColor(color_).green();
     int b = QColor(color_).blue();
-    return QString("#econToolbar { background:%5; border-bottom:1px solid %6; }"
+    return QString(
+                   // Toolbar control labels ("DATASET", "COUNTRY", …). Every one
+                   // of the 31 panels currently does
+                   //     lbl->setStyleSheet(ctrl_label_style());
+                   // which is a full CSS parse per label per panel. This rule
+                   // lets a panel just do setObjectName("econCtrlLabel") and
+                   // inherit the same look for free — the container stylesheet
+                   // is parsed once either way. Migrate panels to it as they are
+                   // touched; ctrl_label_style() stays for the ones not yet moved.
+                   // %9 is TEXT_TERTIARY (same token ctrl_label_style() uses and
+                   // the same one #econStatLabel uses). NOT %12 — that is a
+                   // BACKGROUND colour here (alternate-background-color /
+                   // #econTitleBar), so using it would render the label
+                   // invisible against its own panel.
+                   "QLabel#econCtrlLabel { color:%9; font-size:9px; font-weight:700;"
+                   "  background:transparent; }"
+                   "#econToolbar { background:%5; border-bottom:1px solid %6; }"
                    "#econFetchBtn { background:%1; color:%7; border:none;"
                    "  font-size:10px; font-weight:700; padding:4px 14px; }"
                    "#econFetchBtn:hover { background:rgba(%2,%3,%4,0.75); }"
@@ -166,16 +188,39 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     fetch_btn_ = new QPushButton(tr("FETCH"));
     fetch_btn_->setObjectName("econFetchBtn");
     fetch_btn_->setCursor(Qt::PointingHandCursor);
+    fetch_btn_->setAccessibleName(tr("Fetch data"));
+    fetch_btn_->setAccessibleDescription(tr("Run the query against the %1 data source").arg(source_id_));
+    fetch_btn_->setToolTip(tr("Run the query (Enter)"));
     connect(fetch_btn_, &QPushButton::clicked, this, &EconPanelBase::on_fetch);
 
     export_btn_ = new QPushButton(tr("CSV"));
     export_btn_->setObjectName("econCsvBtn");
     export_btn_->setCursor(Qt::PointingHandCursor);
+    export_btn_->setAccessibleName(tr("Export results as CSV"));
+    export_btn_->setToolTip(tr("Export the full result set (all pages) as CSV"));
     connect(export_btn_, &QPushButton::clicked, this, &EconPanelBase::export_csv);
 
     thl->addWidget(fetch_btn_);
     thl->addWidget(export_btn_);
     root->addWidget(toolbar);
+
+    // Explicit keyboard tab order across the query form, in visual order,
+    // ending on FETCH → CSV. Without this Qt falls back to construction order,
+    // which for the sidebar panels starts focus in the results table.
+    // Also make Enter in any toolbar text field run the query.
+    {
+        QWidget* prev = nullptr;
+        for (int i = 0; i < thl->count(); ++i) {
+            QWidget* w = thl->itemAt(i)->widget();
+            if (!w || !(w->focusPolicy() & Qt::TabFocus))
+                continue;
+            if (prev)
+                QWidget::setTabOrder(prev, w);
+            prev = w;
+            if (auto* le = qobject_cast<QLineEdit*>(w))
+                connect(le, &QLineEdit::returnPressed, this, &EconPanelBase::on_fetch);
+        }
+    }
 
     // Stat cards row
     cards_row_ = new QWidget(this);
@@ -250,6 +295,7 @@ void EconPanelBase::build_base_ui(QWidget* container) {
     table_->verticalHeader()->setVisible(false);
     table_->setAlternatingRowColors(true);
     table_->setShowGrid(true);
+    table_->setAccessibleName(tr("Results table"));
     tpl->addWidget(table_, 1);
 
     pager_ = new ui::PaginationBar(this);
@@ -321,6 +367,25 @@ void EconPanelBase::show_table() {
         fetch_btn_->setEnabled(true);
 }
 
+int EconPanelBase::add_content_page(QWidget* page) {
+    if (!stack_ || !page)
+        return -1;
+    return stack_->addWidget(page);
+}
+
+void EconPanelBase::show_content_page(int index) {
+    if (!stack_ || index < 0 || index >= stack_->count())
+        return;
+    stack_->setCurrentIndex(index);
+    if (fetch_btn_)
+        fetch_btn_->setEnabled(true);
+}
+
+void EconPanelBase::set_stats_visible(bool visible) {
+    if (cards_row_)
+        cards_row_->setVisible(visible);
+}
+
 // ── Display ───────────────────────────────────────────────────────────────────
 
 void EconPanelBase::display(const QJsonArray& rows, const QString& title) {
@@ -360,10 +425,16 @@ void EconPanelBase::display(const QJsonArray& rows, const QString& title) {
 
     if (title_lbl_)
         title_lbl_->setText(title);
-    if (row_count_)
-        row_count_->setText(tr("%1 records").arg(rows.size()));
 
+    // update_stats() derives latest_date_, so it must run before the row count
+    // line that reports the vintage.
     update_stats(rows);
+
+    if (row_count_)
+        row_count_->setText(latest_date_.isEmpty()
+                                ? tr("%1 records").arg(rows.size())
+                                : tr("%1 records · as of %2").arg(rows.size()).arg(latest_date_));
+
     show_table();
 }
 
@@ -371,22 +442,49 @@ void EconPanelBase::render_page() {
     const int start = pager_->offset();
     const int count = std::min<int>(pager_->page_size(), all_rows_.size() - start);
 
+    // Preserve the user's vertical scroll offset across a re-render (page-size
+    // change, language switch) so the row they were reading doesn't jump.
+    const int scroll_pos = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
+    const int sel_row = table_->currentRow();
+
+    table_->setUpdatesEnabled(false);
     table_->setColumnCount(columns_.size());
     table_->setHorizontalHeaderLabels(columns_);
     table_->setRowCount(count);
 
+    const QColor accent(color_);
     for (int r = 0; r < count; ++r) {
         const auto obj = all_rows_[start + r].toObject();
         for (int c = 0; c < columns_.size(); ++c) {
             const auto jv = obj[columns_[c]];
             QString text;
-            if (jv.isDouble())
-                text = QString::number(jv.toDouble(), 'g', 8);
-            else
+            bool numeric = false;
+            if (jv.isDouble()) {
+                numeric = true;
+                const double v = jv.toDouble();
+                // Render exact integers in full — 'g' turned large national
+                // accounts figures (e.g. 21433226000000) into "2.1433226e+13".
+                if (v == std::floor(v) && std::abs(v) < 1e15)
+                    text = QString::number(static_cast<qint64>(v));
+                else
+                    text = QString::number(v, 'g', 10);
+            } else if (jv.isNull() || jv.isUndefined()) {
+                text = QStringLiteral("—"); // explicit gap, never a silent 0
+            } else if (jv.isBool()) {
+                text = jv.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+            } else {
                 text = jv.toString();
+                // Strings that are purely numeric (FRED/BLS return values as
+                // strings) still belong in a right-aligned column.
+                bool ok = false;
+                text.toDouble(&ok);
+                numeric = ok && !text.isEmpty();
+            }
             auto* item = new QTableWidgetItem(text);
             if (c == 0)
-                item->setForeground(QColor(color_));
+                item->setForeground(accent);
+            // DESIGN_SYSTEM §5.4 — numeric columns are right-aligned.
+            item->setTextAlignment(numeric ? (Qt::AlignRight | Qt::AlignVCenter) : (Qt::AlignLeft | Qt::AlignVCenter));
             table_->setItem(r, c, item);
         }
     }
@@ -394,6 +492,12 @@ void EconPanelBase::render_page() {
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     if (columns_.size() > 1)
         table_->horizontalHeader()->setSectionResizeMode(columns_.size() - 1, QHeaderView::Stretch);
+    table_->setUpdatesEnabled(true);
+
+    if (sel_row >= 0 && sel_row < count)
+        table_->setCurrentCell(sel_row, 0);
+    if (table_->verticalScrollBar())
+        table_->verticalScrollBar()->setValue(scroll_pos);
 }
 
 void EconPanelBase::update_stats(const QJsonArray& rows) {
@@ -432,16 +536,33 @@ void EconPanelBase::update_stats(const QJsonArray& rows) {
         }
         if (!ok)
             continue;
+        // Date key: providers use very different spellings, and several return
+        // the period as a JSON *number* (WTO "Year", IMF "year"), where
+        // QJsonValue::toString() yields an empty string. Normalise both cases,
+        // and zero-pad bare years so "999" can't sort after "1999".
         QString date;
-        for (const char* k : {"date", "Date", "TIME_PERIOD", "period", "Period", "time", "obs_date"}) {
-            if (obj.contains(QLatin1String(k))) {
-                date = obj[QLatin1String(k)].toString();
+        for (const char* k : {"date", "Date", "TIME_PERIOD", "time_period", "period", "Period", "time", "obs_date",
+                              "year", "Year", "YEAR", "record_date", "ref_date"}) {
+            if (!obj.contains(QLatin1String(k)))
+                continue;
+            const QJsonValue dv = obj[QLatin1String(k)];
+            if (dv.isDouble())
+                date = QString::number(static_cast<qint64>(dv.toDouble()));
+            else
+                date = dv.toString();
+            if (!date.isEmpty())
                 break;
-            }
         }
+        bool year_only = false;
+        const int year_val = date.toInt(&year_only);
+        if (year_only && date.size() < 4 && year_val >= 0)
+            date = date.rightJustified(4, '0');
         pts.append({date, d});
     }
     std::stable_sort(pts.begin(), pts.end(), [](const DatedVal& a, const DatedVal& b) { return a.date < b.date; });
+    // Most recent period actually present in the payload — surfaced next to the
+    // record count so the user can see the data's vintage, not just its size.
+    latest_date_ = pts.isEmpty() ? QString() : pts.last().date;
     QVector<double> vals;
     vals.reserve(pts.size());
     for (const auto& p : pts)
@@ -489,7 +610,10 @@ void EconPanelBase::update_stats(const QJsonArray& rows) {
 // ── CSV ───────────────────────────────────────────────────────────────────────
 
 void EconPanelBase::export_csv() {
-    if (!table_ || table_->rowCount() == 0)
+    // Export the FULL result set (all_rows_), not just the page currently
+    // rendered in table_. The table only ever holds one page, so the previous
+    // table-driven export silently truncated every multi-page series.
+    if (all_rows_.isEmpty() || columns_.isEmpty())
         return;
 
     QString path =
@@ -501,22 +625,31 @@ void EconPanelBase::export_csv() {
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
         return;
     QTextStream out(&file);
+    out.setEncoding(QStringConverter::Utf8);
+
+    auto quote = [](QString v) {
+        if (v.contains(',') || v.contains('"') || v.contains('\n'))
+            v = "\"" + v.replace("\"", "\"\"") + "\"";
+        return v;
+    };
+
+    // Provenance header — an economics export is useless without its source.
+    out << "# source=" << source_id_ << "  exported=" << QDateTime::currentDateTimeUtc().toString(Qt::ISODate)
+        << "  rows=" << all_rows_.size() << "\n";
 
     QStringList hdrs;
-    for (int c = 0; c < table_->columnCount(); ++c) {
-        auto* h = table_->horizontalHeaderItem(c);
-        hdrs << (h ? h->text() : "");
-    }
+    for (const auto& c : std::as_const(columns_))
+        hdrs << quote(c);
     out << hdrs.join(",") << "\n";
 
-    for (int r = 0; r < table_->rowCount(); ++r) {
+    for (const auto& rv : std::as_const(all_rows_)) {
+        const QJsonObject obj = rv.toObject();
         QStringList row;
-        for (int c = 0; c < table_->columnCount(); ++c) {
-            auto* item = table_->item(r, c);
-            QString val = item ? item->text() : "";
-            if (val.contains(',') || val.contains('"'))
-                val = "\"" + val.replace("\"", "\"\"") + "\"";
-            row << val;
+        for (const auto& col : std::as_const(columns_)) {
+            const QJsonValue jv = obj[col];
+            // 'g' with 15 significant digits round-trips a double without the
+            // scientific-notation truncation the UI formatter applies.
+            row << quote(jv.isDouble() ? QString::number(jv.toDouble(), 'g', 15) : jv.toString());
         }
         out << row.join(",") << "\n";
     }
@@ -564,7 +697,9 @@ void EconPanelBase::retranslateUi() {
 
     // Record count (re-apply count with translated suffix)
     if (row_count_ && !all_rows_.isEmpty())
-        row_count_->setText(tr("%1 records").arg(all_rows_.size()));
+        row_count_->setText(latest_date_.isEmpty()
+                                ? tr("%1 records").arg(all_rows_.size())
+                                : tr("%1 records · as of %2").arg(all_rows_.size()).arg(latest_date_));
 
     // Current status message. The empty default re-translates; loading/error
     // messages keep the message that was last shown (data-derived prefixes are

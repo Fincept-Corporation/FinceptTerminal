@@ -180,6 +180,13 @@ void DashboardStatusBar::refresh_theme() {
                       .arg(ui::colors::POSITIVE())       // %5
                       .arg(ui::colors::WARNING())        // %6
                       .arg(ui::colors::CYAN()));         // %7
+
+    // The bar-level sheet just replaced the per-label colour overrides —
+    // force them to be re-applied against the new tokens on the next tick.
+    mem_color_applied_.clear();
+    if (feeds_label_)
+        feeds_label_->setStyleSheet(QString("color:%1;font-weight:bold;background:transparent;")
+                                        .arg(feeds_connected_ ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 }
 
 void DashboardStatusBar::showEvent(QShowEvent* event) {
@@ -222,10 +229,13 @@ void DashboardStatusBar::set_widget_count(int count) {
 }
 
 void DashboardStatusBar::set_connected(bool connected) {
+    if (feeds_connected_ == connected && last_latency_ms_ != -2)
+        return; // no change — skip the CSS reparse
     feeds_connected_ = connected;
     feeds_label_->setText(connected ? tr("CONNECTED") : tr("DISCONNECTED"));
     feeds_label_->setStyleSheet(QString("color:%1;font-weight:bold;background:transparent;")
                                     .arg(connected ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    emit connectivity_changed(connected);
 }
 
 void DashboardStatusBar::update_memory() {
@@ -263,7 +273,10 @@ void DashboardStatusBar::update_memory() {
                           : rss_mb < 1024.0 ? ui::colors::AMBER()
                                             : ui::colors::NEGATIVE();
     mem_label_->setText(tr("MEM: %1 MB").arg(rss_mb, 0, 'f', 0));
-    mem_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(color));
+    if (color != mem_color_applied_) {
+        mem_color_applied_ = color;
+        mem_label_->setStyleSheet(QString("color:%1;background:transparent;").arg(color));
+    }
 }
 
 void DashboardStatusBar::ping_api() {
@@ -278,6 +291,11 @@ void DashboardStatusBar::ping_api() {
 }
 
 void DashboardStatusBar::set_latency(int ms) {
+    // The health probe is the only real connectivity signal this screen has;
+    // FEEDS previously said "CONNECTED" permanently because set_connected()
+    // had no caller at all.
+    set_connected(ms >= 0);
+
     last_latency_ms_ = ms;
     if (ms < 0) {
         latency_label_->setText(tr("LAT: ERR"));

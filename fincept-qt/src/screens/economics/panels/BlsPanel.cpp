@@ -136,13 +136,29 @@ static QJsonArray extract_bls_rows(const QJsonObject& data) {
             for (const auto& dv : s["data"].toArray()) {
                 QJsonObject row = dv.toObject();
                 row["series"] = title;
-                // Combine year+period into a date string
+                // BLS periods: M01–M12 monthly, M13 = ANNUAL AVERAGE,
+                // Q01–Q04 quarterly (Q05 = annual avg), S01–S02 semi-annual
+                // (S03 = annual avg), A01 annual.
                 const QString year = row["year"].toString();
-                const QString period = row["period"].toString(); // e.g. "M01"
-                if (!year.isEmpty() && !period.isEmpty() && period != "M13") {
-                    const QString month = period.mid(1).rightJustified(2, '0');
-                    row["date"] = year + "-" + month;
-                }
+                const QString period = row["period"].toString();
+                if (year.isEmpty() || period.isEmpty())
+                    continue;
+                // Drop the synthetic annual-average rows: mixing them into a
+                // monthly/quarterly series inflates the point count and skews
+                // MIN/MAX/AVG, and (having no calendar date) they sorted to the
+                // front and could be picked up as CHANGE's "previous" value.
+                if (period == "M13" || period == "Q05" || period == "S03")
+                    continue;
+                const QChar freq = period.at(0);
+                const int num = period.mid(1).toInt();
+                if (freq == QLatin1Char('M'))
+                    row["date"] = year + "-" + QString::number(num).rightJustified(2, '0'); // 2024-03
+                else if (freq == QLatin1Char('Q'))
+                    row["date"] = year + "-Q" + QString::number(num); // 2024-Q1 (sorts correctly)
+                else if (freq == QLatin1Char('S'))
+                    row["date"] = year + "-S" + QString::number(num);
+                else
+                    row["date"] = year; // annual
                 rows.append(row);
             }
         }

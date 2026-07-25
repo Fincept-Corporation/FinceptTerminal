@@ -114,20 +114,40 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
 
     auto* run = make_run_button(tr("RUN BACKTEST"), w);
     connect(run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Backtesting..."));
+        const QJsonArray tickers = parse_csv_strings(text_inputs_["bt_instruments"]->text());
+        if (tickers.isEmpty()) {
+            display_error(tr("Enter at least one instrument, e.g. AAPL,MSFT,GOOG."));
+            return;
+        }
+        const QDate start = date_inputs_["bt_start"]->date();
+        const QDate end = date_inputs_["bt_end"]->date();
+        if (start >= end) {
+            display_error(tr("Start date (%1) must be before end date (%2).")
+                              .arg(start.toString("yyyy-MM-dd"), end.toString("yyyy-MM-dd")));
+            return;
+        }
+        // NOTE: top_k > universe size degenerates to "hold everything" and makes
+        // the turnover / win-rate figures meaningless. Not blocked here because
+        // the shipped default (topk = 10) is larger than the 4-name placeholder
+        // universe — flagging it would reject the out-of-box configuration.
+        const int topk = int_inputs_["bt_topk"]->value();
+        show_loading(tr("Backtesting %1 over %2 instrument(s), %3 → %4...")
+                         .arg(combo_inputs_["bt_strategy"]->currentText())
+                         .arg(tickers.size())
+                         .arg(start.toString("yyyy-MM-dd"), end.toString("yyyy-MM-dd")));
         QJsonObject params;
         QJsonObject strategy_config;
         strategy_config["type"] = combo_inputs_["bt_strategy"]->currentText();
-        strategy_config["topk"] = int_inputs_["bt_topk"]->value();
+        strategy_config["topk"] = topk;
         params["strategy_config"] = strategy_config;
         QJsonObject dataset;
         dataset["instruments"] = text_inputs_["bt_instruments"]->text();
-        dataset["start_date"] = date_inputs_["bt_start"]->date().toString("yyyy-MM-dd");
-        dataset["end_date"] = date_inputs_["bt_end"]->date().toString("yyyy-MM-dd");
+        dataset["start_date"] = start.toString("yyyy-MM-dd");
+        dataset["end_date"] = end.toString("yyyy-MM-dd");
         params["dataset_config"] = dataset;
         QJsonObject portfolio;
         portfolio["initial_capital"] = double_inputs_["bt_capital"]->value();
-        portfolio["benchmark"] = text_inputs_["bt_benchmark"]->text();
+        portfolio["benchmark"] = text_inputs_["bt_benchmark"]->text().trimmed();
         params["portfolio_config"] = portfolio;
         AIQuantLabService::instance().run_backtest(params);
     });
@@ -140,11 +160,13 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
                                      .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM(), ui::colors::BG_BASE()));
     connect(open_terminal, &QPushButton::clicked, this, [this]() {
         auto* instruments_edit = text_inputs_.value("bt_instruments");
-        if (!instruments_edit || instruments_edit->text().trimmed().isEmpty())
+        // Used to return silently — the button simply did nothing and the user
+        // had no idea why.
+        if (!instruments_edit || instruments_edit->text().trimmed().isEmpty()) {
+            display_error(tr("Enter at least one instrument before opening the Backtesting terminal."));
             return;
-        QJsonArray symbols;
-        for (const auto& s : instruments_edit->text().split(',', Qt::SkipEmptyParts))
-            symbols.append(s.trimmed());
+        }
+        const QJsonArray symbols = parse_csv_strings(instruments_edit->text());
         QJsonObject config;
         config["symbols"] = symbols;
         auto* capital_spin = double_inputs_.value("bt_capital");

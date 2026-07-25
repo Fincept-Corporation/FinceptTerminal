@@ -150,6 +150,7 @@ QWidget* AltInvestmentsScreen::create_center_panel() {
     combo_label_->setObjectName("altComboLabel");
     analyzer_combo_ = new QComboBox;
     analyzer_combo_->setFixedWidth(210);
+    analyzer_combo_->setAccessibleName(tr("Analyzer"));
     connect(analyzer_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &AltInvestmentsScreen::on_analyzer_changed);
     combo_col->addWidget(combo_label_);
@@ -175,6 +176,7 @@ QWidget* AltInvestmentsScreen::create_center_panel() {
     analyze_btn_->setObjectName("altAnalyzeBtn");
     analyze_btn_->setCursor(Qt::PointingHandCursor);
     analyze_btn_->setFixedHeight(26);
+    analyze_btn_->setAccessibleName(tr("Run the selected analyzer"));
     connect(analyze_btn_, &QPushButton::clicked, this, &AltInvestmentsScreen::on_analyze);
     fhl->addWidget(form_title_);
     fhl->addStretch(1);

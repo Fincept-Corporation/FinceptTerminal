@@ -208,7 +208,8 @@ void RiskMetricsWidget::hub_subscribe_all() {
                 return;
             row_cache_.insert(sym, v.value<services::QuoteData>());
             set_loading_progress(row_cache_.size(), kRiskSymbols.size());
-            rebuild_from_cache();
+            // One redraw per delivery burst, not one per symbol.
+            schedule_render([this]() { rebuild_from_cache(); });
         });
     }
     hub_active_ = true;
@@ -305,12 +306,10 @@ void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
     };
 
     if (map.contains("SPY") && map.contains("QQQ")) {
-        double d = map["SPY"]->change_pct - map["QQQ"]->change_pct;
         spy_qqq_spread_->setText(spread_str(map["SPY"]->change_pct, map["QQQ"]->change_pct));
         spy_qqq_spread_->setStyleSheet(
             QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
                 .arg(spread_color(map["SPY"]->change_pct, map["QQQ"]->change_pct)));
-        (void)d;
     }
     if (map.contains("SPY") && map.contains("IWM")) {
         spy_iwm_spread_->setText(spread_str(map["SPY"]->change_pct, map["IWM"]->change_pct));

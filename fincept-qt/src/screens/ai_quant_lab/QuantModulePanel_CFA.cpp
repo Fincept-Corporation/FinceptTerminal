@@ -349,7 +349,6 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
     // ── Run button ──────────────────────────────────────────────────────────
     auto* run = make_run_button(tr("RUN ANALYSIS"), w);
     connect(run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Running..."));
         const QString cmd = combo_inputs_["cfa_analysis"]->currentText();
         const QString raw = text_inputs_["cfa_symbol"]->text().trimmed();
 
@@ -361,8 +360,8 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
         // Everything else reads from "data" (or "population" for sampling_techniques).
         const bool needs_data = (cmd != "sampling_error_analysis" && cmd != "central_limit_theorem");
         if (needs_data && raw.isEmpty()) {
+            // display_error() already sets the status label to "Error".
             display_error(tr("Please enter a ticker symbol or comma-separated values"));
-            status_label_->setText(tr("Error"));
             return;
         }
         if (cmd == "sampling_techniques")
@@ -433,6 +432,9 @@ QWidget* QuantModulePanel::build_cfa_quant_panel() {
             params["data_name"] = text_inputs_["cfa_validate_name"]->text();
         }
 
+        QString label = cmd;
+        label.replace('_', ' ');
+        show_loading(needs_data ? tr("Running %1 on %2...").arg(label, raw) : tr("Running %1...").arg(label));
         AIQuantLabService::instance().run_module("cfa_quant", cmd, params);
     });
     vl->addWidget(run);

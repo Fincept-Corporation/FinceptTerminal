@@ -433,8 +433,8 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
         push_right(tr("Holders (%1/%2)").arg(lv.size()).arg(data.institutional_holders.size()), cInst, std::move(lv));
     }
 
-    // MUTUAL FUNDS → right
-    if (filters.show_institutional && !data.mutualfund_holders.isEmpty()) {
+    // MUTUAL FUNDS → right (own filter flag; used to share show_institutional)
+    if (filters.show_mutual_funds && !data.mutualfund_holders.isEmpty()) {
         QVector<LeafInfo> lv;
         for (const auto& h : data.mutualfund_holders) {
             if (lv.size() >= 8)
