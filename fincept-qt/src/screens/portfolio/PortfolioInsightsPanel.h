@@ -39,6 +39,7 @@ class PortfolioInsightsPanel : public QWidget {
     void keyPressEvent(QKeyEvent* e) override;
     void showEvent(QShowEvent* e) override;
     void changeEvent(QEvent* event) override;
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
     void build_ui();
@@ -81,6 +82,7 @@ class PortfolioInsightsPanel : public QWidget {
     QPushButton* ai_run_ = nullptr;
     QLabel* ai_meta_ = nullptr;
     QTextBrowser* ai_content_ = nullptr;
+    QPushButton* ai_copy_btn_ = nullptr;
 
     // Agent page
     QComboBox* agent_cb_ = nullptr;

@@ -8,8 +8,15 @@
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QComboBox>
+#include <QIcon>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
 #include <QDateTime>
+#include <QTimer>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -31,6 +38,43 @@ namespace {
 
 QString fmt_now() {
     return QDateTime::currentDateTime().toString("HH:mm:ss");
+}
+
+QIcon make_copy_icon() {
+    auto draw_pm = [](const QColor& color) {
+        QPixmap pm(16, 16);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(QPen(color, 1.25));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(2, 2, 8, 10);
+        
+        p.setBrush(QColor(15, 15, 15));
+        p.drawRect(5, 5, 8, 10);
+        return pm;
+    };
+
+    QIcon icon;
+    icon.addPixmap(draw_pm(QColor(ui::colors::TEXT_SECONDARY())), QIcon::Normal);
+    icon.addPixmap(draw_pm(QColor(ui::colors::AMBER())), QIcon::Active);
+    return icon;
+}
+
+QIcon make_check_icon() {
+    QPixmap pm(16, 16);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(QColor(ui::colors::POSITIVE()), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    
+    QPainterPath path;
+    path.moveTo(3, 8);
+    path.lineTo(6.5, 11.5);
+    path.lineTo(13, 4);
+    p.drawPath(path);
+    
+    return QIcon(pm);
 }
 
 // SettingsRepository category under which AI/agent results are persisted.
@@ -332,6 +376,42 @@ QWidget* PortfolioInsightsPanel::build_ai_page() {
                                        "  font-size:12px; }")
                                    .arg(bg, text1));
     lay->addWidget(ai_content_, 1);
+
+    // Copy Button overlay on the QTextBrowser itself (not viewport, so it remains sticky)
+    ai_copy_btn_ = new QPushButton(ai_content_);
+    ai_copy_btn_->setCursor(Qt::PointingHandCursor);
+    ai_copy_btn_->setToolTip(tr("Copy entire analysis to clipboard"));
+    ai_copy_btn_->setFixedSize(26, 26);
+    ai_copy_btn_->setIcon(make_copy_icon());
+    ai_copy_btn_->setIconSize(QSize(14, 14));
+
+    QString btn_ss = QString(
+        "QPushButton { background: %1; border: 1px solid %2; border-radius: 4px; }"
+        "QPushButton:hover { background: %3; border-color: %4; }"
+    ).arg("rgba(15, 15, 15, 0.8)", ui::colors::BORDER_MED(),
+          "rgba(30, 30, 30, 0.95)", ui::colors::AMBER());
+    ai_copy_btn_->setStyleSheet(btn_ss);
+    ai_copy_btn_->hide(); // Hidden initially, shown only when rendering successful results
+
+    connect(ai_copy_btn_, &QPushButton::clicked, this, [this, btn_ss]() {
+        QString text = ai_cache_.value(ai_type_);
+        if (text.isEmpty()) {
+            text = ai_content_->toPlainText();
+        }
+        QGuiApplication::clipboard()->setText(text);
+        ai_copy_btn_->setIcon(make_check_icon());
+        ai_copy_btn_->setStyleSheet(QString(
+            "QPushButton { background: %1; border: 1px solid %2; border-radius: 4px; }"
+        ).arg("rgba(15, 15, 15, 0.8)", ui::colors::POSITIVE()));
+
+        QTimer::singleShot(1500, ai_copy_btn_, [this, btn_ss]() {
+            ai_copy_btn_->setIcon(make_copy_icon());
+            ai_copy_btn_->setStyleSheet(btn_ss);
+        });
+    });
+
+    ai_content_->viewport()->installEventFilter(this);
+
     render_empty(ai_content_, tr("Select an analysis type and press RUN.\n\n"
                                  "FULL — broad review of holdings and allocation.\n"
                                  "RISK — concentration, correlation, downside scenarios.\n"
@@ -753,6 +833,15 @@ void PortfolioInsightsPanel::render_result(QTextBrowser* target, const QString& 
     }
     target->setHtml(ui::MarkdownRenderer::render(markdown));
     target->verticalScrollBar()->setValue(0);
+
+    if (target == ai_content_ && ai_copy_btn_) {
+        ai_copy_btn_->show();
+        if (ai_content_->viewport()) {
+            int x = ai_content_->viewport()->x() + ai_content_->viewport()->width() - ai_copy_btn_->width() - 12;
+            int y = ai_content_->viewport()->y() + 12;
+            ai_copy_btn_->move(x, y);
+        }
+    }
 }
 
 void PortfolioInsightsPanel::render_error(QTextBrowser* target, const QString& message) {
@@ -764,12 +853,27 @@ void PortfolioInsightsPanel::render_error(QTextBrowser* target, const QString& m
                             "<div style='color:%2; font-weight:700; letter-spacing:1px; margin-bottom:8px;'>"
                             "⚠ %4</div>%3</div>")
                         .arg(ui::colors::TEXT_PRIMARY(), ui::colors::NEGATIVE(), safe, tr("ERROR")));
+
+    if (target == ai_content_ && ai_copy_btn_) {
+        ai_copy_btn_->hide();
+    }
 }
 
 void PortfolioInsightsPanel::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
     QWidget::changeEvent(event);
+}
+
+bool PortfolioInsightsPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (ai_content_ && obj == ai_content_->viewport() && event->type() == QEvent::Resize) {
+        if (ai_copy_btn_) {
+            int x = ai_content_->viewport()->x() + ai_content_->viewport()->width() - ai_copy_btn_->width() - 12;
+            int y = ai_content_->viewport()->y() + 12;
+            ai_copy_btn_->move(x, y);
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 void PortfolioInsightsPanel::retranslate_ai_run_label() {
@@ -836,6 +940,10 @@ void PortfolioInsightsPanel::render_empty(QTextBrowser* target, const QString& h
     safe.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
     target->setHtml(QString("<div style='color:%1; font-size:11px; line-height:1.7; padding-top:8px;'>%2</div>")
                         .arg(ui::colors::TEXT_TERTIARY(), safe));
+
+    if (target == ai_content_ && ai_copy_btn_) {
+        ai_copy_btn_->hide();
+    }
 }
 
 } // namespace fincept::screens
