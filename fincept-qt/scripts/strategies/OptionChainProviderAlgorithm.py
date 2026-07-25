@@ -12,7 +12,7 @@
 from AlgorithmImports import *
 
 ### <summary>
-### Demonstration of the Option Chain Provider -- a much faster mechanism for manually specifying the option contracts you'd like to recieve
+### Demonstration of the Option Chain Provider -- a much faster mechanism for manually specifying the option contracts you'd like to receive
 ### data for and manually subscribing to them.
 ### </summary>
 ### <meta name="tag" content="strategy example" />

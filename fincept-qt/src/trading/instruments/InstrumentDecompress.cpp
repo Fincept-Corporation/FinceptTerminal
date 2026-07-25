@@ -10,7 +10,9 @@
 // shadows it on the include path (e.g. a PostgreSQL install whose include dir
 // precedes QtZlib), the unprefixed symbols won't link. Define it ourselves so
 // inflate() → z_inflate() regardless of which standard zlib.h is picked up.
-#ifndef Z_PREFIX
+// On macOS/Linux we link the system zlib (ZLIB::ZLIB in CMakeLists.txt),
+// whose symbols are unprefixed — so only define Z_PREFIX on Windows.
+#if defined(_WIN32) && !defined(Z_PREFIX)
 #    define Z_PREFIX
 #endif
 #include <zlib.h>

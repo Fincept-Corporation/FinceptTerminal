@@ -32,6 +32,7 @@ class RegisterScreen : public QWidget {
     QLabel* form_title_ = nullptr;
     QLabel* first_name_lbl_ = nullptr;
     QLabel* last_name_lbl_ = nullptr;
+    QLabel* username_lbl_ = nullptr;
     QLabel* email_lbl_ = nullptr;
     QLabel* code_lbl_ = nullptr;
     QLabel* phone_lbl_ = nullptr;
@@ -40,6 +41,7 @@ class RegisterScreen : public QWidget {
 
     QLineEdit* first_name_ = nullptr;
     QLineEdit* last_name_ = nullptr;
+    QLineEdit* username_ = nullptr;
     QLineEdit* email_ = nullptr;
     QLineEdit* phone_ = nullptr;
     QLineEdit* country_code_ = nullptr;
