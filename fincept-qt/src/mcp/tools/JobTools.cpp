@@ -30,7 +30,7 @@
 
 namespace fincept::mcp::tools {
 
-static constexpr const char* TAG = "JobTools";
+static constexpr const char* kJobToolsTag = "JobTools";
 
 std::vector<ToolDef> get_job_tools() {
     std::vector<ToolDef> tools;
@@ -196,7 +196,7 @@ std::vector<ToolDef> get_job_tools() {
         tools.push_back(std::move(t));
     }
 
-    LOG_INFO(TAG, QString("Defined %1 job/result meta tools").arg(tools.size()));
+    LOG_INFO(kJobToolsTag, QString("Defined %1 job/result meta tools").arg(tools.size()));
     return tools;
 }
 

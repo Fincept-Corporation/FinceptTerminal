@@ -13,7 +13,7 @@
 
 namespace fincept::mcp {
 
-static constexpr const char* TAG = "ResultStore";
+static constexpr const char* kResultStoreTag = "ResultStore";
 
 static int compact_size(const QJsonValue& v) {
     // QJsonDocument only wraps objects/arrays, so scalars are measured inside a
@@ -201,7 +201,7 @@ void ResultStore::sweep_locked() {
         total -= it->text.size();
         entries_.remove(entry.second);
     }
-    LOG_DEBUG(TAG, QString("Swept overflow store — %1 entries, %2 KB retained")
+    LOG_DEBUG(kResultStoreTag, QString("Swept overflow store — %1 entries, %2 KB retained")
                        .arg(entries_.size())
                        .arg(total / 1024));
 }

@@ -11,7 +11,12 @@
 
 namespace fincept::mcp {
 
-static constexpr const char* TAG = "JobRegistry";
+// Not the bare `TAG` used by older files in this namespace. Unity builds
+// concatenate ~14 .cpp files into one TU, so two file-scope `TAG` definitions
+// landing in the same batch is a hard redefinition error. Unity is OFF in
+// win-dev and ON in every release/CI preset, so the bare name compiles locally
+// and only breaks on CI. New files get a unique <File>Tag name.
+static constexpr const char* kJobRegistryTag = "JobRegistry";
 
 static qint64 now_ms() {
     return QDateTime::currentMSecsSinceEpoch();
@@ -59,7 +64,7 @@ QString JobRegistry::create(const QString& tool) {
     job.cancel_flag = std::make_shared<std::atomic<bool>>(false);
     jobs_.insert(id, std::move(job));
 
-    LOG_INFO(TAG, QString("Job %1 started for tool '%2'").arg(id, tool));
+    LOG_INFO(kJobRegistryTag, QString("Job %1 started for tool '%2'").arg(id, tool));
     return id;
 }
 
@@ -95,7 +100,7 @@ void JobRegistry::complete(const QString& id, const ToolResult& result) {
             it->snap.progress = 1.0;
         it->result = result;
 
-        LOG_INFO(TAG, QString("Job %1 (%2) → %3 after %4 ms")
+        LOG_INFO(kJobRegistryTag, QString("Job %1 (%2) → %3 after %4 ms")
                           .arg(id, it->snap.tool, QString::fromLatin1(job_state_str(it->snap.state)))
                           .arg(it->snap.elapsed_ms()));
     }
@@ -111,7 +116,7 @@ bool JobRegistry::request_cancel(const QString& id) {
     if (it->cancel_flag)
         it->cancel_flag->store(true);
     it->snap.message = QStringLiteral("cancellation requested");
-    LOG_INFO(TAG, QString("Job %1 (%2) — cancellation requested").arg(id, it->snap.tool));
+    LOG_INFO(kJobRegistryTag, QString("Job %1 (%2) — cancellation requested").arg(id, it->snap.tool));
     return true;
 }
 
@@ -228,7 +233,7 @@ void JobRegistry::sweep_locked() {
         jobs_.remove(entry.second);
     }
     if (to_drop > 0)
-        LOG_WARN(TAG, QString("%1 running jobs exceed the %2-job cap — none evicted").arg(to_drop).arg(kMaxJobs));
+        LOG_WARN(kJobRegistryTag, QString("%1 running jobs exceed the %2-job cap — none evicted").arg(to_drop).arg(kMaxJobs));
 }
 
 } // namespace fincept::mcp
