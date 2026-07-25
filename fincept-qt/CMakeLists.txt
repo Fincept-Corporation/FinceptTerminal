@@ -1479,6 +1479,7 @@ set(UI_SOURCES
     src/ui/charts/SeriesLayer.cpp
     src/ui/charts/HorizontalLineLayer.cpp
     src/ui/charts/ChartOverlayManager.cpp
+    src/ui/charts/TimeAxisNavigator.cpp
     src/ui/charts/IndicatorPicker.cpp
     src/ui/charts/IndicatorParamDialog.cpp
     src/ui/charts/layers/EmaLayer.cpp

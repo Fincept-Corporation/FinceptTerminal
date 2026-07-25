@@ -31,6 +31,7 @@
 #include <QSplitter>
 #include <QStringListModel>
 #include <QStyle>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
@@ -39,21 +40,64 @@ namespace fincept::screens {
 using namespace fincept::trading;
 using namespace fincept::screens::crypto;
 
-void CryptoTradingScreen::async_fetch_candles(const QString& symbol, const QString& timeframe) {
+void CryptoTradingScreen::async_fetch_candles(const QString& symbol, const QString& timeframe, int attempt) {
     if (candles_fetching_.exchange(true))
         return;
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self, symbol, timeframe]() {
+    (void)QtConcurrent::run([self, symbol, timeframe, attempt]() {
         auto candles = ExchangeService::instance().fetch_ohlcv(symbol, timeframe, OHLCV_FETCH_COUNT);
         if (!self)
             return;
         self->candles_fetching_ = false;
         QMetaObject::invokeMethod(
             self,
-            [self, candles]() {
+            [self, candles, symbol, timeframe, attempt]() {
                 if (!self)
                     return;
-                self->chart_->set_candles(candles);
+                // The user may have moved on while the REST call was in flight.
+                if (self->selected_symbol_ != symbol || self->chart_->current_timeframe() != timeframe)
+                    return;
+
+                if (!candles.isEmpty()) {
+                    self->chart_->set_candles(candles);
+                    self->chart_symbol_ = symbol + QLatin1Char('|') + timeframe;
+                    return;
+                }
+
+                // Empty result — the daemon errored, rate-limited, or the
+                // market has no history. Pushing it into the chart wipes the
+                // history and leaves the user watching WS bars trickle in one
+                // per minute, each drawn as a giant block (#338). Keep what we
+                // have, and only clear when the stale content belongs to a
+                // different symbol/timeframe.
+                const QString key = symbol + QLatin1Char('|') + timeframe;
+                if (self->chart_symbol_ != key) {
+                    self->chart_->clear();
+                    self->chart_symbol_.clear();
+                }
+                LOG_WARN("CryptoTrading", QString("fetch_ohlcv returned no candles for %1 %2 (attempt %3/%4)")
+                                              .arg(symbol, timeframe)
+                                              .arg(attempt + 1)
+                                              .arg(CANDLE_FETCH_MAX_ATTEMPTS));
+
+                if (attempt + 1 < CANDLE_FETCH_MAX_ATTEMPTS) {
+                    // The first fetch races the daemon's exchange handshake on
+                    // a cold start; back off and try again rather than leaving
+                    // the chart permanently empty.
+                    const int delay_ms = CANDLE_FETCH_RETRY_MS * (attempt + 1);
+                    QTimer::singleShot(delay_ms, self, [self, symbol, timeframe, attempt]() {
+                        if (!self || self->selected_symbol_ != symbol)
+                            return;
+                        if (self->chart_->current_timeframe() != timeframe)
+                            return;
+                        self->async_fetch_candles(symbol, timeframe, attempt + 1);
+                    });
+                } else {
+                    LOG_ERROR("CryptoTrading",
+                              QString("no OHLCV history for %1 %2 after %3 attempts — chart is live-only")
+                                  .arg(symbol, timeframe)
+                                  .arg(CANDLE_FETCH_MAX_ATTEMPTS));
+                }
             },
             Qt::QueuedConnection);
     });

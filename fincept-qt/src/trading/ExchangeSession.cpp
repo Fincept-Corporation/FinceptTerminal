@@ -662,8 +662,14 @@ OrderBookData ExchangeSession::fetch_orderbook(const QString& symbol, int limit)
 QVector<Candle> ExchangeSession::fetch_ohlcv(const QString& symbol, const QString& timeframe, int limit) {
     const auto j = daemon_call("fetch_ohlcv", {{"symbol", symbol}, {"timeframe", timeframe}, {"limit", limit}});
     QVector<Candle> result;
-    if (j.contains("error") || !j.contains("candles"))
+    if (j.contains("error") || !j.contains("candles")) {
+        // Swallowing this left the chart silently empty and the terminal
+        // showing live-only bars with no way to tell why (#338).
+        LOG_WARN(kSessionTag, QString("[%1] fetch_ohlcv %2 %3 failed: %4")
+                                  .arg(exchange_id_, symbol, timeframe,
+                                       j.value("error").toString(QStringLiteral("no candles in response"))));
         return result;
+    }
     const auto arr = j.value("candles").toArray();
     for (const auto& item : arr)
         result.append(parse_candle(item.toObject()));

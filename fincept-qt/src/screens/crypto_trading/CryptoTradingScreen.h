@@ -93,7 +93,9 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     bool is_perp_market() const;
     void update_futures_visibility();
 
-    void async_fetch_candles(const QString& symbol, const QString& timeframe);
+    // `attempt` drives the retry backoff for an empty OHLCV response (#338) —
+    // callers always start at 0.
+    void async_fetch_candles(const QString& symbol, const QString& timeframe, int attempt = 0);
     void async_fetch_live_positions();
     void async_fetch_live_orders();
     void async_fetch_live_balance();
@@ -149,6 +151,13 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     // Paper trading
     QString portfolio_id_;
     trading::PtPortfolio portfolio_;
+
+    // "<symbol>|<timeframe>" the chart currently holds history for. Lets an
+    // empty OHLCV response keep a good chart instead of wiping it, while still
+    // clearing content that belongs to a symbol the user has left (#338).
+    QString chart_symbol_;
+    static constexpr int CANDLE_FETCH_MAX_ATTEMPTS = 3;
+    static constexpr int CANDLE_FETCH_RETRY_MS = 2000;
 
     // Async fetch guards
     std::atomic<bool> candles_fetching_{false};

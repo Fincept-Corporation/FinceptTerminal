@@ -4,6 +4,7 @@
 
 #include "trading/TradingTypes.h"
 #include "ui/charts/ChartOverlayManager.h"
+#include "ui/charts/TimeAxisNavigator.h"
 
 #include <QColor>
 #include <QEvent>
@@ -73,6 +74,14 @@ class EquityChart : public QWidget {
     void on_hover_position(const QPointF& chart_value_pos, const QPoint& view_pos);
     void on_hover_leave();
 
+    // ── User-driven time navigation (#338) ────────────────────────────────
+    // Wheel zooms around the cursor, left-drag pans, double-click returns to
+    // auto-follow. Operates in synthetic-timestamp space, same as the axis.
+    void zoom_time(double factor, qint64 anchor_ts);
+    void pan_time_pixels(int dx);
+    void reset_view();
+    void apply_view_range();
+
     HoverEquityChartView* chart_view_ = nullptr;
     QChart* chart_ = nullptr;
     QCandlestickSeries* series_ = nullptr;
@@ -99,6 +108,12 @@ class EquityChart : public QWidget {
 
     QVector<trading::BrokerCandle> candles_;
     static constexpr int MAX_VISIBLE = 120;
+    // Never fit the time axis tighter than this many slots — Qt sizes a candle
+    // body from the slot width in DOMAIN units, so a handful of candles on a
+    // data-fitted axis renders as giant blocks (#338).
+    static constexpr int MIN_VISIBLE_SLOTS = 40;
+
+    fincept::ui::TimeAxisNavigator nav_;
 
     double last_min_price_ = -1;
     double last_max_price_ = -1;

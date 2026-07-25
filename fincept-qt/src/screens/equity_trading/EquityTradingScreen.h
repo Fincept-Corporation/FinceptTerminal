@@ -270,6 +270,11 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // ── Multi-account state ──
     QString focused_account_id_; // the account targeted by order entry + chart
     QString selected_symbol_ = "RELIANCE";
+    // "<symbol>|<timeframe>" the chart currently holds history for. Lets an
+    // empty broker response keep a good chart instead of wiping it down to
+    // live-only bars, while still clearing content the user has moved on
+    // from (#338).
+    QString chart_symbol_;
     QString selected_exchange_ = "NSE";
 
     // Paper trading (derived from focused account)

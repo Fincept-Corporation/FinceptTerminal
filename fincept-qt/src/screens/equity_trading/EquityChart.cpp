@@ -103,6 +103,18 @@ QString time_format_for(qint64 span_ms) {
     return QStringLiteral("MMM yy");
 }
 
+// Pixel clamps for the candle body. Qt derives the body width from the candle
+// time period in DOMAIN units (qtcharts candlestick.cpp: `columnWidth =
+// m_timePeriod`), so a chart holding only a handful of candles stretches every
+// body across the plot (#338). The minimum keeps a full 120-bar chart from
+// collapsing into hairlines.
+constexpr qreal kMaxCandlePx = 18.0;
+constexpr qreal kMinCandlePx = 2.0;
+
+// One wheel notch.
+constexpr double kZoomInFactor = 0.85;
+constexpr double kZoomOutFactor = 1.0 / kZoomInFactor;
+
 QFont scene_font() {
     QFont f;
     f.setFamily(QStringLiteral("Consolas"));
@@ -130,11 +142,37 @@ class HoverEquityChartView : public QChartView {
 
   protected:
     void mouseMoveEvent(QMouseEvent* e) override {
-        if (host_ && chart()) {
+        if (dragging_ && host_) {
+            const int dx = e->pos().x() - drag_pos_.x();
+            drag_pos_ = e->pos();
+            host_->pan_time_pixels(dx);
+        } else if (host_ && chart()) {
             const QPointF chart_pos = chart()->mapToValue(e->pos());
             host_->on_hover_position(chart_pos, e->pos());
         }
         QChartView::mouseMoveEvent(e);
+    }
+    void mousePressEvent(QMouseEvent* e) override {
+        if (e->button() == Qt::LeftButton) {
+            dragging_ = true;
+            drag_pos_ = e->pos();
+            setCursor(Qt::ClosedHandCursor);
+            if (host_)
+                host_->on_hover_leave(); // crosshair off while dragging
+        }
+        QChartView::mousePressEvent(e);
+    }
+    void mouseReleaseEvent(QMouseEvent* e) override {
+        if (e->button() == Qt::LeftButton && dragging_) {
+            dragging_ = false;
+            unsetCursor();
+        }
+        QChartView::mouseReleaseEvent(e);
+    }
+    void mouseDoubleClickEvent(QMouseEvent* e) override {
+        if (host_)
+            host_->reset_view();
+        e->accept();
     }
     void leaveEvent(QEvent* e) override {
         if (host_)
@@ -142,17 +180,23 @@ class HoverEquityChartView : public QChartView {
         QChartView::leaveEvent(e);
     }
     void wheelEvent(QWheelEvent* e) override {
-        if (!chart()) {
+        if (!chart() || !host_) {
             QChartView::wheelEvent(e);
             return;
         }
-        // Zoom price axis only. Wheel-panning the time axis collides with the
-        // candle stream -- users expect Time fixed and Price scaled.
-        const double factor = (e->angleDelta().y() > 0) ? 0.9 : 1.1;
-        if (auto* y = qobject_cast<QValueAxis*>(host_ ? host_->price_axis_ : nullptr)) {
-            const double mid = (y->min() + y->max()) / 2.0;
-            const double span = (y->max() - y->min()) * factor;
-            y->setRange(mid - span / 2.0, mid + span / 2.0);
+        const double factor = (e->angleDelta().y() > 0) ? kZoomInFactor : kZoomOutFactor;
+
+        // Ctrl+wheel keeps the old behaviour (scale the price axis); a plain
+        // wheel zooms time so the chart can be scrolled at all (#338).
+        if (e->modifiers().testFlag(Qt::ControlModifier)) {
+            if (auto* y = host_->price_axis_) {
+                const double mid = (y->min() + y->max()) / 2.0;
+                const double span = (y->max() - y->min()) * factor;
+                y->setRange(mid - span / 2.0, mid + span / 2.0);
+            }
+        } else {
+            const QPointF anchor = chart()->mapToValue(e->position());
+            host_->zoom_time(factor, static_cast<qint64>(anchor.x()));
         }
         e->accept();
     }
@@ -168,6 +212,8 @@ class HoverEquityChartView : public QChartView {
 
   private:
     EquityChart* host_ = nullptr;
+    bool dragging_ = false;
+    QPoint drag_pos_;
 };
 
 // -- EquityChart -------------------------------------------------------------
@@ -223,6 +269,8 @@ EquityChart::EquityChart(QWidget* parent) : QWidget(parent) {
     series_->setIncreasingColor(QColor(colors::POSITIVE()));
     series_->setDecreasingColor(QColor(colors::NEGATIVE()));
     series_->setBodyWidth(0.78);
+    series_->setMaximumColumnWidth(kMaxCandlePx);
+    series_->setMinimumColumnWidth(kMinCandlePx);
     series_->setPen(QPen(Qt::NoPen)); // no outline on body
     series_->setCapsVisible(false);
     chart_->addSeries(series_);
@@ -379,6 +427,9 @@ QString EquityChart::current_timeframe() const {
 
 void EquityChart::set_candles(const QVector<trading::BrokerCandle>& candles) {
     candles_ = candles;
+    // A wholesale replacement means a new symbol/timeframe — a window the user
+    // panned over the previous series no longer maps to anything.
+    nav_.reset();
     rebuild_chart();
 
     // Overlay layers must use synthetic timestamps so their QLineSeries
@@ -462,6 +513,7 @@ void EquityChart::recompute_bounds() {
 
 void EquityChart::clear() {
     candles_.clear();
+    nav_.reset();
     series_->clear();
     if (last_price_line_)
         last_price_line_->clear();
@@ -518,22 +570,85 @@ void EquityChart::update_axes(double min_price, double max_price, qint64 min_tim
         last_max_price_ = p_max;
     }
 
+    // Synthetic timestamps advance one `synth_slot_ms_` per candle; fall back
+    // to the timeframe's real slot before the first rebuild has run.
+    const qint64 slot = synth_slot_ms_ > 0 ? synth_slot_ms_ : tf_slot_ms(TF_LABELS[active_tf_]);
+    qint64 effective_min = min_time;
     qint64 effective_max = max_time;
     if (min_time >= max_time) {
-        effective_max = min_time + tf_slot_ms(TF_LABELS[active_tf_]);
+        effective_max = min_time + slot;
     } else {
         // Add half-a-slot of right padding so the latest candle isn't pinned
         // to the right edge of the plot -- looks more like a real terminal.
-        effective_max = max_time + tf_slot_ms(TF_LABELS[active_tf_]) / 2;
+        effective_max = max_time + slot / 2;
     }
 
-    if (min_time != last_min_time_ || effective_max != last_max_time_) {
-        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(effective_max));
-        last_min_time_ = min_time;
+    // Floor the window at MIN_VISIBLE_SLOTS so a short series (a freshly
+    // opened symbol, a broker that returned two bars) renders as candles at
+    // the right edge instead of blocks spanning the plot (#338).
+    const qint64 min_span = MIN_VISIBLE_SLOTS * slot;
+    if (effective_max - effective_min < min_span)
+        effective_min = effective_max - min_span;
+
+    // The user's own pan/zoom wins over the auto-fit until they double-click.
+    nav_.set_extent(effective_min, effective_max, slot);
+    if (nav_.active()) {
+        effective_min = nav_.min();
+        effective_max = nav_.max();
+    } else {
+        nav_.seed(effective_min, effective_max);
+    }
+
+    if (effective_min != last_min_time_ || effective_max != last_max_time_) {
+        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(effective_min),
+                             QDateTime::fromMSecsSinceEpoch(effective_max));
+        last_min_time_ = effective_min;
         last_max_time_ = effective_max;
     }
 
     overlay_mgr_->reposition_all();
+}
+
+void EquityChart::apply_view_range() {
+    if (!time_axis_ || !nav_.active())
+        return;
+    const qint64 lo = nav_.min();
+    const qint64 hi = nav_.max();
+    if (hi <= lo)
+        return;
+    time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(lo), QDateTime::fromMSecsSinceEpoch(hi));
+    last_min_time_ = lo;
+    last_max_time_ = hi;
+    apply_tf_axis_format();
+    update_last_price_marker();
+    overlay_mgr_->reposition_all();
+}
+
+void EquityChart::zoom_time(double factor, qint64 anchor_ts) {
+    if (nav_.zoom(factor, anchor_ts))
+        apply_view_range();
+}
+
+void EquityChart::pan_time_pixels(int dx) {
+    if (!chart_ || dx == 0)
+        return;
+    const qreal plot_w = chart_->plotArea().width();
+    const qint64 span = last_max_time_ - last_min_time_;
+    if (plot_w <= 1.0 || span <= 0)
+        return;
+    // Drag right -> walk back in time.
+    const auto delta = static_cast<qint64>(-dx * (static_cast<double>(span) / plot_w));
+    if (nav_.pan(delta))
+        apply_view_range();
+}
+
+void EquityChart::reset_view() {
+    if (!nav_.active())
+        return;
+    nav_.reset();
+    rebuild_chart(); // re-fits both axes to the candle set
+    apply_tf_axis_format();
+    update_last_price_marker();
 }
 
 void EquityChart::apply_tf_axis_format() {

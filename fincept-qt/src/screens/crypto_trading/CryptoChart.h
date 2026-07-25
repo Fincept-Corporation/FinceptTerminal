@@ -4,6 +4,7 @@
 
 #include "trading/TradingTypes.h"
 #include "ui/charts/ChartOverlayManager.h"
+#include "ui/charts/TimeAxisNavigator.h"
 
 #include <QEvent>
 #include <QPushButton>
@@ -58,6 +59,15 @@ class CryptoChart : public QWidget {
     void on_hover_position(const QPointF& chart_value_pos, const QPoint& view_pos);
     void on_hover_leave();
 
+    // ── User-driven time navigation (#338) ────────────────────────────────
+    // Wheel zooms around the cursor, left-drag pans, double-click returns to
+    // auto-follow. While the user window is active the live candle stream no
+    // longer re-fits the time axis.
+    void zoom_time(double factor, qint64 anchor_ms);
+    void pan_time_pixels(int dx);
+    void reset_view();
+    void apply_view_range();
+
     HoverChartView* chart_view_ = nullptr;
     QChart* chart_ = nullptr;
     QCandlestickSeries* series_ = nullptr;
@@ -91,6 +101,12 @@ class CryptoChart : public QWidget {
 
     QVector<trading::Candle> candles_;
     static constexpr int MAX_VISIBLE = 120;
+    // Never fit the time axis tighter than this many slots. Qt sizes a candle
+    // body from the slot width in DOMAIN units, so a data-fitted axis holding
+    // 3 live candles inflates each body to a third of the plot (#338).
+    static constexpr int MIN_VISIBLE_SLOTS = 40;
+
+    fincept::ui::TimeAxisNavigator nav_;
 
     // Axis range cache (padded values actually applied to the axis)
     double last_min_price_ = -1;

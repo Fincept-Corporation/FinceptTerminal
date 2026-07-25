@@ -18,7 +18,8 @@
 //  • Time-axis label format auto-scales with the timeframe
 //    (HH:mm · MMM dd HH:mm · MMM dd · MMM yy)
 //  • Generous bottom margin so the time-axis labels stop being clipped
-//  • Mouse wheel = zoom price axis; drag = pan
+//  • Mouse wheel = zoom time (Ctrl+wheel = price), left-drag = pan,
+//    double-click = back to auto-follow (see TimeAxisNavigator)
 //
 // Sizing principles:
 //  • No pixel-pinned heights on the header buttons — uses QSS padding so
@@ -117,6 +118,19 @@ QFont scene_font() {
     return f;
 }
 
+// Pixel clamps for the candle body. Qt derives the body width from the candle
+// time period in DOMAIN units (qtcharts candlestick.cpp: `columnWidth =
+// m_timePeriod`), so a chart holding only a handful of candles stretches every
+// body across the plot — the giant blocks in issue #338. The maximum keeps a
+// 3-candle chart looking like candles; the minimum stops a 120-candle chart
+// from collapsing into hairlines.
+constexpr qreal kMaxCandlePx = 18.0;
+constexpr qreal kMinCandlePx = 2.0;
+
+// One wheel notch.
+constexpr double kZoomInFactor = 0.85;
+constexpr double kZoomOutFactor = 1.0 / kZoomInFactor;
+
 } // namespace
 
 // ── HoverChartView ──────────────────────────────────────────────────────────
@@ -136,11 +150,38 @@ class HoverChartView : public QChartView {
 
   protected:
     void mouseMoveEvent(QMouseEvent* e) override {
-        if (host_ && chart()) {
+        if (dragging_ && host_) {
+            const int dx = e->pos().x() - drag_pos_.x();
+            drag_pos_ = e->pos();
+            host_->pan_time_pixels(dx);
+        } else if (host_ && chart()) {
             const QPointF chart_pos = chart()->mapToValue(e->pos());
             host_->on_hover_position(chart_pos, e->pos());
         }
         QChartView::mouseMoveEvent(e);
+    }
+    void mousePressEvent(QMouseEvent* e) override {
+        if (e->button() == Qt::LeftButton) {
+            dragging_ = true;
+            drag_pos_ = e->pos();
+            setCursor(Qt::ClosedHandCursor);
+            if (host_)
+                host_->on_hover_leave(); // crosshair off while dragging
+        }
+        QChartView::mousePressEvent(e);
+    }
+    void mouseReleaseEvent(QMouseEvent* e) override {
+        if (e->button() == Qt::LeftButton && dragging_) {
+            dragging_ = false;
+            unsetCursor();
+        }
+        QChartView::mouseReleaseEvent(e);
+    }
+    void mouseDoubleClickEvent(QMouseEvent* e) override {
+        // Back to auto-follow — the live candle stream drives the axis again.
+        if (host_)
+            host_->reset_view();
+        e->accept();
     }
     void leaveEvent(QEvent* e) override {
         if (host_)
@@ -148,23 +189,33 @@ class HoverChartView : public QChartView {
         QChartView::leaveEvent(e);
     }
     void wheelEvent(QWheelEvent* e) override {
-        if (!chart()) {
+        if (!chart() || !host_) {
             QChartView::wheelEvent(e);
             return;
         }
-        // Zoom price axis only. Wheel-panning the time axis collides with the
-        // candle stream — users expect Time fixed and Price scaled.
-        const double factor = (e->angleDelta().y() > 0) ? 0.9 : 1.1;
-        if (auto* y = qobject_cast<QValueAxis*>(host_ ? host_->price_axis_ : nullptr)) {
-            const double mid = (y->min() + y->max()) / 2.0;
-            const double span = (y->max() - y->min()) * factor;
-            y->setRange(mid - span / 2.0, mid + span / 2.0);
+        const bool zoom_in = e->angleDelta().y() > 0;
+        const double factor = zoom_in ? kZoomInFactor : kZoomOutFactor;
+
+        // Ctrl+wheel keeps the old behaviour (scale the price axis); a plain
+        // wheel now zooms time, which is what the candle chart needs to be
+        // scrollable at all (#338).
+        if (e->modifiers().testFlag(Qt::ControlModifier)) {
+            if (auto* y = host_->price_axis_) {
+                const double mid = (y->min() + y->max()) / 2.0;
+                const double span = (y->max() - y->min()) * factor;
+                y->setRange(mid - span / 2.0, mid + span / 2.0);
+            }
+        } else {
+            const QPointF anchor = chart()->mapToValue(e->position());
+            host_->zoom_time(factor, static_cast<qint64>(anchor.x()));
         }
         e->accept();
     }
 
   private:
     CryptoChart* host_ = nullptr;
+    bool dragging_ = false;
+    QPoint drag_pos_;
 };
 
 // ── CryptoChart ─────────────────────────────────────────────────────────────
@@ -223,6 +274,8 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     series_->setIncreasingColor(QColor(colors::POSITIVE()));
     series_->setDecreasingColor(QColor(colors::NEGATIVE()));
     series_->setBodyWidth(0.78);
+    series_->setMaximumColumnWidth(kMaxCandlePx);
+    series_->setMinimumColumnWidth(kMinCandlePx);
     series_->setPen(QPen(Qt::NoPen)); // no outline on body
     series_->setCapsVisible(false);
     chart_->addSeries(series_);
@@ -380,6 +433,9 @@ QString CryptoChart::current_timeframe() const {
 
 void CryptoChart::set_candles(const QVector<trading::Candle>& candles) {
     candles_ = candles;
+    // A wholesale replacement means a new symbol/timeframe — a window the user
+    // panned over the previous series no longer maps to anything.
+    nav_.reset();
     rebuild_chart();
     overlay_mgr_->set_candles(fincept::ui::CandleData::from_candles(candles_));
     apply_tf_axis_format();
@@ -480,6 +536,7 @@ void CryptoChart::recompute_bounds() {
 
 void CryptoChart::clear() {
     candles_.clear();
+    nav_.reset();
     series_->clear();
     if (last_price_line_)
         last_price_line_->clear();
@@ -512,22 +569,85 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
         last_max_price_ = p_max;
     }
 
+    const qint64 slot = tf_slot_ms(TF_LABELS[active_tf_]);
+    qint64 effective_min = min_time;
     qint64 effective_max = max_time;
     if (min_time >= max_time) {
-        effective_max = min_time + tf_slot_ms(TF_LABELS[active_tf_]);
+        effective_max = min_time + slot;
     } else {
         // Add half-a-slot of right padding so the latest candle isn't pinned
         // to the right edge of the plot — looks more like a real terminal.
-        effective_max = max_time + tf_slot_ms(TF_LABELS[active_tf_]) / 2;
+        effective_max = max_time + slot / 2;
     }
 
-    if (min_time != last_min_time_ || effective_max != last_max_time_) {
-        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(min_time), QDateTime::fromMSecsSinceEpoch(effective_max));
-        last_min_time_ = min_time;
+    // Floor the window at MIN_VISIBLE_SLOTS. Without it a chart holding a
+    // handful of candles (history fetch empty, bars arriving live) fits the
+    // axis to ~3 minutes, and Qt then draws each body a third of the plot
+    // wide — the "broken candles" in #338. Anchoring left instead keeps the
+    // candles at the right edge at their normal width.
+    const qint64 min_span = MIN_VISIBLE_SLOTS * slot;
+    if (effective_max - effective_min < min_span)
+        effective_min = effective_max - min_span;
+
+    // The user's own pan/zoom wins over the auto-fit until they double-click.
+    nav_.set_extent(effective_min, effective_max, slot);
+    if (nav_.active()) {
+        effective_min = nav_.min();
+        effective_max = nav_.max();
+    } else {
+        nav_.seed(effective_min, effective_max);
+    }
+
+    if (effective_min != last_min_time_ || effective_max != last_max_time_) {
+        time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(effective_min),
+                             QDateTime::fromMSecsSinceEpoch(effective_max));
+        last_min_time_ = effective_min;
         last_max_time_ = effective_max;
     }
 
     overlay_mgr_->reposition_all();
+}
+
+void CryptoChart::apply_view_range() {
+    if (!time_axis_ || !nav_.active())
+        return;
+    const qint64 lo = nav_.min();
+    const qint64 hi = nav_.max();
+    if (hi <= lo)
+        return;
+    time_axis_->setRange(QDateTime::fromMSecsSinceEpoch(lo), QDateTime::fromMSecsSinceEpoch(hi));
+    last_min_time_ = lo;
+    last_max_time_ = hi;
+    apply_tf_axis_format();
+    update_last_price_marker();
+    overlay_mgr_->reposition_all();
+}
+
+void CryptoChart::zoom_time(double factor, qint64 anchor_ms) {
+    if (nav_.zoom(factor, anchor_ms))
+        apply_view_range();
+}
+
+void CryptoChart::pan_time_pixels(int dx) {
+    if (!chart_ || dx == 0)
+        return;
+    const qreal plot_w = chart_->plotArea().width();
+    const qint64 span = last_max_time_ - last_min_time_;
+    if (plot_w <= 1.0 || span <= 0)
+        return;
+    // Drag right → walk back in time.
+    const auto delta = static_cast<qint64>(-dx * (static_cast<double>(span) / plot_w));
+    if (nav_.pan(delta))
+        apply_view_range();
+}
+
+void CryptoChart::reset_view() {
+    if (!nav_.active())
+        return;
+    nav_.reset();
+    rebuild_chart(); // re-fits both axes to the candle set
+    apply_tf_axis_format();
+    update_last_price_marker();
 }
 
 void CryptoChart::apply_tf_axis_format() {

@@ -343,8 +343,26 @@ void EquityTradingScreen::update_chart_position() {
 // ============================================================================
 
 void EquityTradingScreen::on_stream_candles_fetched(const QString& account_id, const QVector<BrokerCandle>& candles) {
-    if (account_id == focused_account_id_)
+    if (account_id != focused_account_id_)
+        return;
+
+    const QString key = selected_symbol_ + QLatin1Char('|') + chart_->current_timeframe();
+    if (!candles.isEmpty()) {
         chart_->set_candles(candles);
+        chart_symbol_ = key;
+        return;
+    }
+
+    // Empty history — broker rejected the request, throttled us, or the symbol
+    // has no bars for this timeframe. Pushing it into the chart wipes what the
+    // user is looking at and leaves live ticks drawing a couple of giant
+    // blocks (#338). Keep the current series unless it belongs to a symbol or
+    // timeframe the user has already left.
+    if (chart_symbol_ != key) {
+        chart_->clear();
+        chart_symbol_.clear();
+    }
+    LOG_WARN("EquityTrading", QString("no candles returned for %1 — keeping existing chart").arg(key));
 }
 
 void EquityTradingScreen::on_stream_orderbook_fetched(const QString& account_id,

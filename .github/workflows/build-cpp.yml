@@ -800,11 +800,60 @@ jobs:
           export OUTPUT="FinceptTerminal-Linux-x86_64.AppImage"
           export UPDATE_INFORMATION="gh-releases-zsync|Fincept-Corporation|FinceptTerminal|latest|FinceptTerminal-Linux-x86_64.AppImage.zsync"
 
+          # ── OpenSSL must be bundled as a MATCHED PAIR (#352) ───────────────
+          # The app only calls libcrypto APIs, so ld's --as-needed drops
+          # libssl.so.3 from DT_NEEDED and linuxdeploy (which walks DT_NEEDED)
+          # bundled libcrypto.so.3 alone. Qt then dlopen()s the HOST libssl.so.3,
+          # which needs OPENSSL_3.3.0 from the stale bundled libcrypto 3.0.2:
+          #   qt.tlsbackend.ossl: Failed to load libssl/libcrypto  → all HTTPS dies.
+          # Keep this in sync with the same block in release.yml.
+          resolve_soname() {
+            local soname="$1" path
+            path=$(ldconfig -p | awk -v s="${soname}" '$1 == s && /x86-64/ { print $NF; exit }')
+            if [ -z "${path}" ] || [ "$(basename "${path}")" != "${soname}" ]; then
+              path="/usr/lib/x86_64-linux-gnu/${soname}"
+            fi
+            if [ ! -e "${path}" ]; then
+              echo "::error::${soname} not found on the runner — cannot bundle a consistent OpenSSL pair (#352)" >&2
+              exit 1
+            fi
+            printf '%s' "${path}"
+          }
+          OPENSSL_ARGS=()
+          for _so in libssl.so.3 libcrypto.so.3; do
+            _path=$(resolve_soname "${_so}")
+            echo "Bundling OpenSSL library: ${_path}"
+            OPENSSL_ARGS+=(--library "${_path}")
+          done
+
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin qt \
             --output appimage \
+            "${OPENSSL_ARGS[@]}" \
             2>&1 || true
+
+          # ── Guard: never ship a half-bundled OpenSSL again (#352) ──────────
+          SSL_BUNDLED=$(find AppDir -name 'libssl.so.3' -print -quit)
+          CRYPTO_BUNDLED=$(find AppDir -name 'libcrypto.so.3' -print -quit)
+          if [ -z "${SSL_BUNDLED}" ] || [ -z "${CRYPTO_BUNDLED}" ]; then
+            echo "::error::AppImage must bundle libssl.so.3 AND libcrypto.so.3 (ssl='${SSL_BUNDLED}' crypto='${CRYPTO_BUNDLED}') — a bundled libcrypto next to the host libssl breaks all TLS (#352)"
+            exit 1
+          fi
+          if LD_LIBRARY_PATH="$(dirname "${SSL_BUNDLED}")" ldd "${SSL_BUNDLED}" \
+               | grep -q 'libcrypto\.so\.3 => not found'; then
+            echo "::error::Bundled libssl.so.3 cannot resolve the bundled libcrypto.so.3"
+            LD_LIBRARY_PATH="$(dirname "${SSL_BUNDLED}")" ldd "${SSL_BUNDLED}" || true
+            exit 1
+          fi
+          echo "OpenSSL pair OK: ${SSL_BUNDLED} + ${CRYPTO_BUNDLED}"
+
+          TLS_PLUGIN=$(find AppDir -name 'libqopensslbackend.so' -print -quit)
+          if [ -z "${TLS_PLUGIN}" ]; then
+            echo "::error::Qt TLS backend plugin (libqopensslbackend.so) missing from AppDir — HTTPS would fail at runtime"
+            exit 1
+          fi
+          echo "Qt TLS plugin OK: ${TLS_PLUGIN}"
 
           # Verify AppImage was created
           if [ ! -f "$OUTPUT" ]; then

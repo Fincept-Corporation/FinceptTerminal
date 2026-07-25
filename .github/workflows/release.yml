@@ -847,13 +847,70 @@ jobs:
           export OUTPUT="FinceptTerminal-${VERSION}-linux-x64-setup.run"
           export UPDATE_INFORMATION="gh-releases-zsync|Fincept-Corporation|FinceptTerminal|latest|FinceptTerminal-*-linux-x64-setup.run.zsync"
 
+          # ── OpenSSL must be bundled as a MATCHED PAIR (#352) ───────────────
+          # The app only calls libcrypto APIs (storage/secure/SecureStorage.cpp,
+          # trading/exchanges/hyperliquid/HyperliquidSigner.cpp), so ld's default
+          # --as-needed drops libssl.so.3 from DT_NEEDED even though CMake links
+          # OpenSSL::SSL. linuxdeploy walks DT_NEEDED, so it bundled libcrypto.so.3
+          # ALONE. Qt's TLS backend dlopen()s libssl.so.3 at runtime and picks the
+          # HOST copy (3.3+ on Arch/NixOS/Fedora), which needs OPENSSL_3.3.0 from
+          # libcrypto but finds our stale bundled 3.0.2 first on LD_LIBRARY_PATH:
+          #   qt.tlsbackend.ossl: Failed to load libssl/libcrypto
+          # → every HTTPS request fails and the setup wizard says "no network".
+          # Force-deploy both so the bundled pair is internally consistent.
+          resolve_soname() {
+            local soname="$1" path
+            path=$(ldconfig -p | awk -v s="${soname}" '$1 == s && /x86-64/ { print $NF; exit }')
+            # ldconfig prints the SONAME-named file; fall back to the multiarch
+            # path if the cache is stale or the name doesn't match exactly.
+            if [ -z "${path}" ] || [ "$(basename "${path}")" != "${soname}" ]; then
+              path="/usr/lib/x86_64-linux-gnu/${soname}"
+            fi
+            if [ ! -e "${path}" ]; then
+              echo "::error::${soname} not found on the runner — cannot bundle a consistent OpenSSL pair (#352)" >&2
+              exit 1
+            fi
+            printf '%s' "${path}"
+          }
+          OPENSSL_ARGS=()
+          for _so in libssl.so.3 libcrypto.so.3; do
+            _path=$(resolve_soname "${_so}")
+            echo "Bundling OpenSSL library: ${_path}"
+            OPENSSL_ARGS+=(--library "${_path}")
+          done
+
           ./linuxdeploy-x86_64.AppImage \
             --appdir "${APPDIR}" \
             --plugin qt \
             --output appimage \
+            "${OPENSSL_ARGS[@]}" \
             --desktop-file "${APPDIR}/usr/share/applications/fincept-terminal.desktop" \
             --icon-file "${ICON_DEST}" \
             2>&1
+
+          # ── Guard: never ship a half-bundled OpenSSL again (#352) ──────────
+          SSL_BUNDLED=$(find "${APPDIR}" -name 'libssl.so.3' -print -quit)
+          CRYPTO_BUNDLED=$(find "${APPDIR}" -name 'libcrypto.so.3' -print -quit)
+          if [ -z "${SSL_BUNDLED}" ] || [ -z "${CRYPTO_BUNDLED}" ]; then
+            echo "::error::AppImage must bundle libssl.so.3 AND libcrypto.so.3 (ssl='${SSL_BUNDLED}' crypto='${CRYPTO_BUNDLED}') — a bundled libcrypto next to the host libssl breaks all TLS (#352)"
+            exit 1
+          fi
+          if LD_LIBRARY_PATH="$(dirname "${SSL_BUNDLED}")" ldd "${SSL_BUNDLED}" \
+               | grep -q 'libcrypto\.so\.3 => not found'; then
+            echo "::error::Bundled libssl.so.3 cannot resolve the bundled libcrypto.so.3"
+            LD_LIBRARY_PATH="$(dirname "${SSL_BUNDLED}")" ldd "${SSL_BUNDLED}" || true
+            exit 1
+          fi
+          echo "OpenSSL pair OK: ${SSL_BUNDLED} + ${CRYPTO_BUNDLED}"
+
+          # Qt's TLS backend plugin is dlopen()ed too — if the qt plugin didn't
+          # deploy it, HTTPS fails with the same "no network" symptom.
+          TLS_PLUGIN=$(find "${APPDIR}" -name 'libqopensslbackend.so' -print -quit)
+          if [ -z "${TLS_PLUGIN}" ]; then
+            echo "::error::Qt TLS backend plugin (libqopensslbackend.so) missing from AppDir — HTTPS would fail at runtime"
+            exit 1
+          fi
+          echo "Qt TLS plugin OK: ${TLS_PLUGIN}"
 
           # linuxdeploy names the output after the desktop entry — find it.
           if [ ! -f "${OUTPUT}" ]; then
@@ -2328,6 +2385,13 @@ jobs:
           MAC_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .url' \
             | head -1)
+          # Native Linux packages — Fedora/RHEL users have no apt (#192).
+          DEB_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.deb$")) | .url' \
+            | head -1)
+          RPM_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.rpm$")) | .url' \
+            | head -1)
 
           # Fallback: if browser_download_url not available via .url, try .browserDownloadUrl
           [ -z "$WIN_URL" ] && WIN_URL=$(gh release view "${TAG}" --json assets \
@@ -2339,22 +2403,34 @@ jobs:
           [ -z "$MAC_URL" ] && MAC_URL=$(gh release view "${TAG}" --json assets \
             --jq '.assets[] | select(.name | test("\\.dmg$|macos.*setup")) | .browserDownloadUrl' \
             | head -1) || true
+          [ -z "$DEB_URL" ] && DEB_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.deb$")) | .browserDownloadUrl' \
+            | head -1) || true
+          [ -z "$RPM_URL" ] && RPM_URL=$(gh release view "${TAG}" --json assets \
+            --jq '.assets[] | select(.name | test("\\.rpm$")) | .browserDownloadUrl' \
+            | head -1) || true
 
           # Release page URL as final fallback
           RELEASE_URL="https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/${TAG}"
           WIN_URL="${WIN_URL:-${RELEASE_URL}}"
           LIN_URL="${LIN_URL:-${RELEASE_URL}}"
           MAC_URL="${MAC_URL:-${RELEASE_URL}}"
+          DEB_URL="${DEB_URL:-${RELEASE_URL}}"
+          RPM_URL="${RPM_URL:-${RELEASE_URL}}"
 
           echo "WIN_URL=${WIN_URL}" >> "$GITHUB_ENV"
           echo "LIN_URL=${LIN_URL}" >> "$GITHUB_ENV"
           echo "MAC_URL=${MAC_URL}" >> "$GITHUB_ENV"
+          echo "DEB_URL=${DEB_URL}" >> "$GITHUB_ENV"
+          echo "RPM_URL=${RPM_URL}" >> "$GITHUB_ENV"
           echo "RELEASE_URL=${RELEASE_URL}" >> "$GITHUB_ENV"
           echo "TAG=${TAG}" >> "$GITHUB_ENV"
 
           echo "Windows  : ${WIN_URL}"
           echo "Linux    : ${LIN_URL}"
           echo "macOS    : ${MAC_URL}"
+          echo "Linux deb: ${DEB_URL}"
+          echo "Linux rpm: ${RPM_URL}"
 
       # ── Rewrite README download table ─────────────────────────────────────
       # Strategy: replace a clearly-delimited block between two sentinel
@@ -2376,7 +2452,9 @@ jobs:
           | Platform | Download | Run |
           |----------|----------|-----|
           | **Windows x64** | [FinceptTerminal-Windows-x64-setup.exe](${WIN_URL}) | Run installer → launch \`FinceptTerminal.exe\` |
-          | **Linux x64** | [FinceptTerminal-Linux-x64.run](${LIN_URL}) | \`chmod +x\` → run installer |
+          | **Linux x64 (AppImage)** | [FinceptTerminal-Linux-x64.run](${LIN_URL}) | \`chmod +x\` → run installer |
+          | **Linux x64 (Debian/Ubuntu)** | [FinceptTerminal-Linux-x64.deb](${DEB_URL}) | \`sudo apt install ./FinceptTerminal-*.deb\` |
+          | **Linux x64 (Fedora/RHEL)** | [FinceptTerminal-Linux-x64.rpm](${RPM_URL}) | \`sudo dnf install ./FinceptTerminal-*.rpm\` |
           | **macOS Apple Silicon** | [FinceptTerminal-macOS-arm64.dmg](${MAC_URL}) | Open DMG → drag to Applications |
           ${END_MARKER}"
 
