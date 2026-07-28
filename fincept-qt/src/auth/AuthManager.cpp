@@ -204,6 +204,11 @@ void AuthManager::initialize() {
     set_loading(true);
     load_session();
 
+    // Check for offline mode via environment variable or settings
+    bool offline_mode = qEnvironmentVariableIsSet("FINCEPT_OFFLINE_MODE") || 
+                        (fincept::SettingsRepository::instance().get("app/offline_mode").is_ok() && 
+                         fincept::SettingsRepository::instance().get("app/offline_mode").value().toLower() == "true");
+
     if (!session_.api_key.isEmpty()) {
         // Apply api_key ONLY — do NOT send the stale session_token during
         // startup validation. The server enforces single-session via
@@ -214,6 +219,20 @@ void AuthManager::initialize() {
         http.clear_session_token();
 
         validate_saved_session();
+        return;
+    }
+
+    // OFFLINE MODE: Create a local "free" session if no credentials exist
+    if (offline_mode) {
+        LOG_INFO("Auth", "Offline mode enabled — creating local free session");
+        session_.authenticated = true;
+        session_.user_info.account_type = "free";
+        session_.user_info.username = "offline_user";
+        session_.user_info.email = "offline@local";
+        session_.has_subscription = false;
+        save_session();
+        set_loading(false);
+        emit auth_state_changed();
         return;
     }
 

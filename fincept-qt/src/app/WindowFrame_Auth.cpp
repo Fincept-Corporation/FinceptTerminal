@@ -163,10 +163,12 @@ void WindowFrame::on_auth_state_changed() {
             for (const QString& bid : fincept::trading::SymbolResolver::instance().registered_brokers())
                 isvc.load_from_db_async(bid);
         } else {
-            // Free/no plan → show pricing gate
-            set_shell_visible(false);
-            stack_->setCurrentIndex(0);
-            auth_stack_->setCurrentIndex(3);
+            // Free/no plan → allow access to dashboard (offline/local mode)
+            set_shell_visible(true);
+            stack_->setCurrentIndex(1);
+            // Cold-boot restore: try last_loaded layout, then most recent
+            // auto snapshot, then no-op (first run).
+            layout::WorkspaceShell::load_last_or_default();
         }
     } else {
         // Disable inactivity guard when logged out and drop the locked flag
