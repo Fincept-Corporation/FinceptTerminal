@@ -1,11 +1,6 @@
 > [!IMPORTANT]
-> **Fincept Terminal ships in two editions.**
->
-> 🏢 **[Fincept Terminal Enterprise](https://fincept.in/enterprise)** — the private, closed-source build for funds, family offices and research desks. 41 modules, proprietary datasets, multi-agent research, live broker routing, private dataroom, SSO and an SLA, from **$99/user/month**. This is where the team develops daily, and it is the edition to use if the terminal is how you earn.
->
-> 📖 **This repository** — the free AGPL-3.0 open-source edition, for learning, personal use and academic research. It stays public, it will not be deleted, and it ships **one release a month**.
->
-> [**Which one do you need? →**](#which-edition-should-you-use) · [Compare](https://fincept.in/comparison) · [Pricing](https://fincept.in/pricing)
+> **Two editions.** **[Enterprise](https://fincept.in/enterprise)** is the private, closed-source build for funds and research desks — 41 modules, private data, live broker routing, SSO, from **$99/user/month**. **This repo** is the free AGPL-3.0 edition for learning and academic use, one release a month.
+> [Compare](https://fincept.in/comparison) · [Pricing](https://fincept.in/pricing)
 
 # Fincept Terminal
 
@@ -54,91 +49,43 @@ State-of-the-art financial intelligence platform with institutional-grade financ
 
 **Fincept Terminal** is a native C++20 desktop terminal for financial research — Qt6 UI, embedded Python 3.11 analytics, one binary, no Electron.
 
-It ships in **two editions on one data core**:
+Two editions run on one data core. **[Enterprise](https://fincept.in/enterprise)** is the private, closed-source build the team develops daily, for funds, family offices and research desks. **This repo** is the free AGPL-3.0 edition — learning, personal use, academic research — shipping one release a month.
 
-| | **Open Source** — this repo | **Enterprise** — [fincept.in/enterprise](https://fincept.in/enterprise) |
+Use the open build if you're a student, hobbyist or academic. Use Enterprise if you're a firm, or if the terminal is how you earn: AGPL copyleft won't apply, and the open build's real cost is your own data and LLM bills, charged per token with no ceiling.
+
+| | Open Source | **Enterprise** |
 |---|---|---|
-| **Built for** | Learning, personal use, academic research | Funds, family offices, research desks |
-| **Price** | Free · AGPL-3.0 | From **$99**/user/month |
-| **Release cadence** | One update per month | Continuous |
-
----
-
-## Which edition should you use?
-
-| If you are… | Use | Why |
-|---|---|---|
-| A student, hobbyist or independent learner | **Open Source** | Genuinely free, and it stays that way |
-| An academic researcher | **Open Source** | Free for academic use — universities wanting managed seats, see the academic bundle below |
-| A fund, family office, prop desk, bank or fintech | **Enterprise** | AGPL copyleft doesn't apply, and you get private data, live routing, SSO and an SLA |
-| Doing this professionally, for money | **Enterprise** | Cheaper in practice, and the only edition under active daily development |
-
-> **The honest version.** The open build is real work, not a crippled demo — but it runs on free public feeds, **your** API keys and **your** LLM key, and every AI call is billed to you per token with no ceiling. Community issues are answered best-effort with no response commitment. If the terminal is how you earn, Enterprise is the cheaper and safer seat.
+| **Licence** | AGPL-3.0 — strong copyleft | Proprietary — no copyleft to manage |
+| **Cost** | Free, plus your own data and LLM bills | $99 / $199 / $299 per user/month |
+| **Data** | Free public feeds, your own API keys | Private datasets, deeper history, point-in-time |
+| **AI** | Bring your own LLM key | 400–5,000 credits included · multi-agent research · private dataroom |
+| **Trading** | Paper trading + broker integrations | Live broker routing + live algo deployment |
+| **Controls** | — | SSO/SAML, audit logs, RBAC, SLA-backed support |
 
 [**See Enterprise →**](https://fincept.in/enterprise) · [Full comparison](https://fincept.in/comparison) · [Pricing](https://fincept.in/pricing) · [FAQ](https://fincept.in/faq)
 
 ---
 
-## Open Source vs Enterprise
+## Enterprise
 
-| | Open Source | **Enterprise** |
-|---|---|---|
-| **Licence** | AGPL-3.0 — strong copyleft. Ship it or host it, and you publish your changes | Proprietary — no copyleft obligations to manage |
-| **Cost** | Free — you pay your own data and LLM bills | $99 / $199 / $299 per user/month, all in |
-| **Modules** | Core terminal | **41 modules across 6 desks** |
-| **Data** | Free public feeds, rate-limited, bring your own keys | Private and proprietary datasets — deeper history, faster refresh |
-| **Price history** | Whatever the free tiers allow | 1 yr / 5 yr / unlimited · **point-in-time** for honest backtests |
-| **AI budget** | Bring your own LLM key, billed to you per token | 400 / 2,000 / 5,000 credits included per month |
-| **AI research** | Basic market assistant | Multi-agent research that **plans and delegates** · Agent Studio · up to 53 agents · 6 team modes |
-| **Private dataroom** | — | Your filings and models, read only by your own agents — never pooled, never trained on |
-| **Trading** | Paper trading + broker integrations with your own keys | **Live broker routing + live algo deployment** |
-| **Quant** | Community backtesting | Quant Lab, Alpha Arena, volatility analytics, point-in-time backtests |
-| **Security & compliance** | — | SSO/SAML, audit logs, role-based access, data isolation |
-| **Support** | GitHub issues, best-effort, no response commitment | SLA-backed priority triage |
-| **Documentation** | This repo | [**700-page manual**](https://fincept.in/manual) — 41 guides, 472 sections |
-| **Platforms** | Windows, macOS, Linux + hosted web terminal | Windows 10/11, macOS 13+ (Apple silicon), Linux |
+41 modules across six desks — agentic research, quant lab and backtesting, deep fundamental research, markets and execution, macro and global intelligence, and your own workspace. All of it in a [700-page manual](https://fincept.in/manual).
 
-Enterprise runs on a **separate account** — free Fincept logins do not sign in to it, and the app stays locked until a subscription is attached. [Create an Enterprise account →](https://fincept.in/enterprise/signup)
-
----
-
-## Enterprise — six desks, 41 modules
-
-| Desk | What it does |
-|---|---|
-| **Agentic Research** · 6 | Agents plan the work, delegate to specialists, read live data and your dataroom, return sourced notes |
-| **Quant Lab & Backtesting** · 4 | Signal research, point-in-time backtests, volatility surfaces |
-| **Deep Fundamental Research** · 8 | Equity analysis, valuation, derivatives, M&A analytics |
-| **Markets & Execution** · 7 | Live equities, crypto and prediction markets, broker routing, algo deployment |
-| **Macro & Global Intelligence** · 7 | Statistics, government data, geopolitics, shipping lanes |
-| **Your Own Workspace** · 9 | Dashboard, spreadsheet, notes, files, code, report builder |
-
-[Browse the products →](https://fincept.in/products)
-
-### Pricing
-
-| | **Exclusive** | **Exclusive+** ★ most popular | **Exclusive Pro** |
+| | **Exclusive** | **Exclusive+** ★ | **Exclusive Pro** |
 |---|---|---|---|
 | | **$99**/user/mo | **$199**/user/mo | **$299**/user/mo |
 | AI credits / month | 400 | 2,000 | 5,000 |
-| Portfolios · watchlists | 1 · 3 | 10 · 25 | Unlimited |
-| Price history | 1 year | 5 years | Unlimited |
-| Seats included | 1 | 1 | 2 |
 | Deep research + agent teams | — | ✓ | ✓ |
-| Broker account linking | — | ✓ | ✓ |
-| Live broker trading + algo deployment | — | — | ✓ |
+| Live broker trading + algo | — | — | ✓ |
 
-Monthly billing · no annual lock-in · no seat minimum · **15% off on quarterly**. That works out to **$1,188–$3,588 per user per year**, against roughly **$27,000** for a Bloomberg seat — [see the full comparison](https://fincept.in/comparison).
+Monthly billing, no lock-in, no seat minimum, 15% off quarterly — **$1,188–$3,588 per user per year**, against roughly $27,000 for a Bloomberg seat. **Universities:** 5 Exclusive Pro seats for **$699/month**. These plans are the whole price list: no negotiated pricing, no separate commercial licence.
 
-**Universities and academic institutions:** one flat bundle — **5 Exclusive Pro seats for $699/month** (list price $1,495). Email [support@fincept.in](mailto:support@fincept.in).
+Enterprise needs its own account — free Fincept logins don't sign in to it.
 
-These three plans plus the academic bundle are the entire price list. There is no custom or negotiated enterprise pricing, and no separate commercial licence to buy.
-
-[**Create Enterprise account**](https://fincept.in/enterprise/signup) · [**Book a walkthrough**](https://calendly.com/nikultilak/fincept-terminal-demo) · [Read the manual](https://fincept.in/manual)
+[**Create account**](https://fincept.in/enterprise/signup) · [**Book a walkthrough**](https://calendly.com/nikultilak/fincept-terminal-demo)
 
 ---
 
-## Install the open-source edition
+## Install
 
 <!-- DOWNLOAD-TABLE-START -->
 Latest release: **v4.3.0** — [View all releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.3.0)
@@ -160,15 +107,12 @@ Latest release: **v4.3.0** — [View all releases](https://github.com/Fincept-Co
 
 ## What's in the open build
 
-| | |
-|---|---|
-| **Multi-asset analytics** | DCF, portfolio optimisation, VaR/Sharpe, derivatives pricing, fixed income, alternatives — via embedded Python |
-| **QuantLib suite** | 18 quantitative modules — pricing, risk, stochastic, volatility, fixed income |
-| **AI agents** | 37 agents across trader/investor, economic and geopolitics frameworks; bring your own key (OpenAI, Anthropic, Gemini, Groq, DeepSeek, OpenRouter, Ollama) |
-| **100+ data connectors** | DBnomics, FRED, IMF, World Bank, AkShare, Polygon, Kraken, Yahoo Finance, government APIs |
-| **Trading** | Crypto and equity feeds, paper-trading engine, 16 broker integrations |
-| **Automation** | Visual node editor, MCP tool integration, AI Quant Lab (ML, factor discovery, RL) |
-| **Global intelligence** | Maritime tracking, geopolitical analysis, relationship mapping |
+- **Analytics** — DCF, portfolio optimisation, VaR/Sharpe, derivatives pricing, fixed income, alternatives, plus an 18-module QuantLib suite
+- **AI** — 37 trader/investor, economic and geopolitics agents; bring your own key (OpenAI, Anthropic, Gemini, Groq, DeepSeek, OpenRouter, Ollama)
+- **Data** — 100+ connectors: FRED, IMF, World Bank, DBnomics, AkShare, Polygon, Kraken, Yahoo Finance, government APIs
+- **Trading** — crypto and equity feeds, paper-trading engine, 16 broker integrations
+- **Automation** — visual node editor, MCP tools, AI Quant Lab (ML, factor discovery, RL)
+- **Global intelligence** — maritime tracking, geopolitical analysis, relationship mapping
 
 Native C++20 · Qt6 · embedded Python 3.11 · single binary · no Node.js, no browser runtime.
 

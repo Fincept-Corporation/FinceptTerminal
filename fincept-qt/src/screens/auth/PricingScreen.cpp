@@ -88,6 +88,9 @@ void PricingScreen::build_ui() {
 
     subtitle_label_ = new QLabel;
     subtitle_label_->setAlignment(Qt::AlignCenter);
+    // Wraps — the subtitle now carries the "Enterprise is separate" caveat and
+    // would otherwise force a wide minimum width on the scroll content.
+    subtitle_label_->setWordWrap(true);
     subtitle_label_->setStyleSheet(
         QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY()).arg(MF));
     vl->addWidget(subtitle_label_);
@@ -168,10 +171,14 @@ void PricingScreen::changeEvent(QEvent* event) {
 }
 
 void PricingScreen::retranslateUi() {
+    // Scope the heading explicitly. These are the open-source terminal's own
+    // credit tiers; Fincept Terminal Enterprise is a separate product on a
+    // separate backend, and a subscription bought here unlocks nothing there.
     if (title_label_)
-        title_label_->setText(tr("PLANS & PRICING"));
+        title_label_->setText(tr("PLANS & PRICING — OPEN-SOURCE EDITION"));
     if (subtitle_label_)
-        subtitle_label_->setText(tr("Unlock the full power of Fincept Terminal"));
+        subtitle_label_->setText(tr("Credits and limits for this open-source terminal. "
+                                    "Fincept Terminal Enterprise is a separate product, billed separately."));
     if (loading_label_)
         loading_label_->setText(loading_is_refresh_ ? tr("Updating plan status...") : tr("Loading plans..."));
 }

@@ -275,6 +275,18 @@ QWidget* make_enterprise_banner(QWidget* parent) {
     sub->setWordWrap(true);
     text_col->addWidget(sub);
 
+    // Enterprise runs on a different backend with its own user records, so a
+    // subscription bought here grants nothing there. Say so on the banner —
+    // sitting next to a list of purchasable plans, it would otherwise read as
+    // just another tier of the same product.
+    auto* note = new QLabel(QObject::tr("Separate product, separate account. Enterprise is billed and signed in "
+                                        "separately — plans on this page do not apply to it, and a Fincept "
+                                        "account from this terminal will not sign in to Enterprise."),
+                            panel);
+    note->setObjectName("entBannerNote");
+    note->setWordWrap(true);
+    text_col->addWidget(note);
+
     hl->addLayout(text_col, 1);
 
     auto* btn = new QPushButton(QObject::tr("See Enterprise"), panel);
@@ -286,10 +298,12 @@ QWidget* make_enterprise_banner(QWidget* parent) {
     panel->setStyleSheet(QString("#entBanner{background:%1;border:1px solid %2;}"
                                  "#entBannerHead{color:%2;font-weight:700;letter-spacing:1px;font-size:12px;"
                                  "  background:transparent;}"
-                                 "#entBannerSub{color:%3;font-size:12px;background:transparent;}")
+                                 "#entBannerSub{color:%3;font-size:12px;background:transparent;}"
+                                 "#entBannerNote{color:%4;font-size:11px;background:transparent;}")
                              .arg(colors::BG_SURFACE())
                              .arg(colors::AMBER())
-                             .arg(colors::TEXT_SECONDARY()));
+                             .arg(colors::TEXT_SECONDARY())
+                             .arg(colors::TEXT_TERTIARY()));
     return panel;
 }
 
