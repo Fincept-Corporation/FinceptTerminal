@@ -1010,6 +1010,14 @@ void DataHub::scheduler_body() {
                 ++it;
         }
 
+        // Release cached payloads for topics nobody is watching any more.
+        // Runs on its own cadence — see kIdleSweepEveryTicks. Placed here so
+        // it can never race the in_flight marking done in phase 2 below.
+        if (++sweep_tick_counter_ >= kIdleSweepEveryTicks) {
+            sweep_tick_counter_ = 0;
+            sweep_idle_topics(t);
+        }
+
         // Phase 1 — collect eligible topics by producer (no rate-limit
         // gate yet). The per-producer rate limit applies to refresh()
         // *calls*, not to topic enrolment; one refresh() carries the
@@ -1078,6 +1086,112 @@ void DataHub::scheduler_body() {
                                  .arg(it.value().join(QLatin1Char(','))));
         it.key()->refresh(it.value());
     }
+}
+
+bool DataHub::has_live_subscribers(const QString& topic) const {
+    // Caller holds mutex_. A destroyed owner leaves a null QPointer behind
+    // until on_owner_destroyed() runs, so presence in the vector is not
+    // enough — the owner has to still be alive.
+    if (auto it = subscriptions_.constFind(topic); it != subscriptions_.constEnd()) {
+        for (const auto& sub : it.value())
+            if (sub.owner)
+                return true;
+    }
+    // Wildcard subscribers (e.g. "option:chain:*", "ws:kraken:*") never appear
+    // under the concrete key, so they must be matched explicitly. Missing this
+    // would evict state out from under a live pattern consumer.
+    for (auto it = pattern_subscriptions_.constBegin(); it != pattern_subscriptions_.constEnd(); ++it) {
+        if (!pattern_matches(it.key(), topic))
+            continue;
+        for (const auto& sub : it.value())
+            if (sub.owner)
+                return true;
+    }
+    // Error-only consumers keep the topic alive too — they're cheap to check
+    // and a topic being watched for failures is not an idle topic.
+    if (auto it = error_subscriptions_.constFind(topic); it != error_subscriptions_.constEnd()) {
+        for (const auto& sub : it.value())
+            if (sub.owner)
+                return true;
+    }
+    for (auto it = error_pattern_subscriptions_.constBegin(); it != error_pattern_subscriptions_.constEnd(); ++it) {
+        if (!pattern_matches(it.key(), topic))
+            continue;
+        for (const auto& sub : it.value())
+            if (sub.owner)
+                return true;
+    }
+    return false;
+}
+
+void DataHub::sweep_idle_topics(qint64 now) {
+    // Caller holds mutex_. Conservative by construction — every one of these
+    // gates must pass before a TopicState is dropped.
+    int evicted = 0;
+    for (auto it = topics_.begin(); it != topics_.end();) {
+        const auto& st = it.value();
+
+        // A producer has an outstanding refresh() for this topic; its
+        // publish() would resurrect the state anyway and the in_flight /
+        // last_refresh_request_ms bookkeeping still matters for the timeout
+        // pre-pass.
+        if (st.in_flight) {
+            ++it;
+            continue;
+        }
+        // A deferred fan-out is armed — do_coalesced_flush() still needs
+        // coalesce_latest.
+        if (st.coalesce_pending) {
+            ++it;
+            continue;
+        }
+        // Never evict a topic somebody is still watching.
+        if (has_live_subscribers(it.key())) {
+            ++it;
+            continue;
+        }
+
+        // Age is measured from the last time the topic was touched at all, so
+        // a state created by a peek() or a subscribe that never received data
+        // ages out too. A state that has never been touched (both zero) is
+        // left alone rather than guessed at.
+        const qint64 last_touch = std::max(st.last_publish_ms, st.last_refresh_request_ms);
+        if (last_touch <= 0) {
+            ++it;
+            continue;
+        }
+
+        // push_only families ignore ttl_ms for scheduling, but the value is
+        // still a sane "how often does this normally move" figure, which is
+        // exactly what we want to scale the idle window by.
+        const qint64 window = std::max(static_cast<qint64>(effective_ttl_ms(st)) * kIdleEvictTtlMultiple,
+                                       kIdleEvictMinAgeMs);
+        if ((now - last_touch) < window) {
+            ++it;
+            continue;
+        }
+
+        // set_policy() stores the explicit per-topic policy *inside* the
+        // TopicState, so a full erase would silently downgrade the topic to
+        // its pattern policy — or to the 30s/5s defaults — the next time it
+        // was touched. Those states release their payload instead and keep
+        // their configuration and counters. The QVariant is the memory; the
+        // rest of the struct is a few dozen bytes.
+        if (it->policy_explicit) {
+            if (it->value.isValid()) {
+                it->value = QVariant();
+                it->coalesce_latest = QVariant();
+                ++evicted;
+            }
+            ++it;
+            continue;
+        }
+
+        it = topics_.erase(it);
+        ++evicted;
+    }
+    if (evicted > 0)
+        LOG_DEBUG("DataHub", QString("Evicted %1 idle topic state(s); %2 retained").arg(evicted).arg(topics_.size()));
 }
 
 void DataHub::tick_scheduler() {

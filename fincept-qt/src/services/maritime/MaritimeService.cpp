@@ -209,6 +209,15 @@ void MaritimeService::get_vessel_position(const QString& imo) {
                 return;
             }
             auto data = unwrap(result.value().object());
+            // A 2xx that carries no vessel object is a failure, not an empty
+            // result. Writing the empty object into CacheManager would pin a
+            // blank "vessel" for kVesselTtlSec, so every retry inside the TTL
+            // is served the failure from cache without touching the network.
+            if (!data.value(QStringLiteral("vessel")).isObject()) {
+                LOG_ERROR("Maritime", "Vessel position: no vessel in response for IMO " + imo_trimmed);
+                emit self->error_occurred("vessel_position", QStringLiteral("No vessel data returned"));
+                return;
+            }
             auto vessel_obj = data["vessel"].toObject();
             fincept::CacheManager::instance().put(
                 cache_key, QVariant(QString::fromUtf8(QJsonDocument(vessel_obj).toJson(QJsonDocument::Compact))),

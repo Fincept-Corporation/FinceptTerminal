@@ -1,267 +1,192 @@
-# 핀셉트 터미널
+# Fincept Terminal
 
 <div align="center">
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)[![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://www.qt.io/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)
+[![Qt6](https://img.shields.io/badge/Qt-6-41CD52?logo=qt&logoColor=white)](https://www.qt.io/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
-[![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
+### **한계는 당신의 사고뿐입니다. 데이터가 아니라.**
 
-### **당신의 생각이 유일한 한계입니다. 데이터는 그렇지 않습니다.**
+기관 수준의 금융 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼.
 
-기관급 금융 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
+[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases) · [🏢 Enterprise](https://fincept.in/enterprise) · [💳 요금제](https://fincept.in/pricing) · [📖 매뉴얼](https://fincept.in/manual) · [💬 Discord](https://discord.gg/ae87a8ygbN)
 
-[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)·[📚 문서](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)·[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)·[💬 불화](https://discord.gg/ae87a8ygbN)·[🤝 파트너](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
-
-![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
+![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/FinceptBanner.png)
 
 </div>
 
-* * *
+> [!IMPORTANT]
+> **Fincept Terminal은 두 가지 에디션으로 제공됩니다.**
+>
+> 🏢 **[Fincept Terminal Enterprise](https://fincept.in/enterprise)** — 펀드, 패밀리 오피스, 리서치 데스크를 위한 비공개 클로즈드소스 빌드. 41개 모듈, 독점 데이터셋, 멀티 에이전트 리서치, 실시간 브로커 라우팅, 프라이빗 데이터룸, SSO, SLA를 제공하며 **사용자당 월 99달러**부터. 팀이 매일 개발하는 쪽이 이 에디션이며, 터미널로 수익을 낸다면 이쪽을 쓰셔야 합니다.
+>
+> 📖 **이 저장소** — AGPL-3.0 기반의 무료 오픈소스 에디션. 학습, 개인 사용, 학술 연구용입니다. 계속 공개로 유지되고 삭제되지 않으며, **월 1회 릴리스**됩니다.
+>
+> [**어느 쪽이 필요한가요? →**](#어떤-에디션을-선택해야-할까) · [비교](https://fincept.in/comparison) · [요금제](https://fincept.in/pricing)
 
-## 에 대한
+---
 
-**Fincept 터미널 vch**순수 네이티브 C++20 데스크톱 애플리케이션입니다. 그것은 사용한다**Qt6**UI 및 렌더링용, 임베디드**파이썬**분석을 위해 단일 네이티브 바이너리로 전문 금융 터미널 수준의 성능을 제공합니다.
+## 소개
 
-* * *
+**Fincept Terminal**은 금융 리서치를 위한 네이티브 C++20 데스크톱 터미널입니다. Qt6 UI, 내장 Python 3.11 분석 엔진, 단일 바이너리로 동작하며 Electron을 쓰지 않습니다.
 
-## 특징
+**하나의 데이터 코어 위에 두 가지 에디션**으로 제공됩니다.
 
-| **특징**                 | **설명**                                                                                                                                        |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📊**멀티 자산 분석**        | DCF 모델, 포트폴리오 최적화, 위험 지표(VaR, Sharpe), 주식·채권·파생상품·포트폴리오·대체투자 전반의 파생 상품 가격을 내장된 Python을 통해 제공                                                  |
-| 🤖**AI 에이전트**          | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham), 헤지 펀드 전략, 현지 LLM 지원, 다중 제공자(OpenAI, Anthropic, Gemini, Groq, DeepSeek, MiniMax, OpenRouter, Ollama) |
-| 🌐**100개 이상의 데이터 커넥터** | DBnomics, Polygon, Kraken, Yahoo Finance, FRED, IMF, World Bank, AkShare, 정부 API 및 주식 조사를 위한 Adanos 시장 심리와 같은 선택적 대체 데이터 오버레이                 |
-| 📈**실시간 거래**           | 암호화폐(Kraken/HyperLiquid WebSocket), 주식, 알고 트레이딩, 종이 트레이딩 엔진                                                                                   |
-| 🔬**QuantLib 스위트**     | 18개의 정량 분석 ​​모듈 — 가격 책정, 리스크, 확률론적, 변동성, 채권                                                                                                   |
-| 🚢**글로벌 인텔리전스**        | 해양 추적, 지정학적 분석, 관계 매핑, 위성 데이터                                                                                                                 |
-| 🎨**시각적 워크플로**         | 자동화 파이프라인을 위한 노드 편집기, MCP 도구 통합                                                                                                               |
-| 🧠**AI 퀀트 연구실**        | ML 모델, 요인 발견, HFT, 강화 학습 거래                                                                                                                   |
+| | **오픈소스** — 이 저장소 | **Enterprise** — [fincept.in/enterprise](https://fincept.in/enterprise) |
+|---|---|---|
+| **대상** | 학습, 개인 사용, 학술 연구 | 펀드, 패밀리 오피스, 리서치 데스크 |
+| **가격** | 무료 · AGPL-3.0 | **월 99달러**/사용자부터 |
+| **릴리스 주기** | 월 1회 업데이트 | 상시 |
 
-* * *
+---
 
-## 설치
+## 어떤 에디션을 선택해야 할까
 
-### 옵션 1 - 사전 구축된 바이너리 다운로드(권장)
+| 당신이… | 선택 | 이유 |
+|---|---|---|
+| 학생, 취미 사용자, 독학하는 분 | **오픈소스** | 정말로 무료이며, 앞으로도 그렇습니다 |
+| 학술 연구자 | **오픈소스** | 학술 용도는 무료 — 관리형 좌석이 필요한 대학은 아래 학술 번들 참고 |
+| 펀드, 패밀리 오피스, 자기자본 데스크, 은행, 핀테크 | **Enterprise** | AGPL 카피레프트가 적용되지 않고, 독점 데이터·실시간 라우팅·SSO·SLA를 받습니다 |
+| 이 일을 직업으로, 돈을 벌기 위해 하는 분 | **Enterprise** | 실질적으로 더 저렴하고, 매일 개발되는 유일한 에디션입니다 |
 
-사전 구축된 바이너리는 다음에서 사용할 수 있습니다.[릴리스 페이지](https://github.com/Fincept-Corporation/FinceptTerminal/releases). 빌드 도구가 필요하지 않습니다. 추출하고 실행하기만 하면 됩니다.
+> **솔직히 말하면.** 오픈 빌드는 기능을 깎아낸 데모가 아니라 실제로 쓸 만한 제품입니다. 다만 무료 공개 피드와 **당신의** API 키, **당신의** LLM 키로 동작하며, 모든 AI 호출은 상한 없이 토큰 단위로 당신에게 청구됩니다. 커뮤니티 이슈는 최선을 다해 처리되지만 응답을 보장하지 않습니다. 터미널이 밥벌이 수단이라면 Enterprise가 더 싸고 안전한 선택입니다.
 
-| 플랫폼               | 다운로드                                     | 달리다                                                  |
-| ----------------- | ---------------------------------------- | ---------------------------------------------------- |
-| **윈도우 x64**       | `FinceptTerminal-Windows-x64.zip`        | 추출 →`FinceptTerminal.exe`                            |
-| **윈도우 ARM64**     | `FinceptTerminal-Windows-arm64.zip`      | 추출 →`FinceptTerminal.exe`                            |
-| **리눅스 x64**       | `FinceptTerminal-Linux-x86_64.AppImage`  | `chmod +x`→`./FinceptTerminal-Linux-x86_64.AppImage` |
-| **macOS(애플 실리콘)** | `FinceptTerminal-macOS-arm64.tar.gz`     | 추출 →`./FinceptTerminal`                              |
-| **맥OS(인텔)**       | `FinceptTerminal-macOS-x64.tar.gz`       | 추출 →`./FinceptTerminal`                              |
-| **macOS(유니버설)**   | `FinceptTerminal-macOS-universal.tar.gz` | 추출 →`./FinceptTerminal`                              |
+[**Enterprise 보기 →**](https://fincept.in/enterprise) · [전체 비교](https://fincept.in/comparison) · [요금제](https://fincept.in/pricing) · [FAQ](https://fincept.in/faq)
 
-* * *
+---
 
-### 옵션 2 - 빠른 시작(원클릭 빌드)
+## 오픈소스 vs Enterprise
 
-설정 스크립트를 복제하고 실행하세요. 모든 종속성을 설치하고 앱을 자동으로 빌드합니다.
+| | 오픈소스 | **Enterprise** |
+|---|---|---|
+| **라이선스** | AGPL-3.0 — 강한 카피레프트. 배포하거나 호스팅하면 변경 사항을 공개해야 합니다 | 독점 — 관리할 카피레프트 의무 없음 |
+| **비용** | 무료 — 데이터와 LLM 비용은 본인 부담 | 사용자당 월 99 / 199 / 299달러, 전부 포함 |
+| **모듈** | 코어 터미널 | **6개 데스크, 41개 모듈** |
+| **데이터** | 무료 공개 피드, 요청 제한 있음, 키는 직접 준비 | 독점 데이터셋 — 더 긴 이력, 더 빠른 갱신 |
+| **가격 이력** | 무료 등급이 허용하는 범위 | 1년 / 5년 / 무제한 · 정직한 백테스트를 위한 **포인트 인 타임** |
+| **AI 예산** | 본인 LLM 키, 토큰 단위로 본인 청구 | 매월 400 / 2,000 / 5,000 크레딧 포함 |
+| **AI 리서치** | 기본 마켓 어시스턴트 | **계획하고 위임하는** 멀티 에이전트 리서치 · Agent Studio · 최대 53개 에이전트 · 6가지 팀 모드 |
+| **프라이빗 데이터룸** | — | 공시 자료와 모델을 본인 에이전트만 읽습니다. 타사와 섞이지 않고 학습에도 쓰이지 않습니다 |
+| **트레이딩** | 모의 매매 + 본인 키로 브로커 연동 | **실시간 브로커 라우팅 + 실시간 알고 배포** |
+| **퀀트** | 커뮤니티 백테스팅 | Quant Lab, Alpha Arena, 변동성 분석, 포인트 인 타임 백테스트 |
+| **보안·컴플라이언스** | — | SSO/SAML, 감사 로그, 역할 기반 접근 제어, 데이터 격리 |
+| **지원** | GitHub 이슈, 최선 노력, 응답 보장 없음 | SLA 기반 우선 대응 |
+| **문서** | 이 저장소 | [**700쪽 매뉴얼**](https://fincept.in/manual) — 41개 가이드, 472개 섹션 |
+| **플랫폼** | Windows, macOS, Linux + 호스팅 웹 터미널 | Windows 10/11, macOS 13+ (애플 실리콘), Linux |
 
-```bash
-# Linux / macOS
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-chmod +x setup.sh && ./setup.sh
-```
+Enterprise는 **별도 계정**으로 동작합니다. 무료 Fincept 계정으로는 로그인되지 않으며, 구독이 연결될 때까지 앱은 잠긴 상태로 유지됩니다. [Enterprise 계정 만들기 →](https://fincept.in/enterprise/signup)
 
-```bat
-# Windows — run from Developer Command Prompt for VS 2022
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-setup.bat
-```
+---
 
-스크립트는 컴파일러 확인, CMake, Qt6, Python, 빌드 및 실행을 처리합니다.
+## Enterprise — 6개 데스크, 41개 모듈
 
-* * *
+| 데스크 | 하는 일 |
+|---|---|
+| **Agentic Research** · 6 | 에이전트가 작업을 계획하고 전문 에이전트에 위임하며, 실시간 데이터와 데이터룸을 읽어 출처가 달린 노트를 작성합니다 |
+| **Quant Lab & Backtesting** · 4 | 시그널 리서치, 포인트 인 타임 백테스트, 변동성 곡면 |
+| **Deep Fundamental Research** · 8 | 주식 분석, 밸류에이션, 파생상품, M&A 분석 |
+| **Markets & Execution** · 7 | 주식·암호화폐·예측시장 실시간 거래, 브로커 라우팅, 알고 배포 |
+| **Macro & Global Intelligence** · 7 | 통계, 정부 데이터, 지정학, 해상 항로 |
+| **나만의 워크스페이스** · 9 | 대시보드, 스프레드시트, 노트, 파일, 코드, 리포트 빌더 |
 
-### 옵션 3 - 도커
+[제품 살펴보기 →](https://fincept.in/products)
 
-```bash
-# Pull and run
-docker pull ghcr.io/fincept-corporation/fincept-terminal:latest
-docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
-    ghcr.io/fincept-corporation/fincept-terminal:latest
+### 요금제
 
-# Or build from source
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-docker build -t fincept-terminal .
-docker run --rm -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix fincept-terminal
-```
+| | **Exclusive** | **Exclusive+** ★ 가장 인기 | **Exclusive Pro** |
+|---|---|---|---|
+| | **월 99달러**/사용자 | **월 199달러**/사용자 | **월 299달러**/사용자 |
+| AI 크레딧 / 월 | 400 | 2,000 | 5,000 |
+| 포트폴리오 · 관심목록 | 1 · 3 | 10 · 25 | 무제한 |
+| 가격 이력 | 1년 | 5년 | 무제한 |
+| 포함 좌석 | 1 | 1 | 2 |
+| 딥 리서치 + 에이전트 팀 | — | ✓ | ✓ |
+| 브로커 계좌 연동 | — | ✓ | ✓ |
+| 실시간 브로커 거래 + 알고 배포 | — | — | ✓ |
 
-> **메모:**Docker는 주로 Linux용으로 만들어졌습니다. macOS 및 Windows에는 추가 XServer 구성이 필요합니다.
+월 단위 결제 · 연간 약정 없음 · 최소 좌석 수 없음 · **분기 결제 시 15% 할인**. 연간 **사용자당 1,188~3,588달러**로, 블룸버그 단말 한 좌석의 약 **27,000달러**와 비교됩니다 — [전체 비교 보기](https://fincept.in/comparison).
 
-* * *
+**대학 및 학술 기관:** 단일 번들 — **Exclusive Pro 5좌석을 월 699달러**(정가 1,495달러). [support@fincept.in](mailto:support@fincept.in)으로 문의하세요.
 
-### 옵션 4 - 소스에서 빌드(수동)
+이 세 가지 요금제와 학술 번들이 전체 가격표입니다. 개별 협상형 엔터프라이즈 가격은 없으며, 따로 구매하는 상용 라이선스도 없습니다.
 
-> **⚠️ 중요:**소스에서 빌드하려면 고정된 도구 체인(MSVC 19.38 / GCC 12.3 / Apple Clang 15, CMake 3.27.7, Qt 6.7.2, Python 3.11.9)이 필요합니다. 항상 최신 단계는 영어 README를 참조하세요:[소스에서 빌드(수동)](https://github.com/Fincept-Corporation/FinceptTerminal#option-4--build-from-source-manual). 아래 번역은 오래되었으며 참고용으로만 보존됩니다.
+[**Enterprise 계정 만들기**](https://fincept.in/enterprise/signup) · [**데모 예약**](https://calendly.com/nikultilak/fincept-terminal-demo) · [매뉴얼 읽기](https://fincept.in/manual)
 
-<details>
-<summary>원본 지침 (오래됨 — 참고용으로 보존)</summary>
+---
 
-#### 전제조건
+## 오픈소스 에디션 설치
 
-| 도구           | 버전    | 윈도우                                                         | 리눅스                   | macOS                              |
-| ------------ | ----- | ----------------------------------------------------------- | --------------------- | ---------------------------------- |
-| **힘내**       | 최신    | `winget install Git.Git`                                    | `apt install git`     | `brew install git`                 |
-| **CMake**    | 3.20+ | `winget install Kitware.CMake`                              | `apt install cmake`   | `brew install cmake`               |
-| **C++ 컴파일러** | C++20 | MSVC 2022 ([비주얼 스튜디오](https://visualstudio.microsoft.com/)) | `apt install g++`     | Xcode CLT:`xcode-select --install` |
-| **Qt6**      | 6.5+  | 아래를 참조하세요                                                   | 아래를 참조하세요             | 아래를 참조하세요                          |
-| **파이썬**      | 3.11+ | [python.org](https://www.python.org/downloads/)             | `apt install python3` | `brew install python`              |
+**Windows x64**, **Linux x64**(`.run` / `.deb` / `.rpm`), **macOS(애플 실리콘)** 설치 파일은 [릴리스 페이지](https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest)에 있습니다.
 
-#### Qt6 설치
+**소스에서 빌드** — Linux/macOS: `git clone … && ./setup.sh`. Windows, 수동 빌드, 고정된 툴체인(**CMake 3.27.7 · Ninja 1.11.1 · Qt 6.8.3 · Python 3.11.9**), 문제 해결은 **[docs/GETTING_STARTED.md](../GETTING_STARTED.md)** 를 참고하세요. 버전은 고정되어 있으며 그보다 높거나 낮은 버전은 지원되지 않습니다.
 
-**윈도우:**
+> Enterprise 빌드를 찾으시나요? Windows, macOS, Linux용 서명된 설치 파일이 Enterprise 로그인 뒤에 준비되어 있습니다 — [여기서 받으세요](https://fincept.in/enterprise).
 
-```powershell
-# Via Qt online installer (recommended — includes windeployqt)
-# Download from https://www.qt.io/download-qt-installer
-# Select: Qt 6.x > MSVC 2022 64-bit
+---
 
-# Or via winget
-winget install Qt.QtCreator
-```
+## 오픈 빌드에 포함된 것
 
-**리눅스(우분투/데비안):**
+| | |
+|---|---|
+| **멀티에셋 분석** | DCF, 포트폴리오 최적화, VaR/샤프, 파생상품 가격 산정, 채권, 대체투자 — 내장 Python 기반 |
+| **QuantLib 스위트** | 18개 퀀트 모듈 — 가격 산정, 리스크, 확률과정, 변동성, 채권 |
+| **AI 에이전트** | 트레이더/투자자, 경제, 지정학 프레임워크에 걸친 37개 에이전트. 키는 직접 준비(OpenAI, Anthropic, Gemini, Groq, DeepSeek, OpenRouter, Ollama) |
+| **100개 이상 데이터 커넥터** | DBnomics, FRED, IMF, 세계은행, AkShare, Polygon, Kraken, Yahoo Finance, 정부 API |
+| **트레이딩** | 암호화폐·주식 피드, 모의 매매 엔진, 16개 브로커 연동 |
+| **자동화** | 비주얼 노드 에디터, MCP 도구 연동, AI Quant Lab(ML, 팩터 발굴, 강화학습) |
+| **글로벌 인텔리전스** | 해상 물류 추적, 지정학 분석, 관계 매핑 |
 
-```bash
-sudo apt install -y \
-  qt6-base-dev qt6-charts-dev qt6-tools-dev \
-  libqt6sql6-sqlite libqt6websockets6-dev \
-  libgl1-mesa-dev libglu1-mesa-dev
-```
+네이티브 C++20 · Qt6 · 내장 Python 3.11 · 단일 바이너리 · Node.js도 브라우저 런타임도 없음.
 
-**맥OS:**
+---
 
-```bash
-brew install qt
-```
+## 이 저장소의 유지보수 방식
 
-#### 짓다
+이 저장소는 **계속 공개되며 삭제되지 않습니다**. 이미 릴리스된 것은 그대로 남습니다.
 
-```bash
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-qt
+이제 상시 개발이 아니라 **월 1회 릴리스**로 운영됩니다. 팀의 일상 작업이 Enterprise에 있기 때문입니다. 이슈와 풀 리퀘스트는 계속 검토되며, 수정 사항은 월간 주기로 반영됩니다. 보안 제보는 [support@fincept.in](mailto:support@fincept.in)으로 보내주세요.
 
-# Linux / macOS
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
+---
 
-# Windows (from Developer Command Prompt for VS 2022)
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/msvc2022_64"
-cmake --build build --config Release --parallel
-```
+## 기여하기
 
-#### 달리다
+새로운 데이터 커넥터, AI 에이전트, 분석 모듈, C++ 화면, 문서 모두 환영합니다.
 
-```bash
-./build/FinceptTerminal              # Linux / macOS
-.\build\Release\FinceptTerminal.exe  # Windows
-```
+[기여 가이드](../CONTRIBUTING.md) · [C++ 가이드](../CPP_CONTRIBUTOR_GUIDE.md) · [Python 가이드](../PYTHON_CONTRIBUTOR_GUIDE.md) · [아키텍처](../ARCHITECTURE.md) · [버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues) · [기능 제안](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
-</details>
+---
 
-* * *
+## Fincept의 다른 제품
 
-## 우리를 차별화하는 요소
+- **[Fincept Data API](https://docs.fincept.in)** — 500개 이상 REST 엔드포인트, 423,000개 이상 종목, 2,000개 이상 소스. 모든 계정에 무료 등급 포함.
+- **[Quantcept](https://quantcept.io)** — 오픈소스 AI 기반 커맨드라인 금융 터미널(Apache-2.0).
 
-**핀셉트 터미널**전통적인 소프트웨어의 제한을 거부하는 사람들을 위해 구축된 오픈 소스 금융 플랫폼입니다. 우리는 경쟁합니다**분석 깊이**그리고**데이터 접근성**— 내부자 정보나 독점 피드가 아닙니다.
+---
 
-최근 빌드에서는 선택 사항도 지원합니다.**아다노스 시장 심리**연결성**데이터 소스 → 대체 데이터**. 구성된 경우 Equity Research는 Reddit, X, 금융 뉴스 및 Polymarket 전반에 걸쳐 소스 간 소매 정서 스냅샷을 표면화할 수 있습니다. 활성 Adanos 연결이 없으면 기능은 휴면 상태로 유지되며 앱의 나머지 부분은 이전과 동일하게 작동합니다.
+## 라이선스
 
--   **기본 성능**— Qt6이 포함된 C++20, 전자/웹 오버헤드 없음
--   **단일 바이너리**— Node.js 없음, 브라우저 런타임 없음, JavaScript 번들러 없음
--   **완전한 바이사이드 애널리스트 툴킷**— 주식, 포트폴리오, 파생상품, 채권, 기업금융, 대체투자
--   **100개 이상의 데이터 커넥터**— Yahoo Finance에서 정부 데이터베이스까지
--   **무료 및 오픈 소스**(AGPL-3.0) 상용 라이센스 사용 가능
+**AGPL-3.0-or-later** — 전문은 [LICENSE](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)에 있습니다.
 
-* * *
+개인 사용, 학습, 학술 연구에는 무료입니다. AGPL-3.0은 **관대한 라이선스가 아니라 강한 카피레프트**입니다. 수정한 빌드를 배포하거나 다른 사람이 접근하는 서비스로 운영하면, 변경 사항을 동일한 라이선스로 공개해야 합니다. 대부분의 법무팀에게는 이 한 줄에서 논의가 끝납니다. 그래서 기업들은 독점 라이선스이며 관리할 카피레프트 의무가 없는 **[Enterprise](https://fincept.in/enterprise)** 를 선택합니다. 배포하지 않는 개인 사용에는 아무 의무도 없습니다.
 
-## 로드맵
+Fincept는 이 저장소에 대해 **더 이상 별도의 상용 또는 학술 라이선스를 판매하지 않습니다**. 상업적·기관·대학 용도는 위에 공개된 가격의 **[Fincept Terminal Enterprise](https://fincept.in/enterprise)** 가 담당합니다.
 
-| 타임라인          | 중요한 단계                                 |
-| ------------- | -------------------------------------- |
-| **2026년 1분기** | 실시간 스트리밍, 고급 백테스팅, 브로커 통합              |
-| **구토 2026**   | 옵션 전략 빌더, 다중 포트폴리오 관리, 50개 이상의 AI 에이전트 |
-| **KZ 2026**   | 프로그래밍 방식 API, ML 학습 UI, 기관 기능          |
-| **미래**        | 모바일 컴패니언, 클라우드 동기화, 커뮤니티 마켓플레이스        |
+**상표.** "Fincept", "Fincept Terminal" 및 Fincept 로고는 Fincept Corporation의 상표입니다. 포크, 파생물, 리브랜딩 제품, 상용 제품에서 사용하려면 사전 서면 허가가 필요합니다.
 
-* * *
+문의: [support@fincept.in](mailto:support@fincept.in) · [이용약관](https://fincept.in/terms) · [개인정보처리방침](https://fincept.in/privacy)
 
-## 기여
+© 2025–2026 Fincept Corporation. All rights reserved.
 
-우리는 재무 분석의 미래를 함께 만들어가고 있습니다.
-
-**기여하다:**새로운 데이터 커넥터, AI 에이전트, 분석 모듈, C++ 화면, 문서
-
--   [기여 가이드](docs/CONTRIBUTING.md)
--   [C++ 기여 가이드](fincept-qt/CONTRIBUTING.md)
--   [Python 기여자 가이드](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
--   [버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues)
--   [기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
-
-* * *
-
-## 대학 및 교육자용
-
-**전문가 수준의 재무 분석을 교실에 도입하세요.**
-
--   **$799/월**20개 계정용
--   Fincept 데이터 및 API에 대한 전체 액세스
--   금융, 경제, 데이터 과학 과정에 적합
--   주식·포트폴리오·파생상품·채권·경제학 분석 내장
-
-**관심 있는?**이메일**[support@fincept.in](mailto:support@fincept.in)**귀하의 기관 이름으로.
-
-[대학 라이센스 세부정보](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
-
-* * *
-
-## 특허
-
-**이중 라이센스: AGPL-3.0(오픈 소스) + 상업용**
-
-### 오픈 소스(AGPL-3.0)
-
--   개인적, 교육적, 비상업적 용도로는 무료입니다.
--   네트워크 서비스로 배포 또는 사용 시 공유 수정 필요
--   전체 소스 코드 투명성
-
-### 상업용 라이센스
-
--   업무용으로 사용하거나 Fincept 데이터/API에 상업적으로 액세스하는 데 필요합니다.
--   연락하다:**[support@fincept.in](mailto:support@fincept.in)**
--   세부:[상용 라이센스 가이드](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
-
-### 상표
-
-"Fincept Terminal" 및 "Fincept"는 Fincept Corporation의 상표입니다.
-
-© 2025-2026 핀셉트 코퍼레이션. 모든 권리 보유.
-
-* * *
+---
 
 <div align="center">
 
-### **당신의 생각이 유일한 한계입니다. 데이터는 그렇지 않습니다.**
+### **한계는 당신의 사고뿐입니다. 데이터가 아니라.**
 
-<div align="center">
-<a href="https://star-history.com/#Fincept-Corporation/FinceptTerminal&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Date" />
- </picture>
-</a>
-</div>
+⭐ **스타** · 🔄 **공유** · 🤝 **기여**
 
-[![Email](https://img.shields.io/badge/Email-support@fincept.in-blue)](mailto:support@fincept.in)
-
-⭐**별**· 🔄**공유하다**· 🤝**기여하다**
+<sub>영문 원본: <a href="../../README.md">README.md</a></sub>
 
 </div>

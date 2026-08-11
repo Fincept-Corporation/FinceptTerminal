@@ -1,5 +1,6 @@
 #include "auth/PinManager.h"
 
+#include "auth/ConstantTime.h"
 #include "auth/SecurityAuditLog.h"
 #include "core/logging/Logger.h"
 #include "storage/secure/SecureStorage.h"
@@ -13,18 +14,10 @@ namespace fincept::auth {
 
 namespace {
 
-// Constant-time byte comparison. Returns true iff a and b are the same length
-// AND every byte matches. The XOR-accumulate loop touches every byte even on
-// mismatch so execution time does not reveal the first differing index.
-bool constant_time_equals(const QByteArray& a, const QByteArray& b) {
-    if (a.size() != b.size())
-        return false;
-    unsigned char diff = 0;
-    const int n = a.size();
-    for (int i = 0; i < n; ++i)
-        diff |= static_cast<unsigned char>(a[i]) ^ static_cast<unsigned char>(b[i]);
-    return diff == 0;
-}
+// constant_time_equals now lives in auth/ConstantTime.h so the loopback HTTP
+// bridges share one implementation. Keeping a second copy in this anonymous
+// namespace would make the unqualified call below ambiguous the moment a
+// unity-build batch pulls both into the same translation unit.
 
 // Reject trivially weak 6-digit PINs. Returns an error message or empty string
 // if the PIN is acceptable. Centralized here (not in UI) so every caller —

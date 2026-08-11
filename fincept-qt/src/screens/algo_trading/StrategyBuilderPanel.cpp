@@ -22,15 +22,14 @@
 
 #include <QDate>
 #include <QDateEdit>
-#include <QEventLoop>
 #include <QFrame>
-#include <QFutureWatcher>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
+#include <QPointer>
 #include <QScrollArea>
 #include <QSet>
 #include <QSignalBlocker>
@@ -40,7 +39,9 @@
 #include <QVBoxLayout>
 #include <QtConcurrent>
 
+#include <atomic>
 #include <cmath>
+#include <memory>
 
 namespace fincept::screens {
 namespace algo_ns = fincept::algo;
@@ -148,28 +149,64 @@ QString status_style() {
         .arg(ui::fonts::DATA_FAMILY());
 }
 
-// Bounded fetch of the current LTP from the connected broker for deploy-time sanity
-// checks. Runs off-thread with a short timeout so the deploy click never hangs.
-double fetch_quote_ltp(const QString& broker_id, const QString& account_id, const QString& symbol, int timeout_ms) {
-    if (broker_id.isEmpty() || account_id.isEmpty() || symbol.isEmpty())
-        return 0.0;
-    auto fut = QtConcurrent::run([broker_id, account_id, symbol]() -> double {
+// Bounded, non-blocking fetch of the current LTP for deploy-time sanity checks.
+//
+// The previous version parked the GUI thread in `QEventLoop::exec()` with
+// DEFAULT flags, so user input was still delivered while the (already closed)
+// deploy dialog left nothing to constrain the user: destroying the panel during
+// that window left ~DeployGuard and the follow-up QMessageBox dereferencing
+// freed memory. It also let a stack QFutureWatcher die while its future was
+// still running, and degraded silently to 0.0 whenever the broker was slow.
+//
+// Now the broker round-trip runs on a worker and `on_result` is invoked EXACTLY
+// ONCE on `receiver`'s thread (§P1/§P8). 0.0 means "no usable quote": missing
+// broker/account/symbol, a failed request, or a probe that outran `timeout_ms`
+// — the last of which is now logged rather than silent.
+template <typename OnResult>
+void fetch_quote_ltp_async(const QString& broker_id, const QString& account_id, const QString& symbol, int timeout_ms,
+                           QObject* receiver, OnResult on_result) {
+    auto answered = std::make_shared<std::atomic<bool>>(false);
+    QPointer<QObject> guard(receiver);
+
+    auto deliver = [answered, guard, on_result](double ltp) {
+        if (answered->exchange(true, std::memory_order_acq_rel))
+            return; // worker vs timeout race — first answer wins
+        if (!guard)
+            return;
+        QMetaObject::invokeMethod(
+            guard.data(),
+            [guard, on_result, ltp]() {
+                if (guard)
+                    on_result(ltp);
+            },
+            Qt::QueuedConnection);
+    };
+
+    if (broker_id.isEmpty() || account_id.isEmpty() || symbol.isEmpty()) {
+        deliver(0.0);
+        return;
+    }
+
+    (void)QtConcurrent::run([broker_id, account_id, symbol, deliver]() {
         auto* broker = trading::BrokerRegistry::instance().get(broker_id);
-        if (!broker)
-            return 0.0;
+        if (!broker) {
+            deliver(0.0);
+            return;
+        }
         auto creds = trading::AccountManager::instance().load_credentials(account_id);
         auto resp = broker->get_quotes(creds, {symbol});
-        if (resp.success && resp.data.has_value() && !resp.data->isEmpty())
-            return resp.data->first().ltp;
-        return 0.0;
+        deliver(resp.success && resp.data.has_value() && !resp.data->isEmpty() ? resp.data->first().ltp : 0.0);
     });
-    QFutureWatcher<double> watcher;
-    QEventLoop loop;
-    QObject::connect(&watcher, &QFutureWatcher<double>::finished, &loop, &QEventLoop::quit);
-    watcher.setFuture(fut);
-    QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
-    loop.exec();
-    return watcher.isFinished() ? watcher.result() : 0.0;
+
+    QTimer::singleShot(timeout_ms, receiver, [answered, deliver, symbol, timeout_ms]() {
+        if (answered->load(std::memory_order_acquire))
+            return;
+        LOG_WARN("AlgoTrading", QString("Deploy sanity check: quote probe for %1 did not answer within %2 ms — "
+                                        "skipping the unreachable-rule scan")
+                                    .arg(symbol)
+                                    .arg(timeout_ms));
+        deliver(0.0);
+    });
 }
 
 // Collects human-readable warnings for price-based leaves that can't fire at `price`
@@ -695,16 +732,24 @@ void StrategyBuilderPanel::on_backtest() {
 }
 
 void StrategyBuilderPanel::on_deploy() {
-    // Re-entrancy: exec() and the LTP probe below both run nested event loops, so
-    // a second click would otherwise open a second dialog and deploy twice.
+    // Re-entrancy: the deploy dialog is modal and the post-accept broker probe
+    // is asynchronous, so without the gate a second click would open a second
+    // dialog and deploy twice.
     if (deploying_)
         return;
     deploying_ = true;
     if (deploy_btn_)
         deploy_btn_->setEnabled(false);
+    // Releases the click gate on every SYNCHRONOUS exit below. Once the deploy
+    // hands off to the async quote probe the guard is disarmed and the queued
+    // continuation owns the release instead — the old unconditional version
+    // dereferenced `self` after loop.exec() had let the user destroy the panel.
     struct DeployGuard {
         StrategyBuilderPanel* self;
+        bool armed = true;
         ~DeployGuard() {
+            if (!armed)
+                return;
             self->deploying_ = false;
             if (self->deploy_btn_)
                 self->deploy_btn_->setEnabled(true);
@@ -741,66 +786,92 @@ void StrategyBuilderPanel::on_deploy() {
                                 underlying_combo_ ? underlying_combo_->currentText() : QString(),
                                 expiry_mode_combo_ ? expiry_mode_combo_->currentData().toString() : QString());
     }
-    if (dialog->exec() == QDialog::Accepted) {
-        // Take the dialog's values verbatim — what the user reviewed is what deploys.
-        auto deployment = dialog->deployment();
+    const bool accepted = (dialog->exec() == QDialog::Accepted);
+    if (!accepted) {
+        dialog->deleteLater();
+        return;
+    }
+    // Take the dialog's values verbatim — what the user reviewed is what deploys.
+    auto deployment = dialog->deployment();
+    dialog->deleteLater(); // nothing below reads the dialog again
 
-        // Sanity check (non-blocking, bounded): warn if a rule can't fire at the
-        // current price — e.g. 'crosses_above 280.45' on a stock trading at 1204.
-        const double cur_price =
-            fetch_quote_ltp(deployment.broker_id, deployment.broker_account_id, deployment.symbol, 2500);
-        if (cur_price > 0) {
-            QStringList warns;
-            scan_unreachable(strat.entry_conditions, tr("Entry"), cur_price, warns);
-            scan_unreachable(strat.exit_conditions, tr("Exit"), cur_price, warns);
-            if (!warns.isEmpty()) {
-                const auto btn =
-                    QMessageBox::warning(this, tr("Deploy — check conditions"),
-                                         tr("%1 is at %2, but some rules may never trigger:\n\n%3\n\nDeploy anyway?")
-                                             .arg(deployment.symbol)
-                                             .arg(cur_price, 0, 'f', 2)
-                                             .arg(warns.join("\n\n")),
-                                         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-                if (btn != QMessageBox::Yes) {
-                    dialog->deleteLater();
-                    return;
+    // Sanity check (non-blocking, bounded): warn if a rule can't fire at the
+    // current price — e.g. 'crosses_above 280.45' on a stock trading at 1204.
+    // The broker probe is off-thread and everything after it lives in the queued
+    // continuation, so the GUI thread is never parked (§P1) and a panel destroyed
+    // mid-probe simply drops the rest instead of writing through freed memory (§P8).
+    deploy_guard.armed = false; // the continuation owns the release from here
+
+    // Releases the click gate on whichever branch the continuation leaves
+    // through. Held as a QPointer, not a raw pointer: the confirmation boxes
+    // run nested event loops, so the panel can still disappear underneath us.
+    struct ReleaseGate {
+        QPointer<StrategyBuilderPanel> panel;
+        ~ReleaseGate() {
+            if (!panel)
+                return;
+            panel->deploying_ = false;
+            if (panel->deploy_btn_)
+                panel->deploy_btn_->setEnabled(true);
+        }
+    };
+
+    QPointer<StrategyBuilderPanel> self = this;
+    fetch_quote_ltp_async(
+        deployment.broker_id, deployment.broker_account_id, deployment.symbol, 2500, this,
+        [self, strat, deployment](double cur_price) {
+            if (!self)
+                return;
+            ReleaseGate release_gate{self};
+
+            if (cur_price > 0) {
+                QStringList warns;
+                scan_unreachable(strat.entry_conditions, tr("Entry"), cur_price, warns);
+                scan_unreachable(strat.exit_conditions, tr("Exit"), cur_price, warns);
+                if (!warns.isEmpty()) {
+                    const auto btn = QMessageBox::warning(
+                        self.data(), tr("Deploy — check conditions"),
+                        tr("%1 is at %2, but some rules may never trigger:\n\n%3\n\nDeploy anyway?")
+                            .arg(deployment.symbol)
+                            .arg(cur_price, 0, 'f', 2)
+                            .arg(warns.join("\n\n")),
+                        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                    if (!self || btn != QMessageBox::Yes)
+                        return;
                 }
             }
-        }
 
-        // Confirm before deploying an exact duplicate of an already-running setup.
-        if (algo_ns::AlgoEngine::instance().has_active_duplicate(deployment.strategy_id, deployment.symbol,
-                                                                 deployment.mode, deployment.entry_side)) {
-            const auto btn = QMessageBox::question(
-                this, tr("Already deployed"),
-                tr("An identical deployment is already running:\n\n%1 · %2 · %3 · %4\n\n"
-                   "Deploy another copy anyway?")
-                    .arg(deployment.strategy_name, deployment.symbol, deployment.mode.toUpper(), deployment.entry_side),
-                QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-            if (btn != QMessageBox::Yes) {
-                dialog->deleteLater();
-                return;
+            // Confirm before deploying an exact duplicate of an already-running setup.
+            if (algo_ns::AlgoEngine::instance().has_active_duplicate(deployment.strategy_id, deployment.symbol,
+                                                                     deployment.mode, deployment.entry_side)) {
+                const auto btn =
+                    QMessageBox::question(self.data(), tr("Already deployed"),
+                                          tr("An identical deployment is already running:\n\n%1 · %2 · %3 · %4\n\n"
+                                             "Deploy another copy anyway?")
+                                              .arg(deployment.strategy_name, deployment.symbol,
+                                                   deployment.mode.toUpper(), deployment.entry_side),
+                                          QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+                if (!self || btn != QMessageBox::Yes)
+                    return;
             }
-        }
 
-        // Save strategy first
-        services::algo::AlgoTradingService::instance().save_strategy(strat);
+            // Save strategy first
+            services::algo::AlgoTradingService::instance().save_strategy(strat);
 
-        LOG_INFO("AlgoTrading", QString("Deploy requested: id=%1 strategy='%2' symbol=%3 mode=%4 backend=%5 "
-                                        "broker=%6 acct=%7 qty=%8")
-                                    .arg(deployment.id, strat.name, deployment.symbol, deployment.mode,
-                                         deployment.backend, deployment.broker_id, deployment.broker_account_id)
-                                    .arg(deployment.quantity));
+            LOG_INFO("AlgoTrading", QString("Deploy requested: id=%1 strategy='%2' symbol=%3 mode=%4 backend=%5 "
+                                            "broker=%6 acct=%7 qty=%8")
+                                        .arg(deployment.id, strat.name, deployment.symbol, deployment.mode,
+                                             deployment.backend, deployment.broker_id, deployment.broker_account_id)
+                                        .arg(deployment.quantity));
 
-        // Deploy via C++ engine (persists the row, then starts the runner). Feedback
-        // is the jump to the Dashboard below — NOT a label on the backtest card, which
-        // is unrelated to deployment and read as "stuck on Deploying…".
-        algo_ns::AlgoEngine::instance().start_deployment(deployment, strat);
+            // Deploy via C++ engine (persists the row, then starts the runner). Feedback
+            // is the jump to the Dashboard below — NOT a label on the backtest card, which
+            // is unrelated to deployment and read as "stuck on Deploying…".
+            algo_ns::AlgoEngine::instance().start_deployment(deployment, strat);
 
-        // Tell the parent screen to switch to the Dashboard and refresh.
-        emit deployed();
-    }
-    dialog->deleteLater();
+            // Tell the parent screen to switch to the Dashboard and refresh.
+            emit self->deployed();
+        });
 }
 
 void StrategyBuilderPanel::load_template(int index) {

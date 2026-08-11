@@ -110,13 +110,23 @@ void DataSourcesScreen::on_category_filter(int idx) {
     update_action_states();
 }
 
-void DataSourcesScreen::on_search_changed(const QString& /*text*/) {
+void DataSourcesScreen::rebuild_all_views() {
     build_category_ladder();
     build_connector_table();
     build_connections_table();
     update_provider_ladder();
     update_stats_strip();
     update_action_states();
+}
+
+void DataSourcesScreen::on_search_changed(const QString& /*text*/) {
+    // Debounced: every keystroke used to rebuild the ~380-row connector table
+    // and tear down + re-create a QCheckBox and a QLabel for every connection
+    // row, which stole focus and stuttered while typing.
+    if (search_debounce_)
+        search_debounce_->start();
+    else
+        rebuild_all_views();
 }
 
 void DataSourcesScreen::on_connector_clicked(const QString& connector_id) {
@@ -308,9 +318,13 @@ void DataSourcesScreen::on_view_mode_toggle() {
 }
 
 void DataSourcesScreen::on_connections_search_changed(const QString& text) {
+    // Record the filter immediately (cheap) but debounce the rebuild — same
+    // reasoning as on_search_changed.
     conn_search_text_ = text;
-    build_connections_table();
-    update_stats_strip();
+    if (search_debounce_)
+        search_debounce_->start();
+    else
+        rebuild_all_views();
 }
 
 void DataSourcesScreen::on_stat_box_clicked(int stat_index) {

@@ -47,17 +47,19 @@ void DiscordProvider::send(const NotificationRequest& req, std::function<void(bo
     body["embeds"] = embeds;
 
     HttpClient::instance().post(webhook_url_, body, [cb](Result<QJsonDocument> res) {
-        // Discord returns 204 No Content on success â€” HttpClient may return empty body
-        if (res.is_err()) {
-            const auto& err = res.error();
-            // "HTTP_204" is a successful empty response
-            if (err.find("HTTP_204") != std::string::npos || err.find("204") != std::string::npos)
-                cb(true, {});
-            else
-                cb(false, QString::fromStdString(err));
-        } else {
+        // Discord answers a successful webhook post with 204 No Content. That is
+        // not an error path: QNetworkReply reports NoError for 2xx, so a real 204
+        // arrives here as is_ok() with an empty document.
+        //
+        // There used to be a `err.find("204")` substring test here. Once HttpClient
+        // began appending the server's message to the error string, that matched any
+        // 4xx/5xx whose body merely contained "204" — a Retry-After value, a byte
+        // count, a snowflake fragment — and reported a rejected webhook as delivered.
+        // Never infer a status code by substring-searching an error message.
+        if (res.is_err())
+            cb(false, QString::fromStdString(res.error()));
+        else
             cb(true, {});
-        }
     });
 }
 

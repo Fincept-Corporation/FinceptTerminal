@@ -293,12 +293,18 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("trade_viz", []() { return new screens::TradeVizScreen; });
     dock_router_->register_factory("docs", []() { return new screens::DocsScreen; });
 
-    // Info/legal pages: static content, safe to construct eagerly.
-    dock_router_->register_screen("contact", new screens::ContactScreen);
-    dock_router_->register_screen("terms", new screens::TermsScreen);
-    dock_router_->register_screen("privacy", new screens::PrivacyScreen);
-    dock_router_->register_screen("trademarks", new screens::TrademarksScreen);
-    dock_router_->register_screen("help", new screens::HelpScreen);
+    // Info/legal pages. Static content, but "static" is not "free": setup_auth_screens()
+    // above already builds one of each for info_stack_, so register_screen() here made
+    // a SECOND instance of all five per window, none of them visible at startup.
+    // HelpScreen::build_page() alone is ~110-130 widgets each carrying an inline
+    // setStyleSheet — roughly 1,100 widgets and 1,100 CSS parses per window, paid on
+    // the cold-start path. Factories make the dock copies cost nothing until the user
+    // actually opens the panel; the auth-stack copies stay the only eager instances.
+    dock_router_->register_factory("contact", []() { return new screens::ContactScreen; });
+    dock_router_->register_factory("terms", []() { return new screens::TermsScreen; });
+    dock_router_->register_factory("privacy", []() { return new screens::PrivacyScreen; });
+    dock_router_->register_factory("trademarks", []() { return new screens::TrademarksScreen; });
+    dock_router_->register_factory("help", []() { return new screens::HelpScreen; });
 }
 
 } // namespace fincept

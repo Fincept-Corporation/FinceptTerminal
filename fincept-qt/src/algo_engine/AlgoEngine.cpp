@@ -6,6 +6,7 @@
 #include "datahub/DataHub.h"
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
 #include "trading/PaperTrading.h"
 #include "trading/UnifiedTrading.h"
 
@@ -37,6 +38,14 @@ AlgoEngine::AlgoEngine() {
     // carry fno_bridge_ along. Ownership: deleted in dtor.
     fno_bridge_ = new fincept::algo::fno::FnoDataBridge();
 
+    // Semi-Auto approval outcomes. ActionCenter lives on the main thread and this
+    // engine on engine_thread_, so these arrive queued — which is what we want:
+    // the runner bookkeeping then runs on the runner's own thread.
+    connect(&fincept::trading::ActionCenter::instance(), &fincept::trading::ActionCenter::order_approved, this,
+            &AlgoEngine::on_approval_approved);
+    connect(&fincept::trading::ActionCenter::instance(), &fincept::trading::ActionCenter::order_rejected, this,
+            &AlgoEngine::on_approval_rejected);
+
     engine_thread_.setObjectName(QStringLiteral("AlgoEngineThread"));
     engine_thread_.start();
     moveToThread(&engine_thread_);
@@ -54,6 +63,7 @@ void AlgoEngine::start_deployment(const services::algo::AlgoDeployment& deployme
                                   const services::algo::AlgoStrategy& strategy) {
     QMutexLocker lock(&mutex_);
     if (runners_.contains(deployment.id)) {
+        lock.unlock(); // never emit under the (non-recursive) lock — a direct slot would deadlock
         emit error_occurred(deployment.id, QStringLiteral("Deployment already running"));
         return;
     }
@@ -70,7 +80,9 @@ void AlgoEngine::start_deployment(const services::algo::AlgoDeployment& deployme
     connect(runner, &DeploymentRunner::status_changed, this, [this](const QString& id, const QString& status) {
         if (status == "stopped" || status == "error") {
             QMutexLocker lock(&mutex_);
-            if (auto* r = runners_.take(id)) {
+            auto* r = runners_.take(id);
+            lock.unlock(); // never emit under the (non-recursive) lock — a direct slot would deadlock
+            if (r) {
                 r->deleteLater();
                 emit deployment_stopped(id);
             }
@@ -163,6 +175,34 @@ void AlgoEngine::on_order_requested(const AlgoOrderSignal& signal) {
     execute_order(signal);
 }
 
+void AlgoEngine::on_approval_approved(const QString& pending_id, const QString& broker_order_id) {
+    QMutexLocker lock(&mutex_);
+    const QString dep_id = approvals_.take(pending_id);
+    if (dep_id.isEmpty())
+        return; // not one of ours (another screen queued it)
+    auto* runner = runners_.value(dep_id, nullptr);
+    lock.unlock();
+    if (!runner)
+        return; // deployment stopped while the order sat in the queue
+    LOG_INFO("AlgoEngine", QString("Deployment %1: queued order %2 approved -> broker order %3")
+                               .arg(dep_id, pending_id, broker_order_id));
+    runner->on_approval_resolved(pending_id, true, broker_order_id, QString());
+}
+
+void AlgoEngine::on_approval_rejected(const QString& pending_id, const QString& reason) {
+    QMutexLocker lock(&mutex_);
+    const QString dep_id = approvals_.take(pending_id);
+    if (dep_id.isEmpty())
+        return;
+    auto* runner = runners_.value(dep_id, nullptr);
+    lock.unlock();
+    if (!runner)
+        return;
+    LOG_WARN("AlgoEngine",
+             QString("Deployment %1: queued order %2 rejected: %3").arg(dep_id, pending_id, reason));
+    runner->on_approval_resolved(pending_id, false, QString(), reason);
+}
+
 void AlgoEngine::execute_order(const AlgoOrderSignal& signal) {
     // Multi-leg F&O basket → dedicated path (paper portfolio / live broker basket).
     if (!signal.legs.isEmpty()) {
@@ -215,6 +255,39 @@ void AlgoEngine::execute_order(const AlgoOrderSignal& signal) {
         order.product_type = trading::ProductType::Intraday;
 
     const QString account_id = signal.account_id;
+
+    // ── Semi-Auto approval gate ─────────────────────────────────────────────────
+    // Every other live-order path opts into this (MCP live tools, workflow order
+    // nodes, the equity screen, basket/broadcast dialogs). Without it an account
+    // set to "Semi-Auto — require approval" still had algo deployments firing
+    // unattended orders on it. Mirrors mcp/tools/LiveTradingTools.cpp and
+    // services/workflow/adapters/ServiceBridges.cpp: queue, don't send.
+    if (fincept::trading::ActionCenter::instance().should_queue(account_id, QStringLiteral("placeorder"))) {
+        const QString pending_id = fincept::trading::ActionCenter::instance().queue_order(
+            account_id, QStringLiteral("placeorder"),
+            fincept::trading::ActionCenter::serialize_unified_order(order));
+
+        QMutexLocker lock(&mutex_);
+        auto* runner = runners_.value(dep_id, nullptr);
+        if (pending_id.isEmpty()) {
+            lock.unlock();
+            LOG_ERROR("AlgoEngine",
+                      QString("Deployment %1: Semi-Auto queue failed — order dropped (NOT sent)").arg(dep_id));
+            if (runner)
+                runner->on_order_rejected(QString(), QStringLiteral("Semi-Auto: failed to queue for approval"));
+            emit error_occurred(dep_id, QStringLiteral("Order could not be queued for approval"));
+            return;
+        }
+        approvals_.insert(pending_id, dep_id);
+        lock.unlock();
+        // Keeps the runner's in-flight guard held until the user acts, so the
+        // deployment cannot stack one approval request per tick.
+        if (runner)
+            runner->on_order_queued_for_approval(pending_id);
+        LOG_WARN("AlgoEngine", QString("Deployment %1: account %2 is in Semi-Auto — order queued for approval (%3)")
+                                   .arg(dep_id, account_id, pending_id));
+        return;
+    }
 
     (void)QtConcurrent::run([self, dep_id, account_id, order, submitted_price]() {
         auto response = fincept::trading::UnifiedTrading::instance().place_order(account_id, order);

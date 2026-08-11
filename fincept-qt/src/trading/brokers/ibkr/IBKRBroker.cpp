@@ -1,5 +1,6 @@
 #include "trading/brokers/ibkr/IBKRBroker.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QDateTime>
@@ -164,26 +165,22 @@ TokenExchangeResponse IBKRBroker::exchange_token(const QString& api_key, const Q
                          {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
 
     if (!resp.success)
-        return {false, "", "", "", "Gateway not reachable at " + gw + ": " + resp.error, ""};
+        return {.success = false, .error = "Gateway not reachable at " + gw + ": " + resp.error};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Gateway: invalid auth status response", ""};
+        return {.success = false, .error = "Gateway: invalid auth status response"};
 
     QJsonObject obj = doc.object();
     bool authenticated = obj.value("authenticated").toBool();
     if (!authenticated) {
-        return {false,
-                "",
-                "",
-                "",
-                "Gateway is running but not authenticated. "
-                "Please log in via the gateway browser interface first.",
-                ""};
+        return {.success = false,
+                .error = "Gateway is running but not authenticated. "
+                         "Please log in via the gateway browser interface first."};
     }
 
     // Store gateway URL as "access_token" — it's the only credential we need at runtime
-    return {true, gw, "", api_key, "", ""};
+    return {.success = true, .access_token = gw, .user_id = api_key};
 }
 
 // ---------- place_order ----------
@@ -212,6 +209,10 @@ OrderPlaceResponse IBKRBroker::place_order(const BrokerCredentials& creds, const
     if (order.stop_price > 0)
         order_obj["auxPrice"] = order.stop_price;
     order_obj["acctId"] = acct;
+    // Customer order id: unique per attempt so a retry after an 8s client-side
+    // timeout is rejected by IBKR as a duplicate rather than creating a second
+    // live order (see BrokerClientOrderId.h).
+    order_obj["cOID"] = make_client_order_ref(40);
 
     QJsonObject body;
     body["orders"] = QJsonArray{order_obj};
@@ -238,10 +239,41 @@ OrderPlaceResponse IBKRBroker::place_order(const BrokerCredentials& creds, const
     if (arr.isEmpty())
         return {false, "", "place_order: empty response"};
 
-    QJsonObject result = arr[0].toObject();
-    QString order_id = result.value("order_id").toString();
-    if (order_id.isEmpty())
-        order_id = QString::number(result.value("order_id").toVariant().toLongLong());
+    // The array branch above used to skip every check the object branch did, so
+    // an error payload or a confirmation prompt was reported as a placed order,
+    // and a missing order_id degraded to the string "0" — a phantom id the algo
+    // engine then tracked as a real position. Validate the element itself.
+    const QJsonObject result = arr[0].toObject();
+
+    const QString elem_err = result.value("error").toString();
+    if (!elem_err.isEmpty())
+        return {false, "", elem_err};
+
+    // A `message` element is IBKR's pre-submit confirmation dialog (order value
+    // warning, missing market data subscription, ...). The order has NOT been
+    // transmitted — it only goes live after POSTing to /iserver/reply/{id}.
+    if (result.contains("message")) {
+        QStringList msgs;
+        for (const QJsonValue& m : result.value("message").toArray())
+            msgs << m.toString();
+        if (msgs.isEmpty() && result.value("message").isString())
+            msgs << result.value("message").toString();
+        return {false, "",
+                QString("place_order requires confirmation and was NOT transmitted: %1")
+                    .arg(msgs.isEmpty() ? QStringLiteral("(no detail)") : msgs.join(" | "))};
+    }
+
+    // order_id may arrive as a string or a JSON number; large ids must not go
+    // through a double->'g'-format round trip, so convert integrally.
+    const QJsonValue oid_val = result.value("order_id");
+    QString order_id;
+    if (oid_val.isString())
+        order_id = oid_val.toString().trimmed();
+    else if (oid_val.isDouble())
+        order_id = QString::number(static_cast<qint64>(oid_val.toDouble()));
+
+    if (order_id.isEmpty() || order_id == QLatin1String("0"))
+        return {false, "", "place_order: broker returned no order id — order not confirmed placed"};
 
     return {true, order_id, ""};
 }

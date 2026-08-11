@@ -1,1 +1,17 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
+
+# ── Auto-update manifest: byte-exact, never line-ending normalised ───────────
+# The updater verifies an Ed25519 detached signature (updates.json.sig) over
+# the bytes of updates.json AS SERVED. Any CRLF↔LF translation by Git — on
+# checkout, on a Windows clone, or via a core.autocrlf setting — changes those
+# bytes and the signature check fails, which the client treats as a tampered
+# manifest and refuses to update. -text pins both files to their committed
+# bytes on every platform. Do not remove.
+updates.json -text
+updates.json.sig -text
+
+# ── Shell scripts must stay LF ───────────────────────────────────────────────
+# .github/scripts/*.sh run on Linux/macOS runners. A CRLF copy committed from
+# a Windows checkout (core.autocrlf=false) fails there with
+# "/usr/bin/env: 'bash\r': No such file or directory".
+*.sh text eol=lf

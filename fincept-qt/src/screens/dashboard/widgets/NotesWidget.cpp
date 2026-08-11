@@ -138,8 +138,8 @@ void NotesWidget::subscribe_events() {
     };
 
     auto& bus = EventBus::instance();
-    event_subs_.append(bus.subscribe("notes.created", on_changed));
-    event_subs_.append(bus.subscribe("notes.deleted", on_changed));
+    event_subs_.append(bus.subscribe(this, "notes.created", on_changed));
+    event_subs_.append(bus.subscribe(this, "notes.deleted", on_changed));
 }
 
 void NotesWidget::unsubscribe_events() {

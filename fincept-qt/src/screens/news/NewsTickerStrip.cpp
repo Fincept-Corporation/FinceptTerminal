@@ -80,6 +80,19 @@ void NewsTickerStrip::resume() {
         scroll_timer_.start();
 }
 
+void NewsTickerStrip::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // Respect an explicit pause() (hover-to-read / edit) — visibility must not
+    // silently override a deliberate pause the user is relying on.
+    if (!paused_ && !entries_.isEmpty())
+        scroll_timer_.start();
+}
+
+void NewsTickerStrip::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    scroll_timer_.stop();
+}
+
 void NewsTickerStrip::paintEvent(QPaintEvent*) {
     if (entries_.isEmpty())
         return;

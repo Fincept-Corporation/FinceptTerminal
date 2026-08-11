@@ -33,7 +33,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     unset(_fincept_sdk_dirs)
 endif()
 
-project(FinceptTerminal VERSION 4.3.0 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 4.4.0 LANGUAGES C CXX)
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -354,14 +354,15 @@ add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 # -DFINCEPT_BUILD_TESTS=ON to compile the Qt Test executables under
 # fincept-qt/tests/. Run via `ctest` in the build directory.
 #
-# STATUS: fincept-qt/tests/ does NOT exist yet — there is no Qt Test target in
-# the repo (no `#include <QTest>` anywhere). Turning this option on currently
-# warns and builds nothing; see the guarded add_subdirectory near the end of
-# this file. Today's automated coverage is the headless `--selftest-*` flags on
+# STATUS: fincept-qt/tests/ now exists — Qt Test suites for tst_broker_modify_fields,
+# tst_result and tst_order_validator. Each target compiles ONLY the sources it
+# needs (see tests/README.md); the app is deliberately NOT split into an OBJECT
+# library, because a main-source-list restructure re-batches the unity build and
+# can break CI in ways that never reproduce on the unity-OFF win-dev preset.
+# These complement — they do not replace — the headless `--selftest-*` flags on
 # the main binary (DockLayout, ToolSelfTest, PaperTrading, PortfolioReplication,
 # PortfolioMonitor, UniverseScan, FnoAlgo, Arena, Feeds), which CI runs in
-# .github/workflows/build-cpp.yml. Adding a real unit-test tree here is tracked
-# in AUDIT_2026-07-25.md §E.
+# .github/workflows/build-cpp.yml. Original tracking item: AUDIT_2026-07-25.md §E.
 option(FINCEPT_BUILD_TESTS "Build the Fincept Terminal test suite" OFF)
 
 # ── Alpha Arena live-mode geofencing ─────────────────────────────────────────
@@ -1026,6 +1027,7 @@ set(STORAGE_SOURCES
     src/storage/sqlite/migrations/v048_instruments_exchange_unique.cpp
     src/storage/sqlite/migrations/v049_order_baskets.cpp
     src/storage/sqlite/migrations/v050_alpha_arena_rewrite.cpp
+    src/storage/sqlite/migrations/v051_drop_duplicate_indexes.cpp
 
     # Historical OHLCV data store (Historify, Phase 3 §13)
     src/storage/HistoricalDataStore.cpp
@@ -1484,6 +1486,7 @@ set(UI_SOURCES
     src/ui/widgets/ConfettiOverlay.cpp
     src/ui/widgets/SpeedSparkline.cpp
     src/ui/widgets/LanguageSwitcher.cpp
+    src/ui/widgets/EnterprisePromo.cpp
     src/ui/tables/DataTable.cpp
     # Selftest for the header-only LiveTableModel/LiveTableDelegate. Also the
     # only TU that includes them, so it is their compile check — a header with
@@ -2549,6 +2552,11 @@ set_source_files_properties(
     src/storage/sqlite/migrations/v047_algo_multileg_trades.cpp
     src/storage/sqlite/migrations/v048_instruments_exchange_unique.cpp
     src/storage/sqlite/migrations/v050_alpha_arena_rewrite.cpp
+    # v051: excluded from unity too. Not because it collides (its helper is
+    # deliberately named sql_v051), but because a file that JOINS a unity batch
+    # re-batches every source after it — which can collide two files that were
+    # previously fine, and only on the unity-ON release/CI presets.
+    src/storage/sqlite/migrations/v051_drop_duplicate_indexes.cpp
     # Polymarket screen files — each defines static fmt_* helpers in same namespace
     src/screens/polymarket/PolymarketScreen.cpp
     src/screens/polymarket/PolymarketCommandBar.cpp
@@ -4222,6 +4230,13 @@ endif()
 # clear message instead, so turning the option on is diagnostic rather than fatal.
 if(FINCEPT_BUILD_TESTS)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+        # enable_testing() MUST be called from the top-level directory. Calling
+        # it only inside tests/ writes a CTestTestfile.cmake under build/tests/
+        # but none at the build root, so `ctest --test-dir build` fails with
+        # "Cannot find file: .../CTestTestfile.cmake" even though the test
+        # targets built fine. Scoped inside the option so a normal build still
+        # generates no CTest machinery at all.
+        enable_testing()
         add_subdirectory(tests)
     else()
         message(WARNING

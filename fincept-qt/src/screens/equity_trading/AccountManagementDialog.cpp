@@ -1279,9 +1279,22 @@ void AccountManagementDialog::on_connect_zerodha_browser() {
         }
     });
 
+    // Carry the RedirectServer's CSRF nonce into the authorize URL, then arm the
+    // gate. Until this happens the nonce check is inert and RedirectServer logs a
+    // warning on every login (see RedirectServer.h, gate 3).
+    //
+    // Kite does NOT echo an arbitrary `state` query parameter. Its login flow
+    // appends whatever is passed in `redirect_params` — a URL-encoded query
+    // string — to the registered redirect URL, so the nonce has to travel that
+    // way to come back as "...&state=<nonce>".
+    QString login_url = trading::ZerodhaBroker::kite_login_url(api_key);
+    login_url += QStringLiteral("&redirect_params=") +
+                 QString::fromLatin1(QUrl::toPercentEncoding(QStringLiteral("state=") + z_redirect_server_->state()));
+    z_redirect_server_->set_require_state(true);
+
     z_status_->setText(tr("Waiting for browser login on port %1 (120s)...").arg(z_redirect_server_->port()));
     z_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
-    QDesktopServices::openUrl(QUrl(trading::ZerodhaBroker::kite_login_url(api_key)));
+    QDesktopServices::openUrl(QUrl(login_url));
 }
 
 void AccountManagementDialog::on_connect_zerodha_manual_paste() {
@@ -1562,9 +1575,23 @@ void AccountManagementDialog::on_connect_fyers_browser() {
     });
 
     const QString redirect_uri = QStringLiteral("http://127.0.0.1:%1/").arg(kFyersPort);
+
+    // Fyers echoes `state` back on the redirect, so route the RedirectServer's
+    // CSRF nonce through it and arm the gate (see RedirectServer.h, gate 3).
+    // fyers_login_url() stamps a timestamp into `state` by default — it MUST be
+    // replaced, not appended to: RedirectServer rejects any echoed state that
+    // isn't the nonce, so a leftover timestamp fails the real callback.
+    QUrl login_url(trading::FyersBroker::fyers_login_url(client_id, redirect_uri));
+    QUrlQuery login_query(login_url);
+    login_query.removeAllQueryItems(QStringLiteral("state"));
+    login_query.addQueryItem(QStringLiteral("state"),
+                             QString::fromLatin1(QUrl::toPercentEncoding(f_redirect_server_->state())));
+    login_url.setQuery(login_query);
+    f_redirect_server_->set_require_state(true);
+
     f_status_->setText(tr("Waiting for browser login on port %1 (120s)...").arg(kFyersPort));
     f_status_->setStyleSheet(QString("color:%1;").arg(colors::AMBER()));
-    QDesktopServices::openUrl(QUrl(trading::FyersBroker::fyers_login_url(client_id, redirect_uri)));
+    QDesktopServices::openUrl(login_url);
 }
 
 void AccountManagementDialog::on_connect_fyers_manual_paste() {

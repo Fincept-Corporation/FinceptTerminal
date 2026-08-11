@@ -1,5 +1,7 @@
 #include "trading/brokers/flattrade/FlattradeBroker.h"
+#include "trading/brokers/BrokerModifyFields.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 
@@ -117,7 +119,7 @@ TokenExchangeResponse FlattradeBroker::exchange_token(const QString& api_key, co
     QString request_code = auth_code.trimmed();
 
     if (apikey.isEmpty() || api_secret.isEmpty() || request_code.isEmpty())
-        return {false, "", "", "", "Flattrade login: api_key, api_secret and request_code are required", ""};
+        return {.success = false, .error = "Flattrade login: api_key, api_secret and request_code are required"};
 
     QString security_hash = QString(
         QCryptographicHash::hash((apikey + request_code + api_secret).toUtf8(), QCryptographicHash::Sha256).toHex());
@@ -131,24 +133,24 @@ TokenExchangeResponse FlattradeBroker::exchange_token(const QString& api_key, co
     auto resp = http.post_json(AUTH_URL, payload, {{"Content-Type", "application/json"}});
 
     if (!resp.success)
-        return {false, "", "", "", "Login failed: " + resp.error, ""};
+        return {.success = false, .error = "Login failed: " + resp.error};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Login: invalid response", ""};
+        return {.success = false, .error = "Login: invalid response"};
 
     QJsonObject obj = doc.object();
     if (obj.value("stat").toString() != "Ok")
-        return {false, "", "", "", obj.value("emsg").toString("Login failed"), ""};
+        return {.success = false, .error = obj.value("emsg").toString("Login failed")};
 
     QString token = obj.value("token").toString();
     if (token.isEmpty())
-        return {false, "", "", "", "Login: no token in response", ""};
+        return {.success = false, .error = "Login: no token in response"};
 
     // Flattrade tokens lapse at the daily reset; re-auth needs a fresh web
     // request_code, so there is no silent refresh. Hint only.
     const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-    return {true, token, "", uid, extra, ""};
+    return {.success = true, .access_token = token, .user_id = uid, .additional_data = extra};
 }
 
 // ---------- place_order ----------
@@ -171,7 +173,10 @@ OrderPlaceResponse FlattradeBroker::place_order(const BrokerCredentials& creds, 
     jdata["trgprc"] = QString::number(order.stop_price, 'f', 2);
     jdata["ret"] = order.validity.isEmpty() ? "DAY" : order.validity;
     jdata["mkt_protection"] = "0";
-    jdata["remarks"] = "fincept";
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
+    jdata["remarks"] = make_client_order_ref(20);
     jdata["ordersource"] = "API";
 
     auto& http = BrokerHttp::instance();
@@ -213,7 +218,8 @@ ApiResponse<QJsonObject> FlattradeBroker::modify_order(const BrokerCredentials& 
     // Only include trigger price for SL/SL-M — trgprc=0 on LMT causes a reject.
     const QString prctyp = jdata["prctyp"].toString();
     if (prctyp == "SL-LMT" || prctyp == "SL-MKT")
-        jdata["trgprc"] = QString::number(mods.value("triggerPrice").toDouble(0), 'f', 2);
+        jdata["trgprc"] = QString::number(
+            modify_fields::number(mods, modify_fields::kTrigger), 'f', 2);
 
     auto& http = BrokerHttp::instance();
     auto resp = http.post_raw(QString("%1/ModifyOrder").arg(BASE), make_body(jdata, creds.access_token),

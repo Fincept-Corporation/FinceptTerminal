@@ -26,7 +26,6 @@ namespace fincept::services {
 // SpeechService's identically-named constants.
 namespace {
 constexpr auto TTS_TAG = "TtsService";
-constexpr int kTtsShutdownTimeoutMs = 1500;
 } // namespace
 
 // ── PythonTtsProvider (base) ─────────────────────────────────────────────────
@@ -111,11 +110,28 @@ class PythonTtsProvider : public TtsProvider {
 
         connect(process_, &QProcess::readyReadStandardOutput, this, &PythonTtsProvider::on_stdout_ready);
         connect(process_, &QProcess::readyReadStandardError, this, &PythonTtsProvider::on_stderr_ready);
-        connect(process_, &QProcess::started, this, [this]() {
-            LOG_INFO(TTS_TAG, QString("Provider[%1]: QProcess::started — pid=%2")
-                                  .arg(name())
-                                  .arg(process_ ? process_->processId() : 0));
-        });
+        // The utterance is piped on stdin from the `started` signal rather than
+        // after a blocking waitForStarted(). speak() is reached straight from the
+        // AI-chat `finished_streaming` handler, i.e. the pure UI thread, so any
+        // wait here freezes the terminal for the whole Python launch (§P1).
+        // `proc` is captured by value so a newer speak() swapping process_ out
+        // from under us can never misroute this write; `this` as the context
+        // object keeps the connection scoped to the provider's lifetime, and
+        // stop() disconnects before tearing the child down.
+        {
+            QProcess* proc = process_;
+            const QByteArray payload = text.toUtf8();
+            connect(process_, &QProcess::started, this, [this, proc, payload]() {
+                LOG_INFO(TTS_TAG,
+                         QString("Provider[%1]: QProcess::started — pid=%2").arg(name()).arg(proc->processId()));
+                const qint64 written = proc->write(payload);
+                proc->closeWriteChannel();
+                LOG_INFO(TTS_TAG, QString("Provider[%1]: wrote %2/%3 bytes to stdin")
+                                      .arg(name())
+                                      .arg(written)
+                                      .arg(payload.size()));
+            });
+        }
         connect(process_, &QProcess::finished, this, &PythonTtsProvider::on_process_finished);
         connect(process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
             LOG_ERROR(TTS_TAG,
@@ -129,35 +145,32 @@ class PythonTtsProvider : public TtsProvider {
         stdout_buffer_.clear();
         LOG_INFO(TTS_TAG,
                  QString("Provider[%1]: launching '%2' '%3' (cwd='%4')").arg(name(), python_exe, script, scripts_dir));
+        // Fire-and-forget: a failed launch arrives as errorOccurred(FailedToStart),
+        // which already emits error_occurred() and calls stop().
         process_->start(python_exe, {script});
-
-        if (!process_->waitForStarted(2000)) {
-            LOG_ERROR(TTS_TAG, "TTS process did not start within 2 s");
-            emit error_occurred(QStringLiteral("TTS process failed to start"));
-            stop();
-            return;
-        }
-
-        // Pipe text on stdin and close so the child sees EOF.
-        const QByteArray payload = text.toUtf8();
-        const qint64 written = process_->write(payload);
-        process_->closeWriteChannel();
-        LOG_INFO(TTS_TAG,
-                 QString("Provider[%1]: wrote %2/%3 bytes to stdin").arg(name()).arg(written).arg(payload.size()));
     }
 
     void stop() override {
         if (!process_)
             return;
 
-        disconnect(process_, nullptr, this, nullptr);
-        if (process_->state() != QProcess::NotRunning) {
-            process_->kill();
-            process_->waitForFinished(kTtsShutdownTimeoutMs);
-        }
-        process_->deleteLater();
+        // Fire-and-forget teardown (§P1) — no waitForFinished on the UI thread.
+        // Detach the child from us FIRST so its eventual exit cannot re-enter
+        // on_process_finished and emit a second speaking_finished, then let it
+        // reap itself once the OS reports the exit. A bare deleteLater() would
+        // risk ~QProcess seeing a still-Running state, and that destructor does
+        // its own blocking waitForFinished() — the very thing we're removing.
+        QProcess* dying = process_;
         process_ = nullptr;
         stdout_buffer_.clear();
+        disconnect(dying, nullptr, this, nullptr);
+        if (dying->state() == QProcess::NotRunning) {
+            dying->deleteLater();
+        } else {
+            connect(dying, &QProcess::finished, dying, &QObject::deleteLater);
+            connect(dying, &QProcess::errorOccurred, dying, &QObject::deleteLater);
+            dying->kill();
+        }
 
         const bool was_active = active_.exchange(false, std::memory_order_acq_rel);
         if (was_active) {

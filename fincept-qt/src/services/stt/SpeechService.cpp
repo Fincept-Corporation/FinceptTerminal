@@ -29,7 +29,6 @@
 namespace fincept::services {
 
 static constexpr auto TAG = "SpeechService";
-static constexpr int kShutdownTimeoutMs = 2000;
 
 // ── PythonSttProvider (base) ─────────────────────────────────────────────────
 //
@@ -141,15 +140,23 @@ class PythonSttProvider : public SttProvider {
         if (!process_)
             return;
 
-        disconnect(process_, nullptr, this, nullptr);
-
-        if (process_->state() != QProcess::NotRunning) {
-            process_->kill();
-            process_->waitForFinished(kShutdownTimeoutMs);
-        }
-        process_->deleteLater();
+        // Fire-and-forget teardown (§P1) — stop() is UI-reachable (mic toggle,
+        // fatal-event handler, reload_config), so no waitForFinished here.
+        // Detaching FIRST means the eventual exit cannot re-enter
+        // on_process_finished and emit a second active_changed(false); letting
+        // the child reap itself on `finished` avoids ~QProcess's own blocking
+        // waitForFinished() on a still-Running handle.
+        QProcess* dying = process_;
         process_ = nullptr;
         stdout_buffer_.clear();
+        disconnect(dying, nullptr, this, nullptr);
+        if (dying->state() == QProcess::NotRunning) {
+            dying->deleteLater();
+        } else {
+            connect(dying, &QProcess::finished, dying, &QObject::deleteLater);
+            connect(dying, &QProcess::errorOccurred, dying, &QObject::deleteLater);
+            dying->kill();
+        }
 
         const bool was_active = active_.exchange(false, std::memory_order_acq_rel);
         if (was_active) {

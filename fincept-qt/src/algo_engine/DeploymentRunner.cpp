@@ -27,6 +27,8 @@ using fincept::Database;
 #include <QVariant>
 #include <QtConcurrent>
 
+#include <cmath>
+
 namespace fincept::algo {
 
 DeploymentRunner::DeploymentRunner(const services::algo::AlgoDeployment& deployment,
@@ -104,13 +106,36 @@ void DeploymentRunner::start() {
 }
 
 void DeploymentRunner::pause() {
+    if (!running_.load())
+        return;
     paused_ = true;
+    // Note: the DB status column is deliberately left as 'running'. recover_orphaned()
+    // only resumes rows in ('running','starting','error','crashed'), so persisting
+    // 'paused' would strand the deployment permanently after a restart. Pause is an
+    // in-process state; a restart resumes the deployment.
     emit status_changed(deployment_.id, QStringLiteral("paused"));
     LOG_INFO("AlgoEngine", QString("Deployment %1 paused").arg(deployment_.id));
 }
 
 void DeploymentRunner::resume() {
+    if (!running_.load())
+        return;
     paused_ = false;
+    // No quotes arrive while paused, so last_heartbeat_ms_ is stale — re-stamp it
+    // or the heartbeat immediately flags "no market data in 30s" and errors the
+    // deployment out.
+    last_heartbeat_ms_ = QDateTime::currentMSecsSinceEpoch();
+    // A resume is an explicit human decision to restart a halted deployment, so it
+    // also clears the daily-loss halt (which is otherwise only cleared by the day
+    // rollover in on_heartbeat). Without this, resume() cannot actually resume the
+    // one case that needs it. Logged at WARN because it grants a fresh daily loss
+    // budget for the remainder of the day.
+    if (position_mgr_->is_paused()) {
+        position_mgr_->reset_daily();
+        LOG_WARN("AlgoEngine", QString("Deployment %1: manual resume cleared the daily-loss halt — daily P&L "
+                                       "reset to 0 for the rest of the day")
+                                   .arg(deployment_.id));
+    }
     emit status_changed(deployment_.id, QStringLiteral("running"));
     LOG_INFO("AlgoEngine", QString("Deployment %1 resumed").arg(deployment_.id));
 }
@@ -415,6 +440,23 @@ void DeploymentRunner::evaluate_entry(const QVector<OhlcvCandle>& candles) {
             return;
         }
 
+        // Order-value ceiling. The equity path below checks this per order; the
+        // basket has no single (qty × price), so sum the legs' notional and run the
+        // same limit. Without this the highest-notional orders the engine places —
+        // multi-leg NFO baskets — were the only ones with no ceiling at all. Checked
+        // before pinning so a rejected basket leaves no leg subscriptions behind.
+        double basket_notional = 0;
+        for (const auto& l : legs)
+            basket_notional += std::abs(l.price * l.quantity);
+        if (!position_mgr_->validate_order_notional(basket_notional)) {
+            LOG_WARN("AlgoEngine", QString("Deployment %1: F&O basket notional %2 (%3 legs) exceeds the max order "
+                                           "value, skipping entry")
+                                       .arg(deployment_.id)
+                                       .arg(basket_notional, 0, 'f', 2)
+                                       .arg(legs.size()));
+            return;
+        }
+
         // Pin the resolved leg symbols into the live WS subscription window so
         // they stay fresh for mark-to-market during the life of the position.
         QStringList syms;
@@ -556,6 +598,51 @@ void DeploymentRunner::on_order_rejected(const QString& /*broker_order_id*/, con
     LOG_ERROR("AlgoEngine", QString("Deployment %1: order rejected: %2").arg(deployment_.id, reason));
 }
 
+void DeploymentRunner::on_order_queued_for_approval(const QString& approval_id) {
+    if (pending_orders_.isEmpty() || approval_id.isEmpty())
+        return;
+    pending_orders_.first().awaiting_approval = true;
+    pending_orders_.first().approval_id = approval_id;
+    LOG_WARN("AlgoEngine", QString("Deployment %1: account is in Semi-Auto — order queued for approval (%2), NOT sent")
+                               .arg(deployment_.id, approval_id));
+    emit_live_snapshot(pending_orders_.first().signal.price, QStringLiteral("Awaiting approval in Action Center"));
+}
+
+void DeploymentRunner::on_approval_resolved(const QString& approval_id, bool approved, const QString& broker_order_id,
+                                            const QString& detail) {
+    if (approval_id.isEmpty())
+        return; // an empty id would match a normal (non-queued) in-flight order
+    int idx = -1;
+    for (int i = 0; i < pending_orders_.size(); ++i) {
+        if (pending_orders_[i].approval_id == approval_id) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0) {
+        // Already purged by the heartbeat (ActionCenter has expired it too). Do
+        // NOT fall through to on_order_filled/on_order_rejected — they resolve the
+        // FIRST pending order, which by now may be an unrelated later signal.
+        LOG_WARN("AlgoEngine", QString("Deployment %1: approval %2 resolved but that order is no longer in flight "
+                                       "— ignored")
+                                   .arg(deployment_.id, approval_id));
+        return;
+    }
+
+    const double price = pending_orders_[idx].signal.price;
+    const double qty = pending_orders_[idx].signal.quantity;
+    pending_orders_[idx].awaiting_approval = false;
+    pending_orders_[idx].approval_id.clear();
+
+    if (approved) {
+        // The broker filled it after approval; mark at the signal's reference price
+        // (market orders carry no price), exactly like the un-gated live path.
+        on_order_filled(broker_order_id, price, qty);
+    } else {
+        on_order_rejected(broker_order_id, detail.isEmpty() ? QStringLiteral("rejected in Action Center") : detail);
+    }
+}
+
 // ── Multi-leg F&O basket fills (P3.4) ───────────────────────────────────────
 // One call per leg from AlgoEngine::execute_basket. Fills accumulate in
 // basket_fills_ / basket_rejected_ until the whole in-flight basket is
@@ -667,21 +754,45 @@ void DeploymentRunner::on_heartbeat() {
         return;
     int64_t now = QDateTime::currentMSecsSinceEpoch();
 
+    // Day rollover: the daily loss limit latches the runner off (is_paused()
+    // gates every entry/exit evaluation). Without this check the latch never
+    // clears, so a "daily" limit halts the deployment for the lifetime of the
+    // process. The heartbeat is the only tick that keeps running while the
+    // runner is latched, so the reset has to live here.
+    if (position_mgr_->reset_daily_if_new_day()) {
+        LOG_INFO("AlgoEngine", QString("Deployment %1: new trading day — daily P&L and the daily-loss halt were reset")
+                                   .arg(deployment_.id));
+        emit_live_snapshot(position_mgr_->metrics().current_price,
+                           QStringLiteral("New trading day — daily loss limit reset"));
+    }
+
     // Keep the DB metrics row fresh (~5s) so the summary cards and any structural
     // rebuild show current values instead of stale zeros.
     persist_metrics();
 
     // Purge orders that never reported a fill/rejection so a lost ack doesn't
     // permanently block new signals (the in-flight guard in emit_order_signal).
+    // An order parked in the Semi-Auto approval queue is NOT a lost ack — it is
+    // waiting on a human — so it keeps the guard until ActionCenter's own TTL
+    // (kPendingOrderTtlMinutes = 15) has certainly expired it. Purging it at 60s
+    // would let the runner re-signal and stack duplicate approval requests.
     for (int i = pending_orders_.size() - 1; i >= 0; --i) {
-        if (now - pending_orders_[i].submitted_ms > 60000) {
-            LOG_WARN("AlgoEngine", QString("Deployment %1: pending order timed out (no fill/reject in 60s), clearing")
-                                       .arg(deployment_.id));
+        const int64_t age = now - pending_orders_[i].submitted_ms;
+        const int64_t limit = pending_orders_[i].awaiting_approval ? 16 * 60000 : 60000;
+        if (age > limit) {
+            LOG_WARN("AlgoEngine", QString("Deployment %1: pending order timed out (no %2 in %3s), clearing")
+                                       .arg(deployment_.id,
+                                            pending_orders_[i].awaiting_approval ? QStringLiteral("approval")
+                                                                                 : QStringLiteral("fill/reject"))
+                                       .arg(limit / 1000));
             pending_orders_.removeAt(i);
         }
     }
 
-    if (now - last_heartbeat_ms_ > 30000) {
+    // A paused runner drops every quote by design, so the stale-data watchdog must
+    // not treat that silence as a broker outage (it would error the deployment out
+    // 30s into any pause, and AlgoEngine tears the runner down on 'error').
+    if (!paused_.load() && now - last_heartbeat_ms_ > 30000) {
         const QString msg = deployment_.broker_id.isEmpty()
                                 ? QStringLiteral("No market data in 30s — no broker is attached to this deployment.")
                                 : QString("No market data from broker '%1' in 30s — check the broker is connected "

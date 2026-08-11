@@ -6,8 +6,13 @@ Imports the openalgo broker streaming adapters directly, captures their
 ZMQ output, and re-emits normalized JSON lines to stdout.
 
 Usage:
-  python broker_ws_bridge.py <broker> <api_key> <access_token> \
-      [user_id] [--symbols SYM:EXCH:TOKEN ...]
+  BROKER_API_KEY=... BROKER_ACCESS_TOKEN=... [BROKER_FEED_TOKEN=...] \
+      python broker_ws_bridge.py <broker> "" "" [user_id] \
+      [--symbols SYM:EXCH:TOKEN ...]
+
+Credentials come from the environment — NEVER from argv, which is readable by
+any process running as the same user. The positional api_key/access_token slots
+remain only as a legacy fallback and are passed empty by the terminal.
 
 Where TOKEN is the broker-specific instrument token (int).
 If no TOKEN is known, pass 0 and we fall back to a symbol-only subscribe.
@@ -384,24 +389,58 @@ def _create_adapter(broker: str):
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("broker",       help="Broker name e.g. zerodha")
-    p.add_argument("api_key",      help="API key")
-    p.add_argument("access_token", help="Access/auth token")
+    # Credentials are read from the environment (see read_credentials). These
+    # positionals only exist so an older caller that still passes them keeps
+    # working; the current caller sends empty placeholders.
+    p.add_argument("api_key",      nargs="?", default="", help="DEPRECATED — use BROKER_API_KEY")
+    p.add_argument("access_token", nargs="?", default="", help="DEPRECATED — use BROKER_ACCESS_TOKEN")
     p.add_argument("user_id",      nargs="?", default="", help="User/client ID")
     p.add_argument("--feed-token", default="", dest="feed_token",
-                   help="Separate feed token (AngelOne feedToken)")
+                   help="DEPRECATED — use BROKER_FEED_TOKEN")
     p.add_argument("--symbols",    nargs="*", default=[],
                    help="Symbols as SYMBOL:EXCHANGE[:TOKEN] e.g. RELIANCE:NSE:738561")
     return p.parse_args()
 
 
+def read_credentials(args):
+    """Resolve broker credentials: environment first, argv as legacy fallback.
+
+    Credentials must NOT travel in argv. A process command line is readable by
+    any process running as the same user (Win32_Process.CommandLine via WMI on
+    Windows without elevation, /proc/<pid>/cmdline on Linux) and is captured by
+    crash dumps and EDR telemetry. These tokens stay valid for the whole
+    trading session, so leaking them defeats the terminal's encrypted
+    credential storage completely.
+
+    Returns (api_key, access_token, feed_token, user_id).
+    """
+    api_key      = os.environ.get("BROKER_API_KEY", "")      or args.api_key
+    access_token = os.environ.get("BROKER_ACCESS_TOKEN", "") or args.access_token
+    feed_token   = (os.environ.get("BROKER_FEED_TOKEN", "")
+                    or args.feed_token
+                    or access_token)  # AngelOne-style separate feed token; else reuse
+    # user_id is a client code, not a secret. Falling back to api_key here (in
+    # the child process) keeps the key out of the parent's argv.
+    user_id      = os.environ.get("BROKER_USER_ID", "") or args.user_id or api_key
+
+    if not os.environ.get("BROKER_ACCESS_TOKEN") and args.access_token:
+        print("WARNING: broker credentials received via argv — they are readable "
+              "by any process running as this user. Pass BROKER_API_KEY / "
+              "BROKER_ACCESS_TOKEN / BROKER_FEED_TOKEN in the environment.",
+              file=sys.stderr)
+
+    return api_key, access_token, feed_token, user_id
+
+
 def main():
     args = parse_args()
 
-    broker       = args.broker.lower()
-    api_key      = args.api_key
-    access_token = args.access_token
-    user_id      = args.user_id or api_key
-    feed_token   = args.feed_token or access_token  # fallback to access_token if not provided
+    broker = args.broker.lower()
+    api_key, access_token, feed_token, user_id = read_credentials(args)
+
+    if not api_key or not access_token:
+        emit_error(broker, "Missing broker credentials (BROKER_API_KEY / BROKER_ACCESS_TOKEN)")
+        sys.exit(1)
 
     # Parse symbol list: "RELIANCE:NSE:738561" → ("RELIANCE","NSE","738561")
     symbols = []

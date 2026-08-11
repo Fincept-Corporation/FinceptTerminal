@@ -41,6 +41,10 @@ namespace {
 
 constexpr qsizetype kMaxRowsRendered = 5000; // safety cap for very large tables
 constexpr qsizetype kMaxHtmlBytes = 10 * 1024 * 1024;
+// The URL is user-configured and the body is buffered whole, so bound both the
+// wait and the size. kMaxHtmlBytes is reused deliberately: a response we would
+// refuse to parse is not worth finishing the download for.
+constexpr int kFetchTimeoutMs = 15000;
 const char* kDefaultUA = "FinceptTerminal/1.0 (compatible; WebScraperWidget)";
 
 // Decode common HTML entities + numeric char refs. Not exhaustive but covers
@@ -188,9 +192,15 @@ WebScraperWidget::WebScraperWidget(const QJsonObject& cfg, QWidget* parent) : Ba
 }
 
 WebScraperWidget::~WebScraperWidget() {
-    if (pending_reply_) {
-        pending_reply_->abort();
-        pending_reply_->deleteLater();
+    // Detach BEFORE aborting. abort() emits finished() synchronously, which runs
+    // handle_reply() on this very stack; that slot clears pending_reply_, so the
+    // old `pending_reply_->deleteLater()` here dereferenced a null QPointer.
+    // Clearing first also makes handle_reply() early-return instead of calling
+    // set_loading()/set_status() on a half-destroyed widget.
+    if (QNetworkReply* r = pending_reply_.data()) {
+        pending_reply_.clear();
+        r->abort();
+        r->deleteLater();
     }
 }
 
@@ -338,16 +348,23 @@ void WebScraperWidget::start_fetch() {
         set_status(tr("Invalid URL"), true);
         return;
     }
-    if (pending_reply_) {
-        pending_reply_->abort();
-        pending_reply_->deleteLater();
+    // Same detach-before-abort ordering as the destructor: abort() delivers
+    // finished() synchronously and handle_reply() clears pending_reply_, so
+    // touching it after the abort was a null dereference.
+    if (QNetworkReply* r = pending_reply_.data()) {
         pending_reply_.clear();
+        r->abort();
+        r->deleteLater();
     }
 
     set_loading(true);
     set_status(tr("Fetching…"));
 
     QNetworkRequest req(url);
+    // Without a timeout a slow or half-open endpoint leaves pending_reply_ set
+    // forever, and on_auto_refresh_tick() skips while it is set — so one stuck
+    // fetch permanently disables this widget's auto-refresh.
+    req.setTransferTimeout(kFetchTimeoutMs);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     req.setHeader(QNetworkRequest::UserAgentHeader,
                   user_agent_.isEmpty() ? QString::fromLatin1(kDefaultUA) : user_agent_);
@@ -357,7 +374,20 @@ void WebScraperWidget::start_fetch() {
     for (auto it = headers_.cbegin(); it != headers_.cend(); ++it)
         req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
 
-    pending_reply_ = net_->get(req);
+    QNetworkReply* reply = net_->get(req);
+    pending_reply_ = reply;
+
+    // The whole body is buffered in memory, and the URL is user-configured, so
+    // an oversized endpoint would inflate process RSS without bound. Abort as
+    // soon as either the advertised or the received size crosses the cap.
+    connect(reply, &QNetworkReply::downloadProgress, reply,
+            [reply](qint64 received, qint64 total) {
+                if (received > kMaxHtmlBytes || total > kMaxHtmlBytes) {
+                    LOG_WARN("WebScraper", QString("Response exceeds %1 bytes — aborting")
+                                               .arg(kMaxHtmlBytes));
+                    reply->abort();
+                }
+            });
 }
 
 void WebScraperWidget::handle_reply(QNetworkReply* reply) {

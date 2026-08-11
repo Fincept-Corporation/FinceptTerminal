@@ -28,11 +28,11 @@ class AboutScreen : public QWidget {
     bool check_in_progress_ = false;
     QLabel* copyright_ = nullptr;
 
-    // License panels
+    // Edition panels — open-source licence vs the Enterprise product
     QLabel* oss_header_ = nullptr;
     QList<QLabel*> oss_bullets_;
-    QLabel* commercial_header_ = nullptr;
-    QList<QLabel*> commercial_bullets_;
+    QLabel* enterprise_header_ = nullptr;
+    QList<QLabel*> enterprise_bullets_;
 
     // Diagnostics
     QLabel* diag_header_ = nullptr;

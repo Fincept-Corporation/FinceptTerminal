@@ -637,7 +637,12 @@ void StorageSection::build_ui() {
                 }
             }
 
-            QSqlQuery query(use_cache ? CacheDatabase::instance().raw_db() : Database::instance().raw_db());
+            // Go through connection(), not raw_db(): raw_db() hands back the
+            // main-thread connection unconditionally, so it would silently
+            // diverge from the per-thread path if this console ever moved off
+            // the UI thread. connection() returns that same handle here and the
+            // correct per-thread clone anywhere else.
+            QSqlQuery query(use_cache ? CacheDatabase::instance().connection() : Database::instance().connection());
             if (!query.exec(sql)) {
                 sql_status_->setText(tr("Error: %1").arg(query.lastError().text()));
                 sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));

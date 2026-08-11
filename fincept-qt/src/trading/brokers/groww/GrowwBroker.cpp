@@ -1,5 +1,6 @@
 #include "trading/brokers/groww/GrowwBroker.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 
@@ -224,23 +225,23 @@ TokenExchangeResponse GrowwBroker::exchange_token(const QString& api_key, const 
     auto resp = BrokerHttp::instance().post_json("https://api.groww.in/v1/token/api/access", body, headers);
 
     if (!resp.success)
-        return {false, "", "", "", checked_error(resp, "Network error"), ""};
+        return {.success = false, .error = checked_error(resp, "Network error")};
 
     QString token = resp.json["token"].toString();
     if (token.isEmpty())
-        return {false, "", "", "", checked_error(resp, "No token in response"), ""};
+        return {.success = false, .error = checked_error(resp, "No token in response")};
 
     // Groww daily access tokens are minted purely from the api_key + api_secret
     // (checksum flow) — both are stored, so the session can be silently
     // re-minted without any user interaction.
     const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-    return {true, token, "", "", extra, ""};
+    return {.success = true, .access_token = token, .additional_data = extra};
 }
 
 // Silent refresh = re-mint the daily token from the stored api_key + api_secret.
 TokenExchangeResponse GrowwBroker::refresh_session(const BrokerCredentials& creds) {
     if (creds.api_key.isEmpty() || creds.api_secret.isEmpty())
-        return {false, "", "", "", "", "Groww silent refresh requires stored API key and secret"};
+        return {.success = false, .error = "Groww silent refresh requires stored API key and secret"};
     return exchange_token(creds.api_key, creds.api_secret, QString());
 }
 
@@ -260,6 +261,10 @@ OrderPlaceResponse GrowwBroker::place_order(const BrokerCredentials& creds, cons
     body["product"] = groww_enum_map().product_or(order.product_type, "CNC");
     body["order_type"] = groww_enum_map().order_type_or(order.order_type, "MARKET");
     body["transaction_type"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Groww requires 8-20 alphanumeric chars.
+    body["order_reference_id"] = make_client_order_ref(20);
 
     if (order.order_type != OrderType::Market)
         body["price"] = order.price;
@@ -549,6 +554,11 @@ ApiResponse<QVector<BrokerPosition>> GrowwBroker::get_positions(const BrokerCred
             pos.pnl = p["realised_pnl"].toDouble();
             pos.product_type = p["product"].toString();
             pos.pnl_pct = 0.0;
+            // credit - debit carries the sign, but PortfolioReplicationService
+            // takes fabs() of quantity and reads direction from `side` alone —
+            // leaving it empty replicated every short as a long and inverted
+            // its P&L.
+            pos.side = qty > 0 ? "LONG" : "SHORT";
 
             SymbolRef ref;
             ref.orig = pos.symbol;

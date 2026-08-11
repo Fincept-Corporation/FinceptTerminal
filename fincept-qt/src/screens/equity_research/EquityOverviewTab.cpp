@@ -35,6 +35,28 @@ static constexpr int FONT_VAL = 13;   // value labels
 static constexpr int FONT_TITLE = 12; // panel titles
 static constexpr int FONT_DESC = 12;  // description text
 
+namespace {
+
+// The inline error banner is owned by the content layout rather than by a
+// member pointer (the tab's header is out of scope for this change), so it is
+// addressed by object name.
+constexpr const char* kErrorBannerName = "overviewErrorBanner";
+constexpr const char* kErrorMessageName = "overviewErrorMessage";
+constexpr const char* kRetryButtonName = "overviewRetryButton";
+
+/// Show the inline error banner with `message`, or hide it when `message` is
+/// empty. Modelled on MarketPanel::show_error + its [RETRY] affordance.
+void set_overview_error(QWidget* tab, const QString& message) {
+    auto* banner = tab->findChild<QFrame*>(QLatin1String(kErrorBannerName));
+    if (!banner)
+        return;
+    if (auto* label = tab->findChild<QLabel*>(QLatin1String(kErrorMessageName)))
+        label->setText(message);
+    banner->setVisible(!message.isEmpty());
+}
+
+} // namespace
+
 // Panel + row helpers live on the class so they can register the title and
 // key labels with the per-instance translation map. Each call site passes a
 // stable English source string declared via QT_TR_NOOP so lupdate sees it.
@@ -283,14 +305,19 @@ EquityOverviewTab::EquityOverviewTab(QWidget* parent) : QWidget(parent) {
             &EquityOverviewTab::on_historical_loaded);
     // Overview waits on three legs (quote / info / historical) and only hides the
     // overlay on success, so any one failing left "LOADING OVERVIEW…" spinning
-    // over the tab with no way to dismiss it.
+    // over the tab with no way to dismiss it. Hiding the overlay fixed the spin
+    // but discarded the reason, leaving a blank tab that explained nothing — so
+    // render the message inline with a retry, the way MarketPanel does.
     connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
-            [this](const QString& ctx, const QString&) {
-                if (!loading_overlay_)
+            [this](const QString& ctx, const QString& message) {
+                if (ctx != QLatin1String("Quote") && ctx != QLatin1String("Info") &&
+                    ctx != QLatin1String("Historical"))
                     return;
-                if (ctx == QLatin1String("Quote") || ctx == QLatin1String("Info") ||
-                    ctx == QLatin1String("Historical"))
+                if (loading_overlay_)
                     loading_overlay_->hide_loading();
+                const QString detail = message.trimmed();
+                set_overview_error(this, detail.isEmpty() ? tr("%1 data could not be loaded.").arg(ctx)
+                                                          : tr("%1 data could not be loaded: %2").arg(ctx, detail));
             });
 }
 
@@ -299,6 +326,7 @@ void EquityOverviewTab::set_symbol(const QString& symbol) {
         return;
     current_symbol_ = symbol;
     info_loaded_ = quote_loaded_ = historical_loaded_ = false;
+    set_overview_error(this, QString()); // drop the previous symbol's failure
     loading_overlay_->show_loading(tr("LOADING OVERVIEW…"));
 }
 
@@ -321,6 +349,37 @@ void EquityOverviewTab::build_ui() {
     auto* vl = new QVBoxLayout(content);
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
+
+    // ── Inline error banner (hidden until a load leg fails) ───────────────────
+    // Built from make_panel_/add_row_ so it inherits the tab's panel styling and
+    // registers its title + key with i18n_labels_ for retranslation; the retry
+    // button picks up the global QSS QPushButton rule. It sits above the panels
+    // rather than replacing them, so a partial load (quote arrived, history
+    // failed) still shows the data that did land.
+    auto* error_banner = make_panel_(QT_TR_NOOP("DATA UNAVAILABLE"), ui::colors::NEGATIVE);
+    error_banner->setObjectName(QLatin1String(kErrorBannerName));
+    auto* error_msg = add_row_(error_banner, QT_TR_NOOP("REASON"), ui::colors::NEGATIVE);
+    error_msg->setObjectName(QLatin1String(kErrorMessageName));
+    error_msg->setWordWrap(true); // service messages are full sentences
+    error_msg->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+    auto* retry_btn = new QPushButton(tr("[RETRY]"));
+    retry_btn->setObjectName(QLatin1String(kRetryButtonName));
+    retry_btn->setCursor(Qt::PointingHandCursor);
+    retry_btn->setAccessibleName(tr("Retry loading the overview tab"));
+    connect(retry_btn, &QPushButton::clicked, this, [this]() {
+        if (current_symbol_.isEmpty())
+            return;
+        set_overview_error(this, QString());
+        info_loaded_ = quote_loaded_ = historical_loaded_ = false;
+        if (loading_overlay_)
+            loading_overlay_->show_loading(tr("LOADING OVERVIEW…"));
+        services::equity::EquityResearchService::instance().load_symbol(current_symbol_, current_period_);
+    });
+    static_cast<QVBoxLayout*>(error_banner->layout())->addWidget(retry_btn, 0, Qt::AlignLeft);
+
+    error_banner->setVisible(false);
+    vl->addWidget(error_banner);
 
     auto* top = new QHBoxLayout;
     top->setSpacing(6);
@@ -490,8 +549,10 @@ void EquityOverviewTab::switch_period(QPushButton* btn, const QString& period) {
     active_period_btn_ = btn;
 
     // Reload data with new period
-    if (!current_symbol_.isEmpty())
+    if (!current_symbol_.isEmpty()) {
+        set_overview_error(this, QString()); // the previous period's failure no longer applies
         services::equity::EquityResearchService::instance().load_symbol(current_symbol_, period);
+    }
 }
 
 // ── Column 4: Analyst + 52W + Profitability + Growth ─────────────────────────
@@ -861,6 +922,11 @@ void EquityOverviewTab::changeEvent(QEvent* event) {
 void EquityOverviewTab::retranslateUi() {
     for (auto it = i18n_labels_.constBegin(); it != i18n_labels_.constEnd(); ++it) {
         it.key()->setText(tr(it.value()));
+    }
+    // The error banner's title + key ride the map above; its button does not.
+    if (auto* retry_btn = findChild<QPushButton*>(QLatin1String(kRetryButtonName))) {
+        retry_btn->setText(tr("[RETRY]"));
+        retry_btn->setAccessibleName(tr("Retry loading the overview tab"));
     }
     // Re-render whatever data is already loaded so value labels (which carry
     // localized "N/A" / recommendation badges / currency-formatted numbers)

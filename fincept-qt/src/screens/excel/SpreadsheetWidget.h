@@ -22,6 +22,14 @@ class SpreadsheetItem : public QTableWidgetItem {
     QVariant data(int role) const override;
     void setData(int role, const QVariant& value) override;
 
+    /// Qt clones the table's item prototype whenever the model has to
+    /// materialise a cell that has no item yet (typing into an empty cell,
+    /// pasting past the filled range, drag & drop). The base implementation
+    /// slices back to a plain QTableWidgetItem, which would silently disable
+    /// formula evaluation for that cell — the grid is no longer pre-populated,
+    /// so this is now the common path, not an edge case.
+    QTableWidgetItem* clone() const override;
+
     /// The raw text (may be a formula starting with '=')
     QString raw_text() const { return raw_text_; }
 
@@ -98,6 +106,9 @@ class SpreadsheetWidget : public QWidget {
   private:
     void build_ui(int rows, int cols);
     void setup_headers(int cols);
+    /// Size each column to its widest value (clamped). Measured from the source
+    /// text so formulas don't have to be evaluated just to lay the grid out.
+    void autofit_columns(const QVector<QVector<QString>>& cells);
     void install_shortcuts();
     static QString column_label(int col);
 

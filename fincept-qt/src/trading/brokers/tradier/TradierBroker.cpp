@@ -1,5 +1,6 @@
 #include "trading/brokers/tradier/TradierBroker.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QDateTime>
@@ -94,7 +95,7 @@ QMap<QString, QString> TradierBroker::auth_headers(const BrokerCredentials& cred
 TokenExchangeResponse TradierBroker::exchange_token(const QString& api_key, const QString& api_secret,
                                                     const QString& /*auth_code*/) {
     if (api_key.trimmed().isEmpty())
-        return {false, "", "", "", "Access token is required", ""};
+        return {.success = false, .error = "Access token is required"};
 
     QString env_base = (api_secret.trimmed().toLower() == "sandbox" || api_secret.trimmed().toLower() == "paper")
                            ? "https://sandbox.tradier.com"
@@ -106,17 +107,17 @@ TokenExchangeResponse TradierBroker::exchange_token(const QString& api_key, cons
 
     if (!resp.success) {
         if (resp.status_code == 401)
-            return {false, "", "", "", "[TOKEN_EXPIRED] Access token is invalid or expired", ""};
-        return {false, "", "", "", "Profile fetch failed: " + resp.error, ""};
+            return {.success = false, .error = "[TOKEN_EXPIRED] Access token is invalid or expired"};
+        return {.success = false, .error = "Profile fetch failed: " + resp.error};
     }
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Profile: invalid response", ""};
+        return {.success = false, .error = "Profile: invalid response"};
 
     QJsonObject profile = doc.object().value("profile").toObject();
     if (profile.isEmpty())
-        return {false, "", "", "", "Profile: missing profile object", ""};
+        return {.success = false, .error = "Profile: missing profile object"};
 
     // account may be object (single) or array (multiple) — take first
     QString account_id;
@@ -128,9 +129,9 @@ TokenExchangeResponse TradierBroker::exchange_token(const QString& api_key, cons
     }
 
     if (account_id.isEmpty())
-        return {false, "", "", "", "Profile: could not find account_number", ""};
+        return {.success = false, .error = "Profile: could not find account_number"};
 
-    return {true, api_key, "", account_id, "", ""};
+    return {.success = true, .access_token = api_key, .user_id = account_id};
 }
 
 // ---------- place_order ----------
@@ -150,7 +151,10 @@ OrderPlaceResponse TradierBroker::place_order(const BrokerCredentials& creds, co
         form.addQueryItem("price", QString::number(order.price, 'f', 2));
     if (order.stop_price > 0)
         form.addQueryItem("stop", QString::number(order.stop_price, 'f', 2));
-    form.addQueryItem("tag", "fincept");
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
+    form.addQueryItem("tag", make_client_order_ref(20));
 
     QMap<QString, QString> hdrs = auth_headers(creds);
     hdrs["Content-Type"] = "application/x-www-form-urlencoded";

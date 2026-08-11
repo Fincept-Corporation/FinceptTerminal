@@ -47,6 +47,11 @@ class SecuritySection : public QWidget {
     QLabel* sec_lockout_status_ = nullptr;
     QPushButton* sec_change_pin_btn_ = nullptr;
 
+    /// Grants destructive MCP tools (`mcp/allow_destructive_tools`). Applies
+    /// immediately on toggle — it is a capability grant, not a form field, so
+    /// it deliberately does not wait for "Save Security Settings".
+    QCheckBox* sec_allow_destructive_ = nullptr;
+
     // Change PIN form (shown/hidden dynamically)
     QWidget* sec_change_pin_form_ = nullptr;
     QLineEdit* sec_current_pin_ = nullptr;
@@ -59,6 +64,7 @@ class SecuritySection : public QWidget {
     QLabel* title_pin_ = nullptr;
     QLabel* title_change_ = nullptr;
     QLabel* title_lock_ = nullptr;
+    QLabel* title_ai_tools_ = nullptr;
     QLabel* title_audit_ = nullptr;
     QLabel* audit_note_ = nullptr;
     QPushButton* save_pin_btn_ = nullptr;
@@ -82,6 +88,8 @@ class SecuritySection : public QWidget {
     QLabel* row_timeout_desc_ = nullptr;
     QLabel* row_minimize_lbl_ = nullptr;
     QLabel* row_minimize_desc_ = nullptr;
+    QLabel* row_destructive_lbl_ = nullptr;
+    QLabel* row_destructive_desc_ = nullptr;
 };
 
 } // namespace fincept::screens

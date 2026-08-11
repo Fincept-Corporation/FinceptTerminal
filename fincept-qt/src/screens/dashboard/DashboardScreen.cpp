@@ -1,5 +1,6 @@
 #include "screens/dashboard/DashboardScreen.h"
 
+#include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "screens/dashboard/canvas/AddWidgetDialog.h"
@@ -387,10 +388,23 @@ namespace {
 // so legacy blobs are still decoded (with empty per-item config).
 constexpr quint32 kDashLayoutMagic = 0xDA58A101u;
 constexpr quint32 kDashLayoutVersion = 1;
+
+/// Dynamic-property guard: set when restore_layout() could not *read* the
+/// stored blob (as opposed to reading a genuinely absent/corrupt one). While
+/// it is set, save_layout() refuses to write, because the layout on screen is
+/// the built-in default rather than anything the user arranged — persisting it
+/// would replace their real dashboard. Cleared by the next successful load.
+constexpr const char* kDashLayoutLoadFailedProp = "fincept_dash_layout_load_failed";
 } // namespace
 
 void DashboardScreen::save_layout() {
     save_timer_->stop();
+
+    if (property(kDashLayoutLoadFailedProp).toBool()) {
+        LOG_WARN("Dashboard", "Skipping layout save — the stored layout could not be read this session, so the "
+                              "on-screen default must not overwrite it");
+        return;
+    }
 
     GridLayout layout = canvas_->current_layout();
 
@@ -425,7 +439,39 @@ void DashboardScreen::restore_layout() {
                 if (!self)
                     return;
 
-                if (result.is_err() || result.value().isEmpty()) {
+                if (result.is_err()) {
+                    LOG_ERROR("Dashboard",
+                              QString("settings read failed for 'dashboard_canvas_layout' — rendering the default "
+                                      "layout read-only, leaving the stored layout untouched: %1")
+                                  .arg(QString::fromStdString(result.error())));
+                    // Degrade read-only: the user still gets a usable dashboard,
+                    // but the layout_changed → save_timer_ → set() chain that
+                    // apply_template() is about to trigger is disarmed.
+                    self->setProperty(kDashLayoutLoadFailedProp, true);
+                    self->build_default_layout();
+
+                    // Say so. Suppressing the write stops the saved layout being
+                    // destroyed, but on its own it just swaps one silent failure
+                    // for another: the user sees a default dashboard, rearranges
+                    // it, and none of it persists — with only a LOG_WARN to
+                    // explain why. Reuse the toast this screen already owns.
+                    if (self->notif_toast_) {
+                        fincept::notifications::NotificationRecord rec;
+                        rec.request.title = tr("Dashboard layout unavailable");
+                        rec.request.message = tr("Your saved layout could not be read, so a default is shown. "
+                                                 "Changes will not be saved this session — restart to retry.");
+                        rec.request.level = fincept::notifications::NotifLevel::Warning;
+                        self->notif_toast_->show_notification(rec);
+                    }
+                    return;
+                }
+
+                // The read succeeded, so anything below this point is a genuine
+                // "unset or corrupt" case where writing the default back is the
+                // correct behaviour.
+                self->setProperty(kDashLayoutLoadFailedProp, false);
+
+                if (result.value().isEmpty()) {
                     self->build_default_layout();
                     return;
                 }

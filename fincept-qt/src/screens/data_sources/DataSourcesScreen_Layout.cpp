@@ -98,6 +98,12 @@ void DataSourcesScreen::setup_ui() {
     poll_timer_ = new QTimer(this);
     poll_timer_->setInterval(30000);
     connect(poll_timer_, &QTimer::timeout, this, &DataSourcesScreen::on_poll_timer);
+
+    // Search debounce — 200 ms after the last keystroke, one rebuild.
+    search_debounce_ = new QTimer(this);
+    search_debounce_->setSingleShot(true);
+    search_debounce_->setInterval(200);
+    connect(search_debounce_, &QTimer::timeout, this, &DataSourcesScreen::rebuild_all_views);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

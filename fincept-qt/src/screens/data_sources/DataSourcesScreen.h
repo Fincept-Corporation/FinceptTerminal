@@ -82,6 +82,10 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     void build_category_ladder();
     void build_connector_table();
     void build_connections_table();
+    /// Single entry point for "the filter text changed" — rebuilds every view
+    /// that depends on it. Driven by `search_debounce_`, never called directly
+    /// from a textChanged signal.
+    void rebuild_all_views();
     void update_stats_strip();
     void update_provider_ladder();
     void update_detail_panel();
@@ -177,6 +181,11 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     // ── Timers ────────────────────────────────────────────────────────────────
     QTimer* clock_timer_ = nullptr;
     QTimer* poll_timer_ = nullptr;
+    /// Coalesces keystrokes in either search box into one rebuild. A full
+    /// rebuild walks ~380 connectors and tears down every connection row
+    /// (checkbox + label per row) — doing that per keystroke rebuilt the table
+    /// under the user's cursor mid-word.
+    QTimer* search_debounce_ = nullptr;
 
     // ── State ─────────────────────────────────────────────────────────────────
     enum class ViewMode { Gallery, Connections };

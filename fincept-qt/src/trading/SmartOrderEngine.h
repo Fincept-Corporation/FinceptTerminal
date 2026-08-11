@@ -33,7 +33,13 @@ class SmartOrderEngine {
         qint64 fetched_at_ms = 0;
     };
 
-    QVector<BrokerPosition> get_positions_cached(IBroker* broker, const BrokerCredentials& creds);
+    // Returns the position book, carrying the fetch failure instead of hiding it.
+    // A failed read MUST NOT be seen as a flat book: the caller trades a delta
+    // against it, so an empty-on-error result would buy the target size on top of
+    // a real position (and silently no-op a flatten). Only successful reads are
+    // cached — caching an error response would poison every smart order for the
+    // rest of the TTL.
+    ApiResponse<QVector<BrokerPosition>> get_positions_cached(IBroker* broker, const BrokerCredentials& creds);
 
     double find_current_position(const QVector<BrokerPosition>& positions, const QString& symbol,
                                  const QString& exchange, const QString& product);

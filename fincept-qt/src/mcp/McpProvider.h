@@ -130,6 +130,37 @@ class McpProvider {
     using AuthChecker = std::function<bool(AuthLevel required, bool is_destructive)>;
     void set_auth_checker(AuthChecker checker);
 
+    // ── Destructive-tool capability (fail-closed) ─────────────────────────
+    //
+    // `is_destructive` used to gate nothing on the chat path. The only consumer
+    // was the AuthChecker installed by AgentService, which denies a destructive
+    // tool ONLY when TerminalMcpBridge::is_call_in_progress() is true. The
+    // interactive LLM tool loop calls McpService::execute_openai_function with
+    // no ScopedCallFlags, so that flag was false and every destructive tool
+    // below AuthLevel::Verified executed with no prompt of any kind.
+    //
+    // The gate now fails closed: a tool that declares `is_destructive` is
+    // refused unless destructive capability has been granted for the current
+    // context. Two ways to grant it, and both are explicit:
+    //   1. Per call — the agent bridge's destructive capability token
+    //      (TerminalMcpBridge::destructive_token(), echoed back as
+    //      X-MCP-Allow-Destructive and surfaced via is_destructive_allowed()).
+    //      Reused as-is; this is not a second mechanism.
+    //   2. Per session — set_destructive_allowed(true), persisted as
+    //      `mcp/allow_destructive_tools`. Defaults to false.
+    //
+    // AuthLevel::ExplicitConfirm tools additionally trip the >= Verified
+    // fail-closed branch below and stay refused even with the grant, until the
+    // confirmation modal lands.
+
+    /// Grant/revoke destructive-tool capability for this session. Persists to
+    /// `mcp/allow_destructive_tools` so the choice survives a restart.
+    static void set_destructive_allowed(bool allowed);
+
+    /// True when destructive tools may run in the CURRENT context — i.e. the
+    /// per-call capability token is present, or the session grant is on.
+    static bool destructive_allowed();
+
     /// Run the Phase 6.3 authorization gate for one call WITHOUT executing
     /// anything. Returns std::nullopt when the call may proceed, or a
     /// ready-to-return failure ToolResult when blocked. Shared by
@@ -137,8 +168,15 @@ class McpProvider {
     /// (external tools, gated destructive-by-default) so both paths apply
     /// identical auth/destructive-confirmation rules. `name` is used for
     /// logging and error messages only.
-    std::optional<ToolResult> check_authorization(const QString& name, AuthLevel auth_required,
-                                                  bool is_destructive) const;
+    ///
+    /// `destructive_declared` — true when `is_destructive` comes from the
+    /// tool's own ToolDef. Pass false when the caller is merely applying a
+    /// conservative default to a tool that carries no destructiveness metadata
+    /// (external MCP servers over the wire). Only DECLARED destructive tools
+    /// hit the fail-closed capability gate; undeclared ones stay on the
+    /// checker-only path so user-configured external servers keep working.
+    std::optional<ToolResult> check_authorization(const QString& name, AuthLevel auth_required, bool is_destructive,
+                                                  bool destructive_declared = true) const;
 
     // ── LLM Integration ────────────────────────────────────────────────────
 

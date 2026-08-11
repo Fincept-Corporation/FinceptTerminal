@@ -71,6 +71,12 @@
   </provides>
 
   <releases>
+    <release version="4.4.0" date="2026-08-11">
+      <description>
+        <p>Correctness and safety release. A failed fetch, an unreadable setting or an incomplete option chain now reports an error instead of rendering as a confident number — missing financials show "no data" rather than a solvency verdict, and a quote served from stale cache is marked stale. Risk limits, per-broker order rate limits and the smart/basket order validators are enforced rather than merely configurable.</p>
+        <p>Destructive AI tools are disabled by default and enabled under Settings &gt; Security; live order tools require explicit confirmation. Broker credentials no longer travel on the command line, and the update manifest is verified against a pinned signing key.</p>
+      </description>
+    </release>
     <release version="4.3.0" date="2026-07-25">
       <description>
         <p>MCP long-running tools now run as background jobs the assistant can poll, cancel, and watch progress on, instead of blocking a request for minutes. Oversized tool results are summarised and paged on demand rather than filling the conversation.</p>

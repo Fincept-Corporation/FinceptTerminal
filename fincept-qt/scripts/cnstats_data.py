@@ -148,9 +148,13 @@ def easyquery(m: str = 'QueryData', dbcode: str = 'hgyd', rowcode: str = 'zb',
         if wdcode:
             obj['wdcode'] = wdcode
 
-        # Exact request handling from cnstats
-        requests.packages.urllib3.disable_warnings()
-        response = requests.post(url, data=obj, headers=API_HEADERS, verify=False, timeout=TIMEOUT)
+        # TLS verification is ON. The upstream cnstats snippet this mirrors used
+        # `verify=False` + `disable_warnings()`; that silently accepted any
+        # certificate AND hid the warning, so a MITM could substitute arbitrary
+        # content that we then parse and render as official economic data.
+        # If data.stats.gov.cn ever presents a chain your store lacks, pin the
+        # CA explicitly (verify="/path/to/ca-bundle.pem") — never disable it.
+        response = requests.post(url, data=obj, headers=API_HEADERS, timeout=TIMEOUT)
         response.raise_for_status()
 
         return response.json()

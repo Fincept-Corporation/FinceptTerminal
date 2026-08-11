@@ -235,14 +235,15 @@ void CryptoTradingScreen::refresh_orderbook() {
     if (!initialized_)
         return;
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    const QString symbol = selected_symbol_; // snapshot on the UI thread — see refresh_ticker()
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
-        auto ob = ExchangeService::instance().fetch_orderbook(self->selected_symbol_, OB_MAX_DISPLAY_LEVELS);
+        auto ob = ExchangeService::instance().fetch_orderbook(symbol, OB_MAX_DISPLAY_LEVELS);
         QMetaObject::invokeMethod(
             self,
-            [self, ob]() {
-                if (!self)
+            [self, symbol, ob]() {
+                if (!self || self->selected_symbol_ != symbol)
                     return;
                 self->orderbook_->set_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
                 self->bottom_panel_->set_depth_data(ob.bids, ob.asks, ob.spread, ob.spread_pct);
@@ -309,10 +310,11 @@ void CryptoTradingScreen::refresh_watchlist() {
     if (!initialized_)
         return;
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    const QStringList symbols = watchlist_symbols_; // snapshot on the UI thread — see refresh_ticker()
+    (void)QtConcurrent::run([self, symbols]() {
         if (!self)
             return;
-        auto tickers = ExchangeService::instance().fetch_tickers(self->watchlist_symbols_);
+        auto tickers = ExchangeService::instance().fetch_tickers(symbols);
         QMetaObject::invokeMethod(
             self,
             [self, tickers]() {

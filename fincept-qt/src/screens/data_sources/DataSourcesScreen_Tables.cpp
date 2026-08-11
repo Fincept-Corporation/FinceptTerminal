@@ -27,6 +27,7 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -115,6 +116,22 @@ void DataSourcesScreen::build_connector_table() {
         return;
     }
 
+    // Provider → {total saved, enabled}. Built once here: the per-row calls to
+    // total_connections_for_provider / enabled_connections_for_provider were two
+    // full linear scans of connections_cache_ per surviving row, i.e. O(rows ×
+    // connections) on every keystroke.
+    QHash<QString, QPair<int, int>> conn_counts;
+    conn_counts.reserve(connections_cache_.size());
+    for (const auto& ds : connections_cache_) {
+        const QString key = normalized_provider_key(ds);
+        if (key.isEmpty())
+            continue;
+        auto& entry = conn_counts[key];
+        ++entry.first;
+        if (ds.enabled)
+            ++entry.second;
+    }
+
     {
         QSignalBlocker blocker(connector_table_);
         connector_table_->clearSpans();
@@ -122,8 +139,9 @@ void DataSourcesScreen::build_connector_table() {
 
         for (int row = 0; row < filtered.size(); ++row) {
             const auto& cfg = filtered[row];
-            const int total_saved = total_connections_for_provider(connections_cache_, cfg.id);
-            const int live_saved = enabled_connections_for_provider(connections_cache_, cfg.id);
+            const auto counts = conn_counts.value(cfg.id);
+            const int total_saved = counts.first;
+            const int live_saved = counts.second;
 
             // Col 0: code badge
             auto* code_item = make_item(connector_code(cfg), QColor(cfg.color), Qt::AlignCenter);

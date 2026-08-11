@@ -16,12 +16,16 @@
 // helpers consolidate that pattern so each tool file doesn't re-implement
 // it (poorly).
 
+#include "core/logging/Logger.h"
+
+#include <QDeadlineTimer>
 #include <QEventLoop>
 #include <QMetaObject>
 #include <QMutex>
 #include <QObject>
 #include <QPointer>
 #include <QThread>
+#include <QTimer>
 #include <QWaitCondition>
 
 #include <functional>
@@ -144,8 +148,24 @@ void run_async_callback_sync(QObject* target, Start&& start, OnDone&& on_done, i
 // This is the pattern actually used by the existing fixed code in
 // NewsTools::fetch_articles_sync. We just generalize it so each tool file
 // doesn't re-roll its own QMutex/QWaitCondition.
+//
+// TIMEOUT (both paths). `signal_done` only ever fires from inside the service
+// callback, so any service that drops its callback on an error branch wedged
+// the waiter forever: the cross-thread path sat in an unbounded
+// `cv.wait(&m)`, the same-thread path in an unbounded `loop.exec()`. With 20+
+// call sites that is a permanent worker-thread leak or a frozen UI. Both paths
+// are now bounded and log an error on expiry, so a dropped callback degrades
+// to an error instead of a hang.
+//
+// Residual hazard, deliberately accepted: callers write results into their own
+// stack via a `[&]` capture inside `start`. If the callback arrives AFTER the
+// timeout, that write lands on an unwound frame. The bound is set high enough
+// (120 s) that only a genuinely dropped callback trips it, and an unbounded
+// hang is the worse failure. Do not lower it without auditing the call sites.
+inline constexpr int kAsyncWaitTimeoutMs = 120000;
+
 template <typename Start>
-void run_async_wait(QObject* target, Start&& start) {
+void run_async_wait(QObject* target, Start&& start, int timeout_ms = kAsyncWaitTimeoutMs) {
     struct Wait {
         QMutex m;
         QWaitCondition cv;
@@ -181,10 +201,19 @@ void run_async_wait(QObject* target, Start&& start) {
             QMutexLocker lock(&w->m);
             already_done = w->done; // start() may have resolved synchronously
         }
-        if (!already_done)
+        if (!already_done) {
+            // Bound the nested loop. The timer is parented to `loop` so it dies
+            // with it; quit() on an already-quit loop is harmless.
+            if (timeout_ms > 0)
+                QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
             loop.exec(QEventLoop::ExcludeUserInputEvents);
+        }
         QMutexLocker lock(&w->m);
         w->loop = nullptr;
+        if (!w->done)
+            LOG_ERROR("ThreadHelper", QString("run_async_wait timed out after %1 ms (same-thread path) — the service "
+                                              "never invoked its callback. Result is unset.")
+                                          .arg(timeout_ms));
         return;
     }
 
@@ -193,6 +222,19 @@ void run_async_wait(QObject* target, Start&& start) {
         Qt::QueuedConnection);
 
     QMutexLocker lock(&w->m);
+    if (timeout_ms > 0) {
+        // QDeadlineTimer so repeated spurious wakeups can't extend the total
+        // wait past the budget — a plain `wait(&m, timeout)` in a while loop
+        // restarts the clock on every wakeup.
+        QDeadlineTimer deadline(timeout_ms);
+        while (!w->done && !deadline.hasExpired())
+            w->cv.wait(&w->m, deadline);
+        if (!w->done)
+            LOG_ERROR("ThreadHelper", QString("run_async_wait timed out after %1 ms (cross-thread path) — the service "
+                                              "never invoked its callback. Result is unset.")
+                                          .arg(timeout_ms));
+        return;
+    }
     while (!w->done)
         w->cv.wait(&w->m);
 }

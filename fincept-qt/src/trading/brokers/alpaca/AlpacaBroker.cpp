@@ -2,7 +2,9 @@
 
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerLogRedact.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -14,6 +16,54 @@ namespace fincept::trading {
 static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
 }
+
+namespace {
+
+// Alpaca reports auth failures as HTTP 401/403 with a JSON {code, message}
+// body. BrokerInterface's default validate_session only classifies a session as
+// Expired when the error string carries the [TOKEN_EXPIRED] marker (see the
+// contract comment on BrokerInterface::validate_session), so without it an
+// Alpaca account reads "Connected" forever while every request fails and the
+// user is never prompted to reconnect. Every error path here goes through this
+// helper so the marker is attached exactly once, in one place.
+QString alpaca_checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
+    QString msg;
+    const QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
+    if (doc.isObject()) {
+        const QJsonObject o = doc.object();
+        msg = o.value("message").toString();
+        if (msg.isEmpty())
+            msg = o.value("error").toString();
+    }
+    if (msg.isEmpty())
+        msg = resp.error;
+    if (msg.isEmpty())
+        msg = fallback;
+
+    const QString lower = msg.toLower();
+    if (resp.status_code == 401 || resp.status_code == 403 || lower.contains("access key verification failed") ||
+        lower.contains("unauthorized") || lower.contains("forbidden"))
+        return QStringLiteral("[TOKEN_EXPIRED] ") + msg;
+    return msg;
+}
+
+// Alpaca accepts fractional shares, so quantity is a decimal string. The
+// default QString::number() 'g' format caps at 6 significant digits, which
+// serialises 1,000,000 shares as "1e+06" — Alpaca rejects that. Emit a plain
+// fixed-point value and trim the padding.
+QString alpaca_qty(double quantity) {
+    QString s = QString::number(quantity, 'f', 9);
+    if (s.contains(QLatin1Char('.'))) {
+        while (s.endsWith(QLatin1Char('0')))
+            s.chop(1);
+        if (s.endsWith(QLatin1Char('.')))
+            s.chop(1);
+    }
+    return s;
+}
+
+} // namespace
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ALPACA — US broker, API key/secret in headers (no OAuth)
 // additional_data == "live"  → https://api.alpaca.markets
@@ -102,13 +152,21 @@ OrderPlaceResponse AlpacaBroker::place_order(const BrokerCredentials& creds, con
     const QString tif = is_market ? "day" : "gtc";
 
     QJsonObject payload{{"symbol", order.symbol},
-                        {"qty", QString::number(order.quantity)},
+                        {"qty", alpaca_qty(order.quantity)},
                         {"side", alpaca_enum_map().side_or(order.side, "buy")},
                         {"type", alpaca_enum_map().order_type_or(order.order_type, "market")},
-                        {"time_in_force", tif}};
+                        {"time_in_force", tif},
+                        // Idempotency key: BrokerHttp aborts client-side on an 8s
+                        // timeout, but the order may already be live at Alpaca. A
+                        // unique client_order_id makes the retry a duplicate that
+                        // Alpaca rejects instead of a second live order.
+                        {"client_order_id", make_client_order_ref(48)}};
     if (is_market)
         payload["extended_hours"] = true; // allow pre/post market execution
-    if (order.price > 0)
+    // limit_price must be gated on the order type, not merely on price > 0:
+    // callers routinely fill order.price with the LTP for a market order, which
+    // silently converted a market order into a limit order at the last tick.
+    if (!is_market && order.price > 0)
         payload["limit_price"] = QString::number(order.price, 'f', 2);
     if (order.stop_price > 0)
         payload["stop_price"] = QString::number(order.stop_price, 'f', 2);
@@ -116,11 +174,27 @@ OrderPlaceResponse AlpacaBroker::place_order(const BrokerCredentials& creds, con
     auto resp = BrokerHttp::instance().post_json(trading_url(creds) + "/v2/orders", payload, auth_headers(creds));
     OrderPlaceResponse result;
     if (!resp.success) {
-        result.error = resp.error;
+        result.error = alpaca_checked_error(resp, "place_order failed");
+        LOG_ERROR("AlpacaBroker",
+                  QString("place_order failed: %1 | body: %2").arg(result.error, redact_body(resp.raw_body)));
+        return result;
+    }
+    // A 2xx alone is not proof the order exists. Alpaca can answer with a
+    // business error in the body, and an unparseable body leaves resp.json
+    // default-constructed — which used to yield success with an empty order id
+    // ("Order placed: ") that the algo engine then tracked as a real position.
+    const QString body_err = resp.json.value("message").toString();
+    if (!body_err.isEmpty()) {
+        result.error = alpaca_checked_error(resp, body_err);
+        return result;
+    }
+    result.order_id = resp.json.value("id").toString();
+    if (result.order_id.isEmpty()) {
+        result.error = "place_order: broker returned no order id — order not confirmed placed";
+        LOG_ERROR("AlpacaBroker", QString("place_order: %1 | body: %2").arg(result.error, redact_body(resp.raw_body)));
         return result;
     }
     result.success = true;
-    result.order_id = resp.json.value("id").toString();
     return result;
 }
 
@@ -130,21 +204,23 @@ ApiResponse<QJsonObject> AlpacaBroker::modify_order(const BrokerCredentials& cre
         BrokerHttp::instance().put_json(trading_url(creds) + "/v2/orders/" + order_id, mods, auth_headers(creds));
     int64_t ts = now_ts();
     return resp.success ? ApiResponse<QJsonObject>{true, resp.json, "", ts}
-                        : ApiResponse<QJsonObject>{false, std::nullopt, resp.error, ts};
+                        : ApiResponse<QJsonObject>{false, std::nullopt, alpaca_checked_error(resp, "request failed"),
+                                                   ts};
 }
 
 ApiResponse<QJsonObject> AlpacaBroker::cancel_order(const BrokerCredentials& creds, const QString& order_id) {
     auto resp = BrokerHttp::instance().del(trading_url(creds) + "/v2/orders/" + order_id, auth_headers(creds));
     int64_t ts = now_ts();
     return resp.success ? ApiResponse<QJsonObject>{true, resp.json, "", ts}
-                        : ApiResponse<QJsonObject>{false, std::nullopt, resp.error, ts};
+                        : ApiResponse<QJsonObject>{false, std::nullopt, alpaca_checked_error(resp, "request failed"),
+                                                   ts};
 }
 
 ApiResponse<QVector<BrokerOrderInfo>> AlpacaBroker::get_orders(const BrokerCredentials& creds) {
     auto resp = BrokerHttp::instance().get(trading_url(creds) + "/v2/orders?status=all&limit=100", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     QVector<BrokerOrderInfo> orders;
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -173,15 +249,17 @@ ApiResponse<QJsonObject> AlpacaBroker::get_trade_book(const BrokerCredentials& c
     auto resp = BrokerHttp::instance().get(trading_url(creds) + "/v2/account/activities/FILL", auth_headers(creds));
     int64_t ts = now_ts();
     return resp.success ? ApiResponse<QJsonObject>{true, resp.json, "", ts}
-                        : ApiResponse<QJsonObject>{false, std::nullopt, resp.error, ts};
+                        : ApiResponse<QJsonObject>{false, std::nullopt, alpaca_checked_error(resp, "request failed"),
+                                                   ts};
 }
 
 ApiResponse<QVector<BrokerPosition>> AlpacaBroker::get_positions(const BrokerCredentials& creds) {
     auto resp = BrokerHttp::instance().get(trading_url(creds) + "/v2/positions", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success) {
-        LOG_ERROR("AlpacaBroker", QString("get_positions failed: %1 | body: %2").arg(resp.error, resp.raw_body));
-        return {false, std::nullopt, resp.error, ts};
+        LOG_ERROR("AlpacaBroker",
+                  QString("get_positions failed: %1 | body: %2").arg(resp.error, redact_body(resp.raw_body)));
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     }
     QVector<BrokerPosition> positions;
     QJsonParseError err;
@@ -210,8 +288,9 @@ ApiResponse<QVector<BrokerHolding>> AlpacaBroker::get_holdings(const BrokerCrede
     auto resp = BrokerHttp::instance().get(trading_url(creds) + "/v2/positions", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success) {
-        LOG_ERROR("AlpacaBroker", QString("get_holdings failed: %1 | body: %2").arg(resp.error, resp.raw_body));
-        return {false, std::nullopt, resp.error, ts};
+        LOG_ERROR("AlpacaBroker",
+                  QString("get_holdings failed: %1 | body: %2").arg(resp.error, redact_body(resp.raw_body)));
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     }
     QVector<BrokerHolding> holdings;
     QJsonParseError err;
@@ -240,8 +319,9 @@ ApiResponse<BrokerFunds> AlpacaBroker::get_funds(const BrokerCredentials& creds)
     auto resp = BrokerHttp::instance().get(trading_url(creds) + "/v2/account", auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success) {
-        LOG_ERROR("AlpacaBroker", QString("get_funds failed: %1 | body: %2").arg(resp.error, resp.raw_body));
-        return {false, std::nullopt, resp.error, ts};
+        LOG_ERROR("AlpacaBroker",
+                  QString("get_funds failed: %1 | body: %2").arg(resp.error, redact_body(resp.raw_body)));
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     }
     // Alpaca returns numeric fields as JSON strings in paper env, numbers in live env — handle both
     auto jval = [](const QJsonValue& v) -> double {
@@ -278,8 +358,9 @@ ApiResponse<QVector<BrokerQuote>> AlpacaBroker::get_quotes(const BrokerCredentia
     auto resp = BrokerHttp::instance().get(url, data_headers);
     int64_t ts = now_ts();
     if (!resp.success) {
-        LOG_ERROR("AlpacaBroker", QString("get_quotes failed: %1 | body: %2").arg(resp.error, resp.raw_body));
-        return {false, std::nullopt, resp.error, ts};
+        LOG_ERROR("AlpacaBroker",
+                  QString("get_quotes failed: %1 | body: %2").arg(resp.error, redact_body(resp.raw_body)));
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     }
 
     QJsonParseError err;
@@ -364,8 +445,9 @@ ApiResponse<QVector<BrokerCandle>> AlpacaBroker::get_history(const BrokerCredent
     auto resp = BrokerHttp::instance().get(url, data_headers);
     int64_t ts = now_ts();
     if (!resp.success) {
-        LOG_ERROR("AlpacaBroker", QString("get_history failed: %1 | body: %2").arg(resp.error, resp.raw_body));
-        return {false, std::nullopt, resp.error, ts};
+        LOG_ERROR("AlpacaBroker",
+                  QString("get_history failed: %1 | body: %2").arg(resp.error, redact_body(resp.raw_body)));
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     }
 
     QVector<BrokerCandle> candles;
@@ -404,7 +486,7 @@ ApiResponse<QVector<MarketCalendarDay>> AlpacaBroker::get_calendar(const BrokerC
     int64_t ts = now_ts();
     if (!resp.success) {
         LOG_ERROR("AlpacaBroker", QString("get_calendar failed: %1").arg(resp.error));
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     }
 
     QJsonParseError err;
@@ -434,7 +516,7 @@ ApiResponse<MarketClock> AlpacaBroker::get_clock(const BrokerCredentials& creds)
     int64_t ts = now_ts();
     if (!resp.success) {
         LOG_ERROR("AlpacaBroker", QString("get_clock failed: %1").arg(resp.error));
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     }
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -512,7 +594,7 @@ ApiResponse<QVector<BrokerCandle>> AlpacaBroker::get_latest_bars(const BrokerCre
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -547,7 +629,7 @@ ApiResponse<QVector<BrokerCandle>> AlpacaBroker::get_historical_bars(const Broke
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -573,7 +655,7 @@ ApiResponse<QVector<BrokerQuote>> AlpacaBroker::get_latest_quotes(const BrokerCr
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -600,7 +682,7 @@ ApiResponse<QVector<BrokerTrade>> AlpacaBroker::get_latest_trades(const BrokerCr
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -635,7 +717,7 @@ ApiResponse<QVector<BrokerTrade>> AlpacaBroker::get_historical_trades(const Brok
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -667,7 +749,7 @@ ApiResponse<QVector<BrokerAuction>> AlpacaBroker::get_historical_auctions(const 
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -718,7 +800,7 @@ ApiResponse<BrokerCandle> AlpacaBroker::get_latest_bar(const BrokerCredentials& 
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -737,7 +819,7 @@ ApiResponse<BrokerQuote> AlpacaBroker::get_latest_quote(const BrokerCredentials&
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -756,7 +838,7 @@ ApiResponse<BrokerTrade> AlpacaBroker::get_latest_trade(const BrokerCredentials&
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -775,7 +857,7 @@ ApiResponse<BrokerQuote> AlpacaBroker::get_snapshot(const BrokerCredentials& cre
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -823,7 +905,7 @@ ApiResponse<QVector<BrokerTrade>> AlpacaBroker::get_historical_trades_single(con
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -851,7 +933,7 @@ ApiResponse<QVector<BrokerQuote>> AlpacaBroker::get_historical_quotes_single(con
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -878,7 +960,7 @@ ApiResponse<QVector<BrokerAuction>> AlpacaBroker::get_historical_auctions_single
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
 
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
@@ -922,7 +1004,7 @@ ApiResponse<QVector<BrokerMetaEntry>> AlpacaBroker::get_condition_codes(const Br
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
     if (err.error != QJsonParseError::NoError)
@@ -947,7 +1029,7 @@ ApiResponse<QVector<BrokerMetaEntry>> AlpacaBroker::get_exchange_codes(const Bro
     auto resp = BrokerHttp::instance().get(url, alpaca_data_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
-        return {false, std::nullopt, resp.error, ts};
+        return {false, std::nullopt, alpaca_checked_error(resp, "request failed"), ts};
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
     if (err.error != QJsonParseError::NoError)
@@ -976,8 +1058,9 @@ ApiResponse<CancelAllResult> AlpacaBroker::cancel_all_orders(const BrokerCredent
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
     if (err.error != QJsonParseError::NoError && !resp.success) {
-        LOG_ERROR("AlpacaBroker", QString("cancel_all_orders failed: %1 | body: %2").arg(resp.error, resp.raw_body));
-        return {false, std::nullopt, resp.error.isEmpty() ? resp.raw_body : resp.error, ts};
+        LOG_ERROR("AlpacaBroker",
+                  QString("cancel_all_orders failed: %1 | body: %2").arg(resp.error, redact_body(resp.raw_body)));
+        return {false, std::nullopt, alpaca_checked_error(resp, "cancel_all_orders failed"), ts};
     }
 
     CancelAllResult result;
@@ -1015,8 +1098,9 @@ ApiResponse<CloseAllResult> AlpacaBroker::close_all_positions(const BrokerCreden
     QJsonParseError err;
     auto doc = QJsonDocument::fromJson(resp.raw_body.toUtf8(), &err);
     if (err.error != QJsonParseError::NoError && !resp.success) {
-        LOG_ERROR("AlpacaBroker", QString("close_all_positions failed: %1 | body: %2").arg(resp.error, resp.raw_body));
-        return {false, std::nullopt, resp.error.isEmpty() ? resp.raw_body : resp.error, ts};
+        LOG_ERROR("AlpacaBroker",
+                  QString("close_all_positions failed: %1 | body: %2").arg(resp.error, redact_body(resp.raw_body)));
+        return {false, std::nullopt, alpaca_checked_error(resp, "close_all_positions failed"), ts};
     }
 
     CloseAllResult result;
@@ -1069,8 +1153,8 @@ ApiResponse<QVector<BrokerQuote>> AlpacaBroker::get_multi_quotes(const BrokerCre
         auto resp = BrokerHttp::instance().get(url, data_headers);
         int64_t ts = now_ts();
         if (!resp.success) {
-            LOG_ERROR("AlpacaBroker",
-                      QString("get_multi_quotes batch failed: %1 | body: %2").arg(resp.error, resp.raw_body));
+            LOG_ERROR("AlpacaBroker", QString("get_multi_quotes batch failed: %1 | body: %2")
+                                          .arg(resp.error, redact_body(resp.raw_body)));
             continue; // best-effort — partial batches still return what succeeded
         }
 

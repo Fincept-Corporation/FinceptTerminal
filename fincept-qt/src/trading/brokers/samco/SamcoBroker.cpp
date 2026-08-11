@@ -104,7 +104,7 @@ QMap<QString, QString> SamcoBroker::auth_headers(const BrokerCredentials& creds)
 TokenExchangeResponse SamcoBroker::exchange_token(const QString& api_key, const QString& api_secret,
                                                   const QString& auth_code) {
     if (api_key.isEmpty() || api_secret.isEmpty() || auth_code.isEmpty())
-        return {false, "", "", "", "Samco login: user id, password and secret API key are required", ""};
+        return {.success = false, .error = "Samco login: user id, password and secret API key are required"};
 
     auto& http = BrokerHttp::instance();
 
@@ -115,17 +115,17 @@ TokenExchangeResponse SamcoBroker::exchange_token(const QString& api_key, const 
     auto tok_resp = http.post_json(QString("%1/accessToken/token").arg(BASE), tok_payload,
                                    {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
     if (!tok_resp.success && tok_resp.status_code == 0)
-        return {false, "", "", "", "Access token request failed: " + tok_resp.error, ""};
+        return {.success = false, .error = "Access token request failed: " + tok_resp.error};
 
     QJsonDocument tok_doc = QJsonDocument::fromJson(tok_resp.raw_body.toUtf8());
     if (!tok_doc.isObject())
-        return {false, "", "", "", "Access token: invalid response", ""};
+        return {.success = false, .error = "Access token: invalid response"};
     QJsonObject tok_obj = tok_doc.object();
     if (tok_obj.value("status").toString() != "Success")
-        return {false, "", "", "", tok_obj.value("statusMessage").toString("Access token generation failed"), ""};
+        return {.success = false, .error = tok_obj.value("statusMessage").toString("Access token generation failed")};
     QString access_token = tok_obj.value("accessToken").toString();
     if (access_token.isEmpty())
-        return {false, "", "", "", "Access token: empty token in response", ""};
+        return {.success = false, .error = "Access token: empty token in response"};
 
     // Step 2: login → sessionToken.
     QJsonObject login_payload;
@@ -135,17 +135,17 @@ TokenExchangeResponse SamcoBroker::exchange_token(const QString& api_key, const 
     auto login_resp = http.post_json(QString("%1/login").arg(BASE), login_payload,
                                      {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
     if (!login_resp.success && login_resp.status_code == 0)
-        return {false, "", "", "", "Login failed: " + login_resp.error, ""};
+        return {.success = false, .error = "Login failed: " + login_resp.error};
 
     QJsonDocument login_doc = QJsonDocument::fromJson(login_resp.raw_body.toUtf8());
     if (!login_doc.isObject())
-        return {false, "", "", "", "Login: invalid response", ""};
+        return {.success = false, .error = "Login: invalid response"};
     QJsonObject login_obj = login_doc.object();
     if (login_obj.value("status").toString() != "Success")
-        return {false, "", "", "", login_obj.value("statusMessage").toString("Login failed"), ""};
+        return {.success = false, .error = login_obj.value("statusMessage").toString("Login failed")};
     QString session = login_obj.value("sessionToken").toString();
     if (session.isEmpty())
-        return {false, "", "", "", "Login: no sessionToken in response", ""};
+        return {.success = false, .error = "Login: no sessionToken in response"};
 
     // Samco's secretApiKey (auth_code) is permanent, and uid/password are stored
     // — persist the secret so the daily session can be silently re-minted. Token
@@ -153,7 +153,7 @@ TokenExchangeResponse SamcoBroker::exchange_token(const QString& api_key, const 
     QJsonObject extra_obj{{"secret_api_key", auth_code}};
     const QString extra = with_token_expiry(QString::fromUtf8(QJsonDocument(extra_obj).toJson(QJsonDocument::Compact)),
                                             next_ist_flush_epoch(6, 0));
-    return {true, session, "", api_key, extra, ""};
+    return {.success = true, .access_token = session, .user_id = api_key, .additional_data = extra};
 }
 
 // Silent refresh = replay the two-step login using the stored uid/password and
@@ -162,7 +162,7 @@ TokenExchangeResponse SamcoBroker::refresh_session(const BrokerCredentials& cred
     const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
     const QString secret_api_key = extra.value("secret_api_key").toString();
     if (creds.api_key.isEmpty() || creds.api_secret.isEmpty() || secret_api_key.isEmpty())
-        return {false, "", "", "", "", "Samco silent refresh requires stored user id, password and secret API key"};
+        return {.success = false, .error = "Samco silent refresh requires stored user id, password and secret API key"};
     return exchange_token(creds.api_key, creds.api_secret, secret_api_key);
 }
 

@@ -245,13 +245,43 @@ Result<void> ArenaStore::set_cadence(const QString& id, int seconds) {
 Result<void> ArenaStore::delete_competition_cascade(const QString& id) {
     if (auto hr = ensure_hitl_table(); hr.is_err())
         return hr;
-    for (const char* table : {"arena_agents", "arena_rounds", "arena_decisions", "arena_orders", "arena_positions",
-                              "arena_accounts", "arena_equity_snapshots", "arena_events", "arena_hitl_pending"}) {
-        auto r = exec_write(QStringLiteral("DELETE FROM %1 WHERE competition_id = ?").arg(QLatin1String(table)), {id});
-        if (r.is_err())
+
+    // One transaction for the whole cascade — the ten DELETEs used to be
+    // independent, so a failure on the third left a half-deleted competition:
+    // orphaned rounds/orders/positions pointing at a competition row that was
+    // itself still present. Same shape as StorageManager::delete_cascade —
+    // every Result checked, rollback on the first error.
+    auto tx = db().begin_transaction();
+    if (tx.is_err())
+        return tx;
+
+    // Children first, parent last, so nothing is orphaned at any point.
+    static const char* const kCascadeTables[] = {
+        "arena_agents",           "arena_rounds", "arena_decisions",    "arena_orders",
+        "arena_positions",        "arena_accounts", "arena_equity_snapshots",
+        "arena_events",           "arena_hitl_pending", "arena_competitions",
+    };
+
+    for (const char* table : kCascadeTables) {
+        const QString table_name = QString::fromLatin1(table);
+        // arena_competitions keys on `id`, every child table on `competition_id`.
+        const QString column = (table_name == QLatin1String("arena_competitions")) ? QStringLiteral("id")
+                                                                                   : QStringLiteral("competition_id");
+        auto r = exec_write(QStringLiteral("DELETE FROM %1 WHERE %2 = ?").arg(table_name, column), {id});
+        if (r.is_err()) {
+            db().rollback();
+            LOG_ERROR("ArenaStore", QString("Cascade delete of competition %1 aborted at %2: %3")
+                                        .arg(id, table_name, QString::fromStdString(r.error())));
             return r;
+        }
     }
-    return exec_write("DELETE FROM arena_competitions WHERE id = ?", {id});
+
+    auto c = db().commit();
+    if (c.is_err()) {
+        db().rollback();
+        return c;
+    }
+    return Result<void>::ok();
 }
 
 Result<QStringList> ArenaStore::competitions_with_status(const QString& status) {

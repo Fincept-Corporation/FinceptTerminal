@@ -1,6 +1,7 @@
 // PortfolioMonitorScreen.cpp — unified all-accounts positions & holdings.
 #include "screens/portfolio_monitor/PortfolioMonitorScreen.h"
 
+#include "core/logging/Logger.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/TradingTypes.h"
 #include "trading/UnifiedPortfolioService.h"
@@ -19,6 +20,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTimer>
@@ -39,6 +41,12 @@ namespace {
 // Columns shared by both trees. Holdings reuses DayPnl for "Today's P&L" and
 // shows invested/current in the parent tooltip.
 enum Col { ColSymbol = 0, ColProduct, ColQty, ColAvg, ColLtp, ColPnl, ColPnlPct, ColAction, ColCount };
+
+/// Dynamic-property guard set around the showEvent() fallback that routes the
+/// screen to PAPER after a *failed* read of portfolio_monitor.mode. While it is
+/// set, on_mode_toggled() applies the mode but does not persist it, so a
+/// transient DB error cannot demote a LIVE user to paper on disk.
+constexpr const char* kModePersistSuppressedProp = "fincept_mode_persist_suppressed";
 
 const QString kRupee = QString::fromUtf8("₹");
 
@@ -105,11 +113,24 @@ void PortfolioMonitorScreen::showEvent(QShowEvent* event) {
         // on a state change, so style/route the paper default explicitly.
         const auto saved =
             SettingsRepository::instance().get(QStringLiteral("portfolio_monitor.mode"), QStringLiteral("paper"));
-        const bool live = saved.is_ok() && saved.value() == QLatin1String("live");
-        if (live)
-            mode_btn_->setChecked(true); // fires on_mode_toggled(true)
-        else
+        if (saved.is_err()) {
+            LOG_ERROR("PortfolioMonitor",
+                      QString("settings read failed for 'portfolio_monitor.mode' — showing PAPER for this session, "
+                              "leaving the stored mode untouched: %1")
+                          .arg(QString::fromStdString(saved.error())));
+            // The stored mode is unknown, not "paper". Apply paper in memory
+            // (styles + routes the service) with the persist suppressed, and
+            // block mode_btn_ so an already-checked button can't re-enter
+            // on_mode_toggled() via toggled().
+            const QSignalBlocker block(mode_btn_);
+            setProperty(kModePersistSuppressedProp, true);
             on_mode_toggled(false);
+            setProperty(kModePersistSuppressedProp, false);
+        } else if (saved.value() == QLatin1String("live")) {
+            mode_btn_->setChecked(true); // fires on_mode_toggled(true)
+        } else {
+            on_mode_toggled(false);
+        }
     }
     // activate() is idempotent: picks up newly-added accounts and forces a
     // portfolio refresh, so reopening the panel always shows fresh data.
@@ -241,8 +262,11 @@ void PortfolioMonitorScreen::on_mode_toggled(bool live) {
                                : tr("Showing paper portfolios — click for live"));
     UnifiedPortfolioService::instance().set_mode(live ? UnifiedPortfolioService::Mode::Live
                                                       : UnifiedPortfolioService::Mode::Paper);
-    SettingsRepository::instance().set(QStringLiteral("portfolio_monitor.mode"),
-                                       live ? QStringLiteral("live") : QStringLiteral("paper"));
+    // Suppressed only by the showEvent() fallback after a failed read — writing
+    // "paper" there would overwrite a stored "live".
+    if (!property(kModePersistSuppressedProp).toBool())
+        SettingsRepository::instance().set(QStringLiteral("portfolio_monitor.mode"),
+                                           live ? QStringLiteral("live") : QStringLiteral("paper"));
     rebuild_positions();
     rebuild_holdings();
     update_summary();

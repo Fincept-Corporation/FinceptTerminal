@@ -1,5 +1,6 @@
 #include "trading/brokers/saxo/SaxoBankBroker.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 
 #include <QDateTime>
@@ -126,7 +127,7 @@ QMap<QString, QString> SaxoBankBroker::auth_headers(const BrokerCredentials& cre
 TokenExchangeResponse SaxoBankBroker::exchange_token(const QString& api_key, const QString& api_secret,
                                                      const QString& auth_code) {
     if (auth_code.trimmed().isEmpty())
-        return {false, "", "", "", "Authorization code is required", ""};
+        return {.success = false, .error = "Authorization code is required"};
 
     // Try live token endpoint first; fall back to SIM if it fails
     // In practice user should specify sim vs live via auth_code prefix "sim:::code"
@@ -146,18 +147,18 @@ TokenExchangeResponse SaxoBankBroker::exchange_token(const QString& api_key, con
                               {{"Content-Type", "application/x-www-form-urlencoded"}, {"Accept", "application/json"}});
 
     if (!resp.success)
-        return {false, "", "", "", "Token exchange failed: " + resp.error, ""};
+        return {.success = false, .error = "Token exchange failed: " + resp.error};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Token exchange: invalid response", ""};
+        return {.success = false, .error = "Token exchange: invalid response"};
 
     QJsonObject obj = doc.object();
     QString access_token = obj.value("access_token").toString();
     QString refresh_token = obj.value("refresh_token").toString();
 
     if (access_token.isEmpty())
-        return {false, "", "", "", obj.value("error_description").toString("Token exchange failed"), ""};
+        return {.success = false, .error = obj.value("error_description").toString("Token exchange failed")};
 
     // Fetch AccountKey from /port/v1/clients/me
     QString base = use_sim ? BASE_SIM : BASE_LIVE;
@@ -175,7 +176,7 @@ TokenExchangeResponse SaxoBankBroker::exchange_token(const QString& api_key, con
     }
 
     // Pack refresh_token into additional field
-    return {true, access_token, refresh_token, account_key, "", ""};
+    return {.success = true, .access_token = access_token, .refresh_token = refresh_token, .user_id = account_key};
 }
 
 // ---------- place_order ----------
@@ -199,6 +200,10 @@ OrderPlaceResponse SaxoBankBroker::place_order(const BrokerCredentials& creds, c
     order_obj["Amount"] = order.quantity;
     order_obj["OrderType"] = saxo_enum_map().order_type_or(order.order_type, "Market");
     order_obj["ManualOrder"] = false;
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h).
+    order_obj["ExternalReference"] = make_client_order_ref(50);
 
     if (order.order_type != OrderType::Market)
         order_obj["OrderPrice"] = order.price;

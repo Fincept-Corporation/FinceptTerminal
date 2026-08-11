@@ -23,7 +23,7 @@ void TradingNotificationBridge::install() {
 
     auto& bus = EventBus::instance();
 
-    sub_placed_ = bus.subscribe(events::kOrderPlaced, [](const QVariantMap& d) {
+    sub_placed_ = bus.subscribe(this, events::kOrderPlaced, [](const QVariantMap& d) {
         NotificationRequest req;
         req.title = "Order Placed";
         req.message = QString("%1 %2 %3 %4 (%5) — %6")
@@ -35,7 +35,7 @@ void TradingNotificationBridge::install() {
         NotificationService::instance().send(req);
     });
 
-    sub_failed_ = bus.subscribe(events::kOrderFailed, [](const QVariantMap& d) {
+    sub_failed_ = bus.subscribe(this, events::kOrderFailed, [](const QVariantMap& d) {
         NotificationRequest req;
         req.title = "Order Failed";
         req.message =
@@ -46,7 +46,7 @@ void TradingNotificationBridge::install() {
         NotificationService::instance().send(req);
     });
 
-    sub_cancelled_ = bus.subscribe(events::kAllOrdersCancelled, [](const QVariantMap& d) {
+    sub_cancelled_ = bus.subscribe(this, events::kAllOrdersCancelled, [](const QVariantMap& d) {
         NotificationRequest req;
         req.title = "All Orders Cancelled";
         req.message = QString("%1 cancelled, %2 failed (%3)")
@@ -58,7 +58,7 @@ void TradingNotificationBridge::install() {
         NotificationService::instance().send(req);
     });
 
-    sub_closed_ = bus.subscribe(events::kAllPositionsClosed, [](const QVariantMap& d) {
+    sub_closed_ = bus.subscribe(this, events::kAllPositionsClosed, [](const QVariantMap& d) {
         NotificationRequest req;
         req.title = "All Positions Squared Off";
         req.message = QString("%1 closed, %2 failed (%3)")
@@ -70,7 +70,7 @@ void TradingNotificationBridge::install() {
         NotificationService::instance().send(req);
     });
 
-    sub_basket_ = bus.subscribe(events::kBasketCompleted, [](const QVariantMap& d) {
+    sub_basket_ = bus.subscribe(this, events::kBasketCompleted, [](const QVariantMap& d) {
         NotificationRequest req;
         req.title = "Basket Order Completed";
         req.message = QString("%1: %2/%3 placed (%4 failed)")

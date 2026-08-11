@@ -1,12 +1,38 @@
 name: Lint
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Runs on pull requests (incremental, gating) and on demand (full tree).
+#
+# It used to be workflow_dispatch-only, and even when run by hand the
+# clang-tidy job could not fail: .clang-tidy sets `WarningsAsErrors: ''` and
+# the invocation passed no --warnings-as-errors, so it exited 0 no matter what
+# it printed — while xargs-ing 1,032 files through a single-threaded process
+# (hours). The PR path below is therefore INCREMENTAL: only the .cpp files the
+# PR actually changed, in parallel, with a narrow high-signal check set that is
+# adoptable today. The full-tree sweep stays available via "Run workflow".
+# ─────────────────────────────────────────────────────────────────────────────
 on:
-  # Manual-only — lint never runs automatically on push/tag/PR.
-  # Trigger from the Actions tab via "Run workflow".
+  pull_request:
+    paths:
+      - 'fincept-qt/src/**'
+      - 'fincept-qt/CMakeLists.txt'
+      - 'fincept-qt/.clang-tidy'
+      - 'fincept-qt/.clang-format'
+      - 'fincept-qt/.cppcheck-suppressions'
+      - '.github/workflows/lint.yml'
   workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning qtserialport"
 
 jobs:
   # ── clang-format ─────────────────────────────────────────────────────────────
@@ -15,6 +41,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install clang-format
         run: |
@@ -22,7 +50,31 @@ jobs:
           sudo apt-get install -y clang-format-18
           sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-18 100
 
-      - name: Check formatting
+      # PR path: only the lines this PR touched. A whole-file --dry-run would
+      # flag pre-existing formatting in untouched lines and fail PRs for code
+      # their author never wrote — the fastest way to get a check deleted.
+      - name: Check formatting of changed lines
+        if: github.event_name == 'pull_request'
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          GCF="$(command -v git-clang-format-18 || command -v git-clang-format || true)"
+          if [ -z "${GCF}" ]; then
+            echo "::warning::git-clang-format not available — skipping the diff-scoped format check"
+            exit 0
+          fi
+          BASE="${{ github.event.pull_request.base.sha }}"
+          DIFF=$("${GCF}" --binary clang-format --diff --commit "${BASE}" -- 'src/*.cpp' 'src/*.h' || true)
+          case "${DIFF}" in
+            *"no modified files"*|*"did not modify"*|"") echo "Changed lines are correctly formatted."; exit 0 ;;
+          esac
+          echo "${DIFF}"
+          echo "::error::Formatting differs from .clang-format on lines this PR touched. Run: git-clang-format --commit ${BASE}"
+          exit 1
+
+      # Full-tree sweep — manual runs only.
+      - name: Check formatting (full tree)
+        if: github.event_name == 'workflow_dispatch'
         working-directory: fincept-qt
         run: |
           # Parentheses required: without them -o has lower precedence than the
@@ -37,6 +89,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install dependencies
         run: |
@@ -44,18 +98,41 @@ jobs:
           sudo apt-get install -y \
             clang-18 clang-tidy-18 \
             cmake ninja-build \
-            qt6-base-dev qt6-base-private-dev \
-            qt6-tools-dev qt6-tools-dev-tools \
-            qt6-charts-dev \
-            qt6-multimedia-dev libqt6multimediawidgets6 \
-            libqt6svg6-dev \
-            libqt6sql6-dev libqt6websockets6-dev \
-            libqt6concurrent6-dev libqt6printsupport6-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev \
+            libxcb-cursor-dev libxcb-icccm4-dev libxcb-image0-dev \
+            libxcb-keysyms1-dev libxcb-render-util0-dev libxcb-shape0-dev \
+            libxcb-sync-dev libxcb-xfixes0-dev libxcb-xinerama0-dev \
+            libdbus-1-dev libfontconfig1-dev libfreetype6-dev libssl-dev
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-18 100
 
+      # Qt 6.8.3 from aqt, NOT apt: ubuntu-24.04 ships Qt 6.4 and CMakeLists.txt
+      # pins Qt 6.8 (FINCEPT_QT_PIN_MODE=MINOR), so the previous apt-based
+      # configure could never produce a compile database.
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-linux-x64-lint
+
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          fi
+
+      # FINCEPT_DEV_BUILD=ON turns the unity build OFF. That is REQUIRED here:
+      # with unity ON the compile database contains only unity_*.cxx entries,
+      # so clang-tidy cannot find a compile command for an individual .cpp.
       - name: Configure (generate compile_commands.json)
         working-directory: fincept-qt
         run: |
@@ -63,20 +140,67 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DFINCEPT_DEV_BUILD=ON \
             -DFINCEPT_BUILD_INSTALLER=OFF \
             -DDEPLOY_QT=OFF
 
-      - name: Run clang-tidy
+      # moc/uic output must exist before clang-tidy parses anything that
+      # includes it, otherwise every hit is a bogus "file not found".
+      - name: Generate moc/uic sources
+        working-directory: fincept-qt
+        run: cmake --build build --target FinceptTerminal_autogen -j "$(nproc)" || echo "::warning::autogen target unavailable — clang-tidy may report missing generated headers"
+
+      # ── PR path: incremental + GATING ───────────────────────────────────────
+      # Narrow, high-signal checks only. bugprone-easily-swappable-parameters,
+      # -narrowing-conversions and -branch-clone are excluded: thousands of
+      # pre-existing hits, near-zero defect yield.
+      - name: clang-tidy (changed files, gating)
+        if: github.event_name == 'pull_request'
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          CHECKS='-*,bugprone-*,concurrency-*,performance-move-const-arg,-bugprone-easily-swappable-parameters,-bugprone-narrowing-conversions,-bugprone-branch-clone'
+          git diff --name-only --diff-filter=ACMR "${BASE}" HEAD -- 'fincept-qt/src/**/*.cpp' \
+            | sed 's|^fincept-qt/||' > /tmp/changed.txt || true
+          # Keep only files the compile database actually knows about (a brand
+          # new .cpp not yet added to CMakeLists.txt has no compile command).
+          : > /tmp/tidy_files.txt
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            [ -f "$f" ] || continue
+            grep -q "\"$(basename "$f")\"\|/$f\"" build/compile_commands.json 2>/dev/null && echo "$f" >> /tmp/tidy_files.txt || \
+              echo "::warning::$f not in compile_commands.json — skipped by clang-tidy"
+          done < /tmp/changed.txt
+          COUNT=$(wc -l < /tmp/tidy_files.txt | tr -d ' ')
+          if [ "${COUNT}" = "0" ]; then
+            echo "No changed .cpp files with compile commands — nothing to analyse."
+            exit 0
+          fi
+          echo "Analysing ${COUNT} changed file(s) with: ${CHECKS}"
+          xargs -a /tmp/tidy_files.txt -P "$(nproc)" -n 1 \
+            clang-tidy -p build \
+              --checks="${CHECKS}" \
+              --warnings-as-errors="${CHECKS}" \
+              --quiet \
+              --extra-arg=-std=c++20
+          echo "clang-tidy clean on changed files."
+
+      # ── Manual path: full tree, advisory ────────────────────────────────────
+      - name: clang-tidy (full tree, advisory)
+        if: github.event_name == 'workflow_dispatch'
         working-directory: fincept-qt
         run: |
           find src -name "*.cpp" | grep -v "/moc_" | grep -v "/qrc_" | sort | \
-            xargs clang-tidy \
+            xargs -P "$(nproc)" -n 1 clang-tidy \
               --config-file=.clang-tidy \
               -p build \
+              --quiet \
               --extra-arg=-std=c++20 \
-              2>&1
-          echo "clang-tidy complete."
+              2>&1 || true
+          echo "clang-tidy sweep complete (advisory — .clang-tidy sets WarningsAsErrors: '')."
 
   # ── datahub-discipline ───────────────────────────────────────────────────────
   # Enforces DataHub rules D1 and D4 (see fincept-qt/CLAUDE.md §D):
@@ -94,15 +218,22 @@ jobs:
       - name: Check screens/ does not call PythonRunner directly
         working-directory: fincept-qt
         run: |
-          if grep -rn --include='*.cpp' --include='*.h' \
-              'PythonRunner::instance()\.run(' src/screens/; then
+          # GRANDFATHER LIST — two pre-existing D1 violations, present when this
+          # check first became a PR gate. New violations anywhere else fail the
+          # build; editing one of these files for an unrelated reason does not.
+          # Delete an entry here the moment its file is migrated to a Producer.
+          ALLOW='src/screens/equity_research/EquityResearchScreen.cpp|src/screens/portfolio/views/EconomicsView.cpp'
+          violations=$(grep -rn --include='*.cpp' --include='*.h' \
+              'PythonRunner::instance()\.run(' src/screens/ | grep -vE "^(${ALLOW})" || true)
+          if [ -n "$violations" ]; then
+            echo "$violations"
             echo ""
             echo "::error::D1 violation — screens must not call PythonRunner directly."
             echo "Route through a Producer registered with DataHub."
             echo "See fincept-qt/DATAHUB_ARCHITECTURE.md §4."
             exit 1
           fi
-          echo "D1 — screens are clean."
+          echo "D1 — screens are clean (excluding the 2 grandfathered files)."
 
       - name: Check screens/ does not call deprecated service fetch_* APIs
         working-directory: fincept-qt
@@ -129,6 +260,8 @@ jobs:
           echo "D4 — screens are clean."
 
   # ── cppcheck ─────────────────────────────────────────────────────────────────
+  # Unchanged from its manual-only form — it already gates via
+  # --error-exitcode=1 and runs the whole tree in a couple of minutes.
   cppcheck:
     name: cppcheck
     runs-on: ubuntu-24.04

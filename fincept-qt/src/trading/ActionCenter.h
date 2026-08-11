@@ -165,7 +165,17 @@ class ActionCenter : public QObject {
     // Execute a queued order against UnifiedTrading (placegttorder routes to the
     // broker's native gtt_place — never an immediate order). Returns the broker
     // order id / GTT id (empty on failure) and sets `ok`/`err`.
-    QString execute_pending(const PendingOrder& po, bool& ok, QString& err);
+    //
+    // Basket and split orders are ASYNCHRONOUS: their outcome is not known when
+    // this returns, so they set `async` and finalize the pending row themselves
+    // from their result callback. When `async` is true the caller must not touch
+    // the row — writing "approved" there is exactly the lie this fixes.
+    QString execute_pending(const PendingOrder& po, bool& ok, QString& err, bool& async);
+
+    // Write the terminal status of an approved row and emit the matching signal.
+    // Shared by the synchronous path and the async (basket/split) callbacks so
+    // the audit trail is produced in one place, from a real result.
+    void finalize_approval(const PendingOrder& po, bool ok, const QString& err, const QString& broker_order_id);
 };
 
 } // namespace fincept::trading

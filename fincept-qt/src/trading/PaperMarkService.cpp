@@ -1,6 +1,7 @@
 #include "trading/PaperMarkService.h"
 
 #include "core/logging/Logger.h"
+#include "storage/sqlite/Database.h"
 #include "trading/AccountDataStream.h"
 #include "trading/AccountManager.h"
 #include "trading/DataStreamManager.h"
@@ -8,6 +9,7 @@
 #include "trading/PaperTrading.h"
 #include "trading/websocket/FyersTickTypes.h"
 
+#include <QStringList>
 #include <QTimer>
 
 namespace fincept::trading {
@@ -184,12 +186,38 @@ void PaperMarkService::flush_prices() {
         return;
     const auto snapshot = pending_;
     pending_.clear();
+
+    // One transaction for the whole flush. Each pt_update_position_price() is a
+    // bare UPDATE, so without this the 1 s timer issued one implicit commit per
+    // position — 40 commits/second on a 40-position book, every second the
+    // market is open.
+    auto& db = fincept::Database::instance();
+    const bool batched = db.begin_transaction().is_ok();
+    if (!batched)
+        LOG_WARN(TAG, "flush_prices: could not open a transaction — falling back to one commit per position");
+
+    QStringList marked;
+    marked.reserve(snapshot.size());
     for (auto pit = snapshot.cbegin(); pit != snapshot.cend(); ++pit) {
         const QString& pid = pit.key();
         for (auto sit = pit.value().cbegin(); sit != pit.value().cend(); ++sit)
             pt_update_position_price(pid, sit.key(), sit.value()); // repo guards price <= 0
-        emit prices_marked(pid);
+        marked.append(pid);
     }
+
+    if (batched) {
+        auto c = db.commit();
+        if (c.is_err()) {
+            LOG_ERROR(TAG, QString("flush_prices commit failed: %1").arg(QString::fromStdString(c.error())));
+            db.rollback();
+            return; // nothing landed — don't tell listeners marks are fresh
+        }
+    }
+
+    // Emit only after the commit, so a slot that re-reads pt_positions sees the
+    // marks it was just told about.
+    for (const auto& pid : marked)
+        emit prices_marked(pid);
 }
 
 } // namespace fincept::trading

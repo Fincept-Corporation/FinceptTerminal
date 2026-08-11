@@ -7,7 +7,6 @@
 #include "core/logging/Logger.h"
 #include "storage/cache/CacheManager.h"
 
-#include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QNetworkAccessManager>
@@ -222,19 +221,9 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
     });
 }
 
-// ── Sync call (MCP tool handlers only — never call from UI thread) ───────────
-
-mcp::ToolResult QuantLibClient::call_sync(const QString& endpoint, const QJsonObject& body) {
-    mcp::ToolResult result = mcp::ToolResult::fail("Timeout");
-
-    QEventLoop loop;
-    call(endpoint, body, [&](mcp::ToolResult r) {
-        result = std::move(r);
-        loop.quit();
-    });
-    loop.exec();
-
-    return result;
-}
+// NOTE: call_sync() used to live here. It had zero call sites and parked the
+// calling thread in an unbounded `loop.exec()` with no timeout — a permanent
+// UI-freeze hazard for whoever reached for it next. Deleted; use the
+// callback-based call() above. Its declaration in QuantLibClient.h can go too.
 
 } // namespace fincept::services

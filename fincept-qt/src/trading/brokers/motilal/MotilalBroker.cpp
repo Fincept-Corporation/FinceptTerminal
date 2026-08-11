@@ -1,5 +1,6 @@
 #include "trading/brokers/motilal/MotilalBroker.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
@@ -180,24 +181,24 @@ TokenExchangeResponse MotilalBroker::exchange_token(const QString& api_key, cons
     auto resp = http.post_json(QString("%1/rest/login/v3/authdirectapi").arg(BASE), body, login_headers);
 
     if (!resp.success)
-        return {false, "", "", "", "Login failed: " + resp.error, ""};
+        return {.success = false, .error = "Login failed: " + resp.error};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Login: invalid response", ""};
+        return {.success = false, .error = "Login: invalid response"};
 
     QJsonObject obj = doc.object();
     if (obj.value("status").toString() != "SUCCESS")
-        return {false, "", "", "", obj.value("message").toString("Login failed"), ""};
+        return {.success = false, .error = obj.value("message").toString("Login failed")};
 
     QString token = obj.value("AuthToken").toString();
     if (token.isEmpty())
-        return {false, "", "", "", "Login: no AuthToken in response", ""};
+        return {.success = false, .error = "Login: no AuthToken in response"};
 
     // Motilal AuthToken is valid for the trading day; 2FA (TOTP/OTP) can't be
     // replayed silently, so detect-only. Startup hint.
     const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-    return {true, token, "", api_key, extra, ""};
+    return {.success = true, .access_token = token, .user_id = api_key, .additional_data = extra};
 }
 
 // ---------- place_order ----------
@@ -216,18 +217,28 @@ OrderPlaceResponse MotilalBroker::place_order(const BrokerCredentials& creds, co
     // shares for cash. UnifiedOrder.quantity is pieces app-wide, so convert via the
     // master's lot size (cash rows carry marketlot=1 → no-op). A 75-piece NIFTY
     // order must not transmit as 75 lots.
-    int qty_in_lot = static_cast<int>(order.quantity);
+    //
+    // Integer division must not be used to "let the broker reject it": that only
+    // holds below one lot. 100 pieces at lot 75 truncates to 1 lot = 75 pieces —
+    // accepted broker-side, but 25 pieces short of what the caller asked for and
+    // reported back as 100. Reject a non-multiple here instead of transmitting
+    // less than requested.
     auto lot_inst = InstrumentService::instance().find_by_token(order.instrument_token.toUInt(), "motilal");
     if (!lot_inst.has_value())
         lot_inst = InstrumentService::instance().find(order.symbol, order.exchange, "motilal");
-    if (lot_inst.has_value() && lot_inst->lot_size > 1)
-        qty_in_lot = static_cast<int>(order.quantity) / lot_inst->lot_size; // partial lots → 0, rejects broker-side
-    body["quantityinlot"] = qty_in_lot;
+    const int qty = static_cast<int>(order.quantity);
+    const int lot = (lot_inst.has_value() && lot_inst->lot_size > 1) ? lot_inst->lot_size : 1;
+    if (lot > 1 && qty % lot != 0)
+        return {false, "", QString("Quantity %1 is not a multiple of lot size %2").arg(qty).arg(lot)};
+    body["quantityinlot"] = qty / lot;
     body["disclosedquantity"] = 0;
     body["amoorder"] = order.amo ? "Y" : "N";
     body["algoid"] = "";
     body["goodtilldate"] = "";
-    body["tag"] = "fincept";
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Motilal caps `tag` at 10 chars.
+    body["tag"] = make_client_order_ref(10);
     body["participantcode"] = "";
     body["clientcode"] = creds.user_id; // required for dealer accounts; harmless for investor
 
@@ -282,8 +293,18 @@ ApiResponse<QJsonObject> MotilalBroker::modify_order(const BrokerCredentials& cr
                 if (o.value("uniqueorderid").toString() == order_id) {
                     const quint32 token = o.value("symboltoken").toVariant().toUInt();
                     auto minst = InstrumentService::instance().find_by_token(token, "motilal");
-                    if (minst.has_value() && minst->lot_size > 1)
-                        new_qty_lot = mods.value("quantity").toInt() / minst->lot_size;
+                    if (minst.has_value() && minst->lot_size > 1) {
+                        const int q = mods.value("quantity").toInt();
+                        // Same rule as place_order: truncating a non-multiple
+                        // silently modifies the order to fewer pieces than asked.
+                        if (q % minst->lot_size != 0)
+                            return {false, std::nullopt,
+                                    QString("Quantity %1 is not a multiple of lot size %2")
+                                        .arg(q)
+                                        .arg(minst->lot_size),
+                                    ts};
+                        new_qty_lot = q / minst->lot_size;
+                    }
                     break;
                 }
             }

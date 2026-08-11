@@ -5,11 +5,13 @@
 #include "core/logging/Logger.h"
 #include "python/PythonSetupManager.h"
 
+#include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QMetaObject>
 #include <QProcessEnvironment>
+#include <QThread>
 
 namespace fincept::mcp {
 
@@ -26,6 +28,18 @@ McpClient::~McpClient() {
 // ============================================================================
 
 Result<void> McpClient::start() {
+    // Invariant (also documented on McpClient.h:start and at the
+    // BlockingQueuedConnection below): never the UI thread. This blocks for up
+    // to 60 s in waitForStarted, and initialize() straight after adds another
+    // 120 s of blocking JSON-RPC. Q_ASSERT compiles out in release builds, so
+    // log it too — a violation is a UI freeze, not a crash, and freezes get
+    // misattributed for weeks.
+    Q_ASSERT(QThread::currentThread() != qApp->thread());
+    if (qApp && QThread::currentThread() == qApp->thread()) {
+        LOG_ERROR(TAG, "McpClient::start() called on the UI thread — this blocks for up to 180 s. "
+                       "Wrap the caller in QtConcurrent::run.");
+    }
+
     if (running_)
         return Result<void>::ok();
 
@@ -123,9 +137,14 @@ void McpClient::cleanup_process() {
 }
 
 void McpClient::stop() {
-    if (!running_)
-        return;
-    running_ = false;
+    // Teardown is UNCONDITIONAL. The old `if (!running_) return;` guard looked
+    // like an idempotency check but was a resource leak: on_finished() sets
+    // running_ = false the moment the child process dies, so a stop() after a
+    // crash returned immediately and orphaned a parentless QThread still
+    // spinning an event loop plus its QProcess. McpManager restarts dead
+    // servers and resets the attempt budget on every success, so that leaked
+    // pair accumulated without bound. Only the terminate() is conditional now.
+    const bool was_running = running_.exchange(false);
 
     // Wake any pending requests with an error
     {
@@ -137,28 +156,53 @@ void McpClient::stop() {
         rpc_cond_.wakeAll();
     }
 
-    if (process_) {
-        // Ask the worker thread to terminate the process, then quit its event loop.
-        // We use QueuedConnection so the worker thread handles terminate() in its
-        // own event loop — no BlockingQueuedConnection deadlock risk.
-        // After quit(), wait() drains the thread and the process dies with it.
-        QMetaObject::invokeMethod(process_, [this]() { process_->terminate(); }, Qt::QueuedConnection);
+    // Kill and delete the QProcess ON ITS OWN THREAD. The old code called
+    // process_->kill() from the caller's thread (a cross-thread QProcess
+    // access) and then `delete worker_thread_` BEFORE cleanup_process()
+    // deleted process_ — destroying a QObject whose thread affinity pointed at
+    // an already-freed QThread. Modelled on trading/ExchangeSession::stop_ws.
+    const bool worker_alive =
+        worker_thread_ && worker_thread_->isRunning() && QThread::currentThread() != worker_thread_;
+    if (process_ && worker_alive) {
+        QMetaObject::invokeMethod(
+            process_,
+            [this, was_running]() {
+                if (!process_)
+                    return;
+                if (process_->state() != QProcess::NotRunning) {
+                    if (was_running)
+                        process_->terminate();
+                    if (!process_->waitForFinished(2000)) {
+                        process_->kill();
+                        process_->waitForFinished(1000);
+                    }
+                }
+                delete process_;
+                process_ = nullptr;
+            },
+            Qt::BlockingQueuedConnection);
     }
 
     if (worker_thread_) {
         worker_thread_->quit();
-        // Wait up to 4s for the worker to drain terminate() and exit cleanly.
-        // If it hangs, kill the process directly before giving up.
-        if (!worker_thread_->wait(4000) && process_) {
-            process_->kill();
-            worker_thread_->wait(1000);
+        if (worker_thread_->wait(3000)) {
+            delete worker_thread_;
+        } else {
+            // Deleting a still-running QThread is a crash, not a leak. The
+            // process is already gone by here, so a stuck event loop is a bug
+            // worth logging and leaking rather than aborting on during teardown.
+            LOG_ERROR(TAG, "Worker thread for " + config_.name + " did not exit — leaking it instead of crashing");
         }
-        delete worker_thread_;
         worker_thread_ = nullptr;
     }
 
+    // No-op when the lambda above already deleted it; covers the paths where
+    // the worker thread was never started or had already exited (in which case
+    // there is no other thread with an affinity claim on process_).
     cleanup_process();
-    LOG_INFO(TAG, "Stopped MCP server: " + config_.name);
+
+    if (was_running)
+        LOG_INFO(TAG, "Stopped MCP server: " + config_.name);
 }
 
 bool McpClient::is_running() const {

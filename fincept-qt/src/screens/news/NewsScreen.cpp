@@ -350,20 +350,50 @@ void NewsScreen::showEvent(QShowEvent* e) {
     if (first_show_) {
         first_show_ = false;
 
-        fincept::NewsArticleRepository::instance().ensure_seen_column();
-        fincept::NewsArticleRepository::instance().ensure_saved_column();
+        // First entry used to run a schema migration (PRAGMA table_info +
+        // conditional ALTER TABLE) plus two unbounded SELECTs straight on the
+        // GUI thread, so opening News stalled in proportion to all accumulated
+        // history — invisible on a fresh install, worse every week. It now runs
+        // on a worker (Database hands out a per-thread SQLite connection) and
+        // the results are applied back here, guarded on both hops (§P1/§P8).
+        //
+        // TODO(cross-file): ensure_seen_column()/ensure_saved_column() are
+        // startup schema work and belong next to the other migrations in
+        // Database::open(); they sit here only until that move lands.
+        const int64_t since_ts = QDateTime::currentSecsSinceEpoch() - (30LL * 86400);
+        QPointer<NewsScreen> self = this;
+        (void)QtConcurrent::run([self, since_ts]() {
+            auto& repo = fincept::NewsArticleRepository::instance();
+            repo.ensure_seen_column();
+            repo.ensure_saved_column();
 
-        int64_t since_ts = QDateTime::currentSecsSinceEpoch() - (30LL * 86400);
-        auto seen_result = fincept::NewsArticleRepository::instance().load_seen_ids(since_ts);
-        if (seen_result.is_ok()) {
-            for (const auto& id : seen_result.value())
-                feed_panel_->model()->mark_seen(id);
-        }
+            QSet<QString> seen_ids;
+            if (auto seen_result = repo.load_seen_ids(since_ts); seen_result.is_ok())
+                seen_ids = seen_result.value();
 
-        auto saved_result = fincept::NewsArticleRepository::instance().load_saved();
-        if (saved_result.is_ok())
-            side_panel_->update_saved(saved_result.value());
+            QVector<services::NewsArticle> saved;
+            if (auto saved_result = repo.load_saved(); saved_result.is_ok())
+                saved = saved_result.value();
 
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, seen_ids = std::move(seen_ids), saved = std::move(saved)]() {
+                    if (!self)
+                        return;
+                    for (const auto& id : seen_ids)
+                        self->feed_panel_->model()->mark_seen(id);
+                    self->side_panel_->update_saved(saved);
+                    LOG_INFO("NewsScreen", QString("Restored %1 seen IDs and %2 bookmarks from DB")
+                                               .arg(seen_ids.size())
+                                               .arg(saved.size()));
+                },
+                Qt::QueuedConnection);
+        });
+
+        // Independent of the restore above — kick the feed fetch immediately so
+        // the screen starts filling while the worker runs.
         LOG_INFO("NewsScreen", "showEvent: calling on_refresh");
         on_refresh();
         LOG_INFO("NewsScreen", "showEvent: on_refresh returned");
@@ -419,10 +449,10 @@ void NewsScreen::subscribe_mcp_events() {
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("news.monitor_added", on_monitors_changed));
-    mcp_event_subs_.append(bus.subscribe("news.monitor_toggled", on_monitors_changed));
-    mcp_event_subs_.append(bus.subscribe("news.monitor_deleted", on_monitors_changed));
-    mcp_event_subs_.append(bus.subscribe("news.refresh_requested", on_refresh_requested));
+    mcp_event_subs_.append(bus.subscribe(this, "news.monitor_added", on_monitors_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "news.monitor_toggled", on_monitors_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "news.monitor_deleted", on_monitors_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "news.refresh_requested", on_refresh_requested));
 }
 
 void NewsScreen::unsubscribe_mcp_events() {

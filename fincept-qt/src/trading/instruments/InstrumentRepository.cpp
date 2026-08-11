@@ -64,27 +64,39 @@ fincept::Result<void> InstrumentRepository::replace_all(const QString& broker_id
     // transaction still "succeeds". Coalesce nulls to "" so the row persists.
     auto nn = [](const QString& s) { return s.isNull() ? QStringLiteral("") : s; };
 
+    // One prepare, N binds. The previous loop called exec_write() per instrument,
+    // and exec_write() → Database::execute() re-prepares the statement every
+    // call — a broker master contract is ~100k rows, so an import paid 100k
+    // sqlite3_prepare_v2 compilations of this one identical INSERT.
+    // execute_many() opens no transaction of its own, so it runs inside the
+    // begin_transaction() above and the whole import is still a single commit.
+    QVector<QVariantList> rows;
+    rows.reserve(instruments.size());
     for (const auto& inst : instruments) {
-        auto ri = exec_write(sql, {
-                                      inst.instrument_token,
-                                      inst.exchange_token,
-                                      nn(inst.symbol),
-                                      nn(inst.brsymbol),
-                                      nn(inst.name),
-                                      nn(inst.exchange),
-                                      nn(inst.brexchange),
-                                      nn(inst.expiry),
-                                      inst.strike,
-                                      inst.lot_size,
-                                      QString(instrument_type_str(inst.instrument_type)),
-                                      inst.tick_size,
-                                      broker_id,
-                                      nn(inst.broker_token),
-                                  });
-        if (ri.is_err()) {
-            db().rollback();
-            return ri;
-        }
+        rows.append(QVariantList{
+            inst.instrument_token,
+            inst.exchange_token,
+            nn(inst.symbol),
+            nn(inst.brsymbol),
+            nn(inst.name),
+            nn(inst.exchange),
+            nn(inst.brexchange),
+            nn(inst.expiry),
+            inst.strike,
+            inst.lot_size,
+            QString(instrument_type_str(inst.instrument_type)),
+            inst.tick_size,
+            broker_id,
+            nn(inst.broker_token),
+        });
+    }
+
+    auto ri = db().execute_many(sql, rows);
+    if (ri.is_err()) {
+        LOG_ERROR("InstrumentRepo", QString("replace_all bulk insert failed for %1: %2")
+                                        .arg(broker_id, QString::fromStdString(ri.error())));
+        db().rollback();
+        return ri;
     }
 
     auto rc2 = db().commit();

@@ -30,9 +30,12 @@ class NewsArticleRepository : public BaseRepository<fincept::services::NewsArtic
     /// Mark an article as read (sets seen_at = now). No-op if already seen.
     Result<void> mark_seen(const QString& id);
 
-    /// Return all article IDs seen since since_ts (unix seconds).
-    /// Pass 0 to load all. Used to pre-populate the feed model on startup.
-    Result<QSet<QString>> load_seen_ids(int64_t since_ts = 0) const;
+    /// Return article IDs seen since since_ts (unix seconds), newest first.
+    /// Pass 0 for "no lower bound". Used to pre-populate the feed model on
+    /// startup. Bounded like load_recent(): news_articles is the fastest-growing
+    /// table, and an unbounded scan made first entry to the News screen cost
+    /// proportional to all accumulated history.
+    Result<QSet<QString>> load_seen_ids(int64_t since_ts = 0, int limit = 5000) const;
 
     /// Ensure the seen_at column exists (idempotent ALTER TABLE).
     /// Called once at startup before any seen operations.
@@ -41,8 +44,8 @@ class NewsArticleRepository : public BaseRepository<fincept::services::NewsArtic
     /// Toggle bookmark state for an article. Returns the new saved state.
     Result<bool> toggle_saved(const QString& id);
 
-    /// Return all bookmarked articles, newest first.
-    Result<QVector<fincept::services::NewsArticle>> load_saved() const;
+    /// Return bookmarked articles, newest first. Bounded like load_recent().
+    Result<QVector<fincept::services::NewsArticle>> load_saved(int limit = 2000) const;
 
     /// Ensure the saved column exists (idempotent ALTER TABLE).
     void ensure_saved_column();

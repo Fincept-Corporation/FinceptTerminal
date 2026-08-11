@@ -344,8 +344,8 @@ void SettingsScreen::subscribe_mcp_events() {
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("settings.changed", on_settings_changed));
-    mcp_event_subs_.append(bus.subscribe("llm.provider_changed", on_provider_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "settings.changed", on_settings_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "llm.provider_changed", on_provider_changed));
 }
 
 void SettingsScreen::unsubscribe_mcp_events() {

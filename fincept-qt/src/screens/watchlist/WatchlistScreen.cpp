@@ -228,9 +228,9 @@ void WatchlistScreen::subscribe_mcp_events() {
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("watchlist.created", on_watchlists_changed));
-    mcp_event_subs_.append(bus.subscribe("watchlist.deleted", on_watchlists_changed));
-    mcp_event_subs_.append(bus.subscribe("watchlist.updated", on_watchlists_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "watchlist.created", on_watchlists_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "watchlist.deleted", on_watchlists_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "watchlist.updated", on_watchlists_changed));
 }
 
 void WatchlistScreen::unsubscribe_mcp_events() {

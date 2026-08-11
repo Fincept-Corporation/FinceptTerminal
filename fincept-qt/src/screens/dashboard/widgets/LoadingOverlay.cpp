@@ -93,6 +93,19 @@ void LoadingOverlay::attach_to(QWidget* target) {
 
 void LoadingOverlay::set_shimmer_phase(qreal v) {
     shimmer_phase_ = v;
+
+    // Rate-gate to P9's 20fps ceiling. The driving QPropertyAnimation loops
+    // forever, and an unconditional update() here repainted at Qt's animation
+    // rate (~60Hz) — while each frame builds four QPainterPaths and four
+    // QLinearGradients under Antialiasing. Every dashboard tile owns one of
+    // these and they are all shimmering simultaneously at startup, which is
+    // exactly when the machine is busiest constructing the dashboard.
+    //
+    // The phase value is still stored every tick, so the animation stays smooth
+    // in value terms; only the repaint is throttled.
+    if (repaint_clock_.isValid() && repaint_clock_.elapsed() < kMinRepaintIntervalMs)
+        return;
+    repaint_clock_.restart();
     update();
 }
 

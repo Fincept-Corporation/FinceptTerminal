@@ -6,6 +6,7 @@
 #include <QSqlQuery>
 #include <QString>
 #include <QVariantList>
+#include <QVector>
 
 #include <atomic>
 
@@ -39,11 +40,24 @@ class Database {
     Result<QSqlQuery> execute(const QString& sql, const QVariantList& params = {});
     Result<void> exec(const QString& sql);
 
+    /// Prepare `sql` ONCE and execute it for every parameter row.
+    /// Use for bulk INSERT/UPDATE loops — `execute()` re-prepares per call, so an
+    /// N-row loop pays N statement compilations of an identical statement.
+    /// Does NOT open a transaction: call inside the caller's
+    /// begin_transaction()/commit() so the whole batch is one commit.
+    /// Stops and returns on the first failing row (the row index is in the error).
+    Result<void> execute_many(const QString& sql, const QVector<QVariantList>& rows);
+
     // Transaction support (per-thread — operates on the calling thread's connection).
     Result<void> begin_transaction();
     Result<void> commit();
     Result<void> rollback();
 
+    /// The owning (main-thread) connection object.
+    /// MAIN THREAD ONLY — this bypasses `connection()`, so using it from any
+    /// other thread is the cross-thread QSqlDatabase misuse the per-thread
+    /// scheme exists to prevent. Prefer `execute()` / `exec()` / `connection()`
+    /// everywhere; this accessor exists for the SQL console and diagnostics.
     QSqlDatabase& raw_db() { return db_; }
 
     /// Returns the file path of the open database (empty if not open).

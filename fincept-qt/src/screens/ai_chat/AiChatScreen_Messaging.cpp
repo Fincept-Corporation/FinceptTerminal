@@ -147,17 +147,22 @@ void AiChatScreen::on_send() {
     ChatRepository::instance().add_message(active_session_id_, "user", text,
                                            ai_chat::LlmService::instance().active_provider(),
                                            ai_chat::LlmService::instance().active_model());
+    // Snapshot BEFORE appending the new turn: every request builder appends
+    // `text` as the trailing user message itself, so including it in the history
+    // too sent the same turn twice (and, on the Fincept flat-prompt path, printed
+    // "User: …" twice in a row).
+    std::vector<ai_chat::ConversationMessage> hist_copy = history_;
     history_.push_back({"user", text});
 
     // Show typing indicator while waiting for first chunk
     show_typing(true);
     scroll_to_bottom();
 
-    // Fresh Thinking section for this message (reasoning chunks land in a
-    // collapsible card created lazily by on_stream_chunk).
+    // Fresh Thinking / Tools sections for this message (both cards are created
+    // lazily by on_stream_chunk when their channel first produces a chunk).
     reset_thinking_state();
+    reset_tools_state();
 
-    std::vector<ai_chat::ConversationMessage> hist_copy = history_;
     const QString provider = ai_chat::LlmService::instance().active_provider();
     if (ai_chat::provider_supports_streaming(provider)) {
         QPointer<AiChatScreen> self = this;
@@ -210,6 +215,15 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
         return;
     }
 
+    // Tool-progress chunk → its own collapsible Tools card, never the answer
+    // bubble. Keeps plumbing (tool_list / tool_describe) out of the reply.
+    const QString tool_prefix = ai_chat::tool_stream_prefix();
+    if (chunk.startsWith(tool_prefix)) {
+        append_tool_chunk(chunk.mid(tool_prefix.size()));
+        scroll_to_bottom();
+        return;
+    }
+
     // Tool-call clear sentinel: reset bubble content (removes partial XML).
     if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
         if (!streaming_bubble_)
@@ -234,9 +248,10 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     streaming_ = false;
     show_typing(false);
 
-    // Lock in the Thinking card (swap the live "Thinking…" header for its final
-    // label) and stop tracking it so the next message starts a fresh one.
+    // Lock in the Thinking and Tools cards (swap their live headers for final
+    // labels) and stop tracking them so the next message starts fresh ones.
     finalize_thinking_card();
+    finalize_tools_card();
 
     // Ensure a bubble exists for any terminal state (success + content,
     // failure with an error message, or success-but-empty). Without this,
@@ -418,11 +433,122 @@ void AiChatScreen::reset_thinking_state() {
     thinking_text_.clear();
 }
 
+// ── Tools card ──────────────────────────────────────────────────────────────────
+// Same shape as the Thinking card, different channel (tool_stream_prefix()).
+// Starts EXPANDED — unlike chain-of-thought, tool progress is the only signal the
+// user has that a long multi-round turn is advancing — and collapses on finish
+// into a one-line "N tools used" summary.
+
+void AiChatScreen::create_tools_card() {
+    if (tools_card_)
+        return;
+
+    auto* card = new QWidget;
+    card->setMaximumWidth(kAiColMaxWidth);
+    card->setStyleSheet(QString("background:%1;border:1px solid %2;").arg(col::BG_SURFACE(), col::BORDER_DIM()));
+    auto* vl = new QVBoxLayout(card);
+    vl->setContentsMargins(10, 6, 10, 6);
+    vl->setSpacing(4);
+
+    auto* header = new QPushButton(QChar(0x25BE) + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x94\xA7") +
+                                                    QStringLiteral(" ")) +
+                                   tr("Using tools…"));
+    header->setCursor(Qt::PointingHandCursor);
+    header->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
+                                  "font-size:%2px;font-weight:600;text-align:left;padding:0;}"
+                                  "QPushButton:hover{color:%3;}")
+                              .arg(col::TEXT_TERTIARY())
+                              .arg(fnt::SMALL)
+                              .arg(col::TEXT_SECONDARY()));
+    vl->addWidget(header);
+
+    auto* body = new QLabel;
+    body->setWordWrap(true);
+    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    body->setVisible(true); // expanded while the turn runs
+    body->setStyleSheet(QString("QLabel{color:%1;font-size:%2px;background:transparent;}")
+                            .arg(col::TEXT_DIM())
+                            .arg(fnt::SMALL));
+    vl->addWidget(body);
+
+    // Raw pointers, not the QPointer members — those are nulled when the stream
+    // finishes, and the finished card must stay toggleable.
+    QObject::connect(header, &QPushButton::clicked, card, [header, body]() {
+        const bool show = !body->isVisible();
+        body->setVisible(show);
+        QString t = header->text();
+        if (!t.isEmpty())
+            t.replace(0, 1, show ? QChar(0x25BE) : QChar(0x25B8));
+        header->setText(t);
+    });
+
+    messages_layout_->insertWidget(messages_layout_->count() - 1, card, 0, Qt::AlignLeft);
+    tools_card_ = card;
+    tools_header_ = header;
+    tools_body_ = body;
+}
+
+void AiChatScreen::append_tool_chunk(const QString& text) {
+    if (text.isEmpty())
+        return;
+    show_typing(false); // the card now signals activity
+    if (!tools_card_)
+        create_tools_card();
+
+    for (const QString& raw : text.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        const QString line = raw.trimmed();
+        if (line.isEmpty())
+            continue;
+        ++tools_count_;
+
+        // Collapse a consecutive run of the same tool into "name ×N". Writing a
+        // spreadsheet is ~45 back-to-back set_excel_cell calls; listing each is a
+        // wall of noise that buries the steps that actually differ.
+        const QString base = line.section(QStringLiteral(" · "), 0, 0);
+        if (base == tools_run_base_ && !tools_lines_.isEmpty()) {
+            ++tools_run_count_;
+            tools_lines_.last() = base + QStringLiteral(" ×") + QString::number(tools_run_count_);
+        } else {
+            tools_run_base_ = base;
+            tools_run_count_ = 1;
+            tools_lines_.append(line);
+        }
+    }
+
+    tools_text_ = QStringLiteral("• ") + tools_lines_.join(QStringLiteral("\n• "));
+    if (tools_body_)
+        tools_body_->setText(tools_text_);
+}
+
+void AiChatScreen::finalize_tools_card() {
+    if (tools_header_) {
+        // Collapse once the answer is in — the detail stays one click away.
+        if (tools_body_)
+            tools_body_->setVisible(false);
+        tools_header_->setText(QChar(0x25B8) +
+                               (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x94\xA7") + QStringLiteral(" ")) +
+                               tr("%n tool step(s)", "", tools_count_));
+    }
+    reset_tools_state();
+}
+
+void AiChatScreen::reset_tools_state() {
+    tools_card_ = nullptr;
+    tools_header_ = nullptr;
+    tools_body_ = nullptr;
+    tools_text_.clear();
+    tools_lines_.clear();
+    tools_run_base_.clear();
+    tools_run_count_ = 0;
+    tools_count_ = 0;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 void AiChatScreen::clear_messages() {
     streaming_bubble_.clear();
     reset_thinking_state(); // card widgets are deleted by the loop below
+    reset_tools_state();
     // Skip the welcome panel — it is a permanent fixture reused across sessions
     // (it is only shown/hidden). Everything else is a message row.
     for (int i = messages_layout_->count() - 1; i >= 0; --i) {
@@ -437,6 +563,12 @@ void AiChatScreen::clear_messages() {
 }
 
 void AiChatScreen::scroll_to_bottom() {
+    // Re-arm following. The rangeChanged handler installed in build_chat_area()
+    // does the real work — it fires once the layout has settled and therefore
+    // knows the true maximum. This deferred nudge covers the case where content
+    // changed without altering the scroll range.
+    stick_to_bottom_ = true;
+
     // Debounce: a single scroll lands at the end of the current event-loop batch.
     // Without this, a 100-chunk stream queued 100 independent 50ms timers, each
     // racing to setValue() and starving paint events.
@@ -445,8 +577,12 @@ void AiChatScreen::scroll_to_bottom() {
     scroll_pending_ = true;
     QTimer::singleShot(0, this, [this]() {
         scroll_pending_ = false;
-        if (scroll_area_ && scroll_area_->verticalScrollBar())
-            scroll_area_->verticalScrollBar()->setValue(scroll_area_->verticalScrollBar()->maximum());
+        if (!scroll_area_ || !scroll_area_->verticalScrollBar())
+            return;
+        auto* sb = scroll_area_->verticalScrollBar();
+        programmatic_scroll_ = true;
+        sb->setValue(sb->maximum());
+        programmatic_scroll_ = false;
     });
 }
 

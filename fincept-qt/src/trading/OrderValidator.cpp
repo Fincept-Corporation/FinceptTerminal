@@ -58,11 +58,14 @@ OrderValidator::ValidationResult OrderValidator::validate_smart(const SmartOrder
     else if (!is_valid_exchange(order.exchange))
         r.errors.append("Invalid exchange: " + order.exchange);
 
-    // Smart order: position_size is the target. When target is 0 (flatten) the
-    // engine derives action from current position, so quantity is optional. When
-    // there is no target and no fallback quantity, nothing can be placed.
-    if (order.position_size == 0 && order.quantity <= 0)
-        r.errors.append("Either position_size or a positive quantity is required");
+    // position_size is the TARGET net position, and 0 is a legitimate target —
+    // "flatten": the engine reads the live book and derives the quantity itself.
+    // An explicit 0 is indistinguishable from an unset one, so requiring a
+    // fallback quantity here would reject every flatten order. The engine already
+    // reports the genuinely-empty case (no position AND no quantity) as a benign
+    // "no action needed", so only a nonsensical negative fallback is an error.
+    if (order.quantity < 0)
+        r.errors.append("Quantity cannot be negative");
 
     if (requires_price(order.order_type) && order.price <= 0)
         r.errors.append("Price is required for LIMIT / SL-Limit orders");

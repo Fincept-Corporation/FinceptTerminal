@@ -1,5 +1,7 @@
 #include "services/wallet/LocalWalletBridge.h"
 
+#include "auth/ConstantTime.h"
+#include "auth/LoopbackGuard.h"
 #include "core/logging/Logger.h"
 
 #include <QByteArray>
@@ -104,6 +106,17 @@ bool LocalWalletBridge::is_listening() const noexcept {
     return server_ != nullptr && server_->isListening();
 }
 
+quint16 LocalWalletBridge::own_port() const noexcept {
+    return server_ ? server_->serverPort() : 0;
+}
+
+QByteArray LocalWalletBridge::own_origin() const {
+    const quint16 p = own_port();
+    if (p == 0)
+        return {};
+    return "http://127.0.0.1:" + QByteArray::number(p);
+}
+
 void LocalWalletBridge::timerEvent(QTimerEvent* e) {
     if (e->timerId() == timer_id_) {
         LOG_WARN("WalletBridge", "timed out before callback");
@@ -154,6 +167,18 @@ void LocalWalletBridge::on_new_connection() {
                 socket->disconnectFromHost();
                 return;
             }
+            // Host + fetch-metadata guard. Blocks DNS rebinding and any
+            // cross-origin subresource request from another page the user has
+            // open; our own served page is same-origin and always passes.
+            // See auth/LoopbackGuard.h for the full threat model.
+            const auto guard = fincept::auth::check_loopback_request(header_block, own_port());
+            if (!guard.allowed) {
+                LOG_WARN("WalletBridge", "rejected request: " + guard.reason);
+                write_response(socket, 403, "text/plain", "forbidden");
+                socket->disconnectFromHost();
+                return;
+            }
+
             const QByteArray method = parts.value(0);
             const QByteArray path = parts.value(1);
             const QByteArray body = buf.mid(header_end + 4, content_length);
@@ -185,8 +210,11 @@ void LocalWalletBridge::handle_request(QTcpSocket* socket, const QByteArray& /*r
         return;
     }
 
+    // Constant-time compare — `!=` on QByteArray short-circuits at the first
+    // differing byte, and the timing difference leaks the token byte by byte to
+    // anything that can hammer this port.
     const auto token_in_query = query_param(path, "token");
-    if (token_in_query != connect_token_) {
+    if (!fincept::auth::constant_time_equals(token_in_query, connect_token_)) {
         LOG_WARN("WalletBridge", QStringLiteral("token mismatch on %1 (got %2 chars)")
                                      .arg(QString::fromLatin1(path))
                                      .arg(token_in_query.size()));
@@ -302,10 +330,16 @@ void LocalWalletBridge::write_response(QTcpSocket* socket, int status, const QBy
     response.append("Referrer-Policy: no-referrer\r\n");
     // Same-origin in practice (page + fetch both served by us), but some
     // browsers (and some Phantom builds) trip on missing CORS for any
-    // localhost POST. Echoing the page's own origin keeps it safe.
-    response.append("Access-Control-Allow-Origin: *\r\n");
-    response.append("Access-Control-Allow-Headers: Content-Type\r\n");
-    response.append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
+    // localhost POST. Send the page's OWN origin — the comment here used to
+    // claim that while the code actually sent `*`, which invites every origin
+    // on the web to read this bridge's responses.
+    const QByteArray origin = own_origin();
+    if (!origin.isEmpty()) {
+        response.append("Access-Control-Allow-Origin: " + origin + "\r\n");
+        response.append("Vary: Origin\r\n");
+        response.append("Access-Control-Allow-Headers: Content-Type\r\n");
+        response.append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
+    }
     response.append("\r\n");
     response.append(body);
     socket->write(response);

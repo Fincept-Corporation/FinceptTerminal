@@ -1,5 +1,7 @@
 #include "trading/brokers/iifl/IIFLBroker.h"
+#include "trading/brokers/BrokerModifyFields.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 
@@ -163,19 +165,19 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
     auto trade_resp = http.post_json(QString("%1/user/session").arg(INTERACTIVE_URL), trade_body,
                                      {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
     if (!trade_resp.success)
-        return {false, "", "", "", "Interactive login failed: " + trade_resp.error, ""};
+        return {.success = false, .error = "Interactive login failed: " + trade_resp.error};
 
     QJsonDocument trade_doc = QJsonDocument::fromJson(trade_resp.raw_body.toUtf8());
     if (!trade_doc.isObject())
-        return {false, "", "", "", "Interactive login: invalid response", ""};
+        return {.success = false, .error = "Interactive login: invalid response"};
 
     QJsonObject trade_obj = trade_doc.object();
     if (trade_obj.value("type").toString() != "success")
-        return {false, "", "", "", trade_obj.value("description").toString("Interactive login failed"), ""};
+        return {.success = false, .error = trade_obj.value("description").toString("Interactive login failed")};
 
     QString trade_token = trade_obj.value("result").toObject().value("token").toString();
     if (trade_token.isEmpty())
-        return {false, "", "", "", "Interactive login: no token in response", ""};
+        return {.success = false, .error = "Interactive login: no token in response"};
 
     // Step 2: Market data login (feed token)
     QJsonObject market_body;
@@ -186,22 +188,22 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
     auto market_resp = http.post_json(QString("%1/auth/login").arg(MARKET_DATA_URL), market_body,
                                       {{"Content-Type", "application/json"}, {"Accept", "application/json"}});
     if (!market_resp.success)
-        return {false, "", "", "", "Market data login failed: " + market_resp.error, ""};
+        return {.success = false, .error = "Market data login failed: " + market_resp.error};
 
     QJsonDocument market_doc = QJsonDocument::fromJson(market_resp.raw_body.toUtf8());
     if (!market_doc.isObject())
-        return {false, "", "", "", "Market data login: invalid response", ""};
+        return {.success = false, .error = "Market data login: invalid response"};
 
     QJsonObject market_obj = market_doc.object();
     if (market_obj.value("type").toString() != "success")
-        return {false, "", "", "", market_obj.value("description").toString("Market data login failed"), ""};
+        return {.success = false, .error = market_obj.value("description").toString("Market data login failed")};
 
     QJsonObject market_result = market_obj.value("result").toObject();
     QString feed_token = market_result.value("token").toString();
     QString user_id = market_result.value("userID").toString();
 
     if (feed_token.isEmpty())
-        return {false, "", "", "", "Market data login: no token in response", ""};
+        return {.success = false, .error = "Market data login: no token in response"};
 
     // Pack both tokens
     QString packed_token = trade_token + ":::" + feed_token;
@@ -209,14 +211,16 @@ TokenExchangeResponse IIFLBroker::exchange_token(const QString& api_key, const Q
     // pairs stored in api_key/api_secret — both are persisted, so the session is
     // silently re-mintable. Tokens lapse at the daily reset.
     const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-    return {true, packed_token, user_id, "", extra, ""};
+    // XTS userID is the account identifier, not a refresh token — it used to be
+    // passed positionally into the refresh_token slot, which left user_id empty.
+    return {.success = true, .access_token = packed_token, .user_id = user_id, .additional_data = extra};
 }
 
 // Silent refresh = re-run the XTS interactive + market logins from the stored
 // appKey/secret pairs (no TOTP/web code involved).
 TokenExchangeResponse IIFLBroker::refresh_session(const BrokerCredentials& creds) {
     if (creds.api_key.isEmpty() || creds.api_secret.isEmpty())
-        return {false, "", "", "", "", "IIFL silent refresh requires stored app/secret keys"};
+        return {.success = false, .error = "IIFL silent refresh requires stored app/secret keys"};
     return exchange_token(creds.api_key, creds.api_secret, QString());
 }
 
@@ -239,7 +243,10 @@ OrderPlaceResponse IIFLBroker::place_order(const BrokerCredentials& creds, const
     body["orderQuantity"] = static_cast<int>(order.quantity);
     body["limitPrice"] = order.price;
     body["stopPrice"] = order.stop_price;
-    body["orderUniqueIdentifier"] = "fincept";
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
+    body["orderUniqueIdentifier"] = make_client_order_ref(20);
 
     auto& http = BrokerHttp::instance();
     auto resp = http.post_json(
@@ -271,12 +278,15 @@ ApiResponse<QJsonObject> IIFLBroker::modify_order(const BrokerCredentials& creds
     body["appOrderID"] = order_id.toLongLong();
     body["modifiedProductType"] = mods.value("productType").toString("MIS");
     body["modifiedOrderType"] = mods.value("orderType").toString("MARKET");
-    body["modifiedOrderQuantity"] = mods.value("quantity").toInt(0);
+    body["modifiedOrderQuantity"] = static_cast<int>(modify_fields::number(mods, modify_fields::kQuantity));
     body["modifiedDisclosedQuantity"] = 0;
-    body["modifiedLimitPrice"] = mods.value("limitPrice").toDouble(0.0);
-    body["modifiedStopPrice"] = mods.value("stopPrice").toDouble(0.0);
+    body["modifiedLimitPrice"] = modify_fields::number(mods, modify_fields::kPrice);
+    body["modifiedStopPrice"] = modify_fields::number(mods, modify_fields::kTrigger);
     body["modifiedTimeInForce"] = mods.value("timeInForce").toString("DAY");
-    body["orderUniqueIdentifier"] = "fincept";
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
+    body["orderUniqueIdentifier"] = make_client_order_ref(20);
 
     auto& http = BrokerHttp::instance();
     auto resp = http.put_json(
@@ -442,6 +452,10 @@ ApiResponse<QVector<BrokerPosition>> IIFLBroker::get_positions(const BrokerCrede
         pos.pnl = o.value("UnrealizedMTM").toDouble();
         pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = o.value("ProductType").toString();
+        // Quantity carries the sign, but PortfolioReplicationService takes
+        // fabs() of quantity and reads direction from `side` alone — leaving it
+        // empty replicated every short as a long and inverted its P&L.
+        pos.side = qty > 0 ? "LONG" : "SHORT";
         positions.append(pos);
     }
 

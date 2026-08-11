@@ -205,7 +205,10 @@ void LlmService::ensure_config() const {
                            "Then call tool_describe(name) for the full input schema, then invoke it. "
                            "For requests with multiple intents (\"get news AND add to watchlist\"), "
                            "call tool_list MULTIPLE TIMES — once per intent. "
-                           "Never decline an action you can fulfil via a discoverable tool.";
+                           "Never decline an action you can fulfil via a discoverable tool. "
+                           "Discovery is not free: only reach for a tool when the request needs live data "
+                           "or an action inside the terminal. Greetings, small talk, and questions you can "
+                           "answer from your own knowledge get a direct plain-text reply and NO tool call.";
             if (!sorted_cats.isEmpty()) {
                 hint += "\nAvailable tool categories: " + sorted_cats.join(", ") + ".";
             }
@@ -1104,6 +1107,12 @@ LlmResponse LlmService::do_streaming_request(const QString& user_message,
         resp.error = QString("HTTP %1").arg(status);
     }
 
+    // On the timeout path we fall straight out of `loop.exec()` with the reply
+    // still streaming, and drain_nam() makes the delete synchronous — tearing
+    // the reply down from under Qt's HTTP machinery. Abort first, as the
+    // sibling helper does (LlmHttpHelpers.cpp:120). No-op when already finished.
+    if (!reply->isFinished())
+        reply->abort();
     drain_nam();
 
     if (!done)

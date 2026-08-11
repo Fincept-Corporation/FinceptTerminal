@@ -25,6 +25,15 @@ namespace fincept::screens {
 
 namespace {
 
+/// Dynamic-property guards set by reload() when a settings *read* failed.
+/// `kNotifProviderReadFailedProp` lives on each provider's body_frame (the only
+/// handle save_provider_fields() has); `kNotifTriggersReadFailedProp` lives on
+/// the section itself and covers the eight alert-trigger booleans. While set,
+/// the corresponding save path refuses to write — the widgets hold defaults,
+/// not the user's values, and set() is an INSERT OR REPLACE.
+constexpr const char* kNotifProviderReadFailedProp = "fincept_notif_provider_read_failed";
+constexpr const char* kNotifTriggersReadFailedProp = "fincept_notif_triggers_read_failed";
+
 struct FieldDef {
     QString key;
     QString label;
@@ -383,14 +392,19 @@ void NotificationsSection::build_ui() {
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
         auto& repo = SettingsRepository::instance();
         auto b = [](bool v) { return v ? "1" : "0"; };
-        repo.set("notifications.inapp", b(trigger_inapp_->isChecked()), "notifications");
-        repo.set("notifications.price_alerts", b(trigger_price_->isChecked()), "notifications");
-        repo.set("notifications.news_alerts", b(trigger_news_->isChecked()), "notifications");
-        repo.set("notifications.order_fills", b(trigger_orders_->isChecked()), "notifications");
-        repo.set("notifications.news_breaking", b(news_breaking_->isChecked()), "notifications");
-        repo.set("notifications.news_monitors", b(news_monitors_->isChecked()), "notifications");
-        repo.set("notifications.news_deviations", b(news_deviations_->isChecked()), "notifications");
-        repo.set("notifications.news_flash", b(news_flash_->isChecked()), "notifications");
+        if (property(kNotifTriggersReadFailedProp).toBool()) {
+            LOG_WARN("Settings", "Skipping alert-trigger save — the stored triggers could not be read, so the "
+                                 "checkboxes on screen are defaults, not the user's values");
+        } else {
+            repo.set("notifications.inapp", b(trigger_inapp_->isChecked()), "notifications");
+            repo.set("notifications.price_alerts", b(trigger_price_->isChecked()), "notifications");
+            repo.set("notifications.news_alerts", b(trigger_news_->isChecked()), "notifications");
+            repo.set("notifications.order_fills", b(trigger_orders_->isChecked()), "notifications");
+            repo.set("notifications.news_breaking", b(news_breaking_->isChecked()), "notifications");
+            repo.set("notifications.news_monitors", b(news_monitors_->isChecked()), "notifications");
+            repo.set("notifications.news_deviations", b(news_deviations_->isChecked()), "notifications");
+            repo.set("notifications.news_flash", b(news_flash_->isChecked()), "notifications");
+        }
 
         for (const auto& def : provider_defs())
             save_provider_fields(def.id, provider_widgets_.value(def.id));
@@ -410,9 +424,21 @@ void NotificationsSection::reload() {
         return;
 
     auto& repo = SettingsRepository::instance();
+    // A read error is not "unset". Every value loaded here is written straight
+    // back by the Save handler (and, for provider fields, by Test Send), so any
+    // failed read must disarm the corresponding save path instead of letting a
+    // default masquerade as the stored value.
+    bool triggers_read_failed = false;
     auto get_bool = [&](const QString& key, bool def) -> bool {
         auto r = repo.get(key);
-        return r.is_ok() && !r.value().isEmpty() ? (r.value() == "1") : def;
+        if (r.is_err()) {
+            LOG_ERROR("Settings", QString("settings read failed for '%1' — showing the default, saving of the alert "
+                                          "triggers is disabled: %2")
+                                      .arg(key, QString::fromStdString(r.error())));
+            triggers_read_failed = true;
+            return def;
+        }
+        return !r.value().isEmpty() ? (r.value() == "1") : def;
     };
 
     if (trigger_inapp_)
@@ -437,24 +463,56 @@ void NotificationsSection::reload() {
     if (news_subopts_frame_)
         news_subopts_frame_->setVisible(news_on);
 
+    setProperty(kNotifTriggersReadFailedProp, triggers_read_failed);
+
     for (const auto& def : provider_defs()) {
         if (!provider_widgets_.contains(def.id))
             continue;
         const auto& pw = provider_widgets_[def.id];
         const QString cat = QString("notif_%1").arg(def.id);
+        bool provider_read_failed = false;
 
         if (pw.enabled) {
             auto r = repo.get(cat + ".enabled");
-            pw.enabled->setChecked(r.is_ok() && r.value() == "1");
+            if (r.is_err()) {
+                LOG_ERROR("Settings", QString("settings read failed for '%1' — leaving the stored value untouched: %2")
+                                          .arg(cat + ".enabled", QString::fromStdString(r.error())));
+                provider_read_failed = true;
+            } else {
+                pw.enabled->setChecked(r.value() == "1");
+            }
         }
 
         for (const auto& fd : def.fields) {
             if (!pw.fields.contains(fd.key))
                 continue;
             auto r = repo.get(cat + "." + fd.key);
-            if (r.is_ok() && pw.fields[fd.key])
+            if (r.is_err()) {
+                // These fields are credentials — webhook URLs, bot tokens, SMTP
+                // passwords. Leave the box empty rather than pretending it is
+                // the stored value, and disarm the save path below so neither
+                // Save nor Test Send can write the blank over the real secret.
+                LOG_ERROR("Settings", QString("settings read failed for '%1' — leaving the stored credential "
+                                              "untouched: %2")
+                                          .arg(cat + "." + fd.key, QString::fromStdString(r.error())));
+                provider_read_failed = true;
+                continue;
+            }
+            if (pw.fields[fd.key])
                 pw.fields[fd.key]->setText(r.value());
         }
+
+        // The guard lives on the provider's own widget so save_provider_fields()
+        // — which only receives the ProviderWidgets struct — can see it.
+        if (pw.body_frame)
+            pw.body_frame->setProperty(kNotifProviderReadFailedProp, provider_read_failed);
+        if (pw.test_btn)
+            pw.test_btn->setEnabled(!provider_read_failed);
+        if (provider_read_failed && pw.status_lbl)
+            pw.status_lbl->setText(tr("Could not read this provider's saved settings — saving is disabled so the "
+                                      "blank fields cannot overwrite them. Reopen Settings to retry."));
+        else if (pw.status_lbl)
+            pw.status_lbl->clear();
     }
 }
 
@@ -525,6 +583,13 @@ void NotificationsSection::retranslateUi() {
 }
 
 void NotificationsSection::save_provider_fields(const QString& provider_id, const ProviderWidgets& pw) {
+    if (pw.body_frame && pw.body_frame->property(kNotifProviderReadFailedProp).toBool()) {
+        LOG_WARN("Settings", QString("Skipping save for notification provider '%1' — its stored settings could not "
+                                     "be read, so the fields on screen are not its real values")
+                                 .arg(provider_id));
+        return;
+    }
+
     auto& repo = SettingsRepository::instance();
     const QString cat = QString("notif_%1").arg(provider_id);
 

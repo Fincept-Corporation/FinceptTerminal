@@ -105,7 +105,7 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
 
     // Listen on the app-wide event bus for "load this symbol" requests
     // from other parts of the app (e.g. the command bar search).
-    EventBus::instance().subscribe("equity_research.load_symbol", [this](const QVariantMap& payload) {
+    EventBus::instance().subscribe(this, "equity_research.load_symbol", [this](const QVariantMap& payload) {
         const QString symbol = payload.value("symbol").toString();
         if (!symbol.isEmpty())
             load_symbol(symbol);

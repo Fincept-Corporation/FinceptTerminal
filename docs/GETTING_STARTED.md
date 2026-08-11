@@ -7,21 +7,27 @@ Welcome to Fincept Terminal! This guide will get you from zero to your first con
 
 ## What is Fincept Terminal?
 
-Fincept Terminal is an **open-source financial analysis platform** — a free, open-source alternative to legacy professional financial terminals. Version 4 is a native C++20 application built with Qt6.
+Fincept Terminal is a native C++20 desktop terminal for financial research — Qt6 UI, embedded Python 3.11 analytics, one binary.
+
+It ships in **two editions on one data core**:
+
+- **Open source** (this repository) — AGPL-3.0, free for learning, personal use and academic research. Ships one release a month. **This guide covers building it.**
+- **[Enterprise](https://fincept.in/enterprise)** — the private, closed-source build for funds, family offices and research desks: 41 modules, proprietary datasets, multi-agent research, live broker routing, SSO and an SLA, from $99/user/month. It is not built from this repository.
 
 ### The Big Picture
 
-**Current Reality:**
-- Legacy professional terminals: $20,000+/year per user
+**Current reality:**
+- Legacy professional terminals: ~$27,000/year per seat
 - Industry-standard market data subscriptions: $20,000+/year
 - Professional tools locked behind paywalls
 
-**Our Vision:**
-- 100% free and open source
-- Integrate 100+ data sources (stocks, crypto, forex, economic data, news, etc.)
-- AI-powered analysis and insights
+**What this repository is for:**
+- 100+ data source integrations (stocks, crypto, forex, economic data, news)
+- AI-powered analysis — bring your own LLM key
 - Native C++ performance — no browser/JS overhead
 - Built by the community, for the community
+
+Contributions land in the open-source edition. Private datasets, point-in-time history, included AI credits and live execution are [Enterprise](https://fincept.in/enterprise) features.
 
 ### Technology Decisions (and Why)
 

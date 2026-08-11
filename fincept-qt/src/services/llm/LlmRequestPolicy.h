@@ -57,6 +57,56 @@ inline void emit_progress(const QString& text) {
         t_progress_emitter(text);
 }
 
+/// Human-readable one-line label for a tool call.
+///
+/// The discovery meta-tools are the ones a user sees most and understands least,
+/// so they get plain-English wording plus the argument that distinguishes one
+/// call from the next — without it, six `tool_describe` calls for six different
+/// tools all render as the identical string "tool_describe".
+inline QString tool_progress_label(const QString& display_name, const QJsonObject& args) {
+    if (display_name == QLatin1String("tool_list")) {
+        const QString q = args.value(QStringLiteral("query")).toString().trimmed();
+        return q.isEmpty() ? QStringLiteral("Finding tools") : QStringLiteral("Finding tools · ") + q;
+    }
+    if (display_name == QLatin1String("tool_describe")) {
+        const QString n = args.value(QStringLiteral("name")).toString().trimmed();
+        return n.isEmpty() ? QStringLiteral("Reading schema") : QStringLiteral("Reading schema · ") + n;
+    }
+    if (display_name == QLatin1String("result_fetch"))
+        return QStringLiteral("Fetching full result");
+
+    // Real tools: name plus the first short STRING argument as context
+    // ("get_news · MARKETS"). Positional indices are deliberately excluded — a
+    // run of set_excel_cell calls rendered as "· 0 / · 1 / · 3 / · 1 …", which
+    // tells the reader nothing and defeats run-collapsing downstream. Numbers in
+    // general make poor labels, so only strings qualify.
+    static const QSet<QString> kPositionalKeys = {
+        QStringLiteral("sheet_index"), QStringLiteral("row"),   QStringLiteral("col"),
+        QStringLiteral("column"),      QStringLiteral("index"), QStringLiteral("limit"),
+        QStringLiteral("offset"),      QStringLiteral("top_k"), QStringLiteral("count"),
+    };
+    for (auto it = args.constBegin(); it != args.constEnd(); ++it) {
+        if (!it.value().isString() || kPositionalKeys.contains(it.key().toLower()))
+            continue;
+        const QString v = it.value().toString().trimmed();
+        if (v.isEmpty() || v.size() > 40 || v.contains(QLatin1Char('\n')))
+            continue;
+        return display_name + QStringLiteral(" · ") + v;
+    }
+    return display_name;
+}
+
+/// Emit one tool-progress line on the dedicated tool channel.
+///
+/// Every call is emitted; collapsing a run of the same tool into "name ×N" is
+/// the consumer's job, because only the consumer can rewrite a line it already
+/// rendered. Suppressing here would have cost the count entirely.
+inline void emit_tool_progress(const QString& display_name, const QJsonObject& args) {
+    if (!t_progress_emitter)
+        return;
+    t_progress_emitter(tool_stream_prefix() + tool_progress_label(display_name, args) + QStringLiteral("\n"));
+}
+
 // Active chat session id for the in-flight LLM request. Set by the chat screen
 // before calling chat_streaming(), read by MCP tools (e.g. report_session_context)
 // to scope per-chat state — for example, "did this chat session already start a

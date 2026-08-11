@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 
+#include <QCoreApplication>
 #include <QDate>
 
 namespace fincept::workflow {
@@ -13,6 +14,14 @@ RiskManager& RiskManager::instance() {
 
 RiskManager::RiskManager() : QObject(nullptr) {
     daily_stats_.date = QDate::currentDate().toString(Qt::ISODate);
+    // The gate is consulted from QtConcurrent worker threads (basket / split /
+    // algo order paths), so this singleton can end up first constructed on a pool
+    // thread that later dies — leaving its signals and its end-of-process
+    // destruction homed to a dead thread. Re-home it on the application thread.
+    // Moving is only legal from the object's current thread, which is exactly
+    // where we are during construction.
+    if (auto* app = QCoreApplication::instance(); app && thread() != app->thread())
+        moveToThread(app->thread());
 }
 
 QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, const QString& side, double quantity,
@@ -30,8 +39,12 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     const double eff_volume = same_day ? daily_stats_.volume : 0.0;
     const double eff_realized_pnl = same_day ? daily_stats_.realized_pnl : 0.0;
 
+    // Every numeric limit below is OPT-IN: a value of 0 (the default) means "no
+    // limit". This gate runs on the real order path, so an unset limit must pass
+    // the order through rather than reject everything.
+
     // Position size check
-    if (quantity > limits_.max_position_size) {
+    if (limits_.max_position_size > 0 && quantity > limits_.max_position_size) {
         results.append({false, RiskSeverity::Error, "position_size",
                         QString("Quantity %1 exceeds max %2").arg(quantity).arg(limits_.max_position_size)});
     } else {
@@ -39,7 +52,7 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     }
 
     // Position value check
-    if (order_value > limits_.max_position_value) {
+    if (limits_.max_position_value > 0 && order_value > limits_.max_position_value) {
         results.append({false, RiskSeverity::Error, "position_value",
                         QString("Value $%1 exceeds max $%2")
                             .arg(order_value, 0, 'f', 2)
@@ -49,7 +62,7 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     }
 
     // Single order value check
-    if (order_value > limits_.max_single_order_value) {
+    if (limits_.max_single_order_value > 0 && order_value > limits_.max_single_order_value) {
         results.append({false, RiskSeverity::Error, "order_value",
                         QString("Order value $%1 exceeds single order limit $%2")
                             .arg(order_value, 0, 'f', 2)
@@ -59,7 +72,7 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     }
 
     // Daily trade count check
-    if (eff_trade_count >= limits_.max_daily_trades) {
+    if (limits_.max_daily_trades > 0 && eff_trade_count >= limits_.max_daily_trades) {
         results.append(
             {false, RiskSeverity::Warning, "daily_trades",
              QString("Daily trade count %1 at limit %2").arg(eff_trade_count).arg(limits_.max_daily_trades)});
@@ -68,7 +81,7 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     }
 
     // Daily volume check
-    if (eff_volume + order_value > limits_.max_daily_volume) {
+    if (limits_.max_daily_volume > 0 && eff_volume + order_value > limits_.max_daily_volume) {
         results.append({false, RiskSeverity::Warning, "daily_volume",
                         QString("Daily volume would exceed $%1 limit").arg(limits_.max_daily_volume, 0, 'f', 2)});
     } else {
@@ -76,7 +89,7 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
     }
 
     // Daily loss limit check
-    if (eff_realized_pnl < -limits_.daily_loss_limit) {
+    if (limits_.daily_loss_limit > 0 && eff_realized_pnl < -limits_.daily_loss_limit) {
         results.append({false, RiskSeverity::Critical, "daily_loss",
                         QString("Daily loss $%1 exceeds limit $%2")
                             .arg(-eff_realized_pnl, 0, 'f', 2)
@@ -103,13 +116,24 @@ QVector<RiskCheckResult> RiskManager::validate_order(const QString& symbol, cons
 }
 
 bool RiskManager::is_order_allowed(const QString& symbol, const QString& side, double quantity, double price,
-                                   bool paper_trading) const {
+                                   bool paper_trading, QString* reason_out) const {
     auto results = validate_order(symbol, side, quantity, price, paper_trading);
+    QStringList reasons;
     for (const auto& r : results) {
         if (!r.passed && (r.severity == RiskSeverity::Error || r.severity == RiskSeverity::Critical))
-            return false;
+            reasons.append(r.message);
     }
-    return true;
+    if (reasons.isEmpty())
+        return true;
+    // Report WHICH limit bit — a bare "rejected" gives the user nothing to act on.
+    LOG_INFO("RiskManager", QString("Order rejected by risk limits: %1 %2 x%3 @ %4 — %5")
+                                .arg(side, symbol)
+                                .arg(quantity)
+                                .arg(price)
+                                .arg(reasons.join("; ")));
+    if (reason_out)
+        *reason_out = reasons.join("; ");
+    return false;
 }
 
 void RiskManager::record_trade(double pnl, double volume) {
@@ -144,11 +168,15 @@ void RiskManager::reset_daily_stats() {
 }
 
 RiskSeverity RiskManager::current_risk_level() const {
-    if (daily_stats_.realized_pnl < -limits_.daily_loss_limit)
-        return RiskSeverity::Critical;
-    if (daily_stats_.realized_pnl < -limits_.daily_loss_limit * 0.8)
-        return RiskSeverity::Error;
-    if (daily_stats_.trade_count > limits_.max_daily_trades * 0.8)
+    // Unset limits (0) mean "no limit" — without these guards a zero daily_loss_limit
+    // would report Critical the instant realized P&L went a cent negative.
+    if (limits_.daily_loss_limit > 0) {
+        if (daily_stats_.realized_pnl < -limits_.daily_loss_limit)
+            return RiskSeverity::Critical;
+        if (daily_stats_.realized_pnl < -limits_.daily_loss_limit * 0.8)
+            return RiskSeverity::Error;
+    }
+    if (limits_.max_daily_trades > 0 && daily_stats_.trade_count > limits_.max_daily_trades * 0.8)
         return RiskSeverity::Warning;
     return RiskSeverity::Info;
 }

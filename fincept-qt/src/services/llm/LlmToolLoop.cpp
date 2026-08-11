@@ -98,7 +98,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 if (sep > 0)
                     display = display.mid(sep + 2);
                 display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
-                detail::emit_progress(QStringLiteral("• ") + display + QStringLiteral("\n"));
+                detail::emit_tool_progress(display, fa);
                 // allow_defer: this is the one call site that knows about the
                 // job_* tools, so it is the one allowed to receive a receipt
                 // instead of a result for a long-running tool.
@@ -235,161 +235,41 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     // ── Pattern 4: ```tool_call\n{"name":"...", "arguments":{...}}\n```
     // ── Pattern 5: function_name(arg1, arg2) style calls embedded in text
 
-    struct TextToolCall {
-        QString name;
-        QJsonObject args;
-    };
-    std::vector<TextToolCall> calls;
-
     LOG_INFO(kLlmToolLoopTag,
              "Checking for text-based tool calls in response (" + QString::number(content.length()) + " chars)");
 
-    // --- Pattern 1: XML <tool_call> blocks (without namespace prefix) ---
-    {
-        static const QRegularExpression rx("<tool_call>\\s*(\\{[\\s\\S]*?\\})\\s*</tool_call>",
-                                           QRegularExpression::MultilineOption |
-                                               QRegularExpression::DotMatchesEverythingOption);
-        auto it = rx.globalMatch(content);
-        while (it.hasNext()) {
-            auto m = it.next();
-            auto doc = QJsonDocument::fromJson(m.captured(1).toUtf8());
-            if (doc.isObject()) {
-                QJsonObject obj = doc.object();
-                QString name = obj["name"].toString();
-                if (name.isEmpty())
-                    name = obj["function"].toString();
-                QJsonObject args = obj["arguments"].toObject();
-                if (args.isEmpty() && obj["arguments"].isString())
-                    args = QJsonDocument::fromJson(obj["arguments"].toString().toUtf8()).object();
-                if (!name.isEmpty())
-                    calls.push_back({name, args});
-            }
-        }
-    }
+    // Pattern matching lives in LlmContentExtractors (shared with the Fincept
+    // async path, which is prompt-injected and therefore always text-mode).
+    QStringList raw_blocks;
+    std::vector<TextToolCall> calls = extract_text_tool_calls(content, &raw_blocks);
 
-    // --- Pattern 2: <invoke name="..."> with <parameter> children or JSON body ---
-    if (calls.empty()) {
-        static const QRegularExpression rx_invoke("<invoke\\s+name=\"([^\"]+)\"[^>]*>([\\s\\S]*?)</invoke>",
-                                                  QRegularExpression::MultilineOption |
-                                                      QRegularExpression::DotMatchesEverythingOption);
-        static const QRegularExpression rx_param("<parameter\\s+name=\"([^\"]+)\"[^>]*>([\\s\\S]*?)</parameter>",
-                                                 QRegularExpression::MultilineOption |
-                                                     QRegularExpression::DotMatchesEverythingOption);
-
-        LOG_INFO(kLlmToolLoopTag, "Pattern 2: invoke regex valid=" + QString(rx_invoke.isValid() ? "yes" : "no"));
-        auto dbg_match = rx_invoke.match(content);
-        LOG_INFO(kLlmToolLoopTag, "Pattern 2: hasMatch=" + QString(dbg_match.hasMatch() ? "yes" : "no"));
-
-        auto it = rx_invoke.globalMatch(content);
-        while (it.hasNext()) {
-            auto m = it.next();
-            QString name = m.captured(1);
-            QString body = m.captured(2).trimmed();
-            QJsonObject args;
-
-            // Try parsing <parameter> children first
-            auto pit = rx_param.globalMatch(body);
-            bool has_params = false;
-            while (pit.hasNext()) {
-                auto pm = pit.next();
-                QString pname = pm.captured(1);
-                QString pval = pm.captured(2).trimmed();
-                has_params = true;
-
-                // Try to parse value as JSON (for arrays/objects)
-                auto pdoc = QJsonDocument::fromJson(pval.toUtf8());
-                if (!pdoc.isNull()) {
-                    if (pdoc.isArray())
-                        args[pname] = pdoc.array();
-                    else if (pdoc.isObject())
-                        args[pname] = pdoc.object();
-                    else
-                        args[pname] = pval;
-                } else {
-                    args[pname] = pval;
-                }
-            }
-
-            // Fallback: try body as JSON object (no <parameter> tags)
-            if (!has_params && !body.isEmpty()) {
-                auto jdoc = QJsonDocument::fromJson(body.toUtf8());
-                if (jdoc.isObject())
-                    args = jdoc.object();
-            }
-
-            if (!name.isEmpty())
-                calls.push_back({name, args});
-        }
-    }
-
-    // --- Pattern 3: minimax:tool_call ... /minimax:tool_call or similar ---
-    if (calls.empty()) {
-        static const QRegularExpression rx("(?:\\w+:)?tool_call\\s+([\\s\\S]*?)\\s*/(?:\\w+:)?tool_call",
-                                           QRegularExpression::MultilineOption);
-        auto it = rx.globalMatch(content);
-        while (it.hasNext()) {
-            auto m = it.next();
-            QString body = m.captured(1).trimmed();
-
-            // Try as JSON first
-            auto doc = QJsonDocument::fromJson(body.toUtf8());
-            if (doc.isObject()) {
-                QJsonObject obj = doc.object();
-                QString name = obj["name"].toString();
-                if (name.isEmpty())
-                    name = obj["function"].toString();
-                QJsonObject args = obj["arguments"].toObject();
-                if (args.isEmpty() && obj["arguments"].isString())
-                    args = QJsonDocument::fromJson(obj["arguments"].toString().toUtf8()).object();
-                if (!name.isEmpty()) {
-                    calls.push_back({name, args});
-                    continue;
-                }
-            }
-
-            // Not JSON — treat as raw SQL/command from the model.
-            // Look for an external tool that accepts a "query"/"sql"/"statement" param
-            // (the user's case: model emits raw SQL inside minimax:tool_call tags).
-            auto all_tools = mcp::McpService::instance().get_all_tools();
+    // A `[ns:]tool_call` block whose body isn't JSON is a raw command (the case
+    // that motivated this: the model emitting bare SQL inside minimax tags).
+    // Map it onto the first external tool with a query/sql/statement parameter.
+    if (calls.empty() && !raw_blocks.isEmpty()) {
+        auto all_tools = mcp::McpService::instance().get_all_tools();
+        for (const auto& body : raw_blocks) {
             for (const auto& tool : all_tools) {
                 if (tool.is_internal)
                     continue;
-                QJsonObject schema = tool.input_schema;
-                QJsonObject props = schema["properties"].toObject();
+                const QJsonObject props = tool.input_schema["properties"].toObject();
+                bool matched = false;
                 for (auto pit = props.constBegin(); pit != props.constEnd(); ++pit) {
-                    QString key = pit.key().toLower();
+                    const QString key = pit.key().toLower();
                     if (key == "query" || key == "sql" || key == "statement") {
-                        QString fn_name =
-                            tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
                         QJsonObject args;
                         args[pit.key()] = body;
-                        calls.push_back({fn_name, args});
+                        calls.push_back(
+                            {tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name), args});
+                        matched = true;
                         break;
                     }
                 }
-                if (!calls.empty())
+                if (matched)
                     break;
             }
-        }
-    }
-
-    // --- Pattern 4: ```tool_call\n...\n``` code blocks ---
-    if (calls.empty()) {
-        static const QRegularExpression rx("```tool_call\\s*\\n([\\s\\S]*?)\\n\\s*```",
-                                           QRegularExpression::MultilineOption);
-        auto it = rx.globalMatch(content);
-        while (it.hasNext()) {
-            auto m = it.next();
-            auto doc = QJsonDocument::fromJson(m.captured(1).trimmed().toUtf8());
-            if (doc.isObject()) {
-                QJsonObject obj = doc.object();
-                QString name = obj["name"].toString();
-                QJsonObject args = obj["arguments"].toObject();
-                if (args.isEmpty() && obj["arguments"].isString())
-                    args = QJsonDocument::fromJson(obj["arguments"].toString().toUtf8()).object();
-                if (!name.isEmpty())
-                    calls.push_back({name, args});
-            }
+            if (!calls.empty())
+                break;
         }
     }
 
@@ -405,7 +285,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         int sep_disp = tc.name.indexOf(QStringLiteral("__"));
         QString display = (sep_disp >= 0) ? tc.name.mid(sep_disp + 2) : tc.name;
         display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
-        detail::emit_progress(QStringLiteral("Using `") + display + QStringLiteral("` …\n"));
+        detail::emit_tool_progress(display, tc.args);
         auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
 
         // Shaped rather than clipped at a byte offset. Two reasons: `.left(4000)`
@@ -479,21 +359,24 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         follow_body["max_tokens"] = resolved_max_tokens();
     }
 
+    // Last-resort rendering when the summarisation turn can't be obtained.
+    // Raw tool JSON is NOT an answer — label it so the user can tell the
+    // difference, and log the reason instead of silently passing it off as one.
+    auto raw_fallback = [&](const QString& reason) -> LlmResponse {
+        LOG_WARN(kLlmToolLoopTag, "Text-tool follow-up unavailable (" + reason + ") — returning raw tool output");
+        resp.content = "*(could not summarise — " + reason + ". Raw tool output below.)*\n" + tool_results;
+        resp.success = true;
+        return resp;
+    };
+
     // No tools in follow-up to prevent infinite loop
     auto fu = blocking_post(url, follow_body, headers);
-    if (!fu.success) {
-        // Even if follow-up fails, return the raw tool results
-        resp.content = tool_results;
-        resp.success = true;
-        return resp;
-    }
+    if (!fu.success)
+        return raw_fallback(fu.error.isEmpty() ? QStringLiteral("follow-up request failed") : fu.error);
 
     auto fu_doc = QJsonDocument::fromJson(fu.body);
-    if (fu_doc.isNull()) {
-        resp.content = tool_results;
-        resp.success = true;
-        return resp;
-    }
+    if (fu_doc.isNull())
+        return raw_fallback(QStringLiteral("follow-up response was not JSON"));
 
     QJsonObject fu_rj = fu_doc.object();
 
@@ -513,7 +396,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     }
 
     if (resp.content.isEmpty())
-        resp.content = tool_results; // fallback to raw results
+        return raw_fallback(QStringLiteral("follow-up returned no text"));
 
     resp.success = true;
     parse_usage(resp, fu_rj, provider_);

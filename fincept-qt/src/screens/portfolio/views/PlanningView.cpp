@@ -1,6 +1,7 @@
 // src/screens/portfolio/views/PlanningView.cpp
 #include "screens/portfolio/views/PlanningView.h"
 
+#include "core/logging/Logger.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 
@@ -27,6 +28,14 @@
 #include <random>
 
 namespace fincept::screens {
+
+namespace {
+/// Dynamic-property guard set by load_goals() when the stored goal array could
+/// not be *read*. While it is set, save_goals() refuses to write: goals_ was
+/// emptied for display, and the next add/remove would persist that truncation
+/// over the user's real goals. Cleared by the next successful load.
+constexpr const char* kGoalsReadFailedProp = "fincept_goals_read_failed";
+} // namespace
 
 PlanningView::PlanningView(QWidget* parent) : QWidget(parent) {
     build_ui();
@@ -926,8 +935,21 @@ void PlanningView::load_goals() {
     goals_.clear();
     const QString pid = summary_.portfolio.id;
     if (!pid.isEmpty()) {
-        auto res = SettingsRepository::instance().get(QString("pi.goals.%1").arg(pid));
-        if (res.is_ok() && !res.value().isEmpty()) {
+        const QString key = QString("pi.goals.%1").arg(pid);
+        auto res = SettingsRepository::instance().get(key);
+        if (res.is_err()) {
+            // A read error is not "no goals". The empty list above is a display
+            // fallback only — arm the guard so the next add/remove cannot
+            // persist it over the user's real goals.
+            LOG_ERROR("Planning", QString("settings read failed for '%1' — showing an empty goal list read-only, "
+                                          "leaving the stored goals untouched: %2")
+                                      .arg(key, QString::fromStdString(res.error())));
+            setProperty(kGoalsReadFailedProp, true);
+            refresh_goals_list();
+            return;
+        }
+        setProperty(kGoalsReadFailedProp, false);
+        if (!res.value().isEmpty()) {
             const auto doc = QJsonDocument::fromJson(res.value().toUtf8());
             for (const auto v : doc.array()) {
                 const auto o = v.toObject();
@@ -940,6 +962,8 @@ void PlanningView::load_goals() {
                 goals_.append(g);
             }
         }
+    } else {
+        setProperty(kGoalsReadFailedProp, false);
     }
     refresh_goals_list();
 }
@@ -948,6 +972,14 @@ void PlanningView::save_goals() {
     const QString pid = summary_.portfolio.id;
     if (pid.isEmpty())
         return;
+    if (property(kGoalsReadFailedProp).toBool()) {
+        LOG_WARN("Planning", "Skipping goal save — the stored goals could not be read, so the list on screen is "
+                             "empty rather than the user's goals");
+        QMessageBox::warning(this, tr("Goals Not Saved"),
+                             tr("Your saved goals could not be read from the database, so this change was not "
+                                "saved — nothing stored was overwritten. Reopen this view to retry."));
+        return;
+    }
     QJsonArray arr;
     for (const auto& g : goals_) {
         QJsonObject o;

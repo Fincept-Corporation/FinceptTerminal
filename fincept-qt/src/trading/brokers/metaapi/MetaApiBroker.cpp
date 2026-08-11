@@ -53,8 +53,13 @@ QMap<QString, QString> MetaApiBroker::auth_headers(const BrokerCredentials& cred
 QString MetaApiBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
     if (resp.status_code == 400)
         return QStringLiteral("MetaAPI: Invalid request. Check symbol and order parameters.");
-    if (resp.status_code == 401)
-        return QStringLiteral("MetaAPI token is invalid or expired. Get a new token from metaapi.cloud.");
+    // The [TOKEN_EXPIRED] marker is the contract BrokerInterface::validate_session
+    // classifies on (BrokerInterface.h) — without it the account reads
+    // "Connected" forever while every request 401s and the user is never
+    // prompted to reconnect.
+    if (resp.status_code == 401 || resp.status_code == 403)
+        return QStringLiteral(
+            "[TOKEN_EXPIRED] MetaAPI token is invalid or expired. Get a new token from metaapi.cloud.");
     if (resp.status_code == 404)
         return QStringLiteral("MT4 account not found on MetaAPI. Please re-provision.");
     if (resp.status_code == 409)

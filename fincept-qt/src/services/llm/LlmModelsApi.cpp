@@ -82,8 +82,9 @@ QString LlmService::get_models_url(const QString& provider, const QString& api_k
         return "https://api.moonshot.ai/v1/models";
     if (p == "aihubmix")
         return "https://aihubmix.com/v1/models"; // fallback if prefilled base_url was cleared
-    if (p == "fincept")
-        return fincept::AppConfig::instance().api_base_url() + "/research/llm/models";
+    // fincept publishes no models endpoint — /research/llm/models is a 404, and
+    // /research/llm/async takes no `model` field at all (the backend picks).
+    // fetch_models() short-circuits to the known list before reaching here.
     // minimax has no public /v1/models — caller falls back to known models.
     return {};
 }

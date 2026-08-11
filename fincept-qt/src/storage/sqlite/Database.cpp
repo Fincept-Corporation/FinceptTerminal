@@ -89,7 +89,13 @@ QSqlDatabase Database::connection() {
         guard.name =
             QStringLiteral("fincept_thread_%1_%2").arg(thread_label(t)).arg(reinterpret_cast<quintptr>(t), 0, 16);
 
-        QSqlDatabase clone = QSqlDatabase::cloneDatabase(db_, guard.name);
+        // Clone BY CONNECTION NAME, not by QSqlDatabase object. The object
+        // overload dereferences `db_` — the main thread's handle and its live
+        // QSqlDriver — from this worker thread, which is exactly the cross-thread
+        // access the per-thread scheme exists to avoid. Qt added this overload
+        // for precisely this case: it resolves the source inside the registry
+        // under Qt's own lock.
+        QSqlDatabase clone = QSqlDatabase::cloneDatabase(QString::fromLatin1(kMainConnectionName), guard.name);
         if (!clone.open()) {
             const QString err = clone.lastError().text();
             LOG_ERROR(kDbTag, QString("Failed to open per-thread connection on [%1]: %2").arg(thread_label(t), err));
@@ -113,7 +119,18 @@ Result<QSqlQuery> Database::execute(const QString& sql, const QVariantList& para
         return Result<QSqlQuery>::err("DB connection unavailable on this thread");
     }
     QSqlQuery query(conn);
-    query.prepare(sql);
+
+    // Check prepare(). Ignoring it hid the real error on every failing
+    // statement in the app: when prepare() fails, bindValue() silently does
+    // nothing and the subsequent exec() reports the *symptom* — "Parameter
+    // count mismatch", or "No query Unable to fetch row" when results are then
+    // read — instead of the actual cause, which is usually "no such table" or
+    // "no such column". Those two useless strings were what every repository
+    // logged, so a schema mismatch was undiagnosable from the log alone.
+    if (!query.prepare(sql)) {
+        return Result<QSqlQuery>::err("prepare failed: " + query.lastError().text().toStdString());
+    }
+
     for (int i = 0; i < params.size(); ++i) {
         query.bindValue(i, params[i]);
     }
@@ -121,6 +138,36 @@ Result<QSqlQuery> Database::execute(const QString& sql, const QVariantList& para
         return Result<QSqlQuery>::err(query.lastError().text().toStdString());
     }
     return Result<QSqlQuery>::ok(std::move(query));
+}
+
+Result<void> Database::execute_many(const QString& sql, const QVector<QVariantList>& rows) {
+    if (rows.isEmpty())
+        return Result<void>::ok();
+
+    QSqlDatabase conn = connection();
+    if (!conn.isOpen()) {
+        return Result<void>::err("DB connection unavailable on this thread");
+    }
+
+    // Prepare ONCE. `execute()` re-prepares per call, which costs one
+    // sqlite3_prepare_v2 per row — a 100k-row broker instrument import paid
+    // 100k compilations of the same statement.
+    QSqlQuery query(conn);
+    if (!query.prepare(sql)) {
+        return Result<void>::err(query.lastError().text().toStdString());
+    }
+
+    int index = 0;
+    for (const auto& row : rows) {
+        for (int i = 0; i < row.size(); ++i)
+            query.bindValue(i, row[i]);
+        if (!query.exec()) {
+            return Result<void>::err("row " + std::to_string(index) + ": " +
+                                     query.lastError().text().toStdString());
+        }
+        ++index;
+    }
+    return Result<void>::ok();
 }
 
 Result<void> Database::exec(const QString& sql) {
@@ -176,9 +223,15 @@ Result<void> Database::apply_pragmas(QSqlDatabase& conn, bool include_database_w
     static const char* kDatabaseWide[] = {
         "PRAGMA journal_mode = WAL",
     };
+    // journal_size_limit is per-connection but bounds a file-global artefact: a
+    // bulk import (100k instruments) grows -wal to hundreds of MB and, without a
+    // limit, SQLite never truncates it back after a checkpoint — the file stays
+    // at its high-water mark for the life of the install. 64 MB.
     static const char* kPerConnection[] = {
-        "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -20000", "PRAGMA temp_store = MEMORY",
-        "PRAGMA mmap_size = 268435456", "PRAGMA foreign_keys = ON",   "PRAGMA busy_timeout = 5000",
+        "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -20000",
+        "PRAGMA temp_store = MEMORY",   "PRAGMA mmap_size = 268435456",
+        "PRAGMA foreign_keys = ON",     "PRAGMA busy_timeout = 5000",
+        "PRAGMA journal_size_limit = 67108864",
     };
 
     auto run = [&conn](const char* sql) {

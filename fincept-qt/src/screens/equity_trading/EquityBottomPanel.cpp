@@ -1372,26 +1372,35 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
         // Per-row SELL → square off just this holding (market, CNC). Routed through
         // the screen's close_position path (same as SQUARE OFF ALL) so it reliably
         // reduces the holding instead of opening a counter-position.
-        auto* action_cell = new QWidget;
-        auto* action_lay = new QHBoxLayout(action_cell);
-        action_lay->setContentsMargins(2, 0, 2, 0);
-        action_lay->setSpacing(4);
-        auto* sell_btn = new QPushButton(tr("SELL"));
-        sell_btn->setObjectName("eqTableBtn");
-        sell_btn->setProperty("act", "sell");
-        sell_btn->setFixedHeight(18);
-        sell_btn->setCursor(Qt::PointingHandCursor);
+        // Reuse the row's existing SELL button; only its bound symbol/exchange
+        // change. Previously this allocated a QWidget + QHBoxLayout + QPushButton
+        // on EVERY holdings push, and setCellWidget() destroyed the previous
+        // occupant — so each broker refresh churned N button subtrees (each with
+        // a connect, a tooltip and a tr() accessible name) and dropped keyboard
+        // focus out of the action cell. The rest of this function was already
+        // careful (updates disabled, sorting off, item reuse via ensure_item);
+        // only the action cell was missed. Same shape as PaperBlotterPanel and
+        // CryptoBottomPanel: the handler reads dynamic properties, so the
+        // connection is made exactly once.
+        auto* sell_btn = qobject_cast<QPushButton*>(holdings_table_->cellWidget(i, 9));
+        if (!sell_btn) {
+            sell_btn = new QPushButton(tr("SELL"));
+            sell_btn->setObjectName("eqTableBtn");
+            sell_btn->setProperty("act", "sell");
+            sell_btn->setFixedHeight(18);
+            sell_btn->setCursor(Qt::PointingHandCursor);
+            connect(sell_btn, &QPushButton::clicked, this, [this, sell_btn]() {
+                const QString sym = sell_btn->property("fnSymbol").toString();
+                const QString exch = sell_btn->property("fnExchange").toString();
+                LOG_INFO("sqoff", QString("[panel] per-row SELL clicked: sym='%1' exch='%2'").arg(sym, exch));
+                emit square_off_holding_requested(sym, exch);
+            });
+            holdings_table_->setCellWidget(i, 9, sell_btn);
+        }
+        sell_btn->setProperty("fnSymbol", h.symbol);
+        sell_btn->setProperty("fnExchange", h.exchange);
         sell_btn->setAccessibleName(tr("Square off holding %1").arg(h.symbol));
         sell_btn->setToolTip(tr("Square off %1 — sells the full holding at market").arg(h.symbol));
-        const QString row_sym = h.symbol;
-        const QString row_exch = h.exchange;
-        connect(sell_btn, &QPushButton::clicked, this, [this, row_sym, row_exch]() {
-            LOG_INFO("sqoff", QString("[panel] per-row SELL clicked: sym='%1' exch='%2'").arg(row_sym, row_exch));
-            emit square_off_holding_requested(row_sym, row_exch);
-        });
-        action_lay->addWidget(sell_btn);
-        action_lay->addStretch();
-        holdings_table_->setCellWidget(i, 9, action_cell);
 
         total_invested += h.invested_value;
         total_current += h.current_value;

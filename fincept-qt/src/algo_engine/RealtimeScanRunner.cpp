@@ -120,6 +120,13 @@ void RealtimeScanRunner::on_quote(const QString& symbol, const fincept::trading:
     auto it = states_.find(symbol);
     if (it == states_.end())
         return;
+    // A zero/negative LTP (feed placeholder, pre-open snapshot, malformed tick) must
+    // never reach the candle buffer: a 0 close poisons every ratio indicator, and a
+    // division by it yields ±inf, which is not NaN and so passes the evaluator's
+    // guards. The sweep below already refuses to evaluate at last_price <= 0 — this
+    // closes the same hole one line earlier, at the buffer.
+    if (!(q.ltp > 0))
+        return;
     SymbolState* st = it.value();
     const int64_t ts = q.timestamp > 0 ? q.timestamp : QDateTime::currentMSecsSinceEpoch();
     st->agg->on_tick(q.ltp, q.volume, ts);

@@ -37,6 +37,11 @@ class ScanMonitor : public QObject {
 
   private:
     ScanMonitor() = default;
+    // Required: scan_thread_ is a running QThread owned by this object. Deleting a
+    // running QThread is qFatal in Qt 6, and this singleton is destroyed after
+    // QApplication unwinds — so without an explicit quit()+wait() every exit that
+    // had a realtime watch running aborted with a crash dialog.
+    ~ScanMonitor() override;
     Q_DISABLE_COPY(ScanMonitor)
 
     struct SymState {

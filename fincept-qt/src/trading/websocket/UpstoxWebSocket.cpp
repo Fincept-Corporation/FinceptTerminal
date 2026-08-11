@@ -124,8 +124,14 @@ class ProtoReader {
         return false;
     }
 
+    // Bytes still unread. Every bounds check below compares against THIS value
+    // rather than doing `p_ + n > end_`: with an attacker-controlled 64-bit
+    // varint length, `p_ + len` wraps modulo 2^64 and silently lands *below*
+    // end_, letting the guard pass with p_ far out of bounds.
+    uint64_t remaining() const { return static_cast<uint64_t>(end_ - p_); }
+
     bool read_double(double& out) {
-        if (p_ + 8 > end_)
+        if (remaining() < 8)
             return false;
         uint64_t bits = 0;
         std::memcpy(&bits, p_, 8); // little-endian on all supported platforms
@@ -135,7 +141,7 @@ class ProtoReader {
     }
 
     bool read_float(float& out) {
-        if (p_ + 4 > end_)
+        if (remaining() < 4)
             return false;
         uint32_t bits = 0;
         std::memcpy(&bits, p_, 4);
@@ -149,7 +155,11 @@ class ProtoReader {
         uint64_t len = 0;
         if (!read_varint(len))
             return false;
-        if (p_ + len > end_)
+        // NEVER `p_ + len > end_` here — len is a full 64-bit varint straight
+        // off the wire and the pointer add wraps modulo 2^64, landing below
+        // end_ and passing the guard. Compare against the byte count instead;
+        // that also bounds len by the buffer size, so the size_t cast is safe.
+        if (len > remaining())
             return false;
         begin = p_;
         length = static_cast<size_t>(len);
@@ -165,7 +175,7 @@ class ProtoReader {
                 return read_varint(v);
             }
             case 1: // 64-bit
-                if (p_ + 8 > end_)
+                if (remaining() < 8)
                     return false;
                 p_ += 8;
                 return true;
@@ -175,7 +185,7 @@ class ProtoReader {
                 return read_bytes(b, l);
             }
             case 5: // 32-bit
-                if (p_ + 4 > end_)
+                if (remaining() < 4)
                     return false;
                 p_ += 4;
                 return true;
@@ -250,7 +260,7 @@ PbOhlc decode_ohlc(const uint8_t* data, size_t len) {
             const uint8_t* b;
             size_t l;
             if (r.read_bytes(b, l))
-                out.interval = QString::fromUtf8(reinterpret_cast<const char*>(b), int(l));
+                out.interval = QString::fromUtf8(reinterpret_cast<const char*>(b), static_cast<qsizetype>(l));
         } else if (fn == 2 && wt == 1) {
             r.read_double(out.open);
         } else if (fn == 3 && wt == 1) {
@@ -685,7 +695,8 @@ void UpstoxWebSocket::parse_feed_response(const QByteArray& data) {
                 size_t el;
                 if (efn == 1 && ewt == 2) {
                     if (entry.read_bytes(eb, el))
-                        instrument_key = QString::fromUtf8(reinterpret_cast<const char*>(eb), int(el));
+                        instrument_key =
+                            QString::fromUtf8(reinterpret_cast<const char*>(eb), static_cast<qsizetype>(el));
                 } else if (efn == 2 && ewt == 2) {
                     if (entry.read_bytes(eb, el)) {
                         feed = decode_feed(eb, el);

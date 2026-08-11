@@ -132,8 +132,9 @@ QWidget* TrademarksScreen::build_page() {
 
     pvl->addWidget(heading("4", tr("COPYRIGHT NOTICE")));
     pvl->addWidget(body(tr("Copyright 2024-2026 Fincept Corporation. All rights reserved.")));
-    pvl->addWidget(body(tr("This software is licensed under AGPL-3.0-or-later for open source use, "
-                           "with a separate commercial license available for enterprise deployment.")));
+    pvl->addWidget(body(tr("This software is licensed under AGPL-3.0-or-later, and under no other licence. "
+                           "Fincept Terminal Enterprise is a separate closed-source product and is not "
+                           "covered by this licence.")));
 
     pvl->addWidget(heading("5", tr("DATA PROVIDER ACKNOWLEDGMENTS")));
     pvl->addWidget(bullet(tr("Market data provided by various exchanges and data vendors")));

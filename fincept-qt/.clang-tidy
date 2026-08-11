@@ -35,7 +35,11 @@ Checks: >
   concurrency-*
 
 # Treat warnings as errors in CI (set via --warnings-as-errors in CI workflow)
-WarningsAsErrors: ''
+# Narrow, high-signal gate rather than the whole check list. The PR workflow also
+# passes --warnings-as-errors explicitly; keeping them in sync means a local
+# `clang-tidy` run fails on the same things CI does, instead of the file claiming
+# a strictness CI never enforced (this was '' while the comment implied gating).
+WarningsAsErrors: 'bugprone-*,concurrency-*,performance-move-const-arg'
 
 CheckOptions:
   # Naming: snake_case functions/variables, PascalCase types

@@ -831,12 +831,19 @@ void AkShareScreen::display_table_data(const QJsonArray& rows_json, const QStrin
             columns << it.key();
     }
 
+    // Cap the fill and suppress repaints while it runs — same treatment as the
+    // sibling AsiaMarketsScreen::display_table. Without it a 5 000-row payload
+    // repainted the viewport on every setItem() on the UI thread.
+    int max_rows = qMin(rows_json.size(), 2000);
+
+    data_table_->setUpdatesEnabled(false);
     data_table_->setColumnCount(columns.size());
     data_table_->setHorizontalHeaderLabels(columns);
-
-    // Populate rows (cap at 5000 to avoid UI freeze)
-    int max_rows = qMin(rows_json.size(), 5000);
     data_table_->setRowCount(max_rows);
+
+    // Pre-build color lookup to avoid repeated QColor construction
+    const QColor col_pos(colors::CYAN());
+    const QColor col_neg(colors::NEGATIVE());
 
     for (int row = 0; row < max_rows; ++row) {
         auto obj = rows_json[row].toObject();
@@ -870,23 +877,18 @@ void AkShareScreen::display_table_data(const QJsonArray& rows_json, const QStrin
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
             // Color numbers in cyan, negative in red
-            if (val.isDouble()) {
-                double v = val.toDouble();
-                if (v < 0) {
-                    item->setForeground(QColor(colors::NEGATIVE()));
-                } else {
-                    item->setForeground(QColor(colors::CYAN()));
-                }
-            }
+            if (val.isDouble())
+                item->setForeground(val.toDouble() < 0 ? col_neg : col_pos);
 
             data_table_->setItem(row, col, item);
         }
     }
 
-    // Resize columns to content (limit to avoid freezing)
-    if (columns.size() <= 20) {
-        data_table_->resizeColumnsToContents();
-    }
+    // Fixed column width — much faster than resizeColumnsToContents, which
+    // measured every cell in every column with no row-count guard at all.
+    data_table_->horizontalHeader()->setDefaultSectionSize(110);
+    data_table_->verticalHeader()->setDefaultSectionSize(22);
+    data_table_->setUpdatesEnabled(true);
     data_table_->setSortingEnabled(true);
 
     if (rows_json.size() > max_rows) {

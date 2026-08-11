@@ -5,12 +5,18 @@
 #include "storage/cache/CacheManager.h"
 #include "storage/sqlite/CacheDatabase.h"
 #include "storage/sqlite/Database.h"
+#include "storage/workspace/WorkspaceDb.h"
 
+#include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QSettings>
 #include <QSqlQuery>
+#include <QTimer>
+#include <QtConcurrent>
+#include <QPointer>
 
 namespace fincept {
 
@@ -49,6 +55,47 @@ Result<void> StorageManager::delete_from(const QString& table, const QString& wh
         sql += " WHERE " + where;
 
     return db.exec(sql);
+}
+
+bool StorageManager::table_exists(const QString& table) const {
+    auto& db = Database::instance();
+    if (!db.is_open())
+        return false;
+    auto r = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1", {table});
+    return r.is_ok() && r.value().next();
+}
+
+Result<void> StorageManager::delete_cascade(const QStringList& tables) {
+    auto& db = Database::instance();
+    if (!db.is_open())
+        return Result<void>::err("Database not open");
+
+    auto tx = db.begin_transaction();
+    if (tx.is_err())
+        return tx;
+
+    for (const QString& table : tables) {
+        // A table this build never creates is not a failure — the old code
+        // discarded every intermediate Result, so a missing auxiliary table was
+        // silently tolerated. Preserve that, but make REAL errors atomic.
+        if (!table_exists(table))
+            continue;
+
+        auto r = delete_from(table);
+        if (r.is_err()) {
+            db.rollback();
+            LOG_ERROR("StorageManager",
+                      QString("Cascade delete aborted at %1: %2").arg(table, QString::fromStdString(r.error())));
+            return r;
+        }
+    }
+
+    auto c = db.commit();
+    if (c.is_err()) {
+        db.rollback();
+        return c;
+    }
+    return Result<void>::ok();
 }
 
 // ── Category definitions ─────────────────────────────────────────────────────
@@ -200,11 +247,9 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Chat: clear messages first (FK), then sessions ---
     if (category_id == "chat_sessions") {
-        auto r1 = delete_from("chat_context_links");
-        auto r2 = delete_from("chat_messages");
-        auto r3 = delete_from("chat_sessions");
-        if (r3.is_err())
-            return r3;
+        auto r = delete_cascade({"chat_context_links", "chat_messages", "chat_sessions"});
+        if (r.is_err())
+            return r;
         emit category_cleared(category_id);
         return Result<void>::ok();
     }
@@ -217,10 +262,9 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Context recordings ---
     if (category_id == "context_recordings") {
-        auto r1 = delete_from("recording_sessions");
-        auto r2 = delete_from("recorded_contexts");
-        if (r2.is_err())
-            return r2;
+        auto r = delete_cascade({"recording_sessions", "recorded_contexts"});
+        if (r.is_err())
+            return r;
         emit category_cleared(category_id);
         return Result<void>::ok();
     }
@@ -235,8 +279,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- LLM configs ---
     if (category_id == "llm_configs") {
-        delete_from("llm_global_settings");
-        auto r = delete_from("llm_configs");
+        auto r = delete_cascade({"llm_global_settings", "llm_configs"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -250,21 +293,17 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- LLM profiles + assignments ---
     if (category_id == "llm_profiles") {
-        auto r1 = delete_from("llm_profile_assignments");
-        auto r2 = delete_from("llm_profiles");
-        if (r2.is_err())
-            return r2;
+        auto r = delete_cascade({"llm_profile_assignments", "llm_profiles"});
+        if (r.is_err())
+            return r;
         emit category_cleared(category_id);
         return Result<void>::ok();
     }
 
     // --- News ---
     if (category_id == "news_articles") {
-        delete_from("news_entity_cache");
-        delete_from("news_instability");
-        delete_from("news_baselines");
-        auto r = delete_from("news_articles");
-        // FTS table clears automatically with content table
+        // FTS table clears automatically with content table (delete triggers).
+        auto r = delete_cascade({"news_entity_cache", "news_instability", "news_baselines", "news_articles"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -292,8 +331,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Reports ---
     if (category_id == "reports") {
-        delete_from("report_templates");
-        auto r = delete_from("reports");
+        auto r = delete_cascade({"report_templates", "reports"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -301,11 +339,8 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Portfolios (cascade: snapshots, assets, transactions) ---
     if (category_id == "portfolios") {
-        delete_from("portfolio_snapshots");
-        delete_from("portfolio_transactions");
-        delete_from("portfolio_assets");
-        delete_from("portfolio_holdings");
-        auto r = delete_from("portfolios");
+        auto r = delete_cascade({"portfolio_snapshots", "portfolio_transactions", "portfolio_assets",
+                                 "portfolio_holdings", "portfolios"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -319,8 +354,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Watchlists ---
     if (category_id == "watchlists") {
-        delete_from("watchlist_stocks");
-        auto r = delete_from("watchlists");
+        auto r = delete_cascade({"watchlist_stocks", "watchlists"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -328,8 +362,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Custom indices ---
     if (category_id == "custom_indices") {
-        delete_from("custom_index_values");
-        auto r = delete_from("custom_indices");
+        auto r = delete_cascade({"custom_index_values", "custom_indices"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -337,11 +370,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Paper Trading ---
     if (category_id == "pt_portfolios") {
-        delete_from("pt_margin_blocks");
-        delete_from("pt_trades");
-        delete_from("pt_positions");
-        delete_from("pt_orders");
-        auto r = delete_from("pt_portfolios");
+        auto r = delete_cascade({"pt_margin_blocks", "pt_trades", "pt_positions", "pt_orders", "pt_portfolios"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -361,9 +390,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Workflows (cascade: edges, nodes) ---
     if (category_id == "workflows") {
-        delete_from("workflow_edges");
-        delete_from("workflow_nodes");
-        auto r = delete_from("workflows");
+        auto r = delete_cascade({"workflow_edges", "workflow_nodes", "workflows"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -371,16 +398,13 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Data sources ---
     if (category_id == "data_sources") {
-        delete_from("data_source_connections");
-        delete_from("ws_provider_configs");
-        auto r = delete_from("data_sources");
+        auto r = delete_cascade({"data_source_connections", "ws_provider_configs", "data_sources"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
     }
     if (category_id == "data_mappings") {
-        delete_from("normalized_data");
-        auto r = delete_from("data_mappings");
+        auto r = delete_cascade({"normalized_data", "data_mappings"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -388,10 +412,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- MCP servers ---
     if (category_id == "mcp_servers") {
-        delete_from("mcp_tool_usage_logs");
-        delete_from("mcp_tools");
-        delete_from("internal_mcp_tool_settings");
-        auto r = delete_from("mcp_servers");
+        auto r = delete_cascade({"mcp_tool_usage_logs", "mcp_tools", "internal_mcp_tool_settings", "mcp_servers"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -399,8 +420,7 @@ Result<void> StorageManager::clear_category(const QString& category_id) {
 
     // --- Dashboard layouts ---
     if (category_id == "dashboard_layouts") {
-        delete_from("dashboard_widget_instances");
-        auto r = delete_from("dashboard_layouts");
+        auto r = delete_cascade({"dashboard_widget_instances", "dashboard_layouts"});
         if (r.is_ok())
             emit category_cleared(category_id);
         return r;
@@ -514,6 +534,161 @@ Result<void> StorageManager::clear_workspace_files() {
     }
     emit category_cleared("workspaces");
     return Result<void>::ok();
+}
+
+// ── Retention ────────────────────────────────────────────────────────────────
+
+namespace {
+// Retention windows. Deliberately generous — these tables exist for forensics.
+constexpr int kAuditLogRetentionDays = 90;
+constexpr int kTelemetryRetentionDays = 30;
+// A push that has failed this many times is never going to succeed; the row is
+// dead-lettered rather than retried forever. `bump_attempt` has no other bound.
+constexpr int kOutboxMaxAttempts = 20;
+} // namespace
+
+int StorageManager::prune_main_db(const QString& table, const QString& where, const QVariantList& params) {
+    auto& db = Database::instance();
+    if (!db.is_open())
+        return 0;
+
+    // A table that was never created (its owning subsystem never ran) is not an
+    // error — the sweeper is unattended and must stay quiet.
+    if (!table_exists(table))
+        return 0;
+
+    auto r = db.execute("DELETE FROM " + table + " WHERE " + where, params);
+    if (r.is_err()) {
+        LOG_WARN("StorageManager",
+                 QString("Retention sweep of %1 failed: %2").arg(table, QString::fromStdString(r.error())));
+        return -1;
+    }
+    return r.value().numRowsAffected();
+}
+
+void StorageManager::prune_off_thread() {
+    // prune_all() issues four bulk DELETEs across three databases. Deferring it
+    // with singleShot() moved it off the *startup* path but left it on the UI
+    // thread (P1) — and worse, it takes a write lock on the main DB, so any
+    // screen doing a synchronous read in its showEvent stalls behind it until
+    // busy_timeout. That is what made the alpha_arena screen miss an 8s
+    // construction deadline in the smoke walk: it was waiting on this prune.
+    //
+    // Safe to run on a worker now: Database/CacheDatabase/WorkspaceDb all hand
+    // out per-thread connections (this release's fix), so the prune gets its own
+    // handle instead of borrowing the main thread's.
+    // Never start a sweep during teardown. The databases this touches are
+    // singletons that TerminalShell::shutdown() closes, so a worker launched
+    // now would outlive them.
+    if (QCoreApplication::closingDown())
+        return;
+
+    if (prune_running_.exchange(true))
+        return; // a sweep is still going — skip this tick rather than pile up
+
+    QPointer<StorageManager> self = this;
+    prune_future_ = QtConcurrent::run([self]() {
+        if (self)
+            (void)self->prune_all();
+        if (self)
+            self->prune_running_.store(false);
+    });
+}
+
+Result<void> StorageManager::prune_all() {
+    int total = 0;
+
+    // workflow_audit_log — one row per node execution, written by AuditLogger and
+    // read by nothing outside it. `timestamp` is stored via datetime('now'), so
+    // the same 'YYYY-MM-DD HH:MM:SS' form compares lexicographically.
+    const int audit = prune_main_db("workflow_audit_log", QString("timestamp < datetime('now', '-%1 days')")
+                                                              .arg(kAuditLogRetentionDays));
+    if (audit > 0) {
+        total += audit;
+        LOG_INFO("StorageManager", QString("Retention: removed %1 workflow_audit_log rows older than %2 days")
+                                       .arg(audit)
+                                       .arg(kAuditLogRetentionDays));
+    }
+
+    // sync_outbox — rows leave only via mark_done(); a permanently failing push
+    // was retried forever with no ceiling.
+    const int outbox = prune_main_db("sync_outbox", "attempts > ?", {kOutboxMaxAttempts});
+    if (outbox > 0) {
+        total += outbox;
+        LOG_WARN("StorageManager", QString("Retention: dead-lettered %1 sync_outbox rows past %2 push attempts")
+                                       .arg(outbox)
+                                       .arg(kOutboxMaxAttempts));
+    }
+
+    // unified_cache (cache.db) — was swept once at startup only, so a terminal
+    // left open for days never reclaimed expired rows.
+    {
+        auto& cdb = CacheDatabase::instance();
+        if (cdb.is_open()) {
+            const int expired = cdb.sweep_expired();
+            if (expired > 0) {
+                total += expired;
+                LOG_INFO("StorageManager", QString("Retention: removed %1 expired unified_cache rows").arg(expired));
+            }
+        }
+    }
+
+    // telemetry_events (workspace.db) — one row per action.invoke, no reader.
+    {
+        auto& wdb = WorkspaceDb::instance();
+        if (wdb.is_open()) {
+            const qint64 cutoff_ms =
+                QDateTime::currentMSecsSinceEpoch() - static_cast<qint64>(kTelemetryRetentionDays) * 86400LL * 1000LL;
+            auto r = wdb.execute("DELETE FROM telemetry_events WHERE ts_ms < ?", {cutoff_ms});
+            if (r.is_ok()) {
+                const int removed = r.value().numRowsAffected();
+                if (removed > 0) {
+                    total += removed;
+                    LOG_INFO("StorageManager", QString("Retention: removed %1 telemetry_events rows older than %2 days")
+                                                   .arg(removed)
+                                                   .arg(kTelemetryRetentionDays));
+                }
+            }
+            // A missing telemetry_events table just means telemetry never wrote
+            // this session — nothing to report.
+        }
+    }
+
+    if (total > 0)
+        LOG_INFO("StorageManager", QString("Retention sweep removed %1 rows in total").arg(total));
+    return Result<void>::ok();
+}
+
+void StorageManager::start_retention_sweeper(int interval_ms) {
+    if (retention_timer_)
+        return; // already running
+
+    retention_timer_ = new QTimer(this);
+    retention_timer_->setInterval(interval_ms);
+    retention_timer_->setTimerType(Qt::VeryCoarseTimer);
+    connect(retention_timer_, &QTimer::timeout, this, [this]() { prune_off_thread(); });
+    retention_timer_->start();
+
+    // First pass deferred off the startup critical path.
+    QTimer::singleShot(0, this, [this]() { prune_off_thread(); });
+
+    // Join the worker before the app tears the databases down. Without this the
+    // sweep is an unowned QtConcurrent task that keeps using Database /
+    // CacheDatabase / WorkspaceDb while TerminalShell::shutdown() closes them —
+    // an access violation during static destruction, i.e. after the crash
+    // handler is gone, so it produces no dump and no log line.
+    if (auto* app = QCoreApplication::instance()) {
+        connect(app, &QCoreApplication::aboutToQuit, this, [this]() {
+            if (retention_timer_)
+                retention_timer_->stop();
+            if (prune_future_.isRunning()) {
+                LOG_INFO("StorageManager", "Waiting for in-flight retention sweep before shutdown");
+                prune_future_.waitForFinished();
+            }
+        });
+    }
+
+    LOG_INFO("StorageManager", QString("Retention sweeper started (every %1 min)").arg(interval_ms / 60000));
 }
 
 Result<void> StorageManager::clear_qsettings() {

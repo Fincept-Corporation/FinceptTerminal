@@ -14,12 +14,18 @@ namespace fincept {
 namespace {
 constexpr const char* kTag = "WS";
 
-// Mask the `token=` query value so broker access tokens (JWTs) never reach the
-// log file. Applied to every URL we log — these tokens are bearer credentials.
+// Mask credential-bearing query values so they never reach the log file.
+// Applied to every URL we log — these are all bearer credentials.
+//
+// The old pattern was `token=[^&]*` only, which missed the `api_key=` that
+// Zerodha's socket URL carries (and `auth=`, `apikey=`, `secret=`, …), so those
+// were logged verbatim. The capture group keeps the parameter name — including
+// any prefix such as `access_token=` — and replaces only its value.
 QString redact_url(const QString& url) {
     QString out = url;
-    static const QRegularExpression re(QStringLiteral("token=[^&]*"));
-    out.replace(re, QStringLiteral("token=REDACTED"));
+    static const QRegularExpression re(QStringLiteral("(api_?key|auth|token|secret|password|signature)=[^&]*"),
+                                       QRegularExpression::CaseInsensitiveOption);
+    out.replace(re, QStringLiteral("\\1=REDACTED"));
     return out;
 }
 

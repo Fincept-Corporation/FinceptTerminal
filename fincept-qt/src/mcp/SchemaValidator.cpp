@@ -144,6 +144,35 @@ Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
             return Result<void>::err(("Missing required parameter: " + key).toStdString());
     }
 
+    // ── Step 2.2: reject arguments the schema doesn't declare ────────────
+    // Unknown keys used to be dropped silently, which let a call written
+    // against an imagined API look like it worked: recalculate_excel_sheet
+    // received {"workbook_name": …, "tab_name": …}, had both ignored, fell back
+    // to sheet_index=-1 (the active sheet) and reported success — so a model
+    // that had invented a whole workbook API got a green light for it.
+    //
+    // Only enforced for tools with a structured schema; legacy `properties`-only
+    // tools keep the permissive behaviour. Underscore-prefixed keys are protocol
+    // metadata (_meta and friends), not tool arguments.
+    if (!schema.params.isEmpty()) {
+        QStringList unknown;
+        for (const QString& key : args.keys()) {
+            if (key.startsWith(QLatin1Char('_')))
+                continue;
+            if (schema.params.contains(key) || schema.properties.contains(key))
+                continue;
+            unknown.append(key);
+        }
+        if (!unknown.isEmpty()) {
+            QStringList accepted = schema.params.keys();
+            accepted.sort();
+            return Result<void>::err(("Unknown parameter(s): " + unknown.join(", ") +
+                                      ". This tool accepts only: " + accepted.join(", ") +
+                                      ". Call tool_describe for its schema before calling it again.")
+                                         .toStdString());
+        }
+    }
+
     // ── Step 2.5: coerce stringified primitives, objects, arrays ─────────
     // Two common LLM mistakes:
     //   - emit nested JSON as an escaped string ("config": "{\"a\":1}")

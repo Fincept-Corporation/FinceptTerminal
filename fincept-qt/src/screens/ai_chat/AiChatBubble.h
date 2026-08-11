@@ -66,6 +66,12 @@ class AiChatBubble : public QWidget {
 
     // Panel internals
     QScrollArea* scroll_area_ = nullptr;
+    // Auto-follow the newest content; cleared when the user scrolls up to read.
+    bool stick_to_bottom_ = true;
+    // Guards our own setValue() so auto-scroll isn't mistaken for a user scroll.
+    bool programmatic_scroll_ = false;
+    // Last tool-progress label rendered; consecutive repeats are dropped.
+    QString last_tool_label_;
     QWidget* msg_container_ = nullptr;
     QVBoxLayout* msg_layout_ = nullptr;
     QWidget* welcome_widget_ = nullptr; // shown when chat is empty

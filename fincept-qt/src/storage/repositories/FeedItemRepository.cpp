@@ -30,19 +30,43 @@ FeedItem FeedItemRepository::map_row(QSqlQuery& q) {
 
 Result<void> FeedItemRepository::upsert(const QString& feed_id, const QVector<FeedItem>& items,
                                         qint64 fetched_at) const {
+    if (items.isEmpty())
+        return Result<void>::ok();
+
+    // One transaction for the whole batch. Without it every row is its own
+    // implicit commit — a 50-item RSS refresh cost 50 fsync-bearing commits, on
+    // EVERY poll of EVERY subscribed feed. Pattern copied from
+    // InstrumentRepository::replace_all / NewsArticleRepository.
+    auto tx = db().begin_transaction();
+    if (tx.is_err())
+        return tx;
+
+    const QString sql = "INSERT INTO feed_items "
+                        "(feed_id, item_id, title, summary, link, source, sort_ts, time, fields_json, fetched_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                        "ON CONFLICT(feed_id, item_id) DO NOTHING";
+
+    QVector<QVariantList> rows;
+    rows.reserve(items.size());
     for (const auto& it : items) {
         QJsonObject o;
         for (auto i = it.fields.begin(); i != it.fields.end(); ++i)
             o[i.key()] = i.value();
         const QString fj = QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
-        auto r =
-            exec_write("INSERT INTO feed_items "
-                       "(feed_id, item_id, title, summary, link, source, sort_ts, time, fields_json, fetched_at) "
-                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                       "ON CONFLICT(feed_id, item_id) DO NOTHING",
-                       {feed_id, it.id, it.title, it.summary, it.link, it.source, it.sort_ts, it.time, fj, fetched_at});
-        if (r.is_err())
-            return r;
+        rows.append({feed_id, it.id, it.title, it.summary, it.link, it.source, it.sort_ts, it.time, fj, fetched_at});
+    }
+
+    auto w = db().execute_many(sql, rows);
+    if (w.is_err()) {
+        db().rollback();
+        LOG_ERROR("FeedItemRepo", QString("upsert failed: %1").arg(QString::fromStdString(w.error())));
+        return w;
+    }
+
+    auto c = db().commit();
+    if (c.is_err()) {
+        db().rollback();
+        return c;
     }
     return Result<void>::ok();
 }

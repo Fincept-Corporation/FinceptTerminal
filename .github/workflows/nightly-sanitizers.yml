@@ -1,0 +1,155 @@
+name: Nightly Sanitizers (ASan + UBSan)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Nightly AddressSanitizer + UndefinedBehaviorSanitizer build of the Linux
+# target, exercised by the headless self-tests and the all-screens smoke walk.
+#
+# WHY THOSE TWO AS THE PAYLOAD
+#   They are deterministic, headless, need no display / GPU / network / API
+#   key, and between them they construct every screen and drive the tool
+#   registry, feed parsing, dock layout, the F&O + paper engines, the
+#   portfolio monitor/replication paths and the arena. That is the largest
+#   slice of real execution CI can reach without a human — exactly what a
+#   sanitizer wants. A use-after-free or a signed-overflow that only bites a
+#   user at runtime shows up here with a full stack trace.
+#
+# WHY NIGHTLY AND NOT PER-PR
+#   The instrumented build is ~2x slower to compile and the tests run 2-5x
+#   slower; putting it on every PR would make the gate unaffordable and it
+#   would get disabled. Nightly catches regressions within a day.
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  schedule:
+    - cron: '17 3 * * *'   # 03:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-sanitizers
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: "6.8.3"
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning qtserialport"
+  APP_NAME: FinceptTerminal
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  asan-ubsan:
+    name: Linux ASan + UBSan
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: linux-x64-asan-${{ env.QT_VERSION }}
+          max-size: 800M
+
+      # Same toolchain as the release Linux job (GCC 12.3+ is a CMakeLists
+      # requirement); libasan6/libubsan1 ship with gcc-12.
+      - name: Install system dependencies
+        run: |
+          sudo add-apt-repository universe -y
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            cmake ninja-build gcc-12 g++-12 \
+            libssl-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libxkbcommon-x11-dev \
+            libxcb-cursor0 libxcb-cursor-dev \
+            libxcb-icccm4 libxcb-icccm4-dev \
+            libxcb-image0 libxcb-image0-dev \
+            libxcb-keysyms1 libxcb-keysyms1-dev \
+            libxcb-randr0 \
+            libxcb-render-util0 libxcb-render-util0-dev \
+            libxcb-shape0-dev libxcb-sync-dev libxcb-xfixes0-dev \
+            libxcb-xinerama0 libxcb-xinerama0-dev libxcb-xkb1 \
+            libdbus-1-dev libfontconfig1-dev libfreetype6-dev \
+            pkg-config
+          echo "CC=gcc-12"  >> "$GITHUB_ENV"
+          echo "CXX=g++-12" >> "$GITHUB_ENV"
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-linux-x64-asan
+
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          fi
+
+      # RelWithDebInfo keeps -O2 (the tests would crawl at -O0) and -g so the
+      # sanitizer reports carry file:line. -fno-sanitize-recover=undefined
+      # makes UBSan ABORT instead of printing and continuing — otherwise a
+      # nightly "failure" is a log nobody reads.
+      - name: Configure (ASan + UBSan)
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          SAN_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined -g"
+          cmake -B build-asan -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DOPENSSL_ROOT_DIR=/usr \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_FLAGS="${SAN_FLAGS}" \
+            -DCMAKE_CXX_FLAGS="${SAN_FLAGS}" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DFINCEPT_DEV_BUILD=OFF \
+            -DFINCEPT_BUILD_INSTALLER=OFF
+
+      - name: Build
+        working-directory: fincept-qt
+        run: cmake --build build-asan --parallel "$(nproc)"
+
+      # detect_leaks=0: LeakSanitizer would report thousands of intentional
+      # one-shot Qt/singleton allocations and bury real findings. ASan's
+      # use-after-free / heap-overflow / stack-overflow detection — the classes
+      # that actually crash users — is unaffected.
+      - name: Self-tests under ASan + UBSan
+        working-directory: fincept-qt
+        timeout-minutes: 90
+        env:
+          QT_QPA_PLATFORM: offscreen
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1:print_stacktrace=1:strict_string_checks=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+          bash ../.github/scripts/ci_app_checks.sh selftests "build-asan/${{ env.APP_NAME }}" ci-asan 900
+
+      - name: All-screens smoke walk under ASan + UBSan
+        working-directory: fincept-qt
+        timeout-minutes: 60
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QTWEBENGINE_DISABLE_SANDBOX: '1'
+          # Chromium ships its own allocator and trips ASan's intercepts; the
+          # smoke walk still constructs every screen, WebEngine included.
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1:print_stacktrace=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+          bash ../.github/scripts/ci_app_checks.sh smoke "build-asan/${{ env.APP_NAME }}" ci-asan-smoke 1800

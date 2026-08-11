@@ -26,10 +26,15 @@ namespace fincept::wallet {
 /// Security:
 ///   - listens only on QHostAddress::LocalHost (no LAN, no public).
 ///   - random port, random connect_token (32 bytes hex) bound to one connect.
-///   - any request with a missing/wrong token is rejected with 403.
+///   - any request with a missing/wrong token is rejected with 403; the token
+///     is compared in constant time.
+///   - Host + Sec-Fetch-* validation rejects DNS rebinding and cross-origin
+///     subresource injection from any other page the user has open
+///     (auth/LoopbackGuard.h).
+///   - Access-Control-Allow-Origin names our own loopback origin, never `*`.
 ///   - server self-destructs after success or timeout.
-///   - never speaks HTTP/2, never allows CORS, never serves anything besides
-///     the embedded connect page and a tiny 200 OK on /callback.
+///   - never speaks HTTP/2, never serves anything besides the embedded connect
+///     page and a tiny 200 OK on /callback.
 class LocalWalletBridge : public QObject {
     Q_OBJECT
   public:
@@ -60,6 +65,10 @@ class LocalWalletBridge : public QObject {
                         const QByteArray& path, const QByteArray& method);
     QByteArray render_connect_page() const;
     void write_response(QTcpSocket* socket, int status, const QByteArray& content_type, const QByteArray& body);
+    /// Port we are actually bound to, or 0 when not listening.
+    quint16 own_port() const noexcept;
+    /// "http://127.0.0.1:<port>" — the only origin allowed to talk to us.
+    QByteArray own_origin() const;
 
     QTcpServer* server_ = nullptr;
     QByteArray nonce_hex_;

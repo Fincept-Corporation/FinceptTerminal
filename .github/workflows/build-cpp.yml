@@ -38,12 +38,18 @@ jobs:
             cmake_extra: "-A ARM64"
 
           # ---- Linux x64 ----
+          # qt_arch is NOT empty: this leg used to skip install-qt-action and
+          # apt-install qt6-base-dev, which is Qt 6.2.4 on ubuntu-22.04 while
+          # CMakeLists.txt pins Qt 6.8 (FINCEPT_QT_PIN_MODE defaults to MINOR
+          # → find_package(Qt6 6.8 REQUIRED)). The job could never configure.
+          # release.yml:588-595 documents that exact trap and installs Qt via
+          # aqt; the fix had simply never been mirrored here.
           - os: ubuntu-22.04
             arch: x64
             platform: Linux
             artifact: FinceptTerminal-Linux-x64
             exe: FinceptTerminal
-            qt_arch: ""
+            qt_arch: linux_gcc_64
             cmake_extra: ""
 
           # ---- macOS ARM64 (Apple Silicon) ----
@@ -88,6 +94,13 @@ jobs:
       # Ubuntu 22.04's default g++ is 11.4, but CMakeLists.txt requires GCC 12.3+.
       # Install gcc-12/g++-12 from the Ubuntu Toolchain PPA (pre-enabled on
       # ubuntu-22.04 runners) and pin it via CC/CXX for the rest of the job.
+      #
+      # NO apt Qt packages here — ubuntu-22.04 ships Qt 6.2 and CMakeLists.txt
+      # pins Qt 6.8, so `qt6-base-dev` & friends made find_package(Qt6 6.8)
+      # fail outright. Qt comes from install-qt-action below (as it already
+      # did on Windows/macOS, and as release.yml does on all three platforms).
+      # The XCB / GL / fontconfig system libs stay: Qt's xcb platform plugin
+      # links against them at build time and loads them at runtime.
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -97,16 +110,17 @@ jobs:
             cmake ninja-build gcc-12 g++-12 \
             libssl-dev \
             libsecret-1-dev \
-            qt6-base-dev qt6-base-private-dev \
-            qt6-tools-dev qt6-tools-dev-tools \
-            libqt6charts6-dev libqt6websockets6-dev \
-            qt6-multimedia-dev libqt6multimediawidgets6 \
-            libqt6svg6-dev libqt6concurrent6 \
             libgl1-mesa-dev libglu1-mesa-dev \
-            libxkbcommon-dev libxkbcommon-x11-0 \
-            libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
-            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-            libxcb-xinerama0 libxcb-xkb1 \
+            libxkbcommon-dev libxkbcommon-x11-0 libxkbcommon-x11-dev \
+            libxcb-cursor0 libxcb-cursor-dev \
+            libxcb-icccm4 libxcb-icccm4-dev \
+            libxcb-image0 libxcb-image0-dev \
+            libxcb-keysyms1 libxcb-keysyms1-dev \
+            libxcb-randr0 \
+            libxcb-render-util0 libxcb-render-util0-dev \
+            libxcb-shape0-dev libxcb-sync-dev libxcb-xfixes0-dev \
+            libxcb-xinerama0 libxcb-xinerama0-dev libxcb-xkb1 \
+            libdbus-1-dev libfontconfig1-dev libfreetype6-dev \
             pkg-config zip
           echo "CC=gcc-12"  >> "$GITHUB_ENV"
           echo "CXX=g++-12" >> "$GITHUB_ENV"
@@ -151,9 +165,10 @@ jobs:
           fi
           echo "static zlib confirmed: $ZLIB_DIR/lib/zlib.lib"
 
-      # ---- Qt6 target (Windows/macOS) ----
+      # ---- Qt6 target (all platforms) ----
+      # Linux is no longer excluded — see the matrix comment on the Linux
+      # entry: apt Qt 6.2 can never satisfy CMakeLists' 6.8 pin.
       - name: Install Qt6
-        if: runner.os != 'Linux'
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
@@ -180,13 +195,37 @@ jobs:
         shell: bash
         run: pip install yt-dlp
 
+      # ---- Strip dangling Qt SQL driver plugin CMake configs (aqt workaround) ----
+      # aqtinstall ships Qt6Sql's MySQL/PSQL/ODBC/Mimer *DriverPlugin CMake
+      # target files but NOT the plugin binaries they reference, so
+      # find_package(Qt6 ... Sql) aborts at CONFIGURE time ("references the
+      # file .../libqsqlmysql.so but this file does not exist"). We only use
+      # SQLite. Mirrors release.yml's identically-named step in all three of
+      # its build jobs. MUST run before "Configure CMake".
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          else
+            echo "::warning::${SQL_CMAKE} not found — skipping SQL plugin config cleanup"
+          fi
+
       # ---- Configure CMake ----
+      # CMAKE_PREFIX_PATH is required now that Qt comes from install-qt-action
+      # instead of apt (it was absent while this leg relied on system Qt).
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
         working-directory: fincept-qt
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DOPENSSL_ROOT_DIR=/usr \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DFINCEPT_REQUIRE_BUNDLED_YTDLP=ON \
@@ -281,47 +320,28 @@ jobs:
       # needs no FUSE mount or codesigning. Skipped on cross-compiled targets
       # (Windows arm64, macOS x64) whose binaries can't execute on the host
       # runner's architecture. timeout-minutes bounds any unexpected hang.
+      #
+      # The flag list used to be spelled out here and DRIFTED: main.cpp
+      # dispatches 10 --selftest-* flags, this loop listed 9, so
+      # --selftest-live-table ran nowhere. It now lives in
+      # .github/scripts/ci_app_checks.sh, which prefers `--selftest-list` from
+      # the binary itself and is shared with release.yml and build-pr.yml.
       - name: Run self-tests (headless)
         if: "!(matrix.platform == 'Windows' && matrix.arch == 'arm64') && !(matrix.platform == 'macOS' && matrix.arch == 'x64')"
         shell: bash
         working-directory: fincept-qt
-        timeout-minutes: 10
-        env:
-          QT_QPA_PLATFORM: offscreen
+        timeout-minutes: 25
         run: |
           set -euo pipefail
           if [ "${{ runner.os }}" == "Windows" ]; then
             BINARY="build/Release/${{ matrix.exe }}"
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            if [ -f "build/${{ matrix.exe }}" ]; then
-              BINARY="build/${{ matrix.exe }}"
-            elif [ -f "build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}" ]; then
-              BINARY="build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}"
-            else
-              BINARY="build/${{ matrix.exe }}"
-            fi
+          elif [ "${{ runner.os }}" == "macOS" ] && [ ! -f "build/${{ matrix.exe }}" ]; then
+            BINARY="build/${{ matrix.exe }}.app/Contents/MacOS/${{ matrix.exe }}"
           else
             BINARY="build/${{ matrix.exe }}"
           fi
-          # No umbrella --selftest exists; run each registered self-test in its
-          # own process (shared DB/state would cross-contaminate one process).
-          for f in \
-            --selftest-tools \
-            --selftest-feeds \
-            --selftest-dock-layout \
-            --selftest-fno-algo \
-            --selftest-universe-scan \
-            --selftest-paper \
-            --selftest-portfolio-monitor \
-            --selftest-portfolio-replication \
-            --selftest-arena; do
-            echo "::group::self-test $f"
-            # --profile ci isolates each run in a fresh, migrated DB so a
-            # cached/drifted default profile can't cause false failures.
-            echo "Running: $BINARY --profile ci $f (QT_QPA_PLATFORM=$QT_QPA_PLATFORM)"
-            "$BINARY" --profile ci "$f"
-            echo "::endgroup::"
-          done
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+          bash ../.github/scripts/ci_app_checks.sh selftests "$BINARY" ci
 
       # ---- Package: Windows (windeployqt + manual DLL sweep) ----
       - name: Package (Windows)
@@ -646,7 +666,14 @@ jobs:
             mkdir -p "${APP_BUNDLE}/Contents/MacOS"
             cp "build/${{ matrix.exe }}" "${APP_BUNDLE}/Contents/MacOS/${{ matrix.exe }}"
             chmod +x "${APP_BUNDLE}/Contents/MacOS/${{ matrix.exe }}"
-            cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
+            # Version comes from CMakeLists.txt, never a literal — a hardcoded
+            # 4.3.0 here shipped a bundle whose CFBundleVersion disagreed with
+            # the binary the moment the project version moved, which breaks the
+            # auto-updater's version comparison. Heredoc delimiter is unquoted
+            # (<<PLIST, not <<'PLIST') so ${VERSION} interpolates.
+            VERSION=$(grep -Eo 'project\(FinceptTerminal VERSION [0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt | awk '{print $3}')
+            [ -n "${VERSION}" ] || { echo "::error::Could not parse VERSION from CMakeLists.txt"; exit 1; }
+            cat > "${APP_BUNDLE}/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
@@ -654,8 +681,8 @@ jobs:
             <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.3.0</string>
-            <key>CFBundleVersion</key><string>4.3.0</string>
+            <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+            <key>CFBundleVersion</key><string>${VERSION}</string>
             <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>

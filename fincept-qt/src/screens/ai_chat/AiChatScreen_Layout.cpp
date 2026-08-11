@@ -244,10 +244,42 @@ void AiChatScreen::build_chat_area() {
     scroll_area_->setWidget(messages_container_);
     vl->addWidget(scroll_area_, 1);
 
-    // Debounced persistence when the user scrolls through chat history.
-    if (auto* vbar = scroll_area_->verticalScrollBar())
+    if (auto* vbar = scroll_area_->verticalScrollBar()) {
+        // Debounced persistence when the user scrolls through chat history.
         connect(vbar, &QScrollBar::valueChanged, this,
                 [this](int) { ScreenStateManager::instance().notify_changed(this); });
+
+        // ── Follow the stream ────────────────────────────────────────────
+        // scroll_to_bottom()'s singleShot(0) fires BEFORE Qt recomputes the
+        // layout for a widget that just grew (setText on a wrapped QLabel
+        // defers its resize), so setValue(maximum()) lands on the *old*
+        // maximum and the view sits one growth-step short — for a card that
+        // keeps growing, permanently behind. rangeChanged fires after the
+        // layout settles, which is the only moment the true bottom is known.
+        connect(vbar, &QScrollBar::rangeChanged, this, [this](int, int max) {
+            if (!stick_to_bottom_ || !scroll_area_)
+                return;
+            auto* sb = scroll_area_->verticalScrollBar();
+            if (!sb)
+                return;
+            programmatic_scroll_ = true;
+            sb->setValue(max);
+            programmatic_scroll_ = false;
+        });
+
+        // Scrolling up mid-stream means "let me read" — stop dragging the view
+        // down until the user returns to the bottom. Programmatic moves are
+        // excluded, or auto-scroll would immediately re-arm itself.
+        connect(vbar, &QScrollBar::valueChanged, this, [this](int v) {
+            if (programmatic_scroll_ || !scroll_area_)
+                return;
+            auto* sb = scroll_area_->verticalScrollBar();
+            if (!sb)
+                return;
+            constexpr int kAtBottomSlackPx = 48;
+            stick_to_bottom_ = (v >= sb->maximum() - kAtBottomSlackPx);
+        });
+    }
 
     // Typing indicator sits above input, inside chat area
     vl->addWidget(build_typing_indicator());

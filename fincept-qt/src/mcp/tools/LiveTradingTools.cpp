@@ -158,7 +158,14 @@ std::vector<ToolDef> get_live_trading_tools() {
                         "order_type MARKET/LIMIT/SL/SL-M; product MIS/CNC/NRML. "
                         "Requires confirmation.";
         t.category = "live-trading";
-        t.auth_required = AuthLevel::Authenticated;
+        // ExplicitConfirm, not Authenticated: Authenticated (1) sits below
+        // Verified (2), so check_authorization()'s fail-closed branch never
+        // fired and the description's "Requires confirmation" enforced nothing.
+        // The only backstop was ActionCenter::should_queue, which returns true
+        // only for SemiAuto accounts — and accounts default to Auto. Prompt
+        // injection reaching the tool loop through news/EDGAR/forum text could
+        // therefore place real broker orders unattended.
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("account_id", "Broker account ID (optional if exactly one active account)")
@@ -242,7 +249,14 @@ std::vector<ToolDef> get_live_trading_tools() {
                         "position_size (positive=long, negative=short, 0=flatten) "
                         "and places the delta order. Requires confirmation.";
         t.category = "live-trading";
-        t.auth_required = AuthLevel::Authenticated;
+        // ExplicitConfirm, not Authenticated: Authenticated (1) sits below
+        // Verified (2), so check_authorization()'s fail-closed branch never
+        // fired and the description's "Requires confirmation" enforced nothing.
+        // The only backstop was ActionCenter::should_queue, which returns true
+        // only for SemiAuto accounts — and accounts default to Auto. Prompt
+        // injection reaching the tool loop through news/EDGAR/forum text could
+        // therefore place real broker orders unattended.
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("account_id", "Broker account ID (optional if exactly one active account)")
@@ -320,7 +334,14 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.name = "live_cancel_order";
         t.description = "Cancel a single open LIVE order by order_id. Requires confirmation.";
         t.category = "live-trading";
-        t.auth_required = AuthLevel::Authenticated;
+        // ExplicitConfirm, not Authenticated: Authenticated (1) sits below
+        // Verified (2), so check_authorization()'s fail-closed branch never
+        // fired and the description's "Requires confirmation" enforced nothing.
+        // The only backstop was ActionCenter::should_queue, which returns true
+        // only for SemiAuto accounts — and accounts default to Auto. Prompt
+        // injection reaching the tool loop through news/EDGAR/forum text could
+        // therefore place real broker orders unattended.
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("account_id", "Broker account ID (optional if exactly one active account)")
@@ -354,7 +375,14 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.name = "live_cancel_all_orders";
         t.description = "Cancel ALL open LIVE orders for an account. Requires confirmation.";
         t.category = "live-trading";
-        t.auth_required = AuthLevel::Authenticated;
+        // ExplicitConfirm, not Authenticated: Authenticated (1) sits below
+        // Verified (2), so check_authorization()'s fail-closed branch never
+        // fired and the description's "Requires confirmation" enforced nothing.
+        // The only backstop was ActionCenter::should_queue, which returns true
+        // only for SemiAuto accounts — and accounts default to Auto. Prompt
+        // injection reaching the tool loop through news/EDGAR/forum text could
+        // therefore place real broker orders unattended.
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("account_id", "Broker account ID (optional if exactly one active account)")
@@ -397,7 +425,14 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Close a single LIVE position by symbol/exchange (places a "
                         "market counter-order). Requires confirmation.";
         t.category = "live-trading";
-        t.auth_required = AuthLevel::Authenticated;
+        // ExplicitConfirm, not Authenticated: Authenticated (1) sits below
+        // Verified (2), so check_authorization()'s fail-closed branch never
+        // fired and the description's "Requires confirmation" enforced nothing.
+        // The only backstop was ActionCenter::should_queue, which returns true
+        // only for SemiAuto accounts — and accounts default to Auto. Prompt
+        // injection reaching the tool loop through news/EDGAR/forum text could
+        // therefore place real broker orders unattended.
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("account_id", "Broker account ID (optional if exactly one active account)")
@@ -440,7 +475,14 @@ std::vector<ToolDef> get_live_trading_tools() {
         t.description = "Square off ALL open LIVE positions for an account (market "
                         "counter-orders). Requires confirmation.";
         t.category = "live-trading";
-        t.auth_required = AuthLevel::Authenticated;
+        // ExplicitConfirm, not Authenticated: Authenticated (1) sits below
+        // Verified (2), so check_authorization()'s fail-closed branch never
+        // fired and the description's "Requires confirmation" enforced nothing.
+        // The only backstop was ActionCenter::should_queue, which returns true
+        // only for SemiAuto accounts — and accounts default to Auto. Prompt
+        // injection reaching the tool loop through news/EDGAR/forum text could
+        // therefore place real broker orders unattended.
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
                              .string("account_id", "Broker account ID (optional if exactly one active account)")

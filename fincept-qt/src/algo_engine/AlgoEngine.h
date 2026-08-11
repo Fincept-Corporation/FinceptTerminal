@@ -59,6 +59,11 @@ class AlgoEngine : public QObject {
 
   private slots:
     void on_order_requested(const fincept::algo::AlgoOrderSignal& signal);
+    // Semi-Auto approval outcomes from ActionCenter, routed back to the runner
+    // that raised the order so its in-flight guard and position bookkeeping stay
+    // correct. Both are no-ops for pending ids this engine did not queue.
+    void on_approval_approved(const QString& pending_id, const QString& broker_order_id);
+    void on_approval_rejected(const QString& pending_id, const QString& reason);
 
   private:
     AlgoEngine();
@@ -86,6 +91,9 @@ class AlgoEngine : public QObject {
     QThread engine_thread_;
     mutable QMutex mutex_;
     QHash<QString, DeploymentRunner*> runners_;
+    // ActionCenter pending id → deployment id, for orders this engine parked in
+    // the Semi-Auto approval queue. Guarded by mutex_.
+    QHash<QString, QString> approvals_;
     fincept::algo::fno::FnoDataBridge* fno_bridge_ = nullptr;
 };
 

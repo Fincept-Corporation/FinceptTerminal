@@ -20,23 +20,30 @@ QMutex* SmartOrderEngine::get_symbol_lock(const QString& symbol, const QString& 
     return it->second.get();
 }
 
-QVector<BrokerPosition> SmartOrderEngine::get_positions_cached(IBroker* broker, const BrokerCredentials& creds) {
+ApiResponse<QVector<BrokerPosition>> SmartOrderEngine::get_positions_cached(IBroker* broker,
+                                                                            const BrokerCredentials& creds) {
     QMutexLocker locker(&cache_mutex_);
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     auto it = position_cache_.find(creds.access_token);
     if (it != position_cache_.end() && (now - it->fetched_at_ms) < CACHE_TTL_MS) {
-        return it->positions;
+        return {true, it->positions, {}};
     }
     locker.unlock();
 
+    // Propagate a failed fetch. The old code swallowed the error, kept the empty
+    // vector, and cached it with a FRESH timestamp — so a single transient
+    // /positions failure made every smart order for the rest of the TTL read the
+    // book as flat: "adjust to N" bought N more on top of a real long, and
+    // "flatten to 0" reported "No action needed" while the exposure stayed open.
     auto resp = broker->get_positions(creds);
-    QVector<BrokerPosition> positions;
-    if (resp.success && resp.data.has_value())
-        positions = resp.data.value();
+    if (!resp.success || !resp.data.has_value()) {
+        return {false, std::nullopt,
+                resp.error.isEmpty() ? QStringLiteral("Broker returned no position data") : resp.error};
+    }
 
     locker.relock();
-    position_cache_[creds.access_token] = {positions, QDateTime::currentMSecsSinceEpoch()};
-    return positions;
+    position_cache_[creds.access_token] = {resp.data.value(), QDateTime::currentMSecsSinceEpoch()};
+    return {true, resp.data.value(), {}};
 }
 
 void SmartOrderEngine::invalidate_cache(const QString& auth_token) {
@@ -71,7 +78,18 @@ ApiResponse<SmartOrderResult> SmartOrderEngine::execute(IBroker* broker, const B
     auto* lock = get_symbol_lock(order.symbol, order.exchange, product_type_str(order.product_type));
     QMutexLocker locker(lock);
 
-    auto positions = get_positions_cached(broker, creds);
+    // Never trade off an unverified book: a smart order is a DELTA against the
+    // current position, so an unknown position must abort before any delta is
+    // computed rather than default to zero.
+    auto pos_resp = get_positions_cached(broker, creds);
+    if (!pos_resp.success || !pos_resp.data.has_value()) {
+        const QString err =
+            pos_resp.error.isEmpty() ? QStringLiteral("Could not read current positions") : pos_resp.error;
+        LOG_ERROR("SmartOrder", QString("Refusing smart order for %1:%2 — position fetch failed: %3")
+                                    .arg(order.symbol, order.exchange, err));
+        return {false, std::nullopt, "Cannot verify current position — order not sent: " + err};
+    }
+    const QVector<BrokerPosition>& positions = pos_resp.data.value();
     double current =
         find_current_position(positions, order.symbol, order.exchange, product_type_str(order.product_type));
 

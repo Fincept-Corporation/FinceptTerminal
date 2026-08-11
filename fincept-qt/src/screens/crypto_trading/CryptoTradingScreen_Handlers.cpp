@@ -401,10 +401,15 @@ void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
         }
     } else {
         QPointer<CryptoTradingScreen> self = this;
-        (void)QtConcurrent::run([self, order_id]() {
+        // Snapshot the symbol on the UI thread. Reading self->selected_symbol_
+        // from the worker races the UI thread's writes — a symbol switch
+        // between dispatch and dereference would cancel against the wrong
+        // market, and the `if (!self)` guard above is a TOCTOU besides.
+        const QString symbol = selected_symbol_;
+        (void)QtConcurrent::run([self, order_id, symbol]() {
             if (!self)
                 return;
-            ExchangeService::instance().cancel_exchange_order(order_id, self->selected_symbol_);
+            ExchangeService::instance().cancel_exchange_order(order_id, symbol);
             QMetaObject::invokeMethod(
                 self,
                 [self]() {

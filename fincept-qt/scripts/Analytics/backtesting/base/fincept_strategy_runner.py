@@ -43,7 +43,16 @@ class FinceptStrategyRunner:
         if not info:
             raise ValueError(f"Strategy {strategy_id} not found in registry")
 
-        strategy_path = self.strategies_dir / info['path']
+        # Containment check. `Path / value` silently ESCAPES the root when
+        # `value` is absolute ("C:/x", "/etc/x") or walks up ("../../x"), and
+        # the code below exec()s whatever it reads. Resolve first, then assert
+        # the result is still under strategies_dir.
+        root = self.strategies_dir.resolve()
+        strategy_path = (root / info['path']).resolve()
+        if not strategy_path.is_relative_to(root):
+            raise ValueError(
+                f"Strategy path escapes the strategies directory: {info['path']}"
+            )
         if not strategy_path.exists():
             raise FileNotFoundError(f"Strategy file not found: {strategy_path}")
 

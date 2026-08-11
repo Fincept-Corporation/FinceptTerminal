@@ -26,12 +26,22 @@ class PositionManager {
     bool has_position() const;
     bool is_paused() const;
     bool validate_order_value(double qty, double price) const;
+    // Same ceiling as validate_order_value, for a pre-computed notional. The
+    // multi-leg F&O basket path has no single (qty × price) — its notional is a
+    // sum over the legs — so it checks the limit through here.
+    bool validate_order_notional(double notional) const;
 
     AlgoPosition position() const;
     AlgoMetrics metrics() const;
     RiskState risk_state() const;
     void update_price(double price);
     void reset_daily();
+    // Clears the daily P&L and the loss-limit latch once the local trading date
+    // has moved past day_start_epoch; returns true when that rollover happened.
+    // Without a caller for this the "daily" loss limit latches for the lifetime
+    // of the process — a lifetime limit, not a daily one. The date is taken in
+    // local time, matching how day_start_epoch is stamped in the constructor.
+    bool reset_daily_if_new_day();
 
     // Multi-leg (F&O basket) mode — parallel to the single-position equity path.
     void record_entry_legs(const QVector<fincept::algo::AlgoLegPosition>& legs, int64_t time_ms);
@@ -42,6 +52,9 @@ class PositionManager {
 
   private:
     void update_drawdown();
+    // Body of reset_daily(); assumes mutex_ is already held (QMutex is not
+    // recursive, so reset_daily_if_new_day() cannot call reset_daily()).
+    void reset_daily_locked();
 
     QString deployment_id_;
     AlgoPosition position_;

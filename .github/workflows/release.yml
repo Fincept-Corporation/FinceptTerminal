@@ -464,6 +464,86 @@ jobs:
           }
           Write-Host "Smoke test passed — every screen constructed on the bundled runtime."
 
+      # ── Headless self-tests ───────────────────────────────────────────────
+      # These never ran on the release path before: the self-test loop lived
+      # only in build-cpp.yml, which is workflow_dispatch-only. They are
+      # deterministic, headless, and exercise the tool registry, feed parsing,
+      # dock layout, F&O + paper engines, portfolio monitor/replication and
+      # the arena — i.e. logic the screen-construction smoke test never
+      # reaches. The flag list is discovered from the binary rather than
+      # hand-copied here (it drifted once: main.cpp dispatched 10 flags while
+      # CI listed 9, so --selftest-live-table ran nowhere). --profile ci keeps
+      # the paper/F&O engines off any real user profile.
+      - name: Run self-tests (headless)
+        shell: bash
+        working-directory: fincept-qt
+        timeout-minutes: 25
+        run: bash ../.github/scripts/ci_app_checks.sh selftests "build/Release/${{ env.APP_NAME }}.exe" ci
+
+      # ── Authenticode sign the application binary ──────────────────────────
+      # Runs BEFORE cpack so the signed exe is what lands in the installer
+      # payload. Without this, every Windows user hits a SmartScreen "unknown
+      # publisher" block on the primary platform — and for an app that stores
+      # broker credentials, an unsigned installer is also trivially
+      # substitutable by a phishing build.
+      #
+      # Credentials come from an Azure Key Vault code-signing certificate
+      # (AzureSignTool). Set these five repo secrets to enable signing:
+      #   AZ_KV_URL        vault URI, e.g. https://myvault.vault.azure.net
+      #   AZ_KV_CLIENT_ID  service-principal / app registration client id
+      #   AZ_KV_SECRET     service-principal client secret
+      #   AZ_KV_CERT       certificate name inside the vault
+      #   AZ_TENANT        Entra tenant id
+      # Optional: AZ_TIMESTAMP_URL (defaults to DigiCert's RFC-3161 server;
+      # use http://timestamp.acs.microsoft.com for Azure Trusted Signing).
+      #
+      # Absent secrets → skip with a loud warning so forks and dry runs still
+      # build. Present secrets → any failure fails the job.
+      - name: Code-sign application binary
+        shell: pwsh
+        working-directory: fincept-qt
+        env:
+          AZ_KV_URL: ${{ secrets.AZ_KV_URL }}
+          AZ_KV_CLIENT_ID: ${{ secrets.AZ_KV_CLIENT_ID }}
+          AZ_KV_SECRET: ${{ secrets.AZ_KV_SECRET }}
+          AZ_KV_CERT: ${{ secrets.AZ_KV_CERT }}
+          AZ_TENANT: ${{ secrets.AZ_TENANT }}
+          AZ_TIMESTAMP_URL: ${{ secrets.AZ_TIMESTAMP_URL }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $secrets = @($env:AZ_KV_URL, $env:AZ_KV_CLIENT_ID, $env:AZ_KV_SECRET, $env:AZ_KV_CERT, $env:AZ_TENANT)
+          if ($secrets | Where-Object { [string]::IsNullOrWhiteSpace($_) }) {
+            Write-Host "::warning::==================== WINDOWS BUILD IS UNSIGNED ===================="
+            Write-Host "::warning::Code-signing secrets (AZ_KV_URL / AZ_KV_CLIENT_ID / AZ_KV_SECRET /"
+            Write-Host "::warning::AZ_KV_CERT / AZ_TENANT) are not set, so FinceptTerminal.exe and the"
+            Write-Host "::warning::installer will NOT be signed. Every user will hit a SmartScreen"
+            Write-Host "::warning::'unknown publisher' warning. Do not publish this as a real release."
+            Write-Host "::warning::=================================================================="
+            "FINCEPT_SIGNED=0" | Out-File -FilePath $env:GITHUB_ENV -Append
+            exit 0
+          }
+          $ts = if ([string]::IsNullOrWhiteSpace($env:AZ_TIMESTAMP_URL)) { 'http://timestamp.digicert.com' } else { $env:AZ_TIMESTAMP_URL }
+
+          dotnet tool install --global AzureSignTool
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::AzureSignTool install failed"; exit 1 }
+          $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
+
+          # Our own build outputs. Qt's DLLs keep their upstream signatures (or
+          # lack thereof); re-signing third-party binaries buys nothing and
+          # would slow the job by minutes.
+          $targets = @('build/Release/FinceptTerminal.exe')
+          if (Test-Path 'build/Release/qgeoview.dll') { $targets += 'build/Release/qgeoview.dll' }
+
+          foreach ($t in $targets) {
+            Write-Host "Signing $t"
+            azuresigntool sign `
+              -kvu $env:AZ_KV_URL -kvi $env:AZ_KV_CLIENT_ID -kvs $env:AZ_KV_SECRET `
+              -kvc $env:AZ_KV_CERT -kvt $env:AZ_TENANT `
+              -tr $ts -td sha256 -fd sha256 -v $t
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::Signing failed for $t"; exit 1 }
+          }
+          "FINCEPT_SIGNED=1" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       # ── Generate Installer ────────────────────────────────────────────────
       - name: Generate Installer (CPack IFW)
         shell: bash
@@ -474,6 +554,59 @@ jobs:
           command -v binarycreator || { echo "::error::binarycreator not found"; exit 1; }
           cpack -G IFW -C ${{ env.BUILD_TYPE }} --verbose
           ls -lh ${{ env.APP_NAME }}-*-setup* 2>/dev/null || ls -lh *.exe 2>/dev/null || true
+
+      # ── Authenticode sign the installer + verify the signature ────────────
+      # The installer is the file users actually download, so it needs its own
+      # signature (the signed payload inside is invisible to SmartScreen until
+      # after extraction). `signtool verify /pa` is the gate: when signing was
+      # supposed to happen it must succeed, and when it was skipped the run
+      # says so loudly in the job summary so an unsigned build can't ship
+      # unnoticed.
+      - name: Code-sign installer + verify
+        shell: pwsh
+        working-directory: fincept-qt/build
+        env:
+          AZ_KV_URL: ${{ secrets.AZ_KV_URL }}
+          AZ_KV_CLIENT_ID: ${{ secrets.AZ_KV_CLIENT_ID }}
+          AZ_KV_SECRET: ${{ secrets.AZ_KV_SECRET }}
+          AZ_KV_CERT: ${{ secrets.AZ_KV_CERT }}
+          AZ_TENANT: ${{ secrets.AZ_TENANT }}
+          AZ_TIMESTAMP_URL: ${{ secrets.AZ_TIMESTAMP_URL }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem -Filter "${{ env.APP_NAME }}-*-windows-x64-setup.exe" | Select-Object -First 1
+          if (-not $setup) { Write-Host "::error::installer not found for signing"; exit 1 }
+
+          # signtool ships with the Windows SDK; pick the newest x64 build.
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+                      Sort-Object FullName -Descending | Select-Object -First 1
+
+          if ($env:FINCEPT_SIGNED -ne '1') {
+            Write-Host "::warning::Installer $($setup.Name) is UNSIGNED (no code-signing secrets configured)."
+            "### :warning: Windows installer is UNSIGNED" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            "``$($setup.Name)`` was built without Authenticode signing — users will see a SmartScreen 'unknown publisher' block. Configure the AZ_KV_* / AZ_TENANT secrets before publishing." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            exit 0
+          }
+
+          $ts = if ([string]::IsNullOrWhiteSpace($env:AZ_TIMESTAMP_URL)) { 'http://timestamp.digicert.com' } else { $env:AZ_TIMESTAMP_URL }
+          $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
+          Write-Host "Signing installer: $($setup.Name)"
+          azuresigntool sign `
+            -kvu $env:AZ_KV_URL -kvi $env:AZ_KV_CLIENT_ID -kvs $env:AZ_KV_SECRET `
+            -kvc $env:AZ_KV_CERT -kvt $env:AZ_TENANT `
+            -tr $ts -td sha256 -fd sha256 -v $setup.FullName
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::Installer signing failed"; exit 1 }
+
+          if (-not $signtool) { Write-Host "::error::signtool.exe not found — cannot verify the signature"; exit 1 }
+          Write-Host "Verifying with: $($signtool.FullName) verify /pa /v"
+          & $signtool.FullName verify /pa /v $setup.FullName
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::signtool verify /pa FAILED — the installer is not trusted by the Authenticode policy"; exit 1 }
+
+          # The exe inside the payload was signed before cpack — prove it, so a
+          # signed installer can never ship an unsigned application binary.
+          & $signtool.FullName verify /pa /v (Join-Path (Get-Location) 'Release\FinceptTerminal.exe')
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::signtool verify /pa FAILED for the packaged FinceptTerminal.exe"; exit 1 }
+          Write-Host "Installer + application signatures verified."
 
       # ── Validate installer PAYLOAD (not just the stage dir) ───────────────
       # The smoke test above runs against build/Release — the *staged* dir,
@@ -717,6 +850,19 @@ jobs:
           echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
           file "$BINARY"
 
+      # ── Headless self-tests (build-tree binary) ───────────────────────────
+      # Run before packaging so a logic regression fails the release in ~2
+      # minutes instead of after the 15-minute AppImage/deb/rpm/IFW sequence.
+      # Flags are discovered from the binary; --profile ci keeps the paper and
+      # F&O engines off any real profile. See .github/scripts/ci_app_checks.sh.
+      - name: Run self-tests (headless)
+        working-directory: fincept-qt
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+          bash ../.github/scripts/ci_app_checks.sh selftests "build/${{ env.APP_NAME }}" ci
+
       # ── Build self-contained AppImage ─────────────────────────────────────
       # The previous release workflow ran CPack IFW on Linux but didn't bundle
       # Qt at all — the installer produced a "binary + desktop file" payload
@@ -946,6 +1092,30 @@ jobs:
             command -v zsyncmake >/dev/null 2>&1 && \
               zsyncmake "build/${OUTPUT}" -o "build/${OUTPUT}.zsync" || true
           fi
+
+      # ── Smoke-test the AppImage (the artifact users actually download) ────
+      # Until this step existed, the Linux artifact got ZERO runtime
+      # verification — "Verify binary" above only checks the file exists and
+      # runs `file` on it. The bug class the Windows job's closure walk and
+      # clean-PATH smoke test were built for (v4.1.0's unbundled z.dll, the
+      # WebEngine crash on first screen open) was completely uncaught here.
+      # The AppImage is self-mounting (libfuse2 is installed above), so
+      # executing it exercises the bundled Qt/OpenSSL/plugin payload exactly
+      # as an end user's machine would — including the #352 OpenSSL pairing.
+      # --smoke-test walks every screen; the '[Smoke] >>> constructing <id>'
+      # breadcrumb names the screen if it dies.
+      - name: Smoke-test AppImage
+        working-directory: fincept-qt
+        timeout-minutes: 15
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QTWEBENGINE_DISABLE_SANDBOX: '1'
+        run: |
+          set -euo pipefail
+          APPIMAGE=$(ls build/${{ env.APP_NAME }}-*-linux-x64-setup.run 2>/dev/null | head -1 || true)
+          [ -n "${APPIMAGE}" ] || { echo "::error::AppImage not found for smoke test"; exit 1; }
+          chmod +x "${APPIMAGE}"
+          bash ../.github/scripts/ci_app_checks.sh smoke "${APPIMAGE}" ci-smoke 600
 
       # ── Build .deb package ────────────────────────────────────────────────
       - name: Build .deb package
@@ -1253,6 +1423,22 @@ jobs:
           echo "Binary: $BINARY ($(du -sh "$BINARY" | cut -f1))"
           lipo -info "$BINARY"
 
+      # ── Headless self-tests (build-tree binary) ───────────────────────────
+      # Runs before staging/macdeployqt/codesign so a logic regression fails
+      # in ~2 minutes rather than after the notarization round-trip. The
+      # signed-bundle launch check is a separate step after stapling.
+      - name: Run self-tests (headless)
+        working-directory: fincept-qt
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          if [ -f "build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}" ]; then
+            BINARY="build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}"
+          else
+            BINARY="build/${{ env.APP_NAME }}"
+          fi
+          bash ../.github/scripts/ci_app_checks.sh selftests "$BINARY" ci
+
       # ── Stage .app bundle contents (Python + resources FIRST) ─────────────
       # Order is critical: Python.framework and resources must be in the bundle
       # BEFORE macdeployqt / codesign run. If we embed after signing, dyld on
@@ -1271,7 +1457,15 @@ jobs:
             mkdir -p "${APP_BUNDLE}/Contents/MacOS"
             cp "${BUILD_DIR}/${{ env.APP_NAME }}" "${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
             chmod +x "${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
-            cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
+            # Version MUST come from CMakeLists.txt, not a literal: this
+            # fallback plist used to hardcode 4.3.0, so on the fallback path
+            # the bundle advertised a CFBundleVersion that disagreed with the
+            # binary as soon as the project version moved — which breaks the
+            # auto-updater's version comparison. Note the heredoc delimiter is
+            # unquoted (<<PLIST, not <<'PLIST') so ${VERSION} interpolates.
+            VERSION=$(grep -Eo 'project\(FinceptTerminal VERSION [0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt | awk '{print $3}')
+            [ -n "${VERSION}" ] || { echo "::error::Could not parse VERSION from CMakeLists.txt"; exit 1; }
+            cat > "${APP_BUNDLE}/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
@@ -1279,8 +1473,8 @@ jobs:
             <key>CFBundleIdentifier</key><string>com.fincept.terminal</string>
             <key>CFBundleName</key><string>FinceptTerminal</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>4.3.0</string>
-            <key>CFBundleVersion</key><string>4.3.0</string>
+            <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+            <key>CFBundleVersion</key><string>${VERSION}</string>
             <key>LSMinimumSystemVersion</key><string>13.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
@@ -1994,6 +2188,32 @@ jobs:
           xcrun stapler validate "${APP_BUNDLE}"
           rm -f "${ZIP_PATH}" "${SUBMIT_JSON}" "${INFO_JSON}"
 
+      # ── Smoke-test the SIGNED bundle ──────────────────────────────────────
+      # Until this step existed, the macOS artifact got ZERO runtime
+      # verification — "Verify binary" is only `[ -f ]` plus `lipo -info`. It
+      # runs AFTER codesign + notarize + staple deliberately: launching the
+      # binary from inside the sealed bundle is the only check that proves the
+      # signature is actually loadable. That is exactly the failure mode of
+      # issue #139 (dyld SIGKILL "Code Signature Invalid" from a framework
+      # embedded after signing) — a broken seal aborts the process here
+      # instead of on a user's Mac. It also walks every screen against the
+      # macdeployqt-bundled Qt, the counterpart of the Windows clean-PATH
+      # gate. codesign --verify is re-run first so a seal break is reported as
+      # a signature error rather than an opaque crash.
+      - name: Smoke-test signed .app bundle
+        working-directory: fincept-qt
+        timeout-minutes: 15
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QTWEBENGINE_DISABLE_SANDBOX: '1'
+        run: |
+          set -euo pipefail
+          APP_BUNDLE="build/${{ env.APP_NAME }}.app"
+          BINARY="${APP_BUNDLE}/Contents/MacOS/${{ env.APP_NAME }}"
+          [ -f "${BINARY}" ] || { echo "::error::signed bundle binary not found at ${BINARY}"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
+          bash ../.github/scripts/ci_app_checks.sh smoke "${BINARY}" ci-smoke 600
+
       # ── Copy signed bundle to dist/ ───────────────────────────────────────
       - name: Finalize dist
         working-directory: fincept-qt
@@ -2445,8 +2665,6 @@ jobs:
           END_MARKER="<!-- DOWNLOAD-TABLE-END -->"
 
           NEW_BLOCK="${START_MARKER}
-          ### Option 1 — Download Installer (Recommended)
-
           Latest release: **${TAG}** — [View all releases](${RELEASE_URL})
 
           | Platform | Download | Run |

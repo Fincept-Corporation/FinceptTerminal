@@ -6,6 +6,7 @@
 #include "auth/PinManager.h"
 #include "auth/SecurityAuditLog.h"
 #include "core/logging/Logger.h"
+#include "mcp/McpProvider.h"
 #include "screens/settings/SettingsRowHelpers.h"
 #include "screens/settings/SettingsStyles.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -25,6 +26,11 @@
 namespace fincept::screens {
 
 namespace {
+/// Dynamic-property guard set by reload() when a settings *read* failed. While
+/// it is set, Save is disabled and its handler refuses to write — the widgets
+/// hold defaults, not the user's values, and set() is an INSERT OR REPLACE.
+constexpr const char* kSecurityReadFailedProp = "fincept_security_read_failed";
+
 // make_row() builds the label (and optional description) QLabel internally;
 // grab them back from the row's direct child QLabels so retranslateUi() can
 // re-apply text. Order is deterministic: title label first, description second.
@@ -34,6 +40,17 @@ void capture_row_labels(QWidget* row, QLabel** label_out, QLabel** desc_out = nu
         *label_out = labels.at(0);
     if (labels.size() > 1 && desc_out)
         *desc_out = labels.at(1);
+}
+
+// Long-form explanation for the destructive-tools grant. One definition so
+// build_ui() and retranslateUi() cannot drift apart.
+QString destructive_tools_desc() {
+    return SecuritySection::tr(
+        "Off by default. With this off, AI chat and agents can read your terminal but cannot change anything "
+        "— no file writes, no spreadsheet, note, watchlist or portfolio edits, no dashboard or workspace "
+        "changes, no script execution. Turning it on lets them act for you; you can turn it back off at any "
+        "time. Live trading orders and access to your saved credentials stay blocked either way. Applies "
+        "immediately — no need to press Save.");
 }
 } // namespace
 
@@ -313,6 +330,12 @@ void SecuritySection::build_ui() {
     save_btn_->setFixedWidth(200);
     save_btn_->setStyleSheet(btn_primary_ss());
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
+        if (property(kSecurityReadFailedProp).toBool()) {
+            LOG_WARN("Settings", "Refusing to save security settings — the stored values could not be read, so the "
+                                 "widgets on screen are defaults rather than the user's settings");
+            return;
+        }
+
         auto& repo = SettingsRepository::instance();
         auto& guard = auth::InactivityGuard::instance();
         auto& pm = auth::PinManager::instance();
@@ -357,6 +380,46 @@ void SecuritySection::build_ui() {
     save_status_->setWordWrap(true);
     save_status_->hide();
     vl->addWidget(save_status_);
+
+    // ── AI TOOL PERMISSIONS ───────────────────────────────────────────────────
+    //
+    // Backs `mcp/allow_destructive_tools`. Every MCP tool flagged
+    // `is_destructive` — spreadsheet and file writes, dashboard / workspace /
+    // layout mutations, notes, watchlist, portfolio, report builder, agent
+    // execution, run_python_script — fails closed unless this is on. It is the
+    // ONLY place that grant can be made, so without it the whole "let the
+    // assistant drive the terminal" surface is permanently read-only.
+    //
+    // Deliberately outside the Save button above: this is a capability grant,
+    // not a form field, and a half-applied capability is worse than either
+    // state. McpProvider::set_destructive_allowed persists it (AppConfig, same
+    // mechanism LoggingSection and VoiceConfigSection use) and updates the live
+    // session in one call — there is no second copy of this setting to keep in
+    // sync.
+    vl->addSpacing(16);
+    title_ai_tools_ = new QLabel(tr("AI TOOL PERMISSIONS"));
+    title_ai_tools_->setStyleSheet(sub_title_ss());
+    vl->addWidget(title_ai_tools_);
+    vl->addSpacing(4);
+
+    sec_allow_destructive_ = new QCheckBox(tr("Allow AI agents to modify files, workspaces and data"));
+    sec_allow_destructive_->setStyleSheet(check_ss());
+    sec_allow_destructive_->setAccessibleName(tr("Allow AI agents to modify files, workspaces and data"));
+    auto* row_destructive =
+        make_row(tr("Destructive AI Tools"), sec_allow_destructive_, destructive_tools_desc());
+    capture_row_labels(row_destructive, &row_destructive_lbl_, &row_destructive_desc_);
+    vl->addWidget(row_destructive);
+
+    connect(sec_allow_destructive_, &QCheckBox::toggled, this, [this](bool checked) {
+        mcp::McpProvider::set_destructive_allowed(checked);
+        // A capability grant belongs in the same audit stream the user is
+        // already looking at, two rows further down this page.
+        auth::SecurityAuditLog::instance().record(checked ? QStringLiteral("ai_destructive_tools_enabled")
+                                                          : QStringLiteral("ai_destructive_tools_disabled"));
+        refresh_audit_log();
+        LOG_INFO("Settings",
+                 QString("Destructive AI tools %1 from Security settings").arg(checked ? "enabled" : "disabled"));
+    });
 
     // ── AUDIT LOG ─────────────────────────────────────────────────────────────
     vl->addSpacing(16);
@@ -419,6 +482,8 @@ void SecuritySection::retranslateUi() {
         title_change_->setText(tr("CHANGE PIN"));
     if (title_lock_)
         title_lock_->setText(tr("AUTO-LOCK"));
+    if (title_ai_tools_)
+        title_ai_tools_->setText(tr("AI TOOL PERMISSIONS"));
     if (title_audit_)
         title_audit_->setText(tr("AUDIT LOG"));
     if (audit_note_)
@@ -451,12 +516,20 @@ void SecuritySection::retranslateUi() {
         row_minimize_lbl_->setText(tr("Lock on Minimize"));
     if (row_minimize_desc_)
         row_minimize_desc_->setText(tr("When on, minimizing the terminal immediately shows the PIN screen."));
+    if (row_destructive_lbl_)
+        row_destructive_lbl_->setText(tr("Destructive AI Tools"));
+    if (row_destructive_desc_)
+        row_destructive_desc_->setText(destructive_tools_desc());
 
     // Checkbox texts.
     if (sec_autolock_toggle_)
         sec_autolock_toggle_->setText(tr("Enable auto-lock on inactivity"));
     if (sec_lock_on_minimize_)
         sec_lock_on_minimize_->setText(tr("Lock when the window is minimized"));
+    if (sec_allow_destructive_) {
+        sec_allow_destructive_->setText(tr("Allow AI agents to modify files, workspaces and data"));
+        sec_allow_destructive_->setAccessibleName(tr("Allow AI agents to modify files, workspaces and data"));
+    }
 
     // PIN field placeholders.
     if (sec_current_pin_)
@@ -516,21 +589,40 @@ void SecuritySection::reload() {
     if (sec_change_pin_btn_)
         sec_change_pin_btn_->setEnabled(pm.has_pin());
 
+    // A read error is not "unset". The Save handler writes every widget on this
+    // page straight back, so a failed read must disarm Save rather than let a
+    // default (10 min / lock-on-minimize off) overwrite the real setting.
+    bool read_failed = false;
+    auto log_read_error = [&read_failed](const char* key, const std::string& err) {
+        LOG_ERROR("Settings", QString("settings read failed for '%1' — leaving the stored value untouched and "
+                                      "disabling Save: %2")
+                                  .arg(QString::fromLatin1(key), QString::fromStdString(err)));
+        read_failed = true;
+    };
+
     if (sec_autolock_toggle_ && sec_lock_timeout_) {
         const QSignalBlocker b1(sec_autolock_toggle_);
         const QSignalBlocker b2(sec_lock_timeout_);
 
         auto r_enabled = repo.get("security.autolock_enabled");
-        bool enabled = !r_enabled.is_ok() || r_enabled.value() != "false";
-        sec_autolock_toggle_->setChecked(enabled);
-        sec_lock_timeout_->setEnabled(enabled);
+        if (r_enabled.is_err()) {
+            log_read_error("security.autolock_enabled", r_enabled.error());
+        } else {
+            bool enabled = r_enabled.value() != "false";
+            sec_autolock_toggle_->setChecked(enabled);
+            sec_lock_timeout_->setEnabled(enabled);
+        }
 
         auto r_timeout = repo.get("security.lock_timeout_minutes");
-        int minutes = r_timeout.is_ok() ? r_timeout.value().toInt() : 10;
-        for (int i = 0; i < sec_lock_timeout_->count(); ++i) {
-            if (sec_lock_timeout_->itemData(i).toInt() == minutes) {
-                sec_lock_timeout_->setCurrentIndex(i);
-                break;
+        if (r_timeout.is_err()) {
+            log_read_error("security.lock_timeout_minutes", r_timeout.error());
+        } else {
+            int minutes = r_timeout.value().toInt();
+            for (int i = 0; i < sec_lock_timeout_->count(); ++i) {
+                if (sec_lock_timeout_->itemData(i).toInt() == minutes) {
+                    sec_lock_timeout_->setCurrentIndex(i);
+                    break;
+                }
             }
         }
     }
@@ -538,7 +630,29 @@ void SecuritySection::reload() {
     if (sec_lock_on_minimize_) {
         const QSignalBlocker b(sec_lock_on_minimize_);
         auto r = repo.get("security.lock_on_minimize");
-        sec_lock_on_minimize_->setChecked(r.is_ok() && r.value() == "true");
+        if (r.is_err())
+            log_read_error("security.lock_on_minimize", r.error());
+        else
+            sec_lock_on_minimize_->setChecked(r.value() == "true");
+    }
+
+    setProperty(kSecurityReadFailedProp, read_failed);
+    if (save_btn_)
+        save_btn_->setEnabled(!read_failed);
+    if (read_failed && save_status_) {
+        save_status_->setText(tr("Could not read your saved security settings — saving is disabled so the values "
+                                 "shown cannot overwrite them. Reopen Settings to retry."));
+        save_status_->show();
+    }
+
+    if (sec_allow_destructive_) {
+        // Read back through McpProvider rather than the raw setting key: it is
+        // the owner of `mcp/allow_destructive_tools` and of the session grant
+        // seeded from it, so this can never show a state the tool gate does not
+        // actually apply. (Its per-call agent token path is thread-local and
+        // always false here on the GUI thread.)
+        const QSignalBlocker b(sec_allow_destructive_);
+        sec_allow_destructive_->setChecked(mcp::McpProvider::destructive_allowed());
     }
 
     refresh_audit_log();

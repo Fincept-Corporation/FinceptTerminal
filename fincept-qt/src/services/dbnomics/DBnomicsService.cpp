@@ -196,6 +196,14 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
                 return;
             }
             QJsonObject root = result.value().object();
+            // A 2xx without a `series` envelope is a failure, not an empty
+            // result: num_found would default to 0 and the UI would render a
+            // rate-limit or outage as an honest "no series found".
+            if (!root.value(QStringLiteral("series")).isObject()) {
+                LOG_ERROR("DBnomicsService", QString("series fetch: malformed response for %1").arg(cache_key));
+                emit error_occurred("series", QStringLiteral("Malformed response from DBnomics"));
+                return;
+            }
             QJsonObject s = root["series"].toObject();
             QJsonArray docs = s["docs"].toArray();
             int total = s["num_found"].toInt();

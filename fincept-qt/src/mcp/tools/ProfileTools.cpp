@@ -128,8 +128,15 @@ std::vector<ToolDef> get_profile_tools() {
     {
         ToolDef t;
         t.name = "profile_get_api_key";
-        t.description = "Get the current user's API key from the active session.";
+        t.description = "Get the current user's API key from the active session. Returns live key material — "
+                        "requires explicit user confirmation.";
         t.category = "profile";
+        // Reading a secret is not "destructive" under the current model, so
+        // nothing gated this: it returned the session API key verbatim to
+        // whatever was driving the tool loop, including a remote agent acting
+        // on prompt-injected instructions. ExplicitConfirm is the only level
+        // that fails closed without a checker installed.
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             const auto& sess = AuthManager::instance().session();

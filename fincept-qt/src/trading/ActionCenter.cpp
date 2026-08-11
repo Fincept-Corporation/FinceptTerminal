@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSqlQuery>
+#include <QStringList>
 #include <QUuid>
 
 #include <cmath>
@@ -65,7 +66,17 @@ void ActionCenter::set_order_mode(const QString& account_id, OrderMode mode) {
 OrderMode ActionCenter::get_order_mode(const QString& account_id) const {
     const QString key = "action_center.mode." + account_id;
     auto r = SettingsRepository::instance().get(key, "auto");
-    return parse_order_mode(r.is_ok() ? r.value() : QString("auto"));
+    if (r.is_err()) {
+        // Fail closed. should_queue() derives straight from this, so reporting
+        // the "auto" default on a read error would send a SemiAuto account's
+        // orders to the broker instead of the approval queue — silently
+        // defeating a risk control the user explicitly turned on.
+        LOG_WARN(kLog, QString("settings read failed for '%1' — treating the account as SemiAuto (approval "
+                               "required) until the read succeeds: %2")
+                           .arg(key, QString::fromStdString(r.error())));
+        return OrderMode::SemiAuto;
+    }
+    return parse_order_mode(r.value());
 }
 
 // ── Serialization ──────────────────────────────────────────────────────────
@@ -335,8 +346,9 @@ ActionCenter::Stats ActionCenter::get_stats(const QString& account_id) const {
 
 // ── Execution on approval ──────────────────────────────────────────────────
 
-QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString& err) {
+QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString& err, bool& async) {
     ok = false;
+    async = false;
     if (po.order_type == "placeorder" || po.order_type == "smartorder") {
         // Smart collapses to a standard place via UnifiedTrading for now —
         // the serialized order carries the same fields. (place_smart_order
@@ -406,13 +418,30 @@ QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString&
         const QJsonArray arr = po.order_data.value("orders").toArray();
         for (const auto& v : arr)
             basket.orders.append(deserialize_unified_order(v.toObject()));
-        // place_basket_orders is async (background thread + callback). For the
-        // approval gate we fire it and report acceptance immediately; per-leg
-        // results surface via the trading event bus / order book.
-        UnifiedTrading::instance().place_basket_orders(po.account_id, basket, [](const BasketOrderResult&) {});
-        ok = true;
-        err.clear();
-        return {}; // no single broker order id for a basket
+        // place_basket_orders is async (background thread + callback). It used to
+        // be fired with an EMPTY callback and the row marked "approved" on the
+        // spot — which discarded "Account not found", "No credentials … Please
+        // authenticate" and every per-leg rejection, so the approval audit trail
+        // claimed success for a basket that never left the building. Capture the
+        // real result and finalize the row from the callback instead.
+        UnifiedTrading::instance().place_basket_orders(
+            po.account_id, basket, [this, po](const BasketOrderResult& res) {
+                const bool all_ok = (res.failed == 0 && res.successful > 0);
+                QStringList errs;
+                for (const auto& r : res.results) {
+                    if (!r.success)
+                        errs.append(QString("%1: %2").arg(r.symbol, r.error));
+                }
+                const QString detail =
+                    all_ok ? QString()
+                           : QString("%1/%2 legs failed — %3")
+                                 .arg(res.failed)
+                                 .arg(res.total)
+                                 .arg(errs.isEmpty() ? QStringLiteral("no legs placed") : errs.join("; "));
+                finalize_approval(po, all_ok, detail, {}); // no single broker order id for a basket
+            });
+        async = true;
+        return {};
     }
 
     if (po.order_type == "splitorder") {
@@ -420,9 +449,32 @@ QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString&
         req.base_order = deserialize_unified_order(po.order_data);
         req.split_size = po.order_data.value("splitsize").toInt((int)po.order_data.value("split_size").toDouble());
         req.delay_between_ms = po.order_data.value("delay_between_ms").toInt(100);
-        UnifiedTrading::instance().place_split_orders(po.account_id, req, [](const SplitOrderResult&) {});
-        ok = true;
-        err.clear();
+        // Same as basketorder: the outcome only exists in the callback, so the row
+        // is finalized there rather than pre-declared approved.
+        UnifiedTrading::instance().place_split_orders(po.account_id, req, [this, po](const SplitOrderResult& res) {
+            const bool all_ok = (res.chunks_failed == 0 && res.chunks_successful > 0);
+            QStringList errs;
+            for (const auto& r : res.results) {
+                if (!r.success)
+                    errs.append(r.error);
+            }
+            const QString detail = all_ok ? QString()
+                                          : QString("%1/%2 chunks failed — %3")
+                                                .arg(res.chunks_failed)
+                                                .arg(res.chunks_failed + res.chunks_successful)
+                                                .arg(errs.isEmpty() ? QStringLiteral("no chunks placed")
+                                                                    : errs.join("; "));
+            // A split has one broker order per chunk; record the first for traceability.
+            QString first_id;
+            for (const auto& r : res.results) {
+                if (r.success && !r.order_id.isEmpty()) {
+                    first_id = r.order_id;
+                    break;
+                }
+            }
+            finalize_approval(po, all_ok, detail, first_id);
+        });
+        async = true;
         return {};
     }
 
@@ -480,24 +532,51 @@ void ActionCenter::approve_order(const QString& pending_id) {
         return;
     }
 
-    bool ok = false;
-    QString err;
-    const QString broker_order_id = execute_pending(po, ok, err);
+    // Claim the row BEFORE executing it. execute_pending() blocks on a broker
+    // round-trip that spins a nested event loop (up to ~8 s/order), which keeps
+    // delivering UI events — so the "is it still pending?" read above and the
+    // status write below used to straddle a window in which a second click, or
+    // Approve All running while a per-row approve was in flight, could send the
+    // same queued order twice. The conditional UPDATE is atomic: exactly one
+    // caller sees one affected row and proceeds.
+    auto claim = Database::instance().execute(
+        "UPDATE pending_orders SET status = 'approving' WHERE id = ? AND status = 'pending'", {pending_id});
+    if (claim.is_err()) {
+        LOG_ERROR(kLog, QString("approve_order claim failed: %1").arg(QString::fromStdString(claim.error())));
+        return;
+    }
+    if (claim.value().numRowsAffected() != 1) {
+        LOG_WARN(kLog, QString("approve_order: %1 was already claimed by another approval — ignoring").arg(pending_id));
+        return;
+    }
+    po.status = QStringLiteral("approving");
 
+    bool ok = false;
+    bool async = false;
+    QString err;
+    const QString broker_order_id = execute_pending(po, ok, err, async);
+    if (async)
+        return; // basket / split: the result callback finalizes the row.
+
+    finalize_approval(po, ok, err, broker_order_id);
+}
+
+void ActionCenter::finalize_approval(const PendingOrder& po, bool ok, const QString& err,
+                                     const QString& broker_order_id) {
     const QDateTime now = QDateTime::currentDateTime();
     auto r = Database::instance().execute("UPDATE pending_orders SET status = ?, approved_at = ?, broker_order_id = ?, "
                                           "rejection_reason = ? WHERE id = ?",
                                           {ok ? "approved" : "rejected", iso(now), broker_order_id,
-                                           ok ? QString() : ("Execution failed: " + err), pending_id});
+                                           ok ? QString() : ("Execution failed: " + err), po.id});
     if (r.is_err())
         LOG_ERROR(kLog, QString("approve_order update failed: %1").arg(QString::fromStdString(r.error())));
 
     if (ok) {
-        LOG_INFO(kLog, QString("Approved %1 → broker order %2").arg(pending_id, broker_order_id));
-        emit order_approved(pending_id, broker_order_id);
+        LOG_INFO(kLog, QString("Approved %1 → broker order %2").arg(po.id, broker_order_id));
+        emit order_approved(po.id, broker_order_id);
     } else {
-        LOG_WARN(kLog, QString("Approval of %1 executed but broker rejected: %2").arg(pending_id, err));
-        emit order_rejected(pending_id, "Execution failed: " + err);
+        LOG_WARN(kLog, QString("Approval of %1 executed but broker rejected: %2").arg(po.id, err));
+        emit order_rejected(po.id, "Execution failed: " + err);
     }
     emit stats_updated(po.account_id);
 }

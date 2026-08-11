@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
+#include <QScopeGuard>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
@@ -187,6 +188,25 @@ void PendingOrdersPanel::build_ui() {
     approve_all_btn_->setAccessibleName(tr("Approve all pending orders"));
     reject_all_btn_->setAccessibleName(tr("Reject all pending orders"));
     connect(approve_all_btn_, &QPushButton::clicked, this, [this]() {
+        // Latch BOTH bulk buttons for the whole handler. Everything below spins a
+        // nested event loop — the confirmation QMessageBox, and approve_all_pending
+        // itself (one blocking broker round-trip per order, up to ~8 s each) — and
+        // a nested loop keeps delivering clicks, so an un-latched button could fire
+        // the same queue a second time while the first pass was still running. The
+        // per-row buttons already latch (see refresh()); these did not.
+        // QPointer + qScopeGuard: the guard restores on EVERY exit path (early
+        // return, exception) and no-ops if the popover was destroyed meanwhile.
+        QPointer<QPushButton> ap_guard(approve_all_btn_);
+        QPointer<QPushButton> rj_guard(reject_all_btn_);
+        auto set_bulk_enabled = [ap_guard, rj_guard](bool on) {
+            if (ap_guard)
+                ap_guard->setEnabled(on);
+            if (rj_guard)
+                rj_guard->setEnabled(on);
+        };
+        set_bulk_enabled(false);
+        const auto restore = qScopeGuard([set_bulk_enabled]() { set_bulk_enabled(true); });
+
         const QString acct = selected_account();
         // Bulk approval fires every queued order at the broker in a loop with no
         // per-order review. Say exactly how many, for which account, how many are
@@ -231,6 +251,18 @@ void PendingOrdersPanel::build_ui() {
         ActionCenter::instance().approve_all_pending(acct);
     });
     connect(reject_all_btn_, &QPushButton::clicked, this, [this]() {
+        // Same latch as Approve All — QInputDialog spins a nested event loop too.
+        QPointer<QPushButton> ap_guard(approve_all_btn_);
+        QPointer<QPushButton> rj_guard(reject_all_btn_);
+        auto set_bulk_enabled = [ap_guard, rj_guard](bool on) {
+            if (ap_guard)
+                ap_guard->setEnabled(on);
+            if (rj_guard)
+                rj_guard->setEnabled(on);
+        };
+        set_bulk_enabled(false);
+        const auto restore = qScopeGuard([set_bulk_enabled]() { set_bulk_enabled(true); });
+
         const QString acct = selected_account();
         if (acct.isEmpty()) {
             QMessageBox::information(this, tr("Reject All"),

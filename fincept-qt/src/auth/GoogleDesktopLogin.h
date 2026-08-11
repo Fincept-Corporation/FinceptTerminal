@@ -39,6 +39,10 @@ class GoogleDesktopLogin : public QObject {
     QTcpServer* server_ = nullptr;
     QTimer* timeout_ = nullptr;
     bool done_ = false;
+    quint16 port_ = 0;
+    // Per-attempt CSRF nonce. Sent to the API as part of desktop_cb's query and
+    // verified when the callback echoes it back. See on_new_connection().
+    QString state_;
 
     // ~5 min: a new Google user is detoured through the website /complete-profile
     // form before the loopback code is issued, so the wait can be well over 2 min.

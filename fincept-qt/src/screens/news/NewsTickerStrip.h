@@ -27,6 +27,14 @@ class NewsTickerStrip : public QWidget {
     void mousePressEvent(QMouseEvent* event) override;
     void enterEvent(QEnterEvent* event) override;
     void leaveEvent(QEvent* event) override;
+    /// P3: the scroll timer must not run while this strip is invisible. It was
+    /// previously driven only by the owning screen calling pause()/resume(), so
+    /// a refactor that dropped one of those calls left a 20fps antialiased paint
+    /// running behind a hidden tab with nothing to notice it. These overrides
+    /// make the invariant self-enforcing; pause()/resume() remain for the
+    /// explicit hover-to-read and edit cases, which are not visibility events.
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private:
     struct TickerEntry {

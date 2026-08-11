@@ -17,6 +17,7 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -124,6 +125,12 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     std::vector<ai_chat::ConversationMessage> history_;
     bool streaming_ = false;
     bool scroll_pending_ = false;
+    // Auto-follow the newest content. Cleared when the user scrolls up to read,
+    // re-armed when they come back to the bottom or send a new message.
+    bool stick_to_bottom_ = true;
+    // Set around our own setValue() calls so the valueChanged handler doesn't
+    // mistake an auto-scroll for the user scrolling.
+    bool programmatic_scroll_ = false;
     QPointer<QLabel> streaming_bubble_;
     int total_tokens_ = 0;
     int total_messages_ = 0;
@@ -136,6 +143,20 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     QPointer<QPushButton> thinking_header_;
     QPointer<QLabel> thinking_body_;
     QString thinking_text_;
+
+    // ── Per-stream "Tools" section ───────────────────────────────────────────
+    // Tool-progress lines arrive on their own channel (see tool_stream_prefix())
+    // and land in a card of their own rather than being appended into the answer
+    // bubble — plumbing like tool_list / tool_describe is not part of the reply.
+    // Expanded while running so the user can see progress, collapsed on finish.
+    QPointer<QWidget> tools_card_;
+    QPointer<QPushButton> tools_header_;
+    QPointer<QLabel> tools_body_;
+    QString tools_text_;
+    QStringList tools_lines_;  // rendered lines; last one is rewritten to collapse runs
+    QString tools_run_base_;   // tool name of the run currently being collapsed
+    int tools_run_count_ = 0;  // length of that run
+    int tools_count_ = 0;      // total steps, for the collapsed header
 
     // ── Build ────────────────────────────────────────────────────────────
     void build_ui();
@@ -159,6 +180,11 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     void create_thinking_card();
     void finalize_thinking_card();
     void reset_thinking_state();
+    // Collapsible "Tools" card for the in-flight assistant message.
+    void append_tool_chunk(const QString& text);
+    void create_tools_card();
+    void finalize_tools_card();
+    void reset_tools_state();
     void clear_messages();
     void scroll_to_bottom();
     void set_input_enabled(bool enabled);

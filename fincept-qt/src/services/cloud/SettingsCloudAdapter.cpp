@@ -1,5 +1,6 @@
 #include "services/cloud/SettingsCloudAdapter.h"
 
+#include "core/logging/Logger.h"
 #include "network/cloud/CloudClient.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/sync/CloudSyncSettings.h"
@@ -14,6 +15,8 @@ using fincept::cloud::CloudClient;
 using fincept::cloud::CloudResponse;
 
 namespace {
+constexpr const char* kSettingsCloudTag = "SettingsCloudAdapter";
+
 QString st_entity() {
     return QStringLiteral("setting");
 }
@@ -67,8 +70,22 @@ void SettingsCloudAdapter::push(const OutboxRow& row, PushDone done) {
 void SettingsCloudAdapter::push_upsert(const OutboxRow& row, PushDone done) {
     const QString key = row.local_id;
     auto v = SettingsRepository::instance().get(key);
+    if (v.is_err()) {
+        // Never sync a value we failed to read. Pushing the "" fallback would
+        // make the cloud authoritative for an empty string and fan it back out
+        // to every device on the account. Report a retryable failure so the
+        // outbox keeps the row and pushes it once the DB is healthy again.
+        LOG_ERROR(kSettingsCloudTag,
+                  QString("settings read failed for '%1' — aborting cloud push, row stays queued: %2")
+                      .arg(key, QString::fromStdString(v.error())));
+        AdapterResult r;
+        r.retry = true;
+        r.error = QStringLiteral("settings_read_failed");
+        done(r);
+        return;
+    }
     QJsonObject body;
-    body["value"] = v.is_ok() ? v.value() : QString();
+    body["value"] = v.value();
     body["category"] = st_category(key);
     CloudClient::instance().put(st_path(key), body, [done](CloudResponse r) { done(st_result(r)); }, this);
 }

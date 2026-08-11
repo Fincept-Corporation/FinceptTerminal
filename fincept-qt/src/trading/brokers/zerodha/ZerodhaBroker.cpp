@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerLogRedact.h"
 #include "trading/brokers/BrokerTokenUtil.h"
@@ -43,7 +44,7 @@ TokenExchangeResponse ZerodhaBroker::refresh_session(const BrokerCredentials& cr
     const QString password = extra.value("password").toString();
     const QString totp_secret = extra.value("totp_secret").toString();
     if (creds.user_id.isEmpty() || password.isEmpty() || totp_secret.isEmpty()) {
-        return {false, "", "", "", "", "Zerodha silent refresh requires stored user id, password and TOTP secret"};
+        return {.success = false, .error = "Zerodha silent refresh requires stored user id, password and TOTP secret"};
     }
     return login_with_totp(creds.user_id, password, creds.api_key, creds.api_secret, totp_secret, {});
 }
@@ -211,7 +212,10 @@ OrderPlaceResponse ZerodhaBroker::place_order(const BrokerCredentials& creds, co
         {"product", kite_enum_map().product_or(order.product_type, "MIS")},
         {"validity", order.validity.isEmpty() ? "DAY" : order.validity},
         {"disclosed_quantity", "0"},
-        {"tag", "fincept"},
+        // Unique per attempt so a retry after an 8s client-side timeout is a
+        // broker-side duplicate rather than a second live order (see
+        // BrokerClientOrderId.h). Kite caps `tag` at 20 alphanumeric chars.
+        {"tag", make_client_order_ref(20)},
     };
     if (order.price > 0)
         params["price"] = QString::number(order.price, 'f', 2);
@@ -235,17 +239,33 @@ ApiResponse<QJsonObject> ZerodhaBroker::modify_order(const BrokerCredentials& cr
                                                      const QJsonObject& mods) {
     QString variety = mods.value("variety").toString("regular");
     QMap<QString, QString> params;
+
+    // The numeric fields arrive as JSON NUMBERS (every caller inserts doubles).
+    // QJsonValue::toString() returns an EMPTY string for a non-string value, so
+    // reading them that way sent Kite `quantity=`, `price=` and `trigger_price=`
+    // on every modify. Go through toVariant(), which yields the value for both a
+    // numeric and a string JSON node, and format exactly as place_order does:
+    // integral quantities, 2-decimal prices.
+    auto as_int_str = [&mods](const char* key) {
+        return QString::number(static_cast<int>(mods.value(QLatin1String(key)).toVariant().toDouble()));
+    };
+    auto as_price_str = [&mods](const char* key) {
+        return QString::number(mods.value(QLatin1String(key)).toVariant().toDouble(), 'f', 2);
+    };
+
     if (mods.contains("order_type"))
-        params["order_type"] = mods.value("order_type").toString();
+        params["order_type"] = mods.value("order_type").toVariant().toString();
     if (mods.contains("quantity"))
-        params["quantity"] = mods.value("quantity").toString();
+        params["quantity"] = as_int_str("quantity");
     if (mods.contains("price"))
-        params["price"] = mods.value("price").toString();
+        params["price"] = as_price_str("price");
     if (mods.contains("trigger_price"))
-        params["trigger_price"] = mods.value("trigger_price").toString();
+        params["trigger_price"] = as_price_str("trigger_price");
     if (mods.contains("disclosed_quantity"))
-        params["disclosed_quantity"] = mods.value("disclosed_quantity").toString();
-    params["validity"] = mods.value("validity").toString("DAY");
+        params["disclosed_quantity"] = as_int_str("disclosed_quantity");
+    params["validity"] = mods.value("validity").toVariant().toString();
+    if (params["validity"].isEmpty())
+        params["validity"] = QStringLiteral("DAY");
 
     auto resp = BrokerHttp::instance().put_form(QString("%1/orders/%2/%3").arg(base_url(), variety, order_id), params,
                                                 auth_headers(creds));

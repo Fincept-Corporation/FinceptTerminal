@@ -257,12 +257,12 @@ void InstrumentService::refresh(const QString& broker_id, const BrokerCredential
                 // Instruments on disk are fresh but may not be in the in-memory
                 // cache yet (e.g. first refresh() of a relaunch within
                 // max_age_hours). Without this, is_loaded() stays false forever
-                // and every lookup fails. load_from_db() uses the shared
-                // main-thread QSqlDatabase connection; refresh() is only ever
-                // called from the UI/main thread (ChainSubTab + EquityTradingScreen
-                // callbacks), so this is safe here.
-                if (!is_loaded(broker_id))
-                    load_from_db(broker_id);
+                // and every lookup fails. refresh() is called from the UI thread
+                // (ChainSubTab + EquityTradingScreen callbacks) and a broker
+                // master is 100k+ rows, so the load goes through the async twin
+                // — it opens its own worker-thread connection and rebuilds the
+                // cache back on this thread (§P1).
+                load_from_db_async(broker_id, {});
                 return;
             }
         }
@@ -314,20 +314,23 @@ void InstrumentService::force_refresh(const QString& broker_id, const BrokerCred
 }
 
 void InstrumentService::load_from_db(const QString& broker_id) {
-    // Called at startup before QApplication::exec() — runs synchronously on
-    // the main thread so that the single QSqlDatabase connection is not
-    // accessed concurrently (QSqlDatabase is not thread-safe).
-    QVector<Instrument> all;
-    for (const QString& exch : QStringList{"NSE", "BSE", "NFO", "CDS", "MCX", "NSE_INDEX", "BSE_INDEX", "BFO", "BCD"}) {
-        auto rows = InstrumentRepository::instance().list(exch, broker_id);
-        all.append(rows);
-    }
-    if (all.isEmpty()) {
-        LOG_WARN("InstrumentService", QString("No instruments found in DB for %1 — run refresh").arg(broker_id));
-        return;
-    }
-    build_cache(broker_id, all);
-    LOG_INFO("InstrumentService", QString("Loaded %1 instruments from DB for %2").arg(all.size()).arg(broker_id));
+    // DEPRECATED shim — kept only so out-of-tree call sites keep linking.
+    //
+    // The old body ran nine unbounded `SELECT ... WHERE exchange=? AND
+    // broker_id=? ORDER BY symbol` queries on the shared main-thread
+    // connection, on the claim that it "runs at startup before
+    // QApplication::exec()". That was false: PortfolioReplicationDialog calls
+    // it twice on every combo change, and refresh() reaches it from the Equity
+    // Trading / options-chain callbacks. A broker master is 100k+ rows, so the
+    // UI froze for the whole scan (§P1).
+    //
+    // Forwarding to the async twin preserves the common case exactly —
+    // load_from_db_async() short-circuits synchronously when the cache is
+    // already warm — and moves only the genuinely cold load onto a worker
+    // thread with its own private connection. New code should call
+    // load_from_db_async() (UI thread) or load_from_db_worker() (already off
+    // the UI thread) directly.
+    load_from_db_async(broker_id, {});
 }
 
 void InstrumentService::load_from_db_async(const QString& broker_id, std::function<void(int)> callback) {

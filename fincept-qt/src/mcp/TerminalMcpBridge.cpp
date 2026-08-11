@@ -7,19 +7,27 @@
 
 #include "mcp/TerminalMcpBridge.h"
 
+#include "auth/ConstantTime.h"
+#include "auth/LoopbackGuard.h"
 #include "core/logging/Logger.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
 
+#include <QDateTime>
 #include <QFutureWatcher>
 #include <QHostAddress>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
+#include <QPromise>
+#include <QRegularExpression>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QUuid>
+#include <QtConcurrent/QtConcurrent>
+
+#include <memory>
 
 namespace fincept::mcp {
 
@@ -30,6 +38,14 @@ static constexpr const char* TAG = "TerminalMcpBridge";
 // unwelcome process probing the port.
 static constexpr int kMaxHeaderBytes = 16 * 1024;
 static constexpr int kMaxBodyBytes = 4 * 1024 * 1024; // 4 MB
+
+// Run-scope bounds. A caller that forgets end_run() leaves its scope behind;
+// that is fail-safe (the run's policy simply stays enforced for a token nobody
+// holds any more) but must not accumulate for the session. Both limits are far
+// beyond any real agent run — a finagent process is driven by an LLM loop with
+// an 85 s per-tool timeout, and concurrency is a handful of runs at most.
+static constexpr qint64 kRunScopeMaxLifetimeMs = 6LL * 60 * 60 * 1000; // 6 h
+static constexpr int kMaxLiveRunScopes = 256;
 
 // Per-thread flags: set by the bridge across the synchronous portion of
 // McpProvider::call_tool_async (where auth runs). The McpProvider auth
@@ -47,6 +63,66 @@ bool TerminalMcpBridge::is_destructive_allowed() {
 }
 
 namespace {
+
+// Categories an agent may never dispatch, regardless of what its catalog says.
+// Mirrors the default `exclude_categories` AgentService applies when it builds
+// `terminal_tools` — UI-driving tools ("navigation"/"system"/"settings"),
+// recursive chat tools ("ai-chat"), and the tool-discovery meta tools.
+// Excludes a specific agent adds on top of these are enforced per run, via the
+// run scope opened by begin_run() (see filter_excludes below).
+const QStringList& never_dispatchable_categories() {
+    static const QStringList kCats = {QStringLiteral("navigation"), QStringLiteral("system"),
+                                      QStringLiteral("settings"), QStringLiteral("ai-chat"), QStringLiteral("meta")};
+    return kCats;
+}
+
+// True when `filter` would have kept this tool OUT of the catalog it built, in
+// which case dispatching it must be refused too. Predicates mirror
+// McpService::apply_tool_filter exactly (category include/exclude, then name
+// regex include/exclude) so the catalog an agent sees and the calls the bridge
+// honours cannot disagree.
+//
+// `filter.max_tools` is deliberately NOT applied: it caps how large a catalog
+// the agent is shown, not which tools are permitted. Enforcing a count here
+// would make a call's fate depend on how many other tools happened to sort
+// ahead of it — a different rule wearing the same name.
+//
+// `category` is empty for tools on external MCP servers; that is the same value
+// apply_tool_filter sees for them, so a whitelist filter excludes them there and
+// here alike.
+bool filter_excludes(const ToolFilter& filter, const QString& tool_name, const QString& category, QString* reason) {
+    auto deny = [reason](const QString& why) {
+        if (reason)
+            *reason = why;
+        return true;
+    };
+
+    if (!filter.categories.isEmpty() && (category.isEmpty() || !filter.categories.contains(category)))
+        return deny(QStringLiteral("category '%1' is not in this agent's allowed categories").arg(category));
+
+    if (!filter.exclude_categories.isEmpty() && filter.exclude_categories.contains(category))
+        return deny(QStringLiteral("category '%1' is excluded by this agent's configuration").arg(category));
+
+    if (!filter.name_patterns.isEmpty()) {
+        bool any_match = false;
+        for (const auto& p : filter.name_patterns) {
+            if (QRegularExpression(p).match(tool_name).hasMatch()) {
+                any_match = true;
+                break;
+            }
+        }
+        if (!any_match)
+            return deny(QStringLiteral("tool name does not match this agent's allowed name patterns"));
+    }
+
+    for (const auto& p : filter.exclude_name_patterns) {
+        if (QRegularExpression(p).match(tool_name).hasMatch())
+            return deny(QStringLiteral("tool name is excluded by this agent's configuration"));
+    }
+
+    return false;
+}
+
 struct CallFlagGuard {
     explicit CallFlagGuard(bool destructive_ok) {
         tls_call_in_progress = true;
@@ -116,6 +192,12 @@ void TerminalMcpBridge::stop() {
     }
     states_.clear();
 
+    {
+        // Run scopes die with the listener — a restart mints fresh tokens.
+        QMutexLocker lock(&runs_mutex_);
+        runs_.clear();
+    }
+
     if (server_) {
         server_->close();
         server_->deleteLater();
@@ -128,6 +210,93 @@ QString TerminalMcpBridge::endpoint() const {
     if (!active_ || !server_)
         return {};
     return QString("http://127.0.0.1:%1").arg(server_->serverPort());
+}
+
+// ── Run scopes ───────────────────────────────────────────────────────────────
+
+QString TerminalMcpBridge::begin_run(const ToolFilter& filter, bool include_external) {
+    if (!active_)
+        return token_; // nothing listening — nothing to scope
+
+    RunScope scope;
+    scope.filter = filter;
+    scope.include_external = include_external;
+    scope.started_ms = QDateTime::currentMSecsSinceEpoch();
+
+    const QString run_token = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    {
+        QMutexLocker lock(&runs_mutex_);
+        sweep_runs_locked();
+        runs_.insert(run_token, scope);
+    }
+    return run_token;
+}
+
+void TerminalMcpBridge::end_run(const QString& run_token) {
+    if (run_token.isEmpty())
+        return;
+    QMutexLocker lock(&runs_mutex_);
+    runs_.remove(run_token);
+}
+
+void TerminalMcpBridge::sweep_runs_locked() {
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    int aged_out = 0;
+    for (auto it = runs_.begin(); it != runs_.end();) {
+        if (now - it.value().started_ms > kRunScopeMaxLifetimeMs) {
+            it = runs_.erase(it);
+            ++aged_out;
+        } else {
+            ++it;
+        }
+    }
+
+    // Hard ceiling as a second backstop, oldest first.
+    while (runs_.size() >= kMaxLiveRunScopes) {
+        auto oldest = runs_.begin();
+        for (auto it = runs_.begin(); it != runs_.end(); ++it) {
+            if (it.value().started_ms < oldest.value().started_ms)
+                oldest = it;
+        }
+        runs_.erase(oldest);
+        ++aged_out;
+    }
+
+    if (aged_out > 0)
+        LOG_DEBUG(TAG, QString("Swept %1 stale agent run scope(s); %2 live").arg(aged_out).arg(runs_.size()));
+}
+
+std::optional<TerminalMcpBridge::RunScope> TerminalMcpBridge::run_scope(const QString& run_token) const {
+    if (run_token.isEmpty())
+        return std::nullopt;
+    QMutexLocker lock(&runs_mutex_);
+    const auto it = runs_.constFind(run_token);
+    if (it == runs_.constEnd())
+        return std::nullopt;
+    return it.value();
+}
+
+bool TerminalMcpBridge::authenticate(const QString& supplied, QString* run_token_out) const {
+    if (run_token_out)
+        run_token_out->clear();
+    if (supplied.isEmpty() || token_.isEmpty())
+        return false;
+
+    // Constant-time throughout: `supplied` is attacker-controlled, and a
+    // short-circuiting compare leaks how many leading bytes were right, which
+    // turns a 128-bit guess into a byte-at-a-time search.
+    if (auth::constant_time_equals(supplied, token_))
+        return true;
+
+    QMutexLocker lock(&runs_mutex_);
+    for (auto it = runs_.constBegin(); it != runs_.constEnd(); ++it) {
+        if (auth::constant_time_equals(supplied, it.key())) {
+            if (run_token_out)
+                *run_token_out = it.key();
+            return true;
+        }
+    }
+    return false;
 }
 
 // ── Tool catalog serialisation ───────────────────────────────────────────────
@@ -261,9 +430,34 @@ void TerminalMcpBridge::try_dispatch(QTcpSocket* sock) {
         return;
     RequestState& st = it.value();
 
-    // Authn — must come before any work happens.
+    // ── Origin validation — must come before authn, and before any work ──────
+    //
+    // Binding 127.0.0.1 keeps other hosts out; it does not keep out the user's
+    // own browser. Any page they have open can POST at this port, and a page
+    // that resolves a hostname it controls to 127.0.0.1 (DNS rebinding) can talk
+    // to us as same-origin. The custom X-MCP-Token header forces a CORS
+    // preflight that this server never answers, which happens to stop a browser
+    // today — but that is a side effect of the header, not a decision, and it
+    // stops nothing that isn't a browser. Check Host and the fetch metadata
+    // explicitly, like the other four loopback listeners do.
+    //
+    // allow_cross_site_navigation=false: unlike the OAuth / wallet callbacks
+    // this endpoint is a machine-to-machine JSON API. It has no legitimate
+    // top-level navigation, so a navigate-mode request is never ours. The
+    // Python agent uses urllib and sends no Sec-Fetch-* at all, which the guard
+    // passes through to the token check below.
+    const quint16 bound_port = server_ ? static_cast<quint16>(server_->serverPort()) : 0;
+    const auto origin_check = auth::check_loopback_request(st.buffer, bound_port,
+                                                           /*allow_cross_site_navigation=*/false);
+    if (!origin_check.allowed) {
+        LOG_WARN(TAG, QString("Rejecting request — %1 (path=%2)").arg(origin_check.reason, st.path));
+        write_error(sock, 403, "Request rejected by origin policy");
+        return;
+    }
+
+    // Authn — constant-time against the process token and every live run token.
     const QString supplied = st.headers.value("x-mcp-token");
-    if (supplied != token_) {
+    if (!authenticate(supplied, &st.run_token)) {
         LOG_WARN(TAG, QString("Rejecting request — token mismatch (path=%1)").arg(st.path));
         write_error(sock, 401, "Invalid or missing X-MCP-Token");
         return;
@@ -309,36 +503,101 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
 
     LOG_INFO(TAG, QString("Tool call %1: %2 on %3").arg(call_id, tool_name, server_id));
 
+    auto it_state = states_.find(sock);
+    const RequestState* req = (it_state != states_.end()) ? &it_state.value() : nullptr;
+
+    auto refuse = [this, sock, call_id, &tool_name](const QString& why) {
+        LOG_WARN(TAG, QString("Refusing tool '%1' — %2").arg(tool_name, why));
+        QJsonObject refusal =
+            ToolResult::fail(QString("Tool '%1' is not available to this agent (%2).").arg(tool_name, why)).to_json();
+        if (!call_id.isEmpty())
+            refusal["id"] = call_id;
+        write_json_response(sock, 200, refusal);
+    };
+
+    // ── Tool boundary, enforced at DISPATCH ──────────────────────────────────
+    //
+    // Filters applied when `terminal_tools` was built only shape the catalog —
+    // an agent that knows a tool's name (stale catalog, guess, injected
+    // instruction) could POST it here and run an "excluded" tool anyway. Two
+    // layers, in order:
+    //
+    //   1. never_dispatchable_categories() — process-wide, non-negotiable,
+    //      matches the defaults AgentService merges into every filter.
+    //   2. the caller's own run scope — the per-agent filter this run was
+    //      opened with (begin_run), so an agent's own exclude_categories /
+    //      exclude_name_patterns bind its calls and not just its catalog.
+    QString category; // empty for tools on external MCP servers
+    if (server_id == INTERNAL_SERVER_ID) {
+        if (const auto info = McpProvider::instance().find_tool(tool_name))
+            category = info->category;
+        if (never_dispatchable_categories().contains(category)) {
+            refuse(QString("category '%1' is not dispatchable over the agent bridge").arg(category));
+            return;
+        }
+    }
+
+    if (const auto scope = run_scope(req ? req->run_token : QString())) {
+        if (!scope->include_external && server_id != INTERNAL_SERVER_ID) {
+            refuse(QStringLiteral("external MCP tools are disabled for this agent"));
+            return;
+        }
+        QString why;
+        if (filter_excludes(scope->filter, tool_name, category, &why)) {
+            refuse(why);
+            return;
+        }
+    }
+
     QPointer<TerminalMcpBridge> self = this;
     QPointer<QTcpSocket> sock_guard = sock;
 
-    // Internal vs external routing. Both shapes return QFuture<ToolResult>
-    // and we resolve via QFutureWatcher so the socket write happens on the
-    // main thread when the future completes — never blocks newConnection.
     // The auth checker (installed by AgentService) inspects
     // is_call_in_progress() and is_destructive_allowed() to apply
-    // agent-specific gating. The flag scope covers only the synchronous
-    // dispatch — the auth check runs there before call_tool_async returns
-    // its future.
-    auto it_state = states_.find(sock);
-    const QString destructive_hdr =
-        (it_state != states_.end()) ? it_state.value().headers.value("x-mcp-allow-destructive") : QString();
-    const bool destructive_ok = !destructive_token_.isEmpty() && destructive_hdr == destructive_token_;
+    // agent-specific gating. Constant-time compare — the header is
+    // attacker-controlled and the token is a capability.
+    const QString destructive_hdr = req ? req->headers.value("x-mcp-allow-destructive") : QString();
+    const bool destructive_ok =
+        !destructive_token_.isEmpty() && auth::constant_time_equals(destructive_hdr, destructive_token_);
 
-    QFuture<ToolResult> future;
-    {
+    // Dispatch OFF the GUI thread.
+    //
+    // AgentService is constructed on the GUI thread, so this QTcpServer and
+    // every accepted socket are GUI-thread objects: readyRead → on_ready_read →
+    // try_dispatch → here, with no thread hop. Sync-shape handlers then ran
+    // inline on the GUI thread, and tools/ThreadHelper.h's run_async_wait saw
+    // `currentThread() == target->thread()` and took the branch that ends in
+    // loop.exec(ExcludeUserInputEvents) with no timeout. Because exec() keeps
+    // pumping socket events, a second concurrent tool call re-entered
+    // handle_post_tool and stacked another nested loop on top — unbounded,
+    // re-entrant, and holding the UI hostage for the duration of every agent
+    // tool call.
+    //
+    // CallFlagGuard is thread_local, so it MUST be re-established inside the
+    // worker: without it the auth checker sees a chat-path call and the
+    // destructive gate silently opens.
+    auto promise = std::make_shared<QPromise<ToolResult>>();
+    promise->start();
+    QFuture<ToolResult> future = promise->future();
+    (void)QtConcurrent::run([promise, tool_name, args, server_id, destructive_ok]() mutable {
         CallFlagGuard guard(destructive_ok);
+        QFuture<ToolResult> f;
         if (server_id == INTERNAL_SERVER_ID) {
-            future = McpProvider::instance().call_tool_async(tool_name, args);
+            f = McpProvider::instance().call_tool_async(tool_name, args);
         } else {
             // External — McpService::execute_openai_function_async handles the
             // QtConcurrent::run wrapping for blocking JSON-RPC clients. Build
             // the wire-form name it expects.
             const QString fn = server_id + "__" + McpProvider::encode_tool_name_for_wire(tool_name);
-            future = McpService::instance().execute_openai_function_async(fn, args);
+            f = McpService::instance().execute_openai_function_async(fn, args);
         }
-    }
+        f.waitForFinished();
+        promise->addResult(f.resultCount() > 0 ? f.result() : ToolResult::fail("Tool produced no result"));
+        promise->finish();
+    });
 
+    // Resolve via QFutureWatcher so the socket write lands back on this
+    // (GUI) thread when the worker completes.
     auto* watcher = new QFutureWatcher<ToolResult>(this);
     connect(watcher, &QFutureWatcher<ToolResult>::finished, this, [self, sock_guard, tool_name, call_id, watcher]() {
         const auto fut = watcher->future();
@@ -361,13 +620,20 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
 // ── GET /tools ──────────────────────────────────────────────────────────────
 
 void TerminalMcpBridge::handle_get_tools(QTcpSocket* sock) {
-    // Default filter — the catalog the agent gets at boot is also what
-    // dynamic refresh returns. AgentService::build_payload owns the per-run
-    // filter; this endpoint is a fallback and uses the same defaults.
+    // A caller inside a run scope gets exactly the catalog its own filter
+    // produces, so a dynamic refresh can never widen what dispatch will honour.
+    // Outside a run scope this is a fallback and uses the process defaults.
     ToolFilter filter;
-    filter.exclude_categories = {"navigation", "system", "settings", "ai-chat", "meta"};
+    bool include_external = true;
+    const auto it = states_.constFind(sock);
+    if (const auto scope = run_scope(it != states_.constEnd() ? it.value().run_token : QString())) {
+        filter = scope->filter;
+        include_external = scope->include_external;
+    } else {
+        filter.exclude_categories = never_dispatchable_categories();
+    }
     QJsonObject payload;
-    payload["tools"] = tool_definitions(filter);
+    payload["tools"] = tool_definitions(filter, include_external);
     write_json_response(sock, 200, payload);
 }
 
@@ -381,6 +647,8 @@ static const char* status_text(int code) {
             return "Bad Request";
         case 401:
             return "Unauthorized";
+        case 403:
+            return "Forbidden";
         case 404:
             return "Not Found";
         case 413:

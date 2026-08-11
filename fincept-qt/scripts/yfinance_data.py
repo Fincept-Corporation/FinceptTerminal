@@ -4,12 +4,74 @@ Fetches real-time stock quotes and historical data using yfinance
 Returns JSON output for Qt/C++ integration
 """
 
+import os
 import sys
 import json
 import re
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
+
+# Safe JSON output boundary. `json.dumps` defaults to allow_nan=True and emits
+# the bare tokens NaN / Infinity / -Infinity, none of which are valid JSON.
+# QJsonDocument::fromJson() on the C++ side does not repair them — it returns a
+# *null document*, so the host throws away the ENTIRE payload, not just the
+# offending field. One halted bar inside a 250-row series is enough to blank a
+# whole chart with no error shown. Every print/frame boundary in this file goes
+# through fincept_json.
+try:
+    import fincept_json
+except ImportError:  # defensive: scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_json
+
+# Per-HTTP-request budget for every yfinance call reachable from the daemon.
+# run_daemon() is a strictly serial read -> dispatch -> write loop, so a single
+# unbounded Yahoo request blocks every request queued behind it — quotes,
+# sparklines, history, search and financials all stall together. yfinance's own
+# default is 10s but it is applied per underlying HTTP call and silently
+# inherited; pin it explicitly so the budget is visible and tunable.
+# Override with FINCEPT_YF_TIMEOUT (seconds).
+try:
+    _NET_TIMEOUT = float(os.environ.get("FINCEPT_YF_TIMEOUT", "15"))
+except (TypeError, ValueError):
+    _NET_TIMEOUT = 15.0
+
+
+def _num(value, digits=2):
+    """`round(float(value), digits)`, or None when the cell is NaN / NA / None.
+
+    yfinance returns NaN cells routinely: halted sessions, missing intraday
+    bars, thinly-traded tickers, futures roll gaps. `round(float(nan), 2)` is
+    still nan and nan is not valid JSON (see the fincept_json note above), so
+    an unguarded conversion voids the whole response.
+    """
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+        return round(float(value), digits)
+    except (TypeError, ValueError):
+        return None
+
+
+def _int(value, default=None):
+    """`int(value)`, or `default` when the cell is NaN / NA / None.
+
+    Distinct from _num because `int(nan)` does not merely produce a bad number,
+    it raises ValueError — which is how one missing volume cell used to abort
+    the whole loop and turn an entire price series into {"error": ...}.
+    """
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
 
 def get_quote(symbol):
     """Fetch real-time quote for a single symbol"""
@@ -19,7 +81,7 @@ def get_quote(symbol):
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
             info = ticker.info
-            hist = ticker.history(period="1d")
+            hist = ticker.history(period="1d", timeout=_NET_TIMEOUT)
 
         if hist.empty:
             return {"error": "No data available", "symbol": symbol}
@@ -62,22 +124,28 @@ def get_historical(symbol, start_date, end_date, interval='1d'):
         ticker = yf.Ticker(symbol)
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
-            hist = ticker.history(start=start_date, end=end_date, interval=interval)
+            hist = ticker.history(start=start_date, end=end_date, interval=interval,
+                                  timeout=_NET_TIMEOUT)
 
         if hist.empty:
             return []
 
         historical_data = []
         for index, row in hist.iterrows():
+            # Guard every conversion the way get_batch_quotes already does — a
+            # single NaN bar must not take the whole series with it.
+            close = _num(row['Close'])
+            if close is None:
+                continue  # a bar with no close is not a price point
             historical_data.append({
                 "symbol": symbol,
                 "timestamp": int(index.timestamp()),
-                "open": round(float(row['Open']), 2),
-                "high": round(float(row['High']), 2),
-                "low": round(float(row['Low']), 2),
-                "close": round(float(row['Close']), 2),
-                "volume": int(row['Volume']),
-                "adj_close": round(float(row['Close']), 2)
+                "open": _num(row['Open']),
+                "high": _num(row['High']),
+                "low": _num(row['Low']),
+                "close": close,
+                "volume": _int(row['Volume'], 0),
+                "adj_close": close
             })
 
         return historical_data
@@ -105,7 +173,8 @@ def get_historical_price(symbol, target_date):
         end = target + timedelta(days=1)
 
         ticker = yf.Ticker(symbol)
-        hist = ticker.history(start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'), interval='1d')
+        hist = ticker.history(start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'), interval='1d',
+                              timeout=_NET_TIMEOUT)
 
         if hist.empty:
             return {"found": False, "error": "No data available for this date range", "symbol": symbol}
@@ -251,7 +320,8 @@ def get_batch_quotes(symbols):
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
             # Use 5d period to guarantee at least 2 trading days for futures/commodities
-            data = yf.download(symbols, period="5d", group_by='ticker', progress=False, threads=True, auto_adjust=True)
+            data = yf.download(symbols, period="5d", group_by='ticker', progress=False, threads=True,
+                               auto_adjust=True, timeout=_NET_TIMEOUT)
 
         if data is None or data.empty:
             return []
@@ -385,7 +455,8 @@ def get_batch_sparklines(symbols, period="5d", interval="1h"):
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
             data = yf.download(symbols, period=period, interval=interval,
-                               group_by='ticker', progress=False, threads=True, auto_adjust=True)
+                               group_by='ticker', progress=False, threads=True, auto_adjust=True,
+                               timeout=_NET_TIMEOUT)
 
         if data is None or data.empty:
             return {"error": "No data"}
@@ -735,6 +806,7 @@ def _resolve_for_history(symbols, period):
                 auto_adjust=True,
                 progress=False,
                 threads=True,
+                timeout=_NET_TIMEOUT,
             )
     finally:
         yf_logger.setLevel(prev_level)
@@ -980,20 +1052,25 @@ def get_historical_period(symbol, period='6mo', interval='1d'):
         ticker = yf.Ticker(symbol)
         _buf = io.StringIO()
         with contextlib.redirect_stdout(_buf):
-            hist = ticker.history(period=period, interval=interval)
+            hist = ticker.history(period=period, interval=interval, timeout=_NET_TIMEOUT)
 
         if hist.empty:
             return []
 
         historical_data = []
         for index, row in hist.iterrows():
+            # Same NaN guard as get_historical — this is the chart path, where
+            # one halted bar previously blanked the entire series.
+            close = _num(row['Close'])
+            if close is None:
+                continue
             historical_data.append({
                 "timestamp": int(index.timestamp()),
-                "open": round(float(row['Open']), 2),
-                "high": round(float(row['High']), 2),
-                "low": round(float(row['Low']), 2),
-                "close": round(float(row['Close']), 2),
-                "volume": int(row['Volume'])
+                "open": _num(row['Open']),
+                "high": _num(row['High']),
+                "low": _num(row['Low']),
+                "close": close,
+                "volume": _int(row['Volume'], 0)
             })
 
         return historical_data
@@ -1021,7 +1098,7 @@ def resolve_symbol(symbol):
     if '.' in symbol or symbol.startswith('^') or '-' in symbol or '=' in symbol:
         try:
             ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="5d")
+            hist = ticker.history(period="5d", timeout=_NET_TIMEOUT)
             exchange = ticker.info.get("exchange", "") if hasattr(ticker, 'info') else ""
             if not hist.empty:
                 return {"resolved_symbol": symbol, "original_symbol": symbol, "exchange": exchange, "found": True}
@@ -1035,7 +1112,7 @@ def resolve_symbol(symbol):
         candidate = symbol + suffix
         try:
             ticker = yf.Ticker(candidate)
-            hist = ticker.history(period="5d")
+            hist = ticker.history(period="5d", timeout=_NET_TIMEOUT)
             if hist is not None and not hist.empty and len(hist) >= 1:
                 exchange = ""
                 try:
@@ -1061,7 +1138,7 @@ def main(args=None):
         args = sys.argv[1:]
 
     if len(args) < 1:
-        return json.dumps({"error": "Usage: python yfinance_data.py <command> <args>"})
+        return fincept_json.dumps({"error": "Usage: python yfinance_data.py <command> <args>"})
 
     command = args[0]
 
@@ -1265,9 +1342,8 @@ def main(args=None):
     # IMPORTANT: Do NOT use indent=2 here. The host subprocess parser
     # looks for the last line starting with '{' or '[' to extract JSON.
     # Pretty-printed JSON puts '{' alone on the first line, breaking parsing.
-    output = json.dumps(result)
-    print(output)
-    return output
+    # fincept_json.emit == print(dumps(...)) with NaN/Infinity scrubbed.
+    return fincept_json.emit(result)
 
 # ── Daemon mode ──────────────────────────────────────────────────────────────
 #
@@ -1367,7 +1443,7 @@ def run_daemon():
     # Ready marker so the C++ host knows imports are done and the worker is
     # ready to accept requests. Uses the same framing.
     try:
-        ready = json.dumps({"ready": True, "pid": __import__("os").getpid()}).encode("utf-8")
+        ready = fincept_json.dumps_bytes({"ready": True, "pid": os.getpid()})
         _daemon_write_frame(stdout, ready)
     except Exception:
         pass
@@ -1380,14 +1456,14 @@ def run_daemon():
             req = json.loads(frame.decode("utf-8"))
         except Exception as e:
             err = {"id": 0, "ok": False, "error": f"bad request JSON: {e}"}
-            _daemon_write_frame(stdout, json.dumps(err).encode("utf-8"))
+            _daemon_write_frame(stdout, fincept_json.dumps_bytes(err))
             continue
 
         req_id = req.get("id", 0)
         action = req.get("action", "")
         if action == "shutdown":
             resp = {"id": req_id, "ok": True, "result": {"shutdown": True}}
-            _daemon_write_frame(stdout, json.dumps(resp).encode("utf-8"))
+            _daemon_write_frame(stdout, fincept_json.dumps_bytes(resp))
             break
 
         try:
@@ -1395,10 +1471,21 @@ def run_daemon():
             resp = {"id": req_id, "ok": True, "result": result}
         except Exception as e:
             resp = {"id": req_id, "ok": False, "error": str(e)}
+
+        # Encode before writing. Every request MUST get exactly one response
+        # frame: the host correlates by id and a request that never gets a
+        # frame back only ends when its deadline sweep fires. So if the result
+        # itself can't be serialised, downgrade to an error frame for that id
+        # rather than dropping it (or killing the loop).
         try:
-            _daemon_write_frame(stdout, json.dumps(resp).encode("utf-8"))
+            payload_bytes = fincept_json.dumps_bytes(resp)
+        except Exception as e:
+            payload_bytes = fincept_json.dumps_bytes(
+                {"id": req_id, "ok": False, "error": f"unserialisable result for {action}: {e}"})
+        try:
+            _daemon_write_frame(stdout, payload_bytes)
         except Exception:
-            break
+            break  # stdout is gone — the host will notice the exit
 
 
 if __name__ == "__main__":

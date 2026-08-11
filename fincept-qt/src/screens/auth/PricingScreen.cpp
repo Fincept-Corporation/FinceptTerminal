@@ -5,6 +5,7 @@
 #include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
 #include <QDesktopServices>
@@ -96,6 +97,15 @@ void PricingScreen::build_ui() {
     user_info_label_->setStyleSheet(
         QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_SECONDARY()).arg(MF));
     vl->addWidget(user_info_label_);
+
+    // ── Enterprise banner ────────────────────────────────────────────────────
+    // The cards below are the open-source build's own credit tiers. Enterprise
+    // is a separate product on a separate backend, so it never appears in the
+    // fetched plan list — surface it here rather than leave the pricing screen
+    // as the one place that omits it.
+    vl->addSpacing(4);
+    vl->addWidget(ui::make_enterprise_banner(content));
+    vl->addSpacing(4);
 
     // ── Loading ──────────────────────────────────────────────────────────────
     loading_label_ = new QLabel;

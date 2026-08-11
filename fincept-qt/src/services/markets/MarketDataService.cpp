@@ -788,11 +788,29 @@ void MarketDataService::fetch_sparklines(const QStringList& symbols, SparklineCa
 void MarketDataService::load_name_cache() {
     if (name_cache_loaded_)
         return;
-    name_cache_loaded_ = true;
 
-    auto load = [](const char* key, QHash<QString, QString>& cache) {
+    // Retry backoff. The loaded flag used to be latched *before* the read, so a
+    // single transient DB error marked the cache "loaded but empty" forever and
+    // the next persist_name_cache() wrote that empty object over the user's
+    // full cache. It is now latched only on success — but this function sits on
+    // a hot path (currency_prefix() runs per row), so a failing read must not
+    // hammer SQLite or spam the log on every call.
+    static qint64 retry_after_ms = 0;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now < retry_after_ms)
+        return;
+
+    bool read_failed = false;
+    auto load = [&read_failed](const char* key, QHash<QString, QString>& cache) {
         auto res = SettingsRepository::instance().get(key);
-        if (!res.is_ok() || res.value().isEmpty())
+        if (res.is_err()) {
+            LOG_ERROR("MarketData", QString("settings read failed for '%1' — name cache stays unloaded and will not "
+                                            "be persisted: %2")
+                                        .arg(QString::fromLatin1(key), QString::fromStdString(res.error())));
+            read_failed = true;
+            return;
+        }
+        if (res.value().isEmpty())
             return;
         auto doc = QJsonDocument::fromJson(res.value().toUtf8());
         if (!doc.isObject())
@@ -803,9 +821,20 @@ void MarketDataService::load_name_cache() {
     };
     load("market_symbol_names", name_cache_);
     load("market_symbol_currencies", currency_cache_);
+
+    name_cache_loaded_ = !read_failed;
+    retry_after_ms = read_failed ? now + 30000 : 0;
 }
 
 void MarketDataService::persist_name_cache() {
+    if (!name_cache_loaded_) {
+        // Never write a cache we never successfully read — the in-memory hash
+        // holds only whatever this run happened to resolve, and set() is an
+        // INSERT OR REPLACE.
+        LOG_WARN("MarketData", "Skipping name-cache persist — the stored cache was never read successfully");
+        return;
+    }
+
     auto dump = [](const QHash<QString, QString>& cache) {
         QJsonObject obj;
         for (auto it = cache.constBegin(); it != cache.constEnd(); ++it)

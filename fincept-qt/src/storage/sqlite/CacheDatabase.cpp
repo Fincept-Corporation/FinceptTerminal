@@ -2,9 +2,22 @@
 
 #include "core/logging/Logger.h"
 
-#include <QMutexLocker>
+#include <QSqlRecord>
+#include <QThread>
 
 namespace fincept {
+
+namespace {
+constexpr const char* kCacheConnectionName = "fincept_cache";
+constexpr const char* kCacheDbTag = "CacheDB";
+
+QString cache_thread_label(QThread* t) {
+    if (!t)
+        return QStringLiteral("?");
+    const QString name = t->objectName();
+    return name.isEmpty() ? QStringLiteral("0x%1").arg(reinterpret_cast<quintptr>(t), 0, 16) : name;
+}
+} // namespace
 
 CacheDatabase& CacheDatabase::instance() {
     static CacheDatabase s;
@@ -12,14 +25,17 @@ CacheDatabase& CacheDatabase::instance() {
 }
 
 Result<void> CacheDatabase::open(const QString& path) {
-    db_ = QSqlDatabase::addDatabase("QSQLITE", "fincept_cache");
+    main_thread_ = QThread::currentThread();
+    db_path_ = path;
+
+    db_ = QSqlDatabase::addDatabase("QSQLITE", QString::fromLatin1(kCacheConnectionName));
     db_.setDatabaseName(path);
     if (!db_.open()) {
         return Result<void>::err(db_.lastError().text().toStdString());
     }
-    LOG_INFO("CacheDB", "Opened cache database: " + path);
+    LOG_INFO(kCacheDbTag, "Opened cache database: " + path);
 
-    auto pr = apply_pragmas();
+    auto pr = apply_pragmas(db_, /*include_database_wide=*/true);
     if (pr.is_err())
         return pr;
 
@@ -27,14 +43,12 @@ Result<void> CacheDatabase::open(const QString& path) {
     if (tr.is_err())
         return tr;
 
-    // One-shot startup sweep of expired rows — prevents unbounded growth of unified_cache
-    // across sessions. Cheap: idx_cache_expires makes this a range scan.
-    auto sweep = execute("DELETE FROM unified_cache WHERE expires_at < datetime('now')");
-    if (sweep.is_ok()) {
-        const int removed = sweep.value().numRowsAffected();
-        if (removed > 0)
-            LOG_INFO("CacheDB", QString("Startup sweep removed %1 expired cache rows").arg(removed));
-    }
+    // Startup sweep of expired rows. StorageManager::start_retention_sweeper()
+    // repeats this on a ~15 min timer — a terminal left open for days used to
+    // accumulate expired rows until the next relaunch.
+    const int removed = sweep_expired();
+    if (removed > 0)
+        LOG_INFO(kCacheDbTag, QString("Startup sweep removed %1 expired cache rows").arg(removed));
 
     return Result<void>::ok();
 }
@@ -48,10 +62,72 @@ bool CacheDatabase::is_open() const {
     return db_.isOpen();
 }
 
+QSqlDatabase CacheDatabase::connection() {
+    QThread* t = QThread::currentThread();
+
+    // Main-thread fast path — the connection opened by `open()`.
+    if (t == main_thread_)
+        return db_;
+
+    // Per-thread cloned connection. The thread_local Guard owns the
+    // connection-name lifetime so the registry entry is removed when the thread
+    // exits — this handles QtConcurrent pool workers, which keep their
+    // connection across tasks and clean up at pool shutdown.
+    struct Guard {
+        QString name;
+        ~Guard() {
+            if (!name.isEmpty())
+                QSqlDatabase::removeDatabase(name);
+        }
+    };
+    thread_local Guard guard;
+
+    if (guard.name.isEmpty()) {
+        if (db_path_.isEmpty()) {
+            LOG_ERROR(kCacheDbTag, "connection() called before open() — refusing to clone");
+            return {};
+        }
+
+        guard.name = QStringLiteral("fincept_cache_thread_%1_%2")
+                         .arg(cache_thread_label(t))
+                         .arg(reinterpret_cast<quintptr>(t), 0, 16);
+
+        // Clone by connection NAME: the QSqlDatabase-object overload would read
+        // the main thread's handle and its live driver from this thread.
+        QSqlDatabase clone = QSqlDatabase::cloneDatabase(QString::fromLatin1(kCacheConnectionName), guard.name);
+        if (!clone.open()) {
+            const QString err = clone.lastError().text();
+            LOG_ERROR(kCacheDbTag,
+                      QString("Failed to open per-thread cache connection on [%1]: %2").arg(cache_thread_label(t), err));
+            QSqlDatabase::removeDatabase(guard.name);
+            guard.name.clear();
+            return {};
+        }
+        // journal_mode is file-global and already set by the main connection —
+        // only re-apply the per-connection PRAGMAs.
+        apply_pragmas(clone, /*include_database_wide=*/false);
+        const int n = ++per_thread_connections_;
+        LOG_INFO(kCacheDbTag,
+                 QString("Opened per-thread cache connection on [%1] (total=%2)").arg(cache_thread_label(t)).arg(n));
+    }
+    return QSqlDatabase::database(guard.name, /*open=*/false);
+}
+
 Result<QSqlQuery> CacheDatabase::execute(const QString& sql, const QVariantList& params) {
-    QMutexLocker lock(&mutex_);
-    QSqlQuery query(db_);
-    query.prepare(sql);
+    QSqlDatabase conn = connection();
+    if (!conn.isOpen()) {
+        return Result<QSqlQuery>::err("Cache DB connection unavailable on this thread");
+    }
+    QSqlQuery query(conn);
+
+    // Check prepare() — see the identical note in Database::execute(). An
+    // unchecked prepare turns "no such column" into a misleading "Parameter
+    // count mismatch" at exec time, because bindValue() no-ops on a statement
+    // that was never prepared.
+    if (!query.prepare(sql)) {
+        return Result<QSqlQuery>::err("prepare failed: " + query.lastError().text().toStdString());
+    }
+
     for (int i = 0; i < params.size(); ++i) {
         query.bindValue(i, params[i]);
     }
@@ -61,29 +137,81 @@ Result<QSqlQuery> CacheDatabase::execute(const QString& sql, const QVariantList&
     return Result<QSqlQuery>::ok(std::move(query));
 }
 
+Result<QVector<QVariantList>> CacheDatabase::query_rows(const QString& sql, const QVariantList& params) {
+    auto r = execute(sql, params);
+    if (r.is_err())
+        return Result<QVector<QVariantList>>::err(r.error());
+
+    QVector<QVariantList> rows;
+    auto& q = r.value();
+    const int cols = q.record().count();
+    while (q.next()) {
+        QVariantList row;
+        row.reserve(cols);
+        for (int c = 0; c < cols; ++c)
+            row.append(q.value(c));
+        rows.append(std::move(row));
+    }
+    return Result<QVector<QVariantList>>::ok(std::move(rows));
+}
+
+int CacheDatabase::sweep_expired() {
+    if (!is_open())
+        return -1;
+    // idx_cache_expires makes this a range scan, not a table scan.
+    auto r = execute("DELETE FROM unified_cache WHERE expires_at < datetime('now')");
+    if (r.is_err()) {
+        LOG_WARN(kCacheDbTag, QString("Expiry sweep failed: %1").arg(QString::fromStdString(r.error())));
+        return -1;
+    }
+    return r.value().numRowsAffected();
+}
+
 Result<void> CacheDatabase::exec(const QString& sql) {
-    QMutexLocker lock(&mutex_);
-    QSqlQuery query(db_);
+    QSqlDatabase conn = connection();
+    if (!conn.isOpen()) {
+        return Result<void>::err("Cache DB connection unavailable on this thread");
+    }
+    QSqlQuery query(conn);
     if (!query.exec(sql)) {
         return Result<void>::err(query.lastError().text().toStdString());
     }
     return Result<void>::ok();
 }
 
-Result<void> CacheDatabase::apply_pragmas() {
+Result<void> CacheDatabase::apply_pragmas(QSqlDatabase& conn, bool include_database_wide) {
+    // journal_mode is a property of the FILE — one connection sets it for all.
+    // Everything else is per-connection and must be re-applied to every clone or
+    // the workers silently run with SQLite defaults (synchronous=FULL, 0 ms busy
+    // timeout → spurious SQLITE_BUSY under concurrent writers).
+    static const char* kDatabaseWide[] = {
+        "PRAGMA journal_mode = WAL",
+    };
     // synchronous=NORMAL under WAL is the standard safe/fast combo. OFF risked full DB
     // corruption on power loss — now that cache.db also holds tab_sessions and
     // screen_state, durability matters more than the marginal write gain of OFF.
-    const char* pragmas[] = {
-        "PRAGMA journal_mode = WAL",  "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -10000",
-        "PRAGMA temp_store = MEMORY", "PRAGMA mmap_size = 134217728", "PRAGMA busy_timeout = 3000",
+    // journal_size_limit bounds the -wal file: without it SQLite never truncates
+    // it back after a checkpoint, so a one-off burst leaves it at high water.
+    static const char* kPerConnection[] = {
+        "PRAGMA synchronous = NORMAL",  "PRAGMA cache_size = -10000",
+        "PRAGMA temp_store = MEMORY",   "PRAGMA mmap_size = 134217728",
+        "PRAGMA busy_timeout = 3000",   "PRAGMA journal_size_limit = 67108864",
     };
-    for (auto* p : pragmas) {
-        auto r = exec(p);
-        if (r.is_err()) {
-            LOG_WARN("CacheDB", QString("PRAGMA failed: %1 — %2").arg(p, QString::fromStdString(r.error())));
+
+    auto run = [&conn](const char* sql) {
+        QSqlQuery q(conn);
+        if (!q.exec(QLatin1String(sql))) {
+            LOG_WARN(kCacheDbTag, QString("PRAGMA failed: %1 — %2").arg(sql, q.lastError().text()));
         }
+    };
+
+    if (include_database_wide) {
+        for (auto* p : kDatabaseWide)
+            run(p);
     }
+    for (auto* p : kPerConnection)
+        run(p);
+
     return Result<void>::ok();
 }
 
@@ -152,8 +280,8 @@ Result<void> CacheDatabase::create_tables() {
     // ADD COLUMN runs only if instance_uuid is missing. Safe to call on
     // every CacheDatabase::open across upgrades.
     {
-        QMutexLocker lock(&mutex_);
-        QSqlQuery info(db_);
+        QSqlDatabase conn = connection();
+        QSqlQuery info(conn);
         if (info.exec("PRAGMA table_info(screen_state)")) {
             bool has_instance_uuid = false;
             while (info.next()) {
@@ -163,11 +291,11 @@ Result<void> CacheDatabase::create_tables() {
                 }
             }
             if (!has_instance_uuid) {
-                QSqlQuery alter(db_);
+                QSqlQuery alter(conn);
                 if (alter.exec("ALTER TABLE screen_state ADD COLUMN instance_uuid TEXT")) {
-                    LOG_INFO("CacheDB", "screen_state migrated: added instance_uuid column");
+                    LOG_INFO(kCacheDbTag, "screen_state migrated: added instance_uuid column");
                 } else {
-                    LOG_WARN("CacheDB",
+                    LOG_WARN(kCacheDbTag,
                              QString("Failed to add instance_uuid column: %1").arg(alter.lastError().text()));
                 }
             }
@@ -181,7 +309,7 @@ Result<void> CacheDatabase::create_tables() {
     if (r.is_err())
         return r;
 
-    LOG_INFO("CacheDB", "Cache tables initialized");
+    LOG_INFO(kCacheDbTag, "Cache tables initialized");
     return Result<void>::ok();
 }
 

@@ -322,7 +322,7 @@ TokenExchangeResponse AngelOneBroker::refresh_session(const BrokerCredentials& c
     const QString client_code = extra.value("client_code").toString();
     const QString totp_secret = extra.value("totp_secret").toString();
     if (client_code.isEmpty() || totp_secret.isEmpty()) {
-        return {false, "", "", "", "", "Angel One silent refresh requires stored client code and TOTP secret"};
+        return {.success = false, .error = "Angel One silent refresh requires stored client code and TOTP secret"};
     }
     const QJsonObject auth{{"client_code", client_code}, {"totp_secret", totp_secret}};
     return exchange_token(creds.api_key, creds.api_secret,

@@ -222,20 +222,28 @@ Result<void> McpManager::start_server(const QString& id) {
 }
 
 Result<void> McpManager::stop_server(const QString& id) {
-    QMutexLocker lock(&mutex_);
+    // Take the shared_ptr under the lock, drop the map entry, then UNLOCK
+    // before stopping. McpClient::stop() blocks for up to ~5 s (terminate →
+    // wait → kill → thread join) and this is called straight from UI click
+    // handlers, so holding mutex_ across it stalled every concurrent
+    // call_external_tool / get_servers / health tick behind a UI button.
+    // The shared_ptr copy keeps the client alive after the map entry is gone.
+    std::shared_ptr<McpClient> client;
+    {
+        QMutexLocker lock(&mutex_);
+        auto it = clients_.find(id);
+        if (it == clients_.end())
+            return Result<void>::ok();
+        client = it.value();
+        clients_.erase(it);
+        tool_cache_.remove(id);
+        if (configs_.contains(id))
+            configs_[id].status = ServerStatus::Stopped;
+    }
 
-    if (!clients_.contains(id))
-        return Result<void>::ok();
-
-    clients_[id]->stop();
-    clients_.remove(id);
-    tool_cache_.remove(id);
-
-    if (configs_.contains(id))
-        configs_[id].status = ServerStatus::Stopped;
-
-    McpServerRepository::instance().set_status(id, "stopped");
-    lock.unlock();
+    McpServerRepository::instance().set_status(id, "stopped"); // DB I/O — also off the lock
+    if (client)
+        client->stop();
 
     emit servers_changed();
     LOG_INFO(TAG, "MCP server stopped: " + id);
@@ -334,8 +342,14 @@ void McpManager::do_health_check() {
 }
 
 void McpManager::on_health_result(const QString& id, bool ok) {
-    // Runs on the main thread: safe to restart (QProcess) and touch
-    // restart_attempts_ (only mutated here).
+    // Runs on the main thread so restart_attempts_ (only mutated here) needs no
+    // lock. The RESTART itself must not: restart_server → start_server →
+    // McpClient::start() → waitForStarted(60000) behind a
+    // Qt::BlockingQueuedConnection, then initialize() → send_request(…, 120000)
+    // blocking on rpc_cond_. A dead server therefore froze the whole UI for up
+    // to 180 s, three times over (MAX_RESTART_ATTEMPTS) — the ping was already
+    // offloaded for exactly this reason, and marshalling the follow-up back
+    // here undid it.
     if (ok) {
         restart_attempts_.remove(id); // reset on success
         return;
@@ -346,7 +360,12 @@ void McpManager::on_health_result(const QString& id, bool ok) {
         restart_attempts_[id] = attempts + 1;
         LOG_INFO(TAG,
                  QString("Restarting server %1 (attempt %2/%3)").arg(id).arg(attempts + 1).arg(MAX_RESTART_ATTEMPTS));
-        restart_server(id);
+        QPointer<McpManager> self = this;
+        const QString sid = id;
+        (void)QtConcurrent::run([self, sid]() {
+            if (self)
+                self->restart_server(sid);
+        });
     } else {
         LOG_ERROR(TAG, "Server " + id + " exceeded max restart attempts — giving up");
         McpServerRepository::instance().set_status(id, "error");
@@ -399,11 +418,17 @@ QStringList McpManager::get_logs(const QString& id) const {
 }
 
 void McpManager::refresh_tools_for(const QString& id) {
-    QMutexLocker lock(&mutex_);
-    McpClient* client = get_client(id);
-    if (!client)
-        return;
-    lock.unlock();
+    // shared_ptr copy, same reasoning as call_external_tool: list_tools()
+    // blocks on JSON-RPC with the lock released, and stop_server() can erase
+    // the map entry meanwhile — a raw pointer would outlive its McpClient.
+    std::shared_ptr<McpClient> client;
+    {
+        QMutexLocker lock(&mutex_);
+        auto it = clients_.find(id);
+        if (it == clients_.end() || !it.value())
+            return;
+        client = it.value();
+    }
 
     auto result = client->list_tools();
     if (result.is_err()) {

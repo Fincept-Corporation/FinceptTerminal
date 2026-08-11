@@ -5,6 +5,7 @@
 
 #include <QStringList>
 
+#include <cmath>
 #include <memory>
 
 namespace fincept::trading {
@@ -402,7 +403,15 @@ class IBroker {
             UnifiedOrder counter;
             counter.symbol = p.symbol;
             counter.exchange = p.exchange;
-            counter.side = (p.quantity > 0) ? OrderSide::Sell : OrderSide::Buy;
+            // Direction comes from `side` FIRST, sign only as a fallback. MetaAPI and
+            // ICICI Direct report an UNSIGNED quantity plus a separate side, so
+            // sign(quantity) alone reads a short as a long and "close all" places
+            // ANOTHER sell — doubling the short at market. Same fix the paper path
+            // already carries (UnifiedTrading::close_all_positions).
+            const QString dir = p.side.toLower();
+            const bool is_short =
+                dir.startsWith(QLatin1String("short")) || dir.startsWith(QLatin1String("sell")) || p.quantity < 0;
+            counter.side = is_short ? OrderSide::Buy : OrderSide::Sell;
             counter.quantity = std::abs(p.quantity);
             counter.order_type = OrderType::Market;
             // Preserve the position's product (CNC/NRML/MTF) — otherwise the close
@@ -430,7 +439,12 @@ class IBroker {
                 UnifiedOrder counter;
                 counter.symbol = p.symbol;
                 counter.exchange = p.exchange;
-                counter.side = (p.quantity > 0) ? OrderSide::Sell : OrderSide::Buy;
+                // Direction from `side` first (unsigned-quantity brokers like MetaAPI /
+                // ICICI Direct), sign only as a fallback — see close_all_positions.
+                const QString dir = p.side.toLower();
+                const bool is_short =
+                    dir.startsWith(QLatin1String("short")) || dir.startsWith(QLatin1String("sell")) || p.quantity < 0;
+                counter.side = is_short ? OrderSide::Buy : OrderSide::Sell;
                 counter.quantity = std::abs(p.quantity);
                 counter.order_type = OrderType::Market;
                 // Preserve the position's product (CNC/NRML/MTF) — else the close

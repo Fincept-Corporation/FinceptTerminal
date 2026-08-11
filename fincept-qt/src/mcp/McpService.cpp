@@ -428,8 +428,16 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
     // metadata, so external tools are gated destructive-by-default: the
     // installed checker must approve them exactly like a destructive internal
     // tool (agent-originated calls are denied unless the agent opts in).
+    // `destructive_declared=false`: the `true` above is OUR conservative
+    // assumption, not something the external tool declared. Marking it as
+    // undeclared keeps these on the checker-only path instead of the
+    // fail-closed capability gate, so a user who configured a Notion/Postgres
+    // server in the MCP Servers tab does not have to also flip the destructive
+    // switch. Agent-originated calls are still denied by the checker unless the
+    // agent opted in with the destructive token.
     if (auto denied = McpProvider::instance().check_authorization(server_id + "__" + tool_name, AuthLevel::None,
-                                                                  /*is_destructive=*/true))
+                                                                  /*is_destructive=*/true,
+                                                                  /*destructive_declared=*/false))
         return *denied;
 
     auto result = McpManager::instance().call_external_tool(server_id, tool_name, args);
@@ -468,8 +476,15 @@ ToolResult McpService::execute_openai_function(const QString& function_name, con
     auto [server_id, tool_name] = McpProvider::parse_openai_function_name(function_name);
 
     if (server_id.isEmpty() || tool_name.isEmpty()) {
-        LOG_WARN(TAG, "Invalid function name format: " + function_name);
-        return ToolResult::fail("Invalid function name format: " + function_name);
+        // parse_openai_function_name only fails to resolve when NO registered
+        // tool matches, so this is "no such tool", not a syntax problem. Saying
+        // "invalid format" sent models off re-spelling a name that simply does
+        // not exist — one turn retried a hallucinated create_workbook/add_tab
+        // API repeatedly instead of concluding the tools weren't there.
+        LOG_WARN(TAG, "No such tool: " + function_name);
+        return ToolResult::fail("No tool named '" + function_name +
+                                "' exists. Do not retry this name. Call tool_list with a description of what you "
+                                "want to do to find the tools that actually exist.");
     }
 
     LOG_INFO(TAG, QString("Dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
@@ -490,8 +505,10 @@ QFuture<ToolResult> McpService::execute_openai_function_async(const QString& fun
     };
 
     if (server_id.isEmpty() || tool_name.isEmpty()) {
-        LOG_WARN(TAG, "Invalid function name format: " + function_name);
-        return fail_now("Invalid function name format: " + function_name);
+        LOG_WARN(TAG, "No such tool: " + function_name);
+        return fail_now("No tool named '" + function_name +
+                        "' exists. Do not retry this name. Call tool_list with a description of what you want to "
+                        "do to find the tools that actually exist.");
     }
 
     LOG_INFO(TAG, QString("Async dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));

@@ -6,6 +6,11 @@
 #include <QSqlQuery>
 #include <QString>
 #include <QVariantList>
+#include <QVector>
+
+#include <atomic>
+
+class QThread;
 
 namespace fincept {
 
@@ -15,12 +20,25 @@ namespace fincept {
 /// Design choices:
 ///   - WAL mode + synchronous=NORMAL — same combo CacheDatabase uses; safe
 ///     under power loss with one fsync per checkpoint, low write amplification.
-///   - QMutex around execute() — Qt's QSqlDatabase connection is not
-///     thread-safe and the workspace writer may be invoked from the UI
-///     thread (frame closeEvent) and from a worker (autosave debounce).
+///   - Per-thread connections, same scheme as `Database` / `CacheDatabase`.
+///     QSqlDatabase has thread AFFINITY, not merely a data race: a connection
+///     may only be used on the thread that created it. The previous design held
+///     one shared connection behind a QMutex and then RETURNED a live QSqlQuery
+///     after releasing the lock, so a caller stepped a statement on a connection
+///     another thread could already be preparing on. `connection()` now hands
+///     out a per-thread cloned connection; under WAL those need no
+///     serialisation. This matters because LocalTelemetrySink::record() writes
+///     here from arbitrary threads. The remaining mutex guards only the owning
+///     connection's identity (open/close/profile swap), never a live statement.
+///   - Consequence for callers: the `QSqlQuery` returned by `execute()` belongs
+///     to the CALLING thread's connection and must be stepped on that same
+///     thread — which is what every call site already does. To hand results to
+///     another thread use `query_rows()`, which materialises them first.
 ///   - Connection name is profile-scoped (`fincept_workspace_<profile_uuid>`)
 ///     so a future profile-switch path can have two WorkspaceDbs open
-///     concurrently during the swap.
+///     concurrently during the swap. A reopen bumps a generation counter so
+///     per-thread clones of the previous profile are retired lazily instead of
+///     silently writing to the old file.
 ///   - Path is taken from ProfilePaths::workspace_db() — TerminalShell::initialise()
 ///     opens the db immediately after that path resolver runs.
 ///
@@ -63,8 +81,18 @@ class WorkspaceDb {
     void close();
     bool is_open() const;
 
+    /// Returns a `QSqlDatabase` handle valid for the current thread.
+    /// Main thread: the primary connection opened by `open()`. Any other thread:
+    /// a lazily-created thread-local clone, removed from Qt's registry when that
+    /// thread exits (or when a profile switch reopens the database).
+    QSqlDatabase connection();
+
     Result<QSqlQuery> execute(const QString& sql, const QVariantList& params = {});
     Result<void> exec(const QString& sql);
+
+    /// Like `execute()`, but copies every row out before the statement dies.
+    /// The result is a plain value type, so it is safe to move across threads.
+    Result<QVector<QVariantList>> query_rows(const QString& sql, const QVariantList& params = {});
 
     Result<void> begin_transaction();
     Result<void> commit();
@@ -84,15 +112,29 @@ class WorkspaceDb {
 
   private:
     WorkspaceDb() = default;
-    Result<void> apply_pragmas();
+    Result<void> apply_pragmas(QSqlDatabase& conn, bool include_database_wide);
     Result<void> create_tables();
 
-    QSqlDatabase db_;
-    QString connection_name_;
-    // Recursive: open() holds the mutex while calling create_tables(),
-    // which routes through exec() that re-acquires the same mutex. With a
-    // non-recursive QMutex this deadlocks the main thread before any window
-    // is shown — see ee4e946e regression.
+    QSqlDatabase db_;                // main-thread (owning) connection
+    QString connection_name_;        // registry name of the owning connection
+    QString db_path_;                // for cloning per-thread connections
+    QThread* main_thread_ = nullptr; // captured at open()
+
+    // Bumped on every open()/close(). A per-thread clone stamps the generation
+    // it was made under and is discarded when it no longer matches, so a
+    // profile switch cannot leave a worker writing into the previous profile.
+    std::atomic<quint64> generation_{0};
+    // is_open() is called from arbitrary threads (LocalTelemetrySink::record).
+    // Reading db_.isOpen() there would touch the main thread's driver, so track
+    // the state in an atomic instead.
+    std::atomic<bool> open_{false};
+    std::atomic<int> per_thread_connections_{0}; // diagnostic counter
+
+    // Recursive: open() holds the mutex while calling create_tables(), which
+    // routes through exec(). exec() no longer takes the mutex, but keep the
+    // recursive type so re-entrancy through this class can never deadlock the
+    // main thread before any window is shown — see ee4e946e regression.
+    // Guards only the owning connection's identity, never a live statement.
     mutable QRecursiveMutex mutex_;
 };
 

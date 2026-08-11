@@ -287,6 +287,24 @@ struct UnifiedOrder {
     double take_profit = 0;
     bool amo = false;
     QString instrument_token; // broker-specific numeric token (e.g. Zerodha/AliceBlue/Dhan)
+
+    /// Stable idempotency reference for this order INTENT, carried into whichever
+    /// native field the broker deduplicates on (Zerodha/Upstox `tag`, Alpaca
+    /// `client_order_id`, IBKR `cOID`, IIFL `orderUniqueIdentifier`, Saxo
+    /// `ExternalReference`, Dhan `correlationId`, …).
+    ///
+    /// Minted ONCE by UnifiedTrading when an order first enters the routing layer
+    /// (see UnifiedTrading::place_order) and never re-minted while non-empty, so
+    /// re-submitting the SAME UnifiedOrder after BrokerHttp's 8 s client-side
+    /// timeout carries the same reference — the broker rejects it as a duplicate
+    /// instead of creating a second live order. A per-call reference (what
+    /// make_client_order_ref() produces on its own) cannot do that.
+    ///
+    /// Split chunks and basket legs are distinct orders and each carry their own.
+    /// Generated as compact alphanumeric text at 20 chars; brokers with a narrower
+    /// field clamp it with .left(n), which is deterministic and so preserves the
+    /// dedup property. See trading/brokers/BrokerClientOrderId.h.
+    QString client_order_id;
 };
 
 struct BrokerPosition {

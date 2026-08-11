@@ -231,7 +231,10 @@ class AttentionCAETrainer:
         }, path)
 
     def load_checkpoint(self, path: str):
-        checkpoint = torch.load(path, map_location=self.device)
+        # weights_only=True: a checkpoint is an untrusted pickle. Without this,
+        # torch.load() runs arbitrary code via __reduce__ on load. Matches
+        # vision_quant/engine.py and vision_quant/setup_index.py.
+        checkpoint = torch.load(path, map_location=self.device, weights_only=True)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         return checkpoint["epoch"], checkpoint["loss"]

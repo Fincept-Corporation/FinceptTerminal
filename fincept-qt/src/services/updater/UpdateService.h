@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QPointer>
@@ -48,6 +49,7 @@ class UpdateService : public QObject {
     QString changelog() const { return changelog_; }
 
     /// Override the manifest URL (default: GitHub raw updates.json).
+    /// The detached signature is always fetched from `<manifest_url> + ".sig"`.
     void set_manifest_url(const QString& url) { manifest_url_ = url; }
 
     /// Parent widget for dialogs (defaults to QApplication::activeWindow()).
@@ -62,11 +64,25 @@ class UpdateService : public QObject {
 
   private slots:
     void on_manifest_reply_finished();
+    void on_signature_reply_finished();
     void on_download_reply_finished();
     void on_download_progress(qint64 received, qint64 total);
 
   private:
     explicit UpdateService(QObject* parent = nullptr);
+
+    /// Parse + act on a manifest whose detached signature has already been
+    /// verified. Never call this with unverified bytes.
+    void process_verified_manifest(const QByteArray& body);
+
+    /// True iff `signature` (base64 or hex, 64 raw bytes) is a valid Ed25519
+    /// signature over `manifest` under UPDATE_SIGNING_PUBLIC_KEY_HEX.
+    static bool verify_manifest_signature(const QByteArray& manifest, const QByteArray& signature);
+
+    /// Raw 32-byte signing public key, or an empty QByteArray when no key is
+    /// pinned (or the pinned value is malformed) — in which case auto-update is
+    /// refused outright.
+    static QByteArray signing_public_key();
 
     /// Return the lookup key for the current runtime (e.g. "windows-x64").
     /// Returns empty string if the platform/arch combination isn't supported.
@@ -90,7 +106,28 @@ class UpdateService : public QObject {
     static constexpr const char* DEFAULT_MANIFEST_URL =
         "https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/updates.json";
 
+    // ── Update-manifest signing key ─────────────────────────────────────────
+    // Raw Ed25519 public key, 32 bytes as 64 lowercase hex characters.
+    //
+    // WHY: `download-url` and `sha256` both come out of the same updates.json
+    // on raw.githubusercontent.com. The sha256 check proves the installer
+    // matches what the manifest claimed — it says nothing about whether the
+    // manifest is ours. Anyone who can push to `main`, or who takes over that
+    // account, otherwise gets code execution on every installation at next
+    // launch, because the verified installer is auto-launched via
+    // startDetached and silent checks fire at startup.
+    //
+    // A detached signature over the manifest bytes fixes that: the private key
+    // never touches CI or the repo, so a repo compromise alone cannot produce a
+    // manifest this binary will accept.
+    //
+    // EMPTY = auto-update is DISABLED (fail closed). See the signing runbook in
+    // UpdateService.cpp for how to generate the keypair and produce
+    // updates.json.sig.
+    static constexpr const char* UPDATE_SIGNING_PUBLIC_KEY_HEX = "";
+
     QNetworkAccessManager net_;
+    QByteArray pending_manifest_body_;
     QString manifest_url_ = DEFAULT_MANIFEST_URL;
     QString latest_version_;
     QString changelog_;

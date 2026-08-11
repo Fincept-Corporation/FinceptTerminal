@@ -19,8 +19,23 @@ class EventBus : public QObject {
     using Handler = std::function<void(const QVariantMap&)>;
     using HandlerId = int;
 
-    HandlerId subscribe(const QString& event, Handler handler);
+    /// Subscribe for as long as `owner` lives.
+    ///
+    /// `owner` is mandatory: handlers capture their owner, and the bus is a
+    /// process-lifetime singleton, so a handler outliving its owner is a
+    /// use-after-free the next time anyone publishes that event. The
+    /// destroyed() connection makes that impossible by construction — there is
+    /// deliberately no ownerless overload, because every previous caller
+    /// discarded the returned id and never unsubscribed.
+    HandlerId subscribe(QObject* owner, const QString& event, Handler handler);
+
+    /// Explicit early unsubscribe. Rarely needed — owner destruction is
+    /// already handled — but useful to stop listening while staying alive.
     void unsubscribe(HandlerId id);
+
+    /// Drop every subscription owned by `owner`. Safe to call more than once.
+    void unsubscribe_owner(QObject* owner);
+
     void publish(const QString& event, const QVariantMap& data = {});
 
   signals:
@@ -33,6 +48,7 @@ class EventBus : public QObject {
         HandlerId id;
         QString event;
         Handler handler;
+        QObject* owner = nullptr; // not owned; only compared, never dereferenced
     };
 
     QList<Subscription> subscriptions_;

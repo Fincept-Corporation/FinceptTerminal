@@ -181,16 +181,24 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     if (timer.isActive()) {
         timer.stop();
     } else {
-        // Timeout
+        // Timeout. The abort is client-side only: the broker may already have
+        // accepted the request, so this is "outcome unknown", not "did not
+        // happen". A blind retry of an order placement here creates a second
+        // live order — order payloads therefore carry a unique client order
+        // reference (BrokerClientOrderId.h) so the broker can reject the
+        // duplicate. Say so in the message rather than implying nothing ran.
         reply->abort();
         reply->deleteLater();
         BrokerHttpResponse timeout_result;
-        timeout_result.error = "Request timed out";
+        timeout_result.error = QString("Request timed out after %1 ms — outcome unknown, the request may have "
+                                       "been accepted; verify before retrying")
+                                   .arg(timeout_ms_);
         timeout_result.rtt_ms = elapsed_ms;
         return timeout_result;
     }
 
     result.status_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString response_content_type = reply->header(QNetworkRequest::ContentTypeHeader).toString();
     result.raw_body = QString::fromUtf8(reply->readAll());
 
     if (reply->error() != QNetworkReply::NoError && result.status_code == 0) {
@@ -200,13 +208,37 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     }
 
     // Parse JSON
+    const QByteArray body_bytes = result.raw_body.toUtf8();
     QJsonParseError parseErr;
-    auto doc = QJsonDocument::fromJson(result.raw_body.toUtf8(), &parseErr);
+    auto doc = QJsonDocument::fromJson(body_bytes, &parseErr);
     if (parseErr.error == QJsonParseError::NoError && doc.isObject()) {
         result.json = doc.object();
     }
 
     result.success = (result.status_code >= 200 && result.status_code < 300);
+
+    // A 2xx whose body we could not parse is NOT a success. The parse failure
+    // used to be dropped on the floor, leaving `json` default-constructed while
+    // `success` stayed true — Alpaca then read an empty `id` off it and reported
+    // "Order placed: " with no order id when nothing had been placed.
+    //
+    // Only a body the server itself labelled as JSON is held to this: an empty
+    // body is legitimate (204 on DELETE/cancel), a top-level JSON array is
+    // legitimate (Alpaca, IBKR and Shoonya return arrays and parse raw_body
+    // themselves — those leave `json` empty by design and parse cleanly), and
+    // genuinely non-JSON endpoints must keep working (Motilal's
+    // /getscripmastercsv and Kite's /instruments both return CSV through this
+    // same client). A missing or non-JSON content type therefore falls through
+    // to the previous behaviour rather than inventing a failure.
+    if (result.success && parseErr.error != QJsonParseError::NoError && !body_bytes.trimmed().isEmpty() &&
+        response_content_type.contains(QLatin1String("json"), Qt::CaseInsensitive)) {
+        result.success = false;
+        result.error = QString("Malformed JSON response (HTTP %1): %2 at offset %3")
+                           .arg(result.status_code)
+                           .arg(parseErr.errorString())
+                           .arg(parseErr.offset);
+    }
+
     if (!result.success && result.error.isEmpty()) {
         result.error = result.json.value("message").toString(
             result.json.value("error").toString(QString("HTTP %1").arg(result.status_code)));

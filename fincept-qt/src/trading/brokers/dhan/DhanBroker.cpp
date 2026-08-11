@@ -15,6 +15,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerLogRedact.h"
 #include "trading/brokers/BrokerTokenUtil.h"
@@ -121,7 +122,7 @@ bool DhanBroker::is_token_expired(const BrokerHttpResponse& resp) {
         LOG_WARN(TAG, QString("Dhan classified TOKEN_EXPIRED → will disconnect. status=%1 type=%2 code=%3 msg=%4 "
                               "body=%5")
                           .arg(resp.status_code)
-                          .arg(error_type, error_code, msg, resp.raw_body.left(400)));
+                          .arg(error_type, error_code, msg, redact_body(resp.raw_body, 400)));
     }
     return auth_err;
 }
@@ -194,10 +195,10 @@ QMap<QString, QString> DhanBroker::auth_headers(const BrokerCredentials& creds) 
 TokenExchangeResponse DhanBroker::exchange_token(const QString& api_key, const QString& api_secret,
                                                  const QString& /*auth_code*/) {
     if (api_key.trimmed().isEmpty()) {
-        return {false, "", "", "", "", "Client ID is required"};
+        return {.success = false, .error = "Client ID is required"};
     }
     if (api_secret.trimmed().isEmpty() || api_secret.length() < 20) {
-        return {false, "", "", "", "", "Access token appears invalid (too short)"};
+        return {.success = false, .error = "Access token appears invalid (too short)"};
     }
 
     // Validate by calling fundlimit — lightweight auth check
@@ -208,7 +209,7 @@ TokenExchangeResponse DhanBroker::exchange_token(const QString& api_key, const Q
     auto resp = BrokerHttp::instance().get(BASE + "/v2/fundlimit", hdrs);
 
     if (is_token_expired(resp)) {
-        return {false, "", "", "", "", "[TOKEN_EXPIRED] Access token is invalid or expired"};
+        return {.success = false, .error = "[TOKEN_EXPIRED] Access token is invalid or expired"};
     }
     // Accept any non-auth error (market closed, etc.) as token valid.
     // Dhan v2 access tokens are valid for 24h from generation (rolling window).
@@ -216,7 +217,7 @@ TokenExchangeResponse DhanBroker::exchange_token(const QString& api_key, const Q
     // a startup hint so a token isn't shown green long after it has lapsed.
     const QString extra = with_token_expiry({}, rolling_expiry_epoch(24));
     LOG_INFO(TAG, "Token exchange OK"); // don't log client_id (P14)
-    return {true, api_secret, /*refresh*/ "", api_key, /*additional*/ extra, ""};
+    return {.success = true, .access_token = api_secret, .user_id = api_key, .additional_data = extra};
 }
 
 // ── Place Order ───────────────────────────────────────────────────────────────
@@ -238,6 +239,10 @@ OrderPlaceResponse DhanBroker::place_order(const BrokerCredentials& creds, const
     body["price"] = order.price;
     body["triggerPrice"] = order.stop_price;
     body["disclosedQuantity"] = 0;
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Dhan caps correlationId at 25 chars.
+    body["correlationId"] = make_client_order_ref(25);
     if (order.amo)
         body["afterMarketOrder"] = true;
 

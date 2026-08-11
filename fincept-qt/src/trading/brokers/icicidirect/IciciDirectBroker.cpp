@@ -1,6 +1,7 @@
 #include "trading/brokers/icicidirect/IciciDirectBroker.h"
 
 #include "core/logging/Logger.h"
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerLogRedact.h"
 #include "trading/brokers/BrokerTokenUtil.h"
@@ -165,11 +166,25 @@ bool IciciDirectBroker::is_success(const BrokerHttpResponse& resp) {
 
 QString IciciDirectBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
     const QString err = resp.json.value("Error").toString();
-    if (!err.isEmpty())
-        return err;
-    if (!resp.error.isEmpty())
-        return resp.error;
-    return fallback;
+    QString msg = err;
+    if (msg.isEmpty())
+        msg = resp.error;
+    if (msg.isEmpty())
+        msg = fallback;
+
+    // Breeze reports an expired/invalid session either through the HTTP status
+    // or through the envelope's Status field with a descriptive Error string.
+    // The [TOKEN_EXPIRED] marker is the contract BrokerInterface::validate_session
+    // classifies on (BrokerInterface.h) — without it the account reads
+    // "Connected" forever while every request fails, and the user is never
+    // prompted to reconnect.
+    const int envelope_status = resp.json.value("Status").toInt(resp.status_code);
+    const QString lower = msg.toLower();
+    if (resp.status_code == 401 || resp.status_code == 403 || envelope_status == 401 || envelope_status == 403 ||
+        lower.contains("session") || lower.contains("unauthor") || lower.contains("invalid token") ||
+        lower.contains("public key does not exist"))
+        return QStringLiteral("[TOKEN_EXPIRED] ") + msg;
+    return msg;
 }
 
 TokenExchangeResponse IciciDirectBroker::exchange_token(const QString& api_key, const QString& api_secret,
@@ -267,7 +282,10 @@ OrderPlaceResponse IciciDirectBroker::place_order(const BrokerCredentials& creds
         {"expiry_date", expiry_iso},
         {"right", right},
         {"strike_price", strike_str},
-        {"user_remark", "fincept"},
+        // Unique per attempt so a retry after an 8s client-side timeout is a
+        // broker-side duplicate rather than a second live order (see
+        // BrokerClientOrderId.h).
+        {"user_remark", make_client_order_ref(20)},
     };
 
     auto resp = breeze_request("POST", "/order", payload, creds);

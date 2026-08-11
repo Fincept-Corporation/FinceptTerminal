@@ -567,8 +567,13 @@ void AnalyticsSectorsView::update_sector_table(const QVector<SectorInfo>& sector
         const auto& s = sectors[r];
         sector_table_->setRowHeight(r, 30);
 
-        // Col 0 — color swatch
-        sector_table_->setCellWidget(r, 0, new Swatch(sector_color(r), 10, 10, sector_table_));
+        // Col 0 — color swatch. Construct only when the cell is empty: the colour
+        // is a pure function of the row index and never changes, but setCellWidget()
+        // destroys the previous occupant, so the old unconditional form churned the
+        // full swatch set on every 60s poll. (The surrounding code already goes out
+        // of its way to preserve the user's selection across this rebuild.)
+        if (!sector_table_->cellWidget(r, 0))
+            sector_table_->setCellWidget(r, 0, new Swatch(sector_color(r), 10, 10, sector_table_));
 
         auto set_text = [&](int col, const QString& text, QColor color, Qt::Alignment align) {
             auto* item = new QTableWidgetItem(text);

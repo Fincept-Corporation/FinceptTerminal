@@ -765,13 +765,12 @@ void EquityTradingScreen::async_modify_order(const QString& order_id, double qty
         if (!self)
             return;
         QJsonObject mods;
-        if (qty > 0) {
-            mods["qty"] = qty;
-            // Brokers read one key or the other — Dhan/Kotak modify_order reads
-            // "quantity" (was getting nothing → transmitted qty 0, corrupting a
-            // resting SL); send both so every broker's modify sees the new qty.
+        // "quantity" is the only spelling any broker's modify_order reads — the
+        // "qty" key that used to be sent alongside it was read by nothing.
+        // UnifiedTrading::modify_order hydrates side/symbol/exchange/product/
+        // order_type from the resting order, so this only carries the deltas.
+        if (qty > 0)
             mods["quantity"] = qty;
-        }
         if (price > 0)
             mods["price"] = price;
         auto result = UnifiedTrading::instance().modify_order(acct_id, order_id, mods);

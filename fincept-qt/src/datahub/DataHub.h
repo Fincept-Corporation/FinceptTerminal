@@ -269,6 +269,43 @@ class DataHub : public QObject {
     void do_coalesced_flush(const QString& topic);
     void scheduler_body();
 
+    // ── Idle-topic eviction ─────────────────────────────────────────────────
+    //
+    // `topics_` was a process-lifetime cache: `state_for()` inserts a
+    // TopicState retaining the full last-published QVariant on every
+    // publish/subscribe/peek, and the only automatic erase sites are gated on
+    // `policy.drop_on_idle` — which defaults false and is set true by exactly
+    // two producers. `ttl_ms` is a freshness *test*; it never releases the
+    // payload. So memory scaled with the total breadth browsed since launch,
+    // monotonically, and the heavy families are the wide ones:
+    // `market:history:<sym>:<period>:<interval>` holds full OHLC vectors,
+    // `news:symbol:<sym>` article bodies, `dbnomics:series:*` whole
+    // observation series.
+    //
+    // The sweep below is the conservative counterpart, modelled on
+    // `mcp::ResultStore::sweep_locked()`: it only ever touches topics with
+    // **zero live subscribers**, no in-flight refresh, and no armed coalesce
+    // flush, and only once they are far past their freshness window. A
+    // re-show inside the window is still a cache hit.
+
+    /// True if any concrete or wildcard subscription with a live owner
+    /// currently covers `topic`. Caller holds mutex_.
+    bool has_live_subscribers(const QString& topic) const;
+    /// Erase idle, long-stale, unsubscribed TopicStates. Caller holds mutex_.
+    void sweep_idle_topics(qint64 now);
+
+    /// A topic is only evictable once it is this many freshness windows
+    /// stale. Generous on purpose — the point is to release payloads nobody
+    /// came back for, not to fight the cache.
+    static constexpr int kIdleEvictTtlMultiple = 10;
+    /// Floor on the above, so short-TTL families (1 s quote topics) aren't
+    /// evicted seconds after the user tabs away.
+    static constexpr qint64 kIdleEvictMinAgeMs = 5 * 60 * 1000;
+    /// Sweep cadence in scheduler ticks (1 s each) — the walk is O(topics_)
+    /// so it doesn't belong on the per-second path.
+    static constexpr int kIdleSweepEveryTicks = 60;
+    int sweep_tick_counter_ = 0;
+
     // ── State ───────────────────────────────────────────────────────────────
     mutable QMutex mutex_;
 

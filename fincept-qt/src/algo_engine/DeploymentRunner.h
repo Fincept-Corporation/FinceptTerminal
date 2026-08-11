@@ -49,6 +49,14 @@ class DeploymentRunner : public QObject {
   public slots:
     void on_order_filled(const QString& broker_order_id, double fill_price, double fill_qty);
     void on_order_rejected(const QString& broker_order_id, const QString& reason);
+    // Semi-Auto approval gate (ActionCenter). The engine calls the first when it
+    // parks the in-flight order in the approval queue instead of sending it, and
+    // the second when the user approves or rejects it. The in-flight guard is
+    // held throughout, so a deployment cannot stack duplicate approval requests
+    // while one is waiting on a human.
+    void on_order_queued_for_approval(const QString& approval_id);
+    void on_approval_resolved(const QString& approval_id, bool approved, const QString& broker_order_id,
+                              const QString& detail);
     // Multi-leg F&O basket fills (P3.4). One call per leg from AlgoEngine::execute_basket.
     // Fills accumulate; once every leg of the in-flight basket is accounted for, an
     // entry records the basket position (record_entry_legs) and an exit realizes it
@@ -123,6 +131,11 @@ class DeploymentRunner : public QObject {
         QString broker_order_id;
         AlgoOrderSignal signal;
         int64_t submitted_ms = 0;
+        // Set when the order was parked in the Semi-Auto approval queue instead of
+        // being sent. approval_id is ActionCenter's pending id; it keys the
+        // approve/reject callback back to this exact order.
+        bool awaiting_approval = false;
+        QString approval_id;
     };
     QVector<PendingOrder> pending_orders_;
 

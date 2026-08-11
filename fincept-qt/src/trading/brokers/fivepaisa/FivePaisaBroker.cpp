@@ -139,11 +139,11 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
                                                       const QString& auth_code) {
     auto kp = unpack_key(api_key);
     if (kp.app_key.isEmpty())
-        return {false, "", "", "", "ApiKey must be 'app_key:::user_id:::client_id'", ""};
+        return {.success = false, .error = "ApiKey must be 'app_key:::user_id:::client_id'"};
 
     QStringList auth_parts = auth_code.split(":::");
     if (auth_parts.size() < 3)
-        return {false, "", "", "", "AuthCode must be 'email:::pin:::totp'", ""};
+        return {.success = false, .error = "AuthCode must be 'email:::pin:::totp'"};
     QString email = auth_parts[0].trimmed();
     QString pin = auth_parts[1].trimmed();
     QString totp = auth_parts[2].trimmed();
@@ -170,7 +170,7 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
             BrokerHttp::instance().post_json(QString(BASE_URL) + "/VendorsAPI/Service1.svc/TOTPLogin", req, headers);
 
         if (!resp.success)
-            return {false, "", "", "", checked_error(resp, "TOTP login network error"), ""};
+            return {.success = false, .error = checked_error(resp, "TOTP login network error")};
 
         // Per SDK, success is indicated by head.statusDescription=="Success" AND
         // body.Status==0; bypassing the status check buries auth errors in an
@@ -180,7 +180,7 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
         const QString req_token = body_obj["RequestToken"].toString();
         if (req_token.isEmpty() || (status_code != 0 && status_code != -1)) {
             const QString msg = body_obj["Message"].toString();
-            return {false, "", "", "", msg.isEmpty() ? "TOTP login failed (no RequestToken)" : msg, ""};
+            return {.success = false, .error = msg.isEmpty() ? "TOTP login failed (no RequestToken)" : msg};
         }
 
         // Step 2: Get access token
@@ -198,18 +198,21 @@ TokenExchangeResponse FivePaisaBroker::exchange_token(const QString& api_key, co
                                                       req2, headers);
 
         if (!resp2.success)
-            return {false, "", "", "", checked_error(resp2, "GetAccessToken network error"), ""};
+            return {.success = false, .error = checked_error(resp2, "GetAccessToken network error")};
 
         QString access_token = resp2.json["body"].toObject()["AccessToken"].toString();
         if (access_token.isEmpty()) {
             QString msg = resp2.json["body"].toObject()["Message"].toString();
-            return {false, "", "", "", msg.isEmpty() ? "No AccessToken in response" : msg, ""};
+            return {.success = false, .error = msg.isEmpty() ? "No AccessToken in response" : msg};
         }
 
         // 5paisa access tokens expire at the daily reset. The live TOTP is a
         // one-time code we can't replay, so there is no silent refresh.
         const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-        return {true, access_token, kp.client_id, "", extra, ""};
+        // clientId is the account identifier, not a refresh token — it used to
+        // be passed positionally into the refresh_token slot, which left
+        // user_id empty. Same defect as AliceBlue and IIFL.
+        return {.success = true, .access_token = access_token, .user_id = kp.client_id, .additional_data = extra};
     }
 }
 
@@ -482,6 +485,10 @@ ApiResponse<QVector<BrokerPosition>> FivePaisaBroker::get_positions(const Broker
         pos.pnl = p["MTOM"].toDouble();
         pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = product;
+        // NetQty carries the sign, but PortfolioReplicationService takes fabs()
+        // of quantity and reads direction from `side` alone — leaving it empty
+        // replicated every short as a long and inverted its P&L.
+        pos.side = net_qty > 0 ? "LONG" : "SHORT";
         positions.append(pos);
     }
 

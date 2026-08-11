@@ -28,6 +28,11 @@
     <binary>FinceptTerminal</binary>
   </provides>
   <releases>
+    <release version="4.4.0" date="2026-08-11">
+      <description>
+        <p>Version 4.4.0 — Correctness and safety release. Failed data fetches, unreadable settings and incomplete option chains now report an error instead of rendering as confident numbers. Risk limits, order rate limits and the smart/basket order validators are enforced rather than merely configurable. Destructive AI tools are off by default (Settings &gt; Security), live orders require explicit confirmation, and the update manifest is signature-verified.</p>
+      </description>
+    </release>
     <release version="4.3.0" date="2026-07-25">
       <description>
         <p>Version 4.3.0 — MCP long-running tools now run as background jobs the assistant can poll and cancel, and oversized tool results are paged on demand instead of filling the conversation.</p>

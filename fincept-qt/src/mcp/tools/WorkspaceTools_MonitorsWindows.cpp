@@ -177,6 +177,17 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const int monitor_idx = args["monitor_index"].toInt(-1);
                 auto* frame = new WindowFrame(WindowFrame::next_window_id(), nullptr);
+                // Every other creation site sets this (WindowFrame.cpp,
+                // WindowCycler.cpp, StressLoad.cpp). WindowFrame unregisters
+                // from WindowRegistry only via `connect(this,
+                // &QObject::destroyed, ...)`, so without it a closed frame
+                // lingers as a live QPointer in the registry: all_minimised()
+                // reads isMinimized()==false on the hidden zombie and
+                // lock-on-minimise never fires again, focus_window_by_index()
+                // showNormal()s a closed window back to life, and
+                // close_window's `frame_count() <= 1` guard counts zombies so
+                // the last real window becomes closeable.
+                frame->setAttribute(Qt::WA_DeleteOnClose);
                 if (monitor_idx >= 0) {
                     if (auto* s = screen_by_index(monitor_idx)) {
                         frame->move_to_screen(s);

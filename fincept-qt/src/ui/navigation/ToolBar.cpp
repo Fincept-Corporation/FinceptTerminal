@@ -119,6 +119,16 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     plan_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(plan_btn_, &QPushButton::clicked, this, &ToolBar::plan_clicked);
     hl->addWidget(plan_btn_);
+
+    // Enterprise CTA. Deliberately added without its own separator: the
+    // credits/chat visibility toggles in apply_responsive_layout() index into
+    // separators_ by position, so inserting one here would shift them.
+    upgrade_btn_ = new QPushButton;
+    upgrade_btn_->setFixedHeight(20);
+    upgrade_btn_->setCursor(Qt::PointingHandCursor);
+    upgrade_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    connect(upgrade_btn_, &QPushButton::clicked, this, &ToolBar::upgrade_clicked);
+    hl->addWidget(upgrade_btn_);
     sep();
 
     chat_mode_btn_ = new QPushButton;
@@ -168,6 +178,13 @@ void ToolBar::retranslateUi() {
         live_label_->setText(tr(" LIVE"));
     if (plan_btn_)
         plan_btn_->setToolTip(tr("View Plans & Pricing"));
+    if (upgrade_btn_) {
+        // U+25B4 up-pointing triangle as an icon; only the label translates.
+        // fromUtf8 is required — QStringLiteral would widen each UTF-8 byte
+        // into its own UTF-16 unit and render as mojibake.
+        upgrade_btn_->setText(QString::fromUtf8("\xe2\x96\xb4 ") + tr("UPGRADE"));
+        upgrade_btn_->setToolTip(tr("Upgrade to Fincept Terminal Enterprise — the private edition"));
+    }
     if (chat_mode_btn_) {
         // Keep the ⬡ glyph (U+2B21) as a visual icon; only the label after it
         // translates. Must use fromUtf8 to decode the UTF-8 bytes — wrapping
@@ -228,6 +245,15 @@ void ToolBar::refresh_theme() {
                                          "QPushButton:hover{color:%2;}")
                                      .arg(colors::TEXT_PRIMARY())
                                      .arg(colors::AMBER()));
+    // Filled rather than outlined — the only solid button on the row, so the
+    // Enterprise CTA reads as the primary action next to LOGOUT and CHAT.
+    if (upgrade_btn_)
+        upgrade_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %1;"
+                                            "padding:0 8px;font-weight:700;}"
+                                            "QPushButton:hover{background:%3;border-color:%3;}")
+                                        .arg(colors::AMBER())
+                                        .arg(colors::BG_BASE())
+                                        .arg(colors::AMBER_DIM()));
     if (chat_mode_btn_)
         chat_mode_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                                               "padding:0 8px;font-weight:700;}"

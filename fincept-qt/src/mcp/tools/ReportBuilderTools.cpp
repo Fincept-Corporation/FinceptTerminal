@@ -17,6 +17,7 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/report/ReportDocument.h"
+#include "mcp/tools/ExportPathGuard.h"
 #include "screens/report_builder/ReportBuilderScreen.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "services/report_builder/ReportBuilderService.h"
@@ -90,11 +91,25 @@ QString link_key_for(const QString& chat_id) {
     return QStringLiteral("chat_report_link:") + chat_id;
 }
 
-QString get_linked_report_for(const QString& chat_id) {
+/// Reads the chat→report link. `ok` distinguishes "no link" (true, empty
+/// string) from "unknown because the settings read failed" (false) — the two
+/// must never be collapsed: an error read as "no link" makes on_llm_mutation_start()
+/// re-link the chat and overwrite the report the chat was already editing.
+QString get_linked_report_for(const QString& chat_id, bool* ok = nullptr) {
+    if (ok)
+        *ok = true;
     if (chat_id.isEmpty())
         return {};
     auto r = SettingsRepository::instance().get(link_key_for(chat_id));
-    return r.is_ok() ? r.value() : QString{};
+    if (r.is_err()) {
+        LOG_ERROR(RB_TOOLS_TAG, QString("settings read failed for '%1' — treating the chat→report link as unknown "
+                                        "and leaving it untouched: %2")
+                                    .arg(link_key_for(chat_id), QString::fromStdString(r.error())));
+        if (ok)
+            *ok = false;
+        return {};
+    }
+    return r.value();
 }
 
 void set_linked_report_for(const QString& chat_id, const QString& path_or_placeholder) {
@@ -117,8 +132,11 @@ void on_llm_mutation_start() {
     const QString chat_id = fincept::ai_chat::detail::t_chat_session_id;
     if (chat_id.isEmpty())
         return;
-    if (!get_linked_report_for(chat_id).isEmpty())
+    bool link_known = false;
+    if (!get_linked_report_for(chat_id, &link_known).isEmpty())
         return; // already linked
+    if (!link_known)
+        return; // read failed — unknown, do not modify the stored link
     QString current;
     QMetaObject::invokeMethod(svc, [svc, &current]() { current = svc->current_file(); }, Qt::BlockingQueuedConnection);
     set_linked_report_for(chat_id, current.isEmpty() ? QStringLiteral("<unsaved>") : current);
@@ -747,19 +765,24 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_export_pdf";
-        t.description = "Export the current report to a PDF at the given absolute path. The Report Builder "
+        t.description = "Export the current report to a PDF inside the export directory. The Report Builder "
                         "screen must be loaded (any prior mutation auto-navigates to it, so this normally just "
-                        "works). Uses A4, with headers/footers if metadata defines them.";
+                        "works). Uses A4, with headers/footers if metadata defines them. 'path' is a filename "
+                        "or relative path inside the export directory; absolute paths elsewhere are refused.";
         t.category = "report-builder";
+        t.is_destructive = true; // writes a file to disk
         t.input_schema.properties = QJsonObject{
-            {"path",
-             QJsonObject{{"type", "string"}, {"description", "Absolute output path, e.g. /Users/x/Desktop/TSLA.pdf"}}},
+            {"path", QJsonObject{{"type", "string"},
+                                 {"description", "Output filename inside the export directory, e.g. 'TSLA.pdf'"}}},
         };
         t.input_schema.required = {"path"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString path = args.value("path").toString().trimmed();
-            if (path.isEmpty())
-                return ToolResult::fail("Missing 'path'");
+            // `path` was raw model text handed to QPdfWriter — arbitrary write.
+            // Confine it to the export directory. See ExportPathGuard.h.
+            const auto dest = resolve_export_path(args.value("path").toString());
+            if (!dest.ok())
+                return ToolResult::fail(dest.error);
+            const QString path = dest.path;
             // Make sure the screen exists — nav.switch_screen lazy-constructs it.
             maybe_request_navigation();
 
@@ -856,7 +879,8 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             const QString chat_id = fincept::ai_chat::detail::t_chat_session_id;
-            const QString linked = get_linked_report_for(chat_id);
+            bool link_known = false;
+            const QString linked = get_linked_report_for(chat_id, &link_known);
             auto& svc = Service::instance();
             int n = static_cast<int>(svc.components().size());
             QString cur = svc.current_file();
@@ -868,15 +892,26 @@ std::vector<ToolDef> get_report_builder_tools() {
                 {"component_count", n},
                 {"title", title.isEmpty() ? QJsonValue::Null : QJsonValue(title)},
             };
+            // A failed read must not read as "null == new chat": that is the
+            // documented cue for the model to call report_clear, which would
+            // wipe the canvas this chat was already editing.
+            if (!link_known)
+                data["link_unknown"] = true;
             QString msg =
                 chat_id.isEmpty()
                     ? QStringLiteral("No chat session bound; canvas has %1 components").arg(n)
-                    : (linked.isEmpty()
-                           ? QStringLiteral("New chat — canvas has %1 components from a prior session").arg(n)
-                           : QStringLiteral("Chat is editing %1 (canvas has %2 components)")
-                                 .arg(linked == QLatin1String("<unsaved>") ? QStringLiteral("an unsaved report")
-                                                                           : linked)
-                                 .arg(n));
+                    : (!link_known
+                           ? QStringLiteral("Chat→report link could not be read (settings error) — treat it as "
+                                            "UNKNOWN, keep editing the canvas as-is and do NOT call report_clear. "
+                                            "Canvas has %1 components")
+                                 .arg(n)
+                           : (linked.isEmpty()
+                                  ? QStringLiteral("New chat — canvas has %1 components from a prior session").arg(n)
+                                  : QStringLiteral("Chat is editing %1 (canvas has %2 components)")
+                                        .arg(linked == QLatin1String("<unsaved>")
+                                                 ? QStringLiteral("an unsaved report")
+                                                 : linked)
+                                        .arg(n)));
             return ToolResult::ok(msg, data);
         };
         tools.push_back(std::move(t));

@@ -20,6 +20,7 @@
 #include <QStandardPaths>
 #include <QStringList>
 #include <QThread>
+#include <QTimer>
 #include <QUuid>
 
 #include <atomic>
@@ -187,6 +188,124 @@ static void strip_unmanaged_credentials(QProcessEnvironment& env, const QStringL
             }
         }
     }
+}
+
+// ── Argument-spill opt-in ────────────────────────────────────────────────────
+// start_next() can replace an oversized argv entry with "@<temp-path>" to dodge
+// the Windows ~32 KB command-line limit. That only works for scripts that
+// implement the convention (read the file, delete it, use its contents). It was
+// applied unconditionally, so any *other* script handed a >8 KB payload — a
+// portfolio config from PortfolioAnalyticsService, a backtest spec from
+// BacktestingService, an option chain from OptionChainService, a Databento
+// query — received the literal string "@C:\...\fincept_arg_*.json" and failed
+// with "malformed JSON" on exactly the inputs that had grown past 8 KB.
+//
+// So spilling is opt-in: only the scripts verified below (grep `resolve_arg` /
+// `startswith("@")` under scripts/) get it.
+//
+// PREFER stdin FOR NEW LARGE PAYLOADS. PythonRunner::run() takes `stdin_data`;
+// it has no size limit, never touches disk, and is invisible to same-user
+// process inspection. New scripts should take `--stdin` rather than grow another
+// `@file` reader.
+static bool script_supports_arg_spill(const QString& script, const QStringList& args) {
+    // yfinance_data.py reads `@file` only for its batch_all action; every other
+    // action takes plain scalar args and would choke on an "@..." string.
+    if (script == QLatin1String("yfinance_data.py"))
+        return !args.isEmpty() && args[0] == QLatin1String("batch_all");
+
+    static const QStringList kSpillCapableScripts = {
+        // scripts/*.py — resolve_arg()
+        QStringLiteral("news_nlp.py"),
+        QStringLiteral("news_correlation.py"),
+        QStringLiteral("news_geolocation.py"),
+        // scripts/Analytics/options/*.py — resolve_arg(), invoked via
+        // MAAnalyticsService::run_python_json()
+        QStringLiteral("Analytics/options/gex_calculator.py"),
+        QStringLiteral("Analytics/options/iv_smile.py"),
+        QStringLiteral("Analytics/options/iv_surface.py"),
+        QStringLiteral("Analytics/options/oi_tracker.py"),
+        QStringLiteral("Analytics/options/straddle_simulator.py"),
+        QStringLiteral("Analytics/options/strategy_chart.py"),
+        // scripts/agents/finagent_core/main.py — payload_str.startswith("@").
+        // AgentService reaches it via its own stdin QProcess, not through here,
+        // but the reader exists so the flag stays correct for any other caller.
+        QStringLiteral("agents/finagent_core/main.py"),
+    };
+    return kSpillCapableScripts.contains(script);
+}
+
+// ── Watchdog budgets ─────────────────────────────────────────────────────────
+// Every spawn gets a kill-timer. Without one, a script blocked on a socket
+// holds one of the THREE concurrency slots forever; three such hangs wedge
+// every Python-backed feature in the terminal until the app is restarted, and
+// nothing is ever shown to the user because the callback simply never fires.
+//
+// This is a *floor* policy, not a per-script tuning knob: callers that know
+// better pass RunOptions::timeout_ms (see BacktestingService). The table below
+// only exists because a handful of scripts legitimately run for many minutes
+// and their callers live in files this change does not touch.
+static constexpr int kDefaultTimeoutMs = 300'000;  //  5 min — ordinary fetch/analytics
+static constexpr int kLongRunTimeoutMs = 3'600'000; // 60 min — training / backtests
+
+static int default_timeout_for_script(const QString& script) {
+    // Prefix match on the script's directory. These trees train models, build
+    // FAISS indexes, run multi-year backtests or drive multi-step LLM agents —
+    // minutes is normal for them and 5 min would kill real work.
+    //   vision_quant/setup_index.py  — CNN training + index build
+    //   ai_quant_lab/qlib_rl.py      — RL training (streams progress for ages)
+    //   ai_quant_lab/qlib_rolling_retraining.py
+    //   Analytics/backtesting/*      — full backtests / walk-forward / optimise
+    //   agents/*                     — LLM agent chains
+    static const QStringList kLongRunPrefixes = {
+        QStringLiteral("vision_quant/"),
+        QStringLiteral("ai_quant_lab/"),
+        QStringLiteral("agents/"),
+        QStringLiteral("Analytics/backtesting/"),
+    };
+    for (const QString& p : kLongRunPrefixes) {
+        if (script.startsWith(p))
+            return kLongRunTimeoutMs;
+    }
+    return kDefaultTimeoutMs;
+}
+
+// ── Script-level error envelope ──────────────────────────────────────────────
+// Scripts across the tree print a well-formed `{"error": "..."}` (often with
+// `{"success": false}` alongside) to describe a failure. Two things went wrong
+// with that before:
+//   * on exit 0 the envelope was treated as a *successful* payload, so the
+//     caller got success=true with data it could not use and rendered blank;
+//   * on a non-zero exit the caller surfaced `result.error`, which was stderr —
+//     and stderr is empty in exactly this case, so the real diagnostic sat
+//     unread in `result.output`.
+// Returns true and fills `*out` when the document carries a usable message.
+//
+// Deliberately NOT triggered by `success: false` alone: several providers emit
+// `{"success": true, "data": {...}, "error": null}`, and BacktestingService
+// already unwraps nested `success` flags itself with better messages.
+static bool extract_error_envelope(const QJsonDocument& doc, QString* out) {
+    if (!doc.isObject())
+        return false;
+    const QJsonObject obj = doc.object();
+    const QJsonValue err = obj.value(QLatin1String("error"));
+    if (err.isUndefined() || err.isNull())
+        return false; // absent, or explicitly "no error"
+
+    QString msg;
+    if (err.isString())
+        msg = err.toString();
+    else if (err.isObject())
+        msg = QString::fromUtf8(QJsonDocument(err.toObject()).toJson(QJsonDocument::Compact));
+    else if (err.isArray())
+        msg = QString::fromUtf8(QJsonDocument(err.toArray()).toJson(QJsonDocument::Compact));
+    else
+        msg = err.toVariant().toString();
+
+    msg = msg.trimmed();
+    if (msg.isEmpty() || msg == QLatin1String("{}") || msg == QLatin1String("[]"))
+        return false; // `"error": ""` / `{}` is not a failure signal
+    *out = msg;
+    return true;
 }
 
 // Scripts that require NumPy 1.x environment
@@ -425,7 +544,15 @@ QString PythonRunner::find_scripts_dir() const {
 
 // ── Run Script ───────────────────────────────────────────────────────────────
 
-void PythonRunner::run(const QString& script, const QStringList& args, Callback cb, StreamCallback on_line) {
+void PythonRunner::run(const QString& script, const QStringList& args, Callback cb, StreamCallback on_line,
+                       const QByteArray& stdin_data) {
+    RunOptions opts;
+    opts.stdin_data = stdin_data;
+    run_with_options(script, args, opts, std::move(cb), std::move(on_line));
+}
+
+void PythonRunner::run_with_options(const QString& script, const QStringList& args, const RunOptions& opts, Callback cb,
+                                    StreamCallback on_line) {
     // Thread-affinity guard. PythonRunner is a QObject singleton living on
     // whatever thread first called instance() — in practice the main thread,
     // because main.cpp warms it at startup. But run() is invoked from
@@ -441,8 +568,9 @@ void PythonRunner::run(const QString& script, const QStringList& args, Callback 
         StreamCallback on_line_copy = std::move(on_line);
         QMetaObject::invokeMethod(
             this,
-            [this, script, args, cb_copy = std::move(cb_copy), on_line_copy = std::move(on_line_copy)]() mutable {
-                run(script, args, std::move(cb_copy), std::move(on_line_copy));
+            [this, script, args, opts, cb_copy = std::move(cb_copy),
+             on_line_copy = std::move(on_line_copy)]() mutable {
+                run_with_options(script, args, opts, std::move(cb_copy), std::move(on_line_copy));
             },
             Qt::QueuedConnection);
         return;
@@ -470,8 +598,14 @@ void PythonRunner::run(const QString& script, const QStringList& args, Callback 
             return;
     }
 
-    // Queue the request and start if under concurrency limit
-    queue_.enqueue({script, args, std::move(cb), std::move(on_line)});
+    // Queue the request and start if under concurrency limit.
+    // kTimeoutFromScript defers to the per-tree table; an explicit 0 disables the
+    // watchdog, which is why the sentinel is negative rather than 0.
+    const int resolved_timeout =
+        (opts.timeout_ms == kTimeoutFromScript) ? default_timeout_for_script(script) : opts.timeout_ms;
+
+    queue_.enqueue({script, args, std::move(cb), std::move(on_line), opts.stdin_data,
+                    script_supports_arg_spill(script, args), opts.expect_json, resolved_timeout});
     start_next();
 }
 
@@ -512,7 +646,7 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
     file.close();
 
     // Queue as a special request — use the temp file path directly
-    queue_.enqueue({"__code__:" + temp_path, {}, std::move(cb), {}});
+    queue_.enqueue({"__code__:" + temp_path, {}, std::move(cb), {}, {}, false});
     start_next();
 }
 
@@ -592,16 +726,25 @@ void PythonRunner::start_next() {
         if (!is_code) {
             // Spill large args to temp files to avoid Windows 32KB command-line limit.
             // Python scripts support "@/path/to/file" — they read and delete the file.
+            // OPT-IN ONLY: see script_supports_arg_spill(). Spilling for a script
+            // that can't read "@file" turns a working call into a parse error.
             static constexpr int kArgSpillThreshold = 8192; // 8 KB
             QStringList spilled_files;
             QStringList safe_args;
             for (const QString& arg : req.args) {
-                if (arg.size() > kArgSpillThreshold) {
+                if (arg.size() > kArgSpillThreshold && req.supports_arg_spill) {
                     QString temp_dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
                     QString temp_path =
                         temp_dir + "/fincept_arg_" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".json";
                     QFile tf(temp_path);
                     if (tf.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                        // 0600 BEFORE the write. TempLocation is /tmp on Linux and
+                        // macOS, where the default umask leaves the file 0644 —
+                        // world-readable. Spilled payloads routinely carry LLM
+                        // provider API keys, the Fincept session key and the MCP
+                        // bridge token, so any local user could read them off disk
+                        // for the lifetime of the file.
+                        tf.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
                         tf.write(arg.toUtf8());
                         tf.close();
                         safe_args << ("@" + temp_path);
@@ -610,14 +753,25 @@ void PythonRunner::start_next() {
                         safe_args << arg; // fallback: pass as-is (may fail, but don't crash)
                     }
                 } else {
+                    if (arg.size() > kArgSpillThreshold) {
+                        // Not spillable. Windows caps the whole command line at
+                        // ~32 KB, so this can still fail to start — the fix is to
+                        // move the payload to run()'s `stdin_data`, not to spill.
+                        LOG_WARN("Python", QString("Script %1 passed a %2 KB argument on argv (no @file support) — "
+                                                   "move this payload to stdin")
+                                               .arg(req.script)
+                                               .arg(arg.size() / 1024));
+                    }
                     safe_args << arg;
                 }
             }
             full_args.append(safe_args);
-            // Store spilled paths so we can clean them up if the process errors out
-            // (Python scripts clean them up on success via resolve_arg)
+            // Store spilled paths so BOTH the finished and errorOccurred handlers
+            // can sweep them. Scripts are supposed to delete the file in
+            // resolve_arg(), but we must not depend on that — see the comment in
+            // the finished handler.
             if (!spilled_files.isEmpty()) {
-                // Attach to process via dynamic property for cleanup in error handler
+                // Attach to process via dynamic property for cleanup in both handlers
                 proc->setProperty("spilled_files", QVariant::fromValue(spilled_files));
             }
         }
@@ -698,7 +852,8 @@ void PythonRunner::start_next() {
         auto script_name = std::move(req.script);
 
         connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-                [this, proc, cb, handled, script_name, is_code, temp_file](int exit_code, QProcess::ExitStatus) {
+                [this, proc, cb, handled, script_name, is_code, temp_file, expect_json = req.expect_json](
+                    int exit_code, QProcess::ExitStatus) {
                     if (handled->exchange(true))
                         return; // errorOccurred already handled this proc
                     // Collect any remaining buffered data
@@ -713,6 +868,17 @@ void PythonRunner::start_next() {
                     QString stderr_str = QString::fromUtf8(bufs.stderr_buf);
 
                     proc_buffers_.remove(proc);
+
+                    // Clean up any spilled arg temp files. The @file convention says
+                    // the script deletes them, but that only holds when the script
+                    // actually reached its resolve_arg() (it may have exited early,
+                    // crashed, or been handed the file for an argument it ignores).
+                    // Only errorOccurred used to sweep these, so every *successful*
+                    // spilling call leaked one temp file — containing the payload —
+                    // into TempLocation for the life of the machine.
+                    for (const QString& f : proc->property("spilled_files").toStringList())
+                        QFile::remove(f);
+
                     proc->deleteLater();
 
                     // Clean up temp file for inline code
@@ -729,11 +895,45 @@ void PythonRunner::start_next() {
                         result.output = std::move(stdout_str);
                         result.error = std::move(stderr_str);
                     } else {
-                        // For scripts: extract JSON from output
+                        // For scripts: extract JSON from output.
+                        //
+                        // Success used to be `exit_code == 0 && !json_out.isEmpty()`,
+                        // which laundered two distinct failures into empty success:
+                        //   * a script printing {"error": "rate limited"} and exiting 0
+                        //   * extract_json's fallback returning an UNBALANCED fragment
+                        //     (first bracket → EOF) that never parses
+                        // Callers then saw success-with-no-rows and rendered a blank
+                        // screen instead of falling back to cached data.
                         QString json_out = extract_json(stdout_str);
-                        result.success = (exit_code == 0 && !json_out.isEmpty());
-                        result.output = json_out.isEmpty() ? std::move(stdout_str) : std::move(json_out);
+                        result.output = json_out.isEmpty() ? stdout_str : json_out;
                         result.error = std::move(stderr_str);
+                        result.success = (exit_code == 0);
+
+                        if (expect_json) {
+                            QJsonParseError pe{};
+                            const QJsonDocument doc = QJsonDocument::fromJson(json_out.toUtf8(), &pe);
+                            const bool parsed = !json_out.isEmpty() && pe.error == QJsonParseError::NoError;
+
+                            if (result.success && !parsed) {
+                                result.success = false;
+                                if (result.error.isEmpty()) {
+                                    result.error = json_out.isEmpty()
+                                                       ? QStringLiteral("script produced no JSON payload")
+                                                       : QStringLiteral("script produced malformed JSON: %1")
+                                                             .arg(pe.errorString());
+                                }
+                            }
+
+                            // A script-level {"error": ...} envelope is a failure even
+                            // on exit 0 — and on a NON-zero exit it is the only useful
+                            // diagnostic, because result.error is stderr and these
+                            // scripts write their message to stdout. ~412 sites do this.
+                            QString envelope;
+                            if (parsed && extract_error_envelope(doc, &envelope)) {
+                                result.success = false;
+                                result.error = envelope;
+                            }
+                        }
                     }
 
                     if (!result.success && !is_code) {
@@ -778,11 +978,52 @@ void PythonRunner::start_next() {
                                .arg(python_exe)
                                .arg(script_path));
         proc->start(python_exe, full_args);
-        // NOTE: no runaway-kill watchdog here on purpose — several scripts run
-        // legitimately for minutes (vision_quant/setup_index.py CNN training,
-        // long backtests, some analytics). Reaping a hung subprocess needs a
-        // per-script timeout policy (e.g. driven by ToolDef::default_timeout_ms),
-        // not a blanket kill. Tracked as deferred in docs/RELEASE_BUGS_2026-07-06.md.
+
+        // Secret / large payloads arrive on stdin instead of argv. QProcess
+        // buffers the write until the channel is actually open, so this is safe
+        // immediately after start() and needs no waitForStarted() (P1).
+        //
+        // The close is GATED on non-empty stdin_data on purpose. Every existing
+        // caller passes nothing and none of them writes to the child's stdin, so
+        // leaving the channel untouched in that case keeps the streaming
+        // (on_line) and daemon-fallback paths byte-for-byte as they are. Only a
+        // caller that opts into stdin gets the EOF it is waiting for.
+        if (!req.stdin_data.isEmpty()) {
+            proc->write(req.stdin_data);
+            proc->closeWriteChannel();
+        }
+
+        // Runaway-kill watchdog.
+        //
+        // This used to be deliberately absent, on the reasoning that several
+        // scripts legitimately run for minutes. True — but the consequence was
+        // that a script blocked on a socket held one of only max_concurrent_ (3)
+        // slots FOREVER, so three hangs silently killed every Python-backed
+        // feature in the terminal until restart, with no error surfaced. The
+        // supposed cover in mcp/tools/PythonTools.cpp resolves the promise, never
+        // the QProcess, so the slot stayed occupied either way.
+        //
+        // The objection is answered by the budget being per-script-tree rather
+        // than blanket (default_timeout_for_script: 60 min for training/backtest/
+        // agent trees, 5 min otherwise), and by callers being able to override or
+        // disable it via RunOptions::timeout_ms.
+        //
+        // kill() drives the normal errorOccurred/finished path, so the slot is
+        // released and the caller gets a real failure instead of silence.
+        if (req.timeout_ms > 0) {
+            auto* watchdog = new QTimer(proc);
+            watchdog->setSingleShot(true);
+            watchdog->setInterval(req.timeout_ms);
+            const QString wd_script = req.script;
+            const int wd_budget = req.timeout_ms;
+            connect(watchdog, &QTimer::timeout, proc, [proc, wd_script, wd_budget]() {
+                if (proc->state() == QProcess::NotRunning)
+                    return;
+                LOG_ERROR("Python", QString("Killing %1 — exceeded %2 ms watchdog budget").arg(wd_script).arg(wd_budget));
+                proc->kill();
+            });
+            watchdog->start();
+        }
     }
 }
 

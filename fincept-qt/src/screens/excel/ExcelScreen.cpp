@@ -7,6 +7,7 @@
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QColor>
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
@@ -25,7 +26,11 @@
 
 #ifdef FINCEPT_HAS_QXLSX
 #    include <xlsxdocument.h>
+#    include <xlsxformat.h>
 #endif
+
+#include <QPointer>
+#include <QSet>
 
 namespace fincept::screens {
 
@@ -318,36 +323,36 @@ void ExcelScreen::on_import() {
         w->deleteLater();
     }
 
-    // Every cell becomes a heap-allocated SpreadsheetItem, so an unbounded
-    // dimension (a stray value in row 1,000,000) would allocate tens of millions
-    // of items and hang the UI. Cap the import window.
+    // The import window bounds BOTH the xlsx.read() calls and the grid we build
+    // from them, so it has to stay something a grid can plausibly show. The old
+    // 20 000 × 512 window was 10.2M cells — a cap that itself caused the hang it
+    // was meant to prevent. 64 columns is already past "BL" in Excel lettering;
+    // anything wider is a data dump, not a spreadsheet.
     constexpr int kMaxImportRows = 20000;
-    constexpr int kMaxImportCols = 512;
+    constexpr int kMaxImportCols = 64;
     bool truncated = false;
 
     for (const auto& name : sheet_names) {
         xlsx.selectSheet(name);
 
-        // Determine dimensions
-        auto dim = xlsx.dimension();
-        int max_row = std::max(dim.lastRow(), 100);
-        int max_col = std::max(dim.lastColumn(), 26);
-        if (max_row > kMaxImportRows) {
-            max_row = kMaxImportRows;
+        // Read the sheet's USED range only. Padding out to a minimum 100 × 26
+        // grid here meant every read loop did at least 2 600 xlsx.read() calls
+        // for cells the file doesn't have; SpreadsheetWidget pads the visible
+        // grid to that minimum itself, without touching the file.
+        const auto dim = xlsx.dimension();
+        int data_rows = std::clamp(dim.lastRow(), 0, kMaxImportRows);
+        int data_cols = std::clamp(dim.lastColumn(), 0, kMaxImportCols);
+        if (dim.lastRow() > kMaxImportRows || dim.lastColumn() > kMaxImportCols)
             truncated = true;
-        }
-        if (max_col > kMaxImportCols) {
-            max_col = kMaxImportCols;
-            truncated = true;
-        }
 
-        auto* sheet = new SpreadsheetWidget(name, max_row, max_col, sheet_tabs_);
+        auto* sheet =
+            new SpreadsheetWidget(name, std::max(data_rows, 100), std::max(data_cols, 26), sheet_tabs_);
 
         // Load data
-        QVector<QVector<QString>> cells(max_row);
-        for (int r = 0; r < max_row; ++r) {
-            cells[r].resize(max_col);
-            for (int c = 0; c < max_col; ++c) {
+        QVector<QVector<QString>> cells(data_rows);
+        for (int r = 0; r < data_rows; ++r) {
+            cells[r].resize(data_cols);
+            for (int c = 0; c < data_cols; ++c) {
                 auto cell = xlsx.read(r + 1, c + 1); // QXlsx is 1-based
                 cells[r][c] = cell.isValid() ? cell.toString() : "";
             }
@@ -389,49 +394,260 @@ void ExcelScreen::on_import() {
 // Export (XLSX via QXlsx)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── XLSX writing ────────────────────────────────────────────────────────────
+// Data is snapshotted out of the widgets before any dialog opens (see
+// on_export), so this works on plain values and touches no UI state.
+
+struct ExcelSheetSnapshot {
+    QString name;
+    QVector<QVector<QString>> cells;
+};
+
+#ifdef FINCEPT_HAS_QXLSX
+
+// Excel sheet-name rules: 1-31 chars, none of []:*?/\, and unique per workbook.
+// A name that violates these makes addSheet/renameSheet fail, after which the
+// writes land on whatever sheet happened to be current — silently exporting one
+// sheet's data under another's name.
+static QString excel_safe_sheet_name(QString name, QSet<QString>& taken) {
+    static const QString kIllegal = QStringLiteral("[]:*?/\\");
+    for (const QChar& ch : kIllegal)
+        name.replace(ch, QLatin1Char('_'));
+    name = name.trimmed().left(31);
+    if (name.isEmpty())
+        name = QStringLiteral("Sheet");
+
+    QString candidate = name;
+    int n = 2;
+    while (taken.contains(candidate.toLower())) {
+        const QString suffix = QStringLiteral("_") + QString::number(n++);
+        candidate = name.left(31 - suffix.size()) + suffix;
+    }
+    taken.insert(candidate.toLower());
+    return candidate;
+}
+
+// Last row/col holding anything. get_data() pads every sheet to at least
+// 100x26, so without trimming a 12-row model exports as a 100-row sheet with
+// column widths and header styling stretched across empty space.
+static void excel_used_extent(const QVector<QVector<QString>>& cells, int& last_row, int& last_col) {
+    last_row = -1;
+    last_col = -1;
+    for (int r = 0; r < cells.size(); ++r) {
+        for (int c = 0; c < cells[r].size(); ++c) {
+            if (!cells[r][c].trimmed().isEmpty()) {
+                last_row = std::max(last_row, r);
+                last_col = std::max(last_col, c);
+            }
+        }
+    }
+}
+
+static bool write_snapshots_to_xlsx(QXlsx::Document& xlsx, const QVector<ExcelSheetSnapshot>& snapshots) {
+    using QXlsx::Format;
+
+    // Header: white on the terminal's accent, bold, centred.
+    Format header_fmt;
+    header_fmt.setFontBold(true);
+    header_fmt.setFontColor(QColor(Qt::white));
+    header_fmt.setPatternBackgroundColor(QColor(kAccent()));
+    header_fmt.setHorizontalAlignment(Format::AlignHCenter);
+    header_fmt.setBorderStyle(Format::BorderThin);
+
+    // Row label / section heading: bold, left.
+    Format label_fmt;
+    label_fmt.setFontBold(true);
+
+    // Numbers: thousands separator, 2dp, negatives in parentheses — the
+    // convention finance reads by default.
+    Format num_fmt;
+    num_fmt.setNumberFormat(QStringLiteral("#,##0.00;(#,##0.00)"));
+    num_fmt.setHorizontalAlignment(Format::AlignRight);
+
+    // Rates are stored as decimals (0.105), so a percent format is what makes
+    // them readable — "10.5%" rather than "0.11".
+    Format pct_fmt;
+    pct_fmt.setNumberFormat(QStringLiteral("0.0%"));
+    pct_fmt.setHorizontalAlignment(Format::AlignRight);
+
+    Format price_fmt;
+    price_fmt.setNumberFormat(QStringLiteral("$#,##0.00"));
+    price_fmt.setHorizontalAlignment(Format::AlignRight);
+
+    // Counts (shares, years, periods) — no decimals, no currency.
+    Format count_fmt;
+    count_fmt.setNumberFormat(QStringLiteral("#,##0.##"));
+    count_fmt.setHorizontalAlignment(Format::AlignRight);
+
+    QSet<QString> taken_names;
+    bool wrote_any = false;
+
+    for (int s = 0; s < snapshots.size(); ++s) {
+        const ExcelSheetSnapshot& snap = snapshots[s];
+        const QString name = excel_safe_sheet_name(snap.name, taken_names);
+
+        // First sheet: rename the default one. Later sheets: add. Both are
+        // checked — a silent failure here is what sends writes to the wrong
+        // sheet. sheetNames() is never assumed non-empty.
+        if (s == 0) {
+            const QStringList names = xlsx.sheetNames();
+            if (names.isEmpty()) {
+                if (!xlsx.addSheet(name))
+                    continue;
+            } else {
+                xlsx.selectSheet(names.first());
+                if (names.first() != name)
+                    xlsx.renameSheet(names.first(), name);
+            }
+        } else if (!xlsx.addSheet(name)) {
+            LOG_WARN("ExcelScreen", "Export: could not add sheet " + name + " — skipped");
+            continue;
+        }
+
+        int last_row = -1;
+        int last_col = -1;
+        excel_used_extent(snap.cells, last_row, last_col);
+        if (last_row < 0) {
+            wrote_any = true; // an empty sheet is still a valid sheet
+            continue;
+        }
+
+        // Header row = first row with content, if it is text rather than
+        // numbers (a numeric first row is data, not a header).
+        int header_row = -1;
+        for (int r = 0; r <= last_row && header_row < 0; ++r) {
+            for (int c = 0; c <= last_col; ++c) {
+                const QString v = (c < snap.cells[r].size()) ? snap.cells[r][c].trimmed() : QString();
+                if (v.isEmpty())
+                    continue;
+                bool numeric = false;
+                v.toDouble(&numeric);
+                header_row = (numeric || v.startsWith(QLatin1Char('='))) ? -2 : r;
+                break;
+            }
+        }
+
+        QVector<int> col_width(last_col + 1, 10);
+
+        for (int r = 0; r <= last_row; ++r) {
+            // Row-level number format, chosen from the row's label in column A.
+            // A single blanket "#,##0.00" is wrong for half a financial model:
+            // a WACC of 0.105 rendered as "0.11" and a 3% terminal growth as
+            // "0.03", losing both precision and meaning. The label is the only
+            // signal available for what a row actually holds.
+            const QString label = (!snap.cells[r].isEmpty()) ? snap.cells[r][0].trimmed().toLower() : QString();
+            const Format* row_fmt = &num_fmt;
+            if (label.contains(QLatin1String("rate")) || label.contains(QLatin1String("growth")) ||
+                label.contains(QLatin1String("margin")) || label.contains(QLatin1String("wacc")) ||
+                label.contains(QLatin1String("yield")) || label.contains(QLatin1String("upside")) ||
+                label.contains(QLatin1String("downside")) || label.startsWith(QLatin1Char('%')) ||
+                label.contains(QLatin1String("% of"))) {
+                row_fmt = &pct_fmt;
+            } else if (label.contains(QLatin1String("price")) || label.contains(QLatin1String("per share"))) {
+                row_fmt = &price_fmt;
+            } else if (label.contains(QLatin1String("shares")) || label.contains(QLatin1String("years")) ||
+                       label.contains(QLatin1String("period"))) {
+                row_fmt = &count_fmt;
+            }
+
+            for (int c = 0; c <= last_col; ++c) {
+                const QString val = (c < snap.cells[r].size()) ? snap.cells[r][c] : QString();
+                if (val.trimmed().isEmpty())
+                    continue;
+
+                // Width from what the cell DISPLAYS, not from its source. A
+                // formula's text is far longer than its result, so sizing on it
+                // pushed every column to the 52-char cap on a model whose widest
+                // visible value was six digits.
+                const int display_len =
+                    val.startsWith(QLatin1Char('=')) ? 12 : static_cast<int>(val.size()) + 2;
+                col_width[c] = std::max(col_width[c], display_len);
+
+                if (r == header_row) {
+                    xlsx.write(r + 1, c + 1, val, header_fmt);
+                    continue;
+                }
+
+                // Formula first — "=1+2" also parses as text, and a formula
+                // written as a string exports as a literal instead of a live cell.
+                if (val.startsWith(QLatin1Char('='))) {
+                    xlsx.write(r + 1, c + 1, val, *row_fmt);
+                    continue;
+                }
+
+                // Percentages authored as text ("12.5%") become real percentages.
+                if (val.endsWith(QLatin1Char('%'))) {
+                    bool pct_ok = false;
+                    const double pct = val.left(val.size() - 1).toDouble(&pct_ok);
+                    if (pct_ok) {
+                        xlsx.write(r + 1, c + 1, pct / 100.0, pct_fmt);
+                        continue;
+                    }
+                }
+
+                bool ok = false;
+                const double d = val.toDouble(&ok);
+                // qIsFinite: "nan"/"inf" parse as doubles and would write XML
+                // Excel refuses to open.
+                if (ok && qIsFinite(d)) {
+                    xlsx.write(r + 1, c + 1, d, *row_fmt);
+                } else if (c == 0) {
+                    xlsx.write(r + 1, c + 1, val, label_fmt); // first column reads as labels
+                } else {
+                    xlsx.write(r + 1, c + 1, val);
+                }
+            }
+        }
+
+        for (int c = 0; c <= last_col; ++c)
+            xlsx.setColumnWidth(c + 1, std::min(col_width[c], 52));
+        wrote_any = true;
+    }
+
+    return wrote_any;
+}
+
+#endif // FINCEPT_HAS_QXLSX
+
 void ExcelScreen::on_export() {
 #ifdef FINCEPT_HAS_QXLSX
+    // ── Snapshot BEFORE the file dialog ───────────────────────────────────
+    // getSaveFileName runs a nested event loop. Anything queued on the UI
+    // thread runs inside it — including MCP tool bodies, which can call
+    // navigate() and tear down or rebuild the Excel dock. The old code read
+    // sheet_tabs_ and every SpreadsheetWidget* AFTER the dialog returned, so a
+    // dock rebuild mid-dialog left it walking freed widgets: the observed crash
+    // was a read of address 0x8 (a null QObject's d_ptr) inside Qt6Core during
+    // export. Copying the data out first means the dialog can't invalidate
+    // anything we still need.
+    QVector<ExcelSheetSnapshot> snapshots;
+    if (sheet_tabs_) {
+        for (int i = 0; i < sheet_tabs_->count(); ++i) {
+            auto* sheet = qobject_cast<SpreadsheetWidget*>(sheet_tabs_->widget(i));
+            if (!sheet)
+                continue;
+            snapshots.append({sheet->sheet_name(), sheet->get_data()});
+        }
+    }
+    if (snapshots.isEmpty()) {
+        QMessageBox::warning(this, tr("Export failed"), tr("There is nothing to export."));
+        return;
+    }
+
+    // `this` can still be destroyed while the modal dialog is open; every
+    // member touched after it returns is guarded on the QPointer.
+    QPointer<ExcelScreen> self = this;
     QString path = QFileDialog::getSaveFileName(this, tr("Export as XLSX"), file_name_, tr("Excel Files (*.xlsx)"));
-    if (path.isEmpty())
+    if (!self || path.isEmpty())
         return;
     // QFileDialog on Linux/macOS does not always append the filter suffix.
     if (!path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive))
         path += QLatin1String(".xlsx");
 
     QXlsx::Document xlsx;
-
-    for (int i = 0; i < sheet_tabs_->count(); ++i) {
-        auto* sheet = qobject_cast<SpreadsheetWidget*>(sheet_tabs_->widget(i));
-        if (!sheet)
-            continue;
-
-        if (i > 0)
-            xlsx.addSheet(sheet->sheet_name());
-        else
-            xlsx.selectSheet(xlsx.sheetNames().first());
-
-        // Rename sheet
-        xlsx.renameSheet(xlsx.sheetNames().last(), sheet->sheet_name());
-
-        auto cells = sheet->get_data();
-        for (int r = 0; r < cells.size(); ++r) {
-            for (int c = 0; c < cells[r].size(); ++c) {
-                const QString& val = cells[r][c];
-                if (val.isEmpty())
-                    continue;
-
-                // Write formulas as formulas, numbers as numbers
-                bool ok = false;
-                double d = val.toDouble(&ok);
-                if (ok) {
-                    xlsx.write(r + 1, c + 1, d);
-                } else if (val.startsWith('=')) {
-                    xlsx.write(r + 1, c + 1, val); // QXlsx handles formulas
-                } else {
-                    xlsx.write(r + 1, c + 1, val);
-                }
-            }
-        }
+    if (!write_snapshots_to_xlsx(xlsx, snapshots)) {
+        QMessageBox::warning(this, tr("Export failed"), tr("Could not build the workbook contents."));
+        return;
     }
 
     if (xlsx.saveAs(path)) {
@@ -472,42 +688,55 @@ void ExcelScreen::on_export_csv() {
     if (!sheet)
         return;
 
-    QString path =
-        QFileDialog::getSaveFileName(this, tr("Export CSV"), sheet->sheet_name() + ".csv", tr("CSV Files (*.csv)"));
-    if (path.isEmpty())
-        return;
+    // Snapshot before the dialog — same re-entrancy hazard as on_export: the
+    // modal loop can run queued work that rebuilds the Excel dock and frees
+    // `sheet`. Reading it afterwards is a use-after-free.
+    const QString sheet_name = sheet->sheet_name();
+    const QVector<QVector<QString>> cells = sheet->get_data();
 
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, tr("Export failed"), tr("Could not open file for writing:\n%1").arg(path));
+    QPointer<ExcelScreen> self = this;
+    QString path = QFileDialog::getSaveFileName(this, tr("Export CSV"), sheet_name + ".csv", tr("CSV Files (*.csv)"));
+    if (!self || path.isEmpty())
         return;
-    }
-
-    QTextStream out(&file);
-    out.setEncoding(QStringConverter::Utf8);
-    auto cells = sheet->get_data();
+    if (!path.endsWith(QLatin1String(".csv"), Qt::CaseInsensitive))
+        path += QLatin1String(".csv");
 
     // Find the last row/col with data to avoid huge trailing empty rows
-    int last_row = 0;
-    int last_col = 0;
+    int last_row = -1;
+    int last_col = -1;
     for (int r = 0; r < cells.size(); ++r) {
         for (int c = 0; c < cells[r].size(); ++c) {
-            if (!cells[r][c].isEmpty()) {
+            if (!cells[r][c].trimmed().isEmpty()) {
                 last_row = std::max(last_row, r);
                 last_col = std::max(last_col, c);
             }
         }
     }
 
-    for (int r = 0; r <= last_row; ++r) {
-        QStringList row;
-        for (int c = 0; c <= last_col; ++c) {
-            QString val = (c < cells[r].size()) ? cells[r][c] : "";
-            if (val.contains(',') || val.contains('"') || val.contains('\n'))
-                val = "\"" + val.replace("\"", "\"\"") + "\"";
-            row << val;
+    // Scoped so the stream flushes and the file closes BEFORE File Manager
+    // copies it. Previously both were destroyed at end of function — i.e. after
+    // import_file — so the Files tab could receive a truncated copy.
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::warning(this, tr("Export failed"), tr("Could not open file for writing:\n%1").arg(path));
+            return;
         }
-        out << row.join(",") << "\n";
+        QTextStream out(&file);
+        out.setEncoding(QStringConverter::Utf8);
+
+        for (int r = 0; r <= last_row; ++r) {
+            QStringList row;
+            for (int c = 0; c <= last_col; ++c) {
+                QString val = (r < cells.size() && c < cells[r].size()) ? cells[r][c] : QString();
+                if (val.contains(',') || val.contains('"') || val.contains('\n'))
+                    val = "\"" + val.replace("\"", "\"\"") + "\"";
+                row << val;
+            }
+            out << row.join(",") << "\n";
+        }
+        out.flush();
+        file.close();
     }
 
     LOG_INFO("ExcelScreen", QString("Exported CSV to %1").arg(path));

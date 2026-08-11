@@ -1090,8 +1090,8 @@ void NotesScreen::subscribe_mcp_events() {
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("notes.created", on_notes_changed));
-    mcp_event_subs_.append(bus.subscribe("notes.deleted", on_notes_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "notes.created", on_notes_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "notes.deleted", on_notes_changed));
 }
 
 void NotesScreen::unsubscribe_mcp_events() {

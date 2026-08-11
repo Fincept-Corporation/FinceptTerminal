@@ -3,6 +3,7 @@
 #include "mcp/tools/FileManagerTools.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/tools/ExportPathGuard.h"
 #include "services/file_manager/FileManagerService.h"
 
 #include <QDateTime>
@@ -436,31 +437,45 @@ std::vector<ToolDef> get_file_manager_tools() {
     {
         ToolDef t;
         t.name = "download_managed_file";
-        t.description = "Copy a managed file from internal storage to an external path on disk.";
+        t.description = "Copy a managed file out of internal storage into the export directory. "
+                        "'destination_path' is a filename (or relative path) inside that directory — "
+                        "absolute paths elsewhere on disk are refused.";
         t.category = "file_manager";
         t.is_destructive = true;
-        t.input_schema.properties =
-            QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Managed file id"}}},
-                        {"destination_path",
-                         QJsonObject{{"type", "string"}, {"description", "Absolute output path. Parent must exist."}}}};
+        t.auth_required = AuthLevel::ExplicitConfirm;
+        t.input_schema.properties = QJsonObject{
+            {"id", QJsonObject{{"type", "string"}, {"description", "Managed file id"}}},
+            {"destination_path",
+             QJsonObject{{"type", "string"},
+                         {"description", "Output filename inside the export directory, e.g. 'report.pdf'"}}}};
         t.input_schema.required = {"id", "destination_path"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const QString id = args["id"].toString().trimmed();
-            const QString dest = args["destination_path"].toString().trimmed();
-            if (id.isEmpty() || dest.isEmpty())
+            const QString requested = args["destination_path"].toString().trimmed();
+            if (id.isEmpty() || requested.isEmpty())
                 return ToolResult::fail("Missing 'id' or 'destination_path'");
+
+            // Confine before touching the filesystem. The pre-emptive
+            // QFile::remove() that used to sit here (QFile::copy refuses to
+            // overwrite) made this tool an arbitrary-delete primitive for any
+            // path the model could name — it deleted first and only then
+            // discovered the copy would fail.
+            const auto dest = resolve_export_path(requested);
+            if (!dest.ok())
+                return ToolResult::fail(dest.error);
 
             auto& svc = services::FileManagerService::instance();
             auto f = svc.find_by_id(id);
             if (f.id.isEmpty())
                 return ToolResult::fail("File not found: " + id);
             const QString src = svc.full_path(f.name);
-            QFile::remove(dest);
-            if (!QFile::copy(src, dest))
-                return ToolResult::fail("Copy failed");
+            if (src.isEmpty())
+                return ToolResult::fail("Managed file has no readable path: " + id);
+            if (!QFile::copy(src, dest.path))
+                return ToolResult::fail("Copy failed — a file already exists at that name, or it is not writable");
             return ToolResult::ok("File downloaded", QJsonObject{
                                                          {"id", id},
-                                                         {"destination_path", dest},
+                                                         {"destination_path", dest.path},
                                                          {"size", f.size},
                                                      });
         };

@@ -213,6 +213,32 @@ void AiChatBubble::build_chat_panel() {
     scroll_area_->setWidget(msg_container_);
     vl->addWidget(scroll_area_, 1);
 
+    // Follow the stream — see the same handler in AiChatScreen_Layout.cpp. A
+    // timer-based setValue(maximum()) reads the maximum from before the growing
+    // widget re-laid out, so it always trails the newest content; rangeChanged
+    // fires after the layout settles.
+    if (auto* vbar = scroll_area_->verticalScrollBar()) {
+        connect(vbar, &QScrollBar::rangeChanged, this, [this](int, int max) {
+            if (!stick_to_bottom_ || !scroll_area_)
+                return;
+            auto* sb = scroll_area_->verticalScrollBar();
+            if (!sb)
+                return;
+            programmatic_scroll_ = true;
+            sb->setValue(max);
+            programmatic_scroll_ = false;
+        });
+        connect(vbar, &QScrollBar::valueChanged, this, [this](int v) {
+            if (programmatic_scroll_ || !scroll_area_)
+                return;
+            auto* sb = scroll_area_->verticalScrollBar();
+            if (!sb)
+                return;
+            constexpr int kAtBottomSlackPx = 48;
+            stick_to_bottom_ = (v >= sb->maximum() - kAtBottomSlackPx);
+        });
+    }
+
     build_welcome_widget();
     show_welcome_if_empty();
 
@@ -523,6 +549,10 @@ void AiChatBubble::on_send() {
     hide_welcome();
 
     add_bubble("user", text);
+    last_tool_label_.clear(); // fresh run of tool lines for this message
+    // Snapshot the PRIOR turns — chat_streaming appends `text` as the trailing
+    // user message itself, so appending here first duplicated it on the wire.
+    std::vector<ai_chat::ConversationMessage> hist_copy = chat_history_;
     chat_history_.push_back({"user", text});
 
     streaming_ = true;
@@ -538,7 +568,7 @@ void AiChatBubble::on_send() {
     // category so the model can't yank the user out of their current screen
     // by calling navigate_to_tab / list_tabs / get_current_tab.
     ai_chat::LlmService::instance().chat_streaming(
-        text, chat_history_,
+        text, hist_copy,
         [self, first_chunk](const QString& chunk, bool done) {
             QMetaObject::invokeMethod(
                 qApp,
@@ -568,6 +598,22 @@ void AiChatBubble::on_stream_chunk(const QString& chunk, bool done) {
     QLabel* bubble = streaming_bubble_;
     if (!bubble)
         return;
+    // Tool progress: no room for a separate card here, so render it inline —
+    // but strip the sentinel, which is a routing marker, not text. Consecutive
+    // repeats are dropped rather than counted: the compact bubble can't rewrite
+    // an already-rendered line, and ~45 identical set_excel_cell lines would
+    // bury the conversation.
+    const QString tool_prefix = ai_chat::tool_stream_prefix();
+    if (chunk.startsWith(tool_prefix)) {
+        const QString label = chunk.mid(tool_prefix.size()).trimmed();
+        if (label.isEmpty() || label == last_tool_label_)
+            return;
+        last_tool_label_ = label;
+        fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(bubble, QStringLiteral("• ") + label +
+                                                                               QStringLiteral("\n"));
+        scroll_to_bottom();
+        return;
+    }
     if (!chunk.isEmpty()) {
         fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(bubble, chunk);
         scroll_to_bottom();
@@ -629,9 +675,17 @@ QLabel* AiChatBubble::add_streaming_bubble() {
 }
 
 void AiChatBubble::scroll_to_bottom() {
+    // Re-arm following; the rangeChanged handler does the real work once the
+    // layout settles. This nudge covers content changes that leave the range
+    // untouched.
+    stick_to_bottom_ = true;
     QTimer::singleShot(30, this, [this]() {
-        if (scroll_area_ && scroll_area_->verticalScrollBar())
-            scroll_area_->verticalScrollBar()->setValue(scroll_area_->verticalScrollBar()->maximum());
+        if (!scroll_area_ || !scroll_area_->verticalScrollBar())
+            return;
+        auto* sb = scroll_area_->verticalScrollBar();
+        programmatic_scroll_ = true;
+        sb->setValue(sb->maximum());
+        programmatic_scroll_ = false;
     });
 }
 

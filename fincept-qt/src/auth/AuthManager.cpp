@@ -132,35 +132,55 @@ void AuthManager::load_session() {
 void AuthManager::migrate_legacy_plaintext_credentials() {
     auto& settings = fincept::SettingsRepository::instance();
     auto& secure = fincept::SecureStorage::instance();
-    bool migrated = false;
+
+    // Two independent sources, tracked separately: each one only authorises the
+    // purge of the row it actually read. Collapsing them into a single
+    // `migrated` flag let a secret found in the session blob authorise deleting
+    // the *plaintext key row we never managed to read* — one transient DB error
+    // then destroyed the user's only copy of the API key, irrecoverably.
+    bool blob_secrets_migrated = false;  // source 1: "fincept_session"
+    bool legacy_row_migrated = false;    // source 2: "fincept_api_key"
 
     // 1. Secrets that came in via the legacy plaintext "fincept_session" blob.
     if (!session_.api_key.isEmpty()) {
         secure.store("api_key", session_.api_key);
-        migrated = true;
+        blob_secrets_migrated = true;
     }
     if (!session_.session_token.isEmpty()) {
         secure.store("session_token", session_.session_token);
-        migrated = true;
+        blob_secrets_migrated = true;
     }
 
     // 2. The standalone plaintext "fincept_api_key" row written by older builds.
+    //    A read error is NOT "the row is absent" — the row may still hold the
+    //    only copy of the key, so the removal below stays gated on a successful
+    //    read.
     auto legacy_key = settings.get("fincept_api_key");
-    if (legacy_key.is_ok() && !legacy_key.value().isEmpty()) {
+    if (legacy_key.is_err()) {
+        LOG_ERROR("Auth",
+                  QString("settings read failed for 'fincept_api_key' — leaving the legacy plaintext row untouched "
+                          "(it may hold the only copy of the key): %1")
+                      .arg(QString::fromStdString(legacy_key.error())));
+    } else if (!legacy_key.value().isEmpty()) {
         if (session_.api_key.isEmpty())
             session_.api_key = legacy_key.value();
         secure.store("api_key", legacy_key.value());
-        migrated = true;
+        legacy_row_migrated = true;
     }
 
-    if (migrated) {
-        // Rewrite fincept_session without secrets and drop the plaintext key row
-        // so the cleartext copies no longer exist on disk for this install.
+    // Rewrite fincept_session without secrets only when the blob actually
+    // carried some — a source-2-only migration has nothing to scrub there, and
+    // writing a session we may have failed to load would drop its non-secret
+    // fields too.
+    if (blob_secrets_migrated) {
         QJsonDocument doc(session_.to_persisted_json());
         settings.set("fincept_session", QString::fromUtf8(doc.toJson(QJsonDocument::Compact)), "auth");
-        settings.remove("fincept_api_key");
-        LOG_INFO("Auth", "Migrated legacy plaintext credentials into SecureStorage and purged settings rows");
     }
+    if (legacy_row_migrated)
+        settings.remove("fincept_api_key");
+
+    if (blob_secrets_migrated || legacy_row_migrated)
+        LOG_INFO("Auth", "Migrated legacy plaintext credentials into SecureStorage and purged settings rows");
 }
 
 QString AuthManager::fincept_api_key() const {

@@ -1,6 +1,7 @@
 // src/algo_engine/PositionManager.cpp
 #include "algo_engine/PositionManager.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QMutexLocker>
 #include <QUuid>
@@ -252,9 +253,13 @@ bool PositionManager::is_paused() const {
 }
 
 bool PositionManager::validate_order_value(double qty, double price) const {
+    return validate_order_notional(qty * price);
+}
+
+bool PositionManager::validate_order_notional(double notional) const {
     if (max_order_value_ <= 0)
         return true;
-    return (qty * price) <= max_order_value_;
+    return std::abs(notional) <= max_order_value_;
 }
 
 AlgoPosition PositionManager::position() const {
@@ -272,11 +277,33 @@ RiskState PositionManager::risk_state() const {
     return risk_;
 }
 
-void PositionManager::reset_daily() {
-    QMutexLocker lock(&mutex_);
+void PositionManager::reset_daily_locked() {
     risk_.daily_pnl = 0;
     risk_.paused_by_loss_limit = false;
     risk_.day_start_epoch = QDateTime::currentMSecsSinceEpoch();
+}
+
+void PositionManager::reset_daily() {
+    QMutexLocker lock(&mutex_);
+    reset_daily_locked();
+}
+
+bool PositionManager::reset_daily_if_new_day() {
+    QMutexLocker lock(&mutex_);
+    if (risk_.day_start_epoch <= 0) {
+        // Never stamped (restored state / defensive) — adopt today as day one.
+        risk_.day_start_epoch = QDateTime::currentMSecsSinceEpoch();
+        return false;
+    }
+    // day_start_epoch is stamped with currentMSecsSinceEpoch(), so the matching
+    // trading date is the LOCAL date of that instant. Compare dates, not a fixed
+    // 24h window, so the reset lands on the day boundary regardless of when the
+    // deployment was started.
+    const QDate start_day = QDateTime::fromMSecsSinceEpoch(risk_.day_start_epoch).date();
+    if (start_day >= QDate::currentDate())
+        return false;
+    reset_daily_locked();
+    return true;
 }
 
 // ── Multi-leg basket methods (P3) ───────────────────────────────────────────

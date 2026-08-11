@@ -29,12 +29,84 @@
 #include <QJsonDocument>
 #include <QPointer>
 #include <QProcess>
+#include <QTimer>
 #include <QUuid>
 #include <QVariant>
 
+#include <atomic>
 #include <memory>
 
 namespace fincept::services {
+
+namespace {
+// How long run_python_light() waits for PythonRunner's async interpreter
+// detection before giving up and failing the call.
+constexpr int kPythonReadyGraceMs = 30000;
+
+// Default excludes applied to every agent: UI-driving tools (navigation /
+// system / settings), the recursive chat tools (ai-chat), and the tool
+// discovery meta tools. Non-negotiable — per-agent config may only ADD to
+// them. TerminalMcpBridge enforces the same set at dispatch.
+const QStringList& default_tool_excludes() {
+    static const QStringList kCats = {QStringLiteral("navigation"), QStringLiteral("system"),
+                                      QStringLiteral("settings"), QStringLiteral("ai-chat"), QStringLiteral("meta")};
+    return kCats;
+}
+
+/// Resolve the effective tool filter for one agent from its config, merging the
+/// non-negotiable defaults with the agent's own `tool_filter` block.
+///
+/// Pulled out of build_payload so the SAME resolved filter can be handed to the
+/// bridge as a run scope. It used to be inline and reachable only when the
+/// catalog was being built, which meant the filter shaped what the agent was
+/// TOLD about and nothing else.
+///
+/// Supported `tool_filter` keys:
+///   categories[]            — whitelist (empty = all enabled)
+///   exclude_categories[]    — blacklist, ON TOP of the defaults
+///   name_patterns[]         — regex include on tool name
+///   exclude_name_patterns[] — regex exclude on tool name
+///   max_tools (int)         — hard cap on catalog size
+mcp::ToolFilter resolve_tool_filter(const QJsonObject& config) {
+    mcp::ToolFilter filter;
+    filter.exclude_categories = default_tool_excludes();
+
+    const QJsonObject tf = config.value("tool_filter").toObject();
+    if (tf.isEmpty())
+        return filter;
+
+    if (tf.contains("categories")) {
+        filter.categories.clear();
+        for (const auto& v : tf["categories"].toArray())
+            filter.categories.append(v.toString());
+    }
+    if (tf.contains("exclude_categories")) {
+        // User excludes are ADDITIVE on top of defaults — defaults are
+        // non-negotiable (UI tools are never safe for agents).
+        for (const auto& v : tf["exclude_categories"].toArray()) {
+            const QString cat = v.toString().trimmed();
+            if (!cat.isEmpty() && !filter.exclude_categories.contains(cat))
+                filter.exclude_categories.append(cat);
+        }
+    }
+    if (tf.contains("name_patterns")) {
+        for (const auto& v : tf["name_patterns"].toArray()) {
+            const QString p = v.toString().trimmed();
+            if (!p.isEmpty())
+                filter.name_patterns.append(p);
+        }
+    }
+    if (tf.contains("exclude_name_patterns")) {
+        for (const auto& v : tf["exclude_name_patterns"].toArray()) {
+            const QString p = v.toString().trimmed();
+            if (!p.isEmpty())
+                filter.exclude_name_patterns.append(p);
+        }
+    }
+    filter.max_tools = tf.value("max_tools").toInt(0);
+    return filter;
+}
+} // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
@@ -65,9 +137,49 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {
     //     gate non-interactively)
     //   - is_destructive + agent → deny (agents can't show a confirm modal;
     //     opt-in via per-agent config is Phase 5 work)
-    //   - is_destructive + chat  → allow (matches current advisory behaviour
-    //     until the Phase 6.12 modal lands)
+    //   - is_destructive + chat  → allow (subject to the fail-closed
+    //     destructive capability gate McpProvider::check_authorization
+    //     applies BEFORE this checker runs)
     //   - everything else        → allow
+    //
+    // ── The confirmation-modal seam ──────────────────────────────────────────
+    //
+    // The `required >= AuthLevel::Verified` line below is the SINGLE line to
+    // change when the confirmation modal lands. It denies unconditionally, so
+    // the 28 tools declared AuthLevel::ExplicitConfirm are refused on every
+    // path — including for a user who has explicitly granted destructive
+    // capability in Settings → Security. That is deliberate and stays as-is:
+    // "ask the user" cannot be honoured while there is nobody to ask, and
+    // failing closed is the only safe reading of a tool that asked to be
+    // confirmed.
+    //
+    // What it currently blocks, so whoever builds the modal knows the blast
+    // radius:
+    //   - Correctly blocked, and must STAY blocked without an explicit
+    //     per-call confirmation — real money and live credentials:
+    //       live-trading (6): live_place_order, live_smart_order,
+    //         live_cancel_order, live_cancel_all_orders, live_close_position,
+    //         live_close_all_positions
+    //       profile     (1): profile_get_api_key   (returns live key material)
+    //       mcp-servers (6): install_mcp_server_from_marketplace,
+    //         add_mcp_server, remove_mcp_server, start_mcp_server,
+    //         restart_mcp_server, call_external_mcp_tool
+    //         (each spawns or drives an arbitrary local child process)
+    //   - Over-blocked pending the modal — destructive but recoverable, and
+    //     arguably covered by the Settings capability grant alone:
+    //       workspace (7): apply_layout, delete_layout, apply_layout_template,
+    //         restore_last_workspace, delete_workspace_snapshot,
+    //         restore_workspace_snapshot, close_window
+    //       dashboard (3): load_dashboard_layout, apply_dashboard_template,
+    //         clear_dashboard_layout
+    //       agents    (3): delete_agent_config, delete_workflow,
+    //         agent_paper_execute_trade
+    //       excel     (1): delete_excel_sheet
+    //       file_manager (1): download_managed_file
+    //
+    // When the modal exists, replace the line with a call that prompts and
+    // returns the user's verdict. Do NOT relax it to `> Verified` or drop the
+    // ExplicitConfirm level — the 13 tools in the first group depend on it.
     mcp::McpProvider::instance().set_auth_checker([](mcp::AuthLevel required, bool is_destructive) -> bool {
         if (required >= mcp::AuthLevel::Verified)
             return false;
@@ -238,8 +350,21 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
     if (bridge.is_active() && terminal_tools_enabled) {
         if (!enriched_config.contains("terminal_mcp_endpoint"))
             enriched_config["terminal_mcp_endpoint"] = bridge.endpoint();
-        if (!enriched_config.contains("terminal_mcp_token"))
-            enriched_config["terminal_mcp_token"] = bridge.token();
+
+        // Resolve the per-agent filter ONCE, up front — before the catalog is
+        // built and regardless of whether it is built at all. It is both the
+        // catalog shape AND the dispatch policy; a caller that pre-supplied
+        // `terminal_tools` must still be held to it.
+        const mcp::ToolFilter filter = resolve_tool_filter(enriched_config);
+        const bool include_external = enriched_config.value("include_external_mcp").toBool(true);
+
+        if (!enriched_config.contains("terminal_mcp_token")) {
+            // Run-scoped token, not the process token: it carries `filter` to
+            // the bridge so an agent that names a tool its own config excluded
+            // is refused at dispatch, not merely omitted from its catalog.
+            // Retired by run_python_stdin when the agent process exits.
+            enriched_config["terminal_mcp_token"] = bridge.begin_run(filter, include_external);
+        }
         // Capability token — only injected when the agent config opts in.
         // Without this header on each request the bridge will block any
         // `is_destructive=true` tool call even if the agent's LLM tries one.
@@ -247,53 +372,8 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
             !enriched_config.contains("terminal_mcp_destructive_token")) {
             enriched_config["terminal_mcp_destructive_token"] = bridge.destructive_token();
         }
-        if (!enriched_config.contains("terminal_tools")) {
-            // Per-agent override via config["tool_filter"] supports:
-            //   categories[]              — whitelist (empty = all enabled)
-            //   exclude_categories[]      — blacklist, ON TOP of defaults below
-            //   name_patterns[]           — regex include on tool name
-            //   exclude_name_patterns[]   — regex exclude on tool name
-            //   max_tools (int)           — hard cap
-            // Default excludes UI-only and recursive categories so agents
-            // don't drive the UI or call the chat LLM.
-            mcp::ToolFilter filter;
-            const QStringList default_excludes = {"navigation", "system", "settings", "ai-chat", "meta"};
-            filter.exclude_categories = default_excludes;
-            const QJsonObject tf = enriched_config.value("tool_filter").toObject();
-            if (!tf.isEmpty()) {
-                if (tf.contains("categories")) {
-                    filter.categories.clear();
-                    for (const auto& v : tf["categories"].toArray())
-                        filter.categories.append(v.toString());
-                }
-                if (tf.contains("exclude_categories")) {
-                    // User excludes are ADDITIVE on top of defaults — defaults
-                    // are non-negotiable (UI tools are never safe for agents).
-                    for (const auto& v : tf["exclude_categories"].toArray()) {
-                        const QString cat = v.toString().trimmed();
-                        if (!cat.isEmpty() && !filter.exclude_categories.contains(cat))
-                            filter.exclude_categories.append(cat);
-                    }
-                }
-                if (tf.contains("name_patterns")) {
-                    for (const auto& v : tf["name_patterns"].toArray()) {
-                        const QString p = v.toString().trimmed();
-                        if (!p.isEmpty())
-                            filter.name_patterns.append(p);
-                    }
-                }
-                if (tf.contains("exclude_name_patterns")) {
-                    for (const auto& v : tf["exclude_name_patterns"].toArray()) {
-                        const QString p = v.toString().trimmed();
-                        if (!p.isEmpty())
-                            filter.exclude_name_patterns.append(p);
-                    }
-                }
-                filter.max_tools = tf.value("max_tools").toInt(0);
-            }
-            const bool include_external = enriched_config.value("include_external_mcp").toBool(true);
+        if (!enriched_config.contains("terminal_tools"))
             enriched_config["terminal_tools"] = bridge.tool_definitions(filter, include_external);
-        }
 
         // Dry-run mode is opt-in and read by the Python TerminalToolkit. When
         // true, the toolkit short-circuits each call and returns a synthetic
@@ -311,37 +391,53 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
     return payload;
 }
 
-// ── Python lightweight runner (via PythonRunner args) ─────────────────────────
+// ── Python lightweight runner ────────────────────────────────────────────────
 
 void AgentService::run_python_light(const QString& action, const QJsonObject& params,
                                     std::function<void(bool, QJsonObject)> on_result) {
-    QJsonObject payload = build_payload(action, params);
-    QString payload_str = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    // SECURITY: this used to hand the payload to PythonRunner::run() as a
+    // command-line argument. That payload is not "light" — build_payload()
+    // embeds every configured LLM provider API key, the Fincept session key,
+    // the MCP bridge token, the destructive-capability token, and the whole
+    // terminal_tools catalog. As argv it is readable by any process running as
+    // the same user (Win32_Process.CommandLine via WMI on Windows, no
+    // elevation; /proc/<pid>/cmdline on Linux) and it is captured by crash
+    // dumps and EDR telemetry. Worse, the catalog pushes it past PythonRunner's
+    // 8 KB argv-spill threshold, so it was written to a temp file in
+    // QStandardPaths::TempLocation with default (0644 in /tmp) permissions.
+    //
+    // stdin has neither problem: it is never visible outside the pipe and never
+    // touches disk. run_python_stdin() already does exactly this for the other
+    // ~40 actions, so the light path just delegates to it.
+    auto& py = python::PythonRunner::instance();
+    if (py.is_available()) {
+        run_python_stdin(action, params, {}, std::move(on_result));
+        return;
+    }
 
+    // Interpreter detection can still be in flight on a cold install, and
+    // discover_agents() fires from main.cpp at startup. PythonRunner::run()
+    // used to queue the request until detection finished; replicate that by
+    // waiting for python_ready, with a bounded fallback so the caller always
+    // gets an answer even when no interpreter is ever found (python_ready is
+    // not emitted in that case).
+    auto fired = std::make_shared<std::atomic_bool>(false);
     QPointer<AgentService> self = this;
-    python::PythonRunner::instance().run(
-        "agents/finagent_core/main.py", {payload_str}, [self, action, on_result](python::PythonResult pr) {
-            if (!self)
-                return;
-            if (!pr.success) {
-                LOG_ERROR("AgentService", QString("%1 failed: %2").arg(action, pr.error.left(200)));
-                on_result(false, QJsonObject{{"error", pr.error}});
-                return;
-            }
-            LOG_INFO("AgentService", QString("%1: raw output length=%2, first 300 chars: %3")
-                                         .arg(action)
-                                         .arg(pr.output.size())
-                                         .arg(pr.output.left(300)));
-            QJsonDocument doc = QJsonDocument::fromJson(pr.output.toUtf8());
-            if (doc.isNull()) {
-                LOG_ERROR("AgentService", QString("%1: invalid JSON response").arg(action));
-                on_result(false, QJsonObject{{"error", "Invalid JSON response from Python"}});
-                return;
-            }
-            LOG_INFO("AgentService",
-                     QString("%1: parsed JSON keys: %2").arg(action, QStringList(doc.object().keys()).join(", ")));
-            on_result(true, doc.object());
-        });
+    auto resume = [self, action, params, on_result, fired](bool ready) {
+        if (fired->exchange(true))
+            return;
+        if (!self)
+            return;
+        if (!ready) {
+            LOG_WARN("AgentService", QString("%1 skipped — no Python interpreter available").arg(action));
+            on_result(false, QJsonObject{{"error", "Python not available"}});
+            return;
+        }
+        self->run_python_stdin(action, params, {}, on_result);
+    };
+    connect(&py, &python::PythonRunner::python_ready, this, [resume]() { resume(true); },
+            Qt::SingleShotConnection);
+    QTimer::singleShot(kPythonReadyGraceMs, this, [resume]() { resume(false); });
 }
 
 // ── Python stdin runner (for large payloads) ─────────────────────────────────
@@ -356,6 +452,12 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
 
     QJsonObject payload = build_payload(action, params, config);
     QByteArray payload_bytes = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+
+    // Bridge run scope opened by build_payload — retire it the moment the agent
+    // process is gone so its token stops authenticating. Empty (or a
+    // caller-supplied token, which the bridge never registered) makes end_run a
+    // no-op, so this is safe for every action including the non-agent ones.
+    const QString run_token = payload.value("config").toObject().value("terminal_mcp_token").toString();
 
     QString python_path = py.python_path();
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
@@ -377,7 +479,8 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
     timer->start();
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, action, on_result, timer](int exit_code, QProcess::ExitStatus) {
+            [self, proc, action, on_result, timer, run_token](int exit_code, QProcess::ExitStatus) {
+                mcp::TerminalMcpBridge::instance().end_run(run_token);
                 int elapsed = timer->elapsed();
 
                 QString stdout_str = QString::fromUtf8(proc->readAllStandardOutput());
@@ -411,7 +514,9 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                 on_result(true, result);
             });
 
-    connect(proc, &QProcess::errorOccurred, this, [self, proc, action, on_result, timer](QProcess::ProcessError) {
+    connect(proc, &QProcess::errorOccurred, this, [self, proc, action, on_result, timer,
+                                                   run_token](QProcess::ProcessError) {
+        mcp::TerminalMcpBridge::instance().end_run(run_token);
         QString err = proc->errorString();
         proc->deleteLater();
         if (!self)

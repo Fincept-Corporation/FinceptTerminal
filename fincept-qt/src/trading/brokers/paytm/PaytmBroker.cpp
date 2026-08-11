@@ -142,7 +142,7 @@ QMap<QString, QString> PaytmBroker::auth_headers(const BrokerCredentials& creds)
 TokenExchangeResponse PaytmBroker::exchange_token(const QString& api_key, const QString& api_secret,
                                                   const QString& auth_code) {
     if (api_key.isEmpty() || api_secret.isEmpty() || auth_code.isEmpty())
-        return {false, "", "", "", "Paytm login: api_key, api_secret and request_token are required", ""};
+        return {.success = false, .error = "Paytm login: api_key, api_secret and request_token are required"};
 
     QJsonObject payload;
     payload["api_key"] = api_key;
@@ -154,20 +154,20 @@ TokenExchangeResponse PaytmBroker::exchange_token(const QString& api_key, const 
         http.post_json(QString("%1/accounts/v2/gettoken").arg(BASE), payload, {{"Content-Type", "application/json"}});
 
     if (!resp.success && resp.status_code == 0)
-        return {false, "", "", "", "Login failed: " + resp.error, ""};
+        return {.success = false, .error = "Login failed: " + resp.error};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Login: invalid response", ""};
+        return {.success = false, .error = "Login: invalid response"};
 
     QJsonObject obj = doc.object();
     QString access_token = obj.value("access_token").toString();
     if (access_token.isEmpty())
-        return {false, "", "", "", checked_error(resp, "Login failed: no access token"), ""};
+        return {.success = false, .error = checked_error(resp, "Login failed: no access token")};
 
     // public_access_token is the WebSocket feed token — stash it in additional_data.
     QString feed_token = obj.value("public_access_token").toString(access_token);
-    return {true, access_token, "", "", feed_token, ""};
+    return {.success = true, .access_token = access_token, .additional_data = feed_token};
 }
 
 // ---------- place_order ----------

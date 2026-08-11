@@ -15,6 +15,11 @@ namespace fincept::trading {
 namespace {
 const QString kPoolTag = "ExchangeDaemonPool";
 
+/// Marks a `responses_` slot whose caller timed out and went away. Never
+/// produced by the daemon, so it can't collide with a real reply. See the
+/// timeout path in call() and the consume in drain_buffer().
+constexpr auto kPoolAbandonedMarker = "__abandoned__";
+
 QString pool_resolve_script_path(const QString& relative) {
     const QString dir = fincept::python::PythonRunner::instance().scripts_dir();
     if (dir.isEmpty())
@@ -72,6 +77,11 @@ void ExchangeDaemonPool::start() {
                 // has forgotten them with the interpreter.
                 QMutexLocker lock(&mutex_);
                 creds_sent_.clear();
+                // Anything still parked here is unclaimable: the ids belong to
+                // the dead interpreter's request stream and no reply is coming.
+                // Waiters aren't stranded — they're on a bounded wait and fall
+                // through to their own timeout.
+                responses_.clear();
             });
 
     QStringList args;
@@ -198,6 +208,16 @@ void ExchangeDaemonPool::drain_buffer() {
 
         {
             QMutexLocker lock(&mutex_);
+            // A reply whose caller already timed out must be dropped, not
+            // stored: nothing will ever claim it, and these payloads are order
+            // books and OHLC batches (5–50 KB each). call() leaves a tiny
+            // tombstone under the request id when it gives up — see
+            // kPoolAbandonedMarker there — which we consume here.
+            auto existing = responses_.find(id);
+            if (existing != responses_.end() && existing.value().value(kPoolAbandonedMarker).toBool(false)) {
+                responses_.erase(existing);
+                continue;
+            }
             responses_[id] = obj;
         }
         response_ready_.wakeAll();
@@ -252,6 +272,17 @@ QJsonObject ExchangeDaemonPool::call(const QString& exchange, const QString& met
         }
         response_ready_.wait(&mutex_, 50);
     }
+    // Timed out. Two things can leak here and both are handled:
+    //   1. A reply that landed between the last find() and the loop exit —
+    //      overwritten by the tombstone below, so its payload is freed now.
+    //   2. A reply that lands *after* we return — the normal case for a slow
+    //      exchange call. drain_buffer() sees the tombstone and drops the
+    //      payload instead of storing it.
+    // Before this, either case left a full 5–50 KB response object in
+    // responses_ with no caller left to erase it, for the life of the process.
+    // The tombstone itself is a one-key object and is consumed by the late
+    // reply; only a request whose reply never arrives at all leaves one behind.
+    responses_[req_id] = QJsonObject{{kPoolAbandonedMarker, true}};
     lock.unlock();
     LOG_WARN(kPoolTag, QString("Daemon call timed out: %1/%2").arg(exchange, method));
     return {{"error", QString("Daemon call timed out: %1/%2").arg(exchange, method)}};

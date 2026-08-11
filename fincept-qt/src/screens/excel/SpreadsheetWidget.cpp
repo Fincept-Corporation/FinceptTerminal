@@ -6,6 +6,8 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QHBoxLayout>
+#include <QFontMetrics>
+#include <QHash>
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QKeySequence>
@@ -35,6 +37,10 @@ SpreadsheetItem::SpreadsheetItem() : QTableWidgetItem(QTableWidgetItem::UserType
 
 SpreadsheetItem::SpreadsheetItem(const QString& text) : QTableWidgetItem(QTableWidgetItem::UserType), raw_text_(text) {}
 
+QTableWidgetItem* SpreadsheetItem::clone() const {
+    return new SpreadsheetItem(raw_text_);
+}
+
 void SpreadsheetItem::setData(int role, const QVariant& value) {
     if (role == Qt::EditRole) {
         raw_text_ = value.toString();
@@ -49,6 +55,41 @@ QVariant SpreadsheetItem::data(int role) const {
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
         return raw_text_;
     }
+
+    // ── Presentation ─────────────────────────────────────────────────────
+    // The grid rendered every cell identically: left-aligned, same weight. A
+    // financial model laid out that way is unreadable — figures don't line up
+    // on the decimal and section headings look like data. Both are derived
+    // from the raw text, never from evaluating the formula, so painting stays
+    // cheap.
+    if (role == Qt::TextAlignmentRole) {
+        bool numeric = false;
+        raw_text_.toDouble(&numeric);
+        const bool right = numeric || raw_text_.startsWith(QLatin1Char('='));
+        return QVariant(static_cast<int>((right ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter));
+    }
+
+    if (role == Qt::FontRole) {
+        // A label in column A with nothing beside it is a section heading
+        // ("INPUTS & ASSUMPTIONS"), not a data row.
+        if (column() == 0 && !raw_text_.trimmed().isEmpty()) {
+            const auto* tbl = tableWidget();
+            if (tbl) {
+                bool row_is_bare = true;
+                for (int c = 1; c < tbl->columnCount() && row_is_bare; ++c) {
+                    const auto* other = tbl->item(row(), c);
+                    if (other && !other->data(Qt::EditRole).toString().trimmed().isEmpty())
+                        row_is_bare = false;
+                }
+                if (row_is_bare) {
+                    QFont f = tbl->font();
+                    f.setBold(true);
+                    return f;
+                }
+            }
+        }
+    }
+
     return QTableWidgetItem::data(role);
 }
 
@@ -123,11 +164,44 @@ QVariant SpreadsheetItem::evaluate_formula() const {
     static thread_local QSet<const SpreadsheetItem*> evaluating;
     if (evaluating.contains(this))
         return QStringLiteral("#CYCLE");
+
+    // ── Memoise within one evaluation pass ────────────────────────────────
+    // Formulas are evaluated lazily from data(DisplayRole), and each one reads
+    // its dependencies' DisplayRole, which evaluates THEM from scratch. On a
+    // chain — the shape of every financial model, Revenue → EBIT → NOPAT → FCF
+    // → PV → EV → equity → per-share — that is O(2^depth) per cell, and the
+    // whole grid repaints together. A DCF was enough to wedge the UI thread
+    // long enough for set_excel_sheet_data to blow its timeout mid-write.
+    //
+    // The cache lives only for the outermost evaluation: entries are dropped
+    // when the last frame unwinds, so an edit is still picked up immediately.
+    // Invalidation is therefore not a concern — nothing can change while a
+    // single synchronous pass is running.
+    static thread_local QHash<const SpreadsheetItem*, QVariant> eval_cache;
+    static thread_local int eval_depth = 0;
+    const auto cached = eval_cache.constFind(this);
+    if (cached != eval_cache.constEnd())
+        return cached.value();
+
     evaluating.insert(this);
+    ++eval_depth;
     struct EvalGuard {
         const SpreadsheetItem* item;
-        ~EvalGuard() { evaluating.remove(item); }
+        ~EvalGuard() {
+            evaluating.remove(item);
+            if (--eval_depth == 0)
+                eval_cache.clear();
+        }
     } eval_guard{this};
+
+    // Store into the cache on every return path.
+    struct Memo {
+        const SpreadsheetItem* item;
+        QVariant operator()(QVariant v) const {
+            eval_cache.insert(item, v);
+            return v;
+        }
+    } memo{this};
 
     QString expr = raw_text_.mid(1).trimmed().toUpper();
 
@@ -138,18 +212,18 @@ QVariant SpreadsheetItem::evaluate_formula() const {
         QString func = fm.captured(1);
         auto vals = resolve_range(fm.captured(2), fm.captured(3));
         if (vals.isEmpty())
-            return 0.0;
+            return memo(0.0);
 
         if (func == "SUM")
-            return std::accumulate(vals.begin(), vals.end(), 0.0);
+            return memo(std::accumulate(vals.begin(), vals.end(), 0.0));
         if (func == "AVG" || func == "AVERAGE")
-            return std::accumulate(vals.begin(), vals.end(), 0.0) / vals.size();
+            return memo(std::accumulate(vals.begin(), vals.end(), 0.0) / vals.size());
         if (func == "MIN")
-            return *std::min_element(vals.begin(), vals.end());
+            return memo(*std::min_element(vals.begin(), vals.end()));
         if (func == "MAX")
-            return *std::max_element(vals.begin(), vals.end());
+            return memo(*std::max_element(vals.begin(), vals.end()));
         if (func == "COUNT")
-            return static_cast<double>(vals.size());
+            return memo(static_cast<double>(vals.size()));
     }
 
     // ── Simple cell reference: =A1 ───────────────────────────────────────
@@ -159,7 +233,7 @@ QVariant SpreadsheetItem::evaluate_formula() const {
         int r, c;
         parse_cell_ref(expr, r, c);
         if (r >= 0 && c >= 0)
-            return resolve_cell_value(r, c);
+            return memo(resolve_cell_value(r, c));
     }
 
     // ── Simple arithmetic with cell refs: =A1+B1, =A1*2, etc. ───────────
@@ -191,7 +265,7 @@ QVariant SpreadsheetItem::evaluate_formula() const {
     // Validate: only digits, operators, decimal points, parens
     static QRegularExpression valid_re("^[0-9+\\-*/().eE]+$");
     if (!valid_re.match(eval_expr).hasMatch()) {
-        return "#ERR";
+        return memo("#ERR");
     }
 
     // Use a simple recursive descent parser
@@ -266,48 +340,48 @@ QVariant SpreadsheetItem::evaluate_formula() const {
                 num_buf += ch;
             } else if (ch == '+' || ch == '-' || ch == '*' || ch == '/') {
                 if (!flush_num())
-                    return QVariant("#ERR");
+                    return memo(QVariant("#ERR"));
                 while (!ops.isEmpty() && ops.last() != '(' && precedence(ops.last()) >= precedence(ch)) {
                     if (!apply_op())
-                        return QVariant(div_zero ? "#DIV/0!" : "#ERR");
+                        return memo(QVariant(div_zero ? "#DIV/0!" : "#ERR"));
                 }
                 ops.append(ch);
             } else if (ch == '(') {
                 ops.append(ch);
             } else if (ch == ')') {
                 if (!flush_num())
-                    return QVariant("#ERR");
+                    return memo(QVariant("#ERR"));
                 while (!ops.isEmpty() && ops.last() != '(') {
                     if (!apply_op())
-                        return QVariant(div_zero ? "#DIV/0!" : "#ERR");
+                        return memo(QVariant(div_zero ? "#DIV/0!" : "#ERR"));
                 }
                 if (ops.isEmpty())
-                    return QVariant("#ERR"); // ')' with no matching '('
+                    return memo(QVariant("#ERR")); // ')' with no matching '('
                 ops.removeLast();            // remove '('
             }
         }
         if (!flush_num())
-            return QVariant("#ERR");
+            return memo(QVariant("#ERR"));
         while (!ops.isEmpty()) {
             if (!apply_op())
-                return QVariant(div_zero ? "#DIV/0!" : "#ERR");
+                return memo(QVariant(div_zero ? "#DIV/0!" : "#ERR"));
         }
 
         if (nums.size() == 1) {
             double result = nums.first();
             if (!std::isfinite(result))
-                return QVariant("#NUM!");
+                return memo(QVariant("#NUM!"));
             if (std::floor(result) == result && std::abs(result) < 1e15)
-                return static_cast<qlonglong>(result);
+                return memo(static_cast<qlonglong>(result));
             // 'g' with 12 significant digits: 2.5 renders as "2.5", not
             // "2.500000", while still keeping precision on long decimals.
-            return QString::number(result, 'g', 12);
+            return memo(QString::number(result, 'g', 12));
         }
     } catch (...) {
         // fall through
     }
 
-    return "#ERR";
+    return memo("#ERR");
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -362,6 +436,9 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
 
     // Table
     table_ = new QTableWidget(rows, cols, this);
+    // Cells are created lazily (see below); the prototype makes every implicitly
+    // created cell a formula-aware SpreadsheetItem rather than a plain one.
+    table_->setItemPrototype(new SpreadsheetItem());
     setup_headers(cols);
 
     table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -374,12 +451,12 @@ void SpreadsheetWidget::build_ui(int rows, int cols) {
     table_->setAlternatingRowColors(false);
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    // Pre-populate with SpreadsheetItems
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-            table_->setItem(r, c, new SpreadsheetItem());
-        }
-    }
+    // Cells are deliberately NOT pre-populated. A 20 000 × 512 import window is
+    // 10.2M cells; allocating a SpreadsheetItem for each here cost ~2 GB and
+    // several seconds on the UI thread, and set_data() then threw the whole lot
+    // away and allocated a second set. Every read path tolerates a null item
+    // (cell_text/get_data return "", set_cell creates on demand), so an empty
+    // grid costs nothing until something is actually written to it.
 
     connect(table_, &QTableWidget::cellChanged, this, &SpreadsheetWidget::on_cell_changed);
     connect(table_, &QTableWidget::currentCellChanged, this, &SpreadsheetWidget::on_current_cell_changed);
@@ -495,19 +572,65 @@ void SpreadsheetWidget::set_data(const QVector<QVector<QString>>& cells) {
     table_->setColumnCount(cols);
     setup_headers(cols);
 
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-            QString text;
-            if (r < cells.size() && c < cells[r].size()) {
-                text = cells[r][c];
-            }
-            auto* item = new SpreadsheetItem(text);
-            table_->setItem(r, c, item);
+    // Allocate ONLY the cells that carry a value. The old loop allocated
+    // rows × cols items unconditionally — for a 20 000-row import that is
+    // millions of heap objects for cells that are, and stay, empty. Anything
+    // reading a missing cell already gets "" (cell_text / get_data), and the
+    // item prototype materialises a real SpreadsheetItem the moment the user
+    // types into one.
+    table_->clearContents(); // drop any items from a previous load
+    for (int r = 0; r < cells.size() && r < rows; ++r) {
+        const auto& src_row = cells[r];
+        for (int c = 0; c < src_row.size() && c < cols; ++c) {
+            if (src_row[c].isEmpty())
+                continue;
+            table_->setItem(r, c, new SpreadsheetItem(src_row[c]));
         }
     }
 
     table_->blockSignals(false);
+    autofit_columns(cells);
     recalculate();
+}
+
+// Size columns to their content.
+//
+// Every column sat at the fixed 80 px default, so a model written into the grid
+// showed as "Terminal …" / "Effective…" — the labels that make it readable were
+// exactly the ones clipped. Widths are measured from the source text with the
+// table's own font rather than via resizeColumnsToContents(), which would walk
+// all 2 600 cells and evaluate every formula just to measure it.
+void SpreadsheetWidget::autofit_columns(const QVector<QVector<QString>>& cells) {
+    constexpr int kMinWidth = 64;
+    constexpr int kMaxWidth = 340; // past this, wrapping/scrolling beats widening
+    constexpr int kPadding = 18;
+
+    // Text shaping is the expensive part: one horizontalAdvance() per non-empty
+    // cell. On a large import that is millions of shaping calls on the UI thread
+    // for column widths that are already decided by the first screenful of rows.
+    // Sample the head of the sheet instead — headers and the first data rows are
+    // what actually set the width.
+    constexpr int kMaxMeasuredRows = 200;
+    const int measured_rows = std::min<int>(cells.size(), kMaxMeasuredRows);
+
+    const QFontMetrics fm(table_->font());
+    // A formula's text is far longer than the number it produces; measuring the
+    // source would push its column to the cap. Budget for a typical result.
+    const int formula_width = fm.horizontalAdvance(QStringLiteral("1,234,567.89"));
+
+    for (int c = 0; c < table_->columnCount(); ++c) {
+        int width = kMinWidth;
+        for (int r = 0; r < measured_rows; ++r) {
+            if (c >= cells[r].size())
+                continue;
+            const QString& text = cells[r][c];
+            if (text.trimmed().isEmpty())
+                continue;
+            const int w = text.startsWith(QLatin1Char('=')) ? formula_width : fm.horizontalAdvance(text);
+            width = std::max(width, w + kPadding);
+        }
+        table_->setColumnWidth(c, std::clamp(width, kMinWidth, kMaxWidth));
+    }
 }
 
 QString SpreadsheetWidget::cell_text(int row, int col) const {
@@ -522,6 +645,18 @@ void SpreadsheetWidget::set_cell(int row, int col, const QString& text) {
         table_->setItem(row, col, item);
     } else {
         item->setData(Qt::EditRole, text);
+    }
+
+    // Grow the column if this value doesn't fit. A model written cell-by-cell
+    // (the set_excel_cell path) never goes through set_data, so without this it
+    // keeps the 80 px default and clips every label.
+    if (!text.startsWith(QLatin1Char('=')) && !text.trimmed().isEmpty() && col >= 0) {
+        constexpr int kMaxWidth = 340;
+        constexpr int kPadding = 18;
+        const QFontMetrics fm(table_->font());
+        const int needed = std::min(fm.horizontalAdvance(text) + kPadding, kMaxWidth);
+        if (needed > table_->columnWidth(col))
+            table_->setColumnWidth(col, needed);
     }
 }
 

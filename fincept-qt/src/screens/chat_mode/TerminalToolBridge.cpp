@@ -14,21 +14,40 @@
 
 namespace fincept::chat_mode {
 
-// Categories that are UI-only and should not be exposed to Finagent
-const QStringList TerminalToolBridge::EXCLUDED_CATEGORIES = {"navigation", "system", "settings"};
+// Categories that are UI-only and should not be exposed to Finagent.
+// `profile` and `data-sources` are here because both hand back credential
+// material verbatim (profile_get_api_key returns the session API key;
+// ds_list_connections mapped every saved connector's config — including
+// passwords and tokens — with no arguments at all, i.e. a one-call bulk
+// credential dump). Neither belongs in a cloud agent's tool catalog.
+const QStringList TerminalToolBridge::EXCLUDED_CATEGORIES = {"navigation", "system", "settings", "profile",
+                                                             "data-sources"};
 
 // Real money (live broker order placement/cancel/close) and local process
 // control (install/start external MCP servers). See the header for why these
 // fail closed on this path but not on the local-agent path.
 const QStringList TerminalToolBridge::BLOCKED_CATEGORIES = {"live-trading", "mcp-servers"};
 
-// Arbitrary local code execution + irreversible file deletion. Their categories
-// ("analytics", "file_manager") also contain read-only tools worth keeping.
+// Arbitrary local code execution + irreversible file deletion, plus
+// download_managed_file: it writes a caller-named path on the local disk, and
+// chained with write_managed_text_file (whose bytes the model authors) that is
+// a write-what-where primitive. It is confined to the export directory now,
+// but a remote agent has no business writing local files at all.
 const QStringList TerminalToolBridge::BLOCKED_TOOLS = {"run_python_script", "delete_managed_file",
-                                                       "bulk_delete_managed_files"};
+                                                       "bulk_delete_managed_files", "download_managed_file"};
 
 bool TerminalToolBridge::is_remote_blocked(const QString& name, const QString& category) {
-    return BLOCKED_CATEGORIES.contains(category) || BLOCKED_TOOLS.contains(name);
+    // EXCLUDED_CATEGORIES was previously applied ONLY while building the
+    // catalog in register_tools(). Catalog-time filtering is cosmetic: the
+    // backend hands us a tool NAME to run, so anything the model already knows
+    // the name of (a stale catalog, a guess, an injected instruction) executed
+    // regardless. Folding the exclusion in here makes both the catalog and the
+    // dispatch path (execute_call) enforce one list.
+    // "ai-chat" is excluded by register_tools() as a recursion guard (the cloud
+    // agent driving the chat LLM that is driving it); mirror that at dispatch.
+    return category == QLatin1String("ai-chat") || category == QLatin1String("ai_chat") ||
+           EXCLUDED_CATEGORIES.contains(category) || BLOCKED_CATEGORIES.contains(category) ||
+           BLOCKED_TOOLS.contains(name);
 }
 
 TerminalToolBridge::TerminalToolBridge(QObject* parent) : QObject(parent) {
@@ -168,12 +187,13 @@ void TerminalToolBridge::execute_call(const QString& call_id, const QString& too
     const QString tool_category = tool_info ? tool_info->category : QString();
     if (is_remote_blocked(local_name, tool_category)) {
         LOG_WARN("TerminalToolBridge",
-                 QString("Refused remote tool '%1' (category '%2') — real-money / arbitrary-code tools are not "
-                         "available to the cloud agent")
+                 QString("Refused remote tool '%1' (category '%2') — real-money / arbitrary-code / credential / "
+                         "UI-only tools are not available to the cloud agent")
                      .arg(local_name, tool_category));
         const auto refusal = mcp::ToolResult::fail(
-            QString("Tool '%1' is not available to the remote agent. It moves real funds or executes local "
-                    "code and must be run by the user from the terminal UI.")
+            QString("Tool '%1' is not available to the remote agent. It moves real funds, executes local code, "
+                    "reads stored credentials, or drives the local UI, and must be run by the user from the "
+                    "terminal itself.")
                 .arg(local_name));
         ChatModeService::instance().submit_tool_result(call_id, refusal.to_json(), [](bool, QString) {});
         emit bridge_error(tr("Blocked unsafe remote tool call: %1").arg(local_name));

@@ -83,17 +83,28 @@ logs/
 .env.*.local
 *.key
 *.pub
+# NOTE: *.pub is repo-wide and matches PUBLIC keys too. If the auto-updater
+# ever ships its Ed25519 verification key as a file (rather than embedded in
+# C++), it will be invisible to `git add` and absent from a fresh clone —
+# add a `!` negation for that exact path at that time.
 
 # ── Large data / ML model files ──────────────────────────────
-*.csv
-*.bin
-*.pt
-*.onnx
-*.h5
-*.pkl
-*.pickle
-*.model
-*.weights
+# SCOPED to the Python analytics tree, which is where scripts write their
+# outputs. These globs used to be repo-wide with no negations, which silently
+# dropped any committed fixture: a .csv test input a script needs, a small
+# .bin resource — invisible to `git add`, absent from a fresh clone and from
+# CI, and impossible to notice until something fails at runtime. Build trees
+# (fincept-qt/build*/) are already ignored above, so nothing generated there
+# needs a second rule.
+fincept-qt/scripts/**/*.csv
+fincept-qt/scripts/**/*.bin
+fincept-qt/scripts/**/*.pt
+fincept-qt/scripts/**/*.onnx
+fincept-qt/scripts/**/*.h5
+fincept-qt/scripts/**/*.pkl
+fincept-qt/scripts/**/*.pickle
+fincept-qt/scripts/**/*.model
+fincept-qt/scripts/**/*.weights
 
 # ── Archives ─────────────────────────────────────────────────
 *.zip
@@ -123,7 +134,12 @@ fincept-qt/uitest/build/
 # ── ML training artifacts ─────────────────────────────────────
 lightning_logs/
 *.ckpt
-*.yaml
+# `*.yaml` was here and is DELETED: it was repo-wide with no negations, so a
+# workflow added as .github/workflows/foo.yaml, a flatpak/AppImage manifest,
+# or any other YAML config would be silently untrackable — invisible to
+# `git add` and simply missing from a fresh clone and from CI. Nothing in the
+# repo was ever tracked as .yaml (verified), and the only .yaml on disk is
+# CMakeConfigureLog.yaml inside an already-ignored build tree.
 
 # ── Shell tree output files ───────────────────────────────────
 **/tree

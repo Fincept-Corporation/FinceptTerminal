@@ -1,4 +1,5 @@
 #include "trading/brokers/tradejini/TradejiniBroker.h"
+#include "trading/brokers/BrokerModifyFields.h"
 
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
@@ -104,7 +105,7 @@ QMap<QString, QString> TradejiniBroker::auth_headers(const BrokerCredentials& cr
 TokenExchangeResponse TradejiniBroker::exchange_token(const QString& api_key, const QString& api_secret,
                                                       const QString& auth_code) {
     if (api_key.isEmpty() || api_secret.isEmpty() || auth_code.isEmpty())
-        return {false, "", "", "", "Tradejini login: api_key, password and TOTP are required", ""};
+        return {.success = false, .error = "Tradejini login: api_key, password and TOTP are required"};
 
     QMap<QString, QString> params;
     params["password"] = api_secret;
@@ -116,21 +117,21 @@ TokenExchangeResponse TradejiniBroker::exchange_token(const QString& api_key, co
                                {{"Authorization", QString("Bearer %1").arg(api_key)}});
 
     if (!resp.success && resp.status_code == 0)
-        return {false, "", "", "", "Login failed: " + resp.error, ""};
+        return {.success = false, .error = "Login failed: " + resp.error};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Login: invalid response", ""};
+        return {.success = false, .error = "Login: invalid response"};
 
     QJsonObject obj = doc.object();
     QString token = obj.value("access_token").toString();
     if (token.isEmpty())
-        return {false, "", "", "", obj.value("message").toString("Login failed: no access token"), ""};
+        return {.success = false, .error = obj.value("message").toString("Login failed: no access token")};
 
     // Tradejini tokens expire at the daily reset; the TOTP is a one-time code we
     // can't replay, so detect-only. Startup hint.
     const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-    return {true, token, "", "", extra, ""};
+    return {.success = true, .access_token = token, .additional_data = extra};
 }
 
 // ---------- place_order ----------
@@ -182,7 +183,31 @@ ApiResponse<QJsonObject> TradejiniBroker::modify_order(const BrokerCredentials& 
                                                        const QJsonObject& mods) {
     int64_t ts = now_ts();
 
-    const QString price_type = mods.value("orderType").toString("limit").toLower();
+    // Tradejini's modify endpoint is a full replace, not a patch: every field
+    // below overwrites the resting order. All of them are caller-owned and each
+    // used to fall back to a hard-coded default, so a caller that sent only
+    // {quantity, price} silently rewrote the rest. The worst case was `side`,
+    // which defaulted to "buy": modifying the price of a resting SELL or
+    // stop-loss converted it into a BUY, turning an exit into a new long entry.
+    // Never transmit a guess for a caller-owned field.
+    static const QStringList required_keys = {"side", "symbol", "orderType"};
+    for (const QString& key : required_keys) {
+        if (mods.value(key).toString().trimmed().isEmpty())
+            return {false, std::nullopt, QString("Cannot modify: order %1 unknown").arg(key), ts};
+    }
+
+    // Tradejini's wire form is "buy"/"sell"; accept the short forms too, and
+    // reject anything else rather than guessing a direction.
+    const QString side_in = mods.value("side").toString().trimmed().toLower();
+    QString tj_side;
+    if (side_in == "b" || side_in == "buy")
+        tj_side = "buy";
+    else if (side_in == "s" || side_in == "sell")
+        tj_side = "sell";
+    else
+        return {false, std::nullopt, QString("Cannot modify: unrecognised order side '%1'").arg(side_in), ts};
+
+    const QString price_type = mods.value("orderType").toString().toLower();
     QString tj_type = "limit";
     if (price_type.contains("market") && price_type.contains("stop"))
         tj_type = "stopmarket";
@@ -197,11 +222,11 @@ ApiResponse<QJsonObject> TradejiniBroker::modify_order(const BrokerCredentials& 
     params["qty"] = QString::number(mods.value("quantity").toInt(0));
     params["type"] = tj_type;
     params["validity"] = "day";
-    params["side"] = mods.value("side").toString("buy").toLower();
+    params["side"] = tj_side;
     if (tj_type == "limit" || tj_type == "stoplimit")
-        params["limitPrice"] = QString::number(mods.value("price").toDouble(0), 'f', 2);
+        params["limitPrice"] = QString::number(modify_fields::number(mods, modify_fields::kPrice), 'f', 2);
     if (tj_type == "stoplimit" || tj_type == "stopmarket")
-        params["trigPrice"] = QString::number(mods.value("triggerPrice").toDouble(0), 'f', 2);
+        params["trigPrice"] = QString::number(modify_fields::number(mods, modify_fields::kTrigger), 'f', 2);
 
     auto& http = BrokerHttp::instance();
     auto resp = http.put_form(QString("%1/api/oms/modify-order").arg(BASE), params, {{"Authorization", bearer(creds)}});

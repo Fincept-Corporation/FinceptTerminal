@@ -195,8 +195,8 @@ void AiChatScreen::subscribe_mcp_events() {
     };
 
     auto& bus = EventBus::instance();
-    mcp_event_subs_.append(bus.subscribe("llm.provider_changed", on_provider_event));
-    mcp_event_subs_.append(bus.subscribe("ai_chat.session_created", on_session_created));
+    mcp_event_subs_.append(bus.subscribe(this, "llm.provider_changed", on_provider_event));
+    mcp_event_subs_.append(bus.subscribe(this, "ai_chat.session_created", on_session_created));
 }
 
 void AiChatScreen::unsubscribe_mcp_events() {

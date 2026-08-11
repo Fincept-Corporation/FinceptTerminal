@@ -15,6 +15,14 @@ class EmailProvider final : public BaseProvider {
 
     void send(const NotificationRequest& req, std::function<void(bool, QString)> cb) override;
 
+    /// Resolve smtp_host_ into the relay URL to POST to.
+    ///
+    /// Defaults the scheme to https — the request body carries the SMTP
+    /// password in cleartext, so it must not travel over plain http. Returns an
+    /// empty string when the configured host would force an unencrypted
+    /// non-loopback connection, and the caller must then refuse to send.
+    QString build_endpoint() const;
+
   protected:
     void load_fields(SettingsRepository& r, const QString& cat) override;
     void save_fields(SettingsRepository& r, const QString& cat) override;

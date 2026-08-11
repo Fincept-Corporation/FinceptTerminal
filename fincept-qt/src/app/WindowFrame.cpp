@@ -97,6 +97,7 @@
 #include "ui/navigation/ToolBar.h"
 #include "ui/pushpins/PushpinBar.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 #include "ui/workspace/LayoutOpenDialog.h"
 #include "ui/workspace/LayoutSaveAsDialog.h"
 
@@ -104,6 +105,7 @@
 #include <QCloseEvent>
 #include <QDateTime>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QInputDialog>
@@ -112,10 +114,12 @@
 #include <QJsonValue>
 #include <QMessageBox>
 #include <QPalette>
+#include <QPointer>
 #include <QScreen>
 #include <QSet>
 #include <QShortcut>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWindow>
@@ -127,6 +131,51 @@
 #include <algorithm>
 
 namespace fincept {
+
+namespace {
+
+/// Binds a QTimer's run state to its host widget's visibility (§P3).
+///
+/// The rule is "start in showEvent, stop in hideEvent", but WindowFrame's header
+/// is shared with the multi-window shell and declares no show/hide overrides, so
+/// the same contract is enforced from an installed event filter instead. Minimise
+/// is covered too: on Windows a minimised top-level gets WindowStateChange, not
+/// Hide, and a minimised window has no reason to keep polling.
+class VisibilityTimerGate final : public QObject {
+  public:
+    VisibilityTimerGate(QTimer* timer, QObject* parent) : QObject(parent), timer_(timer) {}
+
+  protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (timer_) {
+            switch (event->type()) {
+                case QEvent::Show:
+                    timer_->start();
+                    break;
+                case QEvent::Hide:
+                    timer_->stop();
+                    break;
+                case QEvent::WindowStateChange:
+                    if (auto* w = qobject_cast<QWidget*>(watched)) {
+                        if (w->isMinimized())
+                            timer_->stop();
+                        else if (w->isVisible())
+                            timer_->start();
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+  private:
+    QPointer<QTimer> timer_;
+};
+
+} // namespace
+
 int WindowFrame::next_window_id() {
     // Seed from the max of (persisted window IDs, live window IDs) so a new
     // window never reuses an ID that already owns saved geometry/dock layout.
@@ -435,7 +484,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             });
 
     // MCP navigation tool → dock_router (cross-thread safe)
-    EventBus::instance().subscribe("nav.switch_screen", [this](const QVariantMap& nav_data) {
+    EventBus::instance().subscribe(this, "nav.switch_screen", [this](const QVariantMap& nav_data) {
         QString screen_id = nav_data["screen_id"].toString();
         // Optional: callers that want a clean "take me there" switch (replace the
         // current view) rather than the default auto-tiled split set exclusive=true.
@@ -454,7 +503,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // leaving Research. We materialise the trading screen (hidden — no tab switch)
     // if it doesn't exist yet, then open its app-modal ticket, which pops over the
     // current tab. The trading screen owns the form + the paper/live placement path.
-    EventBus::instance().subscribe("equity.open_order_ticket", [this](const QVariantMap& d) {
+    EventBus::instance().subscribe(this, "equity.open_order_ticket", [this](const QVariantMap& d) {
         const QString symbol = d.value("symbol").toString();
         if (symbol.isEmpty())
             return;
@@ -773,6 +822,9 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         auth_stack_->setCurrentIndex(3); // PricingScreen
     });
 
+    // Toolbar UPGRADE → Enterprise (the private edition) promo dialog.
+    connect(toolbar, &ui::ToolBar::upgrade_clicked, this, [this]() { ui::UpgradeDialog::show_now(this); });
+
     // Auth state
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,
             &WindowFrame::on_auth_state_changed);
@@ -929,18 +981,44 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                     }
                     tab_bar_->set_active(last);
                 }
-                // Remaining visible panels on the next tick so the active
-                // panel's paint completes before we block again.
-                QTimer::singleShot(0, this, [this, last]() {
-                    if (!dock_router_ || !dock_manager_)
-                        return;
-                    for (const auto& entry : dock_manager_->dockWidgetsMap().toStdMap()) {
-                        if (entry.first == last)
-                            continue;
-                        if (entry.second && !entry.second->isClosed())
-                            dock_router_->materialize_now(entry.first);
+
+                // Remaining visible panels — ONE PER EVENT-LOOP TURN. Doing the
+                // whole loop in a single tick re-froze the window the instant
+                // the first panel painted: a 4-panel layout constructed three
+                // heavy screens back to back with no chance to repaint between
+                // them. Snapshot the ids first so the walk is stable while the
+                // dock map changes underneath it.
+                QStringList pending;
+                for (const auto& entry : dock_manager_->dockWidgetsMap().toStdMap()) {
+                    if (entry.first == last)
+                        continue;
+                    if (entry.second && !entry.second->isClosed())
+                        pending << entry.first;
+                }
+                if (pending.isEmpty())
+                    return;
+
+                // Copyable, self-rescheduling functor: materialise the head,
+                // then post itself again with the tail. QPointer + the `frame`
+                // context object mean a closed window simply drops the rest.
+                struct MaterialiseWalk {
+                    QPointer<WindowFrame> frame;
+                    QStringList todo;
+                    void operator()() const {
+                        if (!frame || todo.isEmpty())
+                            return;
+                        auto* router = frame->dock_router();
+                        if (!router)
+                            return;
+                        // The user may have closed this panel on an earlier tick.
+                        if (auto* dw = router->find_dock_widget(todo.front()); dw && !dw->isClosed())
+                            router->materialize_now(todo.front());
+                        const QStringList rest = todo.mid(1);
+                        if (!rest.isEmpty())
+                            QTimer::singleShot(0, frame.data(), MaterialiseWalk{frame, rest});
                     }
-                });
+                };
+                QTimer::singleShot(0, this, MaterialiseWalk{this, pending});
             });
         }
     } else {
@@ -950,8 +1028,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // Periodic refresh of user credits/plan (every 3 minutes). Skip while
     // the terminal is locked — we shouldn't be making authenticated API
     // calls behind the back of the PIN gate, and the user can't see the
-    // refreshed data anyway. The timer keeps running (cheap) but the
-    // callback short-circuits.
+    // refreshed data anyway.
     user_refresh_timer_ = new QTimer(this);
     user_refresh_timer_->setInterval(3 * 60 * 1000);
     connect(user_refresh_timer_, &QTimer::timeout, this, []() {
@@ -962,7 +1039,14 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             return;
         auth.refresh_user_data();
     });
-    user_refresh_timer_->start();
+    // §P3: no timer->start() in a constructor. Starting it here made every
+    // window fire an authenticated network refresh every 3 minutes for the
+    // whole process lifetime — including windows that were minimised or never
+    // shown. WindowFrame's header is shared with the multi-window shell, so
+    // rather than add showEvent/hideEvent overrides to it we gate the timer
+    // with an event filter that owns exactly the same lifecycle (and also
+    // covers minimise, which sends WindowStateChange rather than Hide).
+    installEventFilter(new VisibilityTimerGate(user_refresh_timer_, this));
 
     // Confetti overlay (parented to central widget so it covers the whole app)
     // Refresh user data when app regains focus (updates toolbar credits/plan)

@@ -24,8 +24,9 @@ class QuantLibClient : public QObject {
     /// Async call — callback posted on Qt event loop (use from UI thread).
     void call(const QString& endpoint, const QJsonObject& body, QuantLibCallback callback);
 
-    /// Sync call — blocks via QEventLoop (use from MCP tool handlers only, never from UI thread).
-    mcp::ToolResult call_sync(const QString& endpoint, const QJsonObject& body);
+    // call_sync() was removed: it had zero call sites and blocked on an unbounded
+    // QEventLoop, so any future caller would have inherited a hang with no timeout.
+    // Use call() and continue from the callback. See the note in QuantLibClient.cpp.
 
     /// GET-only endpoints (no request body).
     static bool is_get_endpoint(const QString& endpoint);

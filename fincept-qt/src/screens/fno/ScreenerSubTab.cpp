@@ -340,6 +340,16 @@ void ScreenerSubTab::showEvent(QShowEvent* e) {
 
 void ScreenerSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    // §D3: pair the showEvent subscribe. The `subscribed_` latch never reset
+    // and on_chain_published() has no visibility gate, so a hidden tab ran a
+    // full apply_filters() rebuild on every option-chain publish for the rest
+    // of the process.
+    //
+    // unsubscribe_pattern() rather than the blanket unsubscribe(this) so this
+    // stays symmetric with the subscribe_pattern() above and can't collaterally
+    // drop any concrete-topic subscription added here later.
+    fincept::datahub::DataHub::instance().unsubscribe_pattern(this, QStringLiteral("option:chain:*"));
+    subscribed_ = false;
 }
 
 void ScreenerSubTab::on_chain_published(const QVariant& v) {

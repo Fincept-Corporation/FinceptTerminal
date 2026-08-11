@@ -28,7 +28,8 @@ static const char* kSettingsCategory = "dashboard";
 // Constructor
 // ─────────────────────────────────────────────────────────────────────────────
 
-TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
+TickerBar::TickerBar(QWidget* parent)
+    : QWidget(parent), ticker_font_(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2)), ticker_fm_(ticker_font_) {
     setFixedHeight(kEditBarHeight);
     setContextMenuPolicy(Qt::DefaultContextMenu);
     setAccessibleName(tr("Market ticker"));
@@ -40,6 +41,9 @@ TickerBar::TickerBar(QWidget* parent) : QWidget(parent) {
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this, apply_bg](const ui::ThemeTokens&) {
                 apply_bg();
+                // Font family/size and every colour are theme tokens, so the
+                // cached measurements go stale with the theme.
+                rebuild_entry_cache();
                 update();
             });
 
@@ -148,21 +152,38 @@ void TickerBar::save_symbols() {
 // set_data — called by DashboardScreen after fetch_quotes returns
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Derives every string, width and colour paintEvent needs, so the paint path is
+// a pure draw. The old code measured each entry here to compute total_width_ and
+// then *discarded* the per-entry widths, forcing paintEvent to re-measure all
+// three segments per entry per pass at 20 fps — roughly 3,000 text-shaping calls
+// a second, forever, on the always-visible dashboard ticker. NewsTickerStrip
+// already caches its widths this way; this brings TickerBar in line.
+void TickerBar::rebuild_entry_cache() {
+    ticker_font_ = QFont(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
+    ticker_fm_ = QFontMetrics(ticker_font_);
+    symbol_color_ = QColor(ui::colors::WHITE());
+    price_color_ = QColor(ui::colors::GRAY());
+
+    total_width_ = 0;
+    for (auto& e : entries_) {
+        e.price_text = QString::number(e.price, 'f', 2);
+        e.change_text = QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
+        e.change_col = QColor(ui::change_color(e.change));
+
+        e.symbol_width = ticker_fm_.horizontalAdvance(e.symbol);
+        e.price_width = ticker_fm_.horizontalAdvance(e.price_text);
+        e.change_width = ticker_fm_.horizontalAdvance(e.change_text);
+        e.total_width = e.symbol_width + kSegmentGap + e.price_width + kSegmentGap + e.change_width + kItemSpacing;
+
+        total_width_ += e.total_width;
+    }
+}
+
 void TickerBar::set_data(const QVector<Entry>& entries) {
     const bool symbols_changed = entries.size() != entries_.size();
     entries_ = entries;
 
-    // Cache total width — paintEvent runs every 50ms, no per-frame allocation.
-    QFont font(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
-    QFontMetrics fm(font);
-    total_width_ = 0;
-    for (const auto& e : entries_) {
-        const int symbol_w = fm.horizontalAdvance(e.symbol);
-        const int price_w = fm.horizontalAdvance(QString::number(e.price, 'f', 2));
-        const QString change_str = QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
-        const int change_w = fm.horizontalAdvance(change_str);
-        total_width_ += symbol_w + kSegmentGap + price_w + kSegmentGap + change_w + kItemSpacing;
-    }
+    rebuild_entry_cache();
 
     // Preserve the scroll position across price updates. set_data() is called
     // on EVERY per-symbol hub delivery (rebuild_ticker_from_cache), so zeroing
@@ -284,32 +305,35 @@ void TickerBar::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::TextAntialiasing);
 
-    QFont font(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
-    p.setFont(font);
-    QFontMetrics fm(font);
+    // Font, metrics, strings, widths and colours all come from the cache built in
+    // rebuild_entry_cache(). Nothing here formats or measures — see P9.
+    p.setFont(ticker_font_);
 
-    const int text_y = (height() + fm.ascent() - fm.descent()) / 2;
+    const int text_y = (height() + ticker_fm_.ascent() - ticker_fm_.descent()) / 2;
+    const int viewport_w = width();
     double x = -offset_;
-    const int passes = (width() / total_width_) + 2;
+    const int passes = (viewport_w / total_width_) + 2;
 
     for (int pass = 0; pass < passes; ++pass) {
         for (const auto& e : entries_) {
-            // Symbol — primary text
-            p.setPen(QColor(ui::colors::WHITE()));
+            // Skip entries scrolled off either edge. The old loop drew every
+            // entry of every pass regardless of visibility.
+            if (x + e.total_width < 0 || x > viewport_w) {
+                x += e.total_width;
+                continue;
+            }
+
+            p.setPen(symbol_color_);
             p.drawText(QPointF(x, text_y), e.symbol);
-            x += fm.horizontalAdvance(e.symbol) + kSegmentGap;
+            x += e.symbol_width + kSegmentGap;
 
-            // Price — muted
-            const QString price_str = QString::number(e.price, 'f', 2);
-            p.setPen(QColor(ui::colors::GRAY()));
-            p.drawText(QPointF(x, text_y), price_str);
-            x += fm.horizontalAdvance(price_str) + kSegmentGap;
+            p.setPen(price_color_);
+            p.drawText(QPointF(x, text_y), e.price_text);
+            x += e.price_width + kSegmentGap;
 
-            // Change — green / red
-            const QString change_str = QString("%1%2%").arg(e.change >= 0 ? "+" : "").arg(e.change, 0, 'f', 2);
-            p.setPen(QColor(ui::change_color(e.change)));
-            p.drawText(QPointF(x, text_y), change_str);
-            x += fm.horizontalAdvance(change_str) + kItemSpacing;
+            p.setPen(e.change_col);
+            p.drawText(QPointF(x, text_y), e.change_text);
+            x += e.change_width + kItemSpacing;
         }
     }
 }

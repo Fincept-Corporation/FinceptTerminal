@@ -4,6 +4,7 @@
 #include "screens/chat_mode/ChatModeService.h"
 #include "ui/theme/Theme.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QJsonArray>
@@ -13,6 +14,31 @@
 #include <QVBoxLayout>
 
 namespace fincept::chat_mode {
+
+// Drives the panel's data load off visibility instead of construction (§P3).
+//
+// The five refresh_*() calls used to sit in the constructor. WindowFrame builds
+// ChatModeScreen eagerly at startup, so they fired five HTTP GETs before first
+// paint — each allocating a 15 s timeout QTimer, and all of them pre-login, so
+// they went out with an empty X-API-Key and 401'd. Pure waste that also delayed
+// first paint.
+//
+// The natural home is a showEvent() override; this filter is the identical hook
+// installed from the .cpp so ChatAgentPanel.h stays untouched. Fold it into a
+// real `void showEvent(QShowEvent*) override` when the header is next edited.
+// Lives at file scope so MOC doesn't choke on local classes.
+class AgentPanelShowLoader : public QObject {
+  public:
+    explicit AgentPanelShowLoader(ChatAgentPanel* panel) : QObject(panel), panel_(panel) {
+        panel->installEventFilter(this);
+    }
+
+  protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+  private:
+    ChatAgentPanel* panel_ = nullptr;
+};
 
 static QString list_ss() {
     return QString("QListWidget{background:%1;border:1px solid %2;color:%3;"
@@ -42,13 +68,23 @@ static QString hint_ss() {
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 
+bool AgentPanelShowLoader::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == panel_ && event->type() == QEvent::Show) {
+        panel_->refresh_memory();
+        panel_->refresh_schedules();
+        panel_->refresh_tasks();
+        panel_->refresh_mcp_servers();
+        panel_->refresh_monitors();
+    }
+    return QObject::eventFilter(watched, event);
+}
+
 ChatAgentPanel::ChatAgentPanel(QWidget* parent) : QWidget(parent) {
     build_ui();
-    refresh_memory();
-    refresh_schedules();
-    refresh_tasks();
-    refresh_mcp_servers();
-    refresh_monitors();
+    // No data load here — AgentPanelShowLoader runs it on first (and every)
+    // show, so nothing hits the network until the user is actually in chat
+    // mode and logged in. See the comment on that class above.
+    new AgentPanelShowLoader(this); // parented to this; destroyed with the panel
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -517,11 +553,15 @@ void ChatAgentPanel::on_add_memory() {
     if (!ok)
         return;
 
-    ChatModeService::instance().save_memory(key.trimmed(), value.trimmed(), type, [this](bool saved_ok, QString err) {
-        if (!saved_ok)
-            LOG_WARN("ChatAgentPanel", "Save memory failed: " + err);
-        refresh_memory();
-    });
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().save_memory(key.trimmed(), value.trimmed(), type,
+                                            [this, self](bool saved_ok, QString err) {
+                                                if (!self)
+                                                    return;
+                                                if (!saved_ok)
+                                                    LOG_WARN("ChatAgentPanel", "Save memory failed: " + err);
+                                                refresh_memory();
+                                            });
 }
 
 void ChatAgentPanel::on_delete_memory() {
@@ -532,7 +572,10 @@ void ChatAgentPanel::on_delete_memory() {
     if (QMessageBox::question(this, tr("Delete Memory"), tr("Delete \"%1\"?").arg(key),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
-    ChatModeService::instance().delete_memory(key, [this](bool ok, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().delete_memory(key, [this, self](bool ok, QString err) {
+        if (!self)
+            return;
         if (!ok)
             LOG_WARN("ChatAgentPanel", "Delete memory failed: " + err);
         refresh_memory();
@@ -543,7 +586,10 @@ void ChatAgentPanel::on_clear_all_memory() {
     if (QMessageBox::question(this, tr("Clear Memory"), tr("Delete ALL memory entries?"),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
-    ChatModeService::instance().clear_all_memory([this](bool ok, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().clear_all_memory([this, self](bool ok, QString err) {
+        if (!self)
+            return;
         if (!ok)
             LOG_WARN("ChatAgentPanel", "Clear memory failed: " + err);
         refresh_memory();
@@ -563,8 +609,11 @@ void ChatAgentPanel::on_add_schedule() {
     if (!ok || cron.trimmed().isEmpty())
         return;
 
+    QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().create_schedule(query.trimmed(), cron.trimmed(), {},
-                                                [this](bool created_ok, AgentSchedule, QString err) {
+                                                [this, self](bool created_ok, AgentSchedule, QString err) {
+                                                    if (!self)
+                                                        return;
                                                     if (!created_ok)
                                                         LOG_WARN("ChatAgentPanel", "Create schedule failed: " + err);
                                                     refresh_schedules();
@@ -575,11 +624,15 @@ void ChatAgentPanel::on_delete_schedule() {
     auto* item = sched_list_->currentItem();
     if (!item)
         return;
-    ChatModeService::instance().delete_schedule(item->data(Qt::UserRole).toString(), [this](bool ok, QString err) {
-        if (!ok)
-            LOG_WARN("ChatAgentPanel", "Delete schedule failed: " + err);
-        refresh_schedules();
-    });
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().delete_schedule(item->data(Qt::UserRole).toString(),
+                                                [this, self](bool ok, QString err) {
+                                                    if (!self)
+                                                        return;
+                                                    if (!ok)
+                                                        LOG_WARN("ChatAgentPanel", "Delete schedule failed: " + err);
+                                                    refresh_schedules();
+                                                });
 }
 
 void ChatAgentPanel::on_toggle_schedule() {
@@ -588,7 +641,10 @@ void ChatAgentPanel::on_toggle_schedule() {
         return;
     const QString id = item->data(Qt::UserRole).toString();
     const QString status = item->data(Qt::UserRole + 1).toString();
-    auto cb = [this](bool ok, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    auto cb = [this, self](bool ok, QString err) {
+        if (!self)
+            return;
         if (!ok)
             LOG_WARN("ChatAgentPanel", "Toggle schedule failed: " + err);
         refresh_schedules();
@@ -609,7 +665,10 @@ void ChatAgentPanel::on_cancel_task() {
     auto* item = task_list_->currentItem();
     if (!item)
         return;
-    ChatModeService::instance().cancel_task(item->data(Qt::UserRole).toString(), [this](bool ok, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().cancel_task(item->data(Qt::UserRole).toString(), [this, self](bool ok, QString err) {
+        if (!self)
+            return;
         if (!ok)
             LOG_WARN("ChatAgentPanel", "Cancel task failed: " + err);
         refresh_tasks();
@@ -620,8 +679,11 @@ void ChatAgentPanel::on_view_task_detail() {
     auto* item = task_list_->currentItem();
     if (!item)
         return;
+    QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().get_task(
-        item->data(Qt::UserRole).toString(), [this](bool ok, AgentTask task, QString err) {
+        item->data(Qt::UserRole).toString(), [this, self](bool ok, AgentTask task, QString err) {
+            if (!self)
+                return;
             if (!ok) {
                 QMessageBox::warning(this, tr("Task"), tr("Failed: %1").arg(err));
                 return;
@@ -645,8 +707,11 @@ void ChatAgentPanel::on_send_feedback() {
     if (!ok || feedback.trimmed().isEmpty())
         return;
 
+    QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().send_task_feedback(item->data(Qt::UserRole).toString(), feedback.trimmed(),
-                                                   [this](bool sent_ok, QString err) {
+                                                   [this, self](bool sent_ok, QString err) {
+                                                       if (!self)
+                                                           return;
                                                        if (!sent_ok)
                                                            LOG_WARN("ChatAgentPanel", "Feedback failed: " + err);
                                                        else
@@ -694,8 +759,11 @@ void ChatAgentPanel::on_add_mcp_server() {
         config["url"] = url.trimmed();
     }
 
+    QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().add_mcp_server(
-        name.trimmed(), config, [this](bool added_ok, McpServer srv, QString err) {
+        name.trimmed(), config, [this, self](bool added_ok, McpServer srv, QString err) {
+            if (!self)
+                return;
             if (!added_ok) {
                 QMessageBox::warning(this, tr("MCP Server"), tr("Failed: %1").arg(err));
                 return;
@@ -714,7 +782,10 @@ void ChatAgentPanel::on_delete_mcp_server() {
     if (QMessageBox::question(this, tr("Remove Server"), tr("Remove \"%1\"?").arg(name),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
-    ChatModeService::instance().delete_mcp_server(name, [this](bool ok, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().delete_mcp_server(name, [this, self](bool ok, QString err) {
+        if (!self)
+            return;
         if (!ok)
             LOG_WARN("ChatAgentPanel", "Delete MCP server failed: " + err);
         refresh_mcp_servers();
@@ -722,8 +793,11 @@ void ChatAgentPanel::on_delete_mcp_server() {
 }
 
 void ChatAgentPanel::on_refresh_mcp_servers() {
+    QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().refresh_mcp_servers(
-        [this](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
+        [this, self](bool ok, QVector<McpServer> servers, int total_tools, QString err) {
+            if (!self)
+                return;
             if (!ok) {
                 LOG_WARN("ChatAgentPanel", "Refresh MCP failed: " + err);
                 return;
@@ -800,9 +874,12 @@ void ChatAgentPanel::on_add_monitor() {
         return;
     trigger_config["condition"] = cond;
 
+    QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().create_monitor(
         name.trimmed(), source_type, source_config, trigger_config, analysis.trimmed(), interval, {},
-        [this](bool created_ok, AgentMonitor, QString err) {
+        [this, self](bool created_ok, AgentMonitor, QString err) {
+            if (!self)
+                return;
             if (!created_ok)
                 QMessageBox::warning(this, tr("Monitor"), tr("Failed: %1").arg(err));
             refresh_monitors();
@@ -816,11 +893,15 @@ void ChatAgentPanel::on_delete_monitor() {
     if (QMessageBox::question(this, tr("Delete Monitor"), tr("Delete?"), QMessageBox::Yes | QMessageBox::No) !=
         QMessageBox::Yes)
         return;
-    ChatModeService::instance().delete_monitor(item->data(Qt::UserRole).toString(), [this](bool ok, QString err) {
-        if (!ok)
-            LOG_WARN("ChatAgentPanel", "Delete monitor failed: " + err);
-        refresh_monitors();
-    });
+    QPointer<ChatAgentPanel> self = this;
+    ChatModeService::instance().delete_monitor(item->data(Qt::UserRole).toString(),
+                                               [this, self](bool ok, QString err) {
+                                                   if (!self)
+                                                       return;
+                                                   if (!ok)
+                                                       LOG_WARN("ChatAgentPanel", "Delete monitor failed: " + err);
+                                                   refresh_monitors();
+                                               });
 }
 
 void ChatAgentPanel::on_toggle_monitor() {
@@ -829,7 +910,10 @@ void ChatAgentPanel::on_toggle_monitor() {
         return;
     const QString id = item->data(Qt::UserRole).toString();
     const QString status = item->data(Qt::UserRole + 1).toString();
-    auto cb = [this](bool ok, QString err) {
+    QPointer<ChatAgentPanel> self = this;
+    auto cb = [this, self](bool ok, QString err) {
+        if (!self)
+            return;
         if (!ok)
             LOG_WARN("ChatAgentPanel", "Toggle monitor failed: " + err);
         refresh_monitors();

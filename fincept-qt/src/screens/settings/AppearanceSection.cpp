@@ -28,6 +28,11 @@ constexpr const char* kDefaultFontSize = "14px";
 constexpr const char* kDefaultFontFamily = "Consolas";
 constexpr const char* kDefaultDensity = "Default";
 
+/// Dynamic-property guard set by reload() when a settings *read* failed. While
+/// it is set, Save is disabled and its handler refuses to write — the widgets
+/// hold defaults, not the user's values, and set() is an INSERT OR REPLACE.
+constexpr const char* kAppearanceReadFailedProp = "fincept_appearance_read_failed";
+
 // make_row() (shared helper in SettingsRowHelpers.h) builds the label — and the
 // optional description — QLabel internally and only returns the row widget. To
 // re-translate those at runtime we grab them back from the row's direct child
@@ -242,6 +247,12 @@ void AppearanceSection::build_ui() {
     save_btn_->setAccessibleName(tr("Save appearance settings"));
     save_btn_->setStyleSheet(btn_primary_ss());
     connect(save_btn_, &QPushButton::clicked, this, [this]() {
+        if (property(kAppearanceReadFailedProp).toBool()) {
+            LOG_WARN("Settings", "Refusing to save appearance settings — the stored values could not be read, so "
+                                 "the widgets on screen are defaults rather than the user's settings");
+            return;
+        }
+
         auto& repo = SettingsRepository::instance();
 
         repo.set("appearance.font_size", app_font_size_->currentText(), "appearance");
@@ -294,9 +305,22 @@ void AppearanceSection::reload() {
     const QSignalBlocker b2(app_font_family_);
     const QSignalBlocker b4(app_density_);
 
+    // A read error is not "unset". The Save handler writes every widget on this
+    // page straight back, so a failed read must disarm Save; the default is
+    // still used in memory so the page renders something sensible.
+    bool read_failed = false;
+    auto log_read_error = [&read_failed](const QString& key, const std::string& err) {
+        LOG_ERROR("Settings", QString("settings read failed for '%1' — showing the default, leaving the stored "
+                                      "value untouched and disabling Save: %2")
+                                  .arg(key, QString::fromStdString(err)));
+        read_failed = true;
+    };
+
     auto load_combo = [&](QComboBox* cb, const QString& key, const QString& def) {
         auto r = repo.get(key);
-        QString val = r.is_ok() ? r.value() : def;
+        if (r.is_err())
+            log_read_error(key, r.error());
+        const QString val = r.is_ok() ? r.value() : def;
         int idx = cb->findText(val);
         if (idx >= 0)
             cb->setCurrentIndex(idx);
@@ -306,7 +330,12 @@ void AppearanceSection::reload() {
         if (!cb)
             return;
         auto r = repo.get(key);
-        cb->setChecked(!r.is_ok() ? def : r.value() != "false");
+        if (r.is_err()) {
+            log_read_error(key, r.error());
+            cb->setChecked(def);
+            return;
+        }
+        cb->setChecked(r.value() != "false");
     };
 
     load_combo(app_font_size_, "appearance.font_size", kDefaultFontSize);
@@ -316,6 +345,15 @@ void AppearanceSection::reload() {
     load_check(chat_bubble_toggle_, "appearance.show_chat_bubble", true);
     load_check(ticker_bar_toggle_, "appearance.show_ticker_bar", true);
     load_check(animations_toggle_, "appearance.animations", true);
+
+    setProperty(kAppearanceReadFailedProp, read_failed);
+    if (save_btn_) {
+        save_btn_->setEnabled(!read_failed);
+        save_btn_->setToolTip(read_failed ? tr("Your saved appearance settings could not be read — saving is "
+                                               "disabled so the defaults shown cannot overwrite them. Reopen "
+                                               "Settings to retry.")
+                                          : QString());
+    }
 }
 
 void AppearanceSection::changeEvent(QEvent* event) {

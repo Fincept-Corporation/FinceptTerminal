@@ -14,6 +14,8 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
+#include <cmath>
+
 namespace fincept::screens {
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -395,22 +397,33 @@ void EquityValuationTab::run_scoring_models() {
                                                                             : get_stmt_val(bs, "Working Capital");
 
     // ── Altman Z ─────────────────────────────────────────────────
-    QJsonObject altman_body;
-    altman_body["working_capital"] = working_capital;
-    altman_body["total_assets"] = total_assets;
-    altman_body["retained_earnings"] = retained_earnings;
-    altman_body["ebit"] = ebit;
-    altman_body["market_cap"] = last_info_.market_cap;
-    altman_body["total_liabilities"] = total_liabilities;
-    altman_body["revenue"] = revenue;
-
     QPointer<EquityValuationTab> self = this;
-    services::QuantLibClient::instance().call("analysis/valuation/predictive/altman-z", altman_body,
-                                              [self](mcp::ToolResult r) {
-                                                  if (!self || !r.success)
-                                                      return;
-                                                  self->display_altman_result(r.data);
-                                              });
+
+    // Four of Altman's five ratios divide by total assets and the fifth by total
+    // liabilities. With an empty balance sheet every input here is 0, and asking
+    // the endpoint anyway yields a score that describes nothing — which then
+    // rendered as a red "DISTRESS ZONE". Don't ask; say so instead.
+    if (total_assets > 0.0 && total_liabilities > 0.0) {
+        QJsonObject altman_body;
+        altman_body["working_capital"] = working_capital;
+        altman_body["total_assets"] = total_assets;
+        altman_body["retained_earnings"] = retained_earnings;
+        altman_body["ebit"] = ebit;
+        altman_body["market_cap"] = last_info_.market_cap;
+        altman_body["total_liabilities"] = total_liabilities;
+        altman_body["revenue"] = revenue;
+
+        services::QuantLibClient::instance().call("analysis/valuation/predictive/altman-z", altman_body,
+                                                  [self](mcp::ToolResult r) {
+                                                      if (!self)
+                                                          return;
+                                                      // An empty value renders "NO DATA" — a failed call must not
+                                                      // leave a stale verdict from the previously viewed symbol.
+                                                      self->display_altman_result(r.success ? r.data : QJsonValue());
+                                                  });
+    } else {
+        display_altman_result(QJsonValue());
+    }
 
     // ── Piotroski F (needs two periods) ──────────────────────────
     if (is.size() >= 2 && bs.size() >= 2) {
@@ -548,13 +561,22 @@ void EquityValuationTab::display_dcf_result(const QJsonValue& data) {
 
 void EquityValuationTab::display_altman_result(const QJsonValue& data) {
     auto obj = data.toObject();
-    double z = obj.value("z_score").toDouble(obj.value("altman_z_score").toDouble(0.0));
+    // NaN sentinel, not 0.0. run_scoring_models() dispatches the Altman request
+    // unconditionally — with all-zero inputs when the balance sheet is empty,
+    // which is the normal case for ETFs, funds and most non-US listings. A 0.0
+    // default fell past both thresholds into "DISTRESS ZONE", so the terminal
+    // published a red bankruptcy verdict for any instrument whose financials
+    // simply did not load. Mirrors the -1 sentinel in display_piotroski_result.
+    const double z = obj.value("z_score").toDouble(obj.value("altman_z_score").toDouble(qQNaN()));
+    const bool has_z = !std::isnan(z);
 
     if (altman_val_)
-        altman_val_->setText(QString::number(z, 'f', 2));
+        altman_val_->setText(has_z ? QString::number(z, 'f', 2) : QStringLiteral("—"));
 
     if (altman_badge_) {
-        if (z > 2.99)
+        if (!has_z)
+            set_badge(altman_badge_, tr("NO DATA"), ui::colors::TEXT_TERTIARY());
+        else if (z > 2.99)
             set_badge(altman_badge_, tr("SAFE ZONE"), ui::colors::POSITIVE());
         else if (z >= 1.81)
             set_badge(altman_badge_, tr("GREY ZONE"), ui::colors::AMBER());
@@ -582,13 +604,19 @@ void EquityValuationTab::display_piotroski_result(const QJsonValue& data) {
 
 void EquityValuationTab::display_beneish_result(const QJsonValue& data) {
     auto obj = data.toObject();
-    double m = obj.value("m_score").toDouble(obj.value("beneish_m_score").toDouble(0.0));
+    // Same 0.0-default trap as Altman: an absent m_score defaulted to 0.0, which
+    // is above the -2.22 threshold and therefore accused every company with no
+    // returned score of "POSSIBLE MANIPULATOR".
+    const double m = obj.value("m_score").toDouble(obj.value("beneish_m_score").toDouble(qQNaN()));
+    const bool has_m = !std::isnan(m);
 
     if (beneish_val_)
-        beneish_val_->setText(QString::number(m, 'f', 2));
+        beneish_val_->setText(has_m ? QString::number(m, 'f', 2) : QStringLiteral("—"));
 
     if (beneish_badge_) {
-        if (m < -2.22)
+        if (!has_m)
+            set_badge(beneish_badge_, tr("NO DATA"), ui::colors::TEXT_TERTIARY());
+        else if (m < -2.22)
             set_badge(beneish_badge_, tr("UNLIKELY MANIPULATOR"), ui::colors::POSITIVE());
         else
             set_badge(beneish_badge_, tr("POSSIBLE MANIPULATOR"), ui::colors::NEGATIVE());

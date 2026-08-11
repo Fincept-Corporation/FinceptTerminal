@@ -1,9 +1,11 @@
 #include "services/updater/UpdateService.h"
 
 #include "core/logging/Logger.h"
+#include "services/wallet/Ed25519Verifier.h"
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QByteArray>
 #include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QDir>
@@ -22,6 +24,51 @@
 #include <QUrl>
 
 namespace fincept::services {
+
+// ── Update-manifest signing: OFFLINE RUNBOOK ─────────────────────────────────
+//
+// The manifest is only trusted if it carries a valid detached Ed25519
+// signature made with a key that never enters the repository or CI. Generate
+// the keypair ONCE, on an offline / trusted machine, and keep the private key
+// off every build machine.
+//
+//   # 1. Generate the keypair (OpenSSL 3.x).
+//   openssl genpkey -algorithm ed25519 -out fincept-update-signing.key
+//   chmod 600 fincept-update-signing.key
+//
+//   # 2. Extract the RAW 32-byte public key as hex. The DER SubjectPublicKeyInfo
+//   #    for Ed25519 is a fixed 12-byte prefix + the 32 key bytes, so the last
+//   #    32 bytes are exactly what UPDATE_SIGNING_PUBLIC_KEY_HEX wants.
+//   openssl pkey -in fincept-update-signing.key -pubout -outform DER \
+//     | tail -c 32 | xxd -p -c 32
+//
+//   # 3. Paste that 64-hex-character string into
+//   #    UPDATE_SIGNING_PUBLIC_KEY_HEX in UpdateService.h and ship the build.
+//
+//   # 4. For EVERY release, after updates.json is final, sign it and commit the
+//   #    signature next to it. Ed25519 signs the message directly (-rawin);
+//   #    there is no pre-hash step and `openssl dgst -sign` is NOT equivalent.
+//   openssl pkeyutl -sign -rawin -inkey fincept-update-signing.key \
+//     -in updates.json -out updates.json.sig.bin
+//   base64 -w0 updates.json.sig.bin > updates.json.sig
+//
+//   # 5. Verify locally before pushing.
+//   base64 -d updates.json.sig > /tmp/sig.bin
+//   openssl pkeyutl -verify -rawin -pubin \
+//     -inkey <(openssl pkey -in fincept-update-signing.key -pubout) \
+//     -in updates.json -sigfile /tmp/sig.bin
+//
+//   # 6. Commit BOTH files together. updates.json.sig must sit beside
+//   #    updates.json at the same URL + ".sig".
+//
+// The signature covers the manifest bytes EXACTLY as served. Any reformatting,
+// trailing-newline change, or CRLF conversion after signing invalidates it —
+// sign the exact file you commit, and make sure .gitattributes does not
+// normalise line endings for updates.json.
+//
+// Key rotation: ship a build carrying the NEW public key first, wait for it to
+// propagate, then start signing with the new private key. A client only ever
+// trusts the single key compiled into it.
 
 UpdateService& UpdateService::instance() {
     static UpdateService inst;
@@ -143,7 +190,24 @@ void UpdateService::check_for_updates(bool silent) {
         return;
     }
 
+    // Fail closed: without a pinned signing key we cannot tell an authentic
+    // manifest from one pushed by whoever last compromised the repo, and the
+    // installer we would fetch is auto-launched. Refuse rather than proceed
+    // unsigned. See the signing runbook at the top of this file.
+    if (signing_public_key().isEmpty()) {
+        LOG_ERROR("UpdateService", "AUTO-UPDATE DISABLED — no update-signing public key is pinned in this build. "
+                                   "Set UpdateService::UPDATE_SIGNING_PUBLIC_KEY_HEX and sign updates.json (see the "
+                                   "runbook in UpdateService.cpp) before shipping auto-update.");
+        if (!silent_) {
+            show_error(QStringLiteral("Auto-update is disabled in this build because no update-signing key is "
+                                      "configured.\n\nPlease download updates from the releases page."));
+        }
+        emit check_finished(false);
+        return;
+    }
+
     in_progress_ = true;
+    pending_manifest_body_.clear();
     LOG_INFO("UpdateService", QString("Checking for updates — platform=%1, local=%2, manifest=%3")
                                   .arg(platform_key, local_version, manifest_url_));
 
@@ -153,6 +217,52 @@ void UpdateService::check_for_updates(bool silent) {
                   QString("FinceptTerminal/%1 (%2)").arg(local_version, platform_key));
     QNetworkReply* reply = net_.get(req);
     connect(reply, &QNetworkReply::finished, this, &UpdateService::on_manifest_reply_finished);
+}
+
+// ── Manifest signature ──────────────────────────────────────────────────────
+
+QByteArray UpdateService::signing_public_key() {
+    const QByteArray hex =
+        QByteArray::fromRawData(UPDATE_SIGNING_PUBLIC_KEY_HEX,
+                                static_cast<qsizetype>(qstrlen(UPDATE_SIGNING_PUBLIC_KEY_HEX)))
+            .trimmed();
+    if (hex.isEmpty())
+        return {};
+    const QByteArray raw = QByteArray::fromHex(hex);
+    if (raw.size() != 32) {
+        LOG_ERROR("UpdateService", QString("UPDATE_SIGNING_PUBLIC_KEY_HEX is malformed (%1 bytes after hex decode, "
+                                           "expected 32) — auto-update stays disabled")
+                                       .arg(raw.size()));
+        return {};
+    }
+    return raw;
+}
+
+bool UpdateService::verify_manifest_signature(const QByteArray& manifest, const QByteArray& signature) {
+    const QByteArray pubkey = signing_public_key();
+    if (pubkey.isEmpty())
+        return false; // fail closed — never "no key means no check"
+
+    // Accept the signature as base64 (what the runbook produces) or as hex.
+    const QByteArray trimmed = signature.trimmed();
+    QByteArray raw_sig;
+    if (trimmed.size() == 128) {
+        raw_sig = QByteArray::fromHex(trimmed);
+    }
+    if (raw_sig.size() != 64) {
+        raw_sig = QByteArray::fromBase64(trimmed, QByteArray::AbortOnBase64DecodingErrors);
+    }
+    if (raw_sig.size() != 64) {
+        LOG_ERROR("UpdateService",
+                  QString("Update signature is not 64 bytes (got %1) — rejecting manifest").arg(raw_sig.size()));
+        return false;
+    }
+
+    // Ed25519Verifier is already linked (orlp/ed25519, used by the wallet
+    // connect handshake). Its API speaks base58, so re-encode both blobs.
+    const QString pubkey_b58 = wallet::Ed25519Verifier::encode_base58(pubkey);
+    const QString sig_b58 = wallet::Ed25519Verifier::encode_base58(raw_sig);
+    return wallet::Ed25519Verifier::verify(pubkey_b58, manifest, sig_b58);
 }
 
 // ── Manifest response ───────────────────────────────────────────────────────
@@ -172,7 +282,59 @@ void UpdateService::on_manifest_reply_finished() {
         return;
     }
 
-    const QByteArray body = reply->readAll();
+    // Hold the raw bytes and fetch the detached signature. NOTHING in the
+    // manifest is read — not even the version — until the signature verifies.
+    pending_manifest_body_ = reply->readAll();
+
+    const QString sig_url = manifest_url_ + QStringLiteral(".sig");
+    LOG_DEBUG("UpdateService", QString("Fetching manifest signature: %1").arg(sig_url));
+    QNetworkRequest sig_req{QUrl(sig_url)};
+    sig_req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    sig_req.setHeader(QNetworkRequest::UserAgentHeader,
+                      QString("FinceptTerminal/%1").arg(QApplication::applicationVersion()));
+    QNetworkReply* sig_reply = net_.get(sig_req);
+    connect(sig_reply, &QNetworkReply::finished, this, &UpdateService::on_signature_reply_finished);
+}
+
+void UpdateService::on_signature_reply_finished() {
+    auto* reply = qobject_cast<QNetworkReply*>(sender());
+    if (!reply)
+        return;
+    reply->deleteLater();
+
+    const QByteArray manifest = pending_manifest_body_;
+    pending_manifest_body_.clear();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        // A missing or unreachable signature is a hard failure, not a reason to
+        // fall back to the unsigned path. Downgrade-to-unsigned is exactly what
+        // an attacker who can serve the manifest would arrange.
+        LOG_ERROR("UpdateService", QString("Update manifest signature could not be fetched (%1) — refusing to apply "
+                                           "an unverified update")
+                                       .arg(reply->errorString()));
+        if (!silent_)
+            show_error(QStringLiteral("This update could not be authenticated (its signature is missing). "
+                                      "Nothing has been downloaded."));
+        finish_check(false);
+        return;
+    }
+
+    const QByteArray signature = reply->readAll();
+    if (manifest.isEmpty() || !verify_manifest_signature(manifest, signature)) {
+        LOG_ERROR("UpdateService", "Update manifest FAILED signature verification — refusing to apply. The manifest "
+                                   "was not produced by the holder of the pinned signing key.");
+        if (!silent_)
+            show_error(QStringLiteral("This update failed authenticity verification and has been rejected. "
+                                      "Nothing has been downloaded."));
+        finish_check(false);
+        return;
+    }
+
+    LOG_INFO("UpdateService", "Update manifest signature verified");
+    process_verified_manifest(manifest);
+}
+
+void UpdateService::process_verified_manifest(const QByteArray& body) {
     QJsonParseError parse_err{};
     const QJsonDocument doc = QJsonDocument::fromJson(body, &parse_err);
     if (parse_err.error != QJsonParseError::NoError || !doc.isObject()) {
@@ -383,6 +545,15 @@ void UpdateService::on_download_reply_finished() {
 
 void UpdateService::launch_installer(const QString& path) {
     LOG_INFO("UpdateService", QString("Launching installer: %1").arg(path));
+
+    // TODO(security, needs build change): on Windows, verify the installer's
+    // Authenticode signature here — before startDetached — via WinVerifyTrust
+    // with WINTRUST_ACTION_GENERIC_VERIFY_V2 over a WINTRUST_FILE_INFO, and
+    // abort on anything other than ERROR_SUCCESS. That needs `wintrust` (and
+    // `crypt32`, already linked) added to target_link_libraries in
+    // CMakeLists.txt, so it is deliberately not done inline here. It is a
+    // second, independent gate: the manifest signature proves who chose the
+    // installer, Authenticode proves who built it.
 
 #ifdef Q_OS_LINUX
     // Linux installers (.run) need the executable bit set before they can be

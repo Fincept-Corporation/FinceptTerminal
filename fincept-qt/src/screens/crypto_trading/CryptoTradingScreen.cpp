@@ -77,6 +77,15 @@ void CryptoTradingScreen::showEvent(QShowEvent* event) {
         clock_timer_->start();
     if (ws_flush_timer_)
         ws_flush_timer_->start();
+    // Re-attach the hub WS subscriptions dropped by hideEvent (§D3). Same
+    // topic set: hub_subscribe_topics() derives every topic from the current
+    // exchange_id_ / selected_symbol_ / watchlist_symbols_ / chart timeframe,
+    // none of which hideEvent touches. Gated on initialized_ so the very
+    // first show doesn't subscribe ahead of init_exchange() — that deferred
+    // call owns the initial subscribe and would immediately tear this one
+    // down anyway.
+    if (initialized_)
+        hub_subscribe_topics();
     // Restart the live positions/P&L poller if we're in LIVE mode. hideEvent
     // stopped it and it was only ever (re)started from the mode toggle, so
     // tabbing away and back froze live P&L until the mode was re-toggled.
@@ -103,6 +112,14 @@ void CryptoTradingScreen::hideEvent(QHideEvent* event) {
         clock_timer_->stop();
     if (ws_flush_timer_)
         ws_flush_timer_->stop();
+
+    // Drop the hub WS subscriptions (§D3). Stopping ws_flush_timer_ above only
+    // stops the *drain* — the subscription callbacks keep appending to
+    // pending_trades_ / pending_candles_ at exchange tick rate for as long as
+    // the screen stays hidden, so the buffers grew without bound and the first
+    // flush after re-showing dumped the whole accumulation into bottom_panel_
+    // in one multi-second freeze. showEvent re-subscribes the same topic set.
+    hub_unsubscribe_topics();
 
     // Reset WS/state trackers so apply_feed_mode and update_clock re-emit
     // their state when the tab becomes visible again.
@@ -534,6 +551,11 @@ void CryptoTradingScreen::hub_subscribe_topics() {
             e.side = td.side;
             e.price = td.price;
             e.amount = td.amount;
+            // Hard cap — belt and braces against the drain ever stalling
+            // (hidden screen, blocked event loop). Newest wins: the time &
+            // sales tape only ever renders the most recent rows anyway.
+            if (self->pending_trades_.size() >= kMaxPendingTrades)
+                self->pending_trades_.remove(0, self->pending_trades_.size() - kMaxPendingTrades + 1);
             self->pending_trades_.append(e);
         });
 
@@ -545,6 +567,10 @@ void CryptoTradingScreen::hub_subscribe_topics() {
                                             [self](const fincept::trading::Candle& c) {
                                                 if (!self)
                                                     return;
+                                                // Same cap rationale as pending_trades_ above.
+                                                if (self->pending_candles_.size() >= kMaxPendingCandles)
+                                                    self->pending_candles_.remove(
+                                                        0, self->pending_candles_.size() - kMaxPendingCandles + 1);
                                                 self->pending_candles_.append(c);
                                             });
 

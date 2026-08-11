@@ -101,7 +101,14 @@ IndicatorResult IndicatorEngine::compute(const QString& name, const QVector<Ohlc
     QVector<double> open, high, low, close, vol;
     extract_arrays(candles, open, high, low, close, vol);
 
-    int period = params.value("period").toInt(14);
+    // Period/window parameters are divisors *and* array offsets throughout this
+    // file (`sum / period`, `out[period - 1]`, `src[i - period]`, `2/(period+1)`).
+    // A zero or negative period from a malformed strategy therefore produces both
+    // ±inf — which is not NaN, so it survives the evaluator's guards — and
+    // out-of-bounds indexing. Clamp once here instead of in every compute_*.
+    auto at_least_one = [](int v) { return v >= 1 ? v : 1; };
+
+    int period = at_least_one(params.value("period").toInt(14));
 
     // Moving averages
     if (name == "SMA")
@@ -119,14 +126,14 @@ IndicatorResult IndicatorEngine::compute(const QString& name, const QVector<Ohlc
     if (name == "RSI")
         return compute_rsi(close, period);
     if (name == "MACD") {
-        int fast = params.value("fast").toInt(12);
-        int slow = params.value("slow").toInt(26);
-        int sig = params.value("signal").toInt(9);
+        int fast = at_least_one(params.value("fast").toInt(12));
+        int slow = at_least_one(params.value("slow").toInt(26));
+        int sig = at_least_one(params.value("signal").toInt(9));
         return compute_macd(close, fast, slow, sig);
     }
     if (name == "STOCHASTIC") {
-        int k = params.value("k_period").toInt(14);
-        int d = params.value("d_period").toInt(3);
+        int k = at_least_one(params.value("k_period").toInt(14));
+        int d = at_least_one(params.value("d_period").toInt(3));
         return compute_stochastic(high, low, close, k, d);
     }
     if (name == "CCI")
@@ -148,9 +155,9 @@ IndicatorResult IndicatorEngine::compute(const QString& name, const QVector<Ohlc
     if (name == "AROON")
         return compute_aroon(high, low, period);
     if (name == "ICHIMOKU") {
-        int tenkan = params.value("tenkan").toInt(9);
-        int kijun = params.value("kijun").toInt(26);
-        int senkou = params.value("senkou").toInt(52);
+        int tenkan = at_least_one(params.value("tenkan").toInt(9));
+        int kijun = at_least_one(params.value("kijun").toInt(26));
+        int senkou = at_least_one(params.value("senkou").toInt(52));
         return compute_ichimoku(high, low, tenkan, kijun, senkou);
     }
 
@@ -174,7 +181,7 @@ IndicatorResult IndicatorEngine::compute(const QString& name, const QVector<Ohlc
     if (name == "CMF")
         return compute_cmf(high, low, close, vol, period);
     if (name == "VOL_WIN_CHG") {
-        int window = params.value("window").toInt(10);
+        int window = at_least_one(params.value("window").toInt(10));
         return compute_vol_win_chg(vol, window);
     }
 
@@ -469,10 +476,21 @@ IndicatorResult IndicatorEngine::compute_roc(const QVector<double>& close, int p
     int n = close.size();
     if (n <= period)
         return make_error(QStringLiteral("Insufficient data for ROC"));
-    double curr = (close[n - 1] - close[n - 1 - period]) / close[n - 1 - period] * 100.0;
+    // A zero reference close (an unfilled bar, or a bad tick that reached the
+    // aggregator) makes this division ±inf. inf is not NaN, so it slips through
+    // every std::isnan guard downstream and compares true against any threshold —
+    // enough to fire a live entry. Fail the indicator instead.
+    const double base = close[n - 1 - period];
+    if (!std::isfinite(base) || std::abs(base) < 1e-10)
+        return make_error(QStringLiteral("ROC: zero/invalid reference price"));
+    double curr = (close[n - 1] - base) / base * 100.0;
     double prev = curr;
-    if (n > period + 1)
-        prev = (close[n - 2] - close[n - 2 - period]) / close[n - 2 - period] * 100.0;
+    if (n > period + 1) {
+        const double prev_base = close[n - 2 - period];
+        prev = (std::isfinite(prev_base) && std::abs(prev_base) >= 1e-10)
+                   ? (close[n - 2] - prev_base) / prev_base * 100.0
+                   : std::numeric_limits<double>::quiet_NaN();
+    }
     return make_result(curr, prev);
 }
 

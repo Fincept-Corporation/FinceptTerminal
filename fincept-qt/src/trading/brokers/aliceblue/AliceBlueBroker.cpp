@@ -1,6 +1,7 @@
 #include "trading/brokers/aliceblue/AliceBlueBroker.h"
 
 #include "trading/adapter/BrokerEnumMap.h"
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
@@ -130,23 +131,26 @@ TokenExchangeResponse AliceBlueBroker::exchange_token(const QString& api_key, co
     auto resp = BrokerHttp::instance().post_json(AUTH_URL, body, headers);
 
     if (!resp.success)
-        return {false, "", "", "", checked_error(resp, "Network error"), ""};
+        return {.success = false, .error = checked_error(resp, "Network error")};
 
     QString stat = resp.json["stat"].toString();
     if (stat != "Ok")
-        return {false, "", "", "", checked_error(resp, "Authentication failed"), ""};
+        return {.success = false, .error = checked_error(resp, "Authentication failed")};
 
     QString session = resp.json["userSession"].toString();
     QString client_id = resp.json["clientId"].toString();
 
     if (session.isEmpty())
-        return {false, "", "", "", "No userSession in response", ""};
+        return {.success = false, .error = "No userSession in response"};
 
     // AliceBlue session tokens are flushed at the daily reset; the live sweep is
     // authoritative — this is only a startup hint. No silent refresh (re-auth
     // needs a fresh web-login auth code).
     const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-    return {true, session, client_id, "", extra, ""};
+    // clientId is the account identifier, not a refresh token — it used to be
+    // passed positionally into the refresh_token slot, which left user_id empty
+    // everywhere the account is displayed or reconciled.
+    return {.success = true, .access_token = session, .user_id = client_id, .additional_data = extra};
 }
 
 // ============================================================================
@@ -181,7 +185,10 @@ OrderPlaceResponse AliceBlueBroker::place_order(const BrokerCredentials& creds, 
     item["trailingSlAmount"] = "";
     item["apiOrderSource"] = "";
     item["algoId"] = "";
-    item["orderTag"] = "fincept";
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
+    item["orderTag"] = make_client_order_ref(20);
 
     // API expects an array of one item
     QJsonArray payload;
@@ -383,6 +390,10 @@ ApiResponse<QVector<BrokerPosition>> AliceBlueBroker::get_positions(const Broker
         pos.pnl = p["unrealisedPnl"].toDouble();
         pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = p["product"].toString();
+        // netQuantity carries the sign, but PortfolioReplicationService takes
+        // fabs() of quantity and reads direction from `side` alone — leaving it
+        // empty replicated every short as a long and inverted its P&L.
+        pos.side = net_qty > 0 ? "LONG" : "SHORT";
         positions.append(pos);
     }
 

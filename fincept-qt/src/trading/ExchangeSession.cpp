@@ -206,6 +206,13 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
     QString script_path;
     QStringList args;
 
+    // Every Python spawn must inherit the shared base env (PYTHONIOENCODING,
+    // PYTHONDONTWRITEBYTECODE, FINCEPT_DATA_DIR, PYTHONPATH, …). This process
+    // previously called neither setProcessEnvironment nor build_python_env(),
+    // so the WS bridge ran without any of them. Broker credentials ride in
+    // this env too — see the SECURITY note below.
+    QProcessEnvironment ws_env = python::PythonRunner::instance().build_python_env();
+
     if (session_is_broker_stream(exchange_id_)) {
         script_path = session_resolve_script_path("exchange/broker_ws_bridge.py");
         if (python_path.isEmpty() || script_path.isEmpty()) {
@@ -230,8 +237,9 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
                 user_id = ad.value("client_code").toString();
             feed_token = ad.value("feed_token").toString();
         }
-        if (user_id.isEmpty())
-            user_id = creds.api_key;
+        // NOTE: deliberately no `user_id = creds.api_key` fallback here — that
+        // put the api_key back into argv. broker_ws_bridge.py applies the same
+        // fallback internally, where the key never leaves the process.
 
         QStringList broker_symbols = session_to_broker_symbol_args(all_symbols);
         if (broker_symbols.isEmpty())
@@ -240,9 +248,27 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
             LOG_ERROR(kSessionTag, "No symbols provided for broker websocket stream");
             return false;
         }
-        args << "-u" << "-B" << script_path << exchange_id_ << creds.api_key << creds.access_token << user_id;
+
+        // ── SECURITY: broker credentials go in the environment, never argv ───
+        // api_key / access_token / feed_token are live broker credentials that
+        // stay valid for the whole trading session. A process command line is
+        // readable by any process running as the same user (WMI
+        // Win32_Process.CommandLine on Windows with no elevation,
+        // /proc/<pid>/cmdline on Linux) and is captured by crash dumps and EDR
+        // telemetry — passing them there undoes SecureStorage entirely.
+        // build_python_env() already carries 17+ other credential keys this
+        // way. broker_ws_bridge.py reads os.environ first and only falls back
+        // to argv so an older caller still works.
+        ws_env.insert(QStringLiteral("BROKER_API_KEY"), creds.api_key);
+        ws_env.insert(QStringLiteral("BROKER_ACCESS_TOKEN"), creds.access_token);
         if (!feed_token.isEmpty())
-            args << "--feed-token" << feed_token;
+            ws_env.insert(QStringLiteral("BROKER_FEED_TOKEN"), feed_token);
+
+        // Positional arity is preserved (broker, api_key, access_token,
+        // user_id) so the script's argparse contract is unchanged; the two
+        // credential slots are now empty placeholders. user_id is a client
+        // code, not a secret, and may legitimately be empty.
+        args << "-u" << "-B" << script_path << exchange_id_ << QString() << QString() << user_id;
         args << "--symbols";
         args.append(broker_symbols);
     } else {
@@ -257,6 +283,7 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
     }
 
     ws_process_ = new QProcess(this);
+    ws_process_->setProcessEnvironment(ws_env);
     connect(ws_process_, &QProcess::readyReadStandardOutput, this, &ExchangeSession::drain_ws_buffer);
     connect(ws_process_, &QProcess::readyReadStandardError, this, [this]() {
         if (!ws_process_)

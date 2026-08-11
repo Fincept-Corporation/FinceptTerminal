@@ -6,6 +6,8 @@
 #include <QNetworkReply>
 #include <QUrl>
 
+#include <chrono>
+
 namespace fincept::cloud {
 
 CloudClient& CloudClient::instance() {
@@ -15,6 +17,10 @@ CloudClient& CloudClient::instance() {
 
 CloudClient::CloudClient() {
     nam_ = new QNetworkAccessManager(this);
+    // Qt disables the transfer timeout by default: a half-open TCP connection
+    // never emits finished(), so the callback never runs and there is no cancel
+    // path — the only recovery is restarting the app. Matches HttpClient.
+    nam_->setTransferTimeout(std::chrono::seconds{20});
 }
 
 void CloudClient::set_credentials(const QString& api_key, const QString& session_token) {
@@ -45,6 +51,12 @@ QNetworkRequest CloudClient::build_request(const QString& endpoint) const {
 
 void CloudClient::finish(QNetworkReply* reply, Callback cb, const QObject* context) {
     const QObject* receiver = context ? context : static_cast<const QObject*>(this);
+    // Safety net: guarantee the reply is always deleted. If `context` is
+    // destroyed before the reply finishes, Qt auto-disconnects the callback
+    // lambda below and its reply->deleteLater() would never run → the reply
+    // leaks until app exit. deleteLater() is idempotent, so a double-call when
+    // the lambda also runs is harmless. (Same fix as HttpClient::handle_reply.)
+    connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
     connect(reply, &QNetworkReply::finished, receiver, [reply, cb = std::move(cb)]() {
         reply->deleteLater();
 

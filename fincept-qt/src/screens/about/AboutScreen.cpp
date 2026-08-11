@@ -237,29 +237,32 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             rl->addWidget(panel, 1);
         }
 
-        // Commercial
+        // Enterprise — the separate closed-source product, not a licence for this build.
+        // Fincept no longer sells a commercial licence for the open-source edition;
+        // commercial, institutional and academic use is served by Enterprise instead.
         {
             auto* panel = makePanel();
             auto* pvl = new QVBoxLayout(panel);
             pvl->setContentsMargins(0, 0, 0, 0);
             pvl->setSpacing(0);
-            commercial_header_ = makePanelHeader("★", tr("COMMERCIAL LICENSE"), ui::colors::AMBER);
-            pvl->addWidget(commercial_header_);
+            enterprise_header_ = makePanelHeader("★", tr("FINCEPT TERMINAL ENTERPRISE"), ui::colors::AMBER);
+            pvl->addWidget(enterprise_header_);
 
             auto* body = new QWidget(this);
             body->setStyleSheet("background: transparent;");
             auto* bvl = new QVBoxLayout(body);
             bvl->setContentsMargins(14, 10, 14, 10);
             bvl->setSpacing(6);
-            commercial_bullets_ = {
-                makeBullet(tr("Required for commercial deployment")), makeBullet(tr("No source sharing required")),
-                makeBullet(tr("Priority support included")), makeBullet(tr("Custom integration options available"))};
-            for (auto* b : commercial_bullets_)
+            enterprise_bullets_ = {makeBullet(tr("41 modules · private & proprietary data")),
+                                   makeBullet(tr("Multi-agent research · live broker routing")),
+                                   makeBullet(tr("SSO, audit logs & SLA-backed support")),
+                                   makeBullet(tr("From $99/user/month · no copyleft"))};
+            for (auto* b : enterprise_bullets_)
                 bvl->addWidget(b);
             pvl->addWidget(body);
 
             // Footer link
-            auto* foot = new QLabel("support@fincept.in");
+            auto* foot = new QLabel("fincept.in/enterprise");
             foot->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; "
                                         "padding: 6px 14px; border-top: 1px solid %2; "
                                         "font-family: 'Consolas','Courier New',monospace;")
@@ -376,8 +379,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         const Link links[] = {
             {tr("GitHub Repository"), "https://github.com/Fincept-Corporation/FinceptTerminal"},
             {tr("License (AGPL-3.0)"), "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE"},
-            {tr("Commercial License"),
-             "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md"},
+            {tr("Fincept Enterprise"), "https://fincept.in/enterprise"},
             {tr("Documentation"), "https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs"},
             {tr("Contributing Guide"),
              "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CONTRIBUTING.md"},
@@ -478,13 +480,13 @@ void AboutScreen::retranslateUi() {
         setBulletText(oss_bullets_[3], tr("Network use counts as distribution"));
     }
 
-    // Commercial license
-    setPanelHeaderText(commercial_header_, "★", tr("COMMERCIAL LICENSE"));
-    if (commercial_bullets_.size() == 4) {
-        setBulletText(commercial_bullets_[0], tr("Required for commercial deployment"));
-        setBulletText(commercial_bullets_[1], tr("No source sharing required"));
-        setBulletText(commercial_bullets_[2], tr("Priority support included"));
-        setBulletText(commercial_bullets_[3], tr("Custom integration options available"));
+    // Enterprise (separate closed-source product)
+    setPanelHeaderText(enterprise_header_, "★", tr("FINCEPT TERMINAL ENTERPRISE"));
+    if (enterprise_bullets_.size() == 4) {
+        setBulletText(enterprise_bullets_[0], tr("41 modules · private & proprietary data"));
+        setBulletText(enterprise_bullets_[1], tr("Multi-agent research · live broker routing"));
+        setBulletText(enterprise_bullets_[2], tr("SSO, audit logs & SLA-backed support"));
+        setBulletText(enterprise_bullets_[3], tr("From $99/user/month · no copyleft"));
     }
 
     // Diagnostics
@@ -509,7 +511,7 @@ void AboutScreen::retranslateUi() {
     if (resource_btns_.size() == 6) {
         resource_btns_[0]->setText(tr("GitHub Repository"));
         resource_btns_[1]->setText(tr("License (AGPL-3.0)"));
-        resource_btns_[2]->setText(tr("Commercial License"));
+        resource_btns_[2]->setText(tr("Fincept Enterprise"));
         resource_btns_[3]->setText(tr("Documentation"));
         resource_btns_[4]->setText(tr("Contributing Guide"));
         resource_btns_[5]->setText(tr("Official Website"));

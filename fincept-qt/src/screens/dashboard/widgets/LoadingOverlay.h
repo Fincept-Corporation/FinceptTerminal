@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QPointer>
 #include <QPropertyAnimation>
 #include <QWidget>
@@ -87,6 +88,12 @@ class LoadingOverlay : public QWidget {
     int expected_ = 0;
     bool error_mode_ = false;
     QString error_text_;
+
+    /// Repaint budget for the shimmer. The animation ticks at Qt's ~60Hz rate;
+    /// P9 caps timer-driven animation at 20fps, and each shimmer frame builds
+    /// four QPainterPaths + four QLinearGradients under Antialiasing.
+    static constexpr int kMinRepaintIntervalMs = 50;
+    QElapsedTimer repaint_clock_; ///< Throttles set_shimmer_phase() repaints
 
     qreal shimmer_phase_ = 0.0;      ///< 0..1 — drives the sweeping highlight
     qreal displayed_progress_ = 0.0; ///< 0..1 — eased toward loaded_/expected_

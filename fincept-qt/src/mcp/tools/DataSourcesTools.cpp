@@ -7,6 +7,7 @@
 #include "screens/data_sources/ConnectorRegistry.h"
 #include "screens/data_sources/DataSourceTypes.h"
 #include "storage/repositories/DataSourceRepository.h"
+#include "trading/brokers/BrokerLogRedact.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -20,6 +21,24 @@ using namespace fincept::screens::datasources;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// `config` is the connector's saved field values — which for most connectors
+// means the password / api_key / token the user typed in. Returning it verbatim
+// made ds_get_connection a credential read, and ds_list_connections (which
+// takes no arguments at all) a one-call bulk dump of every stored connector
+// credential. Redact by key name, reusing redact_detail::is_secret_key from the
+// broker log redactor so there is exactly one list of "what counts as a secret"
+// in the tree. Shape is preserved (still a JSON string) so existing consumers
+// keep parsing it; only secret-named values become "<redacted:N>".
+static QString redact_config_json(const QString& raw) {
+    if (raw.trimmed().isEmpty())
+        return raw;
+    const QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8());
+    if (!doc.isObject()) // unparseable — we cannot tell which bytes are secret
+        return QStringLiteral("<unparseable config, %1 bytes>").arg(raw.size());
+    return QString::fromUtf8(
+        QJsonDocument(trading::redact_detail::redact_object(doc.object())).toJson(QJsonDocument::Compact));
+}
+
 static QJsonObject ds_to_json(const DataSource& ds) {
     return QJsonObject{
         {"id", ds.id},
@@ -29,7 +48,7 @@ static QJsonObject ds_to_json(const DataSource& ds) {
         {"type", ds.type},
         {"provider", ds.provider},
         {"category", ds.category},
-        {"config", ds.config},
+        {"config", redact_config_json(ds.config)},
         {"enabled", ds.enabled},
         {"tags", ds.tags},
         {"created_at", ds.created_at},
@@ -125,7 +144,8 @@ std::vector<ToolDef> get_data_sources_tools() {
     {
         ToolDef t;
         t.name = "ds_get_connection";
-        t.description = "Get full details (including config JSON) for a saved connection by ID.";
+        t.description = "Get full details for a saved connection by ID. Secret config fields "
+                        "(passwords, API keys, tokens) are redacted.";
         t.category = "data-sources";
         t.input_schema.properties = QJsonObject{
             {"id", QJsonObject{{"type", "string"}, {"description", "Connection ID (UUID)"}}},

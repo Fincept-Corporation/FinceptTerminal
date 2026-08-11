@@ -11,6 +11,7 @@
 #include <QJsonValue>
 #include <QPointer>
 #include <QTimeZone>
+#include <QUrl>
 #include <QUuid>
 
 namespace fincept::services {
@@ -44,7 +45,11 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
     apply_auth(mapping);
 
     const QString url = build_url(mapping);
-    LOG_INFO(TAG, QString("Fetching mapping '%1' from %2").arg(mapping.name, url));
+    // Log the URL WITHOUT its query string: the shipped mapping templates put
+    // `&apikey=`/`&token=` there, and this is LOG_INFO — the default level — so
+    // the raw URL would write a live third-party credential into fincept.log.
+    LOG_INFO(TAG, QString("Fetching mapping '%1' from %2")
+                      .arg(mapping.name, QUrl(url).adjusted(QUrl::RemoveQuery).toString()));
 
     QPointer<DataNormalizationService> self = this;
 
@@ -344,10 +349,28 @@ QString DataNormalizationService::build_url(const DataMapping& mapping) {
 }
 
 void DataNormalizationService::apply_auth(const DataMapping& mapping) {
-    if (mapping.auth_type == "API Key") {
-        HttpClient::instance().set_auth_header(mapping.auth_token);
-    } else if (mapping.auth_type == "Bearer Token") {
-        HttpClient::instance().set_session_token(mapping.auth_token);
+    // ── SECURITY: do NOT mutate the shared HttpClient singleton here ─────────
+    // This used to call set_auth_header() / set_session_token() with the saved
+    // mapping's third-party token and never restore the previous values. Two
+    // consequences, both bad:
+    //
+    //   1. It never worked. build_request() only attaches X-API-Key /
+    //      X-Session-Token when the request host matches base_url_ (the Fincept
+    //      API), so a third-party mapping host never received the token anyway.
+    //   2. It leaked. Every subsequent Fincept API call then transmitted the
+    //      user's third-party credential to api.fincept.in, and the user's own
+    //      session auth stayed broken until AuthManager happened to rewrite it.
+    //
+    // Applying mapping auth correctly needs per-request headers on HttpClient
+    // (or a scoped guard that restores api_key_ / session_token_). Until that
+    // API exists, mapping auth is inert — which is what it already was — but it
+    // no longer corrupts global auth state.
+    if (mapping.auth_type == "API Key" || mapping.auth_type == "Bearer Token") {
+        if (!mapping.auth_token.isEmpty()) {
+            LOG_WARN(TAG, QString("Mapping '%1' declares %2 auth, but per-request auth headers are not "
+                                  "supported yet — the request is being sent unauthenticated")
+                              .arg(mapping.name, mapping.auth_type));
+        }
     }
     // Basic Auth and None require no setup on HttpClient
 }

@@ -26,6 +26,7 @@
 #include "core/window/WindowRegistry.h"
 #include "mcp/AsyncDispatch.h"
 #include "mcp/ToolSchemaBuilder.h"
+#include "mcp/tools/ExportPathGuard.h"
 #include "mcp/tools/WorkspaceTools.h"
 #include "mcp/tools/WorkspaceTools_internal.h"
 #include "storage/workspace/CrashRecovery.h"
@@ -251,7 +252,9 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
     {
         ToolDef t;
         t.name = "export_layout";
-        t.description = "Export a saved workspace to a JSON file path.";
+        t.description = "Export a saved workspace to a JSON file inside the export directory. "
+                        "'path' is a filename or relative path inside that directory; absolute paths "
+                        "elsewhere on disk are refused.";
         t.category = "workspace";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
@@ -259,19 +262,26 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
                              .string("id", "Layout UUID")
                              .required()
                              .length(1, 64)
-                             .string("path", "Output file path (.json)")
+                             .string("path", "Output filename inside the export directory (.json)")
                              .required()
                              .length(1, 1024)
                              .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
+                // `path` is raw model text — confine it before LayoutCatalog
+                // opens it for writing. See ExportPathGuard.h.
+                const auto dest = resolve_export_path(args["path"].toString());
+                if (!dest.ok()) {
+                    resolve(ToolResult::fail(dest.error));
+                    return;
+                }
                 const LayoutId id = LayoutId::from_string(args["id"].toString());
-                auto r = LayoutCatalog::instance().export_to(id, args["path"].toString());
+                auto r = LayoutCatalog::instance().export_to(id, dest.path);
                 if (r.is_err()) {
                     resolve(ToolResult::fail(QString::fromStdString(r.error())));
                     return;
                 }
-                resolve(ToolResult::ok("Layout exported", QJsonObject{{"path", args["path"].toString()}}));
+                resolve(ToolResult::ok("Layout exported", QJsonObject{{"path", dest.path}}));
             });
         };
         tools.push_back(std::move(t));
@@ -280,15 +290,27 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
     {
         ToolDef t;
         t.name = "import_layout";
-        t.description = "Import a workspace JSON file as a new layout.";
+        t.description = "Import a workspace JSON file from the export directory as a new layout. "
+                        "'path' is a filename or relative path inside that directory; absolute paths "
+                        "elsewhere on disk are refused.";
         t.category = "workspace";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.input_schema =
-            ToolSchemaBuilder().string("path", "Input file path (.json)").required().length(1, 1024).build();
+        t.input_schema = ToolSchemaBuilder()
+                             .string("path", "Input filename inside the export directory (.json)")
+                             .required()
+                             .length(1, 1024)
+                             .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
-                auto r = LayoutCatalog::instance().import_from(args["path"].toString());
+                // Reads are confined too: an unconfined read path lets the model
+                // pull any JSON on disk into a layout it can then export back out.
+                const auto src = resolve_export_path(args["path"].toString());
+                if (!src.ok()) {
+                    resolve(ToolResult::fail(src.error));
+                    return;
+                }
+                auto r = LayoutCatalog::instance().import_from(src.path);
                 if (r.is_err()) {
                     resolve(ToolResult::fail(QString::fromStdString(r.error())));
                     return;

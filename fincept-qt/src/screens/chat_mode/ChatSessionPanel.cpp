@@ -18,7 +18,11 @@ namespace fincept::chat_mode {
 
 ChatSessionPanel::ChatSessionPanel(QWidget* parent) : QWidget(parent) {
     build_ui();
-    refresh_sessions();
+    // No refresh_sessions() here (§P3). WindowFrame builds ChatModeScreen
+    // eagerly at startup, so this GET fired before first paint and before
+    // login — an empty X-API-Key that could only 401. ChatModeScreen::showEvent
+    // already calls session_panel_->refresh_sessions() on every entry into chat
+    // mode, which is the only moment the list is actually looked at.
 }
 
 void ChatSessionPanel::build_ui() {

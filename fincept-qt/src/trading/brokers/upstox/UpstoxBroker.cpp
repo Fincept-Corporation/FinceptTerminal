@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
@@ -163,7 +164,7 @@ TokenExchangeResponse UpstoxBroker::exchange_token(const QString& api_key, const
 
     if (!resp.success) {
         LOG_ERROR("Upstox", "exchange_token HTTP error: " + resp.error);
-        return {false, "", "", "", "", resp.error};
+        return {.success = false, .error = resp.error};
     }
 
     // Success: {"access_token":"...","extended_token":"...","user_id":"..."}
@@ -172,18 +173,18 @@ TokenExchangeResponse UpstoxBroker::exchange_token(const QString& api_key, const
         const QString user = resp.json.value("user_id").toString();
         if (access.isEmpty()) {
             const QString err = checked_error(resp, "Empty access_token in response");
-            return {false, "", "", "", "", err};
+            return {.success = false, .error = err};
         }
         // Upstox tokens expire daily at 03:30 IST regardless of when issued.
         // There is no OAuth refresh token, so on expiry the user must re-auth.
         const QString extra = with_token_expiry({}, next_ist_flush_epoch(3, 30));
         LOG_INFO("Upstox", "Token exchange OK, user=" + user);
-        return {true, access, /*refresh*/ "", user, /*additional*/ extra, ""};
+        return {.success = true, .access_token = access, .user_id = user, .additional_data = extra};
     }
 
     const QString err = checked_error(resp, "Token exchange failed");
     LOG_ERROR("Upstox", "exchange_token failed: " + err);
-    return {false, "", "", "", "", err};
+    return {.success = false, .error = err};
 }
 
 // ── Place Order ───────────────────────────────────────────────────────────────
@@ -202,7 +203,10 @@ OrderPlaceResponse UpstoxBroker::place_order(const BrokerCredentials& creds, con
     body["trigger_price"] = order.stop_price;
     body["disclosed_quantity"] = 0;
     body["is_amo"] = order.amo;
-    body["tag"] = "fincept"; // visible in order history for reconciliation
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
+    body["tag"] = make_client_order_ref(20); // also visible in order history for reconciliation
 
     auto& http = BrokerHttp::instance();
     // v2 order mutations live on the HFT host; api.upstox.com returns 404 for /order/*

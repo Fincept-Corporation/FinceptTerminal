@@ -41,8 +41,15 @@ class McpClient : public QObject {
     ~McpClient() override;
 
     // Lifecycle
-    // NOTE: start() must only be called from a background thread, never the UI thread.
+    // NOTE: start() must only be called from a background thread, never the UI
+    // thread — it blocks for up to 60 s in waitForStarted and the caller
+    // normally follows with initialize()'s 120 s JSON-RPC wait. Enforced by a
+    // Q_ASSERT + LOG_ERROR at the top of start().
     Result<void> start();
+
+    /// Idempotent and unconditional: safe to call after the child process has
+    /// already died (which is exactly when the old `if (!running_) return;`
+    /// guard leaked the worker thread + QProcess).
     void stop();
     bool is_running() const;
 

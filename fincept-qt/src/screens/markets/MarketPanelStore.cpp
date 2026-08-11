@@ -1,5 +1,6 @@
 #include "screens/markets/MarketPanelStore.h"
 
+#include "core/logging/Logger.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/SettingsRepository.h"
 
@@ -9,6 +10,18 @@
 
 namespace fincept::screens {
 
+namespace {
+constexpr const char* kPanelStoreTag = "MarketPanels";
+
+/// Set when load() could not *read* the stored panel set (as opposed to
+/// reading a genuinely absent one). While it is set, save() refuses to write:
+/// the panels in memory are the built-in defaults, and MarketsScreen persists
+/// the whole set on every panel edit, so one transient DB error would otherwise
+/// replace the user's panels wholesale. Cleared by the next successful load,
+/// and by reset_to_defaults() (explicit user intent to overwrite).
+bool g_panel_load_failed = false;
+} // namespace
+
 MarketPanelStore& MarketPanelStore::instance() {
     static MarketPanelStore inst;
     return inst;
@@ -16,7 +29,15 @@ MarketPanelStore& MarketPanelStore::instance() {
 
 QVector<MarketPanelConfig> MarketPanelStore::load() {
     auto result = SettingsRepository::instance().get(kSettingsKey);
-    if (!result.is_ok() || result.value().isEmpty())
+    if (result.is_err()) {
+        LOG_ERROR(kPanelStoreTag, QString("settings read failed for '%1' — showing the built-in panels read-only, "
+                                          "leaving the stored set untouched: %2")
+                                      .arg(QString::fromLatin1(kSettingsKey), QString::fromStdString(result.error())));
+        g_panel_load_failed = true;
+        return build_defaults();
+    }
+    g_panel_load_failed = false;
+    if (result.value().isEmpty())
         return build_defaults();
 
     auto doc = QJsonDocument::fromJson(result.value().toUtf8());
@@ -66,6 +87,12 @@ QVector<MarketPanelConfig> MarketPanelStore::load() {
 }
 
 void MarketPanelStore::save(const QVector<MarketPanelConfig>& panels) {
+    if (g_panel_load_failed) {
+        LOG_WARN(kPanelStoreTag, "Skipping panel save — the stored panel set could not be read this session, so the "
+                                 "on-screen defaults must not overwrite it");
+        return;
+    }
+
     QJsonArray arr;
     for (const auto& cfg : panels) {
         QJsonObject obj;
@@ -89,6 +116,9 @@ void MarketPanelStore::save(const QVector<MarketPanelConfig>& panels) {
 }
 
 void MarketPanelStore::reset_to_defaults() {
+    // Explicit user intent to overwrite the stored set with the defaults —
+    // the only path allowed to lift the read-failure guard.
+    g_panel_load_failed = false;
     save(build_defaults());
 }
 

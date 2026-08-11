@@ -287,12 +287,12 @@ Result<bool> NewsArticleRepository::toggle_saved(const QString& id) {
 
 // ── load_saved ────────────────────────────────────────────────────────────────
 
-Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::load_saved() const {
+Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::load_saved(int limit) const {
     return query_list("SELECT id, headline, summary, source, region, category, link, sort_ts, "
                       "       priority, sentiment, impact, tickers, tier, lang, "
                       "       threat_level, threat_cat, threat_conf, source_flag "
-                      "FROM news_articles WHERE saved = 1 ORDER BY sort_ts DESC",
-                      {}, map_row);
+                      "FROM news_articles WHERE saved = 1 ORDER BY sort_ts DESC LIMIT ?",
+                      {limit}, map_row);
 }
 
 // ── save_analysis / load_analysis ─────────────────────────────────────────────
@@ -381,10 +381,14 @@ Result<QVector<fincept::services::NewsArticle>> NewsArticleRepository::search_ft
 
 // ── load_seen_ids ─────────────────────────────────────────────────────────────
 
-Result<QSet<QString>> NewsArticleRepository::load_seen_ids(int64_t since_ts) const {
-    auto r = db().execute(since_ts > 0 ? "SELECT id FROM news_articles WHERE seen_at IS NOT NULL AND sort_ts >= ?"
-                                       : "SELECT id FROM news_articles WHERE seen_at IS NOT NULL",
-                          since_ts > 0 ? QVariantList{static_cast<qint64>(since_ts)} : QVariantList{});
+Result<QSet<QString>> NewsArticleRepository::load_seen_ids(int64_t since_ts, int limit) const {
+    // ORDER BY before LIMIT so the cap keeps the *newest* seen IDs — those are
+    // the ones the feed model can still be showing.
+    auto r = db().execute(since_ts > 0 ? "SELECT id FROM news_articles WHERE seen_at IS NOT NULL AND sort_ts >= ? "
+                                         "ORDER BY sort_ts DESC LIMIT ?"
+                                       : "SELECT id FROM news_articles WHERE seen_at IS NOT NULL "
+                                         "ORDER BY sort_ts DESC LIMIT ?",
+                          since_ts > 0 ? QVariantList{static_cast<qint64>(since_ts), limit} : QVariantList{limit});
     if (r.is_err())
         return Result<QSet<QString>>::err(r.error());
     QSet<QString> ids;

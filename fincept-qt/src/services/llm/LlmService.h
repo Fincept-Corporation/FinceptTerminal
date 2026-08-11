@@ -43,6 +43,18 @@ inline QString think_stream_prefix() {
     return QStringLiteral("\x02__THINK__");
 }
 
+/// In-band sentinel marking a chunk as tool-activity progress ("Finding tools · …")
+/// rather than answer text. Same mechanism as think_stream_prefix (\x02) and the
+/// \x01 __TOOL_CALL_CLEAR__ sentinel; \x03 so the three can't collide.
+///
+/// Tool progress used to be appended straight into the answer bubble, which mixed
+/// plumbing into the reply and — because the label carried no arguments — rendered
+/// six different `tool_describe` calls as six identical "• tool_describe" lines.
+/// The AI Chat tab now routes these into their own collapsible Tools card.
+inline QString tool_stream_prefix() {
+    return QStringLiteral("\x03__TOOL__");
+}
+
 struct ConversationMessage {
     QString role; // system | user | assistant
     QString content;
@@ -55,6 +67,9 @@ struct LlmResponse {
     int completion_tokens = 0;
     int total_tokens = 0;
     bool success = false;
+    /// Failure looks transient (upstream/model error, not a malformed request),
+    /// so the caller may resubmit the identical prompt once.
+    bool retryable = false;
 };
 
 /// (chunk_text, is_done) — invoked on a background thread.
@@ -221,8 +236,16 @@ class LlmService : public QObject {
     static HttpResult eventloop_request(const QString& method, const QString& url, const QByteArray& body,
                                         const QMap<QString, QString>& headers, int timeout_ms = 30000);
 
-    /// POST /research/llm/async then poll /research/llm/status/{id}.
+    /// POST /research/llm/async then poll /research/llm/status/{id}. Runs a
+    /// multi-round tool loop — the endpoint takes a flat prompt, so each round's
+    /// assistant turn and tool results are appended to the prompt transcript.
     LlmResponse fincept_async_request(const QString& user_message, const std::vector<ConversationMessage>& history);
+
+    /// One submit+poll cycle against /research/llm/async. Body is {prompt,
+    /// max_tokens} only — see the note in LlmFinceptAsync.cpp on why `tools` is
+    /// NOT sent. Structured tool_calls, if the backend ever returns any, land in
+    /// *out_tool_calls (may be null).
+    LlmResponse fincept_submit_poll(const QString& prompt, QJsonArray* out_tool_calls);
 };
 
 } // namespace fincept::ai_chat

@@ -106,7 +106,12 @@ void CryptoTradingScreen::async_fetch_candles(const QString& symbol, const QStri
 
 void CryptoTradingScreen::async_fetch_live_positions() {
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    // Snapshot the symbol on the UI thread. Reading self->selected_symbol_
+    // from the worker is a torn read of an implicitly-shared QString being
+    // written by the UI thread, and the `if (!self)` above it is a TOCTOU —
+    // the widget can die between the check and the dereference.
+    const QString symbol = selected_symbol_;
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self) {
             // Widget destroyed before dispatch — no counter to decrement.
             return;
@@ -116,7 +121,7 @@ void CryptoTradingScreen::async_fetch_live_positions() {
         // then returns early on every tick and LIVE data never updates again.
         QJsonObject result;
         try {
-            result = ExchangeService::instance().fetch_positions_live(self->selected_symbol_);
+            result = ExchangeService::instance().fetch_positions_live(symbol);
         } catch (...) {
             LOG_WARN("CryptoTrading", "fetch_positions_live threw");
         }
@@ -135,12 +140,13 @@ void CryptoTradingScreen::async_fetch_live_positions() {
 
 void CryptoTradingScreen::async_fetch_live_orders() {
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    const QString symbol = selected_symbol_; // snapshot on the UI thread — see above
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
         QJsonObject result;
         try {
-            result = ExchangeService::instance().fetch_open_orders_live(self->selected_symbol_);
+            result = ExchangeService::instance().fetch_open_orders_live(symbol);
         } catch (...) {
             LOG_WARN("CryptoTrading", "fetch_open_orders_live threw");
         }
@@ -225,12 +231,13 @@ void CryptoTradingScreen::async_fetch_live_balance() {
 
 void CryptoTradingScreen::async_fetch_my_trades() {
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    const QString symbol = selected_symbol_; // snapshot on the UI thread — see above
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
         QJsonObject result;
         try {
-            result = ExchangeService::instance().fetch_my_trades(self->selected_symbol_);
+            result = ExchangeService::instance().fetch_my_trades(symbol);
         } catch (...) {
             LOG_WARN("CryptoTrading", "fetch_my_trades threw");
         }
@@ -248,10 +255,11 @@ void CryptoTradingScreen::async_fetch_my_trades() {
 
 void CryptoTradingScreen::async_fetch_trading_fees() {
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    const QString symbol = selected_symbol_; // snapshot on the UI thread — see above
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
-        auto result = ExchangeService::instance().fetch_trading_fees(self->selected_symbol_);
+        auto result = ExchangeService::instance().fetch_trading_fees(symbol);
         QMetaObject::invokeMethod(
             self,
             [self, result]() {
@@ -265,10 +273,11 @@ void CryptoTradingScreen::async_fetch_trading_fees() {
 
 void CryptoTradingScreen::async_fetch_mark_price() {
     QPointer<CryptoTradingScreen> self = this;
-    (void)QtConcurrent::run([self]() {
+    const QString symbol = selected_symbol_; // snapshot on the UI thread — see above
+    (void)QtConcurrent::run([self, symbol]() {
         if (!self)
             return;
-        auto mp = ExchangeService::instance().fetch_mark_price(self->selected_symbol_);
+        auto mp = ExchangeService::instance().fetch_mark_price(symbol);
         QMetaObject::invokeMethod(
             self,
             [self, mp]() {

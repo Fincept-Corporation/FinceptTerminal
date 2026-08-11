@@ -168,6 +168,19 @@ void OISubTab::showEvent(QShowEvent* e) {
 
 void OISubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    // §D3: pair the showEvent subscribe. Without this the `subscribed_` latch
+    // never resets, and on_chain_published() has no visibility gate — so a
+    // hidden tab kept driving oi_bars_->set_chain(), pain_chart_->set_chain()
+    // and buildup_model()->set_chain() on every option-chain publish for the
+    // rest of the process. These tabs live in a QStackedWidget, so one visit
+    // armed it permanently.
+    //
+    // unsubscribe_pattern() rather than the blanket unsubscribe(this) so this
+    // stays symmetric with the subscribe_pattern() above and can't collaterally
+    // drop any concrete-topic subscription added here later (the sibling
+    // MultiStraddleSubTab already has exactly that hazard).
+    fincept::datahub::DataHub::instance().unsubscribe_pattern(this, QStringLiteral("option:chain:*"));
+    subscribed_ = false;
 }
 
 void OISubTab::changeEvent(QEvent* event) {

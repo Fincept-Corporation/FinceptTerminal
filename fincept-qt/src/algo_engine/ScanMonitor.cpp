@@ -30,6 +30,19 @@ ScanMonitor& ScanMonitor::instance() {
     return s;
 }
 
+ScanMonitor::~ScanMonitor() {
+    // stop_watch() stops the poll timer and posts stop()+deleteLater() to each
+    // realtime runner on scan_thread_; the thread drains those before finishing.
+    // keys() is a copy, so taking entries out of runners_ while iterating is safe.
+    const auto ids = runners_.keys();
+    for (const QString& id : ids)
+        stop_watch(id);
+    if (scan_thread_) {
+        scan_thread_->quit();
+        scan_thread_->wait(3000);
+    }
+}
+
 void ScanMonitor::start() {
     auto r = ScanWatchRepository::instance().list_active();
     if (r.is_err()) {
@@ -59,7 +72,13 @@ void ScanMonitor::start_watch(const ScanWatch& w) {
     connect(run->timer, &QTimer::timeout, this, [this, id]() { poll(id); });
     runners_.insert(id, run);
     run->timer->start();
-    poll(id); // evaluate immediately on (re)start
+    // Evaluate on (re)start, but on the next event-loop turn rather than inline:
+    // poll() goes straight to CandleDataFetcher (broker REST / Yahoo) for up to 50
+    // symbols, and start() runs on the pre-window boot path in main.cpp — doing
+    // that work inline delays the first paint. `this` as the context object means
+    // the callback is dropped if the monitor goes away, and poll() re-checks that
+    // the watch still exists.
+    QTimer::singleShot(0, this, [this, id]() { poll(id); });
 }
 
 void ScanMonitor::stop_watch(const QString& id) {

@@ -12,6 +12,13 @@ namespace fincept::i18n {
 namespace {
 constexpr const char* kSettingsKey = "general.language";
 constexpr const char* kDefaultCode = "en";
+
+/// Set only for the duration of the startup set_language() call that follows a
+/// *failed* read of the persisted preference. The detected/default language is
+/// then applied for this session but never written back, so a transient DB
+/// error cannot overwrite the user's real saved language. Explicit switches
+/// (LanguageSwitcher, GeneralSection) always run with this false and persist.
+bool g_suppress_language_persist = false;
 } // namespace
 
 LanguageManager& LanguageManager::instance() {
@@ -61,20 +68,30 @@ void LanguageManager::initialize() {
     // Read the persisted preference. If it's set (even to "en"), respect it
     // — the user has made an explicit choice we should not override.
     const auto r = SettingsRepository::instance().get(QString::fromLatin1(kSettingsKey), QString());
-    QString code = r.is_ok() ? r.value() : QString();
+    // A read error is not "no preference" — the stored language is unknown, so
+    // whatever we fall back to must stay session-local.
+    const bool read_failed = r.is_err();
+    if (read_failed) {
+        LOG_ERROR("i18n", QString("settings read failed for '%1' — applying the detected language for this session "
+                                  "only, leaving the stored value untouched: %2")
+                              .arg(QString::fromLatin1(kSettingsKey), QString::fromStdString(r.error())));
+    }
+    QString code = read_failed ? QString() : r.value();
 
     if (code.isEmpty()) {
         // No saved preference — try the OS locale. The Settings save in
         // set_language() will record whatever we picked, so subsequent runs
         // skip this detection and honour the explicit value.
         code = detect_system_language();
-        if (!code.isEmpty())
+        if (!code.isEmpty() && !read_failed)
             LOG_INFO("i18n", QStringLiteral("First launch — detected system language: %1").arg(code));
     }
     if (code.isEmpty())
         code = QString::fromLatin1(kDefaultCode);
 
+    g_suppress_language_persist = read_failed;
     set_language(code);
+    g_suppress_language_persist = false;
 }
 
 QString LanguageManager::detect_system_language() {
@@ -153,7 +170,11 @@ void LanguageManager::set_language(const QString& code) {
 
     // Persist the choice. The repository call is cheap; we accept the small
     // overhead on startup so the value is always in sync with what's running.
-    SettingsRepository::instance().set(QString::fromLatin1(kSettingsKey), code, QStringLiteral("general"));
+    // Suppressed only when initialize() is falling back after a failed read —
+    // set() is an INSERT OR REPLACE, so writing a guess there would destroy the
+    // language the user actually chose.
+    if (!g_suppress_language_persist)
+        SettingsRepository::instance().set(QString::fromLatin1(kSettingsKey), code, QStringLiteral("general"));
 
     emit language_changed(code);
 }

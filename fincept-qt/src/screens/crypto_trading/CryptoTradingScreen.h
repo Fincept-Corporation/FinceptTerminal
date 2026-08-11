@@ -205,6 +205,13 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     trading::OrderBookData pending_orderbook_;
     bool has_pending_orderbook_ = false;
 
+    // Hard caps on the two unbounded append-only WS buffers. The drain
+    // (flush_ws_updates, 10fps) normally empties them every tick, but any
+    // stall — hidden screen, blocked event loop — used to let them grow at
+    // exchange tick rate forever. Oldest entries are dropped on overflow.
+    static constexpr int kMaxPendingTrades = 2000;
+    static constexpr int kMaxPendingCandles = 2000;
+
     // Candle coalescing — append closed candles in order, keep the latest
     // in-progress candle separately so we render partial bars without
     // flooding the chart on every tick.

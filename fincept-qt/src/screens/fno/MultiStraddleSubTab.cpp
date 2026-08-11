@@ -203,6 +203,20 @@ void MultiStraddleSubTab::showEvent(QShowEvent* e) {
 
 void MultiStraddleSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    // §D3: pair the showEvent subscribe. The `chain_subscribed_` latch never
+    // reset and on_chain_published() has no visibility gate, so a hidden tab
+    // kept rebuilding on every option-chain publish for the rest of the
+    // process.
+    //
+    // unsubscribe_pattern(), not the blanket unsubscribe(this): this tab also
+    // owns per-token `subscribe()` entries created by subscribe_token(), whose
+    // lifetime is tracked by token_refcount_ / topic_for_token_ and released
+    // by remove_selection(). Dropping those here would leave the refcounts
+    // populated with no subscription behind them, so subscribe_token() would
+    // short-circuit on re-show and the selections' OI history would never come
+    // back.
+    fincept::datahub::DataHub::instance().unsubscribe_pattern(this, QStringLiteral("option:chain:*"));
+    chain_subscribed_ = false;
 }
 
 void MultiStraddleSubTab::changeEvent(QEvent* event) {

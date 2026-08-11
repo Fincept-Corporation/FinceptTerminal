@@ -24,6 +24,32 @@ void spin(int ms) {
     while (t.elapsed() < ms)
         QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
 }
+
+// Upper bound on how long one screen may take to materialise before we call it
+// a failure. Generous on purpose: this is a "did it build at all" check, not a
+// performance budget, and it gates releases on shared CI runners.
+constexpr int kConstructDeadlineMs = 8000;
+
+// Settle time after the widget appears, so showEvent-driven child construction
+// runs before we move on. Short because the deadline loop already did the wait.
+constexpr int kSettleMs = 120;
+
+// Wait until `id`'s widget exists, or the deadline expires. Returns the elapsed
+// milliseconds so a slow-but-passing screen can still be reported.
+//
+// A fixed spin() budget was the previous approach and it made this test lie: on
+// a machine under memory pressure, 8 unrelated screens were reported as "did not
+// construct" purely because deferred materialisation had not been serviced yet,
+// and the same binary passed on the next run. Polling costs nothing when things
+// are healthy — it returns on the first iteration — and stops the test failing
+// a release for being busy rather than broken.
+int wait_for_construction(DockScreenRouter* router, const QString& id) {
+    QElapsedTimer t;
+    t.start();
+    while (!router->screen_widget(id) && t.elapsed() < kConstructDeadlineMs)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    return static_cast<int>(t.elapsed());
+}
 } // namespace
 
 int run_screen_smoke_test(DockScreenRouter* router) {
@@ -75,12 +101,25 @@ int run_screen_smoke_test(DockScreenRouter* router) {
         // ever-growing set → O(n^2) and a multi-minute walk). We only need each
         // screen open long enough to construct + fire showEvent.
         router->navigate(id, /*exclusive=*/true);
-        spin(300);
+        const int waited_ms = wait_for_construction(router, id);
 
         if (!router->screen_widget(id)) {
             failures << id;
-            std::fprintf(stderr, "[Smoke] !!! %s did not construct\n", qUtf8Printable(id));
+            std::fprintf(stderr, "[Smoke] !!! %s did not construct within %d ms\n", qUtf8Printable(id),
+                         kConstructDeadlineMs);
             std::fflush(stderr);
+            continue;
+        }
+
+        // Let showEvent-driven child construction run before moving on.
+        spin(kSettleMs);
+
+        // Surface slow screens without failing them — a screen that needs seconds
+        // to build is a real finding, just not this test's verdict to make.
+        if (waited_ms > 1000) {
+            std::fprintf(stderr, "[Smoke] ... %s took %d ms to construct\n", qUtf8Printable(id), waited_ms);
+            std::fflush(stderr);
+            LOG_WARN("Smoke", QString("%1 took %2 ms to construct").arg(id).arg(waited_ms));
         }
     }
 

@@ -8,9 +8,17 @@
 //      suffix for Canadian TSX symbols that didn't resolve bare.
 //   4. Persistent fallback "Unclassified".
 //
-// Negative hits (yfinance returns N/A or request fails) are cached with a
-// 7-day TTL so we don't hammer the script every launch for tickers that
-// genuinely don't have a sector (mutual funds, cash, obscure ETFs).
+// Negative hits — yfinance ANSWERED but the instrument genuinely has no sector
+// (mutual funds, cash, obscure ETFs) — are cached with an explicit `negative`
+// flag and a 7-day TTL, checked both at load and on every sector_for() hit.
+//
+// A FETCH FAILURE is not a negative hit and is never cached. Previously the
+// completion path ran on success and failure alike, so a transient script/
+// network error was persisted as if it were data: the symbol resolved to
+// "Unclassified" (or "Cash" for TDB* codes) and, because the TTL was only
+// consulted at construction and only matched the literal string
+// "Unclassified", the wrong answer survived for the whole session and — for
+// the "Cash" case — forever.
 //
 // The resolver is sync-for-cache-hits and async-for-misses. Consumers should
 // either:
@@ -53,15 +61,25 @@ class SectorResolver : public QObject {
     SectorResolver(const SectorResolver&) = delete;
     SectorResolver& operator=(const SectorResolver&) = delete;
 
+    /// One resolved symbol. `negative` marks a placeholder produced by
+    /// fallback_for_unresolvable() rather than a real upstream answer, so
+    /// sector_for() can expire it after kNegativeTtlSeconds and retry.
+    struct Entry {
+        QString sector;
+        qint64 resolved_at = 0;
+        bool negative = false;
+    };
+
     void load_cache();
-    void persist(const QString& symbol, const QString& sector, const QString& industry, const QString& quote_type);
+    void persist(const QString& symbol, const QString& sector, const QString& industry, const QString& quote_type,
+                 qint64 resolved_at);
     void resolve_async(const QString& symbol);
     static QString normalize(const QString& symbol);
     static QString fallback_for_unresolvable(const QString& symbol);
 
     mutable QMutex mutex_;
-    QHash<QString, QString> cache_; // symbol → sector
-    QSet<QString> inflight_;        // symbols currently being fetched
+    QHash<QString, Entry> cache_; // symbol → resolved sector + provenance
+    QSet<QString> inflight_;      // symbols currently being fetched
 };
 
 } // namespace fincept::services

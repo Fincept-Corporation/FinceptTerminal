@@ -13,6 +13,14 @@ using services::algo::ConditionDef;
 namespace {
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
+// A non-finite operand must fail every condition. std::isnan alone is not enough:
+// std::isnan(inf) is false, so an ±inf indicator value (e.g. a % change against a
+// zero reference price) satisfied `inf > threshold` and fired live entries. Every
+// guard below tests this instead of std::isnan.
+inline bool cond_non_finite(double v) {
+    return !std::isfinite(v);
+}
+
 bool op_needs_prev(const QString& op) {
     return op == "crosses_above" || op == "crosses_below" || op == "rising" || op == "falling" ||
            // "==" is a level *touch*: it needs the previous sample to detect the
@@ -43,7 +51,7 @@ bool ConditionEvaluator::is_group_node(const QJsonObject& node) {
 }
 
 bool ConditionEvaluator::apply_comparison(double lhs, const QString& op, double rhs) {
-    if (std::isnan(lhs) || std::isnan(rhs))
+    if (cond_non_finite(lhs) || cond_non_finite(rhs))
         return false;
     if (op == ">")
         return lhs > rhs;
@@ -60,7 +68,8 @@ bool ConditionEvaluator::apply_comparison(double lhs, const QString& op, double 
 
 bool ConditionEvaluator::apply_crossing(double curr, double prev, double target_curr, double target_prev,
                                         const QString& op) {
-    if (std::isnan(curr) || std::isnan(prev) || std::isnan(target_curr) || std::isnan(target_prev))
+    if (cond_non_finite(curr) || cond_non_finite(prev) || cond_non_finite(target_curr) ||
+        cond_non_finite(target_prev))
         return false;
     if (op == "crosses_above")
         return prev <= target_prev && curr > target_curr;
@@ -88,7 +97,16 @@ double ConditionEvaluator::operand_value(const QString& indicator, const QJsonOb
             *error = r.error;
         return kNaN;
     }
-    return r.current.value(field, kNaN);
+    // Single choke point for every operand: a non-finite indicator value is a data
+    // defect, not a tradeable level. Normalise it to NaN + an error so no operator
+    // downstream can compare against ±inf.
+    const double v = r.current.value(field, kNaN);
+    if (cond_non_finite(v)) {
+        if (error)
+            *error = QStringLiteral("%1 produced a non-finite value").arg(indicator);
+        return kNaN;
+    }
+    return v;
 }
 
 ConditionResult ConditionEvaluator::evaluate_single(const ConditionDef& condition,
@@ -135,11 +153,11 @@ ConditionResult ConditionEvaluator::evaluate_single(const ConditionDef& conditio
     if (condition.op == "crosses_above" || condition.op == "crosses_below") {
         result.met = apply_crossing(lhs_curr, lhs_prev, rhs_curr, rhs_prev, condition.op);
     } else if (condition.op == "rising") {
-        result.met = !std::isnan(lhs_curr) && !std::isnan(lhs_prev) && lhs_curr > lhs_prev;
+        result.met = !cond_non_finite(lhs_curr) && !cond_non_finite(lhs_prev) && lhs_curr > lhs_prev;
     } else if (condition.op == "falling") {
-        result.met = !std::isnan(lhs_curr) && !std::isnan(lhs_prev) && lhs_curr < lhs_prev;
+        result.met = !cond_non_finite(lhs_curr) && !cond_non_finite(lhs_prev) && lhs_curr < lhs_prev;
     } else if (condition.op == "between") {
-        result.met = !std::isnan(lhs_curr) && lhs_curr >= condition.value && lhs_curr <= condition.value2;
+        result.met = !cond_non_finite(lhs_curr) && lhs_curr >= condition.value && lhs_curr <= condition.value2;
         result.target_value = condition.value2;
     } else if (condition.op == "==") {
         // Level touch / equality cross. A live price polled every few seconds skips
@@ -152,11 +170,11 @@ ConditionResult ConditionEvaluator::evaluate_single(const ConditionDef& conditio
             tol = 1e-9;
         const double curr_diff = lhs_curr - rhs_curr;
         const double prev_diff = lhs_prev - rhs_prev; // NaN on the first sample
-        if (std::isnan(lhs_curr) || std::isnan(rhs_curr))
+        if (cond_non_finite(lhs_curr) || cond_non_finite(rhs_curr))
             result.met = false;
         else if (std::abs(curr_diff) <= tol)
             result.met = true; // sitting on the level (within float tolerance)
-        else if (!std::isnan(prev_diff) && ((prev_diff < 0) != (curr_diff < 0)))
+        else if (!cond_non_finite(prev_diff) && ((prev_diff < 0) != (curr_diff < 0)))
             result.met = true; // crossed through the level since the last sample
         else
             result.met = false;

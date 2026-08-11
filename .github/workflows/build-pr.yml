@@ -1,0 +1,282 @@
+name: PR Build (compile + self-test gate)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WHY THIS WORKFLOW EXISTS
+#   Until this file was added, NOTHING compiled the C++ on a pull request or on
+#   a push to main: build-cpp.yml and lint.yml are workflow_dispatch-only, and
+#   the only pull_request workflows were arch-ratchet.yml (a Python string
+#   counter) and pr-gate.yml (label policy). That meant /WX and -Werror — which
+#   CMakeLists.txt enables whenever $CI is set — were first enforced on the
+#   `v*` tag push, on three platforms at once, in release.yml. Every release
+#   was a blind roll.
+#
+#   This job builds the same configuration release.yml builds, on the same
+#   three platforms, and runs the headless self-tests. It is the gate that
+#   makes a tag push boring.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    paths:
+      - 'fincept-qt/**'
+      - '.github/workflows/build-pr.yml'
+      - '.github/scripts/ci_app_checks.sh'
+      - '.github/scripts/check_version_drift.sh'
+  push:
+    branches: [main]
+    paths:
+      - 'fincept-qt/**'
+      - '.github/workflows/build-pr.yml'
+      - '.github/scripts/ci_app_checks.sh'
+      - '.github/scripts/check_version_drift.sh'
+  workflow_dispatch:
+
+# One build per PR (or per main push). A new push cancels the in-flight run —
+# these are 30–60 minute jobs and superseded runs are wasted runner time.
+concurrency:
+  group: build-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BUILD_TYPE: Release
+  QT_VERSION: "6.8.3"
+  # Mirrors release.yml — qtserialport is required because the qtpositioning
+  # NMEA plugin links Qt6SerialPort.
+  QT_MODULES: "qtcharts qtwebsockets qtmultimedia qtwebengine qtwebchannel qtpositioning qtserialport"
+  APP_NAME: FinceptTerminal
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ── Cheap gates first — these finish in seconds and fail fast ──────────────
+  version-consistency:
+    name: Version consistency
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # CMakeLists.txt project(... VERSION x.y.z) is the source of truth; the
+      # flatpak / AppImage / appdata manifests each carry a hand-written copy.
+      # A stale copy ships a bundle whose CFBundleVersion / appdata version
+      # disagrees with the binary and breaks the updater's version compare.
+      - name: Check packaging metadata matches CMakeLists.txt
+        run: bash .github/scripts/check_version_drift.sh .
+
+  build:
+    name: ${{ matrix.platform }} build + self-tests
+    needs: version-consistency
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: Windows
+            qt_arch: win64_msvc2022_64
+          - os: ubuntu-22.04
+            platform: Linux
+            qt_arch: linux_gcc_64
+          - os: macos-15
+            platform: macOS
+            qt_arch: clang_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      # ccache for the two platforms release.yml caches. Same action, same key
+      # shape, so a cache warmed by a main-branch run is restored by PR runs.
+      # Windows has no compiler cache here for the same reason release.yml has
+      # none: that job uses the Visual Studio generator, and CMake's
+      # CMAKE_<LANG>_COMPILER_LAUNCHER (how ccache/sccache is injected) is
+      # honoured only by the Makefile and Ninja generators.
+      - name: Set up ccache
+        if: runner.os != 'Windows'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ runner.os == 'Linux' && 'linux-x64-release' || 'macos-arm64-release' }}-${{ env.QT_VERSION }}
+          max-size: 500M
+
+      # ── Windows: OpenSSL (dynamic) + zlib (STATIC) via vcpkg ──────────────
+      # Copied from release.yml. The forward-slash normalisation and the
+      # zs.lib → zlib.lib alias are load-bearing: without them FindZLIB falls
+      # through to a stray system zlib and the exe imports an unbundled z.dll
+      # (the v4.1.0 launch failure).
+      - name: Install OpenSSL + zlib (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VCPKG_ROOT="${VCPKG_INSTALLATION_ROOT:-C:/vcpkg}"
+          VCPKG_ROOT="${VCPKG_ROOT//\\//}"
+          "$VCPKG_ROOT/vcpkg" install openssl:x64-windows zlib:x64-windows-static-md --no-print-usage
+          OPENSSL_DIR="$VCPKG_ROOT/installed/x64-windows"
+          ZLIB_DIR="$VCPKG_ROOT/installed/x64-windows-static-md"
+          echo "OPENSSL_ROOT_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "ZLIB_ROOT=$ZLIB_DIR" >> "$GITHUB_ENV"
+          if [ ! -f "$ZLIB_DIR/lib/zlib.lib" ]; then
+            ALT="$(ls "$ZLIB_DIR"/lib/z*.lib 2>/dev/null | head -1 || true)"
+            [ -n "$ALT" ] && cp "$ALT" "$ZLIB_DIR/lib/zlib.lib"
+          fi
+          [ -f "$ZLIB_DIR/lib/zlib.lib" ] || { echo "::error::static zlib archive not found"; exit 1; }
+
+      # ── Linux: toolchain + XCB/GL system libs ─────────────────────────────
+      # ubuntu-22.04 ships g++ 11.4; CMakeLists.txt requires GCC 12.3+.
+      # Deliberately NO apt Qt packages — ubuntu-22.04 has Qt 6.2 and
+      # CMakeLists pins Qt 6.8 (FINCEPT_QT_PIN_MODE defaults to MINOR).
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo add-apt-repository universe -y
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            cmake ninja-build gcc-12 g++-12 \
+            libssl-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libxkbcommon-x11-dev \
+            libxcb-cursor0 libxcb-cursor-dev \
+            libxcb-icccm4 libxcb-icccm4-dev \
+            libxcb-image0 libxcb-image0-dev \
+            libxcb-keysyms1 libxcb-keysyms1-dev \
+            libxcb-randr0 \
+            libxcb-render-util0 libxcb-render-util0-dev \
+            libxcb-shape0-dev libxcb-sync-dev libxcb-xfixes0-dev \
+            libxcb-xinerama0 libxcb-xinerama0-dev libxcb-xkb1 \
+            libdbus-1-dev libfontconfig1-dev libfreetype6-dev \
+            pkg-config
+          echo "CC=gcc-12"  >> "$GITHUB_ENV"
+          echo "CXX=g++-12" >> "$GITHUB_ENV"
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja cmake || brew upgrade ninja cmake || true
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ matrix.qt_arch }}
+          modules: ${{ env.QT_MODULES }}
+          cache: true
+          cache-key-prefix: qt-${{ matrix.platform }}-pr
+
+      # aqtinstall ships Qt6Sql's MySQL/PSQL/ODBC/Mimer *DriverPlugin CMake
+      # target files but not the plugin binaries, so find_package(Qt6 ... Sql)
+      # aborts at configure time. We only use SQLite. (release.yml does the
+      # same in all three of its build jobs.)
+      - name: Remove dangling Qt SQL driver plugin CMake configs
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL_CMAKE="${QT_ROOT_DIR}/lib/cmake/Qt6Sql"
+          if [ -d "${SQL_CMAKE}" ]; then
+            for drv in QMYSQLDriverPlugin QPSQLDriverPlugin QODBCDriverPlugin QMimerSQLDriverPlugin; do
+              rm -fv "${SQL_CMAKE}/Qt6${drv}"*.cmake || true
+            done
+          else
+            echo "::warning::${SQL_CMAKE} not found — skipping SQL plugin config cleanup"
+          fi
+
+      # ── Configure ─────────────────────────────────────────────────────────
+      # CRITICAL: this must be the RELEASE-STYLE configuration, i.e. unity
+      # build ON (FINCEPT_DEV_BUILD=OFF, the default). The local `win-dev`
+      # preset turns unity OFF, so a win-dev-shaped PR build would silently
+      # miss the exact class of error this gate exists to catch: unity
+      # concatenates ~20 .cpp files into one TU, so two file-scope symbols
+      # with the same name in the same batch become a hard redefinition error
+      # that appears ONLY on a unity build — and adding or removing a source
+      # file re-batches everything after it. GitHub Actions always sets
+      # CI=true, so CMakeLists.txt also turns on /WX (MSVC) and -Werror
+      # (GCC/Clang) here, exactly as it does on the release path.
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}" \
+            -DZLIB_ROOT="${ZLIB_ROOT}" \
+            -DZLIB_USE_STATIC_LIBS=ON \
+            -DFINCEPT_DEV_BUILD=OFF \
+            -DFINCEPT_BUILD_INSTALLER=OFF
+
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DOPENSSL_ROOT_DIR=/usr \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFINCEPT_DEV_BUILD=OFF \
+            -DFINCEPT_BUILD_INSTALLER=OFF
+
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFINCEPT_DEV_BUILD=OFF \
+            -DFINCEPT_BUILD_INSTALLER=OFF
+
+      # Guard against someone "fixing" a slow PR build by flipping the preset
+      # to the dev configuration — that would quietly delete the unity-batch
+      # coverage this workflow exists to provide. The build dir is always
+      # fresh on a runner, so the generated unity sources are proof.
+      - name: Assert unity build is ON
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          if ! find build -name 'unity_*_cxx.cxx' -print -quit | grep -q .; then
+            echo "::error::No unity sources generated — this build is NOT the release-style configuration."
+            echo "::error::CI must build with CMAKE_UNITY_BUILD=ON (FINCEPT_DEV_BUILD=OFF) or it cannot catch unity-batch symbol collisions."
+            exit 1
+          fi
+          echo "Unity build confirmed (batch size 20, matching the release path)."
+
+      - name: Build
+        shell: bash
+        working-directory: fincept-qt
+        run: |
+          cmake --build build --config ${{ env.BUILD_TYPE }} \
+            --parallel $(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+
+      # ── Headless self-tests ───────────────────────────────────────────────
+      # The flag list is discovered from the binary (--selftest-list) with a
+      # hard-coded fallback — see .github/scripts/ci_app_checks.sh. Never
+      # hand-maintain the list in YAML: it drifted once already and
+      # --selftest-live-table ran nowhere for months.
+      - name: Run self-tests (headless)
+        shell: bash
+        working-directory: fincept-qt
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            BINARY="build/Release/${{ env.APP_NAME }}.exe"
+          elif [ -f "build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}" ]; then
+            BINARY="build/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}"
+          else
+            BINARY="build/${{ env.APP_NAME }}"
+          fi
+          export LD_LIBRARY_PATH="${QT_ROOT_DIR}/lib:${LD_LIBRARY_PATH:-}"
+          bash ../.github/scripts/ci_app_checks.sh selftests "$BINARY" ci

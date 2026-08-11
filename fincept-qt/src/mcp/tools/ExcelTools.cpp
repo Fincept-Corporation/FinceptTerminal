@@ -19,13 +19,18 @@
 #include "core/window/WindowRegistry.h"
 #include "mcp/AsyncDispatch.h"
 #include "mcp/ToolSchemaBuilder.h"
+#include "mcp/tools/ExportPathGuard.h"
 #include "screens/excel/ExcelScreen.h"
 #include "screens/excel/SpreadsheetWidget.h"
+#include "services/file_manager/FileManagerService.h"
+
+#include <algorithm>
 
 #include <QApplication>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QTabWidget>
 #include <QTextStream>
 
@@ -34,6 +39,13 @@ namespace fincept::mcp::tools {
 namespace {
 static constexpr const char* TAG = "ExcelTools";
 static constexpr int kDefaultTimeoutMs = 15000;
+
+// Bulk sheet reads/writes run on the UI thread and repopulate every cell, which
+// on a full model is far more work than a single-cell edit. 15 s was not enough:
+// set_excel_sheet_data and get_excel_sheet_data were both killed mid-flight,
+// leaving a half-written sheet — which is where the stray zeros came from, since
+// formulas pointing at cells that never got written evaluate to 0.
+static constexpr int kBulkTimeoutMs = 90000;
 
 screens::ExcelScreen* find_excel_screen() {
     for (auto* w : WindowRegistry::instance().frames()) {
@@ -53,8 +65,53 @@ screens::ExcelScreen* find_excel_screen() {
     return nullptr;
 }
 
+// Excel screen, building it on demand.
+//
+// Screens are lazily constructed (P2), so the Excel screen does not exist until
+// the user visits that tab. Every tool here resolved through find_excel_screen()
+// and hard-failed with "Excel screen not open" when it wasn't — which meant an
+// agent driving Excel from the AI Chat tab could fetch SEC data, plan a full DCF
+// model, create the sheet, and then lose 45 consecutive set_excel_cell calls to
+// a screen that had simply never been built. Asking the user to go open a tab
+// first is not a workable contract for a tool the model calls on its own.
+//
+// Tools run on the UI thread (run_on_ui), so constructing widgets here is safe.
+// Two cases: the dock exists but holds a placeholder (materialize_now builds the
+// screen in place, no visible change), or there is no dock at all (navigate
+// creates and shows it — the user asked for work in Excel, so surfacing it is
+// the expected outcome, and it is the only path that registers the dock).
+screens::ExcelScreen* ensure_excel_screen() {
+    if (auto* es = find_excel_screen())
+        return es;
+
+    // Never restructure the dock layout while a modal dialog is open. Tool
+    // bodies are queued onto the UI thread, so they also run inside the nested
+    // event loop of a file dialog — navigating there would rebuild docks under
+    // a screen that is mid-export and holding pointers into them.
+    if (QApplication::activeModalWidget()) {
+        LOG_WARN(TAG, "Excel screen missing but a modal dialog is open — refusing to navigate");
+        return nullptr;
+    }
+
+    for (auto* w : WindowRegistry::instance().frames()) {
+        auto* router = w ? w->dock_router() : nullptr;
+        if (!router)
+            continue;
+        if (router->find_dock_widget("excel"))
+            router->materialize_now("excel");
+        else
+            router->navigate("excel");
+        if (auto* es = find_excel_screen()) {
+            LOG_INFO(TAG, "Excel screen was not open — opened it for a tool call");
+            return es;
+        }
+    }
+    LOG_WARN(TAG, "Could not open the Excel screen for a tool call");
+    return nullptr;
+}
+
 QTabWidget* find_excel_tabs() {
-    auto* es = find_excel_screen();
+    auto* es = ensure_excel_screen();
     return es ? es->findChild<QTabWidget*>() : nullptr;
 }
 
@@ -70,7 +127,62 @@ screens::SpreadsheetWidget* active_sheet() {
     return tabs ? sheet_by_index(tabs->currentIndex()) : nullptr;
 }
 
+screens::SpreadsheetWidget* sheet_by_name(const QString& name) {
+    auto* tabs = find_excel_tabs();
+    if (!tabs || name.isEmpty())
+        return nullptr;
+    for (int i = 0; i < tabs->count(); ++i) {
+        auto* s = qobject_cast<screens::SpreadsheetWidget*>(tabs->widget(i));
+        if (s && s->sheet_name().compare(name, Qt::CaseInsensitive) == 0)
+            return s;
+    }
+    return nullptr;
+}
+
+// ── Addressing aliases ──────────────────────────────────────────────────────
+//
+// These tools address a live Excel *screen*: sheets by integer index, cells by
+// zero-based row/col. Every Excel API a model has ever seen — openpyxl,
+// xlsxwriter, the Sheets API, VBA — addresses workbooks by file, sheets by NAME
+// and cells by A1 reference. So models confidently send
+// {workbook_name, tab_name, cell_ref:"B87"}, which matched nothing and failed
+// every call; one turn made 15 such calls, had all 15 rejected, and reported a
+// finished model anyway.
+//
+// Rather than expect every model to learn an unusual convention, accept the
+// conventional one too. Index/row/col remain canonical; these are aliases.
+
+// "B87" / "$B$87" → row 86, col 1 (both zero-based). False if not A1 notation.
+bool parse_a1_ref(const QString& ref, int& row, int& col) {
+    static const QRegularExpression re(QStringLiteral("^\\$?([A-Za-z]{1,3})\\$?([0-9]{1,7})$"));
+    const auto m = re.match(ref.trimmed());
+    if (!m.hasMatch())
+        return false;
+
+    const QString letters = m.captured(1).toUpper();
+    int c = 0;
+    for (const QChar& ch : letters)
+        c = c * 26 + (ch.unicode() - 'A' + 1);
+
+    const int r = m.captured(2).toInt();
+    if (c <= 0 || r <= 0)
+        return false;
+    col = c - 1;
+    row = r - 1;
+    return true;
+}
+
+/// Sheet from sheet_index, or the sheet_name/tab_name alias, or the active one.
 screens::SpreadsheetWidget* resolve_sheet(const QJsonObject& args) {
+    for (const char* key : {"sheet_name", "tab_name"}) {
+        const QString name = args.value(QLatin1String(key)).toString().trimmed();
+        if (!name.isEmpty()) {
+            if (auto* s = sheet_by_name(name))
+                return s;
+            return nullptr; // named a sheet that doesn't exist — don't silently
+                            // fall through to the active one and edit the wrong sheet
+        }
+    }
     if (args.contains("sheet_index") && !args["sheet_index"].isNull()) {
         const int i = args["sheet_index"].toInt(-1);
         if (i >= 0)
@@ -78,6 +190,59 @@ screens::SpreadsheetWidget* resolve_sheet(const QJsonObject& args) {
     }
     return active_sheet();
 }
+
+/// Row/col from the explicit integers, or from a cell/cell_ref A1 alias.
+/// Returns false when neither was supplied (or the A1 string is malformed).
+bool resolve_row_col(const QJsonObject& args, int& row, int& col) {
+    if (args.contains("row") && args.contains("col")) {
+        row = args["row"].toInt(-1);
+        col = args["col"].toInt(-1);
+        return row >= 0 && col >= 0;
+    }
+    for (const char* key : {"cell", "cell_ref", "cell_reference", "ref"}) {
+        const QString ref = args.value(QLatin1String(key)).toString();
+        if (!ref.isEmpty())
+            return parse_a1_ref(ref, row, col);
+    }
+    return false;
+}
+
+/// Declare the alias params so validation accepts them (unknown args are now
+/// rejected) and tool_describe advertises them.
+ToolSchema with_sheet_aliases(ToolSchema s) {
+    ToolParam name_p;
+    name_p.type = "string";
+    name_p.description = "Sheet name, as an alternative to sheet_index";
+    s.params["sheet_name"] = name_p;
+    s.params["tab_name"] = name_p; // common synonym
+
+    ToolParam wb;
+    wb.type = "string";
+    wb.description = "Ignored - there is one live workbook (the Excel screen). Accepted for compatibility.";
+    s.params["workbook_name"] = wb;
+    return s;
+}
+
+ToolSchema with_cell_aliases(ToolSchema s) {
+    s = with_sheet_aliases(std::move(s));
+    ToolParam cell;
+    cell.type = "string";
+    cell.description = "Cell in A1 notation (e.g. \"B87\"), as an alternative to row + col";
+    s.params["cell"] = cell;
+    s.params["cell_ref"] = cell;
+    // row/col stay declared but stop being mandatory — either addressing form is
+    // valid, so the handler enforces "one of the two" instead.
+    if (s.params.contains("row"))
+        s.params["row"].required = false;
+    if (s.params.contains("col"))
+        s.params["col"].required = false;
+    s.required.removeAll(QStringLiteral("row"));
+    s.required.removeAll(QStringLiteral("col"));
+    return s;
+}
+
+constexpr const char* kAddressingError =
+    "Specify the cell either as row + col (zero-based integers) or as cell=\"B87\" (A1 notation)";
 
 template <typename BodyFn>
 void run_on_ui(ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise, BodyFn&& body) {
@@ -99,7 +264,7 @@ std::vector<ToolDef> get_excel_tools() {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* tabs = find_excel_tabs();
                 if (!tabs) {
-                    resolve(ToolResult::fail("Excel screen not open"));
+                    resolve(ToolResult::fail("Excel screen could not be opened"));
                     return;
                 }
                 QJsonArray arr;
@@ -132,7 +297,7 @@ std::vector<ToolDef> get_excel_tools() {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* tabs = find_excel_tabs();
                 if (!tabs) {
-                    resolve(ToolResult::fail("Excel screen not open"));
+                    resolve(ToolResult::fail("Excel screen could not be opened"));
                     return;
                 }
                 auto* s = active_sheet();
@@ -160,11 +325,12 @@ std::vector<ToolDef> get_excel_tools() {
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder().integer("sheet_index", "Sheet index").required().min(0).build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
                 if (!tabs) {
-                    resolve(ToolResult::fail("Excel screen not open"));
+                    resolve(ToolResult::fail("Excel screen could not be opened"));
                     return;
                 }
                 const int i = args["sheet_index"].toInt();
@@ -203,7 +369,7 @@ std::vector<ToolDef> get_excel_tools() {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
                 if (!tabs) {
-                    resolve(ToolResult::fail("Excel screen not open"));
+                    resolve(ToolResult::fail("Excel screen could not be opened"));
                     return;
                 }
                 QString name = args["name"].toString();
@@ -228,11 +394,12 @@ std::vector<ToolDef> get_excel_tools() {
         t.auth_required = AuthLevel::ExplicitConfirm;
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder().integer("sheet_index", "Sheet index to delete").required().min(0).build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
                 if (!tabs) {
-                    resolve(ToolResult::fail("Excel screen not open"));
+                    resolve(ToolResult::fail("Excel screen could not be opened"));
                     return;
                 }
                 const int i = args["sheet_index"].toInt();
@@ -270,17 +437,18 @@ std::vector<ToolDef> get_excel_tools() {
                              .required()
                              .length(1, 64)
                              .build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* tabs = find_excel_tabs();
                 if (!tabs) {
-                    resolve(ToolResult::fail("Excel screen not open"));
+                    resolve(ToolResult::fail("Excel screen could not be opened"));
                     return;
                 }
                 const int i = args["sheet_index"].toInt();
                 auto* s = sheet_by_index(i);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 const QString name = args["name"].toString();
@@ -296,7 +464,9 @@ std::vector<ToolDef> get_excel_tools() {
     {
         ToolDef t;
         t.name = "get_excel_cell";
-        t.description = "Read a cell's raw text (may be a formula starting with '=').";
+        t.description = "Read a cell's raw text (may be a formula starting with '='). Address the cell either as "
+                        "row + col (zero-based) or as cell=\"B87\" (A1 notation); the sheet as sheet_index or "
+                        "sheet_name.";
         t.category = "excel";
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
@@ -310,14 +480,19 @@ std::vector<ToolDef> get_excel_tools() {
                              .required()
                              .min(0)
                              .build();
+        t.input_schema = with_cell_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheets"));
                     return;
                 }
-                const int r = args["row"].toInt(), c = args["col"].toInt();
+                int r = -1, c = -1;
+                if (!resolve_row_col(args, r, c)) {
+                    resolve(ToolResult::fail(kAddressingError));
+                    return;
+                }
                 if (r >= s->row_count() || c >= s->col_count()) {
                     resolve(ToolResult::fail("Cell out of range"));
                     return;
@@ -337,7 +512,9 @@ std::vector<ToolDef> get_excel_tools() {
         ToolDef t;
         t.name = "set_excel_cell";
         t.description =
-            "Write a cell's text. Strings starting with '=' are evaluated as formulas (e.g. '=A1+B1', '=SUM(A1:A10)').";
+            "Write a cell's text. Strings starting with '=' are evaluated as formulas (e.g. '=A1+B1', "
+            "'=SUM(A1:A10)'). Address the cell either as row + col (zero-based) or as cell=\"B87\" (A1 notation); "
+            "the sheet as sheet_index or sheet_name.";
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
@@ -355,14 +532,20 @@ std::vector<ToolDef> get_excel_tools() {
                              .required()
                              .length(0, 4096)
                              .build();
+        t.input_schema = with_cell_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheets"));
                     return;
                 }
-                s->set_cell(args["row"].toInt(), args["col"].toInt(), args["text"].toString());
+                int r = -1, c = -1;
+                if (!resolve_row_col(args, r, c)) {
+                    resolve(ToolResult::fail(kAddressingError));
+                    return;
+                }
+                s->set_cell(r, c, args["text"].toString());
                 resolve(ToolResult::ok("Cell updated"));
             });
         };
@@ -373,7 +556,7 @@ std::vector<ToolDef> get_excel_tools() {
     {
         ToolDef t;
         t.name = "clear_excel_cell";
-        t.description = "Clear a cell (set to empty).";
+        t.description = "Clear a cell (set to empty). Address it as row + col (zero-based) or cell=\"B87\".";
         t.category = "excel";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
@@ -388,14 +571,20 @@ std::vector<ToolDef> get_excel_tools() {
                              .required()
                              .min(0)
                              .build();
+        t.input_schema = with_cell_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheets"));
                     return;
                 }
-                s->set_cell(args["row"].toInt(), args["col"].toInt(), QString());
+                int r = -1, c = -1;
+                if (!resolve_row_col(args, r, c)) {
+                    resolve(ToolResult::fail(kAddressingError));
+                    return;
+                }
+                s->set_cell(r, c, QString());
                 resolve(ToolResult::ok("Cell cleared"));
             });
         };
@@ -408,14 +597,15 @@ std::vector<ToolDef> get_excel_tools() {
         t.name = "get_excel_sheet_data";
         t.description = "Get the entire sheet as a 2D array of cell text (rows of strings).";
         t.category = "excel";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kBulkTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 const auto data = s->get_data();
@@ -442,20 +632,30 @@ std::vector<ToolDef> get_excel_tools() {
         t.name = "set_excel_sheet_data";
         t.description = "Replace the entire sheet with a 2D array of cell text.";
         t.category = "excel";
+        // is_destructive only — NOT ExplicitConfirm. The confirm modal that
+        // level waits on was never built, so the checker in AgentService denies
+        // everything >= Verified outright and this tool could never run: the
+        // chat path got "requires explicit_confirm auth" on every call. Worse,
+        // it was inconsistent — set_excel_cell, add_excel_sheet, insert_excel_row
+        // and delete_excel_rows are all destructive without the gate, so writing
+        // 45 cells one at a time was permitted while writing them in one call
+        // was not. is_destructive still blocks the agent path (agents can't
+        // prompt); the chat path, where the user is present and watching, is
+        // allowed. delete_excel_sheet keeps its gate — it destroys existing work.
         t.is_destructive = true;
-        t.auth_required = AuthLevel::ExplicitConfirm;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kBulkTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .integer("sheet_index", "Sheet index (-1 = active)")
                              .default_int(-1)
                              .min(-1)
                              .array("rows", "2D array of strings (array of row arrays)", QJsonObject{{"type", "array"}})
                              .build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 QVector<QVector<QString>> data;
@@ -481,11 +681,12 @@ std::vector<ToolDef> get_excel_tools() {
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 resolve(ToolResult::ok_data(QJsonObject{
@@ -505,14 +706,15 @@ std::vector<ToolDef> get_excel_tools() {
         t.description = "Force recalculation of all formula cells in a sheet.";
         t.category = "excel";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kBulkTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 s->recalculate();
@@ -538,11 +740,12 @@ std::vector<ToolDef> get_excel_tools() {
                              .default_str("below")
                              .enums({"above", "below"})
                              .build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 if (args["position"].toString("below") == "above")
@@ -571,11 +774,12 @@ std::vector<ToolDef> get_excel_tools() {
                              .default_str("right")
                              .enums({"left", "right"})
                              .build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 if (args["position"].toString("right") == "left")
@@ -598,11 +802,12 @@ std::vector<ToolDef> get_excel_tools() {
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 s->delete_selected_rows();
@@ -622,11 +827,12 @@ std::vector<ToolDef> get_excel_tools() {
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
                 s->delete_selected_cols();
@@ -640,49 +846,94 @@ std::vector<ToolDef> get_excel_tools() {
     {
         ToolDef t;
         t.name = "export_excel_sheet_csv";
-        t.description = "Write a sheet to a CSV file on disk (programmatic, no file dialog).";
+        t.description = "Write a sheet to a CSV file inside the export directory (programmatic, no file dialog). "
+                        "'path' is a filename or relative path inside that directory; absolute paths elsewhere "
+                        "on disk are refused.";
         t.category = "excel";
+        // See set_excel_sheet_data above for why ExplicitConfirm is not used.
+        // This is the ONLY tool that persists a sheet to disk, so leaving it
+        // gated meant nothing the model built could ever leave memory — a sheet
+        // it had just filled in was unreachable from File Manager.
+        //
+        // That argument covers the CONFIRMATION gate, not the PATH. `path` was
+        // still raw model text handed straight to QFile::open(WriteOnly), i.e.
+        // arbitrary write anywhere the process can reach. resolve_export_path()
+        // confines it without re-gating the tool.
         t.is_destructive = true;
-        t.auth_required = AuthLevel::ExplicitConfirm;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kBulkTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .integer("sheet_index", "Sheet index (-1 = active)")
                              .default_int(-1)
                              .min(-1)
-                             .string("path", "Output CSV file path")
+                             .string("path", "Output CSV filename inside the export directory, e.g. 'model.csv'")
                              .required()
                              .length(1, 1024)
                              .build();
+        t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 auto* s = resolve_sheet(args);
                 if (!s) {
-                    resolve(ToolResult::fail("Sheet not found"));
+                    resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
-                QFile f(args["path"].toString());
+                const auto dest = resolve_export_path(args["path"].toString());
+                if (!dest.ok()) {
+                    resolve(ToolResult::fail(dest.error));
+                    return;
+                }
+                QFile f(dest.path);
                 if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
                     resolve(ToolResult::fail("Cannot open path for writing"));
                     return;
                 }
-                QTextStream out(&f);
                 const auto data = s->get_data();
-                for (const auto& row : data) {
-                    QStringList parts;
-                    for (const auto& cell : row) {
-                        QString c = cell;
-                        if (c.contains(',') || c.contains('"') || c.contains('\n')) {
-                            c.replace('"', "\"\"");
-                            c = '"' + c + '"';
+
+                // Trim to the used extent. get_data() pads every sheet to at
+                // least 100x26, so a 12-row model was exporting as 100 rows of
+                // bare commas.
+                int last_row = -1;
+                int last_col = -1;
+                for (int r = 0; r < data.size(); ++r) {
+                    for (int c = 0; c < data[r].size(); ++c) {
+                        if (!data[r][c].trimmed().isEmpty()) {
+                            last_row = std::max(last_row, r);
+                            last_col = std::max(last_col, c);
                         }
-                        parts.append(c);
                     }
-                    out << parts.join(',') << '\n';
+                }
+
+                {
+                    QTextStream out(&f);
+                    out.setEncoding(QStringConverter::Utf8);
+                    for (int r = 0; r <= last_row; ++r) {
+                        QStringList parts;
+                        for (int c = 0; c <= last_col; ++c) {
+                            QString cell = (c < data[r].size()) ? data[r][c] : QString();
+                            if (cell.contains(',') || cell.contains('"') || cell.contains('\n')) {
+                                cell.replace('"', "\"\"");
+                                cell = '"' + cell + '"';
+                            }
+                            parts.append(cell);
+                        }
+                        out << parts.join(',') << '\n';
+                    }
+                    out.flush();
                 }
                 f.close();
+
+                // Register with File Manager, exactly as the UI export buttons
+                // do. Without this a model-driven export landed on disk but
+                // never appeared in the Files tab — the file existed and was
+                // simply invisible, which reads as "the export silently failed".
+                const QString out_path = dest.path;
+                const QString file_id = services::FileManagerService::instance().import_file(out_path, "excel");
+
                 resolve(ToolResult::ok("CSV exported", QJsonObject{
-                                                           {"path", args["path"].toString()},
-                                                           {"rows", static_cast<int>(data.size())},
+                                                           {"path", out_path},
+                                                           {"rows", last_row + 1},
+                                                           {"cols", last_col + 1},
+                                                           {"file_manager_id", file_id},
                                                        }));
             });
         };

@@ -2,9 +2,11 @@
 
 #include "mcp/McpProvider.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "mcp/JobRegistry.h"
 #include "mcp/SchemaValidator.h"
+#include "mcp/TerminalMcpBridge.h"
 
 #include <QCoreApplication>
 #include <QFutureWatcher>
@@ -530,20 +532,72 @@ void McpProvider::set_auth_checker(AuthChecker checker) {
     auth_checker_ = std::move(checker);
 }
 
+namespace {
+// Session-level destructive grant. -1 = not yet read from settings, 0 = denied,
+// 1 = granted. Atomic because tool calls dispatch from pool threads.
+std::atomic<int> s_destructive_session_grant{-1};
+
+constexpr const char* kDestructiveSettingKey = "mcp/allow_destructive_tools";
+} // namespace
+
+void McpProvider::set_destructive_allowed(bool allowed) {
+    s_destructive_session_grant.store(allowed ? 1 : 0, std::memory_order_relaxed);
+    AppConfig::instance().set(QString::fromLatin1(kDestructiveSettingKey), allowed);
+    LOG_WARN(TAG, QString("Destructive MCP tools are now %1 for this session")
+                      .arg(allowed ? "ENABLED (tools may mutate state and write files)" : "disabled"));
+}
+
+bool McpProvider::destructive_allowed() {
+    // 1. Per-call capability token — the agent bridge sets a thread_local flag
+    //    for the duration of a call that presented the destructive token.
+    //    Reusing that mechanism rather than adding a parallel one.
+    if (TerminalMcpBridge::is_destructive_allowed())
+        return true;
+
+    // 2. Session grant, seeded once from the persisted setting.
+    int v = s_destructive_session_grant.load(std::memory_order_relaxed);
+    if (v < 0) {
+        v = AppConfig::instance().get(QString::fromLatin1(kDestructiveSettingKey), QVariant(false)).toBool() ? 1 : 0;
+        s_destructive_session_grant.store(v, std::memory_order_relaxed);
+    }
+    return v == 1;
+}
+
 std::optional<ToolResult> McpProvider::check_authorization(const QString& name, AuthLevel auth_required,
-                                                           bool is_destructive) const {
+                                                           bool is_destructive, bool destructive_declared) const {
     // We don't import AuthManager here to avoid pulling auth headers into
     // McpTypes.h consumers — instead we expose a hook that the app installs
     // at startup.
     //
-    // No-checker semantics:
-    //   • AuthLevel <= Authenticated and is_destructive flag → log + pass
-    //     (the flag is a hint for the Phase 6.12 modal; not a hard gate
-    //     until that UI lands)
-    //   • AuthLevel >= Verified → fail closed (genuine privilege escalation
-    //     that must not happen unauthenticated)
+    // Order of checks:
+    //   1. Nothing declared → pass immediately.
+    //   2. Declared destructive without capability → REFUSE (fail closed, all
+    //      callers). This runs ahead of the checker because the checker can
+    //      only distinguish agent calls, and the chat path is the one that was
+    //      unguarded.
+    //   3. Installed checker → its verdict wins for everything else.
+    //   4. No checker + AuthLevel >= Verified → fail closed (genuine privilege
+    //      escalation that must not happen unauthenticated).
     if (auth_required == AuthLevel::None && !is_destructive)
         return std::nullopt;
+
+    // ── Fail-closed destructive gate ─────────────────────────────────────
+    // Runs BEFORE the caller-installed checker and applies to every caller,
+    // because the checker could only ever see agent-originated calls (it keys
+    // off TerminalMcpBridge::is_call_in_progress()) and the interactive chat
+    // tool loop never sets that flag. See the header for the two ways to grant
+    // the capability. Note this is deliberately caller-agnostic: "which caller
+    // is this" is exactly the distinction that made the old gate a no-op.
+    if (destructive_declared && is_destructive && !destructive_allowed()) {
+        LOG_WARN(TAG, QString("Tool '%1' refused: destructive tools are disabled (auth_required=%2). "
+                              "Grant the capability to allow it.")
+                          .arg(name, auth_level_str(auth_required)));
+        return ToolResult::fail(
+            QString("Tool '%1' changes state or writes to disk and is disabled by default. To allow it, "
+                    "the USER must enable destructive tools in Settings (`%2`). Do not retry this tool "
+                    "until they confirm they have; tell them what you were trying to do and why.")
+                .arg(name, QString::fromLatin1(kDestructiveSettingKey)));
+    }
 
     AuthChecker checker;
     {
@@ -564,13 +618,11 @@ std::optional<ToolResult> McpProvider::check_authorization(const QString& name, 
                           .arg(name, auth_level_str(auth_required)));
         return ToolResult::fail("Tool requires user confirmation but no authorisation hook is installed");
     } else if (is_destructive) {
-        // Advisory log only — the modal that prompts on this flag is
-        // Phase 6.12 work. Tools tagged Authenticated+destructive still
-        // run today; once the modal ships, install the checker and the
-        // upper branch starts gating them.
-        LOG_INFO(TAG,
-                 QString("Tool '%1' is destructive (flag is advisory; install McpProvider::set_auth_checker to gate)")
-                     .arg(name));
+        // Reaching here means the capability gate above already passed — the
+        // user granted it for the session, or the caller presented the agent
+        // destructive token. Record it: a destructive tool running is worth an
+        // audit line even when it was authorised.
+        LOG_WARN(TAG, QString("Destructive tool '%1' authorised and running").arg(name));
     }
     return std::nullopt;
 }

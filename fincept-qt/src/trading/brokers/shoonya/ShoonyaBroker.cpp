@@ -1,5 +1,7 @@
 #include "trading/brokers/shoonya/ShoonyaBroker.h"
+#include "trading/brokers/BrokerModifyFields.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 
@@ -129,26 +131,26 @@ TokenExchangeResponse ShoonyaBroker::exchange_token(const QString& api_key, cons
                               {{"Content-Type", "application/x-www-form-urlencoded"}});
 
     if (!resp.success)
-        return {false, "", "", "", "Login failed: " + resp.error, ""};
+        return {.success = false, .error = "Login failed: " + resp.error};
 
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (!doc.isObject())
-        return {false, "", "", "", "Login: invalid response", ""};
+        return {.success = false, .error = "Login: invalid response"};
 
     QJsonObject obj = doc.object();
     if (obj.value("stat").toString() != "Ok")
-        return {false, "", "", "", obj.value("emsg").toString("Login failed"), ""};
+        return {.success = false, .error = obj.value("emsg").toString("Login failed")};
 
     QString token = obj.value("susertoken").toString();
     QString uid = obj.value("uid").toString(api_key);
 
     if (token.isEmpty())
-        return {false, "", "", "", "Login: no susertoken in response", ""};
+        return {.success = false, .error = "Login: no susertoken in response"};
 
     // Shoonya session tokens lapse at the daily reset; factor2 (TOTP/OTP) is a
     // one-time code we can't replay, so detect-only. Startup hint.
     const QString extra = with_token_expiry({}, next_ist_flush_epoch(6, 0));
-    return {true, token, "", uid, extra, ""};
+    return {.success = true, .access_token = token, .user_id = uid, .additional_data = extra};
 }
 
 // ---------- place_order ----------
@@ -169,7 +171,10 @@ OrderPlaceResponse ShoonyaBroker::place_order(const BrokerCredentials& creds, co
     jdata["prc"] = QString::number(order.price, 'f', 2);
     jdata["trgprc"] = QString::number(order.stop_price, 'f', 2);
     jdata["ret"] = order.validity.isEmpty() ? "DAY" : order.validity;
-    jdata["remarks"] = "fincept";
+    // Unique per attempt so a retry after an 8s client-side timeout is a
+    // broker-side duplicate rather than a second live order (see
+    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
+    jdata["remarks"] = make_client_order_ref(20);
     // ordersource is a PlaceOrder-only field per NorenAPI spec (values: WEB/MOB/TT).
     jdata["ordersource"] = "WEB";
 
@@ -207,9 +212,14 @@ ApiResponse<QJsonObject> ShoonyaBroker::modify_order(const BrokerCredentials& cr
     jdata["qty"] = QString::number(mods.value("quantity").toInt(0));
     jdata["prctyp"] = mods.value("orderType").toString("LMT");
     jdata["prc"] = QString::number(mods.value("price").toDouble(0), 'f', 2);
-    jdata["trgprc"] = QString::number(mods.value("triggerPrice").toDouble(0), 'f', 2);
     jdata["dscqty"] = "0";
     jdata["ret"] = mods.value("validity").toString("DAY");
+    // Only include trigger price for SL/SL-M — trgprc=0 on LMT causes a reject.
+    // (Same guard as the line-identical Noren twin in FlattradeBroker.)
+    const QString prctyp = jdata["prctyp"].toString();
+    if (prctyp == "SL-LMT" || prctyp == "SL-MKT")
+        jdata["trgprc"] = QString::number(
+            modify_fields::number(mods, modify_fields::kTrigger), 'f', 2);
     // ordersource not part of ModifyOrder spec — omit.
 
     auto& http = BrokerHttp::instance();

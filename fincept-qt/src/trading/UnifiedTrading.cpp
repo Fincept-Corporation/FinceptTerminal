@@ -3,16 +3,20 @@
 #include "trading/UnifiedTrading.h"
 
 #include "core/logging/Logger.h"
+#include "services/workflow/RiskManager.h"
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
 #include "trading/OrderValidator.h"
 #include "trading/PaperTrading.h"
+#include "trading/RateLimiter.h"
 #include "trading/SmartOrderEngine.h"
 #include "trading/StrategyPortfolio.h"
 #include "trading/TradingEvents.h"
+#include "trading/brokers/BrokerClientOrderId.h"
 
+#include <QCoreApplication>
 #include <QJsonObject>
 #include <QMutexLocker>
 #include <QPointer>
@@ -22,8 +26,161 @@
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fincept::trading {
+
+namespace {
+constexpr const char* kUtLog = "UnifiedTrading";
+
+/// Risk-limit gate shared by every UnifiedTrading path that can reach a broker.
+/// Returns an empty string when the order is allowed, otherwise the reason it was
+/// blocked.
+///
+/// Every RiskLimits field defaults to "unlimited" (0) with short selling allowed,
+/// so an unconfigured install behaves exactly as it did before this gate existed;
+/// only an operator who has set a limit can be rejected by it.
+///
+/// Fails CLOSED: if the check itself throws, the order is refused. A risk gate
+/// that could not be evaluated must never read as a pass.
+QString risk_block_reason(const QString& symbol, OrderSide side, double quantity, double price, bool paper) {
+    try {
+        QString reason;
+        if (workflow::RiskManager::instance().is_order_allowed(symbol, QString::fromLatin1(order_side_str(side)),
+                                                               quantity, price, paper, &reason))
+            return {};
+        return reason.isEmpty() ? QStringLiteral("Blocked by risk limits") : reason;
+    } catch (const std::exception& e) {
+        return QStringLiteral("Risk check failed: ") + QString::fromUtf8(e.what());
+    } catch (...) {
+        return QStringLiteral("Risk check failed (unknown error)");
+    }
+}
+
+/// Broker order-rate gate, applied immediately before a live broker call.
+/// OrderRateLimiter::acquire() sleeps (QThread::msleep) to space orders out, so it
+/// must NEVER run on the GUI thread (P1). The batch paths that actually need it —
+/// basket, split, broadcast, algo deployment — all run under QtConcurrent::run.
+/// The two known main-thread callers are a single user-initiated approval
+/// (ActionCenter) and the MCP tool handler; there we skip the throttle rather than
+/// freeze the UI, which is safe because those are one order at a time.
+void rate_limit_broker(const QString& broker_id) {
+    const auto id = parse_broker_id(broker_id);
+    if (!id)
+        return; // unknown broker string — nothing registered to throttle
+    auto* app = QCoreApplication::instance();
+    if (app && QThread::currentThread() == app->thread()) {
+        LOG_DEBUG(kUtLog, QString("Order rate-limit skipped for %1 — call is on the GUI thread").arg(broker_id));
+        return;
+    }
+    OrderRateLimiter::instance().acquire(*id);
+}
+
+/// Stamp an order's idempotency reference exactly ONCE, at the point it enters
+/// the routing layer. A non-empty value is never overwritten, so re-submitting
+/// the SAME UnifiedOrder after BrokerHttp's 8 s client-side timeout reaches the
+/// broker with the reference it already used — the broker rejects the retry as a
+/// duplicate instead of opening a second live position. Minting inside each
+/// broker (what make_client_order_ref() does on its own) cannot achieve that,
+/// because it produces a fresh value on every attempt.
+void stamp_client_order_id(UnifiedOrder& order) {
+    if (order.client_order_id.isEmpty())
+        order.client_order_id = make_client_order_ref(20);
+}
+
+/// Fill the caller-owned identity fields of a modify request from the RESTING
+/// order, then return an empty string. On failure, returns the reason the modify
+/// must be refused.
+///
+/// Why this exists: Kotak and Tradejini implement modify as a FULL REPLACE —
+/// every field they transmit overwrites the resting order. They used to default
+/// the missing ones, and the worst of those defaults was `side` ("B" / "buy"):
+/// re-pricing a resting SELL or stop-loss rewrote it as a BUY, turning an exit
+/// into a new long. Both now hard-fail instead of guessing. Every caller in the
+/// terminal (order blotter, workflow node) sends only {quantity, price}, so
+/// without this hydration those two brokers can no longer modify anything.
+///
+/// Caller-supplied values ALWAYS win — this only fills gaps.
+///
+/// The same concept is read under different key names across the 22 brokers, so
+/// each value is written under every spelling some broker reads. Brokers ignore
+/// keys they don't read, so the duplicate spellings are inert:
+///   side       -> "side"                              (kotak, tradejini)
+///   symbol     -> "symbol"                            (flattrade, kotak, shoonya, tradejini)
+///   exchange   -> "exchange", "exchange_code"         (flattrade/groww/kotak/shoonya, icicidirect)
+///   product    -> "product", "productType"            (kotak, iifl)
+///   order type -> "order_type", "orderType", "type"   (see the three families below)
+///
+/// Deliberately NOT written:
+///   "variety" — it looks like a product slot but is the Kite / AngelOne order
+///     VARIETY (regular|amo|co, NORMAL|STOPLOSS|AMO). Zerodha puts it in the
+///     request path, so writing a product there would issue
+///     PUT /orders/MIS/<id>; AngelOne already recovers the real variety from its
+///     own order book.
+///   "segment" — Groww's CASH/FNO segment, not an exchange. Groww already
+///     derives it from "exchange" when absent, which this does supply.
+QString hydrate_modify_fields(IBroker& broker, const BrokerCredentials& creds, const QString& order_id,
+                              QJsonObject& mods) {
+    // Every key some broker reads for one of the five hydratable concepts.
+    static const char* const kHydratedKeys[] = {"side",    "symbol",      "exchange",   "exchange_code",
+                                                "product", "productType", "order_type", "orderType",
+                                                "type"};
+    auto blank = [&mods](const char* key) {
+        return mods.value(QString::fromLatin1(key)).toString().trimmed().isEmpty();
+    };
+
+    // If the caller already supplied everything, skip the round trip entirely.
+    bool needs_fill = false;
+    for (const char* k : kHydratedKeys) {
+        if (blank(k)) {
+            needs_fill = true;
+            break;
+        }
+    }
+    if (!needs_fill)
+        return {};
+
+    const QString broker_name = QString::fromLatin1(broker.name());
+    auto resp = broker.get_orders(creds);
+    if (!resp.success || !resp.data.has_value()) {
+        // Refuse rather than dispatch a half-populated map — a partially
+        // populated full-replace modify is the exact failure mode this guards.
+        return QString("Cannot modify order %1: %2's order book could not be read (%3)")
+            .arg(order_id, broker_name, resp.error.isEmpty() ? QStringLiteral("no detail") : resp.error);
+    }
+
+    const BrokerOrderInfo* resting = nullptr;
+    for (const auto& o : *resp.data) {
+        if (o.order_id == order_id || (!o.exchange_order_id.isEmpty() && o.exchange_order_id == order_id)) {
+            resting = &o;
+            break;
+        }
+    }
+    if (!resting) {
+        return QString("Cannot modify order %1: it is not in %2's order book (already filled or cancelled?)")
+            .arg(order_id, broker_name);
+    }
+
+    auto fill = [&mods, &blank](const char* key, const QString& value) {
+        if (!value.trimmed().isEmpty() && blank(key))
+            mods[QString::fromLatin1(key)] = value;
+    };
+    fill("side", resting->side);
+    fill("symbol", resting->symbol);
+    fill("exchange", resting->exchange);
+    fill("exchange_code", resting->exchange);
+    fill("product", resting->product_type);
+    fill("productType", resting->product_type);
+    fill("order_type", resting->order_type);
+    fill("orderType", resting->order_type);
+    fill("type", resting->order_type);
+
+    LOG_DEBUG(kUtLog, QString("Modify %1 on %2 hydrated from the resting order: %3 %4 %5 %6/%7")
+                          .arg(order_id, broker_name, resting->side, resting->symbol, resting->exchange,
+                               resting->product_type, resting->order_type));
+    return {};
+}
+} // namespace
 
 UnifiedTrading& UnifiedTrading::instance() {
     static UnifiedTrading ut;
@@ -91,10 +248,13 @@ UnifiedOrderResponse UnifiedTrading::place_order(const UnifiedOrder& order) {
         return {false, "", "No active trading session. Call init_session first.", ""};
     }
 
+    UnifiedOrder routed = order;
+    stamp_client_order_id(routed);
+
     if (session_->mode == "paper") {
-        return place_paper_order(*session_, order);
+        return place_paper_order(*session_, routed);
     }
-    return place_live_order(*session_, order);
+    return place_live_order(*session_, routed);
 }
 
 UnifiedOrderResponse UnifiedTrading::place_paper_order(const TradingSession& session, const UnifiedOrder& order) {
@@ -145,6 +305,18 @@ UnifiedOrderResponse UnifiedTrading::place_live_order(const TradingSession& sess
         return {false, "", "No credentials for " + session.broker + ". Please authenticate.", "live"};
     }
 
+    // Legacy session path bypasses the account-aware place_order, so it carries
+    // its own risk gate — this reaches a real broker.
+    const QString blocked = risk_block_reason(order.symbol, order.side, order.quantity, order.price, /*paper=*/false);
+    if (!blocked.isEmpty()) {
+        LOG_INFO(kUtLog, QString("Risk limit rejected %1 %2 x%3 on %4: %5")
+                             .arg(QString::fromLatin1(order_side_str(order.side)), order.symbol)
+                             .arg(order.quantity)
+                             .arg(session.broker, blocked));
+        return {false, "", "Risk check failed: " + blocked, "live"};
+    }
+
+    rate_limit_broker(session.broker);
     auto result = broker->place_order(creds, order);
     return {result.success, result.order_id, result.error, "live"};
 }
@@ -170,6 +342,7 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& order_id) {
         return {false, "", "Broker not found", "live"};
 
     auto creds = broker->load_credentials();
+    rate_limit_broker(session_->broker);
     auto result = broker->cancel_order(creds, order_id);
     return {result.success, order_id, result.error, "live"};
 }
@@ -191,6 +364,23 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
         return {false, "", "Validation failed: " + err, account.trading_mode};
     }
 
+    // Risk limits. This is the terminal's single order choke point — every
+    // broadcast, approval and workflow order funnels through here — so the gate
+    // lives here rather than in each caller. Defaults are wide open (see
+    // RiskLimits), so nothing that works today starts failing; a rejection only
+    // happens when an operator has actually configured a limit, and is logged so
+    // they can see which one bit.
+    const QString risk_err =
+        risk_block_reason(order.symbol, order.side, order.quantity, order.price, account.trading_mode == "paper");
+    if (!risk_err.isEmpty()) {
+        LOG_INFO(kUtLog, QString("Risk limit rejected %1 %2 x%3 on account %4: %5")
+                             .arg(QString::fromLatin1(order_side_str(order.side)), order.symbol)
+                             .arg(order.quantity)
+                             .arg(account_id, risk_err));
+        publish(OrderFailedEvent{account_id, "PLACE", order.symbol, risk_err, account.trading_mode});
+        return {false, "", "Risk check failed: " + risk_err, account.trading_mode};
+    }
+
     // Quantity freeze check (Phase 3 §17). Exchanges cap the max quantity per
     // single order (e.g. NSE NIFTY futures = 1800). place_order is synchronous;
     // an auto-split is inherently async (place_split_orders runs on a worker
@@ -209,8 +399,15 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
         return {false, "", err, account.trading_mode};
     }
 
-    UnifiedOrderResponse resp = (account.trading_mode == "paper") ? place_paper_order_for_account(account_id, order)
-                                                                  : place_live_order_for_account(account_id, order);
+    // Stamp the idempotency reference here — this is the terminal's single order
+    // choke point, so every routed order carries one exactly once. Re-submitting
+    // the same UnifiedOrder (a retry after an 8 s BrokerHttp timeout) keeps the
+    // original reference; a freshly built order gets a new one.
+    UnifiedOrder routed = order;
+    stamp_client_order_id(routed);
+
+    UnifiedOrderResponse resp = (account.trading_mode == "paper") ? place_paper_order_for_account(account_id, routed)
+                                                                  : place_live_order_for_account(account_id, routed);
 
     if (resp.success) {
         publish(OrderPlacedEvent{account_id, resp.order_id, order.symbol, order.exchange, order.side, order.quantity,
@@ -240,6 +437,7 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& account_id, con
         return {false, "", "Broker not found: " + account.broker_id, "live"};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    rate_limit_broker(account.broker_id);
     auto result = broker->cancel_order(creds, order_id);
     return {result.success, order_id, result.error, "live"};
 }
@@ -258,7 +456,25 @@ UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, con
         return {false, "", "Broker not found: " + account.broker_id, "live"};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
-    auto result = broker->modify_order(creds, order_id, modifications);
+
+    // Hydrate side/symbol/exchange/product/order_type from the resting order
+    // before dispatching. Several brokers replace the whole order on modify, so
+    // a map carrying only {quantity, price} either gets rejected (Kotak,
+    // Tradejini) or silently rewrites the fields the caller never touched
+    // (IIFL's MIS/MARKET defaults, AliceBlue's LIMIT default).
+    //
+    // This costs one extra broker round trip per modify. Both call sites
+    // (EquityTradingScreen::async_modify_order, the workflow modify-order node)
+    // already run under QtConcurrent::run, so it never blocks the GUI thread.
+    QJsonObject mods = modifications;
+    const QString hydrate_err = hydrate_modify_fields(*broker, creds, order_id, mods);
+    if (!hydrate_err.isEmpty()) {
+        LOG_ERROR(kUtLog, QString("Modify refused on account %1: %2").arg(account_id, hydrate_err));
+        return {false, order_id, hydrate_err, "live"};
+    }
+
+    rate_limit_broker(account.broker_id);
+    auto result = broker->modify_order(creds, order_id, mods);
     return {result.success, order_id, result.error, "live"};
 }
 
@@ -330,6 +546,10 @@ UnifiedOrderResponse UnifiedTrading::place_live_order_for_account(const QString&
     if (creds.access_token.isEmpty())
         return {false, "", "No credentials for account " + account.display_name + ". Please authenticate.", "live"};
 
+    // Space orders out to the broker's published per-second cap. Without this a
+    // broadcast / basket / algo loop fires as fast as the network allows and the
+    // API key gets throttled or banned mid-batch.
+    rate_limit_broker(account.broker_id);
     auto result = broker->place_order(creds, order);
     return {result.success, result.order_id, result.error, "live"};
 }
@@ -493,6 +713,27 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
 
+    // Pre-flight validation. Smart orders previously reached the broker with no
+    // checks at all — only the plain UnifiedOrder overload was wired.
+    auto vr = OrderValidator::validate_smart(order);
+    if (!vr.valid)
+        return {false, std::nullopt, "Validation failed: " + vr.errors.join("; ")};
+
+    // Risk gate on the TARGET exposure: the engine computes the delta from the
+    // live book, so the size the account will be carrying is the meaningful
+    // quantity to check (falling back to the explicit quantity when the target is
+    // a flatten). Defaults are unlimited — see risk_block_reason.
+    const double risk_qty = (order.position_size != 0.0) ? std::abs(order.position_size) : order.quantity;
+    const QString risk_err = risk_block_reason(order.symbol, order.action, risk_qty, order.price,
+                                               account.trading_mode == "paper");
+    if (!risk_err.isEmpty()) {
+        LOG_INFO(kUtLog, QString("Risk limit rejected smart order %1 (target %2) on account %3: %4")
+                             .arg(order.symbol)
+                             .arg(order.position_size)
+                             .arg(account_id, risk_err));
+        return {false, std::nullopt, "Risk check failed: " + risk_err};
+    }
+
     if (account.trading_mode == "paper") {
         // Paper mode: get paper positions, calculate delta, place paper order
         auto positions = pt_get_positions(account.paper_portfolio_id);
@@ -561,6 +802,7 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    rate_limit_broker(account.broker_id);
     return SmartOrderEngine::instance().execute(broker, creds, order);
 }
 
@@ -611,6 +853,25 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
         return;
     }
 
+    // Pre-flight validation. validate_basket had zero call sites, so a basket
+    // reached the broker with no checks whatsoever — a leg with a bad exchange or
+    // a zero quantity was only ever rejected by the broker itself, one leg at a
+    // time, after the earlier legs had already filled.
+    auto bvr = OrderValidator::validate_basket(basket);
+    if (!bvr.valid) {
+        const QString err = bvr.errors.join("; ");
+        BasketOrderResult result;
+        result.total = basket.orders.size();
+        for (const auto& order : basket.orders) {
+            result.results.append({order.symbol, order.exchange, false, {}, "Validation failed: " + err});
+            result.failed++;
+        }
+        LOG_WARN(kUtLog, QString("Basket rejected by validation for %1: %2").arg(account_id, err));
+        if (callback)
+            callback(result);
+        return;
+    }
+
     const bool is_paper = (account.trading_mode == "paper");
 
     // Resolve broker + credentials up front on the calling thread (consistent
@@ -656,6 +917,12 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     QVector<UnifiedOrder> orders = basket.orders;
     std::stable_partition(orders.begin(), orders.end(), [](const UnifiedOrder& o) { return o.side == OrderSide::Buy; });
 
+    // Basket legs bypass place_order, so stamp each leg's idempotency reference
+    // here. Every leg is a distinct order and therefore gets its own reference —
+    // sharing one would make the broker dedupe legs 2..N away.
+    for (auto& o : orders)
+        stamp_client_order_id(o);
+
     // Paper MARKET legs need a fill price, but basket builders (BasketOrdersDialog,
     // options strategies) leave price = 0 on market legs. Backfill from the account
     // stream's quote cache HERE on the calling (GUI) thread — cached_quote() is
@@ -676,8 +943,9 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
 
     QPointer<UnifiedTrading> self = this;
     const QString basket_strategy = basket.strategy_name;
-    (void)QtConcurrent::run(
-        [self, account_id, basket_strategy, orders, is_paper, broker, creds, paper_portfolio_id, callback]() {
+    const QString broker_id = account.broker_id;
+    (void)QtConcurrent::run([self, account_id, basket_strategy, orders, is_paper, broker, broker_id, creds,
+                             paper_portfolio_id, callback]() {
         BasketOrderResult result;
         result.total = orders.size();
 
@@ -691,6 +959,20 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             BasketOrderResult::OrderResult r;
             r.symbol = order.symbol;
             r.exchange = order.exchange;
+
+            // Basket legs bypass place_order, so the risk gate is applied per leg
+            // here. A blocked leg fails on its own; the rest of the basket still
+            // goes out, matching how a broker-rejected leg already behaves.
+            const QString leg_risk = risk_block_reason(order.symbol, order.side, order.quantity, order.price, is_paper);
+            if (!leg_risk.isEmpty()) {
+                LOG_INFO(kUtLog, QString("Risk limit rejected basket leg %1 on account %2: %3")
+                                     .arg(order.symbol, account_id, leg_risk));
+                r.success = false;
+                r.error = "Risk check failed: " + leg_risk;
+                result.failed++;
+                result.results.append(r);
+                continue;
+            }
 
             if (is_paper) {
                 // Store the BARE symbol + forward exchange/product (same contract as
@@ -728,6 +1010,8 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
                     }
                 }
             } else {
+                // Worker thread — safe to block on the broker's per-second cap.
+                rate_limit_broker(broker_id);
                 OrderPlaceResponse resp = broker->place_order(creds, order);
                 r.success = resp.success;
                 r.order_id = resp.order_id;
@@ -779,7 +1063,45 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         return;
     }
 
-    const int total = static_cast<int>(request.base_order.quantity);
+    // UnifiedOrder::quantity is a double. Truncating it to int made any fractional
+    // quantity below 1 collapse to total = 0: the chunk loop never ran, and the
+    // callback fired with chunks_successful == 0 AND chunks_failed == 0 — reported
+    // as neither success nor failure, so the user believed the order had gone out.
+    // Reject anything that is not a whole quantity of at least 1, and ROUND (not
+    // truncate) the conversion so a 9.9999 carried in from a float calculation is
+    // 10 chunks' worth, not 9.
+    const double raw_qty = request.base_order.quantity;
+    const long long rounded_qty = std::llround(raw_qty);
+    if (raw_qty < 1.0 || std::fabs(raw_qty - static_cast<double>(rounded_qty)) > 1e-6) {
+        SplitOrderResult result;
+        result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
+                               QString("Invalid quantity %1 for a split order — it must be a whole number of at "
+                                       "least 1.")
+                                   .arg(raw_qty)});
+        result.chunks_failed++;
+        if (callback)
+            callback(result);
+        return;
+    }
+
+    // Risk gate on the FULL quantity (a split is one intent, not N independent
+    // orders) — split chunks bypass place_order entirely. Defaults are unlimited.
+    const QString split_risk =
+        risk_block_reason(request.base_order.symbol, request.base_order.side, raw_qty, request.base_order.price,
+                          account.trading_mode == "paper");
+    if (!split_risk.isEmpty()) {
+        LOG_INFO(kUtLog, QString("Risk limit rejected split order %1 on account %2: %3")
+                             .arg(request.base_order.symbol, account_id, split_risk));
+        SplitOrderResult result;
+        result.results.append({request.base_order.symbol, request.base_order.exchange, false, {},
+                               "Risk check failed: " + split_risk});
+        result.chunks_failed++;
+        if (callback)
+            callback(result);
+        return;
+    }
+
+    const int total = static_cast<int>(rounded_qty);
     const int split_size = request.split_size;
     const int num_full = total / split_size;
     const int remainder = total % split_size;
@@ -852,10 +1174,11 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         }
     }
     const int delay_ms = request.delay_between_ms;
+    const QString broker_id = account.broker_id;
 
     QPointer<UnifiedTrading> self = this;
     (void)QtConcurrent::run(
-        [self, base, chunk_qtys, delay_ms, is_paper, broker, creds, paper_portfolio_id, callback]() {
+        [self, base, chunk_qtys, delay_ms, is_paper, broker, broker_id, creds, paper_portfolio_id, callback]() {
             SplitOrderResult result;
 
             for (int i = 0; i < chunk_qtys.size(); ++i) {
@@ -864,6 +1187,10 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
 
                 UnifiedOrder chunk = base;
                 chunk.quantity = chunk_qtys.at(i);
+                // Each chunk is a SEPARATE live order, so it needs its own
+                // idempotency reference. Inheriting the base order's would make
+                // the broker dedupe chunks 2..N and only the first would fill.
+                chunk.client_order_id = make_client_order_ref(20);
 
                 BasketOrderResult::OrderResult r;
                 r.symbol = chunk.symbol;
@@ -902,6 +1229,8 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
                         }
                     }
                 } else {
+                    // Worker thread — safe to block on the broker's per-second cap.
+                    rate_limit_broker(broker_id);
                     OrderPlaceResponse resp = broker->place_order(creds, chunk);
                     r.success = resp.success;
                     r.order_id = resp.order_id;
