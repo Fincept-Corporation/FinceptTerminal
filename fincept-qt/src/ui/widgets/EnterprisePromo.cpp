@@ -142,8 +142,12 @@ UpgradeDialog::UpgradeDialog(QWidget* parent) : QDialog(parent) {
     compare_btn_ = new QPushButton;
     compare_btn_->setCursor(Qt::PointingHandCursor);
     compare_btn_->setStyleSheet(ent_ghost_button_ss());
+    // No capture — open_url/comparison_url are free functions in the
+    // enterprise namespace. `this` stays as connect()'s context object (3rd
+    // arg) for lifetime, but capturing it would be unused and Clang builds
+    // with -Werror=unused-lambda-capture.
     connect(compare_btn_, &QPushButton::clicked, this,
-            [this]() { enterprise::open_url(enterprise::comparison_url()); });
+            []() { enterprise::open_url(enterprise::comparison_url()); });
     buttons->addWidget(compare_btn_);
 
     primary_btn_ = new QPushButton;

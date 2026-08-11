@@ -39,8 +39,7 @@ namespace fincept::services {
 //   # 2. Extract the RAW 32-byte public key as hex. The DER SubjectPublicKeyInfo
 //   #    for Ed25519 is a fixed 12-byte prefix + the 32 key bytes, so the last
 //   #    32 bytes are exactly what UPDATE_SIGNING_PUBLIC_KEY_HEX wants.
-//   openssl pkey -in fincept-update-signing.key -pubout -outform DER \
-//     | tail -c 32 | xxd -p -c 32
+//   openssl pkey -in fincept-update-signing.key -pubout -outform DER | tail -c 32 | xxd -p -c 32
 //
 //   # 3. Paste that 64-hex-character string into
 //   #    UPDATE_SIGNING_PUBLIC_KEY_HEX in UpdateService.h and ship the build.
@@ -48,15 +47,14 @@ namespace fincept::services {
 //   # 4. For EVERY release, after updates.json is final, sign it and commit the
 //   #    signature next to it. Ed25519 signs the message directly (-rawin);
 //   #    there is no pre-hash step and `openssl dgst -sign` is NOT equivalent.
-//   openssl pkeyutl -sign -rawin -inkey fincept-update-signing.key \
-//     -in updates.json -out updates.json.sig.bin
+//   openssl pkeyutl -sign -rawin -inkey fincept-update-signing.key -in updates.json -out updates.json.sig.bin
 //   base64 -w0 updates.json.sig.bin > updates.json.sig
 //
-//   # 5. Verify locally before pushing.
+//   # 5. Verify locally before pushing. Export the public key to its own file
+//   #    first so the verify step needs no bash process substitution.
+//   openssl pkey -in fincept-update-signing.key -pubout -out fincept-update-signing.pub
 //   base64 -d updates.json.sig > /tmp/sig.bin
-//   openssl pkeyutl -verify -rawin -pubin \
-//     -inkey <(openssl pkey -in fincept-update-signing.key -pubout) \
-//     -in updates.json -sigfile /tmp/sig.bin
+//   openssl pkeyutl -verify -rawin -pubin -inkey fincept-update-signing.pub -in updates.json -sigfile /tmp/sig.bin
 //
 //   # 6. Commit BOTH files together. updates.json.sig must sit beside
 //   #    updates.json at the same URL + ".sig".
