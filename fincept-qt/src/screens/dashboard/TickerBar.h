@@ -25,14 +25,17 @@ class TickerBar : public QWidget {
     /// in set_data(). paintEvent runs 20×/s over every entry × every pass, so
     /// it must not format strings or measure text — see rebuild_entry_cache().
     struct Entry {
-        QString symbol;
+        QString symbol{};
         double price = 0;
         double change = 0;
 
         // ── Derived (do not set from outside) ──
-        QString price_text;
-        QString change_text;
-        QColor change_col;
+        // The `{}` are load-bearing: callers brace-init only the first three
+        // fields, and -Wmissing-field-initializers (fatal on Linux/macOS under
+        // -Wextra -Werror) flags every omitted member that lacks an NSDMI.
+        QString price_text{};
+        QString change_text{};
+        QColor change_col{};
         int symbol_width = 0;
         int price_width = 0;
         int change_width = 0;

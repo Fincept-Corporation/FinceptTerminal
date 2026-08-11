@@ -155,27 +155,35 @@ struct PriceData {
 // Broker Types
 // ============================================================================
 
+// Every member below carries a default member initializer, including the class
+// types where `{}` is otherwise redundant. Broker code returns these via
+// partial designated initialisers (`return {.success = false, .error = "…"}`),
+// and GCC's -Wmissing-field-initializers — fatal under the Linux build's
+// -Wextra -Werror — fires for each omitted member UNLESS that member has an
+// NSDMI. The `{}` are load-bearing; removing them breaks the Linux build at
+// ~99 call sites across the broker implementations.
+
 template <typename T>
 struct ApiResponse {
     bool success = false;
-    std::optional<T> data;
-    QString error;
+    std::optional<T> data{};
+    QString error{};
     int64_t timestamp = 0;
 };
 
 struct TokenExchangeResponse {
     bool success = false;
-    QString access_token;
-    QString refresh_token;
-    QString user_id;
-    QString additional_data;
-    QString error;
+    QString access_token{};
+    QString refresh_token{};
+    QString user_id{};
+    QString additional_data{};
+    QString error{};
 };
 
 struct OrderPlaceResponse {
     bool success = false;
-    QString order_id;
-    QString error;
+    QString order_id{};
+    QString error{};
 };
 
 struct BrokerCredentials {
