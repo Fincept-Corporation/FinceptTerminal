@@ -1212,6 +1212,7 @@ set(TRADING_SOURCES
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
     src/trading/brokers/metaapi/MetaApiBroker.cpp
+    src/trading/brokers/tickerall/TickerAllBroker.cpp
 
     # Instrument system (Phase 1)
     src/trading/instruments/InstrumentNormalize.cpp
@@ -2606,6 +2607,7 @@ set_source_files_properties(
     src/trading/brokers/tradier/TradierBroker.cpp
     src/trading/brokers/saxo/SaxoBankBroker.cpp
     src/trading/brokers/metaapi/MetaApiBroker.cpp
+    src/trading/brokers/tickerall/TickerAllBroker.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 

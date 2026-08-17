@@ -25,6 +25,10 @@ OrderRateLimiter::OrderRateLimiter() {
     set_limit(BrokerId::Tradier, 10);
     set_limit(BrokerId::SaxoBank, 10);
     set_limit(BrokerId::MetaTrader4, 10);
+    // TickerAll publishes no REST rate limit (only a WebSocket RATE_LIMIT error
+    // code), so stay deliberately below the MT4 bridge until a documented figure
+    // exists. Raise it once tickerall.com states one.
+    set_limit(BrokerId::MetaTrader5, 5);
 }
 
 OrderRateLimiter::BrokerLimit& OrderRateLimiter::get_or_create(BrokerId broker) {

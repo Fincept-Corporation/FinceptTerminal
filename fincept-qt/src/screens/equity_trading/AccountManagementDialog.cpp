@@ -141,6 +141,15 @@ static QVector<CredSubField> custom_cred_fields(const QString& broker_id) {
                 {"password", QObject::tr("PASSWORD"), true},
                 {"dob", QObject::tr("DATE OF BIRTH (DD/MM/YYYY)"), false},
                 {"totp", QObject::tr("TOTP (current 6-digit code, if enabled)"), true}};
+    // MT5 via the TickerAll hosted bridge. Not a delimiter-packing broker: it
+    // needs the MT5 SERVER name, which has no CredentialField of its own, so the
+    // plain profile form cannot render it. MT4 solved the same problem with a
+    // whole dedicated page (build_mt4_form); four labelled boxes do it here.
+    if (broker_id == QLatin1String("metatrader5"))
+        return {{"api_key", QObject::tr("TICKERALL API KEY"), true},
+                {"server", QObject::tr("MT5 SERVER (e.g. Exness-MT5Trial7)"), false},
+                {"login", QObject::tr("MT5 LOGIN"), false},
+                {"password", QObject::tr("MT5 PASSWORD"), true}};
     return {};
 }
 
@@ -173,6 +182,17 @@ static ExchangeArgs pack_custom_credentials(const QString& broker_id, const QMap
         a.api_key = v.value("userid");
         a.api_secret = v.value("password");
         a.auth_code = v.value("dob") + S + v.value("totp");
+    } else if (broker_id == QLatin1String("metatrader5")) {
+        // TickerAllBroker::exchange_token() parses auth_code as JSON
+        // {"login","password","server"} — same contract as MetaApiBroker's MT4
+        // flow, so the MT5 password never touches api_key/api_secret.
+        a.api_key = v.value("api_key");
+        a.auth_code = QString::fromUtf8(QJsonDocument(QJsonObject{
+                                                          {"login", v.value("login")},
+                                                          {"password", v.value("password")},
+                                                          {"server", v.value("server")},
+                                                      })
+                                            .toJson(QJsonDocument::Compact));
     }
     return a;
 }
@@ -679,6 +699,27 @@ void AccountManagementDialog::load_saved_credentials(const QString& account_id) 
         const QString acct_type = extra.value("account_type").toString();
         if (mt4_account_type_)
             mt4_account_type_->setCurrentIndex(acct_type == "live" ? 1 : 0);
+        return;
+    }
+
+    // MT5 (TickerAll) uses the custom-sub-field form but, unlike the delimiter
+    // brokers below, its parts are stored unpacked and are NOT daily-expiring: the
+    // API key, server and login all round-trip cleanly. Repopulate them by key
+    // (not by index, so field order stays free to change) and leave only the
+    // password blank — it is never persisted, and once the session exists it is
+    // not needed again.
+    if (creds.broker_id == QStringLiteral("metatrader5") && !cred_form_keys_.isEmpty()) {
+        const auto extra = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
+        const QMap<QString, QString> values = {
+            {QStringLiteral("api_key"), creds.api_key},
+            {QStringLiteral("server"), extra.value("server").toString()},
+            {QStringLiteral("login"), creds.user_id},
+        };
+        for (int i = 0; i < cred_form_keys_.size() && i < cred_fields_.size(); ++i) {
+            const auto it = values.constFind(cred_form_keys_[i]);
+            if (it != values.constEnd())
+                cred_fields_[i]->setText(*it);
+        }
         return;
     }
 

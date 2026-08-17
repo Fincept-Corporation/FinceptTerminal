@@ -541,7 +541,8 @@ enum class BrokerId {
     IBKR,
     Tradier,
     SaxoBank,
-    MetaTrader4
+    MetaTrader4,
+    MetaTrader5
 };
 
 inline const char* broker_id_str(BrokerId id) {
@@ -590,6 +591,8 @@ inline const char* broker_id_str(BrokerId id) {
             return "saxobank";
         case BrokerId::MetaTrader4:
             return "metatrader4";
+        case BrokerId::MetaTrader5:
+            return "metatrader5";
     }
     return "unknown";
 }
@@ -639,6 +642,8 @@ inline std::optional<BrokerId> parse_broker_id(const QString& s) {
         return BrokerId::SaxoBank;
     if (s == "metatrader4")
         return BrokerId::MetaTrader4;
+    if (s == "metatrader5")
+        return BrokerId::MetaTrader5;
     return std::nullopt;
 }
 

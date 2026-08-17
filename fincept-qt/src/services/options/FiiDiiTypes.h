@@ -2,8 +2,7 @@
 // FiiDiiTypes — daily institutional flows.
 //
 // One row per trading day. Source: NSE cash-market FII/DII end-of-day
-// publication (scripts/fii_dii_scraper.py). All values in Indian Rupees,
-// Crore units (1 Crore = 10⁷ ₹).
+// publication. All values in Indian Rupees, Crore units (1 Crore = 10⁷ ₹).
 
 #include <QMetaType>
 #include <QString>

@@ -24,6 +24,14 @@ import time
 import signal
 from datetime import datetime, timezone
 
+# _loader lives next to this file; guarantee it is importable whether we are run
+# as a script (sys.path[0] is already this dir) or imported from elsewhere.
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+from _loader import resolve_strategy_path, StrategyPathError
+
 # ============================================================================
 # SQLite Schema & DB Helpers
 # ============================================================================
@@ -143,8 +151,17 @@ def cmd_deploy(deploy_id: str, strategy_id: str, params_json: str, db_path: str,
             conn.close()
             return
 
-        full_path = os.path.join(strategies_dir, strategy_path)
-        if not os.path.exists(full_path):
+        # Containment check - the exec() below runs whatever this path points at,
+        # and the registry value may be absolute or contain "..". Shared with
+        # fincept_strategy_runner.py via _loader so the two cannot diverge.
+        try:
+            full_path = resolve_strategy_path(strategies_dir, strategy_path)
+        except StrategyPathError as e:
+            _update_status(conn, deploy_id, "error", str(e))
+            conn.close()
+            return
+
+        if not full_path.exists():
             _update_status(conn, deploy_id, "error", f"Strategy file not found: {strategy_path}")
             conn.close()
             return
@@ -154,7 +171,7 @@ def cmd_deploy(deploy_id: str, strategy_id: str, params_json: str, db_path: str,
             source = f.read()
 
         module_globals = {}
-        exec(compile(source, full_path, "exec"), module_globals)
+        exec(compile(source, str(full_path), "exec"), module_globals)
 
         # Find the QCAlgorithm subclass
         algo_class = None

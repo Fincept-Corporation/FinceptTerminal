@@ -2,9 +2,8 @@
 // FiiDiiService — DataHub Producer for `fno:fii_dii:daily`.
 //
 // On `refresh()` (called by the hub scheduler when a subscriber wants fresh
-// data), the service runs scripts/fii_dii_scraper.py via PythonRunner,
-// upserts the result into `fii_dii_daily`, then publishes the last
-// `kPublishWindow` days as `QVector<FiiDiiDay>` on the topic.
+// data), the service upserts the result into `fii_dii_daily`, then publishes
+// the last `kPublishWindow` days as `QVector<FiiDiiDay>` on the topic.
 //
 // Cadence
 // ───────

@@ -18,6 +18,7 @@
 #include "trading/brokers/iifl/IIFLBroker.h"
 #include "trading/brokers/kotak/KotakBroker.h"
 #include "trading/brokers/metaapi/MetaApiBroker.h"
+#include "trading/brokers/tickerall/TickerAllBroker.h"
 #include "trading/brokers/motilal/MotilalBroker.h"
 #include "trading/brokers/paytm/PaytmBroker.h"
 #include "trading/brokers/samco/SamcoBroker.h"
@@ -141,8 +142,9 @@ void BrokerRegistry::register_all() {
     // EU brokers
     brokers_["saxobank"] = std::make_unique<SaxoBankBroker>();
 
-    // MetaAPI-bridged
-    brokers_["metatrader4"] = std::make_unique<MetaApiBroker>();
+    // Hosted MetaTrader bridges — no local terminal required
+    brokers_["metatrader4"] = std::make_unique<MetaApiBroker>();   // via metaapi.cloud
+    brokers_["metatrader5"] = std::make_unique<TickerAllBroker>(); // via tickerall.com
 
     LOG_INFO("BrokerRegistry", QString("Registered %1 brokers").arg(brokers_.size()));
 }
