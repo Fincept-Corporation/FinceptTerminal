@@ -71,6 +71,12 @@
   </provides>
 
   <releases>
+    <release version="4.4.1" date="2026-08-19">
+      <description>
+        <p>Adds the TickerAll (MetaTrader 5) broker integration, so MT5 accounts can be linked, funded and traded from the equity trading screen alongside the existing brokers.</p>
+        <p>Reworks Python runtime provisioning: the bundled environment is set up more reliably on first run, and the unused FinRL reinforcement-learning analytics module and its heavy dependencies have been removed, shrinking the install.</p>
+      </description>
+    </release>
     <release version="4.4.0" date="2026-08-11">
       <description>
         <p>Correctness and safety release. A failed fetch, an unreadable setting or an incomplete option chain now reports an error instead of rendering as a confident number — missing financials show "no data" rather than a solvency verdict, and a quote served from stale cache is marked stale. Risk limits, per-broker order rate limits and the smart/basket order validators are enforced rather than merely configurable.</p>

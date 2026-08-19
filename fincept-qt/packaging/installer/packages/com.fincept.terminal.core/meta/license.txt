@@ -226,5 +226,5 @@ Status:           Current. Remains in force until expressly superseded by a
                   subsequent version published by Fincept Corporation. The
                   date above marks the most recent revision and is NOT an
                   expiry date.
-Software Version: 4.4.0 (licence applies to all releases, branches, tags,
+Software Version: 4.4.1 (licence applies to all releases, branches, tags,
                   and commits of the open-source edition)
