@@ -9,7 +9,12 @@ numpy>=2.2.3,<3.0
 pandas>=2.3.3,<3.0
 
 # Trading platform (requires NumPy 2.2+)
-vnpy==4.3.0
+# Excluded on Linux ARM64: vnpy pulls pyside6==6.8.2.1, which publishes no
+# aarch64 Linux wheel. Without the marker the ENTIRE numpy2 set is unresolvable
+# there and setup dies at "Install Analytics Libraries", taking every other
+# analytics library with it. Linux ARM64 is a source-build target only — CI
+# ships Linux x64, macOS arm64 and Windows x64.
+vnpy==4.3.0; platform_machine != "aarch64" or sys_platform != "linux"
 
 # Data fetching
 ccxt>=4.5.44,<5.0
@@ -127,7 +132,11 @@ fortitudo.tech==1.2
 quantstats>=0.0.62
 
 # Quant libraries
-pyqlib==0.9.7
+# Excluded on Linux ARM64 for the same reason as vnpy above: pyqlib 0.9.7 ships
+# wheels for manylinux_2_17_x86_64 / manylinux2014_x86_64 / macosx_10_9_universal2
+# / win_amd64 only, and has no sdist to fall back to. Costs the qlib features
+# (scripts/ai_quant_lab/qlib_*.py, scripts/agents/rdagents/cli.py) on that arch.
+pyqlib==0.9.7; platform_machine != "aarch64" or sys_platform != "linux"
 rdagent==0.8.0
 deepagents==0.4.12
 gs-quant==1.4.67
@@ -169,7 +178,16 @@ pandarallel>=1.6.0
 gymnasium>=1.0.0
 
 # RL libraries
-stable-baselines3>=2.7.0
+# Excluded on macOS Intel: no SB3 release can satisfy this file there. PyTorch
+# dropped x86_64 macOS wheels after 2.2.2 (see the torch pin above), and SB3
+# splits cleanly either side of that line — >=2.6.0 requires torch>=2.3, while
+# <=2.5.0 requires numpy<2.0 or gymnasium<0.30, both of which this file rules
+# out. Without the marker the ENTIRE numpy2 set is unresolvable on
+# x86_64-apple-darwin and setup dies at "Install Analytics Libraries", taking
+# every other analytics library down with it. RL trading is therefore
+# unavailable on Intel Macs; the shipped DMG is arm64-only, so this only
+# affects x86_64 source builds.
+stable-baselines3>=2.7.0; platform_machine != "x86_64" or sys_platform != "darwin"
 
 # MLflow
 # `>=2.0.0` already resolved to 3.x (venv has 3.12.0) across MLflow's breaking

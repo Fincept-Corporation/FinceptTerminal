@@ -57,8 +57,17 @@ QString PythonSetupManager::base_python_path() const {
     proc.setProcessEnvironment(env);
     proc.start(uv_path(), {"python", "find", kPythonVersion});
     if (proc.waitForFinished(10000) && proc.exitCode() == 0) {
-        cached_python_path_ = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-        return cached_python_path_;
+        // Only accept a path that actually exists. `uv python find` can exit 0
+        // while printing nothing usable to stdout; caching that empty string
+        // and returning it here skipped the directory scan below and surfaced
+        // as a bogus "Python not found after UV install" on a healthy install.
+        const QString found = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+        if (!found.isEmpty() && QFileInfo::exists(found)) {
+            cached_python_path_ = found;
+            return cached_python_path_;
+        }
+        LOG_WARN("PythonSetup", QString("uv python find gave an unusable path (%1) — falling back to directory scan")
+                                    .arg(found.isEmpty() ? QStringLiteral("<empty>") : found));
     }
 
     // Fallback: scan known install directory for the cpython-3.11 subdirectory.
@@ -399,8 +408,23 @@ void PythonSetupManager::run_setup() {
                                     .arg(status.venv_numpy1_ready ? "YES" : "NO")
                                     .arg(status.venv_numpy2_ready ? "YES" : "NO"));
 
+        // ── Step 0: bail out on hosts we cannot set up at all ────────────────
+        // Checked before any download so an impossible platform reports why
+        // instead of burning a download and failing at step 2.
+        const QString blocked = self->unsupported_platform_reason();
+        if (!blocked.isEmpty()) {
+            self->emit_progress("python", 0, blocked, true);
+            fail(blocked);
+            return;
+        }
+
         // ── Step 1: Download UV standalone binary (~13MB) ────────────────────
-        if (!status.uv_installed) {
+        // Existence alone is not enough to skip this step — SetupStatus::uv_installed
+        // is a bare file check (cheap enough for the fast path). A truncated
+        // archive or a lost +x bit from an earlier failed run leaves a file that
+        // exists and cannot run, which made every retry skip step 1 and then die
+        // at step 2 with "Failed to install Python" instead of re-downloading.
+        if (!status.uv_installed || !self->uv_runnable()) {
             self->emit_progress("uv", 0, "Downloading UV package manager...");
             if (!self->download_uv()) {
                 self->emit_progress("uv", 0, "Failed to download UV", true);
@@ -536,9 +560,47 @@ void PythonSetupManager::run_setup() {
     });
 }
 
+QString PythonSetupManager::unsupported_platform_reason() const {
+#if defined(__linux__)
+    // musl libc (Alpine and friends). uv 0.7.12's download metadata carries
+    // gnu / darwin / windows CPython targets only — there is no musl build of
+    // 3.11.9 to install — and PyPI has no musl wheels for torch either, so both
+    // requirement sets are unresolvable regardless. Detect it up front: failing
+    // here beats a 13 MB uv download followed by a bare "Failed to install Python".
+    const QDir loader_dir(QStringLiteral("/lib"));
+    const QStringList musl_loaders =
+        loader_dir.entryList({QStringLiteral("ld-musl-*.so.1")}, QDir::Files | QDir::System);
+    if (!musl_loaders.isEmpty()) {
+        LOG_ERROR("PythonSetup", "musl libc detected (" + musl_loaders.join(", ") + ") — setup cannot proceed");
+        return QStringLiteral("musl libc detected — Fincept Terminal needs a glibc-based Linux. "
+                              "The Python 3.11 runtime we install is published for glibc only, and "
+                              "several analytics libraries (PyTorch among them) ship no musl wheels.");
+    }
+#endif
+    return {};
+}
+
+bool PythonSetupManager::uv_runnable() const {
+    if (!QFileInfo::exists(uv_path()))
+        return false;
+
+    QString stderr_out;
+    if (run_command_capture(uv_path(), {"--version"}, {}, stderr_out))
+        return true;
+
+    LOG_WARN("PythonSetup", QString("UV binary exists but will not run (%1) — re-downloading. Stderr: %2")
+                                .arg(uv_path(), stderr_out.trimmed().left(200)));
+    return false;
+}
+
 bool PythonSetupManager::download_uv() {
     QString dir = install_dir() + "/uv";
     QDir().mkpath(dir);
+
+    // Clear any leftover from a previous failed run before extracting — the
+    // Windows branch below only moves the nested uv.exe up when the target is
+    // absent, so a broken file left in place would survive the re-download.
+    QFile::remove(uv_path());
 
     // Determine platform-specific archive
     QString target;

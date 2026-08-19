@@ -73,6 +73,14 @@ class PythonSetupManager : public QObject {
     void emit_progress(const QString& step, int pct, const QString& msg, bool err = false);
 
     // Installation steps
+    // Non-empty when the host can never complete setup (currently musl libc only) —
+    // the string is user-facing. Checked before the first download.
+    QString unsupported_platform_reason() const;
+    // Spawns `uv --version`. SetupStatus::uv_installed is a bare file-existence
+    // check so the fast path stays process-spawn-free; call this before *skipping*
+    // the download so a broken leftover binary gets replaced instead of failing
+    // the next step.
+    bool uv_runnable() const;
     bool download_uv();
     bool install_python_via_uv();
     bool create_venv(const QString& venv_name);
