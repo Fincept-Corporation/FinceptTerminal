@@ -1817,6 +1817,7 @@ jobs:
         env:
           P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
@@ -1828,8 +1829,15 @@ jobs:
           security import "$P12_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$P12_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           rm -f "$P12_PATH"
+
+          # `security find-identity` EXITS 0 while printing "0 valid identities
+          # found", so calling it bare proved nothing: an expired certificate or
+          # a rotated MACOS_SIGNING_IDENTITY sailed through this step and died
+          # ~35 minutes later inside the codesign step as an opaque
+          # "Process completed with exit code 1". Assert instead.
+          source "$GITHUB_WORKSPACE/.github/scripts/macos_codesign.sh"
+          assert_signing_identity "$KEYCHAIN_PATH" "$SIGNING_IDENTITY"
 
       # ── Deep re-sign the entire bundle with Developer ID ─────────────────
       # macdeployqt's nested-framework signing is unreliable, so we strip
@@ -1914,6 +1922,14 @@ jobs:
 
           SIGN_FLAGS=(--force --options runtime --timestamp --sign "$SIGNING_IDENTITY")
 
+          # codesign_retry: `--timestamp` contacts Apple's TSA on EVERY call,
+          # and this step makes hundreds of them (one per Mach-O). A single
+          # rate-limit or 5xx from timestamp.apple.com is a hard codesign
+          # error, and under `set -e` that ends the release job — after the
+          # build, self-tests, staging and macdeployqt have all passed. Retry
+          # with backoff instead of throwing ~35 minutes of work away.
+          source "$GITHUB_WORKSPACE/.github/scripts/macos_codesign.sh"
+
           # ── Enumerate every Mach-O via `file -h`, not by filename ────────
           # Previously we filtered on `*.dylib | *.so | -perm +111`. That
           # misses three real-world cases:
@@ -1961,7 +1977,7 @@ jobs:
 
           echo "Signing every Mach-O with hardened runtime + timestamp..."
           while IFS= read -r f; do
-            codesign "${SIGN_FLAGS[@]}" "$f" >/dev/null
+            codesign_retry "${SIGN_FLAGS[@]}" "$f" >/dev/null
           done < "${MACHO_LIST}"
 
           echo "Signing nested frameworks and .app bundles (deepest-first)..."
@@ -1971,14 +1987,14 @@ jobs:
           # framework is signed before the top-level .app below.
           BUNDLE_COUNT=0
           while IFS= read -r d; do
-            codesign "${SIGN_FLAGS[@]}" "$d" >/dev/null
+            codesign_retry "${SIGN_FLAGS[@]}" "$d" >/dev/null
             BUNDLE_COUNT=$((BUNDLE_COUNT + 1))
           done < <(find "${APP_BUNDLE}/Contents" -mindepth 1 -depth -type d \
                         \( -name "*.framework" -o -name "*.app" \) 2>/dev/null)
           echo "  signed ${BUNDLE_COUNT} nested bundles"
 
           echo "Signing top-level bundle with entitlements..."
-          codesign --force --options runtime --timestamp \
+          codesign_retry --force --options runtime --timestamp \
                    --entitlements "$ENT" \
                    --sign "$SIGNING_IDENTITY" \
                    "${APP_BUNDLE}"
@@ -2262,12 +2278,18 @@ jobs:
             exit 0
           fi
 
+          source "$GITHUB_WORKSPACE/.github/scripts/macos_codesign.sh"
+
           # Sign the installer app's own Mach-Os leaf-first (the payload is an
           # embedded archive that is already signed+notarized+stapled).
+          # Retried like everywhere else: the trailing `|| true` keeps a leaf
+          # failure non-fatal, but without the retry a transient TSA error
+          # left an unsigned Mach-O behind that the notary rejected minutes
+          # later — a silent skip turning into a confusing downstream failure.
           while IFS= read -r m; do
-            codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$m" || true
+            codesign_retry --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$m" || true
           done < <(find "${WIZ_APP}" -type f \( -perm -u+x -o -name "*.dylib" \) 2>/dev/null)
-          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "${WIZ_APP}"
+          codesign_retry --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "${WIZ_APP}"
 
           # Notarize a zip of the installer app, then staple. (For production,
           # adopt the submit/poll/staple loop used by the DMG step — --wait has
@@ -2335,7 +2357,8 @@ jobs:
           set -euo pipefail
           DMG=$(ls build/FinceptTerminal-*-macos-arm64-setup.dmg | head -1)
           echo "Signing DMG: ${DMG}"
-          codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
+          source "$GITHUB_WORKSPACE/.github/scripts/macos_codesign.sh"
+          codesign_retry --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG"
 
           # Same submit-then-poll pattern as the .app step: --wait has no
           # retry on transient network errors (NSURLErrorDomain -1009 from
