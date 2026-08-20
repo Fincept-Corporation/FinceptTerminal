@@ -3,25 +3,25 @@
   "schema-version": 2,
   "updates": {
     "windows-x64": {
-      "latest-version": "4.4.0",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.4.0/FinceptTerminal-4.4.0-windows-x64-setup.exe",
-      "sha256": "f17c44a1ce8d892ba6c12ed5b11edafed6e0e0bc2382ebe175e4cb2657950a9b",
-      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.0",
-      "changelog": "Fincept Terminal v4.4.0 \u2014 see release notes at https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.0"
+      "latest-version": "4.4.1",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.4.1/FinceptTerminal-4.4.1-windows-x64-setup.exe",
+      "sha256": "d44ecd1d9731206ba4320added8959a99a89859fcacd9895e858f1b719611f02",
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.1",
+      "changelog": "Fincept Terminal v4.4.1 \u2014 see release notes at https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.1"
     },
     "linux-x64": {
-      "latest-version": "4.4.0",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.4.0/FinceptTerminal-4.4.0-linux-x64-setup.run",
-      "sha256": "9d113133c02c6204647d3a698ccfd5b2cca22040171b7e09b45c6a7c83c8c204",
-      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.0",
-      "changelog": "Fincept Terminal v4.4.0 \u2014 see release notes at https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.0"
+      "latest-version": "4.4.1",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.4.1/FinceptTerminal-4.4.1-linux-x64-setup.run",
+      "sha256": "60a0aaedf4cd7e3aca2558ea725835e99422c73f20667eb171cd5a2f4c9de991",
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.1",
+      "changelog": "Fincept Terminal v4.4.1 \u2014 see release notes at https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.1"
     },
     "macos-arm64": {
-      "latest-version": "4.4.0",
-      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.4.0/FinceptTerminal-4.4.0-macos-arm64-setup.dmg",
-      "sha256": "f93b8cf91684c6dc1c094445a86cdcf318bdf21212e1945b3546c9f8c81a051b",
-      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.0",
-      "changelog": "Fincept Terminal v4.4.0 \u2014 see release notes at https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.0"
+      "latest-version": "4.4.1",
+      "download-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v4.4.1/FinceptTerminal-4.4.1-macos-arm64-setup.dmg",
+      "sha256": "e04a3c4415a4dc06a6b0b9d424961ee53220c8d11ddaf34e9d3cb0a1682bd378",
+      "open-url": "https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.1",
+      "changelog": "Fincept Terminal v4.4.1 \u2014 see release notes at https://github.com/Fincept-Corporation/FinceptTerminal/releases/tag/v4.4.1"
     }
   }
 }
