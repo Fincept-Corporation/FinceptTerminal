@@ -180,8 +180,26 @@ class LlmService : public QObject {
     // follow-up turns stay identical to the first turn (Anthropic/Gemini
     // previously dropped tools on the follow-up, so they could never chain a
     // second tool call). Honour the active ToolPolicy via apply_request_policy.
-    QJsonArray build_anthropic_tools(); // [{name, description, input_schema}]
-    QJsonArray build_gemini_tools();    // [{functionDeclarations:[{name, description, parameters}]}]
+    //
+    // `activated` carries the tools the model has discovered this turn via
+    // tool_list / tool_describe, exactly as the OpenAI path does. Without it
+    // these two providers saw a fixed slice of the catalogue and could never
+    // call anything they discovered — Tool RAG is on by default, so that slice
+    // is what "tools don't work on Gemini/Claude" actually looked like.
+    QJsonArray build_anthropic_tools(const QSet<QString>& activated = {}); // [{name, description, input_schema}]
+    QJsonArray build_gemini_tools(const QSet<QString>& activated = {});    // [{functionDeclarations:[...]}]
+
+    /// Stamp the output-token cap onto an OpenAI-shaped request body using the
+    /// field the target endpoint actually accepts.
+    ///
+    /// OpenAI/xAI native endpoints — and OpenAI-family models routed through a
+    /// pass-through aggregator — require `max_completion_tokens`; the o-series
+    /// and gpt-5 hard-reject `max_tokens` with a 400. EVERY OpenAI-shaped body
+    /// must go through this, tool-loop follow-ups included: those used to send
+    /// `max_tokens` unconditionally, so on a reasoning model the first turn
+    /// succeeded and every follow-up 400'd — the model called a tool once and
+    /// the answer never came back.
+    void apply_openai_token_limit(QJsonObject& body) const;
 
     QString get_endpoint_url() const;
     QMap<QString, QString> get_headers() const;

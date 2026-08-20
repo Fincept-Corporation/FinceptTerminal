@@ -200,6 +200,17 @@ QString ProviderCatalog::chat_endpoint(const QString& provider, const QString& b
         QString base = base_url;
         while (base.endsWith('/'))
             base.chop(1);
+        // Gemini's body is not OpenAI-shaped, so its custom base_url composes
+        // the native path. Mirrors LlmService::get_endpoint_url — keep the two
+        // in step.
+        if (p == "gemini" || p == "google") {
+            if (base.contains(QLatin1String(":generateContent")))
+                return base;
+            static const QRegularExpression gem_ver(QStringLiteral("/v\\d+[a-zA-Z]*$"));
+            if (!gem_ver.match(base).hasMatch())
+                base += QStringLiteral("/v1beta");
+            return base + QStringLiteral("/models/") + model + QStringLiteral(":generateContent");
+        }
         const QString suffix = (p == "anthropic") ? QStringLiteral("/messages") : QStringLiteral("/chat/completions");
         if (base.endsWith(suffix))
             return base;

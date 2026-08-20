@@ -48,7 +48,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         fu["model"] = model_;
         fu["messages"] = loop_messages;
         // Temperature intentionally omitted — provider default.
-        fu["max_tokens"] = resolved_max_tokens();
+        apply_openai_token_limit(fu);
 
         QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(
             detail::apply_request_policy(tool_filter_), activated.names());
@@ -163,7 +163,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         QJsonObject fu;
         fu["model"] = model_;
         fu["messages"] = loop_messages;
-        fu["max_tokens"] = resolved_max_tokens();
+        apply_openai_token_limit(fu);
         // Keep tools available so structured tool_calls still work. Stripping
         // them used to force text-markup mode (raw <minimax:tool_call> blobs)
         // which leaked into the chat bubble. Carry the activated set so a
@@ -338,6 +338,17 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         // Temperature intentionally omitted — Anthropic default.
         if (!system_prompt_.isEmpty())
             follow_body["system"] = system_prompt_;
+    } else if (provider_ == "gemini" || provider_ == "google") {
+        // `url` here is the Gemini generateContent endpoint, so the body must
+        // be Gemini-shaped. It previously fell through to the OpenAI branch
+        // below and posted {model, messages, max_tokens} at :generateContent,
+        // which 400s — the user then saw the raw-tool-output fallback instead
+        // of an answer.
+        follow_body["contents"] =
+            QJsonArray{QJsonObject{{"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", follow_prompt}}}}}};
+        follow_body["generationConfig"] = QJsonObject{{"maxOutputTokens", resolved_max_tokens()}};
+        if (!system_prompt_.isEmpty())
+            follow_body["systemInstruction"] = QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
     } else if (provider_ == "fincept") {
         // /research/chat uses messages array
         QJsonArray msgs;
@@ -356,7 +367,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         follow_body["model"] = model_;
         follow_body["messages"] = msgs;
         // Temperature intentionally omitted — provider default.
-        follow_body["max_tokens"] = resolved_max_tokens();
+        apply_openai_token_limit(follow_body);
     }
 
     // Last-resort rendering when the summarisation turn can't be obtained.
@@ -383,6 +394,10 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     // Extract text from follow-up response (provider-aware)
     if (provider_ == "anthropic") {
         resp.content = extract_anthropic_content_text(fu_rj["content"].toArray());
+    } else if (provider_ == "gemini" || provider_ == "google") {
+        const QJsonArray cands = fu_rj["candidates"].toArray();
+        if (!cands.isEmpty())
+            resp.content = extract_gemini_parts_text(cands[0].toObject()["content"].toObject()["parts"].toArray());
     } else if (provider_ == "fincept") {
         // /research/chat: {"success":true,"data":{"choices":[{"message":{"content":"..."}}]}}
         QJsonObject data = fu_rj.contains("data") ? fu_rj["data"].toObject() : fu_rj;

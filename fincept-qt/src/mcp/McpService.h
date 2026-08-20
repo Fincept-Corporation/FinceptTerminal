@@ -44,6 +44,24 @@ class McpService {
     /// contains them). See the tool loop / note_tool_activations.
     QJsonArray format_tools_for_openai(const ToolFilter& filter, const QSet<QString>& extra_tool_names);
 
+    /// Format for Anthropic `/v1/messages` — `[{name, description, input_schema}]`,
+    /// no OpenAI-style `{"type":"function"}` wrapper.
+    ///
+    /// Shares the Tier-0 / filter / activation selection with
+    /// format_tools_for_openai. It has to: the catalogue is ~900 tools, and the
+    /// Anthropic and Gemini builders used to bypass Tool RAG and send ALL of
+    /// them on every turn, which is why tool calling worked on the OpenAI path
+    /// and nowhere else.
+    QJsonArray format_tools_for_anthropic(const ToolFilter& filter, const QSet<QString>& extra_tool_names = {});
+
+    /// Format for Gemini `generateContent` —
+    /// `[{functionDeclarations:[{name, description, parameters}]}]`.
+    ///
+    /// Parameters are translated into Gemini's OpenAPI subset (see
+    /// mcp/GeminiSchema.h); declarations whose name or schema cannot be made
+    /// valid are dropped rather than allowed to fail the whole request.
+    QJsonArray format_tools_for_gemini(const ToolFilter& filter, const QSet<QString>& extra_tool_names = {});
+
     std::size_t tool_count();
 
     // ── Unified Tool Execution ──────────────────────────────────────────
@@ -105,6 +123,8 @@ class McpService {
     // ~150 KB OpenAI JSON schema on every LLM turn.
     QHash<QByteArray, std::vector<UnifiedTool>> filtered_tools_cache_;
     QHash<QByteArray, QJsonArray> openai_format_cache_;
+    QHash<QByteArray, QJsonArray> anthropic_format_cache_;
+    QHash<QByteArray, QJsonArray> gemini_format_cache_;
     // In Tool RAG mode the format-cache key encodes the activated-tool set, so
     // it varies per round and the map would otherwise grow unbounded across a
     // session. Cleared wholesale on overflow — it is a memo, not a store.
@@ -117,6 +137,14 @@ class McpService {
     // must hold mutex_. Splitting this out lets get_all_tools(filter) and
     // format_tools_for_openai(filter) reuse the cache without re-locking.
     const std::vector<UnifiedTool>& cached_tools_locked();
+
+    /// Tool selection shared by every provider formatter: applies Tier-0 (Tool
+    /// RAG) mode plus the activated-tool set when the caller passed a default
+    /// filter, and the explicit ToolFilter otherwise. Caller must hold mutex_.
+    /// `out_key` receives the cache key the caller should memo under.
+    std::vector<UnifiedTool> select_tools_for_llm_locked(const ToolFilter& filter,
+                                                         const QSet<QString>& extra_tool_names, QByteArray* out_key,
+                                                         bool* out_used_rag);
 
     // Stable byte signature of a ToolFilter — usable as a QHash key.
     static QByteArray filter_signature(const ToolFilter& filter);

@@ -351,6 +351,22 @@ QString LlmService::get_endpoint_url() const {
         QString base = base_url_;
         while (base.endsWith('/'))
             base.chop(1);
+
+        // Gemini is the one provider whose request body is NOT OpenAI-shaped,
+        // so a custom base_url has to compose Gemini's own path. Appending
+        // "/chat/completions" (what every other provider gets) pointed a
+        // native `contents`/`tools[].functionDeclarations` body at an
+        // OpenAI-compat route, which 400s — so any user with a Gemini proxy or
+        // a regional endpoint lost tool calling along with everything else.
+        if (p == "gemini" || p == "google") {
+            if (base.contains(QLatin1String(":generateContent")))
+                return base;
+            static const QRegularExpression gem_ver(QStringLiteral("/v\\d+[a-zA-Z]*$"));
+            if (!gem_ver.match(base).hasMatch())
+                base += QStringLiteral("/v1beta");
+            return base + QStringLiteral("/models/") + model_ + QStringLiteral(":generateContent");
+        }
+
         const QString suffix = (p == "anthropic") ? QStringLiteral("/messages") : QStringLiteral("/chat/completions");
 
         // Already a full endpoint — use verbatim.
@@ -490,6 +506,13 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             loop_msgs.append(QJsonObject{{"role", "user"}, {"content", user_message}});
             loop_msgs.append(QJsonObject{{"role", "assistant"}, {"content", content}});
 
+            // Tools the model discovers this turn via tool_list / tool_describe.
+            // Tool RAG only ships the Tier-0 prefix, so without feeding these
+            // back into the next round's `tools` array the model stalls right
+            // after tool_describe with "I don't have that tool loaded" — the
+            // OpenAI path has always done this; Anthropic never did.
+            detail::ActivationTracker activated;
+
             QJsonArray tool_results;
             for (const auto& block_val : content) {
                 QJsonObject block = block_val.toObject();
@@ -500,11 +523,14 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 QJsonObject input = block["input"].toObject();
 
                 LOG_INFO(kLlmSvcTag, "Executing Anthropic tool: " + tool_name);
+                const QString bare = mcp::McpProvider::parse_openai_function_name(tool_name).second;
+                detail::emit_tool_progress(bare, input);
                 auto tr = mcp::McpService::instance().execute_openai_function(tool_name, input, /*allow_defer=*/true);
+                detail::note_tool_activations(bare, input, tr, activated);
                 tool_results.append(
                     QJsonObject{{"type", "tool_result"},
                                 {"tool_use_id", tool_id},
-                                {"content", detail::encode_tool_result_for_llm(tool_name, tr)}});
+                                {"content", detail::encode_tool_result_for_llm(bare, tr)}});
             }
 
             loop_msgs.append(QJsonObject{{"role", "user"}, {"content", tool_results}});
@@ -513,13 +539,14 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             // Previously this was a SINGLE follow-up with NO tools attached, so
             // the model could execute exactly one tool and never chain a second
             // (multi-step flows like "create a portfolio then add assets" broke).
-            // We now loop, keeping the full tool set advertised each round, until
-            // the model returns a final text answer or we hit the round cap. All
-            // tools are always declared (full catalogue), so no activation step
-            // is needed here — unlike the Tool-RAG OpenAI path.
+            // We now loop, re-advertising the tool set each round, until the
+            // model returns a final text answer or we hit the round cap. The
+            // set is rebuilt per round rather than hoisted: under Tool RAG it
+            // grows as the model discovers tools, so a hoisted array would
+            // freeze the catalogue at whatever round 1 could see.
             const int kMaxRounds = active_max_tool_rounds();
-            const QJsonArray ant_tools = build_anthropic_tools();
             for (int round = 0; round < kMaxRounds; ++round) {
+                const QJsonArray ant_tools = build_anthropic_tools(activated.names());
                 QJsonObject fu;
                 fu["model"] = model_;
                 fu["messages"] = loop_msgs;
@@ -557,12 +584,16 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                         continue;
                     const QString tid = block["id"].toString();
                     const QString tname = block["name"].toString();
+                    const QJsonObject targs = block["input"].toObject();
                     LOG_INFO(kLlmSvcTag, QString("Anthropic tool loop r%1: %2").arg(round).arg(tname));
-                    auto tr = mcp::McpService::instance().execute_openai_function(tname, block["input"].toObject(),
+                    const QString bare = mcp::McpProvider::parse_openai_function_name(tname).second;
+                    detail::emit_tool_progress(bare, targs);
+                    auto tr = mcp::McpService::instance().execute_openai_function(tname, targs,
                                                                                   /*allow_defer=*/true);
+                    detail::note_tool_activations(bare, targs, tr, activated);
                     more_results.append(QJsonObject{{"type", "tool_result"},
                                                     {"tool_use_id", tid},
-                                                    {"content", detail::encode_tool_result_for_llm(tname, tr)}});
+                                                    {"content", detail::encode_tool_result_for_llm(bare, tr)}});
                 }
                 loop_msgs.append(QJsonObject{{"role", "user"}, {"content", more_results}});
             }
@@ -594,7 +625,10 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 // tool and never chain a second. We now loop, re-attaching the tool
                 // set each round, until a text answer or the round cap.
                 const int kMaxRounds = active_max_tool_rounds();
-                const QJsonArray gem_tools = build_gemini_tools();
+                // Rebuilt per round, not hoisted: under Tool RAG the declared
+                // set grows as tool_list / tool_describe surface tools, and a
+                // hoisted array would pin the model to what round 1 could see.
+                detail::ActivationTracker activated;
 
                 // Constant conversation prefix: prior history + the user turn.
                 QJsonArray fu_contents;
@@ -622,9 +656,13 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                             continue;
                         const QJsonObject fc = part["functionCall"].toObject();
                         const QString fn_name = fc["name"].toString();
+                        const QJsonObject fn_args = fc["args"].toObject();
                         LOG_INFO(kLlmSvcTag, QString("Gemini tool loop r%1: %2").arg(round).arg(fn_name));
-                        auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fc["args"].toObject(),
+                        const QString bare = mcp::McpProvider::parse_openai_function_name(fn_name).second;
+                        detail::emit_tool_progress(bare, fn_args);
+                        auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args,
                                                                                       /*allow_defer=*/true);
+                        detail::note_tool_activations(bare, fn_args, tr, activated);
                         // Gemini requires response to be an object — wrap strings under "result".
                         QJsonObject response_obj;
                         if (!tr.data.isNull() && !tr.data.isUndefined() && tr.data.isObject())
@@ -635,7 +673,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                             response_obj = tr.to_json();
                         // Same transcript budget as the other providers — this
                         // path re-posts `fu_contents` wholesale every round too.
-                        detail::fit_llm_payload(fn_name, response_obj);
+                        detail::fit_llm_payload(bare, response_obj);
                         fn_response_parts.append(QJsonObject{
                             {"functionResponse", QJsonObject{{"name", fn_name}, {"response", response_obj}}}});
                     }
@@ -650,6 +688,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     if (!system_prompt_.isEmpty())
                         fu_body["systemInstruction"] =
                             QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
+                    const QJsonArray gem_tools = build_gemini_tools(activated.names());
                     if (!gem_tools.isEmpty())
                         fu_body["tools"] = gem_tools;
 

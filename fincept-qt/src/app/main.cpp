@@ -30,6 +30,7 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "datahub/TopicPolicy.h"
 #include "mcp/McpInit.h"
+#include "mcp/ProviderToolFormatSelfTest.h"
 #include "mcp/ToolSelfTest.h"
 #include "network/http/HttpClient.h"
 #include "python/OptionGreeksWorker.h"
@@ -1042,7 +1043,8 @@ int main(int argc, char* argv[]) {
     {
         bool tools_needed_synchronously = false;
         for (int i = 1; i < argc; ++i) {
-            if (qstrcmp(argv[i], "--selftest-tools") == 0 || qstrcmp(argv[i], "--dump-tools") == 0)
+            if (qstrcmp(argv[i], "--selftest-tools") == 0 || qstrcmp(argv[i], "--selftest-llm-tools") == 0 ||
+                qstrcmp(argv[i], "--dump-tools") == 0)
                 tools_needed_synchronously = true;
         }
         if (tools_needed_synchronously)
@@ -1073,6 +1075,7 @@ int main(int argc, char* argv[]) {
     };
     static constexpr SelftestSuite kSelftestSuites[] = {
         {"--selftest-tools", &fincept::mcp::run_tool_selftest},
+        {"--selftest-llm-tools", &fincept::mcp::run_provider_tool_format_selftest},
         {"--selftest-feeds", &fincept::feeds::run_feed_selftest},
         {"--selftest-dock-layout", &fincept::layout::run_dock_layout_selftest},
         {"--selftest-live-table", &fincept::ui::run_live_table_selftest},

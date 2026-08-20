@@ -1082,6 +1082,8 @@ set(MCP_SOURCES
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
     src/mcp/ToolSelfTest.cpp
+    src/mcp/GeminiSchema.cpp
+    src/mcp/ProviderToolFormatSelfTest.cpp
     src/mcp/TerminalMcpBridge.cpp
     src/mcp/JobRegistry.cpp
     src/mcp/ResultStore.cpp
@@ -2661,6 +2663,8 @@ set_source_files_properties(
     src/mcp/SchemaValidator.cpp
     src/mcp/ToolRetriever.cpp
     src/mcp/ToolSelfTest.cpp
+    src/mcp/GeminiSchema.cpp
+    src/mcp/ProviderToolFormatSelfTest.cpp
     src/mcp/TerminalMcpBridge.cpp
     src/mcp/tools/NavigationTools.cpp
     src/mcp/tools/MarketsTools.cpp

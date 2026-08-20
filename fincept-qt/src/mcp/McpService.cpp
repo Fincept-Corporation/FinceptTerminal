@@ -4,6 +4,7 @@
 
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
+#include "mcp/GeminiSchema.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
 #include "mcp/TerminalMcpBridge.h"
@@ -23,6 +24,16 @@
 namespace fincept::mcp {
 
 static constexpr const char* TAG = "McpService";
+
+// Per-request declaration ceilings — a backstop, not the primary limit.
+//
+// kHardMaxTools (50, below) already bounds the non-Tier-0 path, and a Tier-0
+// turn ships ~12. These exist so that a caller who raises ToolFilter::max_tools
+// can't silently walk a provider past a hard API limit: Gemini rejects a
+// request carrying more than 128 function declarations, and does so without
+// naming the offender, which is indistinguishable from "tools are broken".
+static constexpr int kGeminiMaxToolsPerRequest = 128;
+static constexpr int kMaxToolsPerRequest = 256;
 
 McpService& McpService::instance() {
     static McpService s;
@@ -297,8 +308,9 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
     return format_tools_for_openai(filter, QSet<QString>{});
 }
 
-QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
-    QMutexLocker lock(&mutex_);
+std::vector<UnifiedTool> McpService::select_tools_for_llm_locked(const ToolFilter& filter,
+                                                                 const QSet<QString>& extra_tool_names,
+                                                                 QByteArray* out_key, bool* out_used_rag) {
     cached_tools_locked();
 
     // ── Tool RAG Tier-0 mode ──
@@ -327,15 +339,6 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const Q
         key = filter_signature(filter);
     }
 
-    auto cached = openai_format_cache_.constFind(key);
-    if (cached != openai_format_cache_.constEnd()) {
-        LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (cached, %2)")
-                          .arg(cached.value().size())
-                          .arg(use_rag ? "tier-0" : "filtered"));
-        return cached.value();
-    }
-
-    const int total_seen = static_cast<int>(cached_tools_.size());
     std::vector<UnifiedTool> tools;
     if (use_rag) {
         const auto& tier0 = tier_0_tool_names();
@@ -346,6 +349,48 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const Q
     } else {
         tools = apply_tool_filter(cached_tools_, filter);
     }
+
+    if (out_key)
+        *out_key = key;
+    if (out_used_rag)
+        *out_used_rag = use_rag;
+    return tools;
+}
+
+// Bound any provider's tool array. In a Tier-0 turn this never binds (12-ish
+// declarations); it only matters when Tool RAG is switched off, where the raw
+// catalogue is ~900 tools — past every provider's declaration ceiling and
+// enough prompt to crowd out the conversation. Dropping silently would read as
+// "the model can't see my tool", so overflow is always logged.
+static std::vector<UnifiedTool> cap_tool_list(std::vector<UnifiedTool> tools, int cap, const char* dialect) {
+    if (cap <= 0 || static_cast<int>(tools.size()) <= cap)
+        return tools;
+    LOG_WARN(TAG, QString("%1: %2 tools selected but the dialect accepts at most %3 — sending the first %3. "
+                          "Enable Tool RAG (mcp/use_tool_rag) or pass a narrower ToolFilter.")
+                      .arg(QString::fromUtf8(dialect))
+                      .arg(tools.size())
+                      .arg(cap));
+    tools.resize(static_cast<std::size_t>(cap));
+    return tools;
+}
+
+QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
+    QMutexLocker lock(&mutex_);
+
+    QByteArray key;
+    bool use_rag = false;
+    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, extra_tool_names, &key, &use_rag);
+
+    auto cached = openai_format_cache_.constFind(key);
+    if (cached != openai_format_cache_.constEnd()) {
+        LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (cached, %2)")
+                          .arg(cached.value().size())
+                          .arg(use_rag ? "tier-0" : "filtered"));
+        return cached.value();
+    }
+
+    const int total_seen = static_cast<int>(cached_tools_.size());
+    tools = cap_tool_list(std::move(tools), kMaxToolsPerRequest, "openai");
 
     QJsonArray result;
     for (const auto& tool : tools) {
@@ -396,6 +441,101 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const Q
     } else {
         LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (fresh)").arg(result.size()));
     }
+    return result;
+}
+
+QJsonArray McpService::format_tools_for_anthropic(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
+    QMutexLocker lock(&mutex_);
+
+    QByteArray key;
+    bool use_rag = false;
+    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, extra_tool_names, &key, &use_rag);
+
+    auto cached = anthropic_format_cache_.constFind(key);
+    if (cached != anthropic_format_cache_.constEnd())
+        return cached.value();
+
+    tools = cap_tool_list(std::move(tools), kMaxToolsPerRequest, "anthropic");
+
+    QJsonArray result;
+    for (const auto& tool : tools) {
+        QJsonObject schema = tool.input_schema;
+        // Anthropic requires input_schema to be a JSON Schema object. A
+        // parameterless tool is legal here (unlike Gemini) as long as the
+        // object is well-formed.
+        if (schema.value(QStringLiteral("type")).toString() != QLatin1String("object")) {
+            schema[QStringLiteral("type")] = QStringLiteral("object");
+        }
+        if (!schema.contains(QStringLiteral("properties")))
+            schema[QStringLiteral("properties")] = QJsonObject();
+
+        result.append(QJsonObject{
+            {QStringLiteral("name"), tool.server_id + QStringLiteral("__") + McpProvider::encode_tool_name_for_wire(tool.name)},
+            {QStringLiteral("description"), tool.description},
+            {QStringLiteral("input_schema"), schema},
+        });
+    }
+
+    if (anthropic_format_cache_.size() >= kMaxFormatCacheEntries)
+        anthropic_format_cache_.clear();
+    anthropic_format_cache_.insert(key, result);
+
+    LOG_INFO(TAG, QString("format_tools_for_anthropic: %1 tools sent to LLM (%2)")
+                      .arg(result.size())
+                      .arg(use_rag ? "tier-0" : "filtered"));
+    return result;
+}
+
+QJsonArray McpService::format_tools_for_gemini(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
+    QMutexLocker lock(&mutex_);
+
+    QByteArray key;
+    bool use_rag = false;
+    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, extra_tool_names, &key, &use_rag);
+
+    auto cached = gemini_format_cache_.constFind(key);
+    if (cached != gemini_format_cache_.constEnd())
+        return cached.value();
+
+    tools = cap_tool_list(std::move(tools), kGeminiMaxToolsPerRequest, "gemini");
+
+    QJsonArray fn_decls;
+    int dropped_names = 0;
+    for (const auto& tool : tools) {
+        const QString fn_name =
+            tool.server_id + QStringLiteral("__") + McpProvider::encode_tool_name_for_wire(tool.name);
+        if (!is_valid_gemini_function_name(fn_name)) {
+            // One invalid name fails the entire generateContent call, taking
+            // every other tool down with it. Drop this one instead.
+            ++dropped_names;
+            LOG_WARN(TAG, QString("format_tools_for_gemini: dropping '%1' — not a valid Gemini function name "
+                                  "(must match ^[a-zA-Z_][a-zA-Z0-9_.:-]{0,63}$)")
+                              .arg(fn_name));
+            continue;
+        }
+
+        QJsonObject decl{{QStringLiteral("name"), fn_name}, {QStringLiteral("description"), tool.description}};
+        // `parameters` is OMITTED for a parameterless tool. Sending
+        // {"type":"object","properties":{}} — which is what the OpenAI-shaped
+        // builders emit — is rejected with "properties: should be non-empty
+        // for OBJECT type" and fails the whole request.
+        if (auto params = sanitize_schema_for_gemini(tool.input_schema))
+            decl[QStringLiteral("parameters")] = *params;
+        fn_decls.append(decl);
+    }
+
+    QJsonArray result;
+    if (!fn_decls.isEmpty())
+        result.append(QJsonObject{{QStringLiteral("functionDeclarations"), fn_decls}});
+
+    if (gemini_format_cache_.size() >= kMaxFormatCacheEntries)
+        gemini_format_cache_.clear();
+    gemini_format_cache_.insert(key, result);
+
+    LOG_INFO(TAG, QString("format_tools_for_gemini: %1 function declarations sent to LLM (%2%3)")
+                      .arg(fn_decls.size())
+                      .arg(use_rag ? "tier-0" : "filtered")
+                      .arg(dropped_names > 0 ? QString(", %1 dropped on name").arg(dropped_names) : QString()));
     return result;
 }
 
@@ -583,6 +723,8 @@ void McpService::refresh_cache() {
     // <200 KB, so simple full-clear is fine.
     filtered_tools_cache_.clear();
     openai_format_cache_.clear();
+    anthropic_format_cache_.clear();
+    gemini_format_cache_.clear();
 
     cache_time_ = QDateTime::currentDateTime();
     cached_generation_ = McpProvider::instance().generation();

@@ -16,6 +16,26 @@ namespace {
 constexpr const char* kLlmBuildersTag = "LlmService";
 }
 
+void LlmService::apply_openai_token_limit(QJsonObject& body) const {
+    // OpenAI/xAI native endpoints take max_completion_tokens universally.
+    // AIHubMix is a pass-through aggregator (no param translation), so an
+    // OpenAI-family model routed through it ALSO needs max_completion_tokens —
+    // o-series and gpt-5 hard-reject max_tokens with a 400 ("Unsupported
+    // parameter: 'max_tokens' ... Use 'max_completion_tokens' instead").
+    // Non-OpenAI models (claude/gemini/deepseek/qwen/…) keep max_tokens.
+    //
+    // Centralised because the tool-loop follow-ups did NOT do this and sent
+    // max_tokens unconditionally: on a reasoning model the opening turn was
+    // built correctly and every follow-up 400'd, so the model would call one
+    // tool and the reply never arrived.
+    const QString model_lower = model_.toLower();
+    const bool wants_completion_tokens = provider_ == "openai" || provider_ == "xai" ||
+                                         (provider_ == "aihubmix" && detail::is_openai_family_model(model_lower));
+    body.remove(wants_completion_tokens ? QStringLiteral("max_tokens") : QStringLiteral("max_completion_tokens"));
+    body[wants_completion_tokens ? QStringLiteral("max_completion_tokens") : QStringLiteral("max_tokens")] =
+        resolved_max_tokens();
+}
+
 QJsonObject LlmService::build_openai_request(const QString& user_message,
                                              const std::vector<ConversationMessage>& history, bool stream,
                                              bool with_tools) {
@@ -37,24 +57,12 @@ QJsonObject LlmService::build_openai_request(const QString& user_message,
     req["model"] = model_;
     req["messages"] = messages;
     // Temperature omitted — each provider's default.
-    // Token-limit field: OpenAI/xAI native endpoints take max_completion_tokens
-    // universally. AIHubMix is a pass-through aggregator (no param translation),
-    // so an OpenAI-family model routed through it ALSO needs max_completion_tokens —
-    // o-series and gpt-5 hard-reject max_tokens with a 400 ("Unsupported parameter:
-    // 'max_tokens' ... Use 'max_completion_tokens' instead"). Non-OpenAI models
-    // (claude/gemini/deepseek/qwen/…) keep the OpenAI-compat max_tokens.
-    const int mx = resolved_max_tokens();
-    const bool wants_completion_tokens = provider_ == "openai" || provider_ == "xai" ||
-                                         (provider_ == "aihubmix" && detail::is_openai_family_model(model_lower));
-    if (wants_completion_tokens)
-        req["max_completion_tokens"] = mx;
-    else
-        req["max_tokens"] = mx;
+    apply_openai_token_limit(req);
     if (stream) {
         req["stream"] = true;
         // OpenAI/xAI (and OpenAI-family models via AIHubMix) omit usage on streamed
         // responses unless we opt in. Don't send stream_options to non-OpenAI routes.
-        if (wants_completion_tokens)
+        if (req.contains("max_completion_tokens"))
             req["stream_options"] = QJsonObject{{"include_usage", true}};
     }
 
@@ -106,21 +114,16 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
     return req;
 }
 
-QJsonArray LlmService::build_anthropic_tools() {
-    QJsonArray ant_tools;
+QJsonArray LlmService::build_anthropic_tools(const QSet<QString>& activated) {
     if (!detail::effective_tools_enabled(tools_enabled_))
-        return ant_tools;
-    auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
-    for (const auto& tool : all_tools) {
-        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-        QJsonObject schema = tool.input_schema;
-        if (schema.isEmpty()) {
-            schema["type"] = "object";
-            schema["properties"] = QJsonObject();
-        }
-        ant_tools.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"input_schema", schema}});
-    }
-    return ant_tools;
+        return {};
+    // Same selection as the OpenAI path (Tier-0 + whatever the model has
+    // discovered this turn). This used to call get_all_tools(), which bypasses
+    // Tool RAG entirely and hands back an arbitrary 50-tool slice of a ~900
+    // tool catalogue — so `tool_list` was frequently not even declared and the
+    // model had no way to reach the rest.
+    return mcp::McpService::instance().format_tools_for_anthropic(detail::apply_request_policy(tool_filter_),
+                                                                  activated);
 }
 
 QJsonObject LlmService::build_gemini_request(const QString& user_message,
@@ -152,23 +155,16 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     return req;
 }
 
-QJsonArray LlmService::build_gemini_tools() {
+QJsonArray LlmService::build_gemini_tools(const QSet<QString>& activated) {
     if (!detail::effective_tools_enabled(tools_enabled_))
         return {};
-    auto all_tools = mcp::McpService::instance().get_all_tools(detail::apply_request_policy(tool_filter_));
-    QJsonArray fn_decls;
-    for (const auto& tool : all_tools) {
-        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-        QJsonObject schema = tool.input_schema;
-        if (schema.isEmpty()) {
-            schema["type"] = "object";
-            schema["properties"] = QJsonObject();
-        }
-        fn_decls.append(QJsonObject{{"name", fn_name}, {"description", tool.description}, {"parameters", schema}});
-    }
-    if (fn_decls.isEmpty())
-        return {};
-    return QJsonArray{QJsonObject{{"functionDeclarations", fn_decls}}};
+    // Gemini needs more than a reshuffle of the OpenAI payload: its
+    // `parameters` field is an OpenAPI subset, not JSON Schema, and one
+    // unrecognised key — or one parameterless tool sent as
+    // {"type":"object","properties":{}} — fails the ENTIRE request rather than
+    // the offending declaration. format_tools_for_gemini does that
+    // translation; see mcp/GeminiSchema.h.
+    return mcp::McpService::instance().format_tools_for_gemini(detail::apply_request_policy(tool_filter_), activated);
 }
 
 QJsonObject LlmService::build_fincept_request(const QString& user_message,
