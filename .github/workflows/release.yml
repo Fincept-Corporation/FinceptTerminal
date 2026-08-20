@@ -1968,14 +1968,28 @@ jobs:
           MACHO_COUNT=$(wc -l < "${MACHO_LIST}" | tr -d ' ')
           echo "  found ${MACHO_COUNT} Mach-O file(s) (main executable signed separately at bundle root)"
 
-          echo "Stripping existing signatures from every Mach-O..."
-          while IFS= read -r f; do
-            codesign --remove-signature "$f" 2>/dev/null || true
-          done < "${MACHO_LIST}"
-          codesign --remove-signature "${MAIN_EXE}" 2>/dev/null || true
-          codesign --remove-signature "${APP_BUNDLE}" 2>/dev/null || true
-
-          echo "Signing every Mach-O with hardened runtime + timestamp..."
+          # ── NO --remove-signature pass ───────────────────────────────────
+          # There used to be one here, stripping every Mach-O before re-signing.
+          # It is both unnecessary and actively harmful:
+          #
+          #   * Unnecessary — `codesign --force` (in SIGN_FLAGS) already replaces
+          #     any existing signature. That is Apple's documented mechanism.
+          #   * Harmful — `--remove-signature` rewrites the Mach-O's load commands
+          #     and __LINKEDIT, and is well known to leave the file in a state a
+          #     later `codesign` refuses ("main executable failed strict
+          #     validation" / "__LINKEDIT segment does not cover the end of the
+          #     file"). Qt's dylibs arrive from aqtinstall already ad-hoc signed,
+          #     so every one of them went through that rewrite. It was run with
+          #     `2>/dev/null || true`, so the damage was silent and only showed up
+          #     as an unexplained failure in the signing loop below.
+          #
+          # This is what broke the v4.4.1 release: signing died on
+          # Contents/PlugIns/platforms/libqcocoa.dylib and retried 5 times, so it
+          # was neither a bad certificate (the identity assertion passed) nor a
+          # timestamp-service blip. Newer Xcode on the runner image validates
+          # more strictly than it did when v4.4.0 shipped, which is why the same
+          # workflow signed fine on 2026-08-11 and not on 2026-08-20.
+          echo "Signing every Mach-O with hardened runtime + timestamp (--force replaces existing signatures)..."
           while IFS= read -r f; do
             codesign_retry "${SIGN_FLAGS[@]}" "$f" >/dev/null
           done < "${MACHO_LIST}"

@@ -103,9 +103,16 @@ codesign_retry() {
 
         if [ "${attempt}" -ge "${max}" ]; then
             printf '%s\n' "${out}" >&2
+            # Fold codesign's own stderr INTO the annotation, not just the log.
+            # Annotations are readable from the public check-runs API; step logs
+            # need repo-admin auth. Without this the annotation said only "it
+            # failed" and diagnosing meant asking a human to download the log
+            # archive. Newlines collapsed because an annotation is one line.
+            local detail
+            detail="$(printf '%s' "${out}" | tr '\n' ' ' | tr -s ' ')"
             # stderr, not stdout: two call sites send this command's stdout to
             # /dev/null, and an annotation nobody sees is worse than none.
-            echo "::error::codesign failed after ${max} attempts (last exit ${rc}). Target: ${target}" >&2
+            echo "::error::codesign failed after ${max} attempts (last exit ${rc}). Target: ${target} -- ${detail:0:800}" >&2
             return "${rc}"
         fi
 
