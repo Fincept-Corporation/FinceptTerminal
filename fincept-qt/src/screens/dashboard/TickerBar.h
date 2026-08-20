@@ -21,13 +21,16 @@ class TickerBar : public QWidget {
   public:
     explicit TickerBar(QWidget* parent = nullptr);
 
-    /// Callers fill only symbol/price/change; everything below is derived once
-    /// in set_data(). paintEvent runs 20×/s over every entry × every pass, so
-    /// it must not format strings or measure text — see rebuild_entry_cache().
+    /// Callers fill only symbol/price/change_pct; everything below is derived
+    /// once in set_data(). paintEvent runs 20×/s over every entry × every pass,
+    /// so it must not format strings or measure text — see rebuild_entry_cache().
     struct Entry {
         QString symbol{};
         double price = 0;
-        double change = 0;
+        /// Percent change, NOT the absolute price change. rebuild_entry_cache()
+        /// renders this with a trailing '%', so passing a point delta here
+        /// prints e.g. "-90.88%" for a 0.35% move. Feed QuoteData::change_pct.
+        double change_pct = 0;
 
         // ── Derived (do not set from outside) ──
         // The `{}` are load-bearing: callers brace-init only the first three
