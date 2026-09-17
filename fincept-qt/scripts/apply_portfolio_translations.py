@@ -29,6 +29,13 @@ TRANS_DIR = ROOT  # translations_<locale>.json sit at project root
 
 
 def apply_locale(locale: str) -> None:
+    import re as _re
+
+    # Locales are BCP-47-ish tags (en, zh_CN); anything else could escape
+    # TS_DIR via path traversal, so refuse it before touching the filesystem.
+    if not _re.fullmatch(r"[A-Za-z]+(?:_[A-Za-z]+)?", locale):
+        print(f"[{locale}] invalid locale tag", file=sys.stderr)
+        return
     ts_path = TS_DIR / f"fincept_{locale}.ts"
     json_path = TRANS_DIR / f"translations_{locale}.json"
 
@@ -48,7 +55,16 @@ def apply_locale(locale: str) -> None:
     header_end = raw.find("<TS")
     header = raw[:header_end] if header_end > 0 else ""
 
-    tree = ET.parse(ts_path)
+    try:
+        from defusedxml.ElementTree import parse as _xml_parse
+        tree = _xml_parse(ts_path)
+    except ImportError:
+        # No defusedxml: refuse entity declarations (XXE guard, CWE-611)
+        # before falling back to stdlib parsing.
+        if "<!ENTITY" in raw.upper() or "<!DOCTYPE" in raw.upper():
+            print(f"[{locale}] refusing XML with DOCTYPE/entities", file=sys.stderr)
+            return
+        tree = ET.parse(ts_path)
     root = tree.getroot()
 
     applied = 0
