@@ -1,16 +1,16 @@
 > [!IMPORTANT]
-> ## 🔒 Fincept Terminal **Enterprise** — the private edition. Launch price: **90% off, ends soon.**
+> ## 🔒 Fincept Terminal **Enterprise** — the private edition is now available.
 > Proprietary real-time data · Multi-agent AI research · Live broker & algo execution · Priority support
 >
-> | Plan | Was | **Launch price** |
-> |:--|:--:|:--:|
-> | **Exclusive** | ~~$99~~ | **$10** /user/mo |
-> | **Exclusive+** | ~~$199~~ | **$20** /user/mo |
-> | **Exclusive Pro** ⭐ Most popular | ~~$299~~ | **$40** /user/mo |
+> | Plan | Price |
+> |:--|:--:|
+> | **Exclusive** | **$15** /user/mo |
+> | **Exclusive+** | **$30** /user/mo |
+> | **Exclusive Pro** ⭐ Most popular | **$45** /user/mo |
 >
-> [![Claim launch price](https://img.shields.io/badge/%F0%9F%94%A5_Claim_launch_price_%E2%86%92-C06524?style=for-the-badge)](https://fincept.in/enterprise/signup) &nbsp; [![Compare plans](https://img.shields.io/badge/Compare_plans-1F2328?style=for-the-badge)](https://fincept.in/pricing)
+> [![Get Enterprise](https://img.shields.io/badge/Get_Enterprise_%E2%86%92-C06524?style=for-the-badge)](https://fincept.in/enterprise/signup) &nbsp; [![Compare plans](https://img.shields.io/badge/Compare_plans-1F2328?style=for-the-badge)](https://fincept.in/pricing)
 >
-> <sub>Early seats locked in at launch price for life · No annual lock-in, cancel anytime · This open-source repo stays free under AGPL-3.0</sub>
+> <sub>No annual lock-in, cancel anytime · This open-source repo stays free under AGPL-3.0</sub>
 
 
 > [!TIP]
