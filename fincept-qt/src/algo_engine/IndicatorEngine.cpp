@@ -27,26 +27,31 @@ void IndicatorEngine::extract_arrays(const QVector<OhlcvCandle>& candles, QVecto
     }
 }
 
-// Both smoothers are also fed *derived* series that start with a run of NaN (the
-// MACD line, an EMA of an EMA for DEMA/TEMA, the stochastic %K). Seeding from
-// src[0..period) over such a series sums NaN, and the NaN then propagates through
-// every later bar — so MACD's signal line, DEMA, TEMA and %D were NaN forever and
-// every rule using them silently never fired. Skip the leading NaNs and seed from
-// the first full window of real values instead (identical output for plain price
-// series, which have no leading NaN).
+// Both helpers emit a series whose first period-1 samples are NaN, and callers
+// feed exactly such a series straight back in (Stochastic's %D over %K, MACD's
+// signal line over the MACD line, DEMA/TEMA's EMA of an EMA). Seeding the
+// window at index 0 pulls those NaNs into the running sum, and a NaN never
+// leaves a rolling sum or an EMA recursion again, so the whole output is NaN
+// however long the input is. Seed from the first finite sample instead.
+static int first_finite(const QVector<double>& src) {
+    const int n = src.size();
+    int i = 0;
+    while (i < n && !std::isfinite(src[i]))
+        ++i;
+    return i;
+}
+
 QVector<double> IndicatorEngine::sma_series(const QVector<double>& src, int period) {
     const int n = src.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
-    int first = 0;
-    while (first < n && std::isnan(src[first]))
-        ++first;
-    if (n - first < period)
+    const int start = first_finite(src);
+    if (n - start < period)
         return out;
     double sum = 0;
-    for (int i = first; i < first + period; ++i)
+    for (int i = start; i < start + period; ++i)
         sum += src[i];
-    out[first + period - 1] = sum / period;
-    for (int i = first + period; i < n; ++i) {
+    out[start + period - 1] = sum / period;
+    for (int i = start + period; i < n; ++i) {
         sum += src[i] - src[i - period];
         out[i] = sum / period;
     }
@@ -56,17 +61,15 @@ QVector<double> IndicatorEngine::sma_series(const QVector<double>& src, int peri
 QVector<double> IndicatorEngine::ema_series(const QVector<double>& src, int period) {
     const int n = src.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
-    int first = 0;
-    while (first < n && std::isnan(src[first]))
-        ++first;
-    if (n - first < period)
+    const int start = first_finite(src);
+    if (n - start < period)
         return out;
     double sum = 0;
-    for (int i = first; i < first + period; ++i)
+    for (int i = start; i < start + period; ++i)
         sum += src[i];
-    out[first + period - 1] = sum / period;
+    out[start + period - 1] = sum / period;
     double mult = 2.0 / (period + 1);
-    for (int i = first + period; i < n; ++i)
+    for (int i = start + period; i < n; ++i)
         out[i] = (src[i] - out[i - 1]) * mult + out[i - 1];
     return out;
 }
