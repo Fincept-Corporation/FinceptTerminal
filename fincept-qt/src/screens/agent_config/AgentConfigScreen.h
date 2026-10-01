@@ -51,6 +51,9 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
     QPushButton* make_nav_btn(const QString& text, services::AgentViewMode mode);
 
     void ensure_panel_built(services::AgentViewMode mode);
+    /// Hand a panel the draft restore_state() stashed for it (panels are built
+    /// lazily, so it may not exist yet when the state is restored).
+    void apply_pending_draft(services::AgentViewMode mode);
     QWidget* panel_widget(services::AgentViewMode mode) const;
     void wire_cross_panel_signals();
 
@@ -78,6 +81,11 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
     AgentChatPanel* chat_panel_ = nullptr;
     SystemViewPanel* system_panel_ = nullptr;
     AgenticTasksPanel* agentic_panel_ = nullptr;
+
+    // Drafts from restore_state() whose panel has not been built yet. They are
+    // applied when the panel is built and, until then, written back by save_state()
+    // so an unvisited tab's draft is not lost after one more restart.
+    QVariantMap pending_state_;
 
     // Track which stack slots have been populated (one per AgentViewMode value).
     bool panel_built_[9] = {};

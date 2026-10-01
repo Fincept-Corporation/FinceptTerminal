@@ -143,6 +143,7 @@ class PythonTtsProvider : public TtsProvider {
         });
 
         stdout_buffer_.clear();
+        error_reported_ = false;
         LOG_INFO(TTS_TAG,
                  QString("Provider[%1]: launching '%2' '%3' (cwd='%4')").arg(name(), python_exe, script, scripts_dir));
         // Fire-and-forget: a failed launch arrives as errorOccurred(FailedToStart),
@@ -242,10 +243,12 @@ class PythonTtsProvider : public TtsProvider {
         } else if (obj.contains("error")) {
             const QString msg = obj["error"].toString();
             LOG_WARN(TTS_TAG, QString("Provider[%1] error: %2").arg(name(), msg));
+            error_reported_ = true;
             emit error_occurred(msg);
         } else if (obj.contains("fatal")) {
             const QString msg = obj["fatal"].toString();
             LOG_ERROR(TTS_TAG, QString("Provider[%1] fatal: %2").arg(name(), msg));
+            error_reported_ = true;
             emit error_occurred(msg);
         }
     }
@@ -283,12 +286,22 @@ class PythonTtsProvider : public TtsProvider {
                 LOG_ERROR(TTS_TAG, QString("Provider[%1] exited abnormally (code=%2)").arg(name()).arg(exit_code));
                 emit error_occurred(QStringLiteral("Voice response stopped unexpectedly"));
             }
+        } else if ((status == QProcess::CrashExit || exit_code != 0) && !error_reported_) {
+            // Died before ever reporting "speaking" and without a JSON error line (broken
+            // venv, interpreter crash, import failure that never reached the script's own
+            // handler). Nothing told the UI, so a voice-mode conversation just went quiet
+            // and never resumed listening; a speak() that fails now surfaces an error.
+            LOG_ERROR(TTS_TAG, QString("Provider[%1] exited before speaking (code=%2) with no error reported")
+                                   .arg(name())
+                                   .arg(exit_code));
+            emit error_occurred(QStringLiteral("Voice response could not be started"));
         }
     }
 
     QProcess* process_ = nullptr;
     QByteArray stdout_buffer_;
     std::atomic<bool> active_{false};
+    bool error_reported_ = false; // the current process already reported its own error
 };
 
 // ── Pyttsx3TtsProvider ───────────────────────────────────────────────────────

@@ -364,7 +364,7 @@ class RiskAssessmentWorkflow:
             name="Risk Assessment",
             steps=[
                 Step(name="identify_risk_type", executor=identify_step),
-                Router(selector, choices, name="risk_router"),
+                Router(choices=choices, selector=selector, name="risk_router"),
                 Step(name="generate_risk_report", executor=report_step),
             ]
         )
@@ -401,6 +401,7 @@ class FinancialWorkflowTemplates:
                                terminal_tool_defs: Optional[List] = None,
                                terminal_token: Optional[str] = None,
                                terminal_destructive_token: Optional[str] = None,
+                               terminal_dry_run: bool = False,
                                **_) -> "PortfolioRebalancingWorkflow":
         _keys = api_keys or {}
         _tools = tools or _load_workflow_tools(_keys, terminal_endpoint, terminal_tool_defs,
@@ -415,6 +416,7 @@ class FinancialWorkflowTemplates:
                         terminal_tool_defs: Optional[List] = None,
                         terminal_token: Optional[str] = None,
                         terminal_destructive_token: Optional[str] = None,
+                        terminal_dry_run: bool = False,
                         **_) -> "RiskAssessmentWorkflow":
         _keys = api_keys or {}
         _tools = tools or _load_workflow_tools(_keys, terminal_endpoint, terminal_tool_defs,
@@ -542,7 +544,7 @@ class WorkflowModule:
                     key = _rfn(ctx if isinstance(ctx, dict) else {})
                     idx = _keys.index(key) if key in _keys else 0
                     return [_choices[idx]]
-                out.append(Router(_sel, choices, name=cfg["name"]))
+                out.append(Router(choices=choices, selector=_sel, name=cfg["name"]))
         return out
 
     def _make_step(self, cfg):

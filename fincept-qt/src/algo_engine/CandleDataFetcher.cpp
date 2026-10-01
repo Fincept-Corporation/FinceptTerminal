@@ -41,6 +41,8 @@ YahooInterval yahoo_interval(const QString& tf) {
         return {QStringLiteral("1m"), 3};
     if (tf == "5m")
         return {QStringLiteral("5m"), 1};
+    if (tf == "10m")
+        return {QStringLiteral("5m"), 2}; // Yahoo has no 10m either
     if (tf == "15m")
         return {QStringLiteral("15m"), 1};
     if (tf == "30m")
@@ -74,27 +76,42 @@ QString symbol_to_yahoo(const QString& symbol) {
     return s + QStringLiteral(".NS");
 }
 
-// Aggregate `factor` consecutive bars into one. Drops an incomplete trailing
-// group so we never emit a misleading partial bar.
+// Aggregate `factor` consecutive bars into one. A group never spans two UTC days:
+// the old flat grouping paired the last bar(s) of one session with the first bar(s)
+// of the next whenever the session's bar count was not a multiple of `factor`
+// (4h from 7 hourly bars, 10m from 75 five-minute bars) — mixing overnight gaps into
+// a single OHLC bar and shifting every later bar off the session open. Intraday
+// sessions (NSE/BSE/US) sit inside one UTC date, and 24h markets get clean blocks.
+// A short group at a session end is a real (shorter) bar and is kept; only a short
+// FINAL group is dropped, since that is the bar that may still be forming.
 QVector<OhlcvCandle> aggregate_candles(const QVector<OhlcvCandle>& in, int factor) {
     if (factor <= 1)
         return in;
+    constexpr int64_t kDayMs = 86400000LL;
     QVector<OhlcvCandle> out;
     out.reserve(in.size() / factor + 1);
-    for (int i = 0; i + factor <= in.size(); i += factor) {
-        OhlcvCandle c = in[i];
-        c.high = in[i].high;
-        c.low = in[i].low;
-        c.volume = 0;
-        for (int j = 0; j < factor; ++j) {
-            c.high = std::max(c.high, in[i + j].high);
-            c.low = std::min(c.low, in[i + j].low);
-            c.volume += in[i + j].volume;
+    int i = 0;
+    while (i < in.size()) {
+        const int64_t day = in[i].open_time / kDayMs;
+        int end = i;
+        while (end < in.size() && end - i < factor && in[end].open_time / kDayMs == day)
+            ++end;
+        const int count = end - i;
+        const bool final_group = (end >= in.size());
+        if (count == factor || !final_group) {
+            OhlcvCandle c = in[i];
+            c.volume = 0;
+            for (int j = i; j < end; ++j) {
+                c.high = std::max(c.high, in[j].high);
+                c.low = std::min(c.low, in[j].low);
+                c.volume += in[j].volume;
+            }
+            c.close = in[end - 1].close;
+            c.close_time = in[end - 1].close_time;
+            c.is_closed = true;
+            out.append(c);
         }
-        c.close = in[i + factor - 1].close;
-        c.close_time = in[i + factor - 1].close_time;
-        c.is_closed = true;
-        out.append(c);
+        i = end;
     }
     return out;
 }
@@ -189,6 +206,8 @@ QString CandleDataFetcher::timeframe_to_broker_resolution(const QString& tf) {
         return QStringLiteral("3");
     if (tf == "5m")
         return QStringLiteral("5");
+    if (tf == "10m")
+        return QStringLiteral("10");
     if (tf == "15m")
         return QStringLiteral("15");
     if (tf == "30m")
@@ -293,14 +312,22 @@ void CandleDataFetcher::fetch_from_broker(const QString& symbol, const QString& 
     // Broker history (symbol resolution + bare-symbol fallback + cache) now lives
     // in the shared trading::HistoricalDataService; convert its BrokerCandle
     // result to the algo OhlcvCandle here. (Yahoo fallback is layered in fetch().)
-    const QString tf = timeframe;
+    // 10m has no portable broker resolution (HistoricalDataService passes unknown
+    // strings straight through, and most brokers reject "10m"): fetch 5m and merge
+    // pairs, the same way the Yahoo path synthesises it.
+    const bool merge_10m = (timeframe == QLatin1String("10m"));
+    const QString tf = merge_10m ? QStringLiteral("5m") : timeframe;
     trading::HistoricalDataService::instance().fetch(
-        symbol, timeframe, lookback_days, broker_id, account_id,
-        [callback, tf](bool ok, const QVector<trading::BrokerCandle>& candles, const QString& err) {
-            if (ok && !candles.isEmpty())
-                callback(true, CandleDataFetcher::broker_candles_to_ohlcv(candles, tf), {});
-            else
+        symbol, tf, lookback_days, broker_id, account_id,
+        [callback, tf, merge_10m](bool ok, const QVector<trading::BrokerCandle>& candles, const QString& err) {
+            if (ok && !candles.isEmpty()) {
+                auto out = CandleDataFetcher::broker_candles_to_ohlcv(candles, tf);
+                if (merge_10m)
+                    out = aggregate_candles(out, 2);
+                callback(true, out, {});
+            } else {
                 callback(false, {}, err);
+            }
         });
 }
 
@@ -329,42 +356,71 @@ void CandleDataFetcher::fetch_from_yahoo(const QStringList& symbols, const QStri
 
     for (const QString& sym : symbols) {
         const QString yf = symbol_to_yahoo(sym);
-        const QString url = QString("https://query1.finance.yahoo.com/v8/finance/chart/%1"
-                                    "?period1=%2&period2=%3&interval=%4&includePrePost=false")
-                                .arg(yf)
-                                .arg(period1)
-                                .arg(period2)
-                                .arg(yi.interval);
-
-        QNetworkRequest req{QUrl(url)};
-        // Yahoo's chart endpoint 429s detailed browser UA strings (and python-requests),
-        // but accepts a bare "Mozilla/5.0" — verified empirically.
-        req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
-        req.setRawHeader("Accept", "application/json");
-
-        QPointer<CandleDataFetcher> self = this;
-        QNetworkReply* reply = yahoo_nam_->get(req);
-        connect(reply, &QNetworkReply::finished, this,
-                [self, reply, sym, yf, tf_ms, yi, results, errors, remaining, callback]() {
-                    reply->deleteLater();
-                    const QByteArray body = reply->readAll();
-
-                    if (reply->error() != QNetworkReply::NoError) {
-                        errors->append(QString("%1: %2").arg(sym, reply->errorString()));
-                    } else {
-                        QString perr;
-                        auto candles = parse_yahoo_chart(QJsonDocument::fromJson(body).object(), tf_ms, &perr);
-                        candles = aggregate_candles(candles, yi.aggregate);
-                        if (!candles.isEmpty())
-                            results->insert(sym, candles);
-                        else
-                            errors->append(QString("%1: %2").arg(sym, perr.isEmpty() ? "No data" : perr));
-                    }
-
-                    if (remaining->fetch_sub(1) == 1)
-                        callback(*results, *errors);
-                });
+        // symbol_to_yahoo() appends ".NS" to a bare ticker (NSE default). A US ticker
+        // typed bare ("AAPL" — the Strategy list's own placeholder) then 404s as
+        // "AAPL.NS"; allow exactly one retry on the bare symbol before giving up.
+        const bool bare_fallback = (yf != sym.trimmed().toUpper());
+        yahoo_fetch_one(sym, yf, bare_fallback, yi.interval, yi.aggregate, period1, period2, tf_ms, results, errors,
+                        remaining, callback);
     }
+}
+
+void CandleDataFetcher::yahoo_fetch_one(const QString& sym, const QString& yahoo_symbol, bool bare_fallback_left,
+                                        const QString& interval, int aggregate, qint64 period1, qint64 period2,
+                                        int64_t tf_ms,
+                                        std::shared_ptr<QHash<QString, QVector<OhlcvCandle>>> results,
+                                        std::shared_ptr<QStringList> errors,
+                                        std::shared_ptr<std::atomic<int>> remaining, MultiCandleCallback callback) {
+    const QString url = QString("https://query1.finance.yahoo.com/v8/finance/chart/%1"
+                                "?period1=%2&period2=%3&interval=%4&includePrePost=false")
+                            .arg(yahoo_symbol)
+                            .arg(period1)
+                            .arg(period2)
+                            .arg(interval);
+
+    QNetworkRequest req{QUrl(url)};
+    // Yahoo's chart endpoint 429s detailed browser UA strings (and python-requests),
+    // but accepts a bare "Mozilla/5.0" — verified empirically.
+    req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
+    req.setRawHeader("Accept", "application/json");
+    // A stalled connection must not hold a scan / backtest / deployment warm-up open
+    // forever (every caller blocks its UI state on this callback).
+    req.setTransferTimeout(20000);
+
+    QNetworkReply* reply = yahoo_nam_->get(req);
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, sym, bare_fallback_left, interval, aggregate, period1, period2, tf_ms, results, errors,
+             remaining, callback]() {
+                reply->deleteLater();
+                const QByteArray body = reply->readAll();
+
+                QString failure;
+                if (reply->error() != QNetworkReply::NoError) {
+                    failure = reply->errorString();
+                } else {
+                    QString perr;
+                    auto candles = parse_yahoo_chart(QJsonDocument::fromJson(body).object(), tf_ms, &perr);
+                    candles = aggregate_candles(candles, aggregate);
+                    if (!candles.isEmpty()) {
+                        results->insert(sym, candles);
+                    } else {
+                        failure = perr.isEmpty() ? QStringLiteral("No data") : perr;
+                    }
+                }
+
+                if (!failure.isEmpty() && bare_fallback_left) {
+                    LOG_DEBUG("CandleDataFetcher",
+                              QString("%1: '.NS' lookup failed (%2) — retrying as a bare symbol").arg(sym, failure));
+                    yahoo_fetch_one(sym, sym.trimmed().toUpper(), false, interval, aggregate, period1, period2, tf_ms,
+                                    results, errors, remaining, callback);
+                    return; // this symbol is still outstanding
+                }
+                if (!failure.isEmpty())
+                    errors->append(QString("%1: %2").arg(sym, failure));
+
+                if (remaining->fetch_sub(1) == 1)
+                    callback(*results, *errors);
+            });
 }
 
 } // namespace fincept::algo

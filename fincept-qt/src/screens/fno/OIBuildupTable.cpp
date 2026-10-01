@@ -125,7 +125,7 @@ QVariant OIBuildupModel::data(const QModelIndex& index, int role) const {
 
     switch (col) {
         case ColStrike:
-            return QString::number(r.strike, 'f', r.strike < 100 ? 2 : 0);
+            return fincept::services::options::format_strike(r.strike);
         case ColCeClass:
             return class_str(classify(r.ce_quote.change_pct, r.ce_quote.oi_change_pct));
         case ColCeChgPct:

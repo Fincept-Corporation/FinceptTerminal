@@ -14,6 +14,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QUrl>
 
 #include <algorithm>
 #include <cmath>
@@ -51,6 +52,21 @@ TokenExchangeResponse ZerodhaBroker::refresh_session(const BrokerCredentials& cr
 
 static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
+}
+
+// Variety (regular|amo|co|iceberg|auction) an order was placed under, read from its
+// own history (GET /orders/{id}: one row per state, each carrying `variety`). Kite
+// addresses modify/cancel as /orders/{variety}/{id}, so an AMO or CO order cannot be
+// touched through the "regular" route. Empty on any failure.
+static QString zerodha_lookup_variety(const QString& base, const QString& order_id,
+                                      const QMap<QString, QString>& headers) {
+    auto resp = BrokerHttp::instance().get(QString("%1/orders/%2").arg(base, order_id), headers);
+    if (!resp.success || resp.json.value("status").toString() != "success")
+        return {};
+    const auto rows = resp.json.value("data").toArray();
+    if (rows.isEmpty())
+        return {};
+    return rows.last().toObject().value("variety").toString();
 }
 
 QMap<QString, QString> ZerodhaBroker::auth_headers(const BrokerCredentials& creds) const {
@@ -197,6 +213,15 @@ TokenExchangeResponse ZerodhaBroker::exchange_token(const QString& api_key, cons
 }
 
 OrderPlaceResponse ZerodhaBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
+    // Kite retired Bracket Orders (SEBI): there is no `bo` variety any more, and
+    // the regular-variety fallback in zerodha_variety() would drop the stop-loss /
+    // target legs the user asked for and leave a naked position. Refuse rather
+    // than silently downgrade.
+    if (order.product_type == ProductType::BracketOrder)
+        return {false, "",
+                "Zerodha no longer supports Bracket Orders (discontinued by SEBI) — place a regular order and "
+                "protect it with a GTT stop-loss/target"};
+
     // Variety is derived from order flags, not ProductType. AMO orders take
     // variety="amo" regardless of MIS/CNC/NRML; CoverOrder takes "co".
     // Iceberg/Auction would need new UnifiedOrder flags — not wired yet.
@@ -212,10 +237,11 @@ OrderPlaceResponse ZerodhaBroker::place_order(const BrokerCredentials& creds, co
         {"product", kite_enum_map().product_or(order.product_type, "MIS")},
         {"validity", order.validity.isEmpty() ? "DAY" : order.validity},
         {"disclosed_quantity", "0"},
-        // Unique per attempt so a retry after an 8s client-side timeout is a
-        // broker-side duplicate rather than a second live order (see
-        // BrokerClientOrderId.h). Kite caps `tag` at 20 alphanumeric chars.
-        {"tag", make_client_order_ref(20)},
+        // Stable per order intent (UnifiedOrder::client_order_id) so a retry after
+        // an 8s client-side timeout carries the same reference and is traceable to
+        // the first attempt (see BrokerClientOrderId.h). Kite caps `tag` at 20
+        // alphanumeric chars.
+        {"tag", client_order_ref_for(order, 20)},
     };
     if (order.price > 0)
         params["price"] = QString::number(order.price, 'f', 2);
@@ -269,6 +295,15 @@ ApiResponse<QJsonObject> ZerodhaBroker::modify_order(const BrokerCredentials& cr
 
     auto resp = BrokerHttp::instance().put_form(QString("%1/orders/%2/%3").arg(base_url(), variety, order_id), params,
                                                 auth_headers(creds));
+    // The caller did not name a variety and the "regular" route refused: the order may be an
+    // AMO/CO. Retry once under its real variety (same order id, so it cannot touch another order).
+    if (!mods.contains("variety") && (!resp.success || resp.json.value("status").toString() != "success") &&
+        !is_token_expired(resp)) {
+        const QString real = zerodha_lookup_variety(QString(base_url()), order_id, auth_headers(creds));
+        if (!real.isEmpty() && real != variety)
+            resp = BrokerHttp::instance().put_form(QString("%1/orders/%2/%3").arg(base_url(), real, order_id),
+                                                   params, auth_headers(creds));
+    }
     int64_t ts = now_ts();
     if (!resp.success || resp.json.value("status").toString() != "success")
         return {false, std::nullopt, checked_error(resp, "Modify failed"), ts};
@@ -277,14 +312,27 @@ ApiResponse<QJsonObject> ZerodhaBroker::modify_order(const BrokerCredentials& cr
 
 ApiResponse<QJsonObject> ZerodhaBroker::cancel_order(const BrokerCredentials& creds, const QString& order_id) {
     QString variety = "regular";
+    bool variety_named = false;
     if (!creds.additional_data.isEmpty()) {
         auto ad = QJsonDocument::fromJson(creds.additional_data.toUtf8()).object();
         auto v = ad.value("variety").toString();
-        if (!v.isEmpty())
+        if (!v.isEmpty()) {
             variety = v;
+            variety_named = true;
+        }
     }
     auto resp =
         BrokerHttp::instance().del(QString("%1/orders/%2/%3").arg(base_url(), variety, order_id), auth_headers(creds));
+    // An AMO / CO order can only be cancelled under the variety it was placed with
+    // (DELETE /orders/:variety/:order_id). When no variety was named and the "regular"
+    // route refused, read the order's real variety from its history and retry once.
+    if (!variety_named && (!resp.success || resp.json.value("status").toString() != "success") &&
+        !is_token_expired(resp)) {
+        const QString real = zerodha_lookup_variety(QString(base_url()), order_id, auth_headers(creds));
+        if (!real.isEmpty() && real != variety)
+            resp = BrokerHttp::instance().del(QString("%1/orders/%2/%3").arg(base_url(), real, order_id),
+                                              auth_headers(creds));
+    }
     int64_t ts = now_ts();
     if (!resp.success || resp.json.value("status").toString() != "success")
         return {false, std::nullopt, checked_error(resp, "Cancel failed"), ts};
@@ -401,11 +449,15 @@ ApiResponse<BrokerFunds> ZerodhaBroker::get_funds(const BrokerCredentials& creds
 
 ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_quotes(const BrokerCredentials& creds,
                                                             const QVector<QString>& symbols) {
+    // Instrument keys go into a query string: percent-encode each one (':' kept) so a
+    // '&' / space / '+' inside a tradingsymbol ("M&M", "NIFTY 50") can't split or
+    // corrupt the `i=` list. Kite decodes the parameter server-side.
     QString query;
     for (const auto& sym : symbols) {
         if (!query.isEmpty())
             query += "&i=";
-        query += sym.contains(':') ? sym : ("NSE:" + sym);
+        const QString key = sym.contains(':') ? sym : ("NSE:" + sym);
+        query += QString::fromUtf8(QUrl::toPercentEncoding(key, QByteArray(":")));
     }
     auto resp = BrokerHttp::instance().get(QString(base_url()) + "/quote?i=" + query, auth_headers(creds));
     int64_t ts = now_ts();
@@ -896,7 +948,7 @@ ApiResponse<QVector<BrokerQuote>> ZerodhaBroker::get_multi_quotes(const BrokerCr
             QString key = (exch.isEmpty() ? "NSE" : exch) + ":" + (br_sym.has_value() ? br_sym.value() : sym);
             if (!query.isEmpty())
                 query += "&i=";
-            query += key;
+            query += QString::fromUtf8(QUrl::toPercentEncoding(key, QByteArray(":"))); // '&' in "M&M"
         }
 
         auto resp = BrokerHttp::instance().get(QString(base_url()) + "/quote?i=" + query, auth_headers(creds));
@@ -951,7 +1003,9 @@ ApiResponse<MarketDepth> ZerodhaBroker::get_market_depth(const BrokerCredentials
     QString exch = exchange.isEmpty() ? "NSE" : exchange;
     QString key = exch + ":" + (br_sym.has_value() ? br_sym.value() : symbol);
 
-    auto resp = BrokerHttp::instance().get(QString(base_url()) + "/quote?i=" + key, auth_headers(creds));
+    auto resp = BrokerHttp::instance().get(
+        QString(base_url()) + "/quote?i=" + QString::fromUtf8(QUrl::toPercentEncoding(key, QByteArray(":"))),
+        auth_headers(creds));
     int64_t ts = now_ts();
 
     if (!resp.success)

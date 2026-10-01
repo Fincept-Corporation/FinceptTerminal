@@ -27,21 +27,25 @@ void TelegramProvider::send(const NotificationRequest& req, std::function<void(b
     const QString level_tag = [&]() -> QString {
         switch (req.level) {
             case NotifLevel::Warning:
-                return "âš ï¸ ";
+                return QStringLiteral(u"\u26A0\uFE0F "); // warning sign
             case NotifLevel::Alert:
-                return "ðŸ”” ";
+                return QStringLiteral(u"\U0001F514 "); // bell
             case NotifLevel::Critical:
-                return "ðŸš¨ ";
+                return QStringLiteral(u"\U0001F6A8 "); // rotating light
             default:
-                return "â„¹ï¸ ";
+                return QStringLiteral(u"\u2139\uFE0F "); // information
         }
     }();
 
     QJsonObject body;
     body["chat_id"] = chat_id_;
     body["parse_mode"] = "HTML";
+    // parse_mode=HTML: a raw '<', '>' or '&' in the title/message (an alert such as
+    // "AAPL < 150" or "R&D") makes Telegram reject the whole message with
+    // "can't parse entities" — escape the user-controlled parts.
     body["text"] = QString("<b>%1%2</b>\n%3\n<i>%4</i>")
-                       .arg(level_tag, req.title, req.message, req.timestamp.toString("yyyy-MM-dd hh:mm:ss"));
+                       .arg(level_tag, req.title.toHtmlEscaped(), req.message.toHtmlEscaped(),
+                            req.timestamp.toString("yyyy-MM-dd hh:mm:ss"));
 
     HttpClient::instance().post(url, body, [cb](Result<QJsonDocument> res) {
         if (res.is_err()) {

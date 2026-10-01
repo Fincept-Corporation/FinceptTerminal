@@ -183,11 +183,16 @@ void EquityChartPanel::on_quote(const trading::BrokerQuote& quote) {
         return;
 
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    // Roll forward on the historical grid (last bar + interval) so the live bar
+    // Roll forward on the historical grid (last bar + N*interval) so the live bar
     // stays aligned with the bars the broker returned; the periodic history
     // reload on symbol/timeframe change corrects any session-gap drift.
+    // Jump straight to the bucket that contains `now`. Advancing a single interval
+    // per tick sprouted a flat phantom bar on EVERY quote while the history ended
+    // before the current bucket (overnight/weekend gap, market closed, history that
+    // lacks the forming bar) — and on the Qt-Charts fallback each one is a full
+    // chart rebuild.
     if (now >= bar_ts_ms_ + interval) {
-        bar_ts_ms_ += interval;
+        bar_ts_ms_ += ((now - bar_ts_ms_) / interval) * interval;
         bar_open_ = bar_high_ = bar_low_ = bar_close_ = px;
         bar_vol_ = 0.0;
     } else {

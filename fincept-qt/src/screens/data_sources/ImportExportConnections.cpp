@@ -46,7 +46,31 @@ bool looks_like_secret_key(const QString& key) {
            k.contains(QLatin1String("privatekey")) || k.contains(QLatin1String("private_key")) ||
            k.contains(QLatin1String("accesskey")) || k.contains(QLatin1String("access_key")) ||
            k.contains(QLatin1String("credential")) || k.contains(QLatin1String("appkey")) ||
-           k.contains(QLatin1String("connectionstring"));
+           k.contains(QLatin1String("connectionstring")) ||
+           // Custom-headers JSON (REST / GraphQL connectors) routinely carries an
+           // Authorization / X-API-Key value; it is a plain Textarea, not a Password field.
+           k == QLatin1String("headers");
+}
+
+/// Coerce the values of an imported / template config to the types the connector form
+/// stores: Number fields as integers and Checkbox fields as booleans. A hand-edited
+/// file naturally writes "5432" and "true"; the config dialog and the connection
+/// tester read ints and bools (a string "true" read back as false).
+void coerce_config_types(QJsonObject& cfg, const ConnectorConfig& connector) {
+    for (const auto& field : connector.fields) {
+        if (!cfg.contains(field.name) || !cfg.value(field.name).isString())
+            continue;
+        const QString text = cfg.value(field.name).toString().trimmed();
+        if (field.type == FieldType::Number) {
+            bool ok = false;
+            const int n = text.toInt(&ok);
+            if (ok)
+                cfg[field.name] = n;
+        } else if (field.type == FieldType::Checkbox) {
+            const QString t = text.toLower();
+            cfg[field.name] = (t == QLatin1String("true") || t == QLatin1String("1") || t == QLatin1String("yes"));
+        }
+    }
 }
 
 /// Blank out every secret-bearing value in a connection's config object.
@@ -230,24 +254,42 @@ bool import_connections(QWidget* parent, int* imported_out, int* skipped_out) {
                               QMessageBox::Cancel) != QMessageBox::Yes)
         return false;
 
-    int imported = 0, skipped = 0, needs_secrets = 0;
+    int imported = 0, skipped = 0, needs_secrets = 0, unknown_provider = 0;
     for (const auto& val : entries) {
         const auto obj = val.toObject();
-        const QString provider = obj["provider"].toString();
+        const QString provider = obj["provider"].toString().trimmed();
         if (provider.isEmpty()) {
+            ++skipped;
+            continue;
+        }
+        // A provider the registry does not know can never be edited, tested or used
+        // (the Connections table would just list a dead row), so don't create one.
+        const ConnectorConfig* connector = find_connector_config(provider);
+        if (!connector) {
+            LOG_WARN(TAG, QString("Import skipped an entry for unknown connector '%1'").arg(provider));
+            ++unknown_provider;
             ++skipped;
             continue;
         }
 
         DataSource ds;
         ds.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        ds.alias = obj["alias"].toString();
+        // The alias column is UNIQUE and the file's alias is the one the connection
+        // already has (export) or a fixed "<id>_1" (template): importing the same
+        // file twice, or a template with two entries of one connector, failed every
+        // row on the constraint. Mint it like the config dialog does.
+        ds.alias = connector->id + "_" + ds.id.left(8);
         ds.display_name = obj["display_name"].toString();
         ds.description = obj["description"].toString();
-        ds.type = obj["type"].toString();
-        ds.provider = provider;
-        ds.category = obj["category"].toString();
-        ds.config = QJsonDocument(obj["config"].toObject()).toJson(QJsonDocument::Compact);
+        // The `type` column is CHECK-constrained to 'websocket' | 'rest_api' (the
+        // template wrote the connector id there, which the database rejects), and
+        // `category` is a lookup key — take both from the connector, not the file.
+        ds.type = persistence_type(*connector);
+        ds.provider = connector->id;
+        ds.category = category_str(connector->category);
+        QJsonObject config_obj = obj["config"].toObject();
+        coerce_config_types(config_obj, *connector);
+        ds.config = QJsonDocument(config_obj).toJson(QJsonDocument::Compact);
         ds.enabled = obj["enabled"].toBool(false);
         ds.tags = obj["tags"].toString();
 
@@ -255,21 +297,25 @@ bool import_connections(QWidget* parent, int* imported_out, int* skipped_out) {
             ++needs_secrets;
 
         if (ds.display_name.isEmpty())
-            ds.display_name = provider;
-        if (ds.alias.isEmpty())
-            ds.alias = provider + "_" + ds.id.left(8);
+            ds.display_name = connector->name;
 
         const auto result = DataSourceRepository::instance().save(ds);
-        if (result.is_ok())
+        if (result.is_ok()) {
             ++imported;
-        else
+        } else {
+            LOG_WARN(TAG, QString("Import: could not save a '%1' entry: %2")
+                              .arg(connector->id, QString::fromStdString(result.error())));
             ++skipped;
+        }
     }
 
     LOG_INFO(TAG, QString("Import complete: %1 imported, %2 skipped").arg(imported).arg(skipped));
     services::FileManagerService::instance().import_file(path, "data_sources");
 
     QString summary = QObject::tr("Imported %1 connection(s), skipped %2.").arg(imported).arg(skipped);
+    if (unknown_provider > 0)
+        summary += QObject::tr("\n\n%1 of the skipped entries named a connector this version does not have.")
+                       .arg(unknown_provider);
     if (needs_secrets > 0)
         summary += QObject::tr("\n\n%1 of them came from a redacted export — open each one and re-enter its "
                                "password / API key before use.")
@@ -305,6 +351,18 @@ bool download_connector_template(QWidget* parent) {
             }
             QString val = !field.default_value.isEmpty() ? field.default_value
                                                          : (!field.placeholder.isEmpty() ? field.placeholder : "");
+            // Typed like the form stores them (bool / int): a Checkbox written as the string
+            // "true" is read back as false, and a port as a string is not an integer.
+            if (field.type == FieldType::Checkbox) {
+                config_obj[field.name] = (field.default_value == QLatin1String("true"));
+                continue;
+            }
+            if (field.type == FieldType::Number) {
+                bool ok = false;
+                const int n = val.toInt(&ok);
+                config_obj[field.name] = ok ? n : 0;
+                continue;
+            }
             config_obj[field.name] = val;
         }
 
@@ -313,7 +371,7 @@ bool download_connector_template(QWidget* parent) {
         entry["display_name"] = cfg.name;
         entry["alias"] = cfg.id + "_1";
         entry["description"] = cfg.description;
-        entry["type"] = cfg.type;
+        entry["type"] = persistence_type(cfg); // what the connection store accepts, not the connector id
         entry["category"] = category_str(cfg.category);
         entry["enabled"] = false;
         entry["tags"] = "";

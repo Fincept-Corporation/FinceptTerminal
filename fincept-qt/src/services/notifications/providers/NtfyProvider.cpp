@@ -24,19 +24,26 @@ void NtfyProvider::send(const NotificationRequest& req, std::function<void(bool,
         return;
     }
 
-    const QString base = server_url_.isEmpty() ? "https://ntfy.sh" : server_url_;
-    const QString url = QString("%1/%2").arg(base, topic_);
+    // ntfy's JSON publish API takes a POST to the server ROOT with the topic in the
+    // body. Posting this JSON to "<server>/<topic>" instead publishes the raw JSON
+    // text as the message body.
+    QString base = server_url_.isEmpty() ? QStringLiteral("https://ntfy.sh") : server_url_;
+    while (base.endsWith(QLatin1Char('/')))
+        base.chop(1);
+    const QString url = base;
 
-    const QString priority = [&]() -> QString {
+    // JSON publishing needs the numeric priority (1=min .. 5=max/urgent); the
+    // names ("high", "urgent") are only valid in the X-Priority header.
+    const int priority = [&]() -> int {
         switch (req.level) {
             case NotifLevel::Warning:
-                return "default";
+                return 3; // default
             case NotifLevel::Alert:
-                return "high";
+                return 4; // high
             case NotifLevel::Critical:
-                return "urgent";
+                return 5; // urgent
             default:
-                return "low";
+                return 2; // low
         }
     }();
 
@@ -46,18 +53,24 @@ void NtfyProvider::send(const NotificationRequest& req, std::function<void(bool,
     body["message"] = req.message;
     body["priority"] = priority;
 
-    // If token is set, we'd normally add an Authorization header.
-    // HttpClient doesn't support per-request headers yet, so we embed
-    // token as a query param (ntfy supports ?auth=<base64>).
-    const QString final_url = token_.isEmpty() ? url : url + "?auth=" + QString(token_.toUtf8().toBase64());
+    // An access token goes in "Authorization: Bearer <token>" (per-request header,
+    // never the URL). The previous "?auth=" query param carried base64(token) —
+    // ntfy expects base64 of the *whole* header value there, so it was rejected
+    // as well as being a secret in the URL.
+    HttpClient::Headers headers;
+    if (!token_.isEmpty())
+        headers.insert("Authorization", QByteArray("Bearer ") + token_.toUtf8());
 
-    HttpClient::instance().post(final_url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        cb(true, {});
-    });
+    HttpClient::instance().post(
+        url, body,
+        [cb](Result<QJsonDocument> res) {
+            if (res.is_err()) {
+                cb(false, QString::fromStdString(res.error()));
+                return;
+            }
+            cb(true, {});
+        },
+        nullptr, headers);
 }
 
 } // namespace fincept::notifications

@@ -25,6 +25,10 @@ inline int effective_ttl_ms(const TopicStateT& st) {
     return st.ttl_override_ms > 0 ? st.ttl_override_ms : st.policy.ttl_ms;
 }
 
+// Set by DataHub::unsubscribe(owner) around its call into on_owner_destroyed().
+// thread_local: unsubscribe() may be called from any thread.
+thread_local bool g_datahub_explicit_unsubscribe = false;
+
 // Phase 8 / decision 9.2: walk up from the owner to its top-level widget
 // and read the `fincept.active_for_work` dynamic property that WindowFrame
 // sets in its constructor + changeEvent. If the owner is not a QWidget or
@@ -170,79 +174,76 @@ void DataHub::rebuild_pattern_index() {
 // ── Subscription ───────────────────────────────────────────────────────────
 
 void DataHub::on_owner_destroyed(QObject* owner) {
-    // Note: owner is being destroyed, do NOT dereference it as QObject*.
-    // We only use the pointer value as a map key.
+    // Two callers reach this function, and they need different matching rules:
+    //
+    //  * unsubscribe(owner) — the owner is ALIVE, so its entries are the ones whose
+    //    QPointer still equals `owner`.
+    //  * the queued QObject::destroyed connection — by the time it runs the owner is
+    //    gone, so every QPointer that referred to it is already NULL. Matching on
+    //    `s.owner.data() == owner` therefore never removed anything: the dead owner's
+    //    Subscription objects (and their captured slots) stayed in the buckets
+    //    forever, the bucket never emptied so `topic_idle` never fired, and the
+    //    scheduler kept refreshing the topic for a subscriber that no longer exists.
+    //    Worse, the pointer VALUE may already belong to a new object (allocators
+    //    reuse freed addresses), whose live subscriptions must not be removed.
+    //
+    // So: a null owner is always stale; a pointer-equal owner is removed only on the
+    // explicit path.
+    const bool owner_alive = g_datahub_explicit_unsubscribe;
+    auto is_stale = [owner, owner_alive](const QPointer<QObject>& p) {
+        return !p || (owner_alive && p.data() == owner);
+    };
+
+    // Drops `owner`'s stale entries from every bucket it registered in and returns
+    // the keys of buckets that became empty. On the destroyed path the owner's
+    // bookkeeping entry is kept for any key where a live object with the same
+    // address has since subscribed.
+    auto purge = [&](auto& buckets, auto& owner_map) {
+        QStringList emptied;
+        auto oit = owner_map.find(owner);
+        if (oit == owner_map.end())
+            return emptied;
+        QSet<QString> keep;
+        for (const QString& key : oit.value()) {
+            auto bit = buckets.find(key);
+            if (bit == buckets.end())
+                continue;
+            auto& vec = bit.value();
+            vec.erase(std::remove_if(vec.begin(), vec.end(), [&](const auto& s) { return is_stale(s.owner); }),
+                      vec.end());
+            if (!owner_alive && std::any_of(vec.begin(), vec.end(),
+                                            [owner](const auto& s) { return s.owner.data() == owner; }))
+                keep.insert(key);
+            if (vec.isEmpty()) {
+                buckets.erase(bit);
+                emptied.append(key);
+            }
+        }
+        if (keep.isEmpty())
+            owner_map.erase(oit);
+        else
+            oit.value() = keep;
+        return emptied;
+    };
+
     QStringList newly_idle; // emitted outside the lock at the end
     {
         QMutexLocker lock(&mutex_);
 
-        // Gap 1 fix: also drop owner from the per-topic error map. Done
+        // Gap 1 fix: also drop owner from the per-topic error maps. Done
         // first because the data unsubscribe path uses the same maps for
         // bookkeeping cleanup.
-        if (auto eit = error_owner_topics_.find(owner); eit != error_owner_topics_.end()) {
-            for (const auto& topic : eit.value()) {
-                auto bucket = error_subscriptions_.find(topic);
-                if (bucket == error_subscriptions_.end())
-                    continue;
-                bucket.value().erase(std::remove_if(bucket.value().begin(), bucket.value().end(),
-                                                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
-                                     bucket.value().end());
-                if (bucket.value().isEmpty())
-                    error_subscriptions_.erase(bucket);
-            }
-            error_owner_topics_.erase(eit);
-        }
-        if (auto epit = error_owner_patterns_.find(owner); epit != error_owner_patterns_.end()) {
-            for (const auto& pattern : epit.value()) {
-                auto bucket = error_pattern_subscriptions_.find(pattern);
-                if (bucket == error_pattern_subscriptions_.end())
-                    continue;
-                bucket.value().erase(std::remove_if(bucket.value().begin(), bucket.value().end(),
-                                                    [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
-                                     bucket.value().end());
-                if (bucket.value().isEmpty())
-                    error_pattern_subscriptions_.erase(bucket);
-            }
-            error_owner_patterns_.erase(epit);
+        purge(error_subscriptions_, error_owner_topics_);
+        purge(error_pattern_subscriptions_, error_owner_patterns_);
+
+        newly_idle = purge(subscriptions_, owner_topics_);
+        for (const auto& topic : newly_idle) {
+            // Topic just went idle — drop cached state if policy opted in.
+            if (auto ts_it = topics_.find(topic); ts_it != topics_.end() && ts_it->policy.drop_on_idle)
+                topics_.erase(ts_it);
         }
 
-        auto topics_it = owner_topics_.find(owner);
-        if (topics_it != owner_topics_.end()) {
-            for (const auto& topic : topics_it.value()) {
-                auto sub_it = subscriptions_.find(topic);
-                if (sub_it == subscriptions_.end())
-                    continue;
-                auto& vec = sub_it.value();
-                vec.erase(std::remove_if(vec.begin(), vec.end(),
-                                         [owner](const Subscription& s) { return s.owner.data() == owner; }),
-                          vec.end());
-                if (vec.isEmpty()) {
-                    subscriptions_.erase(sub_it);
-                    // Topic just went idle — drop cached state if policy opted in.
-                    if (auto ts_it = topics_.find(topic); ts_it != topics_.end() && ts_it->policy.drop_on_idle) {
-                        topics_.erase(ts_it);
-                    }
-                    newly_idle.append(topic);
-                }
-            }
-            owner_topics_.erase(topics_it);
-        }
-
-        auto pats_it = owner_patterns_.find(owner);
-        if (pats_it != owner_patterns_.end()) {
-            for (const auto& pattern : pats_it.value()) {
-                auto sub_it = pattern_subscriptions_.find(pattern);
-                if (sub_it == pattern_subscriptions_.end())
-                    continue;
-                auto& vec = sub_it.value();
-                vec.erase(std::remove_if(vec.begin(), vec.end(),
-                                         [owner](const Subscription& s) { return s.owner.data() == owner; }),
-                          vec.end());
-                if (vec.isEmpty())
-                    pattern_subscriptions_.erase(sub_it);
-            }
-            owner_patterns_.erase(pats_it);
-        }
+        purge(pattern_subscriptions_, owner_patterns_);
 
         // Gap 4 fix: any topics that just lost their final subscriber must
         // also be removed from coalesce_pending_ — otherwise we'd dispatch
@@ -401,7 +402,12 @@ QMetaObject::Connection DataHub::subscribe_pattern(QObject* owner, const QString
 }
 
 void DataHub::unsubscribe(QObject* owner) {
+    // Explicit removal of a LIVE owner: match its entries by identity (see
+    // on_owner_destroyed for why the destroyed path cannot).
+    const bool prev = g_datahub_explicit_unsubscribe;
+    g_datahub_explicit_unsubscribe = true;
     on_owner_destroyed(owner);
+    g_datahub_explicit_unsubscribe = prev;
 }
 
 void DataHub::unsubscribe(QObject* owner, const QString& topic) {
@@ -1027,6 +1033,11 @@ void DataHub::scheduler_body() {
             const QString& topic = it.key();
             if (it.value().isEmpty())
                 continue;
+            // A destroyed owner leaves a null QPointer until its cleanup runs; a
+            // topic watched only by such ghosts must not be polled.
+            const auto& subs = it.value();
+            if (std::none_of(subs.cbegin(), subs.cend(), [](const Subscription& s) { return !s.owner.isNull(); }))
+                continue;
 
             auto& st = state_for(topic);
             if (st.policy.push_only)
@@ -1220,8 +1231,11 @@ QVector<TopicStats> DataHub::stats() const {
         s.in_flight = it->in_flight;
         s.push_only = it->policy.push_only;
         s.last_error = it->last_error;
-        if (auto sub_it = subscriptions_.find(it.key()); sub_it != subscriptions_.end())
-            s.subscriber_count = sub_it.value().size();
+        if (auto sub_it = subscriptions_.find(it.key()); sub_it != subscriptions_.end()) {
+            for (const auto& sub : sub_it.value())
+                if (sub.owner)
+                    ++s.subscriber_count; // ghosts of destroyed owners are not subscribers
+        }
         out.append(std::move(s));
     }
     std::sort(out.begin(), out.end(), [](const TopicStats& a, const TopicStats& b) { return a.topic < b.topic; });

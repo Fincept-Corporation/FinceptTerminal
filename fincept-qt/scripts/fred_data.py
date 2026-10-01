@@ -10,6 +10,7 @@ Optimized with concurrent fetching for multiple series
 import sys
 import json
 import os
+import re
 import requests
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -22,6 +23,13 @@ FRED_API_KEY = os.environ.get('FRED_API_KEY', '')  # API key from environment va
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
 session.mount('https://', adapter)
+
+
+def _redact_key(message: Any) -> str:
+    """Mask the API key that requests echoes back in HTTPError text
+    ("... for url: https://api.stlouisfed.org/...&api_key=<KEY>&...") so it never
+    reaches the UI or the logs."""
+    return re.sub(r'(api_key=)[^&\s]+', r'\1***', str(message))
 
 
 def make_fred_request(endpoint: str, params: Dict[str, Any]) -> Dict:
@@ -57,11 +65,11 @@ def make_fred_request(endpoint: str, params: Dict[str, Any]) -> Dict:
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
-        return {"error": str(e), "error_code": "HTTP_ERROR"}
+        return {"error": _redact_key(e), "error_code": "HTTP_ERROR"}
     except requests.exceptions.Timeout:
         return {"error": "FRED request timed out.", "error_code": "TIMEOUT"}
     except requests.exceptions.RequestException as e:
-        return {"error": str(e), "error_code": "REQUEST_FAILED"}
+        return {"error": _redact_key(e), "error_code": "REQUEST_FAILED"}
 
 
 def get_series(series_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None,

@@ -55,9 +55,12 @@ class TickerBar : public QWidget {
   signals:
     /// Emitted when the user saves a new symbol list — caller should re-fetch.
     void symbols_changed(const QStringList& symbols);
+    /// Emitted when the user double-clicks a symbol in the scrolling strip.
+    void symbol_activated(const QString& symbol);
 
   protected:
     void paintEvent(QPaintEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;

@@ -1,6 +1,6 @@
 > [!IMPORTANT]
 > ## 🔒 Fincept Terminal **Enterprise** — the private edition is now available.
-> RealTime data · Multi-agent AI research · Live broker, Backtest & Algo execution · Priority support
+> RealTime data · Multi-agent AI research · Live broker, Backtest & Algo execution · Priority support ·
 > Equity Research · Portfolio Management · Financial Workflows · Quant Research Lab · Maritime · Geopolitics
 >
 > | Plan | Price |

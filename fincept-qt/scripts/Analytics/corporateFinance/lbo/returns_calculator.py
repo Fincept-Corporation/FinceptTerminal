@@ -94,11 +94,50 @@ class ReturnsCalculator:
             'excess_moic': returns['moic'] - ((1 + hurdle_irr) ** returns['holding_period_years'])
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `returns_calculator.py <command> <flat-params-json>` (argv length 3). The native
+# form is `returns entry_valuation exit_valuation equity_invested holding_period`, so a service-style call is
+# translated here and then falls through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    entry = _svc_num(p, "entry_valuation", "entry_ev", default=0.0)
+    exit_value = _svc_num(p, "exit_valuation", "exit_ev", default=0.0)
+    equity = _svc_num(p, "equity_invested", default=0.0)
+    hold = int(_svc_num(p, "holding_period", "hold_years", default=5.0))
+    # The native CLI treats the exit figure as EXIT EQUITY. The panel supplies an enterprise value plus the
+    # debt used at entry, so net the debt off (no paydown is modelled here; use the LBO Model tab for that).
+    debt = (_svc_num(p, "senior_debt", default=0.0) + _svc_num(p, "sub_debt", default=0.0)
+            + _svc_num(p, "debt", default=0.0))
+    exit_equity = max(exit_value - debt, 0.0) if debt > 0 else exit_value
+    return [argv[0], "returns", repr(entry), repr(exit_equity), repr(equity), str(max(hold, 1))]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

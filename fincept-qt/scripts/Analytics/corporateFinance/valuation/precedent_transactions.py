@@ -332,10 +332,86 @@ class PrecedentTransactionAnalyzer:
             'premium_dollars': implied_price_per_share - current_price
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `precedent_transactions.py calculate <flat-params-json>` (argv length 3), with only
+# the target's financials. The native `precedent <target> <comps>` form needs the comparable deals up front, so a
+# service-style call resolves them itself: explicit `comparables` if given, otherwise the completed deals already in
+# the local deal database. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+
+
+def _svc_comp_from_deal(deal):
+    """Map a MADeal-shaped dict to a TransactionComp (same mapping as the native `precedent` command)."""
+    ev = deal.get('deal_value', 0) or 0
+    revenue = deal.get('revenue', 0) or 0
+    ebitda = deal.get('ebitda', 0) or 0
+    return TransactionComp(
+        deal_id=deal.get('deal_id', ''),
+        announcement_date=deal.get('announcement_date', deal.get('announced_date', '')),
+        acquirer_name=deal.get('acquirer_name', deal.get('acquirer', 'Unknown')),
+        target_name=deal.get('target_name', deal.get('target', 'Unknown')),
+        deal_value=ev,
+        enterprise_value=deal.get('enterprise_value', ev),
+        revenue=revenue,
+        ebitda=ebitda,
+        ev_revenue=deal.get('ev_revenue', 0) or (ev / revenue if revenue else 0),
+        ev_ebitda=deal.get('ev_ebitda', 0) or (ev / ebitda if ebitda else 0),
+        ev_ebit=deal.get('ev_ebit', 0),
+        price_earnings=deal.get('price_earnings', deal.get('pe', 0)) or 0,
+        premium_1day=deal.get('premium_1day', deal.get('premium', 0)),
+        premium_4week=deal.get('premium_4week', 0),
+        payment_method=deal.get('payment_method', deal.get('payment', '')),
+        deal_status=deal.get('deal_status', deal.get('status', '')),
+    )
+
+
+def _service_dispatch(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return False
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return False
+    if not isinstance(p, dict):
+        return False
+    try:
+        target = {k: p[k] for k in ("revenue", "ebitda", "ebit", "net_income", "industry", "deal_value",
+                                    "enterprise_value") if p.get(k) is not None}
+        # panel keys
+        if "target_revenue" in p:
+            target["revenue"] = p["target_revenue"]
+        if "target_ebitda" in p:
+            target["ebitda"] = p["target_ebitda"]
+        analyzer = PrecedentTransactionAnalyzer()
+        given = p.get("comparables", p.get("comps"))
+        if isinstance(given, list) and given:
+            comps = [_svc_comp_from_deal(d) if isinstance(d, dict) else d for d in given]
+        else:
+            # find_comparables() filters `industry = <target industry>` even when it is None (matches nothing);
+            # drop unset filters so a target with no industry searches every completed deal.
+            original_search = analyzer.db.search_deals
+            analyzer.db.search_deals = lambda filters: original_search({k: v for k, v in filters.items() if v is not None})
+            criteria = {"years_back": int(p.get("years_back", 5)), "status": p.get("status", "Completed")}
+            comps = analyzer.find_comparables(target, criteria)
+        if not comps:
+            raise ValueError("No comparable completed deals found in the local deal database. Run SCAN SEC FILINGS "
+                             "in the Deal Database tab (or add deals) first, or supply `comparables`.")
+        table = analyzer.build_comp_table(comps, target)
+        print(json.dumps({"success": True, "data": table}, default=str))
+    except Exception as e:
+        print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
+        sys.exit(1)
+    return True
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    if _service_dispatch(sys.argv):
+        return
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified. Usage: precedent_transactions.py <command> [args...]"}
         print(json.dumps(result))

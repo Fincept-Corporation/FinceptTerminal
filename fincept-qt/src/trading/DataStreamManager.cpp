@@ -30,6 +30,18 @@ bool is_daily_expiring_broker(const QString& broker_id) {
 // Hourly cadence is enough to catch the 3:00 AM IST window without polling
 // the clock aggressively.
 constexpr int DSM_EXPIRY_CHECK_MS = 60 * 60 * 1000;
+
+// Per-(account, channel) floors between hub-driven fetches. Positions / orders /
+// quotes are what users watch tick over; holdings and balance move slowly.
+constexpr qint64 DSM_REFRESH_FLOOR_FAST_MS = 3000;
+constexpr qint64 DSM_REFRESH_FLOOR_SLOW_MS = 10000;
+
+// "<account_id>|<channel>" -> wall-clock ms of the last hub-driven fetch. Touched
+// only from DataStreamManager::refresh(), which the hub invokes on the main thread.
+QHash<QString, qint64>& dsm_last_channel_refresh() {
+    static QHash<QString, qint64> last;
+    return last;
+}
 } // namespace
 
 DataStreamManager& DataStreamManager::instance() {
@@ -140,8 +152,18 @@ void DataStreamManager::restart_stream(const QString& account_id) {
     // caches the access token at construction); start_stream() then rebuilds it so
     // ws_init() reloads the latest credentials from AccountManager. If no stream
     // exists yet, stop_stream() is a no-op and start_stream() creates a fresh one.
+    //
+    // The old stream's subscriptions (consumer symbol sets, active-feed sets, the
+    // selected symbol) live only on that object, so carry them onto the new one —
+    // stop_stream() only deleteLater()s, so `previous` stays valid for this call.
+    QPointer<AccountDataStream> previous = stream_for(account_id);
     stop_stream(account_id);
     start_stream(account_id);
+    if (previous) {
+        if (auto* fresh = stream_for(account_id))
+            fresh->adopt_subscriptions(*previous);
+    }
+    emit stream_restarted(account_id);
 }
 
 void DataStreamManager::start_all_active() {
@@ -203,6 +225,12 @@ void DataStreamManager::wire_stream_signals(AccountDataStream* stream) {
                 AccountManager::instance().set_connection_state(account_id, state);
             });
     connect(stream, &AccountDataStream::token_expired, this, &DataStreamManager::token_expired);
+    // Symbol-tagged twins + the auction / condition-code results (additive relays).
+    connect(stream, &AccountDataStream::orderbook_for_symbol, this, &DataStreamManager::orderbook_for_symbol);
+    connect(stream, &AccountDataStream::time_sales_for_symbol, this, &DataStreamManager::time_sales_for_symbol);
+    connect(stream, &AccountDataStream::latest_trade_for_symbol, this, &DataStreamManager::latest_trade_for_symbol);
+    connect(stream, &AccountDataStream::auctions_fetched, this, &DataStreamManager::auctions_fetched);
+    connect(stream, &AccountDataStream::condition_codes_fetched, this, &DataStreamManager::condition_codes_fetched);
 
     // Dual-fire: publish the same per-account data onto hub topics so
     // consumers subscribed to broker:<id>:<account>:<channel> see it.
@@ -228,21 +256,47 @@ QStringList DataStreamManager::topic_patterns() const {
 }
 
 void DataStreamManager::refresh(const QStringList& topics) {
-    // AccountDataStream's portfolio_timer already polls positions /
-    // orders / funds every 3s while a stream is running — short enough
-    // that hub refresh() can stay advisory. Just log + validate.
-    // Per-broker BrokerProducer subclasses (follow-up PRs per Phase 7
-    // plan) can override and trigger explicit fetches when needed.
+    // This used to be advisory ("the stream polls every 3 s anyway") — but the
+    // streams' own portfolio / quote timers run on a 5-MINUTE cadence, so a forced
+    // hub request (a widget's refresh button, a cold-start fetch) did nothing for
+    // up to five minutes. Serve it for real: ask the owning stream to pull exactly
+    // the requested channel now.
+    //
+    // Broker REST limits are respected two ways: the hub paces refresh() calls to
+    // max_requests_per_sec(), and each (account, channel) is additionally floored
+    // here so a burst of topics / repeated clicks collapses into one fetch.
+    // Hub refresh() runs on the main thread, like every other member of this class.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
     for (const auto& topic : topics) {
+        // broker:<broker_id>:<account_id>:<channel>[:<symbol>]
         const QStringList parts = topic.split(QLatin1Char(':'));
         if (parts.size() < 4) {
             LOG_DEBUG(DSM_TAG, "refresh: ignoring malformed topic: " + topic);
             continue;
         }
-        const QString channel = parts[3];
+        const QString& account_id = parts[2];
+        const QString& channel = parts[3];
         if (channel == QLatin1String("ticks"))
             continue; // push-only
-        LOG_DEBUG(DSM_TAG, "refresh advisory (timer-driven): " + topic);
+
+        auto* stream = stream_for(account_id);
+        if (!stream) {
+            LOG_DEBUG(DSM_TAG, "refresh: no stream for " + topic);
+            continue;
+        }
+
+        // Holdings / balance change slowly; positions / orders / quotes are the ones
+        // users watch tick over.
+        const qint64 floor_ms = (channel == QLatin1String("holdings") || channel == QLatin1String("balance"))
+                                    ? DSM_REFRESH_FLOOR_SLOW_MS
+                                    : DSM_REFRESH_FLOOR_FAST_MS;
+        qint64& last = dsm_last_channel_refresh()[account_id + QLatin1Char('|') + channel];
+        if (last != 0 && now - last < floor_ms) {
+            LOG_DEBUG(DSM_TAG, "refresh: throttled " + topic);
+            continue;
+        }
+        last = now;
+        stream->refresh_channel(channel);
     }
 }
 

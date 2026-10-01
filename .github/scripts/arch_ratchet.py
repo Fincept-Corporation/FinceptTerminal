@@ -128,6 +128,14 @@ def scan_file(path: Path) -> tuple[int, int, list[tuple[int, str]]]:
 
 
 def main() -> int:
+    # The report prints "→"; a Windows console defaults to cp1252 and would
+    # raise UnicodeEncodeError instead of showing which ratchet rose.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="fincept-qt/src")
     ap.add_argument("--update-baseline", action="store_true")

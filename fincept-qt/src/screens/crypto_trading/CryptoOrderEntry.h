@@ -19,6 +19,9 @@ class CryptoOrderEntry : public QWidget {
 
     void set_balance(double balance);
     void set_current_price(double price);
+    /// Load a price into the ticket's limit-price box (order-book click). A plain
+    /// MARKET / STOP ticket is promoted to LIMIT / STOP-LMT so the price is shown.
+    void set_limit_price(double price);
     void set_mode(bool is_paper);
     void set_symbol(const QString& symbol);
     void set_futures_mode(bool is_futures); // show/hide leverage + margin controls

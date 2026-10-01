@@ -1,6 +1,7 @@
 #include "trading/brokers/paytm/PaytmBroker.h"
 
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/instruments/InstrumentService.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -174,9 +175,22 @@ TokenExchangeResponse PaytmBroker::exchange_token(const QString& api_key, const 
 // POST /orders/v1/place/regular  (JSON, x-jwt-token)
 
 OrderPlaceResponse PaytmBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
-    // Paytm needs the numeric security_id; the instrument token rides in
-    // UnifiedOrder::instrument_token when known, else fall back to symbol.
-    const QString security_id = order.instrument_token.isEmpty() ? order.symbol : order.instrument_token;
+    // Paytm needs the numeric security_id. It rides in UnifiedOrder::instrument_token when the
+    // F&O chain filled it; the equity ticket does not, so resolve it from the instrument master.
+    // The old fallback sent the trading SYMBOL as security_id, which can never match a contract.
+    QString security_id = order.instrument_token;
+    if (security_id.isEmpty() || security_id == QLatin1String("0")) {
+        security_id.clear();
+        const auto inst =
+            InstrumentService::instance().find(order.symbol, order.exchange, QStringLiteral("paytm"));
+        if (inst.has_value())
+            security_id = inst->broker_token.isEmpty() ? QString::number(static_cast<qlonglong>(inst->instrument_token))
+                                                       : inst->broker_token;
+    }
+    if (security_id.isEmpty())
+        return {false, "",
+                "Paytm place_order: security_id not found for " + order.exchange + ":" + order.symbol +
+                    " (instrument master not loaded yet?)"};
     const QString segment = (order.exchange == "NSE" || order.exchange == "BSE") ? "E" : "D";
     QString api_exchange = order.exchange;
     if (api_exchange == "NFO")
@@ -352,6 +366,10 @@ ApiResponse<QVector<BrokerOrderInfo>> PaytmBroker::get_orders(const BrokerCreden
 
     QJsonObject obj = doc.object();
     if (obj.value("status").toString() != "success") {
+        // A dead session also answers with an empty `data`; say so before the empty-state shortcut
+        // below can pass it off as "no orders" (and hide the expiry from the session sweep).
+        if (is_token_expired(resp))
+            return {false, std::nullopt, checked_error(resp, "get_orders failed"), ts};
         // No orders is a non-error empty state for Paytm.
         if (obj.value("data").toArray().isEmpty())
             return {true, QVector<BrokerOrderInfo>{}, "", ts};
@@ -418,6 +436,8 @@ ApiResponse<QVector<BrokerPosition>> PaytmBroker::get_positions(const BrokerCred
 
     QJsonObject obj = doc.object();
     if (obj.value("status").toString() != "success") {
+        if (is_token_expired(resp)) // see get_orders: an expired session must not read as "no positions"
+            return {false, std::nullopt, checked_error(resp, "get_positions failed"), ts};
         if (obj.value("data").toArray().isEmpty())
             return {true, QVector<BrokerPosition>{}, "", ts};
         return {false, std::nullopt, checked_error(resp, "get_positions failed"), ts};
@@ -464,6 +484,8 @@ ApiResponse<QVector<BrokerHolding>> PaytmBroker::get_holdings(const BrokerCreden
 
     QJsonObject obj = doc.object();
     if (obj.value("status").toString() != "success") {
+        if (is_token_expired(resp)) // see get_orders: an expired session must not read as "no holdings"
+            return {false, std::nullopt, checked_error(resp, "get_holdings failed"), ts};
         if (obj.value("data").toObject().value("results").toArray().isEmpty())
             return {true, QVector<BrokerHolding>{}, "", ts};
         return {false, std::nullopt, checked_error(resp, "get_holdings failed"), ts};

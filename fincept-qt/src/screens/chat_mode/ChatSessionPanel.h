@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QSet>
 #include <QWidget>
 
 namespace fincept::chat_mode {
@@ -56,6 +57,9 @@ class ChatSessionPanel : public QWidget {
 
     QString active_uuid_;
     QVector<ChatSession> sessions_;
+    // Sessions that contain a message matching the current server-side search; they are
+    // listed (and highlighted) even when their TITLE doesn't match the typed text.
+    QSet<QString> search_hits_;
     ChatStats last_stats_{};
 
     void build_ui();

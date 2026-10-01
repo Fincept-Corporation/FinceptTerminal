@@ -2,6 +2,7 @@
 #include "screens/portfolio/views/CustomIndexView.h"
 
 #include "core/logging/Logger.h"
+#include "services/portfolio/PortfolioService.h"
 #include "ui/theme/Theme.h"
 
 #define QT_CHARTS_USE_NAMESPACE
@@ -298,7 +299,9 @@ void CustomIndexView::set_data(const portfolio::PortfolioSummary& summary, const
     summary_ = summary;
     currency_ = currency;
     update_constituents();
-    load_indices(); // refresh with latest portfolio prices
+    // PortfolioService records each index's level on every summary refresh
+    // (before it emits the summary), so this reads current values.
+    load_indices();
 }
 
 void CustomIndexView::update_constituents() {
@@ -635,67 +638,10 @@ void CustomIndexView::retranslateUi() {
 // ── Index value computation ───────────────────────────────────────────────────
 
 double CustomIndexView::compute_index_value(const CustomIndex& idx) const {
-    if (idx.constituents.isEmpty())
-        return idx.base_value;
-
-    // Build a map from symbol → current price from live holdings
-    QHash<QString, double> price_map;
-    for (const auto& h : summary_.holdings) {
-        price_map[h.symbol] = h.current_price;
-    }
-
-    const int n = idx.constituents.size();
-    const QString method = idx.method;
-
-    if (method == "Price Weighted") {
-        // Sum of current prices / sum of creation prices * base
-        double sum_cur = 0.0;
-        double sum_base = 0.0;
-        for (const auto& c : idx.constituents) {
-            const double cur = price_map.value(c.symbol, c.price_at_create);
-            sum_cur += cur;
-            sum_base += c.price_at_create;
-        }
-        return sum_base > 0.0 ? (sum_cur / sum_base * idx.base_value) : idx.base_value;
-
-    } else if (method == "Equal Weighted") {
-        double ratio_sum = 0.0;
-        for (const auto& c : idx.constituents) {
-            if (c.price_at_create > 0.0) {
-                const double cur = price_map.value(c.symbol, c.price_at_create);
-                ratio_sum += cur / c.price_at_create;
-            }
-        }
-        return (ratio_sum / n) * idx.base_value;
-
-    } else if (method == "Geometric Mean") {
-        double log_sum = 0.0;
-        int valid = 0;
-        for (const auto& c : idx.constituents) {
-            if (c.price_at_create > 0.0) {
-                const double cur = price_map.value(c.symbol, c.price_at_create);
-                if (cur > 0.0) {
-                    log_sum += std::log(cur / c.price_at_create);
-                    ++valid;
-                }
-            }
-        }
-        return valid > 0 ? (std::exp(log_sum / valid) * idx.base_value) : idx.base_value;
-
-    } else {
-        // Market Cap Weighted / Float Adjusted / Fundamental / Modified / Factor / Risk Parity / Capped
-        // All fall back to weight-based: sum(weight_i * price_ratio_i) * base
-        double weighted_ratio = 0.0;
-        double total_weight = 0.0;
-        for (const auto& c : idx.constituents) {
-            if (c.price_at_create > 0.0 && c.weight > 0.0) {
-                const double cur = price_map.value(c.symbol, c.price_at_create);
-                weighted_ratio += c.weight * (cur / c.price_at_create);
-                total_weight += c.weight;
-            }
-        }
-        return total_weight > 0.0 ? (weighted_ratio / total_weight * idx.base_value) : idx.base_value;
-    }
+    // The maths lives in PortfolioService so the per-refresh recorder (which
+    // keeps the index history growing even when this view is closed) and the
+    // creation path always agree on the level.
+    return services::PortfolioService::compute_custom_index_value(idx, summary_);
 }
 
 } // namespace fincept::screens

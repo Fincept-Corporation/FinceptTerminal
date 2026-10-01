@@ -170,6 +170,8 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
         const QString display = labels.value(q.symbol, q.symbol);
         if (c.name->text() != display)
             c.name->setText(display);
+        // Double-click a tile to open the sector ETF in Equity Research.
+        link_symbol(c.frame, q.symbol);
         c.name->setToolTip(QString("%1  (%2)").arg(display, q.symbol));
 
         c.chg->setText(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));

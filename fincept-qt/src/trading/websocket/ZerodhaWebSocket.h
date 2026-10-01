@@ -80,6 +80,9 @@ class ZerodhaWebSocket : public QObject {
     ZerodhaTick parse_ltp_packet(const uchar* data) const;
     ZerodhaTick parse_quote_packet(const uchar* data) const;
     ZerodhaTick parse_full_packet(const uchar* data) const;
+    // 28-byte (quote) / 32-byte (full, + exchange timestamp) INDEX packet. Indices
+    // (NIFTY 50, SENSEX, …) are not tradable and use their own, shorter layout.
+    ZerodhaTick parse_index_packet(const uchar* data, int len) const;
 
     static quint32 read_u32(const uchar* p);
     static qint32 read_i32(const uchar* p);

@@ -26,7 +26,33 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
+#include <cmath>
+
 namespace fincept::screens {
+
+// QString::toDouble() happily parses "nan" and "inf". Both slip straight past the
+// "<= 0" validation in the dialogs below (NaN compares false with everything) and
+// would be written into a position as its quantity/price, poisoning every total.
+// Treat them as unparsable (0), which the existing checks already reject.
+static double dlg_finite_or_zero(double v) {
+    return std::isfinite(v) ? v : 0.0;
+}
+
+// Pre-fill text for an editable number: at least 2 decimals (reads like money) but
+// up to 8, trailing zeros trimmed. The edit dialog used a fixed 'f', 2, so opening a
+// transaction for 0.00123456 BTC showed "0.00" - and saving it (even to fix only the
+// notes) wrote the rounded value back, or was blocked by the "> 0" check.
+static QString dlg_edit_number(double v) {
+    QString s = QString::number(v, 'f', 8);
+    const qsizetype dot = s.indexOf(QLatin1Char('.'));
+    if (dot >= 0) {
+        qsizetype keep = s.size();
+        while (keep > dot + 3 && s[keep - 1] == QLatin1Char('0'))
+            --keep;
+        s.truncate(keep);
+    }
+    return s;
+}
 
 // ── CreatePortfolioDialog ────────────────────────────────────────────────────
 
@@ -581,12 +607,14 @@ bool AddAssetDialog::eventFilter(QObject* obj, QEvent* event) {
     if (obj == symbol_edit_ && event->type() == QEvent::KeyPress) {
         auto* ke = static_cast<QKeyEvent*>(event);
         if (search_frame_->isVisible()) {
-            if (ke->key() == Qt::Key_Down) {
+            // count() > 0: the wrap-around below takes `% count()`, and a result set
+            // whose rows were all skipped (empty symbols) leaves the list empty.
+            if (ke->key() == Qt::Key_Down && search_list_->count() > 0) {
                 const int next = (search_list_->currentRow() + 1) % search_list_->count();
                 search_list_->setCurrentRow(next);
                 return true;
             }
-            if (ke->key() == Qt::Key_Up) {
+            if (ke->key() == Qt::Key_Up && search_list_->count() > 0) {
                 const int prev = (search_list_->currentRow() - 1 + search_list_->count()) % search_list_->count();
                 search_list_->setCurrentRow(prev);
                 return true;
@@ -648,10 +676,10 @@ QString AddAssetDialog::symbol() const {
     return symbol_edit_->text().trimmed().toUpper();
 }
 double AddAssetDialog::quantity() const {
-    return quantity_edit_->text().toDouble();
+    return dlg_finite_or_zero(quantity_edit_->text().toDouble());
 }
 double AddAssetDialog::price() const {
-    return price_edit_->text().toDouble();
+    return dlg_finite_or_zero(price_edit_->text().toDouble());
 }
 
 // ── SellAssetDialog ──────────────────────────────────────────────────────────
@@ -789,10 +817,10 @@ void SellAssetDialog::retranslateUi() {
 }
 
 double SellAssetDialog::quantity() const {
-    return quantity_edit_->text().toDouble();
+    return dlg_finite_or_zero(quantity_edit_->text().toDouble());
 }
 double SellAssetDialog::price() const {
-    return price_edit_->text().toDouble();
+    return dlg_finite_or_zero(price_edit_->text().toDouble());
 }
 
 // ── ImportPortfolioDialog ────────────────────────────────────────────────────
@@ -862,7 +890,7 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
         if (path.isEmpty())
             return;
 
-        QJsonArray holdings;
+        QJsonArray txns;
         struct H {
             const char* symbol;
             double qty;
@@ -883,21 +911,31 @@ ImportPortfolioDialog::ImportPortfolioDialog(const QVector<portfolio::Portfolio>
             {"UNH", 4, 525.60, "Healthcare"},
             {"PG", 12, 158.90, "Consumer Staples"},
         };
+        // The template MUST be the terminal's own export format - 'portfolio_name' plus
+        // a 'transactions' array - because that is all PortfolioService::import_json()
+        // accepts. This used to write a holdings-only file ('name' + 'holdings'), which
+        // the importer rejects outright ("Holdings-only snapshots are not supported"),
+        // so the template offered right here could never be imported. Each holding
+        // becomes a BUY a year ago (which also gives the charts a year of history to
+        // backfill); the per-transaction 'sector' is honoured by the importer.
+        const QString buy_date = QDate::currentDate().addYears(-1).toString("yyyy-MM-dd");
         for (const auto& h : demo) {
             QJsonObject o;
+            o["date"] = buy_date;
             o["symbol"] = h.symbol;
+            o["type"] = "BUY";
             o["quantity"] = h.qty;
-            o["avg_buy_price"] = h.price;
+            o["price"] = h.price;
             o["sector"] = h.sector;
-            holdings.append(o);
+            txns.append(o);
         }
 
         QJsonObject root;
-        root["name"] = "Demo Portfolio";
+        root["format_version"] = "1.0";
+        root["portfolio_name"] = "Demo Portfolio";
         root["owner"] = "Fincept User";
         root["currency"] = "USD";
-        root["description"] = "Sample portfolio for demonstration";
-        root["holdings"] = holdings;
+        root["transactions"] = txns;
 
         QFile f(path);
         if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -1067,11 +1105,11 @@ EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, 
     auto* form = new QFormLayout;
     form->setSpacing(8);
 
-    quantity_edit_ = new QLineEdit(QString::number(txn.quantity, 'f', 2));
+    quantity_edit_ = new QLineEdit(dlg_edit_number(txn.quantity));
     quantity_row_label_ = new QLabel(tr("Quantity:"));
     form->addRow(quantity_row_label_, quantity_edit_);
 
-    price_edit_ = new QLineEdit(QString::number(txn.price, 'f', 2));
+    price_edit_ = new QLineEdit(dlg_edit_number(txn.price));
     price_row_label_ = new QLabel(tr("Price:"));
     form->addRow(price_row_label_, price_edit_);
 
@@ -1183,10 +1221,10 @@ void EditTransactionDialog::retranslateUi() {
 }
 
 double EditTransactionDialog::quantity() const {
-    return quantity_edit_->text().toDouble();
+    return dlg_finite_or_zero(quantity_edit_->text().toDouble());
 }
 double EditTransactionDialog::price() const {
-    return price_edit_->text().toDouble();
+    return dlg_finite_or_zero(price_edit_->text().toDouble());
 }
 QString EditTransactionDialog::date() const {
     return date_edit_->date().toString("yyyy-MM-dd");
@@ -1456,7 +1494,7 @@ QString AddDividendDialog::symbol() const {
 }
 
 double AddDividendDialog::amount_per_share() const {
-    return amount_edit_->text().trimmed().toDouble();
+    return dlg_finite_or_zero(amount_edit_->text().trimmed().toDouble());
 }
 
 QString AddDividendDialog::date() const {

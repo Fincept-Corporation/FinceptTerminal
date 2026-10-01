@@ -588,6 +588,8 @@ ApiResponse<QVector<BrokerCandle>> SamcoBroker::get_history(const BrokerCredenti
         QDateTime dt = QDateTime::fromString(date_str, "yyyy-MM-dd HH:mm:ss");
         if (!dt.isValid())
             dt = QDateTime(QDate::fromString(date_str.left(10), "yyyy-MM-dd"), QTime(0, 0, 0));
+        if (dt.isValid())
+            dt.setTimeZone(ist_zone()); // Samco bar times are IST wall-clock, not machine-local
         c.timestamp = dt.isValid() ? dt.toSecsSinceEpoch() * 1000LL : 0LL;
         c.open = samco_d(o.value("open"));
         c.high = samco_d(o.value("high"));

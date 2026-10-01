@@ -43,6 +43,11 @@ static QString instrument_key(const QString& symbol, const QString& exchange, co
     if (!broker_id.isEmpty() && InstrumentService::instance().is_loaded(broker_id)) {
         auto opt = InstrumentService::instance().find(symbol, exchange, broker_id);
         if (opt) {
+            // The master row's native key ("NSE_EQ|INE002A01018", "NSE_FO|45450") lives in
+            // broker_token; instrument_token is only an FNV hash of it (stable_token), and
+            // "NSE_EQ|<hash>" is not an instrument Upstox can resolve.
+            if (!opt->broker_token.isEmpty())
+                return opt->broker_token;
             return seg + "|" + QString::number(static_cast<qlonglong>(opt->instrument_token));
         }
     }
@@ -118,6 +123,8 @@ QString UpstoxBroker::checked_error(const BrokerHttpResponse& resp, const QStrin
 
 // ── History interval mapping ──────────────────────────────────────────────────
 // Returns {unit, interval_str, max_days_per_chunk}
+// Upstox v3 historical-candle caps the window per request: minutes 1..15 → 1 month,
+// minutes >15 and hours → 1 quarter, days → 1 decade (weeks/months uncapped).
 struct UpstoxInterval {
     QString unit;
     QString interval;
@@ -127,8 +134,8 @@ static UpstoxInterval upstox_interval(const QString& resolution) {
     static const QMap<QString, UpstoxInterval> map = {
         {"1", {"minutes", "1", 30}},    {"1m", {"minutes", "1", 30}},   {"2", {"minutes", "2", 30}},
         {"2m", {"minutes", "2", 30}},   {"3", {"minutes", "3", 30}},    {"3m", {"minutes", "3", 30}},
-        {"5", {"minutes", "5", 30}},    {"5m", {"minutes", "5", 30}},   {"10", {"minutes", "10", 90}},
-        {"10m", {"minutes", "10", 90}}, {"15", {"minutes", "15", 90}},  {"15m", {"minutes", "15", 90}},
+        {"5", {"minutes", "5", 30}},    {"5m", {"minutes", "5", 30}},   {"10", {"minutes", "10", 30}},
+        {"10m", {"minutes", "10", 30}}, {"15", {"minutes", "15", 30}},  {"15m", {"minutes", "15", 30}},
         {"30", {"minutes", "30", 90}},  {"30m", {"minutes", "30", 90}}, {"60", {"minutes", "60", 90}},
         {"60m", {"minutes", "60", 90}}, {"1h", {"minutes", "60", 90}},  {"2h", {"hours", "2", 90}},
         {"4h", {"hours", "4", 90}},     {"D", {"days", "1", 3650}},     {"1D", {"days", "1", 3650}},
@@ -203,10 +210,9 @@ OrderPlaceResponse UpstoxBroker::place_order(const BrokerCredentials& creds, con
     body["trigger_price"] = order.stop_price;
     body["disclosed_quantity"] = 0;
     body["is_amo"] = order.amo;
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
-    body["tag"] = make_client_order_ref(20); // also visible in order history for reconciliation
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+    body["tag"] = client_order_ref_for(order, 20); // also visible in order history for reconciliation
 
     auto& http = BrokerHttp::instance();
     // v2 order mutations live on the HFT host; api.upstox.com returns 404 for /order/*
@@ -438,7 +444,16 @@ ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_quotes(const BrokerCredentia
     const auto data = resp.json.value("data").toObject();
     for (auto it = data.begin(); it != data.end(); ++it) {
         const auto entry = it.value().toObject();
-        const auto ohlc = entry.value("ohlc").toObject();
+        // v2 carries one `ohlc` object; the v3 OHLC endpoint instead returns `live_ohlc`
+        // (today's bar) and `prev_ohlc` (previous session — its close is the reference
+        // for the day change). Reading only `ohlc` left open/high/low/close at 0 on v3,
+        // which turned `change` into the whole last price.
+        auto ohlc = entry.value("ohlc").toObject();
+        QJsonObject prev_ohlc;
+        if (ohlc.isEmpty()) {
+            ohlc = entry.value("live_ohlc").toObject();
+            prev_ohlc = entry.value("prev_ohlc").toObject();
+        }
 
         BrokerQuote q;
         // Key may arrive as "NSE_EQ|12345" or "NSE_EQ:NHPC" depending on
@@ -457,8 +472,8 @@ ApiResponse<QVector<BrokerQuote>> UpstoxBroker::get_quotes(const BrokerCredentia
         q.open = ohlc.value("open").toDouble();
         q.high = ohlc.value("high").toDouble();
         q.low = ohlc.value("low").toDouble();
-        q.close = ohlc.value("close").toDouble();
-        q.volume = entry.value("volume").toDouble();
+        q.close = prev_ohlc.isEmpty() ? ohlc.value("close").toDouble() : prev_ohlc.value("close").toDouble();
+        q.volume = entry.value("volume").toDouble(ohlc.value("volume").toDouble());
         if (q.close > 0)
             q.change_pct = (q.ltp - q.close) / q.close * 100.0;
         q.change = q.ltp - q.close;

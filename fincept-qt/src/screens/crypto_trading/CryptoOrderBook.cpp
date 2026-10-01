@@ -187,6 +187,58 @@ void CryptoOrderBook::set_data(const QVector<QPair<double, double>>& bids, const
     }
     spread_label_->setText(tr("SPREAD  %1  (%2%)").arg(format_price_plain(spread)).arg(spread_pct, 0, 'f', 4));
     has_spread_data_ = true;
+
+    // Feed the Imb / Sig list views — add_tick_snapshot() had no caller, so both
+    // modes rendered a header row and nothing else. One snapshot per
+    // OB_TICK_CAPTURE_MS from the top-3 levels of each side.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (!bids.isEmpty() && !asks.isEmpty() && now - last_tick_capture_ms_ >= OB_TICK_CAPTURE_MS) {
+        last_tick_capture_ms_ = now;
+        TickSnapshot snap;
+        snap.timestamp = now;
+        snap.best_bid = bids.first().first;
+        snap.best_ask = asks.first().first;
+        double bid_sum = 0.0;
+        double ask_sum = 0.0;
+        for (int i = 0; i < 3; ++i) {
+            snap.bid_qty[i] = i < bids.size() ? bids[i].second : 0.0;
+            snap.ask_qty[i] = i < asks.size() ? asks[i].second : 0.0;
+            bid_sum += snap.bid_qty[i];
+            ask_sum += snap.ask_qty[i];
+        }
+        // (bid - ask) / (bid + ask): +1 all bids, -1 all asks; thresholds in CryptoTypes.h.
+        snap.imbalance = (bid_sum + ask_sum) > 0.0 ? (bid_sum - ask_sum) / (bid_sum + ask_sum) : 0.0;
+        // Mid-price move over the last 60 snapshots (~60 s).
+        const double mid = (snap.best_bid + snap.best_ask) / 2.0;
+        {
+            QMutexLocker lock(&mutex_);
+            if (tick_history_.size() >= 60) {
+                const TickSnapshot& ref = tick_history_[tick_history_.size() - 60];
+                const double ref_mid = (ref.best_bid + ref.best_ask) / 2.0;
+                if (ref_mid > 0.0)
+                    snap.rise_ratio_60 = (mid - ref_mid) / ref_mid;
+            }
+        }
+        add_tick_snapshot(snap);
+    }
+
+    cache_dirty_ = true;
+    if (repaint_timer_ && !repaint_timer_->isActive())
+        repaint_timer_->start();
+}
+
+void CryptoOrderBook::clear() {
+    {
+        QMutexLocker lock(&mutex_);
+        bids_.clear();
+        asks_.clear();
+        tick_history_.clear();
+        spread_ = 0;
+        spread_pct_ = 0;
+    }
+    last_tick_capture_ms_ = 0;
+    has_spread_data_ = false;
+    spread_label_->setText(tr("Spread: --"));
     cache_dirty_ = true;
     if (repaint_timer_ && !repaint_timer_->isActive())
         repaint_timer_->start();
@@ -205,15 +257,28 @@ void CryptoOrderBook::resizeEvent(QResizeEvent* event) {
 }
 
 void CryptoOrderBook::mousePressEvent(QMouseEvent* event) {
-    if (view_mode_ != ObViewMode::Book)
+    // Book and Vol share the same dual-column layout; Imb / Sig are list views.
+    if (view_mode_ != ObViewMode::Book && view_mode_ != ObViewMode::Volume)
         return;
 
     // Calculate which row was clicked in the paint area
+    const int paint_h = height() - HEADER_H - SPREAD_H;
     const int paint_y = event->pos().y() - (HEADER_H + SPREAD_H);
     if (paint_y < 0)
         return;
 
-    const int row = paint_y / ROW_H;
+    // rebuild_cache() paints a column-header row first, then level i of BOTH
+    // sides on row i+1 — bids in the left half, asks in the right half. The
+    // old mapping treated the book as one stacked list (asks reversed, then
+    // bids), so a click landed on a level of the wrong side/depth and the
+    // price handed to the order ticket was not the one under the cursor.
+    const int row = paint_y / ROW_H - 1;
+    if (row < 0 || (row + 1) * ROW_H >= paint_h)
+        return; // header row, or below the last painted row
+    const int half_w = width() / 2;
+    const int x = event->pos().x();
+    if (x == half_w)
+        return; // divider
 
     // Resolve the price under the lock, then RELEASE it before emitting.
     // `price_clicked` runs its receiver synchronously (same thread) and the
@@ -223,19 +288,10 @@ void CryptoOrderBook::mousePressEvent(QMouseEvent* event) {
     double clicked_price = 0.0;
     {
         QMutexLocker lock(&mutex_);
-        const int ask_count = std::min(static_cast<int>(asks_.size()), OB_MAX_DISPLAY_LEVELS);
-        const int bid_count = std::min(static_cast<int>(bids_.size()), OB_MAX_DISPLAY_LEVELS);
-
-        if (row < ask_count) {
-            // Clicked an ask row (displayed in reverse)
-            const int src = ask_count - 1 - row;
-            if (src >= 0 && src < asks_.size())
-                clicked_price = asks_[src].first;
-        } else if (row < ask_count + bid_count) {
-            const int bid_idx = row - ask_count;
-            if (bid_idx >= 0 && bid_idx < bids_.size())
-                clicked_price = bids_[bid_idx].first;
-        }
+        const auto& side = (x < half_w) ? bids_ : asks_;
+        const int count = std::min(static_cast<int>(side.size()), OB_MAX_DISPLAY_LEVELS);
+        if (row < count)
+            clicked_price = side[row].first;
     }
     if (clicked_price > 0.0)
         emit price_clicked(clicked_price);

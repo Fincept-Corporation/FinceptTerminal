@@ -71,6 +71,10 @@ class EvaluationService:
         if not PANDAS_AVAILABLE:
             return {"success": False, "error": "Pandas not available"}
 
+        if isinstance(predictions, pd.Series):
+            # The CLI/panel supplies flat lists, not a datetime x instrument frame.
+            return self._ic_metrics_1d(predictions, returns, method)
+
         try:
             # Align data
             common_dates = predictions.index.intersection(returns.index)
@@ -156,6 +160,133 @@ class EvaluationService:
         """
         return self.calculate_ic_metrics(predictions, returns, method="spearman")
 
+    # ------------------------------------------------------------------
+    # Flat-vector (1-D) evaluation -- what the C++ panel actually sends
+    # ------------------------------------------------------------------
+    # The DataFrame methods above need a datetime x instrument panel. The panel
+    # (and the MCP tools) send two flat lists, which used to crash every call with
+    # "'Series' object has no attribute 'columns'" and score every factor 0 / "Very
+    # Poor". These helpers evaluate one prediction vector against one return vector.
+
+    @staticmethod
+    def _paired(predictions, returns) -> Tuple[np.ndarray, np.ndarray]:
+        pair = pd.concat([pd.Series(predictions).reset_index(drop=True),
+                          pd.Series(returns).reset_index(drop=True)], axis=1).dropna()
+        return pair.iloc[:, 0].astype(float).values, pair.iloc[:, 1].astype(float).values
+
+    def _ic_metrics_1d(self, predictions, returns, method: str = "pearson") -> Dict[str, Any]:
+        """IC of one prediction vector against realised returns.
+
+        ``IC_mean`` is the full-sample correlation. Dispersion statistics (std, ICIR,
+        positive rate, ...) come from a rolling-window IC series and are only
+        meaningful with >= 2 windows, so ``rolling_ic_available`` says whether they
+        were computed rather than reporting a made-up zero.
+        """
+        try:
+            x, y = self._paired(predictions, returns)
+            n = len(x)
+            if n < 3:
+                return {"success": False,
+                        "error": f"IC needs at least 3 paired observations (got {n})"}
+            if np.std(x) == 0 or np.std(y) == 0:
+                return {"success": False,
+                        "error": "IC is undefined: predictions or returns are constant"}
+
+            corr = spearmanr if method == "spearman" else pearsonr
+            ic, p_value = corr(x, y)
+
+            window = max(10, n // 5)
+            rolling = []
+            if n >= 2 * window:
+                for end in range(window, n + 1):
+                    xs, ys = x[end - window:end], y[end - window:end]
+                    if np.std(xs) == 0 or np.std(ys) == 0:
+                        continue
+                    rolling.append((end, float(corr(xs, ys)[0])))
+
+            result = {
+                "success": True,
+                "IC_mean": float(ic),
+                "p_value": float(p_value),
+                "is_significant": bool(p_value < 0.05),
+                "observations": int(n),
+                "method": method,
+                "rolling_window": int(window),
+                "rolling_ic_available": len(rolling) >= 2,
+            }
+            if len(rolling) >= 2:
+                vals = np.array([r[1] for r in rolling])
+                std = float(np.std(vals))
+                result.update({
+                    "IC_std": std,
+                    "ICIR": float(np.mean(vals) / std) if std > 0 else 0.0,
+                    "IC_positive_rate": float(np.mean(vals > 0)),
+                    "IC_max": float(np.max(vals)),
+                    "IC_min": float(np.min(vals)),
+                    "IC_median": float(np.median(vals)),
+                    "IC_skewness": float(stats.skew(vals)),
+                    "IC_kurtosis": float(stats.kurtosis(vals)),
+                    "ic_series": [{"date": f"obs {end}", "ic": v} for end, v in rolling],
+                })
+            else:
+                result.update({
+                    "IC_std": 0.0, "ICIR": 0.0, "IC_positive_rate": 0.0,
+                    "IC_max": float(ic), "IC_min": float(ic), "IC_median": float(ic),
+                    "IC_skewness": 0.0, "IC_kurtosis": 0.0, "ic_series": [],
+                    "note": (f"Only {n} observations: rolling-IC statistics (std, ICIR, positive "
+                             f"rate) need at least {2 * window}. IC shown is the full-sample correlation."),
+                })
+            return result
+        except Exception as e:
+            return {"success": False, "error": f"IC calculation failed: {str(e)}"}
+
+    def _quantiles_1d(self, factor_values, returns, quantiles: int = 5) -> Dict[str, Any]:
+        """Bucket observations by factor value (Q1 = lowest) and compare realised returns.
+
+        Orientation: a predictive factor has returns that INCREASE from Q1 to Q<n>,
+        so the long-short leg is top bucket minus bottom bucket.
+        """
+        try:
+            x, y = self._paired(factor_values, returns)
+            n = len(x)
+            quantiles = int(quantiles)
+            if n < quantiles * 4:
+                return {"success": False,
+                        "error": f"Quantile analysis needs at least {quantiles * 4} observations "
+                                 f"for {quantiles} buckets (got {n})"}
+            labels = pd.qcut(pd.Series(x).rank(method="first"), q=quantiles, labels=False)
+            stats_by_q = {}
+            means = []
+            for q in range(quantiles):
+                vals = y[(labels == q).values]
+                if len(vals) == 0:
+                    continue
+                sd = float(np.std(vals))
+                stats_by_q[f"Q{q + 1}"] = {
+                    "mean_return": float(np.mean(vals)),
+                    "std_return": sd,
+                    "sharpe": float(np.mean(vals) / sd * np.sqrt(252)) if sd > 0 else 0.0,
+                    "win_rate": float(np.mean(vals > 0)),
+                    "observations": int(len(vals)),
+                }
+                means.append(float(np.mean(vals)))
+            top = y[(labels == quantiles - 1).values]
+            bottom = y[(labels == 0).values]
+            spread = float(np.mean(top) - np.mean(bottom))
+            pooled = float(np.sqrt((np.var(top) + np.var(bottom)) / 2))
+            steps = len(means) - 1
+            return {
+                "success": True,
+                "quantile_stats": stats_by_q,
+                "long_short_mean_return": spread,
+                "long_short_sharpe": float(spread / pooled * np.sqrt(252)) if pooled > 0 else 0.0,
+                "monotonicity": float(sum(1 for i in range(steps) if means[i + 1] > means[i]) / steps)
+                                if steps > 0 else 0.0,
+                "spread": spread,
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Factor returns analysis failed: {str(e)}"}
+
     def analyze_factor_returns(self,
                                factor_values: pd.DataFrame,
                                returns: pd.DataFrame,
@@ -175,6 +306,9 @@ class EvaluationService:
         """
         if not PANDAS_AVAILABLE:
             return {"success": False, "error": "Pandas not available"}
+
+        if isinstance(factor_values, pd.Series):
+            return self._quantiles_1d(factor_values, returns, quantiles)
 
         try:
             common_dates = factor_values.index.intersection(returns.index)
@@ -252,6 +386,10 @@ class EvaluationService:
         """
         if not PANDAS_AVAILABLE:
             return {"success": False, "error": "Pandas not available"}
+
+        if isinstance(factor_values, pd.Series):
+            return {"success": False,
+                    "error": "Turnover needs a datetime x instrument factor panel, not a flat vector"}
 
         try:
             dates = sorted(factor_values.index)
@@ -484,6 +622,9 @@ class EvaluationService:
                 }
             }
 
+            if isinstance(predictions, pd.Series):
+                return self._report_1d(report, predictions, returns)
+
             # IC Analysis
             ic_metrics = self.calculate_ic_metrics(predictions, returns)
             report["ic_analysis"] = ic_metrics
@@ -512,6 +653,36 @@ class EvaluationService:
 
         except Exception as e:
             return {"success": False, "error": f"Report generation failed: {str(e)}"}
+
+    def _report_1d(self, report: Dict[str, Any], predictions, returns) -> Dict[str, Any]:
+        """Full evaluation report for flat prediction / return vectors."""
+        ic_metrics = self._ic_metrics_1d(predictions, returns, "pearson")
+        rank_ic = self._ic_metrics_1d(predictions, returns, "spearman")
+        quantile_analysis = self._quantiles_1d(predictions, returns)
+        report["ic_analysis"] = ic_metrics
+        report["rank_ic_analysis"] = rank_ic
+        report["quantile_analysis"] = quantile_analysis
+        report["turnover_analysis"] = {}   # undefined without a time x instrument panel
+
+        if not ic_metrics.get("success"):
+            return {"success": False, "error": ic_metrics.get("error", "IC calculation failed")}
+
+        # Same point scheme as _calculate_factor_score, but re-based on the components
+        # that exist for a flat vector (no turnover; ICIR only with rolling windows),
+        # so a good factor is not capped at 60-80 by terms that cannot be computed.
+        earned, possible = 0.0, 20.0
+        earned += min(abs(ic_metrics.get("IC_mean", 0)) * 400, 20)
+        if ic_metrics.get("rolling_ic_available"):
+            possible += 20.0
+            earned += min(abs(ic_metrics.get("ICIR", 0)) * 5, 20)
+        if quantile_analysis.get("success"):
+            possible += 40.0
+            earned += min(abs(quantile_analysis.get("long_short_sharpe", 0)) * 10, 20)
+            earned += quantile_analysis.get("monotonicity", 0) * 20
+        score = min(earned / possible * 100.0, 100.0)
+        report["overall_score"] = score
+        report["rating"] = self._get_factor_rating(score)
+        return {"success": True, "report": report}
 
     def _calculate_factor_score(self,
                                 ic_metrics: Dict,
@@ -553,6 +724,21 @@ class EvaluationService:
             return "Poor"
         else:
             return "Very Poor"
+
+
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
 
 
 def main():
@@ -617,7 +803,7 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(result))
+        print(json.dumps(_json_safe(result)))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

@@ -126,7 +126,21 @@ struct EventsPage {
     bool has_prev = false;
     double credits_used = 0.0;
     int remaining_credits = -1; // -1 = unknown / not reported
+    /// events_request_key() of the request that produced this page. events_loaded
+    /// is a shared signal (hub refresh, MCP tools and the Geopolitics screen all
+    /// trigger it), so a consumer compares this against its own request to tell
+    /// its response from someone else's.
+    QString request_key;
 };
+
+/// Canonical key for a fetch_events() request (see EventsPage::request_key).
+inline QString events_request_key(const QString& country, const QString& city, const QString& category, int limit,
+                                  int page, const QString& source, const QString& date_from, const QString& date_to) {
+    return QStringList{country.trimmed().toLower(), city.trimmed().toLower(), category.trimmed().toLower(),
+                       source.trimmed().toLower(),  date_from.trimmed(),      date_to.trimmed(),
+                       QString::number(limit),      QString::number(page > 1 ? page : 1)}
+        .join(QLatin1Char('|'));
+}
 
 // ── Relationship map node ───────────────────────────────────────────────────
 

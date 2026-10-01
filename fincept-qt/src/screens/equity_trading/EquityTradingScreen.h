@@ -182,8 +182,13 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // account, then a live match, then a paper match. Empty when nothing matches.
     QString pick_account_for_exchanges(const QStringList& match) const;
     // Re-reads the focused account's paper portfolio into the panels. No-op for
-    // live accounts (their data flows from AccountDataStream via the hub).
+    // live accounts and native-paper accounts (their data flows from
+    // AccountDataStream via the hub).
     void refresh_paper_panels();
+    // Re-derives focused_native_paper_ and points the blotter at the matching data source
+    // (broker rows for LIVE / native paper, paper-engine rows for the local simulator).
+    // Call after anything that can change the answer: focus, mode toggle, credentials.
+    void sync_native_paper();
     void flush_paper_prices(); // persist buffered paper position prices to SQLite
 
     // DataHub subscription helpers (D4 migration)
@@ -282,7 +287,12 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     // Cached focused-account trading context. Refreshed on every focus / symbol /
     // mode change (hub_subscribe_streaming) and on every paper refresh, so the
     // per-tick quote handler avoids a mutex-locked BrokerAccount copy per tick.
-    bool focused_is_paper_ = false;
+    bool focused_is_paper_ = false; // LOCAL paper simulator only — false whenever focused_native_paper_ is true
+    // True when the focused account's PAPER mode runs on the broker's own paper venue
+    // (UnifiedTrading::uses_native_paper): orders, positions, funds and the blotter then
+    // come from the broker exactly as in LIVE; only the PAPER tag stays. Cached because the
+    // check reads secure storage; refreshed by sync_native_paper().
+    bool focused_native_paper_ = false;
     // True when the focused broker is a US-market broker (region == "US"). Gates the
     // US-only data fetches (time&sales / calendar / clock) and bottom-panel tabs.
     bool focused_is_us_market_ = false;

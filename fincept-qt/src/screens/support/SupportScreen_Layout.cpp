@@ -355,7 +355,7 @@ QWidget* SupportScreen::build_create_page() {
 
         const QString tip_items[] = {
             tr("✓  One issue per ticket — easier to track and resolve"),
-            tr("✓  Include your OS, version, and any error messages"),
+            tr("✓  Include your OS, version, and any error messages (About → Diagnostics → Copy System Info)"),
             tr("✓  Describe steps to reproduce if it's a bug"),
             // No stated turnaround here: the previous "resolved within 4 hours"
             // was an unbacked SLA promise on a support surface.

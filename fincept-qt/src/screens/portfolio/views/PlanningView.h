@@ -177,6 +177,7 @@ class PlanningView : public QWidget {
     double hist_cagr_ = 0.0; // derived annualised return (decimal), 0 if unknown
     double hist_vol_ = 0.0;  // derived annualised volatility (decimal), 0 if unknown
     bool have_history_ = false;
+    QString assumptions_seeded_for_; // portfolio id whose history already seeded the return inputs
     bool has_data_ = false;
 };
 

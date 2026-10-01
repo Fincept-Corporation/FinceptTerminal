@@ -37,16 +37,23 @@ void PortfolioService::export_csv(const QString& portfolio_id, const QString& fi
 
     if (assets_r.is_err() || portfolio_r.is_err()) {
         LOG_ERROR("PortfolioSvc", "Export CSV failed: cannot load data");
+        emit export_failed(file_path, tr("Could not read the portfolio from the database."));
         return;
     }
 
     QFile file(file_path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         LOG_ERROR("PortfolioSvc", "Cannot open file for writing: " + file_path);
+        emit export_failed(file_path, file.errorString());
         return;
     }
 
     QTextStream out(&file);
+    // QTextStream defaults to 6 significant digits, which silently rounded
+    // prices/quantities (1234.5678 -> 1234.57, 1234567 -> 1.23457e+06) in the
+    // exported file. 12 keeps any realistic holding exact without printing
+    // binary-float noise.
+    out.setRealNumberPrecision(12);
     auto& p = portfolio_r.value();
     out << "# Portfolio: " << p.name << "\n";
     out << "# Owner: " << p.owner << "\n";
@@ -82,6 +89,7 @@ void PortfolioService::export_json(const QString& portfolio_id, const QString& f
 
     if (portfolio_r.is_err()) {
         LOG_ERROR("PortfolioSvc", "Export JSON failed: cannot load portfolio");
+        emit export_failed(file_path, tr("Could not read the portfolio from the database."));
         return;
     }
 
@@ -112,9 +120,14 @@ void PortfolioService::export_json(const QString& portfolio_id, const QString& f
     QFile file(file_path);
     if (!file.open(QIODevice::WriteOnly)) {
         LOG_ERROR("PortfolioSvc", "Cannot open file for writing: " + file_path);
+        emit export_failed(file_path, file.errorString());
         return;
     }
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    if (file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0) {
+        LOG_ERROR("PortfolioSvc", "Write failed for " + file_path + ": " + file.errorString());
+        emit export_failed(file_path, file.errorString());
+        return;
+    }
     file.close();
 
     LOG_INFO("PortfolioSvc", "Exported JSON to " + file_path);
@@ -215,12 +228,45 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
     int replayed = 0;
     QStringList errors;
 
-    // Replay transactions chronologically
-    for (const auto& val : txn_arr) {
-        auto obj = val.toObject();
+    // Replay chronologically. export_json() writes transactions newest-first
+    // (get_transactions orders by date DESC), so replaying in file order hit
+    // every SELL before the BUY that funded it: the sell was rejected as
+    // "asset not found" and the position came back overstated. Sort by day; on
+    // a tie BUY goes first so a same-day round trip is not rejected as "qty >
+    // held" (the file carries no intra-day ordering).
+    QVector<QJsonObject> ordered;
+    ordered.reserve(txn_arr.size());
+    for (const auto& val : txn_arr)
+        ordered.append(val.toObject());
+    std::stable_sort(ordered.begin(), ordered.end(), [](const QJsonObject& a, const QJsonObject& b) {
+        const QString da = a.value("date").toString().left(10);
+        const QString db = b.value("date").toString().left(10);
+        if (da != db)
+            return da < db;
+        const int ra = a.value("type").toString() == QLatin1String("BUY") ? 0 : 1;
+        const int rb = b.value("type").toString() == QLatin1String("BUY") ? 0 : 1;
+        return ra < rb;
+    });
+
+    for (const auto& obj : ordered) {
         QString type = obj["type"].toString();
+        if (type == "DIVIDEND") {
+            // A dividend never moves a position, so it can be recorded as-is.
+            // export_json() writes them, so dropping them on import silently
+            // lost the dividend history on every round trip.
+            const QString dsym = obj["symbol"].toString().trimmed();
+            if (dsym.isEmpty())
+                continue;
+            auto dr = repo.add_transaction(target_id, dsym, "DIVIDEND", obj["quantity"].toDouble(),
+                                           obj["price"].toDouble(), obj["date"].toString(), obj["notes"].toString());
+            if (dr.is_err())
+                errors.append(QString("DIVIDEND %1: %2").arg(dsym, QString::fromStdString(dr.error())));
+            else
+                ++replayed;
+            continue;
+        }
         if (type != "BUY" && type != "SELL")
-            continue; // Skip DIVIDEND/SPLIT for now
+            continue; // SPLIT is not replayed yet
 
         QString sym = obj["symbol"].toString();
         double qty = obj["quantity"].toDouble();
@@ -237,9 +283,11 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
         } else { // SELL
             auto assets = repo.get_assets(target_id);
             bool sell_ok = false;
+            bool found = false;
             if (assets.is_ok()) {
                 for (const auto& a : assets.value()) {
                     if (a.symbol == sym.toUpper()) {
+                        found = true;
                         if (qty > a.quantity + 0.0001) {
                             errors.append(QString("SELL %1: qty %2 > held %3").arg(sym).arg(qty).arg(a.quantity));
                         } else {
@@ -253,7 +301,8 @@ void PortfolioService::import_json(const QString& file_path, portfolio::ImportMo
                         break;
                     }
                 }
-                if (!sell_ok && errors.isEmpty())
+                // Was gated on errors.isEmpty(), so any earlier error hid this one.
+                if (!found)
                     errors.append(QString("SELL %1: asset not found").arg(sym));
             }
             if (!sell_ok)

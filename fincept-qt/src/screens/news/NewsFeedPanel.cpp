@@ -1,11 +1,16 @@
 #include "screens/news/NewsFeedPanel.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 
 #include <QApplication>
+#include <QClipboard>
 #include <QDateTime>
+#include <QDesktopServices>
+#include <QMenu>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QUrl>
 
 #if defined(Q_OS_WIN)
 #    include <windows.h>
@@ -82,6 +87,10 @@ NewsFeedPanel::NewsFeedPanel(QWidget* parent) : QWidget(parent) {
     empty_state_->setAccessibleName(tr("Empty news feed"));
     banner_widget_->setAccessibleName(tr("Breaking news banner"));
 
+    // Right-click: open the story / open or filter by one of its tickers.
+    list_view_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(list_view_, &QWidget::customContextMenuRequested, this, &NewsFeedPanel::show_context_menu);
+
     // Connect clicks
     connect(list_view_, &QListView::clicked, this, &NewsFeedPanel::on_item_clicked);
     // Keyboard: Enter/Return on the highlighted row opens it, same as a click.
@@ -115,11 +124,15 @@ void NewsFeedPanel::build_breaking_banner() {
     banner_tag_->setFixedWidth(48);
     banner_tag_->setAlignment(Qt::AlignCenter);
 
+    // Headline and source come straight from the feed: pin them to plain text so
+    // a headline that looks like markup can't be rendered as rich text.
     banner_headline_ = new QLabel(banner_widget_);
     banner_headline_->setObjectName("newsBreakingHeadline");
+    banner_headline_->setTextFormat(Qt::PlainText);
 
     banner_source_ = new QLabel(banner_widget_);
     banner_source_->setObjectName("newsBreakingSource");
+    banner_source_->setTextFormat(Qt::PlainText);
     banner_source_->setFixedWidth(80);
     banner_source_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
@@ -342,6 +355,46 @@ void NewsFeedPanel::on_item_clicked(const QModelIndex& index) {
         auto cluster = model_->cluster_at(index.row());
         emit cluster_clicked(cluster);
     }
+}
+
+void NewsFeedPanel::show_context_menu(const QPoint& pos) {
+    const QModelIndex index = list_view_->indexAt(pos);
+    if (!index.isValid())
+        return;
+    const auto article = model_->article_at(index.row());
+    if (article.id.isEmpty())
+        return;
+
+    // Feed links are untrusted (cached/DB rows may predate link validation):
+    // only offer web URLs.
+    const QUrl url(article.link);
+    const bool has_link =
+        url.isValid() && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https"));
+
+    QMenu menu(this);
+    auto* open_act = menu.addAction(tr("Open article in browser"));
+    open_act->setEnabled(has_link);
+    connect(open_act, &QAction::triggered, this, [url]() { QDesktopServices::openUrl(url); });
+    auto* copy_act = menu.addAction(tr("Copy link"));
+    copy_act->setEnabled(has_link);
+    connect(copy_act, &QAction::triggered, this, [link = article.link]() { QApplication::clipboard()->setText(link); });
+
+    if (!article.tickers.isEmpty()) {
+        menu.addSeparator();
+        for (const QString& ticker : article.tickers) {
+            auto* eq_act = menu.addAction(tr("Open $%1 in Equity Research").arg(ticker));
+            connect(eq_act, &QAction::triggered, this, [ticker]() {
+                EventBus::instance().publish("nav.open_symbol",
+                                             QVariantMap{{"screen_id", "equity_research"}, {"symbol", ticker}});
+            });
+        }
+        menu.addSeparator();
+        for (const QString& ticker : article.tickers) {
+            auto* filter_act = menu.addAction(tr("Filter feed by $%1").arg(ticker));
+            connect(filter_act, &QAction::triggered, this, [this, ticker]() { emit ticker_filter_requested(ticker); });
+        }
+    }
+    menu.exec(list_view_->viewport()->mapToGlobal(pos));
 }
 
 void NewsFeedPanel::check_scroll_position() {

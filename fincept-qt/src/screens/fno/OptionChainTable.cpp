@@ -215,7 +215,7 @@ void OptionChainTable::contextMenuEvent(QContextMenuEvent* e) {
     }
 
     // Prefer the broker contract symbol for the menu label; fall back to strike+side.
-    QString label = QString::number(strike, 'f', 0) + (is_call ? QStringLiteral(" CE") : QStringLiteral(" PE"));
+    QString label = fincept::services::options::format_strike(strike) + (is_call ? QStringLiteral(" CE") : QStringLiteral(" PE"));
     const auto& rows = model_->chain().rows;
     if (idx.row() >= 0 && idx.row() < rows.size()) {
         const QString sym = is_call ? rows[idx.row()].ce_symbol : rows[idx.row()].pe_symbol;

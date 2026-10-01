@@ -65,8 +65,11 @@ def run_simulation(symbols, weights, num_simulations=1000):
     else:
         close = data["Close"]
 
-    # Drop rows with all NaN
+    # Drop rows with all NaN, then columns yfinance could not price at all - an
+    # all-NaN column would survive the ffill/bfill below and make dropna() empty
+    # the whole frame ("Insufficient historical data") because of one holding.
     close = close.dropna(how="all")
+    close = close.dropna(axis=1, how="all")
 
     # Align columns to requested symbols, filling missing with forward-fill
     available = [s for s in symbols if s in close.columns]

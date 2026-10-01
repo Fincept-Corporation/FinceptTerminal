@@ -17,6 +17,8 @@ class PolymarketLeaderboard : public QWidget {
 
     void set_entries(const QVector<services::polymarket::LeaderboardEntry>& entries);
     void set_loading(bool loading);
+    /// The fetch failed — say so instead of leaving "Loading…" / stale rows.
+    void set_unavailable(const QString& reason);
 
   signals:
     void trader_clicked(const QString& address);

@@ -4,7 +4,10 @@
 #include "screens/economics/panels/EconomicsPresets.h"
 #include "services/workflow/NodeRegistry.h"
 
+#include <QDate>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 
 namespace fincept::workflow {
 
@@ -41,6 +44,37 @@ void run_python_json(const QString& script, const QStringList& args,
             }
         }
         cb(true, doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), {});
+    });
+}
+
+// sec_data.py (shared with the MCP data tools, so it is not edited here) prints Python's bare
+// NaN literal for missing cells — e.g. "isXBRLNumeric": NaN — which is not JSON, so the
+// runner's strict JSON check rejects every filing list. Run it unchecked and map NaN/Infinity
+// to null before parsing.
+void mkt_run_sec_json(const QStringList& args, std::function<void(bool, QJsonValue, QString)> cb) {
+    PythonRunner::RunOptions opts;
+    opts.expect_json = false;
+    PythonRunner::instance().run_with_options("sec_data.py", args, opts, [cb](const PythonResult& res) {
+        if (!res.success) {
+            cb(false, {}, res.error.isEmpty() ? QStringLiteral("sec_data.py failed") : res.error);
+            return;
+        }
+        QString json_str = extract_json(res.output).trimmed();
+        static const QRegularExpression non_json_re(QStringLiteral(R"((?<=[:\[,])\s*-?(?:NaN|Infinity)(?=\s*[,\]}]))"));
+        json_str.replace(non_json_re, QStringLiteral(" null"));
+        const auto doc = QJsonDocument::fromJson(json_str.toUtf8());
+        if (!doc.isObject()) {
+            cb(false, {}, "Invalid JSON from sec_data.py: " + res.output.left(200));
+            return;
+        }
+        const QJsonObject obj = doc.object();
+        if (obj.contains("error") || !obj.value("success").toBool(true)) {
+            const QJsonValue e = obj.value("error");
+            const QString msg = e.isObject() ? e.toObject().value("error").toString() : e.toString();
+            cb(false, {}, msg.isEmpty() ? QStringLiteral("SEC request failed") : msg);
+            return;
+        }
+        cb(true, obj, {});
     });
 }
 
@@ -469,19 +503,36 @@ void register_market_data_nodes(NodeRegistry& registry) {
                     cb(false, {}, "Symbol is required for insider trades");
                     return;
                 }
-                // Use yfinance info which includes insider transaction data
-                run_python_json("yfinance_data.py", {"info", symbol},
-                                [cb, symbol](bool ok, QJsonValue val, QString err) {
-                                    if (!ok) {
-                                        cb(false, {}, err);
-                                        return;
-                                    }
-                                    QJsonObject out;
-                                    out["symbol"] = symbol;
-                                    out["data"] = val;
-                                    out["node_type"] = "market.insider_trades";
-                                    cb(true, out, {});
-                                });
+                // This node returned yfinance company info (nothing to do with insiders).
+                // It now lists the company's real Form 4 filings from SEC EDGAR, newest first.
+                // sec_data.py's own insider_trading command is a stub (fixed placeholder rows),
+                // and its date filters corrupt the result, so the Days Back cut-off is applied here.
+                const int days_back = qBound(1, static_cast<int>(params.value("days_back").toDouble(30)), 3650);
+                const QString cutoff = QDate::currentDate().addDays(-days_back).toString(Qt::ISODate);
+                mkt_run_sec_json({"company_filings", symbol, "", "4", "", "", "100"},
+                                 [cb, symbol, days_back, cutoff](bool ok, QJsonValue val, QString err) {
+                                     if (!ok) {
+                                         cb(false, {}, err);
+                                         return;
+                                     }
+                                     QJsonArray recent;
+                                     for (const QJsonValue& row : val.toObject().value("data").toArray()) {
+                                         if (row.toObject().value("filingDate").toString() >= cutoff)
+                                             recent.append(row);
+                                     }
+                                     QJsonObject out;
+                                     out["symbol"] = symbol;
+                                     out["form"] = "4";
+                                     out["days_back"] = days_back;
+                                     out["count"] = recent.size();
+                                     out["filings"] = recent;
+                                     out["data"] = recent;
+                                     out["source"] = "SEC EDGAR";
+                                     out["note"] = "Form 4 filing index. Transaction details (buy/sell, shares, value) "
+                                                   "are not parsed, so the Type and Min Value filters do not apply.";
+                                     out["node_type"] = "market.insider_trades";
+                                     cb(true, out, {});
+                                 });
             },
     });
 
@@ -514,19 +565,28 @@ void register_market_data_nodes(NodeRegistry& registry) {
                     cb(false, {}, "Symbol is required for SEC filings");
                     return;
                 }
-                // Use yfinance info for basic company data including filings metadata
-                run_python_json("yfinance_data.py", {"info", symbol},
-                                [cb, symbol](bool ok, QJsonValue val, QString err) {
-                                    if (!ok) {
-                                        cb(false, {}, err);
-                                        return;
-                                    }
-                                    QJsonObject out;
-                                    out["symbol"] = symbol;
-                                    out["data"] = val;
-                                    out["node_type"] = "market.sec_filings";
-                                    cb(true, out, {});
-                                });
+                // Filing Type and Limit were ignored and the node returned yfinance company info.
+                // sec_data.py lists the real EDGAR filings (form, filing date, document URLs).
+                const QString filing_type = params.value("filing_type").toString("10-K");
+                const int limit = qBound(1, static_cast<int>(params.value("limit").toDouble(10)), 100);
+                const QString form = filing_type == "all" ? QString() : (filing_type == "13F" ? "13F-HR" : filing_type);
+                mkt_run_sec_json({"company_filings", symbol, "", form, "", "", QString::number(limit)},
+                                 [cb, symbol, filing_type](bool ok, QJsonValue val, QString err) {
+                                     if (!ok) {
+                                         cb(false, {}, err);
+                                         return;
+                                     }
+                                     const QJsonArray rows = val.toObject().value("data").toArray();
+                                     QJsonObject out;
+                                     out["symbol"] = symbol;
+                                     out["filing_type"] = filing_type;
+                                     out["count"] = rows.size();
+                                     out["filings"] = rows;
+                                     out["data"] = rows;
+                                     out["source"] = "SEC EDGAR";
+                                     out["node_type"] = "market.sec_filings";
+                                     cb(true, out, {});
+                                 });
             },
     });
 }

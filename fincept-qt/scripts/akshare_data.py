@@ -34,10 +34,10 @@ try:
 except ImportError:
     ChinaEconomicsWrapper = None
 
-try:
-    from akshare_economics_global import GlobalEconomicsWrapper
-except ImportError:
-    GlobalEconomicsWrapper = None
+# akshare_economics_global.py is a deprecated stub: importing it prints an error JSON and calls
+# sys.exit(1) at module level (SystemExit is not an ImportError), which used to kill this whole
+# script - every "Market Data" endpoint failed. It never defined GlobalEconomicsWrapper anyway.
+GlobalEconomicsWrapper = None
 
 try:
     from akshare_derivatives import DerivativesWrapper
@@ -486,5 +486,8 @@ if __name__ == "__main__":
         except Exception as e:
             print(json.dumps({"success": False, "error": str(e), "endpoint": endpoint}))
     else:
-        print(json.dumps({"success": False, "error": f"Unknown endpoint: {endpoint}. Method '{method_name}' not found."}))
+        # Not a wrapper method name: try the curated endpoint names that get_all_endpoints
+        # advertises (stock_zh_spot, china_gdp, forex_spot, ...). main() dispatches those via
+        # its endpoint map; previously they all answered "Unknown endpoint".
+        main()
 

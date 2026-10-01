@@ -54,12 +54,34 @@ void MAAnalyticsService::run_python(const QString& script, const QStringList& ar
     });
 }
 
+// Failure text for a script that exited non-zero when PythonRunner's own envelope handling was bypassed
+// (bool_error_flag calls): stderr if any, else the `message` / `error` string of the JSON the script printed.
+static QString ma_svc_failure_text(const python::PythonResult& r) {
+    if (!r.error.trimmed().isEmpty())
+        return r.error;
+    const QJsonDocument doc = QJsonDocument::fromJson(python::extract_json(r.output).toUtf8());
+    if (doc.isObject()) {
+        const QJsonObject o = doc.object();
+        const QString msg = o.value(QStringLiteral("message")).toString();
+        if (!msg.isEmpty())
+            return msg;
+        const QString err = o.value(QStringLiteral("error")).toString();
+        if (!err.isEmpty())
+            return err;
+    }
+    return QStringLiteral("Script failed (exit code %1)").arg(r.exit_code);
+}
+
 void MAAnalyticsService::run_python_json(const QString& script, const QString& command, const QJsonObject& params,
-                                         const QString& context) {
+                                         const QString& context, bool bool_error_flag) {
     auto params_json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     const QString cache_key = "ma:" + context + "_" + command + ":" + QString::fromUtf8(params_json);
 
-    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    // create_deal / update_deal write to the deal database: replaying a cached answer for an identical request
+    // would report success without writing anything.
+    const bool cacheable = (context != QLatin1String("create_deal") && context != QLatin1String("update_deal"));
+
+    const QVariant cached = cacheable ? fincept::CacheManager::instance().get(cache_key) : QVariant();
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
         if (!doc.isNull()) {
@@ -74,12 +96,13 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
     QStringList args = {command, QString::fromUtf8(params_json)};
 
     QPointer<MAAnalyticsService> self = this;
-    python::PythonRunner::instance().run(script, args, [self, context, cache_key](python::PythonResult result) {
+    auto on_finished = [self, context, cache_key, cacheable, bool_error_flag](python::PythonResult result) {
         if (!self)
             return;
         if (!result.success) {
-            LOG_ERROR("MAAnalytics", QString("Python call failed [%1]: %2").arg(context, result.error));
-            emit self->error_occurred(context, result.error);
+            const QString text = bool_error_flag ? ma_svc_failure_text(result) : result.error;
+            LOG_ERROR("MAAnalytics", QString("Python call failed [%1]: %2").arg(context, text));
+            emit self->error_occurred(context, text);
             return;
         }
         auto json_str = python::extract_json(result.output);
@@ -90,13 +113,39 @@ void MAAnalyticsService::run_python_json(const QString& script, const QString& c
             return;
         }
         auto obj = doc.object();
-        fincept::CacheManager::instance().put(
-            cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), kResultTtlSec,
-            "ma_analytics");
+
+        // `{"error": true, "message": ...}` (options scripts) is a failure, reported through error_occurred().
+        if (bool_error_flag && obj.value(QStringLiteral("error")).toBool(false)) {
+            QString text = obj.value(QStringLiteral("message")).toString();
+            if (text.isEmpty())
+                text = QStringLiteral("The analysis reported a failure");
+            LOG_ERROR("MAAnalytics", QString("Script reported failure [%1]: %2").arg(context, text));
+            emit self->error_occurred(context, text);
+            return;
+        }
+
+        // A payload that says it was not successful is still delivered (status probes such as
+        // fortitudo_check_status use it) but is never cached, or a transient failure would be replayed
+        // for the whole TTL.
+        const QJsonValue success = obj.value(QStringLiteral("success"));
+        const bool reported_failure = success.isBool() && !success.toBool();
+        if (cacheable && !reported_failure) {
+            fincept::CacheManager::instance().put(
+                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
+                kResultTtlSec, "ma_analytics");
+        }
         LOG_INFO("MAAnalytics", QString("Result ready [%1]").arg(context));
         emit self->result_ready(context, obj);
         publish_ma_result(self->hub_registered_, context, obj);
-    });
+    };
+
+    if (bool_error_flag) {
+        python::PythonRunner::RunOptions opts;
+        opts.expect_json = false; // see run_python_json() in the header
+        python::PythonRunner::instance().run_with_options(script, args, opts, std::move(on_finished));
+    } else {
+        python::PythonRunner::instance().run(script, args, std::move(on_finished));
+    }
 }
 
 // ── Valuation ────────────────────────────────────────────────────────────────
@@ -672,27 +721,33 @@ void MAAnalyticsService::skfolio_generate_report(const QJsonObject& params) {
 // Options Analytics — each script takes (command, JSON params) and returns JSON.
 // Distinct contexts so results route unambiguously.
 void MAAnalyticsService::options_gamma_exposure(const QJsonObject& params) {
-    run_python_json("Analytics/options/gex_calculator.py", "compute", params, "options_gex");
+    run_python_json("Analytics/options/gex_calculator.py", "compute", params, "options_gex",
+                    /*bool_error_flag=*/true);
 }
 
 void MAAnalyticsService::options_iv_smile(const QJsonObject& params) {
-    run_python_json("Analytics/options/iv_smile.py", "compute", params, "options_iv_smile");
+    run_python_json("Analytics/options/iv_smile.py", "compute", params, "options_iv_smile",
+                    /*bool_error_flag=*/true);
 }
 
 void MAAnalyticsService::options_iv_surface(const QJsonObject& params) {
-    run_python_json("Analytics/options/iv_surface.py", "compute", params, "options_iv_surface");
+    run_python_json("Analytics/options/iv_surface.py", "compute", params, "options_iv_surface",
+                    /*bool_error_flag=*/true);
 }
 
 void MAAnalyticsService::options_open_interest(const QJsonObject& params) {
-    run_python_json("Analytics/options/oi_tracker.py", "compute", params, "options_oi");
+    run_python_json("Analytics/options/oi_tracker.py", "compute", params, "options_oi",
+                    /*bool_error_flag=*/true);
 }
 
 void MAAnalyticsService::options_straddle_sim(const QJsonObject& params) {
-    run_python_json("Analytics/options/straddle_simulator.py", "simulate", params, "options_straddle");
+    run_python_json("Analytics/options/straddle_simulator.py", "simulate", params, "options_straddle",
+                    /*bool_error_flag=*/true);
 }
 
 void MAAnalyticsService::options_strategy_payoff(const QJsonObject& params) {
-    run_python_json("Analytics/options/strategy_chart.py", "compute", params, "options_strategy_payoff");
+    run_python_json("Analytics/options/strategy_chart.py", "compute", params, "options_strategy_payoff",
+                    /*bool_error_flag=*/true);
 }
 
 // Corporate-Finance Valuation Summary — command + JSON target-metrics → JSON.

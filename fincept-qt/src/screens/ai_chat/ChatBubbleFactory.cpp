@@ -7,12 +7,14 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
@@ -91,6 +93,19 @@ static QPushButton* make_copy_button(const QString& initial_text) {
     return btn;
 }
 
+// Markdown links in a reply (sources, filings, docs) were rendered as links but did
+// nothing when clicked: a QLabel only opens them if told to. The model controls the link
+// target, so only web links are followed — a file:// or custom-scheme URL would let a
+// reply launch a local program with one click.
+static void enable_web_links(QLabel* body) {
+    QObject::connect(body, &QLabel::linkActivated, body, [](const QString& link) {
+        const QUrl url(link);
+        const QString scheme = url.scheme().toLower();
+        if (scheme == QLatin1String("http") || scheme == QLatin1String("https"))
+            QDesktopServices::openUrl(url);
+    });
+}
+
 // Build the row + column scaffold shared by static and streaming bubbles.
 // `body` is added to the bubble frame; the column + row layouts handle role
 // label and alignment. The footer is built only when show_footer is true.
@@ -157,6 +172,7 @@ ChatBubbleFactory::Bubble ChatBubbleFactory::build(const Options& opts) {
     body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     body->setStyleSheet(
         QString("QLabel{background:transparent;color:%1;font-size:%2px;}").arg(body_color(opts.role)).arg(fnt::BODY));
+    enable_web_links(body);
     qobject_cast<QVBoxLayout*>(s.frame->layout())->addWidget(body);
 
     Bubble out;
@@ -221,6 +237,7 @@ ChatBubbleFactory::Bubble ChatBubbleFactory::build_streaming(const Options& opts
     body->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     body->setStyleSheet(
         QString("QLabel{background:transparent;color:%1;font-size:%2px;}").arg(body_color(opts.role)).arg(fnt::BODY));
+    enable_web_links(body);
     qobject_cast<QVBoxLayout*>(s.frame->layout())->addWidget(body);
 
     Bubble out;

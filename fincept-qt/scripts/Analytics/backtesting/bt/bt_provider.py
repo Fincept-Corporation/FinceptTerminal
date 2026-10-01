@@ -345,8 +345,11 @@ class BtProvider(BacktestingProviderBase):
         ret_std = np.std(portfolio_returns)
         sharpe = (np.mean(portfolio_returns) * np.sqrt(trading_days)) / ret_std if ret_std > 0 else 0
 
-        neg_returns = portfolio_returns[portfolio_returns < 0]
-        downside_std = np.std(neg_returns) if len(neg_returns) > 0 else 1e-8
+        # Standard downside deviation: sqrt(mean(min(r, 0)^2)) over ALL bars (it was the std of
+        # only the negative bars, which re-centres them and divides by the loss count).
+        downside_std = float(np.sqrt(np.mean(np.minimum(portfolio_returns, 0.0) ** 2)))
+        if downside_std <= 0:
+            downside_std = 1e-8
         sortino = (np.mean(portfolio_returns) * np.sqrt(trading_days)) / downside_std
 
         rolling_max = np.maximum.accumulate(equity)
@@ -1164,9 +1167,9 @@ class BtProvider(BacktestingProviderBase):
             dd = (cum - rolling_max) / np.where(rolling_max > 0, rolling_max, 1)
             max_dd = float(np.min(dd))
 
-            neg_returns = returns[returns < 0]
-            downside = float(np.std(neg_returns) * np.sqrt(252)) if len(neg_returns) > 0 else 1e-8
-            sortino = float(np.mean(returns) * np.sqrt(252) / (downside if downside > 0 else 1e-8))
+            # Standard downside deviation over ALL bars (see run_backtest numpy path).
+            downside = float(np.sqrt(np.mean(np.minimum(returns, 0.0) ** 2)) * np.sqrt(252)) if len(returns) > 0 else 1e-8
+            sortino = float(np.mean(returns) * 252 / (downside if downside > 0 else 1e-8))
 
             results[sym] = {
                 'totalReturn': float(total_return),

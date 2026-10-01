@@ -1,6 +1,7 @@
 // src/screens/economics/panels/EconPanelBase.cpp
 #include "screens/economics/panels/EconPanelBase.h"
 
+#include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -13,6 +14,7 @@
 #include <QJsonObject>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QScrollBar>
 #include <QTextStream>
 #include <QVBoxLayout>
@@ -217,8 +219,13 @@ void EconPanelBase::build_base_ui(QWidget* container) {
             if (prev)
                 QWidget::setTabOrder(prev, w);
             prev = w;
+            // Enter must not bypass the disabled FETCH button: a second query started while one is in
+            // flight lets a slow earlier response overwrite the newer selection.
             if (auto* le = qobject_cast<QLineEdit*>(w))
-                connect(le, &QLineEdit::returnPressed, this, &EconPanelBase::on_fetch);
+                connect(le, &QLineEdit::returnPressed, this, [this]() {
+                    if (fetch_btn_ && fetch_btn_->isEnabled())
+                        on_fetch();
+                });
         }
     }
 
@@ -318,6 +325,10 @@ void EconPanelBase::refresh_panel_theme() {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
+
+bool EconPanelBase::keeps_state_on_activate() const {
+    return (stack_ && stack_->currentIndex() != 0) || status_kind_ == StatusKind::Loading;
+}
 
 void EconPanelBase::show_loading(const QString& msg) {
     if (!empty_lbl_)
@@ -622,8 +633,12 @@ void EconPanelBase::export_csv() {
         return;
 
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        // Say so — silently returning looked like a successful export.
+        LOG_WARN("EconPanel", QString("CSV export failed to open %1: %2").arg(path, file.errorString()));
+        QMessageBox::warning(this, tr("Export CSV"), tr("Could not write %1:\n%2").arg(path, file.errorString()));
         return;
+    }
     QTextStream out(&file);
     out.setEncoding(QStringConverter::Utf8);
 

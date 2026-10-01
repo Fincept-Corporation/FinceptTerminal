@@ -189,6 +189,7 @@ struct SupplyHistoryPoint {
     QString circulating_raw; ///< circulating only (excludes vesting/locked)
     QString burned_raw;      ///< cumulative burned to date
     int decimals = 6;
+    bool is_mock = false; ///< true when the point comes from the built-in demo series
 };
 
 /// Treasury reserves snapshot. Published on `treasury:reserves`.

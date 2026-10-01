@@ -1,12 +1,14 @@
 // src/screens/dashboard/widgets/RecentFilesWidget.cpp
 #include "screens/dashboard/widgets/RecentFilesWidget.h"
 
+#include "core/events/EventBus.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QScrollArea>
 #include <QShowEvent>
 
@@ -33,9 +35,15 @@ RecentFilesWidget::RecentFilesWidget(QWidget* parent)
 
     content_layout()->addWidget(scroll_);
 
-    // Refresh when service changes
-    connect(&FileManagerService::instance(), &FileManagerService::files_changed, this,
-            &RecentFilesWidget::refresh_data);
+    // Refresh when service changes. A hidden tile only invalidates itself —
+    // showEvent() reloads — instead of rebuilding rows nobody can see on every
+    // export/import.
+    connect(&FileManagerService::instance(), &FileManagerService::files_changed, this, [this]() {
+        if (isVisible())
+            refresh_data();
+        else
+            loaded_ = false;
+    });
     connect(this, &BaseWidget::refresh_requested, this, &RecentFilesWidget::refresh_data);
 
     apply_styles();
@@ -88,6 +96,10 @@ void RecentFilesWidget::refresh_data() {
         auto* row = new QWidget(this);
         row->setStyleSheet(QString("background:%1;border:1px solid %2;border-radius:2px;")
                                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        row->setCursor(Qt::PointingHandCursor);
+        row->setToolTip(tr("Click to open the File Manager"));
+        row->setProperty("recent_file_row", true);
+        row->installEventFilter(this);
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 5, 8, 5);
         rl->setSpacing(6);
@@ -117,10 +129,23 @@ void RecentFilesWidget::refresh_data() {
             QString("color:%1;font-size:10px;background:transparent;%2").arg(colors::TEXT_DIM(), MF));
         rl->addWidget(date_lbl);
 
+        // Children are transparent to the mouse so the click lands on the row.
+        for (auto* lbl : row->findChildren<QLabel*>())
+            lbl->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
         list_layout_->addWidget(row);
     }
 
     list_layout_->addStretch();
+}
+
+bool RecentFilesWidget::eventFilter(QObject* obj, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonRelease && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton &&
+        obj->property("recent_file_row").toBool()) {
+        EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", "file_manager"}});
+        return true;
+    }
+    return BaseWidget::eventFilter(obj, event);
 }
 
 void RecentFilesWidget::apply_styles() {

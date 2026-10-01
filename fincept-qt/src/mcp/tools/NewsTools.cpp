@@ -10,12 +10,8 @@
 #include "services/news/NewsMonitorService.h"
 #include "services/news/NewsService.h"
 
-#include <QEventLoop>
 #include <QMetaObject>
-#include <QMutex>
-#include <QThread>
 #include <QVariantMap>
-#include <QWaitCondition>
 
 namespace fincept::mcp::tools {
 
@@ -25,57 +21,31 @@ using namespace fincept::services;
 
 // Synchronously fetch articles with a timeout.
 //
-// MCP tool handlers run on a QtConcurrent worker thread. NewsService's
-// QNetworkAccessManager lives on the main thread; firing requests at it from
-// a worker corrupts QObject parentage and eventually crashes Qt. We dispatch
-// the entire fetch onto the main thread via BlockingQueuedConnection (same
-// pattern as ReportBuilderTools::run_on_service_thread). The main-thread
-// runs its own event loop, the NAM completes its request, the callback
-// signals our QWaitCondition, the worker resumes.
+// MCP tool handlers run on a pool thread. NewsService's QNetworkAccessManager lives on the
+// main thread; firing requests at it from a worker corrupts QObject parentage and eventually
+// crashes Qt, so the fetch is marshalled to the service's thread by detail::run_async_wait
+// (ThreadHelper.h), which waits on a bounded condition rather than a nested event loop.
 static QVector<NewsArticle> fetch_articles_sync(bool force = false) {
     auto* svc = &NewsService::instance();
-    QVector<NewsArticle> result;
 
-    if (QThread::currentThread() == svc->thread()) {
-        // Already on main thread (e.g. test invocation) — direct call works
-        // because the NAM's pending signals get drained by the same event
-        // loop we'd nest below.
-        QEventLoop loop;
-        bool done = false;
-        svc->fetch_all_news(force, [&](bool ok, QVector<NewsArticle> arts) {
+    // The hand-rolled QMutex/QWaitCondition version waited with no bound at all: a
+    // fetch whose callback never fired (a service error branch that returns early)
+    // parked the tool thread forever — and every news tool and the AI chat's tool pool
+    // with it. detail::run_async_wait covers both the worker-thread and same-thread
+    // cases and gives up after its bound with an error log; the result then stays
+    // empty and the callers already report "No news articles available".
+    //
+    // The result lives on the heap so a callback that arrives AFTER the bound writes
+    // into live memory instead of an unwound stack frame.
+    auto result = std::make_shared<QVector<NewsArticle>>();
+    detail::run_async_wait(svc, [svc, force, result](auto signal_done) {
+        svc->fetch_all_news(force, [result, signal_done](bool ok, QVector<NewsArticle> arts) {
             if (ok)
-                result = std::move(arts);
-            done = true;
-            loop.quit();
+                *result = std::move(arts);
+            signal_done();
         });
-        if (!done)
-            loop.exec();
-        return result;
-    }
-
-    // Worker thread: post the fetch to the main thread, block until it
-    // completes via a wait condition. Don't use a worker-thread QEventLoop —
-    // NAM signals fire on the main thread and would never wake it.
-    QMutex m;
-    QWaitCondition cv;
-    bool done = false;
-    QMetaObject::invokeMethod(
-        svc,
-        [svc, force, &result, &m, &cv, &done]() {
-            svc->fetch_all_news(force, [&result, &m, &cv, &done](bool ok, QVector<NewsArticle> arts) {
-                QMutexLocker lock(&m);
-                if (ok)
-                    result = std::move(arts);
-                done = true;
-                cv.wakeAll();
-            });
-        },
-        Qt::QueuedConnection);
-
-    QMutexLocker lock(&m);
-    while (!done)
-        cv.wait(&m);
-    return result;
+    });
+    return *result;
 }
 
 static QVector<NewsArticle> filter_articles(const QVector<NewsArticle>& articles, const QString& category,
@@ -189,7 +159,12 @@ std::vector<ToolDef> get_news_tools() {
             if (all.isEmpty())
                 return ToolResult::fail("No news articles available — feeds may still be loading");
 
-            auto filtered = filter_articles(all, category, time_range, query, sentiment, limit);
+            // Filter without a cap, then slice: stopping the filter at `limit` made
+            // "20 articles" indistinguishable from "exactly 20 matched" (§M4).
+            auto filtered = filter_articles(all, category, time_range, query, sentiment, 0);
+            const int matched = static_cast<int>(filtered.size());
+            if (filtered.size() > limit)
+                filtered.resize(limit);
 
             QJsonArray result;
             for (const auto& a : filtered)
@@ -197,8 +172,15 @@ std::vector<ToolDef> get_news_tools() {
 
             LOG_DEBUG(TAG, QString("get_news: %1/%2 articles").arg(filtered.size()).arg(all.size()));
 
-            return ToolResult::ok(QString("Found %1 articles").arg(filtered.size()),
+            const bool truncated = matched > filtered.size();
+            return ToolResult::ok(truncated ? QString("Showing %1 of %2 matching articles (raise `limit`, max 100, or "
+                                                      "narrow the filters to see others)")
+                                                  .arg(filtered.size())
+                                                  .arg(matched)
+                                            : QString("Found %1 articles").arg(filtered.size()),
                                   QJsonObject{{"count", filtered.size()},
+                                              {"matched", matched},
+                                              {"truncated", truncated},
                                               {"total", all.size()},
                                               {"category", category},
                                               {"time_range", time_range},
@@ -235,6 +217,7 @@ std::vector<ToolDef> get_news_tools() {
                 return x.sort_ts > y.sort_ts;
             });
 
+            const int matched = static_cast<int>(high_prio.size());
             if (high_prio.size() > limit)
                 high_prio.resize(limit);
 
@@ -242,8 +225,16 @@ std::vector<ToolDef> get_news_tools() {
             for (const auto& a : high_prio)
                 result.append(article_to_json(a));
 
-            return ToolResult::ok(QString("%1 high-priority articles").arg(high_prio.size()),
-                                  QJsonObject{{"count", high_prio.size()}, {"articles", result}});
+            const bool truncated = matched > high_prio.size();
+            return ToolResult::ok(truncated ? QString("Showing the top %1 of %2 high-priority articles (raise `limit`, "
+                                                      "max 50, to see more)")
+                                                  .arg(high_prio.size())
+                                                  .arg(matched)
+                                            : QString("%1 high-priority articles").arg(high_prio.size()),
+                                  QJsonObject{{"count", high_prio.size()},
+                                              {"matched", matched},
+                                              {"truncated", truncated},
+                                              {"articles", result}});
         };
         tools.push_back(std::move(t));
     }
@@ -269,14 +260,29 @@ std::vector<ToolDef> get_news_tools() {
             int limit = qBound(1, args["limit"].toInt(20), 100);
 
             auto all = fetch_articles_sync(false);
-            auto filtered = filter_articles(all, "ALL", time_range, query, "ALL", limit);
+            if (all.isEmpty())
+                return ToolResult::fail("No news articles available — feeds may still be loading");
+            auto filtered = filter_articles(all, "ALL", time_range, query, "ALL", 0);
+            const int matched = static_cast<int>(filtered.size());
+            if (filtered.size() > limit)
+                filtered.resize(limit);
 
             QJsonArray result;
             for (const auto& a : filtered)
                 result.append(article_to_json(a));
 
-            return ToolResult::ok(QString("Found %1 articles matching '%2'").arg(filtered.size()).arg(query),
-                                  QJsonObject{{"count", filtered.size()}, {"query", query}, {"articles", result}});
+            const bool truncated = matched > filtered.size();
+            return ToolResult::ok(
+                truncated ? QString("Showing %1 of %2 articles matching '%3' (raise `limit`, max 100, to see others)")
+                                .arg(filtered.size())
+                                .arg(matched)
+                                .arg(query)
+                          : QString("Found %1 articles matching '%2'").arg(filtered.size()).arg(query),
+                QJsonObject{{"count", filtered.size()},
+                            {"matched", matched},
+                            {"truncated", truncated},
+                            {"query", query},
+                            {"articles", result}});
         };
         tools.push_back(std::move(t));
     }
@@ -293,6 +299,8 @@ std::vector<ToolDef> get_news_tools() {
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString time_range = args["time_range"].toString("24H");
             auto all = fetch_articles_sync(false);
+            if (all.isEmpty())
+                return ToolResult::fail("No news articles available — feeds may still be loading");
             auto filtered = filter_articles(all, "ALL", time_range, "", "ALL", 0);
 
             QMap<QString, int> cat_counts;
@@ -349,10 +357,13 @@ std::vector<ToolDef> get_news_tools() {
             "Create a news alert: a keyword monitor that notifies you of, and highlights, breaking articles "
             "matching specific keywords or topics in the News screen.";
         t.category = "news";
-        t.input_schema.properties =
-            QJsonObject{{"label", QJsonObject{{"type", "string"}, {"description", "Monitor name"}}},
-                        {"keywords", QJsonObject{{"type", "array"}, {"description", "Keywords to track"}}},
-                        {"color", QJsonObject{{"type", "string"}, {"description", "Highlight color hex (optional)"}}}};
+        t.is_destructive = true; // creates a persisted monitor that drives alerts
+        t.input_schema.properties = QJsonObject{
+            {"label", QJsonObject{{"type", "string"}, {"description", "Monitor name"}}},
+            {"keywords", QJsonObject{{"type", "array"},
+                                     {"items", QJsonObject{{"type", "string"}}},
+                                     {"description", "Keywords to track"}}},
+            {"color", QJsonObject{{"type", "string"}, {"description", "Highlight color hex (optional)"}}}};
         t.input_schema.required = {"label", "keywords"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString label = args["label"].toString().trimmed();
@@ -369,12 +380,26 @@ std::vector<ToolDef> get_news_tools() {
                 return ToolResult::fail("'keywords' must be a non-empty array");
 
             QString color = args["color"].toString();
-            NewsMonitorService::instance().add_monitor(label, keywords, color);
+            // The service owns `monitors_` on its thread, and the News screen reads it
+            // there — appending from this worker raced those reads. Marshal it, and
+            // read back the id the service generated so the model can toggle/delete
+            // the monitor it just made without a get_news_monitors round trip.
+            auto* svc = &NewsMonitorService::instance();
+            QString new_id;
+            detail::run_async_wait(svc, [svc, label, keywords, color, &new_id](auto signal_done) {
+                svc->add_monitor(label, keywords, color);
+                const auto all = svc->get_monitors();
+                if (!all.isEmpty())
+                    new_id = all.last().id;
+                signal_done();
+            });
             EventBus::instance().publish("news.monitor_added", QVariantMap{{"label", label}});
 
             LOG_INFO(TAG, "Added news monitor: " + label);
             return ToolResult::ok("Monitor created: " + label,
-                                  QJsonObject{{"label", label}, {"keywords", QJsonArray::fromStringList(keywords)}});
+                                  QJsonObject{{"id", new_id},
+                                              {"label", label},
+                                              {"keywords", QJsonArray::fromStringList(keywords)}});
         };
         tools.push_back(std::move(t));
     }
@@ -386,7 +411,13 @@ std::vector<ToolDef> get_news_tools() {
         t.description = "List all configured news keyword monitors.";
         t.category = "news";
         t.handler = [](const QJsonObject&) -> ToolResult {
-            auto monitors = NewsMonitorService::instance().get_monitors();
+            // Copy the list on the service's thread — the News screen mutates it there.
+            auto* svc = &NewsMonitorService::instance();
+            QVector<NewsMonitor> monitors;
+            detail::run_async_wait(svc, [svc, &monitors](auto signal_done) {
+                monitors = svc->get_monitors();
+                signal_done();
+            });
             QJsonArray result;
             for (const auto& m : monitors) {
                 result.append(QJsonObject{{"id", m.id},
@@ -425,22 +456,48 @@ std::vector<ToolDef> get_news_tools() {
     {
         ToolDef t;
         t.name = "toggle_news_monitor";
-        t.description = "Enable or disable an existing news keyword monitor by id. "
+        t.description = "Enable or disable an existing news keyword monitor by id. Pass `enabled` to set the state "
+                        "explicitly; without it the monitor is flipped. Returns the resulting state. "
                         "Use get_news_monitors to discover monitor ids.";
         t.category = "news";
-        t.input_schema.properties = QJsonObject{{"id", QJsonObject{{"type", "string"}, {"description", "Monitor id"}}}};
+        t.is_destructive = true; // changes which alerts fire
+        t.input_schema.properties = QJsonObject{
+            {"id", QJsonObject{{"type", "string"}, {"description", "Monitor id"}}},
+            {"enabled", QJsonObject{{"type", "boolean"},
+                                    {"description", "Desired state (true = on). Omit to flip the current state."}}}};
         t.input_schema.required = {"id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString id = args["id"].toString().trimmed();
             if (id.isEmpty())
                 return ToolResult::fail("Missing 'id'");
+            const bool has_desired = args.contains("enabled");
+            const bool desired = args["enabled"].toBool();
             auto* svc = &NewsMonitorService::instance();
-            detail::run_async_wait(svc, [svc, id](auto signal_done) {
-                svc->toggle_monitor(id);
+            // The service only offers a blind flip and silently ignores an unknown id, so
+            // the old tool reported "Monitor toggled" for ids that do not exist and never
+            // said which way it flipped. Look the monitor up first, flip only when needed,
+            // and report the state it ended in.
+            bool found = false;
+            bool now_enabled = false;
+            detail::run_async_wait(svc, [svc, id, has_desired, desired, &found, &now_enabled](auto signal_done) {
+                for (const auto& m : svc->get_monitors()) {
+                    if (m.id != id)
+                        continue;
+                    found = true;
+                    now_enabled = m.enabled;
+                    break;
+                }
+                if (found && (!has_desired || desired != now_enabled)) {
+                    svc->toggle_monitor(id);
+                    now_enabled = !now_enabled;
+                }
                 signal_done();
             });
+            if (!found)
+                return ToolResult::fail("Unknown monitor id '" + id + "' — use get_news_monitors to list ids");
             EventBus::instance().publish("news.monitor_toggled", QVariantMap{{"id", id}});
-            return ToolResult::ok("Monitor toggled: " + id, QJsonObject{{"id", id}});
+            return ToolResult::ok(QString("Monitor %1 is now %2").arg(id, now_enabled ? "enabled" : "disabled"),
+                                  QJsonObject{{"id", id}, {"enabled", now_enabled}});
         };
         tools.push_back(std::move(t));
     }
@@ -459,10 +516,21 @@ std::vector<ToolDef> get_news_tools() {
             if (id.isEmpty())
                 return ToolResult::fail("Missing 'id'");
             auto* svc = &NewsMonitorService::instance();
-            detail::run_async_wait(svc, [svc, id](auto signal_done) {
-                svc->delete_monitor(id);
+            bool found = false;
+            detail::run_async_wait(svc, [svc, id, &found](auto signal_done) {
+                for (const auto& m : svc->get_monitors()) {
+                    if (m.id == id) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found)
+                    svc->delete_monitor(id);
                 signal_done();
             });
+            if (!found)
+                return ToolResult::fail("Unknown monitor id '" + id + "' — nothing was deleted. Use "
+                                                                        "get_news_monitors to list ids");
             EventBus::instance().publish("news.monitor_deleted", QVariantMap{{"id", id}});
             return ToolResult::ok("Monitor deleted: " + id, QJsonObject{{"id", id}});
         };
@@ -619,10 +687,13 @@ std::vector<ToolDef> get_news_tools() {
                 clusters = get_breaking_clusters(clusters);
 
             QJsonArray result;
-            int kept = 0;
+            int eligible = 0;
             for (const auto& c : clusters) {
                 if (c.source_count < min_sources)
                     continue;
+                ++eligible;
+                if (result.size() >= limit)
+                    continue; // keep counting so a clipped list is reported as clipped (§M4)
                 QJsonObject obj{{"id", c.id},
                                 {"lead", article_to_json(c.lead_article)},
                                 {"source_count", c.source_count},
@@ -640,12 +711,17 @@ std::vector<ToolDef> get_news_tools() {
                     obj["articles"] = arts;
                 }
                 result.append(obj);
-                if (++kept >= limit)
-                    break;
             }
 
-            return ToolResult::ok(QString("%1 clusters").arg(result.size()),
+            const bool truncated = eligible > result.size();
+            return ToolResult::ok(truncated ? QString("Showing %1 of %2 clusters (raise `limit`, max 100, or raise "
+                                                      "`min_sources` to see the strongest stories)")
+                                                  .arg(result.size())
+                                                  .arg(eligible)
+                                            : QString("%1 clusters").arg(result.size()),
                                   QJsonObject{{"count", result.size()},
+                                              {"matched", eligible},
+                                              {"truncated", truncated},
                                               {"category", category},
                                               {"time_range", time_range},
                                               {"breaking_only", breaking_only},
@@ -703,24 +779,35 @@ std::vector<ToolDef> get_news_tools() {
                 if (!threat_cat_filter.isEmpty() && a.threat.category.toLower() != threat_cat_filter)
                     continue;
 
-                QJsonObject obj = article_to_json(a);
-                obj["threat_level"] = threat_level_string(level);
-                obj["threat_category"] = a.threat.category;
-                obj["threat_confidence"] = a.threat.confidence;
-                result.append(obj);
-
+                // Count every match, but only serialise up to `limit` — the counts
+                // below describe ALL alerts, so a clipped list is visibly clipped (§M4).
                 if (level == ThreatLevel::CRITICAL)
                     ++critical;
                 else
                     ++high;
 
                 if (result.size() >= limit)
-                    break;
+                    continue;
+
+                QJsonObject obj = article_to_json(a);
+                obj["threat_level"] = threat_level_string(level);
+                obj["threat_category"] = a.threat.category;
+                obj["threat_confidence"] = a.threat.confidence;
+                result.append(obj);
             }
 
+            const int total_alerts = critical + high;
+            const bool truncated = total_alerts > result.size();
             return ToolResult::ok(
-                QString("%1 threat alerts (%2 critical, %3 high)").arg(result.size()).arg(critical).arg(high),
+                truncated ? QString("Showing %1 of %2 threat alerts (%3 critical, %4 high) — raise `limit` (max 100) "
+                                    "or set min_level=CRITICAL to see the rest")
+                                .arg(result.size())
+                                .arg(total_alerts)
+                                .arg(critical)
+                                .arg(high)
+                          : QString("%1 threat alerts (%2 critical, %3 high)").arg(result.size()).arg(critical).arg(high),
                 QJsonObject{{"count", result.size()},
+                            {"truncated", truncated},
                             {"critical_count", critical},
                             {"high_count", high},
                             {"min_level", min_level_s},

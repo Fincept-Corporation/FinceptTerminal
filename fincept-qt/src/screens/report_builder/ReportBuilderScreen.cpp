@@ -42,6 +42,7 @@
 #include <QPrintPreviewDialog>
 #include <QPrinter>
 #include <QPushButton>
+#include <QScopedValueRollback>
 #include <QShortcut>
 #include <QTextDocument>
 #include <QTextFrame>
@@ -120,10 +121,12 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
     connect(comp_toolbar_, &ComponentToolbar::move_down, this, &ReportBuilderScreen::move_down_at);
 
     // ── Properties panel wiring ───────────────────────────────────────────
-    connect(properties_, &PropertiesPanel::content_changed, this, [](int idx, const QString& content) {
+    connect(properties_, &PropertiesPanel::content_changed, this, [this](int idx, const QString& content) {
         const auto comps = Service::instance().components();
         if (idx < 0 || idx >= comps.size())
             return;
+        // The edit came FROM the panel — keep its widgets (see props_editing_).
+        QScopedValueRollback<bool> editing(props_editing_, true);
         Service::instance().update_component(comps[idx].id, content, comps[idx].config);
     });
 
@@ -340,9 +343,11 @@ ReportBuilderScreen::ReportBuilderScreen(QWidget* parent) : QWidget(parent) {
                     return;
                 }
 
-                // Generic single-key config patch.
+                // Generic single-key config patch. The panel's own editor already shows
+                // this value, so don't rebuild the panel around it (see props_editing_).
                 QMap<QString, QString> patch;
                 patch[key] = val;
+                QScopedValueRollback<bool> editing(props_editing_, true);
                 svc.patch_component(comp_id, nullptr, patch);
             });
 
@@ -547,6 +552,10 @@ void ReportBuilderScreen::retranslateUi() {
     if (right_toggle_btn_)
         right_toggle_btn_->setToolTip(right_collapsed_ ? tr("Expand properties panel  (Ctrl+Shift+B)")
                                                        : tr("Collapse properties panel  (Ctrl+Shift+B)"));
+    // The properties panel rebuilds itself from its cached copy of the component, which is
+    // no longer refreshed on every edit (see props_editing_) — re-sync it from the service
+    // so a language switch can't resurrect stale text.
+    rebind_from_service();
 }
 
 // ── IStatefulScreen ──────────────────────────────────────────────────────────

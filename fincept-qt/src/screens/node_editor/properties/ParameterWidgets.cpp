@@ -15,6 +15,7 @@
 #include <QJsonDocument>
 #include <QPointer>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QtConcurrent/QtConcurrent>
 
 #include <memory>
@@ -197,7 +198,7 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                     combo->setCurrentIndex(combo->count() - 1);
             }
         };
-        populate();
+        populate(current_value.toString()); // re-select the file this node already points at
 
         rl->addWidget(combo, 1);
 
@@ -269,9 +270,14 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         combo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
         auto populate_agents = [combo, current_value]() {
-            QString saved = current_value.toString();
-            if (combo->count() > 0)
-                saved = combo->currentData().toString();
+            // While the "Loading agents…" placeholder is showing, its (empty) data is NOT the
+            // user's choice — fall back to the value the node already holds. Reading it as the
+            // choice dropped the saved agent, and clear() then emitted currentIndexChanged,
+            // which wrote "" back into the node's parameters.
+            QString saved = combo->count() > 0 ? combo->currentData().toString() : QString();
+            if (saved.isEmpty())
+                saved = current_value.toString();
+            QSignalBlocker block(combo); // repopulating is not a user edit
             combo->clear();
             combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "— select agent —"), QString());
 
@@ -382,7 +388,10 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                 .arg(input_style(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER(), ui::colors::TEXT_PRIMARY()));
 
         auto populate_tools = [combo, current_value]() {
-            QString saved = combo->count() > 0 ? combo->currentData().toString() : current_value.toString();
+            QString saved = combo->count() > 0 ? combo->currentData().toString() : QString();
+            if (saved.isEmpty())
+                saved = current_value.toString(); // placeholder showing -> keep the node's tool
+            QSignalBlocker block(combo);
             combo->clear();
             combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "— select tool —"), QString());
 
@@ -460,23 +469,33 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
         auto populate_connections = [p_combo, provider, current_value]() {
             if (!p_combo)
                 return;
-            p_combo->clear();
-            p_combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "Loading connections..."),
-                             QString());
+            // Decide what to keep BEFORE the loading placeholder replaces the current item.
+            // The old code read it afterwards — from the placeholder, whose data is empty — so
+            // the saved connection was never re-selected, and the clear() calls (signals live)
+            // wrote "" into the node's connection_id as soon as the node was selected.
+            QString keep = p_combo->currentData().toString();
+            if (keep.isEmpty())
+                keep = current_value.toString();
+            {
+                QSignalBlocker block(p_combo.data());
+                p_combo->clear();
+                p_combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "Loading connections..."),
+                                 QString());
+            }
 
             // Load all saved connections of this provider type asynchronously
-            (void)QtConcurrent::run([p_combo, provider, current_value]() {
+            (void)QtConcurrent::run([p_combo, provider, keep]() {
                 auto res = std::make_shared<Result<QVector<DataSource>>>(DataSourceRepository::instance().list_all());
 
                 // Post results back to combo box on the UI thread
                 QMetaObject::invokeMethod(
                     p_combo.data(),
-                    [p_combo, provider, current_value, res]() {
+                    [p_combo, provider, keep, res]() {
                         if (!p_combo)
                             return;
 
-                        QString saved =
-                            p_combo->count() > 0 ? p_combo->currentData().toString() : current_value.toString();
+                        const QString& saved = keep;
+                        QSignalBlocker block(p_combo.data());
                         p_combo->clear();
                         p_combo->addItem(QCoreApplication::translate("ParameterWidgetFactory", "— select connection —"),
                                          QString());

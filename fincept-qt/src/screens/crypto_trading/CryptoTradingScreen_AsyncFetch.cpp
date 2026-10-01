@@ -28,6 +28,7 @@
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QJsonObject>
+#include <QMessageBox>
 #include <QPointer>
 #include <QSplitter>
 #include <QStringListModel>
@@ -49,15 +50,24 @@ void CryptoTradingScreen::async_fetch_candles(const QString& symbol, const QStri
         auto candles = ExchangeService::instance().fetch_ohlcv(symbol, timeframe, OHLCV_FETCH_COUNT);
         if (!self)
             return;
-        self->candles_fetching_ = false;
         QMetaObject::invokeMethod(
             self,
             [self, candles, symbol, timeframe, attempt]() {
                 if (!self)
                     return;
+                // Release the single-flight guard on the UI thread (it used to be
+                // cleared from this worker through the QPointer, which races the
+                // widget's destruction).
+                self->candles_fetching_.store(false);
                 // The user may have moved on while the REST call was in flight.
-                if (self->selected_symbol_ != symbol || self->chart_->current_timeframe() != timeframe)
+                if (self->selected_symbol_ != symbol || self->chart_->current_timeframe() != timeframe) {
+                    // The fetch for what the chart is on NOW was swallowed by the
+                    // single-flight guard while this one ran, and this reply is
+                    // being discarded — so nothing would ever load its history.
+                    // Re-issue for the current selection.
+                    self->async_fetch_candles(self->selected_symbol_, self->chart_->current_timeframe());
                     return;
+                }
 
                 if (!candles.isEmpty()) {
                     self->chart_->set_candles(candles);
@@ -132,6 +142,8 @@ void CryptoTradingScreen::async_fetch_live_positions() {
                     return;
                 if (result.contains("positions"))
                     self->bottom_panel_->set_live_positions(result.value("positions").toArray());
+                else if (result.contains("error"))
+                    self->bottom_panel_->set_live_positions_unavailable(result.value("error").toString());
                 self->live_inflight_.fetch_sub(1);
             },
             Qt::QueuedConnection);
@@ -157,6 +169,8 @@ void CryptoTradingScreen::async_fetch_live_orders() {
                     return;
                 if (result.contains("orders"))
                     self->bottom_panel_->set_live_orders(result.value("orders").toArray());
+                else if (result.contains("error"))
+                    self->bottom_panel_->set_live_orders_unavailable(result.value("error").toString());
                 self->live_inflight_.fetch_sub(1);
             },
             Qt::QueuedConnection);
@@ -196,11 +210,32 @@ void CryptoTradingScreen::async_fetch_live_balance() {
                 // decode to 0.0 and render a misleading $0.00 that looks exactly
                 // like a genuinely empty account. Surface an explicit unavailable
                 // state instead, and leave the order-entry balance untouched.
-                if (result.contains("error") || !result.contains("total")) {
+                // The daemon's fetch_balance returns {"balances": {CCY: {free, used,
+                // total}}} (non-zero currencies only); this reader only knew the
+                // legacy {"total": {CCY: x}, "free": {...}, "used": {...}} shape, so
+                // a perfectly good response always landed in the UNAVAILABLE branch
+                // and the live balance never reached the ticket. Accept both.
+                const bool daemon_shape = result.contains("balances");
+                if (result.contains("error") || (!daemon_shape && !result.contains("total"))) {
                     self->bottom_panel_->set_balance_unavailable(
                         result.value("error").toString(QStringLiteral("no data")));
                 } else {
-                    const QJsonObject totals = result.value("total").toObject();
+                    QJsonObject totals;
+                    QJsonObject frees;
+                    QJsonObject useds;
+                    if (daemon_shape) {
+                        const QJsonObject per_ccy = result.value("balances").toObject();
+                        for (auto it = per_ccy.constBegin(); it != per_ccy.constEnd(); ++it) {
+                            const QJsonObject b = it.value().toObject();
+                            totals.insert(it.key(), b.value("total"));
+                            frees.insert(it.key(), b.value("free"));
+                            useds.insert(it.key(), b.value("used"));
+                        }
+                    } else {
+                        totals = result.value("total").toObject();
+                        frees = result.value("free").toObject();
+                        useds = result.value("used").toObject();
+                    }
                     // Fall back through the common stable quotes so an account
                     // funded in USDC on a USDT-quoted pair still shows.
                     QString ccy = quote;
@@ -214,8 +249,8 @@ void CryptoTradingScreen::async_fetch_live_balance() {
                         }
                     }
                     const double total = totals.value(ccy).toDouble();
-                    const double free = result.value("free").toObject().value(ccy).toDouble();
-                    const double used = result.value("used").toObject().value(ccy).toDouble();
+                    const double free = frees.value(ccy).toDouble();
+                    const double used = useds.value(ccy).toDouble();
                     self->bottom_panel_->set_live_balance(free, total, used);
                     self->order_entry_->set_balance(free);
                 }
@@ -290,14 +325,74 @@ void CryptoTradingScreen::async_fetch_mark_price() {
 }
 
 void CryptoTradingScreen::async_set_leverage(int leverage) {
+    // Leverage / margin mode are ACCOUNT settings on the exchange. In PAPER mode the
+    // ticket's controls only drive the cost preview (the paper engine runs 1x), and
+    // forwarding them anyway silently re-levers the user's REAL account whenever API
+    // keys are configured. Only touch the exchange in LIVE mode.
+    if (trading_mode_ != crypto::TradingMode::Live)
+        return;
     const QString symbol = selected_symbol_;
-    (void)QtConcurrent::run([symbol, leverage]() { ExchangeService::instance().set_leverage(symbol, leverage); });
+    const int seq = ++leverage_seq_;
+    QPointer<CryptoTradingScreen> self = this;
+    // Debounce: the spin box emits on every step (wheel / held arrow), and each
+    // used to be its own exchange API call. Only the value the user settles on
+    // should be sent.
+    QTimer::singleShot(600, this, [self, symbol, leverage, seq]() {
+        if (!self || seq != self->leverage_seq_ || self->trading_mode_ != crypto::TradingMode::Live)
+            return;
+        (void)QtConcurrent::run([self, symbol, leverage]() {
+            QString err;
+            try {
+                const QJsonObject r = ExchangeService::instance().set_leverage(symbol, leverage);
+                if (r.contains("error") || !r.value("success").toBool(true))
+                    err = r.value("error").toString(QStringLiteral("The exchange rejected the leverage change."));
+            } catch (...) {
+                err = QStringLiteral("leverage request failed");
+            }
+            if (err.isEmpty() || !self)
+                return;
+            LOG_WARN("CryptoTrading", QString("set_leverage(%1, %2x) failed: %3").arg(symbol).arg(leverage).arg(err));
+            QMetaObject::invokeMethod(
+                self,
+                [self, symbol, leverage, err]() {
+                    if (!self)
+                        return;
+                    QMessageBox::warning(self, tr("Leverage"),
+                                         tr("Could not set %1 leverage to %2x:\n%3").arg(symbol).arg(leverage).arg(err));
+                },
+                Qt::QueuedConnection);
+        });
+    });
 }
 
 void CryptoTradingScreen::async_set_margin_mode(const QString& mode) {
+    if (trading_mode_ != crypto::TradingMode::Live)
+        return; // see async_set_leverage — never change a real account from PAPER mode
     const QString symbol = selected_symbol_;
     const QString m = mode;
-    (void)QtConcurrent::run([symbol, m]() { ExchangeService::instance().set_margin_mode(symbol, m); });
+    QPointer<CryptoTradingScreen> self = this;
+    (void)QtConcurrent::run([self, symbol, m]() {
+        QString err;
+        try {
+            const QJsonObject r = ExchangeService::instance().set_margin_mode(symbol, m);
+            if (r.contains("error") || !r.value("success").toBool(true))
+                err = r.value("error").toString(QStringLiteral("The exchange rejected the margin-mode change."));
+        } catch (...) {
+            err = QStringLiteral("margin-mode request failed");
+        }
+        if (err.isEmpty() || !self)
+            return;
+        LOG_WARN("CryptoTrading", QString("set_margin_mode(%1, %2) failed: %3").arg(symbol, m, err));
+        QMetaObject::invokeMethod(
+            self,
+            [self, symbol, m, err]() {
+                if (!self)
+                    return;
+                QMessageBox::warning(self, tr("Margin mode"),
+                                     tr("Could not set %1 margin mode to %2:\n%3").arg(symbol, m, err));
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

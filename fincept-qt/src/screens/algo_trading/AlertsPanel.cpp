@@ -323,6 +323,14 @@ void AlertsPanel::on_save_watch() {
         status_label_->setText(tr("Enter at least one symbol."));
         return;
     }
+    // DATA SOURCE defaults to "Broker Only" and the account to "None": that pair can never
+    // fetch a candle, so the watch would sit "watching" forever without ever evaluating.
+    if (w.data_source == QLatin1String("Broker") && w.account_id.isEmpty()) {
+        status_label_->setText(
+            tr("Data source is 'Broker Only' but no broker account is selected — pick an account, or switch the "
+               "data source to Auto / YFinance."));
+        return;
+    }
     // Editing an existing watch → UPDATE in place + restart its monitor.
     if (!editing_id_.isEmpty()) {
         w.id = editing_id_;

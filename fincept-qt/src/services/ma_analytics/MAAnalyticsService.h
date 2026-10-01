@@ -258,9 +258,12 @@ class MAAnalyticsService : public QObject, public fincept::datahub::Producer {
     /// Run a Python script in the Analytics/corporateFinance/ tree.
     void run_python(const QString& script, const QStringList& args, const QString& context);
 
-    /// Run with JSON payload piped via args
+    /// Run with JSON payload piped via args.
+    /// `bool_error_flag`: the script reports failure as `{"error": true, "message": "..."}` and success as
+    /// `{"error": false, ...}` (the options analytics scripts). PythonRunner's script-level error envelope reads
+    /// that `false` as the error text "false", so these calls bypass it and interpret the flag here instead.
     void run_python_json(const QString& script, const QString& command, const QJsonObject& params,
-                         const QString& context);
+                         const QString& context, bool bool_error_flag = false);
 
     static constexpr int kResultTtlSec = 120;
 

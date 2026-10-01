@@ -50,8 +50,8 @@ pr::ExchangeCapabilities KalshiAdapter::capabilities() const {
     c.supports_limit_orders = true;
     c.supports_market_orders = true;
     c.supports_gtd = true;
-    c.supports_fok = true;
-    c.supports_fak = true;
+    c.supports_fok = false; // the Python bridge has no time-in-force field (see place_order)
+    c.supports_fak = false;
     c.supports_decrease_order = true;
     c.supports_batch_orders = true;
     c.quote_currency = QStringLiteral("USD");
@@ -82,6 +82,11 @@ void KalshiAdapter::list_markets(const QString& category, const QString& /*sort_
 void KalshiAdapter::list_events(const QString& category, const QString& /*sort_by*/, int limit, int /*offset*/) {
     const QString series = (category.isEmpty() || category == QStringLiteral("ALL")) ? QString() : category;
     rest_->fetch_events(QStringLiteral("open"), series, /*with_nested_markets=*/true, limit, QString());
+}
+
+void KalshiAdapter::list_events_by_status(const QString& status, const QString& category, int limit) {
+    const QString series = (category.isEmpty() || category == QStringLiteral("ALL")) ? QString() : category;
+    rest_->fetch_events(status, series, /*with_nested_markets=*/true, limit, QString());
 }
 
 void KalshiAdapter::search(const QString& query, int limit) {
@@ -373,13 +378,38 @@ void KalshiAdapter::place_order(const pr::OrderRequest& req) {
         return;
     }
 
+    // Kalshi trades whole contracts; int(req.size) below would silently truncate 5.9 -> 5.
+    if (req.size < 1.0 || std::abs(req.size - std::round(req.size)) > 1e-9) {
+        emit error_occurred(QStringLiteral("place_order"),
+                            QStringLiteral("Kalshi orders are whole contracts (size must be an integer >= 1)"));
+        return;
+    }
+
+    // The order ticket offers the time-in-force codes GTC / FOK / FAK (Polymarket's
+    // vocabulary), but Kalshi's order `type` is only "limit" | "market". The old code
+    // forwarded req.order_type.toLower() ("gtc") verbatim, which the bridge put straight
+    // into the request body as type="gtc" — not a valid Kalshi type, and (not being
+    // "limit") sent with no price. Map the codes. FOK / FAK have no field in the bridge's
+    // request, so refuse them instead of quietly turning them into a resting limit order.
+    const QString type_code = req.order_type.trimmed().toUpper();
+    QString kalshi_type;
+    if (type_code.isEmpty() || type_code == QStringLiteral("GTC") || type_code == QStringLiteral("LIMIT")) {
+        kalshi_type = QStringLiteral("limit");
+    } else if (type_code == QStringLiteral("MARKET")) {
+        kalshi_type = QStringLiteral("market");
+    } else {
+        emit error_occurred(QStringLiteral("place_order"),
+                            QStringLiteral("Kalshi: order type %1 is not supported — use GTC").arg(type_code));
+        return;
+    }
+
     QJsonObject extra;
     extra.insert("ticker", ticker);
     extra.insert("side", side);
     extra.insert("action",
                  req.side.toLower() == QStringLiteral("sell") ? QStringLiteral("sell") : QStringLiteral("buy"));
     extra.insert("count", int(req.size));
-    extra.insert("order_type", req.order_type.isEmpty() ? QStringLiteral("limit") : req.order_type.toLower());
+    extra.insert("order_type", kalshi_type);
     // Kalshi limit price is integer cents 1-99.
     const int price_cents = qBound(1, int(std::round(req.price * 100.0)), 99);
     if (side == QStringLiteral("yes"))

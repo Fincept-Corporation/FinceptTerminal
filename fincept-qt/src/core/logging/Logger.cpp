@@ -166,7 +166,11 @@ void Logger::rotate_if_needed_locked() {
     if (log_file_.open(QIODevice::WriteOnly | QIODevice::Append)) {
         bytes_written_ = 0;
     } else {
-        qWarning() << "[Logger] rotate: reopen failed for" << base << "error:" << log_file_.errorString();
+        // stderr, not qWarning(): this runs with mutex_ held and main.cpp's Qt
+        // message handler routes qWarning() straight back into Logger::write(),
+        // which would re-lock the same non-recursive mutex and deadlock.
+        fprintf(stderr, "[Logger] rotate: reopen failed for %s error: %s\n", qUtf8Printable(base),
+                qUtf8Printable(log_file_.errorString()));
     }
 }
 

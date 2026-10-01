@@ -467,6 +467,21 @@ class OnlineLearningManager:
         }
 
 
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def main():
     """Main CLI interface"""
     if len(sys.argv) < 2:
@@ -522,7 +537,7 @@ def main():
     except Exception as e:
         result = {'success': False, 'error': str(e)}
 
-    print(json.dumps(result, indent=2))
+    print(json.dumps(_json_safe(result), indent=2))
 
 
 if __name__ == '__main__':

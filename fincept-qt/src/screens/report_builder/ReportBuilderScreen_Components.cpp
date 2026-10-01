@@ -196,7 +196,9 @@ void ReportBuilderScreen::on_component_added(int id, int /*index*/) {
 void ReportBuilderScreen::on_component_updated(int id) {
     refresh_canvas();
     refresh_structure();
-    if (id == selected_id_) {
+    // props_editing_: the update came from a keystroke in the properties panel itself;
+    // rebuilding it here would delete the editor the user is typing in.
+    if (id == selected_id_ && !props_editing_) {
         auto& svc = Service::instance();
         int sel_idx = svc.index_of(id);
         if (sel_idx >= 0)
@@ -224,6 +226,13 @@ void ReportBuilderScreen::on_component_removed(int id, int /*prior_index*/) {
 void ReportBuilderScreen::on_component_moved(int /*id*/, int /*from*/, int /*to*/) {
     refresh_canvas();
     refresh_structure();
+    // The properties panel addresses its component by INDEX, and a move changes the index
+    // of the selected component (or of the one it swapped with). It was never re-pointed,
+    // so after Move Up/Down — or an undo of one — edits typed into the panel landed in the
+    // neighbouring component.
+    const int sel_idx = (selected_id_ > 0) ? Service::instance().index_of(selected_id_) : -1;
+    if (sel_idx >= 0 && !props_editing_)
+        properties_->show_properties(&Service::instance().components()[sel_idx], sel_idx);
     ScreenStateManager::instance().notify_changed(this);
 }
 

@@ -344,7 +344,11 @@ void WebScraperWidget::on_auto_refresh_tick() {
 
 void WebScraperWidget::start_fetch() {
     const QUrl url(url_);
-    if (!url.isValid() || url.scheme().isEmpty()) {
+    // Web pages only. QNetworkAccessManager will also happily serve file:// and
+    // qrc:// URLs, and this URL is free text (also settable via the MCP
+    // add-widget tool), which would let a tile render arbitrary local files.
+    const bool web_scheme = url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https");
+    if (!url.isValid() || !web_scheme) {
         set_status(tr("Invalid URL"), true);
         return;
     }

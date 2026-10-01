@@ -177,6 +177,7 @@ class MetaLearningManager:
             return {'success': False, 'error': 'No models specified'}
 
         # Generate synthetic data if not provided (for demo/testing)
+        synthetic = X_train is None
         if X_train is None:
             n_samples = 1000
             n_features = 20
@@ -239,7 +240,8 @@ class MetaLearningManager:
                     'metrics': metrics,
                     'trained_at': datetime.now().isoformat(),
                     'n_train_samples': len(X_train),
-                    'n_test_samples': len(X_test)
+                    'n_test_samples': len(X_test),
+                    'synthetic_data': synthetic
                 }
 
                 results[model_id] = {
@@ -287,7 +289,9 @@ class MetaLearningManager:
             'ranking': ranking,
             'best_model': ranking[0]['model_id'] if ranking else None,
             'trained_count': trained_count,
-            'task_type': task_type
+            'task_type': task_type,
+            **({'synthetic_data': True,
+                'warning': 'Models were trained and scored on randomly generated data, not market data -- the metrics below measure nothing about any market and rankings are noise.'} if synthetic else {})
         }
 
     def _create_model(self, model_id: str, task_type: str):
@@ -395,7 +399,9 @@ class MetaLearningManager:
                 'ensemble_id': ensemble_id,
                 'method': ensemble_method,
                 'n_models': len(models),
-                'model_keys': model_keys
+                'model_keys': model_keys,
+                'warning': ('Ensemble definition only: it is neither fitted nor stored, and no '
+                            'predictions or scores are produced here.')
             }
 
         except Exception as e:
@@ -422,6 +428,7 @@ class MetaLearningManager:
             return {'success': False, 'error': 'scikit-learn not available'}
 
         # Generate synthetic data if not provided
+        synthetic = X_train is None
         if X_train is None:
             n_samples = 1000
             n_features = 20
@@ -452,7 +459,9 @@ class MetaLearningManager:
                 'best_params': search.best_params_,
                 'best_score': float(search.best_score_),
                 'search_method': search_method,
-                'cv_folds': cv
+                'cv_folds': cv,
+                **({'synthetic_data': True,
+                    'warning': 'Models were trained and scored on randomly generated data, not market data -- the metrics below measure nothing about any market and rankings are noise.'} if synthetic else {})
             }
 
         except Exception as e:
@@ -466,6 +475,21 @@ class MetaLearningManager:
             'best_model': self.best_model_id,
             'n_models': len(self.trained_models)
         }
+
+
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
 
 
 def main():
@@ -515,7 +539,7 @@ def main():
     except Exception as e:
         result = {'success': False, 'error': str(e)}
 
-    print(json.dumps(result, indent=2))
+    print(json.dumps(_json_safe(result), indent=2))
 
 
 if __name__ == '__main__':

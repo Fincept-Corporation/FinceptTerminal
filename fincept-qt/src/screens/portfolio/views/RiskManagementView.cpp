@@ -216,6 +216,11 @@ void RiskManagementView::retranslateUi() {
 
 void RiskManagementView::set_metrics(const portfolio::ComputedMetrics& metrics) {
     metrics_ = metrics;
+    // The overview cards (volatility, VaR, CVaR) read metrics_ too. Metrics land
+    // asynchronously after the summary, so without this the cards kept showing the
+    // day-change proxy until the next set_data().
+    if (has_data_)
+        update_overview();
     update_stress_test(); // rescale with real beta
 }
 
@@ -268,9 +273,17 @@ void RiskManagementView::update_overview() {
     for (qsizetype i = 0; i < std::min(qsizetype{5}, sorted.size()); ++i)
         conc_top5 += sorted[i].weight;
 
-    // VaR/CVaR — parametric normal: CVaR/VaR = phi(1.645)/0.05 ≈ 1.546
+    // VaR/CVaR — parametric normal: CVaR/VaR = phi(1.645)/0.05 ≈ 1.546. This is the
+    // fallback only: when PortfolioService has produced its historical-simulation
+    // figures (the ones PERF/RISK shows) use those, so the two views agree.
     double var95 = total_mv * avg_vol * 1.645 / 100.0;
     double cvar95 = var95 * 1.546;
+    bool var_historical = false;
+    if (metrics_.var_95.has_value() && metrics_.cvar_95.has_value()) {
+        var95 = *metrics_.var_95;
+        cvar95 = *metrics_.cvar_95;
+        var_historical = true;
+    }
 
     // Metric cards grid
     auto* grid = new QGridLayout;
@@ -311,9 +324,9 @@ void RiskManagementView::update_overview() {
     // previously always claimed "day-change proxy" even when the real 30-day
     // realized volatility from ComputedMetrics was used.
     add_card(0, 1, tr("ANNUALIZED VOLATILITY"), QString("%1%").arg(fmt(ann_vol, 1)), ui::colors::AMBER,
-             metrics_.volatility.has_value() ? tr("30-day realized") : tr("Based on day-change proxy"));
+             metrics_.volatility.has_value() ? tr("Realized, daily snapshots") : tr("Based on day-change proxy"));
     add_card(0, 2, tr("VALUE AT RISK (95%)"), QString("%1 %2").arg(currency_, fmt(var95)), ui::colors::NEGATIVE,
-             tr("1-day parametric"));
+             var_historical ? tr("1-day historical") : tr("1-day parametric"));
     add_card(0, 3, tr("CONDITIONAL VaR"), QString("%1 %2").arg(currency_, fmt(cvar95)), ui::colors::NEGATIVE,
              tr("Expected shortfall"));
 

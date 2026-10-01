@@ -6,6 +6,7 @@
 #include "services/gov_data/GovDataService.h"
 #include "ui/theme/Theme.h"
 
+#include <QDate>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -162,7 +163,9 @@ QWidget* GovDataCongressPanel::build_toolbar() {
 
     congress_num_ = new QSpinBox;
     congress_num_->setRange(1, 200);
-    congress_num_->setValue(118);
+    // Default to the sitting Congress: the 1st met in 1789 and a new one starts every two years
+    // (2025-2026 -> 119th). A hard-coded 118 listed a finished Congress.
+    congress_num_->setValue((QDate::currentDate().year() - 1789) / 2 + 1);
     congress_num_->setFixedHeight(26);
     hl->addWidget(congress_num_);
 

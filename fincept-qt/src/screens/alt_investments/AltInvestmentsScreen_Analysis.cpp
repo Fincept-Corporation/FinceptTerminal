@@ -18,6 +18,7 @@
 #include <QDoubleSpinBox>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
@@ -27,6 +28,7 @@
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QShowEvent>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QVBoxLayout>
@@ -194,7 +196,7 @@ static QList<AltField> fields_for(const QString& id) {
             text_field("name", alt_tr("BOND NAME"), "HY Corp Bond"),
             spin_field("par_value", alt_tr("PAR VALUE") + " ($)", 1000, 100, 1e9, 0, "$"),
             spin_field("price", alt_tr("MARKET PRICE") + " ($)", 950, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 8.5, 0, 30, 2, "", "%"),
+            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 8.5, 0, 30, 2, "", "%", true),
             spin_field("maturity_years", alt_tr("MATURITY (years)"), 5, 0.5, 30, 1),
             combo_field("credit_rating", alt_tr("CREDIT RATING"), "BB|B|CCC|BB+|BB-|B+|B-|CCC+"),
         };
@@ -203,7 +205,7 @@ static QList<AltField> fields_for(const QString& id) {
             text_field("name", alt_tr("BOND NAME"), "Brazil 2030"),
             spin_field("face_value", alt_tr("FACE VALUE") + " ($)", 1000, 100, 1e9, 0, "$"),
             spin_field("current_market_value", alt_tr("MARKET PRICE") + " ($)", 950, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 6.0, 0, 25, 2, "", "%"),
+            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 6.0, 0, 25, 2, "", "%", true),
             spin_field("maturity_years", alt_tr("MATURITY (years)"), 10, 0.5, 30, 1),
             spin_field("credit_spread", alt_tr("CREDIT SPREAD (%)"), 3.0, 0, 20, 2, "", "%", true),
         };
@@ -212,7 +214,7 @@ static QList<AltField> fields_for(const QString& id) {
             text_field("name", alt_tr("BOND NAME"), "Tesla Conv 2028"),
             spin_field("par_value", alt_tr("PAR VALUE") + " ($)", 1000, 100, 1e9, 0, "$"),
             spin_field("current_price", alt_tr("MARKET PRICE") + " ($)", 1100, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 2.0, 0, 15, 2, "", "%"),
+            spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 2.0, 0, 15, 2, "", "%", true),
             spin_field("maturity_years", alt_tr("MATURITY (years)"), 5, 0.5, 30, 1),
             spin_field("stock_price", alt_tr("STOCK PRICE") + " ($)", 55, 1, 1e6, 2, "$"),
             spin_field("conversion_ratio", alt_tr("CONVERSION RATIO"), 18, 1, 1e4, 2),
@@ -261,7 +263,7 @@ static QList<AltField> fields_for(const QString& id) {
     if (id == "natural-resources")
         return {
             text_field("name", alt_tr("COMMODITY NAME"), "WTI Crude Oil"),
-            spin_field("spot_price", alt_tr("SPOT PRICE") + " ($)", 80, 0, 1e6, 2, "$"),
+            spin_field("spot_price", alt_tr("SPOT PRICE") + " ($)", 80, 0, 1e6, 0, "$"),
             spin_field("three_month_futures", alt_tr("3M FUTURES") + " ($)", 82, 0, 1e6, 2, "$"),
             spin_field("six_month_futures", alt_tr("6M FUTURES") + " ($)", 84, 0, 1e6, 2, "$"),
             spin_field("twelve_month_futures", alt_tr("12M FUTURES") + " ($)", 87, 0, 1e6, 2, "$"),
@@ -306,6 +308,8 @@ static QList<AltField> fields_for(const QString& id) {
     if (id == "inflation-annuity")
         return {
             text_field("name", alt_tr("ANNUITY NAME"), "Inflation-Indexed Annuity"),
+            spin_field("acquisition_price", alt_tr("PREMIUM") + " ($)", 100000, 1000, 1e9, 0, "$"),
+            spin_field("age", alt_tr("PURCHASE AGE (years)"), 65, 40, 90, 0),
             spin_field("real_payout_rate", alt_tr("REAL PAYOUT RATE (%)"), 4.0, 0, 15, 2, "", "%", true),
             spin_field("inflation_rate", alt_tr("ASSUMED INFLATION (%)"), 3.0, 0, 15, 2, "", "%", true),
             spin_field("payout_years", alt_tr("PAYOUT TERM (years)"), 20, 5, 50, 0),
@@ -383,6 +387,175 @@ static QList<AltField> fields_for(const QString& id) {
     return {text_field("name", alt_tr("NAME"), "")};
 }
 
+// ── Analysis methods (cli.py --method) ───────────────────────────────────────
+// Per analyzer: the methods that run end to end in cli.py (checked by running every method of every analyzer),
+// default first. cli.py's argparse also lists methods whose implementation is missing (e.g. hedge-funds
+// `performance`, natural-resources `contango`) or crashes (convertible-bonds `bond_floor`, three annuity methods);
+// those are deliberately not offered. The screen used to pass no --method at all, so only each analyzer's default
+// method was reachable.
+
+struct AltMethod {
+    const char* id;
+    const char* label;
+};
+
+static QList<AltMethod> alt_methods_for(const QString& id) {
+    static const QHash<QString, QList<AltMethod>> kTable = {
+        {"digital-assets", {{"fundamental", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Fundamental metrics")}}},
+        {"hedge-funds", {{"metrics", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Strategy metrics")}}},
+        {"natural-resources", {{"basis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Futures basis")}}},
+        {"private-capital", {{"metrics", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Key metrics")}}},
+        {"real-estate",
+         {{"noi", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Net operating income")},
+          {"caprate", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Cap rate")},
+          {"dcf", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "DCF valuation")}}},
+        {"tips",
+         {{"real_yield", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Real yield")},
+          {"inflation_scenarios", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Inflation scenarios")},
+          {"tax_efficiency", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax efficiency")}}},
+        {"ibonds",
+         {{"composite_rate", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Composite rate")},
+          {"penalty", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Early redemption penalty")},
+          {"compare_tips", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Compare to TIPS")},
+          {"tax_efficiency", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax efficiency")}}},
+        {"high-yield",
+         {{"credit_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Credit spread analysis")},
+          {"default_prob", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Default probability")},
+          {"equity_behavior", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Equity-like behavior")}}},
+        {"preferred-stocks",
+         {{"yield_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Yield analysis")},
+          {"call_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Call risk")},
+          {"dividend_safety", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Dividend safety")}}},
+        {"pme",
+         {{"correlation", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Correlation")},
+          {"drawdowns", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Drawdowns")},
+          {"crisis_performance", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Crisis performance")}}},
+        {"convertible-bonds",
+         {{"conversion_premium", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Conversion premium")},
+          {"upside_participation", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Upside participation")}}},
+        {"annuities", {{"payouts", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Payout analysis")}}},
+        {"inflation-annuity",
+         {{"compare_fixed", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Compare to fixed annuity")},
+          {"compare_tips", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Compare to TIPS ladder")},
+          {"longevity", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Longevity break-even")},
+          {"inflation_value", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Inflation protection value")}}},
+        {"em-bonds",
+         {{"yield_spread", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Yield spread")},
+          {"default_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Sovereign default risk")},
+          {"currency_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Currency risk")}}},
+        {"managed-futures",
+         {{"trend_following", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Trend following")},
+          {"crisis_alpha", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Crisis alpha")},
+          {"fee_impact", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Fee impact")}}},
+        {"market-neutral",
+         {{"beta_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Beta analysis")},
+          {"factor_exposure", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Factor exposure")},
+          {"leverage_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Leverage risk")}}},
+        {"stable-value",
+         {{"market_to_book", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Market-to-book")},
+          {"crediting_rate", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Crediting rate")},
+          {"suitability", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Suitability")}}},
+        {"eia",
+         {{"crediting", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Credited return")},
+          {"upside_limitation", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Upside limitation")},
+          {"surrender_charges", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Surrender charges")}}},
+        {"asset-location",
+         {{"optimal", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Optimal location")},
+          {"value_added", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Value added")},
+          {"muni_bond", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Municipal bond decision")}}},
+        {"covered-calls",
+         {{"tax", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax consequences")},
+          {"opportunity_cost", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Opportunity cost")},
+          {"alternative", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Better alternative")},
+          {"verdict", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Verdict")}}},
+        {"sri",
+         {{"performance", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Performance")},
+          {"screening", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Screening impact")},
+          {"expenses", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Expenses")},
+          {"approaches", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "SRI approaches")}}},
+        {"leveraged-funds",
+         {{"decay", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Volatility decay")},
+          {"verdict", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Verdict")}}},
+        {"structured-products", {{"complexity", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Analysis verdict")}}},
+        {"variable-annuities",
+         {{"fees", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Total annual cost")},
+          {"tax", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax deferral")},
+          {"alternatives", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Alternatives")},
+          {"verdict", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Verdict")}}},
+    };
+    return kTable.value(id);
+}
+
+// ── Form -> cli.py data adaptation ────────────────────────────────────────────
+// The form's keys are display-oriented; cli.py reads its own names (and only those it lists). Copy each value
+// under the name the backend honours, keeping the original key too. Without this, e.g. the high-yield MARKET PRICE
+// (`price`) and the digital-asset 24H VOLUME (`volume_24h`) never reached the analyzers. Mappings were verified by
+// perturbing each input and checking the result changes.
+static void adapt_form_for_cli(const QString& id, QJsonObject& form) {
+    auto alias = [&form](const char* from, const char* to) {
+        if (form.contains(QLatin1String(from)) && !form.contains(QLatin1String(to)))
+            form.insert(QLatin1String(to), form.value(QLatin1String(from)));
+    };
+    if (id == QLatin1String("digital-assets")) {
+        alias("volume_24h", "trading_volume_24h");
+        alias("max_supply", "total_supply");
+    } else if (id == QLatin1String("real-estate")) {
+        alias("gross_income", "gross_rental_income");
+    } else if (id == QLatin1String("tips")) {
+        alias("face_value", "acquisition_price");
+        alias("current_market_value", "current_price");
+    } else if (id == QLatin1String("ibonds")) {
+        alias("purchase_price", "face_value");
+    } else if (id == QLatin1String("high-yield")) {
+        alias("par_value", "face_value");
+        alias("price", "current_market_value");
+    } else if (id == QLatin1String("convertible-bonds")) {
+        alias("par_value", "face_value");
+        alias("current_price", "current_market_value");
+    } else if (id == QLatin1String("annuities")) {
+        alias("premium", "acquisition_price");
+        alias("annual_payout_rate", "annuity_rate");
+    } else if (id == QLatin1String("stable-value")) {
+        alias("book_value", "acquisition_price");
+        alias("market_value", "current_market_value");
+    } else if (id == QLatin1String("covered-calls")) {
+        alias("shares", "shares_owned");
+        alias("premium", "option_premium");
+    } else if (id == QLatin1String("sri")) {
+        alias("sri_return", "fund_return");
+    } else if (id == QLatin1String("leveraged-funds")) {
+        alias("leverage_ratio", "leverage_multiple");
+    } else if (id == QLatin1String("natural-resources")) {
+        // The script prices the basis from `futures_price` (3-month contract here) and `expiry_months`.
+        alias("three_month_futures", "futures_price");
+        form.insert(QStringLiteral("expiry_months"), 3);
+    } else if (id == QLatin1String("market-neutral")) {
+        // GROSS LEVERAGE = long + short exposure; a market-neutral book is split evenly.
+        const double gross = form.value(QStringLiteral("gross_leverage")).toDouble(0.0);
+        if (gross > 0.0) {
+            form.insert(QStringLiteral("long_exposure"), gross / 2.0);
+            form.insert(QStringLiteral("short_exposure"), gross / 2.0);
+        }
+    }
+}
+
+void AltInvestmentsScreen::populate_methods(const QString& analyzer_id) {
+    if (!method_combo_)
+        return;
+    const QList<AltMethod> methods = alt_methods_for(analyzer_id);
+    {
+        const QSignalBlocker block(method_combo_);
+        method_combo_->clear();
+        for (const AltMethod& m : methods)
+            method_combo_->addItem(QCoreApplication::translate("AltInvestmentsScreen", m.label), QString::fromLatin1(m.id));
+    }
+    // Nothing to choose between when only one method is available.
+    const bool choosable = methods.size() > 1;
+    method_combo_->setVisible(choosable);
+    if (method_label_)
+        method_label_->setVisible(choosable);
+}
+
 void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
     for (auto* w : field_widgets_)
         w->deleteLater();
@@ -398,6 +571,7 @@ void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
 
     const QString ana_id = categories_[cat].analyzers[ana].id;
     current_fields_ = fields_for(ana_id);
+    populate_methods(ana_id);
 
     int i = 0;
     while (i < current_fields_.size()) {
@@ -559,9 +733,23 @@ QJsonObject AltInvestmentsScreen::collect_form_data() const {
 
 // ── Python execution ──────────────────────────────────────────────────────────
 
-void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObject& form) {
+void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObject& form_in) {
+    QJsonObject form = form_in;
+    adapt_form_for_cli(command, form);
     const QString data_json = QString::fromUtf8(QJsonDocument(form).toJson(QJsonDocument::Compact));
-    const QString cache_key = "alt_screen:" + command + ":" + data_json;
+
+    QStringList cli_args = {command, QStringLiteral("--data"), data_json};
+    const QString method =
+        (method_combo_ && method_combo_->count() > 0) ? method_combo_->currentData().toString() : QString();
+    if (!method.isEmpty())
+        cli_args << QStringLiteral("--method") << method;
+    // asset-location takes the bracket as a CLI flag (a fraction), not as a data key.
+    if (command == QLatin1String("asset-location") && form.contains(QStringLiteral("tax_bracket")))
+        cli_args << QStringLiteral("--tax-bracket")
+                 << QString::number(form.value(QStringLiteral("tax_bracket")).toDouble(), 'g', 10);
+
+    // The cache key must include the method (and flags): the same inputs under another method are another result.
+    const QString cache_key = "alt_screen:" + cli_args.join(QLatin1Char('\x1f'));
 
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
@@ -591,7 +779,7 @@ void AltInvestmentsScreen::run_analysis(const QString& command, const QJsonObjec
     QPointer<AltInvestmentsScreen> self = this;
 
     services::python_cli::PythonCliService::instance().run(
-        QStringLiteral("Analytics/alternateInvestment/cli.py"), {command, QStringLiteral("--data"), data_json},
+        QStringLiteral("Analytics/alternateInvestment/cli.py"), cli_args,
         [self, command, cache_key](const services::python_cli::CliResult& r) {
             if (!self)
                 return;

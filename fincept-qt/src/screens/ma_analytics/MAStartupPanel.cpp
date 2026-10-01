@@ -243,6 +243,27 @@ QWidget* MAModulePanel::build_startup_panel() {
         params["vc_years"] = int_inputs_["vc_years"]->value();
         params["vc_investment"] = double_inputs_["vc_investment"]->value();
         params["rf_base"] = double_inputs_["rf_base"]->value();
+        // The hint promises ALL methods: also send the Scorecard, First Chicago and Risk Factor tab inputs
+        // (only Berkus and the VC method were being valued, so the "consensus" covered 2 of 5).
+        QJsonObject scorecard;
+        scorecard["stage"] = combo_inputs_["sc_stage"]->currentText();
+        QJsonArray sc_assessments;
+        for (int i = 0; i < 7; ++i)
+            sc_assessments.append(double_inputs_[QString("sc_%1").arg(i)]->value());
+        scorecard["assessments"] = sc_assessments;
+        params["scorecard"] = scorecard;
+        QJsonArray scenarios;
+        for (int i = 0; i < 3; ++i) {
+            QJsonObject s;
+            s["probability"] = double_inputs_[QString("fc_prob_%1").arg(i)]->value() / 100.0;
+            s["exit_value"] = double_inputs_[QString("fc_value_%1").arg(i)]->value();
+            scenarios.append(s);
+        }
+        params["scenarios"] = scenarios;
+        QJsonArray risk_assessments;
+        for (int i = 0; i < 12; ++i)
+            risk_assessments.append(int_inputs_[QString("rf_%1").arg(i)]->value());
+        params["risk_assessments"] = risk_assessments;
         MAAnalyticsService::instance().calculate_comprehensive_startup(params);
     });
     comp_vl->addWidget(comp_run);

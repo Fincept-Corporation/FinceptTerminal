@@ -149,13 +149,27 @@ void ImfPanel::on_result(const QString& request_id, const services::EconomicsRes
             return;
         }
 
-        auto* ind_item = indicator_list_->currentItem();
-        const QString code = ind_item ? ind_item->data(Qt::UserRole).toString() : values.keys().first();
-        const QString country = country_combo_->currentData().toString();
+        // Take the indicator / country from the request id ("imf_data_<code>_<country>"; the code
+        // itself contains underscores, the country never does) rather than from the widgets: the
+        // user may have clicked another indicator while this request was in flight, which used to
+        // look the data up under the wrong code ("No data" / wrong title).
+        const QString tail = request_id.mid(QStringLiteral("imf_data_").size());
+        const int cut = tail.lastIndexOf(QLatin1Char('_'));
+        const QString code = cut > 0 ? tail.left(cut) : values.keys().first();
+        const QString country = cut > 0 ? tail.mid(cut + 1) : QString();
+
+        QString indicator_name = code;
+        for (int i = 0; i < indicator_list_->count(); ++i) {
+            if (indicator_list_->item(i)->data(Qt::UserRole).toString() == code) {
+                indicator_name = indicator_list_->item(i)->text();
+                break;
+            }
+        }
+        const int country_idx = country_combo_->findData(country);
+        const QString country_name = country_idx >= 0 ? country_combo_->itemText(country_idx) : country;
 
         const QJsonArray rows = flatten_pivot(values, code, country);
-        const QString title = (ind_item ? ind_item->text() : code) +
-                              (country.isEmpty() ? tr(" — All Countries") : " — " + country_combo_->currentText());
+        const QString title = indicator_name + (country.isEmpty() ? tr(" — All Countries") : " — " + country_name);
         // "All Countries" produces a wide cross-section (one row per country,
         // one column per year). LATEST/CHANGE/MIN/MAX/AVG would then be computed
         // over an arbitrary single year column across unrelated countries — hide

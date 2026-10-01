@@ -125,6 +125,10 @@ void EquityOrderBook::set_data(const QVector<QPair<double, double>>& bids, const
         repaint_timer_->start();
 }
 
+void EquityOrderBook::clear() {
+    set_data({}, {}, 0.0, 0.0);
+}
+
 void EquityOrderBook::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange) {
         retranslateUi();
@@ -166,11 +170,21 @@ bool EquityOrderBook::level_at_y(int widget_y, bool& is_ask, int& index) const {
 }
 
 void EquityOrderBook::mousePressEvent(QMouseEvent* event) {
-    QMutexLocker lock(&mutex_);
-    bool is_ask = false;
-    int idx = 0;
-    if (level_at_y(static_cast<int>(event->position().y()), is_ask, idx))
-        emit price_clicked(is_ask ? asks_[idx].first : bids_[idx].first);
+    double clicked_price = 0.0;
+    bool hit = false;
+    {
+        QMutexLocker lock(&mutex_);
+        bool is_ask = false;
+        int idx = 0;
+        if (level_at_y(static_cast<int>(event->position().y()), is_ask, idx)) {
+            clicked_price = is_ask ? asks_[idx].first : bids_[idx].first;
+            hit = true;
+        }
+    }
+    // Emit with the (non-recursive) mutex released: the slot runs synchronously and a
+    // handler that calls back into set_data() would otherwise deadlock on mutex_.
+    if (hit)
+        emit price_clicked(clicked_price);
 }
 
 void EquityOrderBook::mouseMoveEvent(QMouseEvent* event) {

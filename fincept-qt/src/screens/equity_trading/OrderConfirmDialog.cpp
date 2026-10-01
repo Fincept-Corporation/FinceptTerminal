@@ -1,6 +1,7 @@
 #include "screens/equity_trading/OrderConfirmDialog.h"
 
 #include "core/logging/Logger.h"
+#include "screens/equity_trading/EquityTypes.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
@@ -101,7 +102,7 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
     const QString px_headline = needs_limit(order.order_type) ? money(order.price) : tr("MARKET");
     auto* headline = new QLabel(QStringLiteral("%1  %2  %3  @ %4")
                                     .arg(side)
-                                    .arg(QString::number(order.quantity, 'f', 0))
+                                    .arg(equity::format_quantity(order.quantity))
                                     .arg(order.symbol)
                                     .arg(px_headline));
     headline->setStyleSheet(QString("color:%1;font-size:15px;font-weight:700;").arg(side_color));
@@ -138,7 +139,7 @@ OrderConfirmDialog::OrderConfirmDialog(QWidget* parent, const UnifiedOrder& orde
     // Product (MIS/CNC/NRML) decides overnight carry + leverage — it was
     // previously invisible here even though it always reaches the broker.
     add_row(tr("Product"), QString::fromLatin1(trading::product_to_broker_str(order.product_type)));
-    add_row(tr("Quantity"), QString::number(order.quantity, 'f', 0));
+    add_row(tr("Quantity"), equity::format_quantity(order.quantity));
     add_row(tr("Type"), type_str(order.order_type));
     if (needs_limit(order.order_type))
         add_row(tr("Limit price"), money(order.price));

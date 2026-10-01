@@ -365,7 +365,21 @@ std::vector<ToolDef> get_dashboard_tools() {
                     resolve(ToolResult::fail("Dashboard not open"));
                     return;
                 }
-                canvas->apply_template(args["template_id"].toString());
+                // apply_template() is void and only logs "Template not found", so an unknown id
+                // used to be reported as "Template applied" with the layout untouched.
+                const QString template_id = args["template_id"].toString();
+                QStringList known_ids;
+                bool known = false;
+                for (const auto& tpl : screens::all_dashboard_templates()) {
+                    known_ids.append(tpl.id);
+                    known = known || tpl.id == template_id;
+                }
+                if (!known) {
+                    resolve(ToolResult::fail("Unknown template_id '" + template_id +
+                                             "'. Valid ids: " + known_ids.join(", ")));
+                    return;
+                }
+                canvas->apply_template(template_id);
                 resolve(ToolResult::ok("Template applied", QJsonObject{
                                                                {"template_id", args["template_id"].toString()},
                                                                {"widget_count", canvas->tile_count()},
@@ -526,6 +540,13 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
                 const QString id = args["instance_id"].toString();
+                // remove_widget() is void and silent for an unknown id — verify first so the
+                // model is not told a widget it mistyped was removed.
+                if (!find_tile_by_instance_id(canvas, id)) {
+                    resolve(ToolResult::fail("Widget instance not found: " + id +
+                                             " (use get_current_dashboard_layout for instance ids)"));
+                    return;
+                }
                 canvas->remove_widget(id);
                 resolve(ToolResult::ok("Widget removed", QJsonObject{{"instance_id", id}}));
             });
@@ -920,7 +941,9 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder()
-                .array("symbols", "Symbol list (e.g. ['SPY','QQQ','AAPL'])", QJsonObject{{"type", "string"}})
+                .array("symbols", "Symbol list (e.g. ['SPY','QQQ','AAPL']); pass [] explicitly to clear the bar",
+                       QJsonObject{{"type", "string"}})
+                .required()
                 .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
@@ -929,6 +952,12 @@ std::vector<ToolDef> get_dashboard_tools() {
                     const QString s = v.toString().trimmed().toUpper();
                     if (!s.isEmpty())
                         symbols.append(s);
+                }
+                // Each ticker symbol is a live quote subscription; a bar cannot show hundreds.
+                if (symbols.size() > 50) {
+                    resolve(ToolResult::fail("Too many ticker symbols (" + QString::number(symbols.size()) +
+                                             ") — at most 50"));
+                    return;
                 }
                 // Persist via the same SettingsRepository key the ticker bar uses.
                 auto r = SettingsRepository::instance().set(kTickerSymbolsKey, symbols.join(','), "dashboard");

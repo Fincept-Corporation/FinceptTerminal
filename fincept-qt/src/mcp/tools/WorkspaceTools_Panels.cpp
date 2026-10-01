@@ -42,9 +42,32 @@
 #include <QScreen>
 #include <QSize>
 
+#include <initializer_list>
+
 namespace fincept::mcp::tools {
 
 using namespace fincept::mcp::tools::workspace_internal;
+
+namespace {
+
+// First of `ids` that is not a registered screen id of `w`'s router, or an empty string
+// when all are known. DockScreenRouter::navigate/tab_into/add_alongside/replace_screen are
+// void and merely log for an unknown id, so without this check every typo was reported
+// back to the model as a success ("Navigated", "Tabbed", ...).
+QString ws_first_unknown_screen_id(WindowFrame* w, std::initializer_list<QString> ids) {
+    const QStringList known = w->dock_router()->all_screen_ids();
+    for (const QString& id : ids) {
+        if (!known.contains(id))
+            return id;
+    }
+    return {};
+}
+
+ToolResult ws_unknown_screen_result(const QString& id) {
+    return ToolResult::fail("Unknown screen id '" + id + "' — use list_available_screen_ids for the valid ids");
+}
+
+} // namespace
 
 void workspace_internal::register_panel_tools(std::vector<ToolDef>& tools) {
     // ═══════════════════════════════════════════════════════════════════
@@ -74,15 +97,38 @@ void workspace_internal::register_panel_tools(std::vector<ToolDef>& tools) {
                 const QString grp = args["link_group"].toString();
                 const int wid = args["window_id"].toInt(-1);
 
+                // Filters AND together. Each one used to REPLACE the previous result set, so
+                // type_id + window_id returned every panel in the window (the type filter was
+                // thrown away), and an unknown window_id was ignored — returning ALL panels.
                 QList<PanelHandle*> panels = PanelRegistry::instance().all_panels();
-                if (!type.isEmpty())
-                    panels = PanelRegistry::instance().find_by_type(type);
-                if (!grp.isEmpty())
-                    panels = PanelRegistry::instance().find_by_group(grp);
+                if (!type.isEmpty()) {
+                    const auto by_type = PanelRegistry::instance().find_by_type(type);
+                    QList<PanelHandle*> kept;
+                    for (auto* p : panels)
+                        if (by_type.contains(p))
+                            kept.append(p);
+                    panels = kept;
+                }
+                if (!grp.isEmpty()) {
+                    const auto by_group = PanelRegistry::instance().find_by_group(grp);
+                    QList<PanelHandle*> kept;
+                    for (auto* p : panels)
+                        if (by_group.contains(p))
+                            kept.append(p);
+                    panels = kept;
+                }
                 if (wid >= 0) {
                     auto* w = frame_by_id(wid);
-                    if (w)
-                        panels = PanelRegistry::instance().find_by_frame(w->frame_uuid());
+                    if (!w) {
+                        resolve(ToolResult::fail("Window not found: " + QString::number(wid)));
+                        return;
+                    }
+                    const auto by_frame = PanelRegistry::instance().find_by_frame(w->frame_uuid());
+                    QList<PanelHandle*> kept;
+                    for (auto* p : panels)
+                        if (by_frame.contains(p))
+                            kept.append(p);
+                    panels = kept;
                 }
                 QJsonArray arr;
                 for (auto* p : panels)
@@ -145,6 +191,10 @@ void workspace_internal::register_panel_tools(std::vector<ToolDef>& tools) {
                 }
                 const QString id = args["screen_id"].toString();
                 const bool excl = args["exclusive"].toBool(false);
+                if (!ws_first_unknown_screen_id(w, {id}).isEmpty()) {
+                    resolve(ws_unknown_screen_result(id));
+                    return;
+                }
                 w->dock_router()->navigate(id, excl);
                 resolve(ToolResult::ok("Navigated", QJsonObject{{"screen_id", id}, {"window_id", w->window_id()}}));
             });
@@ -175,6 +225,10 @@ void workspace_internal::register_panel_tools(std::vector<ToolDef>& tools) {
                     return;
                 }
                 const QString id = args["screen_id"].toString();
+                if (!ws_first_unknown_screen_id(w, {id}).isEmpty()) {
+                    resolve(ws_unknown_screen_result(id));
+                    return;
+                }
                 w->dock_router()->tab_into(id);
                 resolve(ToolResult::ok("Tabbed", QJsonObject{{"screen_id", id}, {"window_id", w->window_id()}}));
             });
@@ -206,6 +260,11 @@ void workspace_internal::register_panel_tools(std::vector<ToolDef>& tools) {
                 auto* w = resolve_window(args);
                 if (!w || !w->dock_router()) {
                     resolve(ToolResult::fail("Window not found"));
+                    return;
+                }
+                const QString bad = ws_first_unknown_screen_id(w, {args["primary"].toString(), args["secondary"].toString()});
+                if (!bad.isEmpty()) {
+                    resolve(ws_unknown_screen_result(bad));
                     return;
                 }
                 w->dock_router()->add_alongside(args["primary"].toString(), args["secondary"].toString());
@@ -242,6 +301,11 @@ void workspace_internal::register_panel_tools(std::vector<ToolDef>& tools) {
                     resolve(ToolResult::fail("Window not found"));
                     return;
                 }
+                const QString bad = ws_first_unknown_screen_id(w, {args["primary"].toString(), args["secondary"].toString()});
+                if (!bad.isEmpty()) {
+                    resolve(ws_unknown_screen_result(bad));
+                    return;
+                }
                 w->dock_router()->replace_screen(args["primary"].toString(), args["secondary"].toString());
                 resolve(ToolResult::ok("Panel replaced", QJsonObject{{"old", args["primary"].toString()},
                                                                      {"new", args["secondary"].toString()},
@@ -274,9 +338,19 @@ void workspace_internal::register_panel_tools(std::vector<ToolDef>& tools) {
                     resolve(ToolResult::fail("Window not found"));
                     return;
                 }
-                w->dock_router()->remove_screen(args["screen_id"].toString());
-                resolve(ToolResult::ok("Panels removed", QJsonObject{{"kept", args["screen_id"].toString()},
-                                                                     {"window_id", w->window_id()}}));
+                const QString keep_id = args["screen_id"].toString();
+                if (!ws_first_unknown_screen_id(w, {keep_id}).isEmpty()) {
+                    // remove_screen() closes every panel that is not `keep` and only then looks
+                    // `keep` up — for an id it cannot find, that closed ALL panels and opened
+                    // nothing, leaving the user with an empty workspace.
+                    resolve(ws_unknown_screen_result(keep_id));
+                    return;
+                }
+                if (w->dock_router()->find_dock_widget(keep_id))
+                    w->dock_router()->remove_screen(keep_id);
+                else
+                    w->dock_router()->navigate(keep_id, /*exclusive=*/true); // known id, not built yet: open it alone
+                resolve(ToolResult::ok("Panels removed", QJsonObject{{"kept", keep_id}, {"window_id", w->window_id()}}));
             });
         };
         tools.push_back(std::move(t));

@@ -167,6 +167,15 @@ class StreamingCoreAgent:
             if hasattr(response, '__iter__') and not isinstance(response, str):
                 # Iterable response (true streaming)
                 for chunk in response:
+                    # A failed run (bad/missing API key, provider error) arrives as a
+                    # RunErrorEvent whose `content` is the error text. It used to be
+                    # emitted as an ordinary TOKEN and the run reported as successful,
+                    # so the UI showed the error message as the agent's answer.
+                    if getattr(chunk, 'event', None) == 'RunError':
+                        err_text = str(getattr(chunk, 'content', None) or 'Agent run failed')
+                        self.emit("error", err_text)
+                        yield {"type": "error", "content": err_text}
+                        return
                     if hasattr(chunk, 'content'):
                         content = chunk.content
                     elif isinstance(chunk, dict):

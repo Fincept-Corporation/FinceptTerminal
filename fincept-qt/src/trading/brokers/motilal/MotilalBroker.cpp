@@ -206,7 +206,6 @@ TokenExchangeResponse MotilalBroker::exchange_token(const QString& api_key, cons
 OrderPlaceResponse MotilalBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
     QJsonObject body;
     body["exchange"] = mo_exchange(order.exchange);
-    body["symboltoken"] = order.instrument_token.toInt();
     body["buyorsell"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
     body["ordertype"] = mo_enum_map().order_type_or(order.order_type, "MARKET");
     body["producttype"] = mo_enum_map().product_or(order.product_type, "DELIVERY");
@@ -226,6 +225,27 @@ OrderPlaceResponse MotilalBroker::place_order(const BrokerCredentials& creds, co
     auto lot_inst = InstrumentService::instance().find_by_token(order.instrument_token.toUInt(), "motilal");
     if (!lot_inst.has_value())
         lot_inst = InstrumentService::instance().find(order.symbol, order.exchange, "motilal");
+
+    // symboltoken is the ONLY contract identifier in the payload. The equity ticket does not carry
+    // one (only the F&O chain fills UnifiedOrder::instrument_token), so take it from the resolved
+    // master row; the old 0 could never match a contract.
+    qint64 symbol_token = order.instrument_token.toLongLong();
+    if (symbol_token <= 0 && lot_inst.has_value())
+        symbol_token = lot_inst->instrument_token;
+    if (symbol_token <= 0)
+        return {false, "",
+                "Motilal place_order: symboltoken not found for " + order.exchange + ":" + order.symbol +
+                    " (instrument master not loaded yet?)"};
+    body["symboltoken"] = symbol_token;
+
+    // With no master row the lot size is unknown and the piece count below would go out as a LOT
+    // count — a 75-piece NIFTY order as 75 lots. Cash segments are 1:1; derivatives must refuse.
+    static const QStringList kLotSegments = {"NFO", "BFO", "CDS", "BCD", "MCX", "NCDEX"};
+    if (!lot_inst.has_value() && kLotSegments.contains(order.exchange.toUpper()))
+        return {false, "",
+                "Motilal place_order: lot size unknown for " + order.exchange + ":" + order.symbol +
+                    " (instrument master not loaded) — refusing to send a piece quantity as lots"};
+
     const int qty = static_cast<int>(order.quantity);
     const int lot = (lot_inst.has_value() && lot_inst->lot_size > 1) ? lot_inst->lot_size : 1;
     if (lot > 1 && qty % lot != 0)
@@ -235,10 +255,10 @@ OrderPlaceResponse MotilalBroker::place_order(const BrokerCredentials& creds, co
     body["amoorder"] = order.amo ? "Y" : "N";
     body["algoid"] = "";
     body["goodtilldate"] = "";
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Motilal caps `tag` at 10 chars.
-    body["tag"] = make_client_order_ref(10);
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+    // Motilal caps `tag` at 10 chars.
+    body["tag"] = client_order_ref_for(order, 10);
     body["participantcode"] = "";
     body["clientcode"] = creds.user_id; // required for dealer accounts; harmless for investor
 
@@ -736,7 +756,9 @@ ApiResponse<QVector<BrokerCandle>> MotilalBroker::get_history(const BrokerCreden
                 continue;
         }
         BrokerCandle c;
-        c.timestamp = d.isValid() ? QDateTime(d, QTime(15, 30)).toMSecsSinceEpoch() : 0; // BrokerCandle contract = ms
+        // BrokerCandle contract = ms. The date is an exchange (IST) trading day: anchor the 15:30
+        // close in IST, not the machine's zone, so the bar lands on the right calendar day.
+        c.timestamp = d.isValid() ? QDateTime(d, QTime(15, 30), ist_zone()).toMSecsSinceEpoch() : 0;
         c.open = o.value("open").toDouble();
         c.high = o.value("high").toDouble();
         c.low = o.value("low").toDouble();

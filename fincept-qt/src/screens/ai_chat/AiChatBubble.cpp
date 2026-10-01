@@ -104,6 +104,14 @@ AiChatBubble::AiChatBubble(QWidget* parent) : QWidget(parent) {
         if (!is_listening_ && !is_speaking_)
             start_listening();
     });
+    // The detector's failures (no mic, stream died) used to go only to the log, so
+    // "clap to start" just stopped working with no sign why. Show them in the
+    // status strip the panel already has for STT/TTS problems.
+    connect(&clap, &services::ClapDetectorService::error_occurred, this, [this](const QString& msg) {
+        LOG_WARN("AiChatBubble", QString("Clap-to-start error: %1").arg(msg));
+        error_msg_ = tr("Clap-to-start: %1").arg(msg);
+        render_status();
+    });
     if (services::ClapDetectorService::is_enabled_in_config())
         clap.start();
 
@@ -621,6 +629,14 @@ void AiChatBubble::on_stream_chunk(const QString& chunk, bool done) {
 }
 
 void AiChatBubble::on_streaming_done(ai_chat::LlmResponse response) {
+    // finished_streaming() is process-wide: it also fires for the AI Chat tab's
+    // requests (which carry a session id; the bubble sends none) and there is one
+    // bubble per window. Every tab answer used to be added here — a phantom reply with
+    // no question, an unread badge, and spoken aloud in voice mode. Only react to a
+    // response that is ours: we are waiting for one and it has no session id.
+    if (!streaming_ || !response.origin_session_id.isEmpty())
+        return;
+
     streaming_ = false;
     set_input_enabled(true);
 
@@ -636,7 +652,10 @@ void AiChatBubble::on_streaming_done(ai_chat::LlmResponse response) {
         streaming_bubble_ = nullptr;
     }
 
-    chat_history_.push_back({"assistant", content});
+    // Only a real answer belongs in the history that is re-sent with the next
+    // question — "Error: HTTP 401…" is not something the model said.
+    if (response.success && !content.isEmpty())
+        chat_history_.push_back({"assistant", content});
 
     if (!is_open_)
         update_unread(1);

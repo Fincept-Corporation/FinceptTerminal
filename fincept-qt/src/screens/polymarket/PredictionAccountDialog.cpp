@@ -16,6 +16,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QTabWidget>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -309,8 +310,17 @@ void PredictionAccountDialog::on_save_polymarket() {
     if (!c.private_key.startsWith(QStringLiteral("0x"))) {
         c.private_key.prepend(QStringLiteral("0x"));
     }
-    if (c.private_key.size() != 66) {
+    // Length alone accepted any 64 characters (a typo'd non-hex digit only surfaced later as an
+    // opaque signing error from the Python bridge) — check the characters too.
+    static const QRegularExpression kPrivKeyRe(QStringLiteral("^0x[0-9a-fA-F]{64}$"));
+    if (!kPrivKeyRe.match(c.private_key).hasMatch()) {
         pm_status_->setText(tr("<span style='color:#dc2626'>Private key should be 0x + 64 hex chars.</span>"));
+        return;
+    }
+
+    static const QRegularExpression kAddrRe(QStringLiteral("^0x[0-9a-fA-F]{40}$"));
+    if (!c.funder_address.isEmpty() && !kAddrRe.match(c.funder_address).hasMatch()) {
+        pm_status_->setText(tr("<span style='color:#dc2626'>Funder address should be 0x + 40 hex chars.</span>"));
         return;
     }
 

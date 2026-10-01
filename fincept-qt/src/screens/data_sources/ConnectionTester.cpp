@@ -13,10 +13,13 @@
 
 #include <QApplication>
 #include <QDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QLocale>
 #include <QMetaObject>
 #include <QPushButton>
 #include <QStringList>
@@ -34,6 +37,20 @@ namespace col = fincept::ui::colors;
 
 namespace {
 constexpr const char* TAG = "DataSources";
+
+/// TCP port for a URL that does not spell one out. Everything that was not
+/// https/wss used to be probed on port 80, so a perfectly healthy
+/// "mqtt://broker.example.com" or "bolt://db.example.com" reported "cannot connect".
+int default_probe_port(const QString& scheme) {
+    static const QHash<QString, int> kPorts = {
+        {"http", 80},     {"ws", 80},     {"https", 443},     {"wss", 443},        {"ftp", 21},
+        {"sftp", 22},     {"mqtt", 1883}, {"mqtts", 8883},    {"ssl", 8883},       {"amqp", 5672},
+        {"amqps", 5671},  {"bolt", 7687}, {"neo4j", 7687},    {"redis", 6379},     {"rediss", 6379},
+        {"postgres", 5432}, {"postgresql", 5432}, {"mysql", 3306}, {"mongodb", 27017}, {"nats", 4222},
+        {"kafka", 9092},
+    };
+    return kPorts.value(scheme.toLower(), 80);
+}
 } // namespace
 
 // Provider-specific probe URL synthesis. Returns {} when no HTTP probe is
@@ -77,6 +94,10 @@ QString provider_probe_url(const QString& provider_id, const QJsonObject& cfg) {
         return "https://api.pitchbook.com/";
     if (provider_id == "nasdaq-totalview")
         return "https://api.nasdaq.com/api/quote/AAPL/info?assetClass=stocks";
+    if (provider_id == "newsapi")
+        return "https://newsapi.org/";
+    if (provider_id == "openfigi")
+        return "https://api.openfigi.com/";
     if (provider_id == "fincept")
         return {};
 
@@ -352,113 +373,8 @@ QString redact_url(const QString& url) {
     return u.toString();
 }
 
-namespace {
-
-QString simple_dialog_qss() {
-    return QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
-                   "QLabel{font-size:13px;background:transparent;}"
-                   "QPushButton{background:%3;color:%2;border:1px solid %4;"
-                   "padding:6px 18px;font-size:12px;font-weight:700;}"
-                   "QPushButton:hover{background:%4;}")
-        .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BG_RAISED(), col::BORDER_DIM());
-}
-
-void show_message_dialog(QWidget* parent, const QString& title, const QString& body) {
-    QDialog dlg(parent);
-    dlg.setWindowTitle(title);
-    dlg.resize(420, 160);
-    dlg.setModal(true);
-    dlg.setStyleSheet(simple_dialog_qss());
-    auto* vl = new QVBoxLayout(&dlg);
-    vl->setContentsMargins(24, 20, 24, 16);
-    vl->setSpacing(10);
-    auto* lbl = new QLabel(body);
-    lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY()));
-    vl->addWidget(lbl);
-    vl->addStretch();
-    auto* btn = new QPushButton(QObject::tr("Close"));
-    btn->setCursor(Qt::PointingHandCursor);
-    QObject::connect(btn, &QPushButton::clicked, &dlg, &QDialog::accept);
-    auto* row = new QHBoxLayout;
-    row->addStretch();
-    row->addWidget(btn);
-    vl->addLayout(row);
-    dlg.exec();
-}
-
-void show_result_dialog(QWidget* parent, const QString& display, bool success, const QString& message) {
-    QDialog dlg(parent);
-    dlg.setWindowTitle(QObject::tr("Test: %1").arg(display));
-    dlg.resize(440, 190);
-    dlg.setModal(true);
-    dlg.setStyleSheet(simple_dialog_qss());
-
-    auto* vl = new QVBoxLayout(&dlg);
-    vl->setContentsMargins(24, 20, 24, 16);
-    vl->setSpacing(10);
-
-    auto* status_lbl = new QLabel(success ? QObject::tr("Connection successful") : QObject::tr("Connection failed"));
-    status_lbl->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;background:transparent;")
-                                  .arg(success ? col::POSITIVE.operator QString() : col::NEGATIVE.operator QString()));
-    vl->addWidget(status_lbl);
-
-    auto* msg_lbl = new QLabel(message);
-    msg_lbl->setWordWrap(true);
-    msg_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
-    vl->addWidget(msg_lbl);
-
-    if (success) {
-        auto* note =
-            new QLabel(QObject::tr("Note: TCP reachability confirmed. API key validity is not verified here."));
-        note->setWordWrap(true);
-        note->setStyleSheet(
-            QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY()));
-        vl->addWidget(note);
-    }
-    vl->addStretch();
-
-    auto* close_btn = new QPushButton(QObject::tr("Close"));
-    close_btn->setCursor(Qt::PointingHandCursor);
-    QObject::connect(close_btn, &QPushButton::clicked, &dlg, &QDialog::accept);
-    auto* btn_row = new QHBoxLayout;
-    btn_row->addStretch();
-    btn_row->addWidget(close_btn);
-    vl->addLayout(btn_row);
-
-    dlg.exec();
-}
-
-} // namespace
-
-void test_connection(QWidget* parent, const QString& conn_id, const TestResultCallback& on_result) {
-    const auto get_result = DataSourceRepository::instance().get(conn_id);
-    if (get_result.is_err()) {
-        if (on_result)
-            on_result(conn_id, false, QObject::tr("Connection not found: %1").arg(conn_id));
-        return;
-    }
-
-    const auto ds = get_result.value();
-    const auto cfg_doc = QJsonDocument::fromJson(ds.config.toUtf8());
-    const auto cfg_obj = cfg_doc.object();
-
-    const auto* connector_cfg = find_connector_config(ds.provider);
-    if (connector_cfg && !connector_cfg->testable) {
-        const QString msg = QObject::tr("This connector does not support connectivity testing.");
-        // Always settle the callback, even on the early-exit paths — the caller
-        // puts its TEST button into a "testing..." state before calling us and
-        // relies on the callback to clear it.
-        if (on_result)
-            on_result(conn_id, false, msg);
-        show_message_dialog(parent, QObject::tr("Test: %1").arg(ds.display_name), msg);
-        return;
-    }
-
-    const QString display = ds.display_name;
-    const QString provider = ds.provider;
-
-    const QString probe_url = provider_probe_url(provider, cfg_obj);
+ProbeEndpoint resolve_probe_endpoint(const QString& provider_id, const QJsonObject& cfg_obj) {
+    const QString probe_url = provider_probe_url(provider_id, cfg_obj);
 
     QString explicit_url;
     if (probe_url.isEmpty()) {
@@ -582,12 +498,200 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
         const QUrl u(test_url);
         if (u.isValid() && !u.host().isEmpty()) {
             host = u.host();
-            if (port <= 0) {
-                const QString s = u.scheme().toLower();
-                port = u.port((s == "https" || s == "wss") ? 443 : 80);
-            }
+            if (port <= 0)
+                port = u.port(default_probe_port(u.scheme()));
         }
     }
+
+    ProbeEndpoint endpoint;
+    endpoint.url = test_url;
+    endpoint.host = host;
+    endpoint.port = port;
+    return endpoint;
+}
+
+bool probe_target(const ProbeEndpoint& endpoint, QString* host, int* port) {
+    if (!endpoint.url.isEmpty()) {
+        // Same precedence the TEST button uses: an HTTP probe URL wins over host fields.
+        const QUrl u(endpoint.url);
+        if (!u.isValid() || u.host().isEmpty())
+            return false;
+        *host = u.host();
+        *port = u.port(default_probe_port(u.scheme()));
+        return *port > 0;
+    }
+    if (endpoint.host.isEmpty() || endpoint.port <= 0)
+        return false;
+    *host = endpoint.host;
+    *port = endpoint.port;
+    return true;
+}
+
+namespace {
+
+QString simple_dialog_qss() {
+    return QString("QDialog{background:%1;color:%2;font-family:'Consolas','Courier New',monospace;}"
+                   "QLabel{font-size:13px;background:transparent;}"
+                   "QPushButton{background:%3;color:%2;border:1px solid %4;"
+                   "padding:6px 18px;font-size:12px;font-weight:700;}"
+                   "QPushButton:hover{background:%4;}")
+        .arg(col::BG_SURFACE(), col::TEXT_PRIMARY(), col::BG_RAISED(), col::BORDER_DIM());
+}
+
+void show_message_dialog(QWidget* parent, const QString& title, const QString& body) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(title);
+    dlg.resize(420, 160);
+    dlg.setModal(true);
+    dlg.setStyleSheet(simple_dialog_qss());
+    auto* vl = new QVBoxLayout(&dlg);
+    vl->setContentsMargins(24, 20, 24, 16);
+    vl->setSpacing(10);
+    auto* lbl = new QLabel(body);
+    lbl->setWordWrap(true);
+    lbl->setStyleSheet(QString("color:%1;font-size:13px;background:transparent;").arg(col::TEXT_SECONDARY()));
+    vl->addWidget(lbl);
+    vl->addStretch();
+    auto* btn = new QPushButton(QObject::tr("Close"));
+    btn->setCursor(Qt::PointingHandCursor);
+    QObject::connect(btn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    auto* row = new QHBoxLayout;
+    row->addStretch();
+    row->addWidget(btn);
+    vl->addLayout(row);
+    dlg.exec();
+}
+
+void show_result_dialog(QWidget* parent, const QString& display, bool success, const QString& message,
+                        const QString& success_note = {}) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(QObject::tr("Test: %1").arg(display));
+    dlg.resize(440, 190);
+    dlg.setModal(true);
+    dlg.setStyleSheet(simple_dialog_qss());
+
+    auto* vl = new QVBoxLayout(&dlg);
+    vl->setContentsMargins(24, 20, 24, 16);
+    vl->setSpacing(10);
+
+    auto* status_lbl = new QLabel(success ? QObject::tr("Connection successful") : QObject::tr("Connection failed"));
+    status_lbl->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;background:transparent;")
+                                  .arg(success ? col::POSITIVE.operator QString() : col::NEGATIVE.operator QString()));
+    vl->addWidget(status_lbl);
+
+    auto* msg_lbl = new QLabel(message);
+    msg_lbl->setWordWrap(true);
+    msg_lbl->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(col::TEXT_SECONDARY()));
+    vl->addWidget(msg_lbl);
+
+    if (success) {
+        auto* note = new QLabel(success_note.isEmpty()
+                                    ? QObject::tr("Note: TCP reachability confirmed. API key validity is not verified here.")
+                                    : success_note);
+        note->setWordWrap(true);
+        note->setStyleSheet(
+            QString("color:%1;font-size:11px;font-style:italic;background:transparent;").arg(col::TEXT_TERTIARY()));
+        vl->addWidget(note);
+    }
+    vl->addStretch();
+
+    auto* close_btn = new QPushButton(QObject::tr("Close"));
+    close_btn->setCursor(Qt::PointingHandCursor);
+    QObject::connect(close_btn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    auto* btn_row = new QHBoxLayout;
+    btn_row->addStretch();
+    btn_row->addWidget(close_btn);
+    vl->addLayout(btn_row);
+
+    dlg.exec();
+}
+
+/// Path of a local file a connection points at (the `filepath` field of the file /
+/// SQLite connectors), or {} for URIs such as s3://bucket/x — a drive letter
+/// ("C:\data") parses as a one-character URL scheme, a real scheme is longer.
+QString local_file_path(const QJsonObject& cfg) {
+    const QString path = cfg.value("filepath").toString().trimmed();
+    if (path.isEmpty() || QUrl(path).scheme().size() > 1)
+        return {};
+    return path;
+}
+
+/// File connectors have no network endpoint to open a socket to, so TEST used to say
+/// "does not support connectivity testing". The saved path can still be checked: that
+/// is the one thing that makes them fail later. The stat runs on a worker thread
+/// (a UNC / network-drive path can block for seconds).
+void probe_local_file(QWidget* parent, const QString& conn_id, const QString& display, const QString& path,
+                      const TestResultCallback& on_result) {
+    QPointer<QWidget> parent_guard = parent;
+    const TestResultCallback captured_cb = on_result;
+    const auto probe_future = QtConcurrent::run([parent_guard, conn_id, display, path, captured_cb]() {
+        const QFileInfo info(path);
+        bool ok = false;
+        QString message;
+        if (!info.exists())
+            message = QObject::tr("File not found: %1").arg(path);
+        else if (!info.isFile())
+            message = QObject::tr("Not a regular file: %1").arg(path);
+        else if (!info.isReadable())
+            message = QObject::tr("File exists but is not readable: %1").arg(path);
+        else {
+            ok = true;
+            message = QObject::tr("File found (%1): %2").arg(QLocale().formattedDataSize(info.size()), path);
+        }
+        QMetaObject::invokeMethod(
+            qApp,
+            [parent_guard, conn_id, display, ok, message, captured_cb]() {
+                if (!parent_guard)
+                    return;
+                LOG_INFO(TAG, QString("Test %1: %2 — %3").arg(display, ok ? "OK" : "FAIL", message));
+                if (captured_cb)
+                    captured_cb(conn_id, ok, message);
+                show_result_dialog(parent_guard.data(), display, ok, message,
+                                   QObject::tr("Note: the file exists and is readable. Its contents are not parsed here."));
+            },
+            Qt::QueuedConnection);
+    });
+    Q_UNUSED(probe_future);
+}
+
+} // namespace
+
+void test_connection(QWidget* parent, const QString& conn_id, const TestResultCallback& on_result) {
+    const auto get_result = DataSourceRepository::instance().get(conn_id);
+    if (get_result.is_err()) {
+        if (on_result)
+            on_result(conn_id, false, QObject::tr("Connection not found: %1").arg(conn_id));
+        return;
+    }
+
+    const auto ds = get_result.value();
+    const auto cfg_doc = QJsonDocument::fromJson(ds.config.toUtf8());
+    const auto cfg_obj = cfg_doc.object();
+
+    const auto* connector_cfg = find_connector_config(ds.provider);
+    if (connector_cfg && !connector_cfg->testable) {
+        const QString local_path = local_file_path(cfg_obj);
+        if (!local_path.isEmpty()) {
+            probe_local_file(parent, conn_id, ds.display_name, local_path, on_result);
+            return;
+        }
+        const QString msg = QObject::tr("This connector does not support connectivity testing.");
+        // Always settle the callback, even on the early-exit paths — the caller
+        // puts its TEST button into a "testing..." state before calling us and
+        // relies on the callback to clear it.
+        if (on_result)
+            on_result(conn_id, false, msg);
+        show_message_dialog(parent, QObject::tr("Test: %1").arg(ds.display_name), msg);
+        return;
+    }
+
+    const QString display = ds.display_name;
+    const QString provider = ds.provider;
+
+    const ProbeEndpoint endpoint = resolve_probe_endpoint(provider, cfg_obj);
+    const QString test_url = endpoint.url;
+    const QString host = endpoint.host;
+    const int port = endpoint.port;
 
     if (test_url.isEmpty() && (host.isEmpty() || port <= 0)) {
         const QString msg = QObject::tr("No testable endpoint found in the saved configuration.\n"
@@ -629,9 +733,7 @@ void test_connection(QWidget* parent, const QString& conn_id, const TestResultCa
                 message = QObject::tr("Invalid URL: %1").arg(safe_url);
             } else {
                 const QString url_host = url.host();
-                const QString scheme = url.scheme().toLower();
-                const int default_port = (scheme == "https" || scheme == "wss") ? 443 : 80;
-                const int url_port = url.port(default_port);
+                const int url_port = url.port(default_probe_port(url.scheme()));
                 auto [ok, msg] = tcp_probe(url_host, url_port, 5000);
                 success = ok;
                 message = ok ? QObject::tr("Endpoint reachable: %1").arg(safe_url) : msg;

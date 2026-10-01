@@ -85,7 +85,6 @@ class PolymarketAdapter : public fincept::services::prediction::PredictionExchan
     void on_market_detail(const fincept::services::polymarket::Market& market);
     void on_event_detail(const fincept::services::polymarket::Event& event);
     void on_order_book(const fincept::services::polymarket::OrderBook& book);
-    void on_price_history(const fincept::services::polymarket::PriceHistory& history);
     void on_trades(const QVector<fincept::services::polymarket::Trade>& trades);
     void on_service_error(const QString& ctx, const QString& msg);
 
@@ -111,9 +110,6 @@ class PolymarketAdapter : public fincept::services::prediction::PredictionExchan
 
     fincept::services::polymarket::PolymarketService* service_ = nullptr; // singleton ptr, not owned
     fincept::services::polymarket::PolymarketWebSocket* ws_ = nullptr;    // singleton ptr, not owned
-
-    // Per-request context kept between service callback and our signal.
-    QString last_history_asset_id_;
 
     bool hub_registered_ = false;
 

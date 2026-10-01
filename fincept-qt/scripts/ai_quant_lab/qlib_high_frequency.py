@@ -284,6 +284,9 @@ def cmd_fetch_orderbook(p: dict) -> None:
     bids = ob.get("bids", [])
     asks = ob.get("asks", [])
     metrics = _compute_book_metrics(bids, asks)
+    if not metrics:
+        _err(f"{symbol} on {exchange_id} returned an empty or one-sided order book")
+        return
     _ok({
         "symbol":     symbol,
         "exchange":   exchange_id,
@@ -342,6 +345,9 @@ def cmd_analyze(p: dict) -> None:
                "amount": t.get("amount"), "timestamp": t.get("timestamp")} for t in raw]
 
     metrics   = _compute_book_metrics(bids, asks)
+    if not metrics:
+        _err(f"{symbol} on {exchange_id} returned an empty or one-sided order book")
+        return
     mm        = _market_making_quotes(metrics, inventory, spread_mult)
     toxic     = _detect_toxic_flow(trades, metrics)
     slippage  = _estimate_slippage(bids, asks, "buy", float(p.get("quantity", 1.0)))
@@ -374,12 +380,18 @@ def cmd_market_making(p: dict) -> None:
         _err(str(e))
         return
     metrics = _compute_book_metrics(ob.get("bids", []), ob.get("asks", []))
+    if not metrics:
+        _err(f"{symbol} on {exchange_id} returned an empty or one-sided order book")
+        return
     mm      = _market_making_quotes(
         metrics,
         float(p.get("inventory", 0.0)),
         float(p.get("spread_multiplier", 1.5)),
         float(p.get("risk_aversion", 0.01)),
     )
+    if "error" in mm:       # e.g. zero spread -- a failure, not a result with blank quotes
+        _err(mm["error"])
+        return
     _ok({"symbol": symbol, "exchange": exchange_id,
          "book_metrics": metrics, "market_making": mm,
          "timestamp": datetime.utcnow().isoformat() + "Z"})
@@ -403,6 +415,9 @@ def cmd_toxic_flow(p: dict) -> None:
     trades  = [{"side": t.get("side"), "price": t.get("price"),
                 "amount": t.get("amount")} for t in raw]
     toxic   = _detect_toxic_flow(trades, metrics)
+    if "error" in toxic:    # too few trades / no volume: do not render it as a CLEAN reading
+        _err(toxic["error"])
+        return
     _ok({"symbol": symbol, "exchange": exchange_id,
          "book_metrics": metrics, "toxic_flow": toxic,
          "timestamp": datetime.utcnow().isoformat() + "Z"})

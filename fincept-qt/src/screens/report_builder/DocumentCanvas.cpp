@@ -24,6 +24,7 @@ static fincept::screens::ReportTheme default_canvas_theme() {
 #include <QBarSet>
 #include <QChart>
 #include <QChartView>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -71,6 +72,34 @@ static QStringList parse_csv_labels(const QString& csv) {
     return out;
 }
 
+// Background marking the component selected in the editor. A fixed pale yellow was
+// used for every theme, so on the three dark themes (light text) the selected block
+// became pale-on-pale and unreadable.
+static QColor selection_bg(const ReportTheme& theme) {
+    return QColor(theme.page_bg).lightness() < 128 ? QColor("#3d3200") : QColor("#fffbe6");
+}
+
+// Where a rendered chart/sparkline PNG lives, derived from everything that affects the
+// picture.
+//
+// DocumentCanvas::render() runs on EVERY document change — each keystroke in the
+// properties panel, each LLM tool call while a report is being built — and it used to
+// re-render every chart through a QChartView and write a brand-new PNG per chart per
+// call, named by the millisecond. Nothing ever deleted them, so a long editing session
+// filled the temp directory, and two images finished in the same millisecond silently
+// overwrote each other. A content-addressed name makes an unchanged chart a file-exists
+// check, and identical inputs can never collide with different ones.
+static QString chart_cache_path(const QString& kind, const QStringList& inputs) {
+    const QByteArray digest = QCryptographicHash::hash(inputs.join(QChar(0x1F)).toUtf8(), QCryptographicHash::Sha1);
+    return QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+           QString("/fincept_%1_%2.png").arg(kind, QString::fromLatin1(digest.toHex()));
+}
+
+static bool chart_cache_hit(const QString& path) {
+    const QFileInfo fi(path);
+    return fi.exists() && fi.size() > 0;
+}
+
 // Render a QChart to a temp PNG file and return the file path (empty on failure)
 static QString render_chart_to_file(const QString& chart_type, const QString& title, const QString& data_str,
                                     const QString& labels_str, const ReportTheme& theme, int width = 640,
@@ -78,6 +107,14 @@ static QString render_chart_to_file(const QString& chart_type, const QString& ti
     QVector<double> values = parse_csv_doubles(data_str);
     if (values.isEmpty())
         return {};
+
+    const QString cache_path =
+        chart_cache_path(QStringLiteral("chart"),
+                         {chart_type, title, data_str, labels_str, QString::number(width), QString::number(height),
+                          theme.page_bg, theme.text_color, theme.accent_color, theme.heading_color,
+                          theme.divider_color});
+    if (chart_cache_hit(cache_path))
+        return cache_path;
 
     QStringList labels = parse_csv_labels(labels_str);
 
@@ -192,10 +229,8 @@ static QString render_chart_to_file(const QString& chart_type, const QString& ti
     QPixmap pix = view.grab();
     delete chart; // view took ownership but we grabbed already
 
-    QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-                   QString("/fincept_chart_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
-    if (pix.save(path, "PNG"))
-        return path;
+    if (pix.save(cache_path, "PNG"))
+        return cache_path;
     return {};
 }
 
@@ -205,6 +240,12 @@ static QString render_sparkline_to_file(const QString& data_str, const ReportThe
     QVector<double> values = parse_csv_doubles(data_str);
     if (values.size() < 2)
         return {};
+
+    const QString cache_path =
+        chart_cache_path(QStringLiteral("spark"), {data_str, QString::number(width), QString::number(height),
+                                                   theme.page_bg, theme.accent_color});
+    if (chart_cache_hit(cache_path))
+        return cache_path;
 
     QChart* chart = new QChart();
     chart->setMargins(QMargins(0, 0, 0, 0));
@@ -232,10 +273,8 @@ static QString render_sparkline_to_file(const QString& data_str, const ReportThe
     QPixmap pix = view.grab();
     delete chart;
 
-    QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-                   QString("/fincept_spark_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
-    if (pix.save(path, "PNG"))
-        return path;
+    if (pix.save(cache_path, "PNG"))
+        return cache_path;
     return {};
 }
 
@@ -272,6 +311,14 @@ DocumentCanvas::DocumentCanvas(QWidget* parent) : QWidget(parent) {
 
     // Always have at least one page so text_edit() never returns nullptr
     new_page(default_canvas_theme());
+}
+
+QVector<QTextDocument*> DocumentCanvas::page_documents() const {
+    QVector<QTextDocument*> docs;
+    docs.reserve(pages_.size());
+    for (const QTextEdit* page : pages_)
+        docs.append(page->document());
+    return docs;
 }
 
 void DocumentCanvas::clear_pages() {
@@ -412,7 +459,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
         // Highlight selected
         QTextBlockFormat sel_bf;
         if (i == selected_index) {
-            sel_bf.setBackground(QColor("#fffbe6"));
+            sel_bf.setBackground(selection_bg(theme));
             sel_bf.setLeftMargin(4);
             cursor.setBlockFormat(sel_bf);
         }
@@ -424,7 +471,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             hbf.setTopMargin(20);
             hbf.setBottomMargin(8);
             if (i == selected_index)
-                hbf.setBackground(QColor("#fffbe6"));
+                hbf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(hbf);
 
             QTextCharFormat fmt;
@@ -452,7 +499,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setTopMargin(4);
             bf.setBottomMargin(8);
             if (i == selected_index)
-                bf.setBackground(QColor("#fffbe6"));
+                bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(bf);
 
             // Set default char format so insertMarkdown picks up the right
@@ -522,8 +569,15 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                 rows = comp.config.value("rows", "3").toInt();
                 cols = comp.config.value("cols", "3").toInt();
             }
-            rows = qBound(1, rows, 100);
-            cols = qBound(1, cols, 12);
+            // 20 columns is what the properties panel lets the user create — the canvas cap
+            // used to be 12, so columns 13-20 of a manually built table were never drawn.
+            // Anything beyond the caps is dropped, but not silently: see the note below.
+            constexpr int kMaxTableRows = 200;
+            constexpr int kMaxTableCols = 20;
+            const int wanted_rows = rows;
+            const int wanted_cols = cols;
+            rows = qBound(1, rows, kMaxTableRows);
+            cols = qBound(1, cols, kMaxTableCols);
 
             QTextTableFormat tf;
             tf.setBorderBrush(QColor(theme.divider_color));
@@ -588,6 +642,20 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             }
             cursor.movePosition(QTextCursor::End);
             cursor.insertText("\n");
+            if (wanted_rows > rows || wanted_cols > cols) {
+                // A report that quietly omits rows reads as complete — say what was cut.
+                QTextCharFormat note_fmt;
+                note_fmt.setFontItalic(true);
+                note_fmt.setFontPointSize(10);
+                note_fmt.setForeground(QColor(theme.meta_color));
+                cursor.insertText(QString("(Table truncated: showing %1 of %2 rows and %3 of %4 columns.)")
+                                      .arg(rows)
+                                      .arg(wanted_rows)
+                                      .arg(cols)
+                                      .arg(wanted_cols),
+                                  note_fmt);
+                cursor.insertText("\n");
+            }
 
         } else if (comp.type == "code") {
             QTextBlockFormat bf;
@@ -595,7 +663,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setLeftMargin(16);
             bf.setRightMargin(16);
             if (i == selected_index)
-                bf.setBackground(QColor("#fffbe6"));
+                bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(bf);
             QTextCharFormat fmt;
             fmt.setFontFamilies({"Consolas"});
@@ -619,7 +687,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setBottomMargin(8);
             bf.setBackground(QColor(theme.quote_bg));
             if (i == selected_index)
-                bf.setBackground(QColor("#fffbe6"));
+                bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(bf);
             QTextCharFormat fmt;
             fmt.setFontItalic(true);
@@ -642,7 +710,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             outer_bf.setTopMargin(4);
             outer_bf.setBottomMargin(8);
             if (i == selected_index)
-                outer_bf.setBackground(QColor("#fffbe6"));
+                outer_bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(outer_bf);
 
             QTextListFormat lf;
@@ -688,7 +756,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setBottomMargin(8);
             bf.setAlignment(Qt::AlignHCenter);
             if (i == selected_index)
-                bf.setBackground(QColor("#fffbe6"));
+                bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(bf);
 
             if (data_str.isEmpty()) {
@@ -722,7 +790,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             // Apply alignment to the block
             QTextBlockFormat img_bf;
             if (i == selected_index)
-                img_bf.setBackground(QColor("#fffbe6"));
+                img_bf.setBackground(selection_bg(theme));
             if (align == "center")
                 img_bf.setAlignment(Qt::AlignHCenter);
             else if (align == "right")
@@ -779,7 +847,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setTopMargin(6);
             bf.setBottomMargin(6);
             if (i == selected_index)
-                bf.setBackground(QColor("#fffbe6"));
+                bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(bf);
 
             if (status == "loading") {
@@ -1015,7 +1083,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setTopMargin(8);
             bf.setBottomMargin(8);
             if (i == selected_index)
-                bf.setBackground(QColor("#fffbe6"));
+                bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(bf);
 
             // Icon + optional heading
@@ -1055,7 +1123,7 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             bf.setTopMargin(4);
             bf.setBottomMargin(4);
             if (i == selected_index)
-                bf.setBackground(QColor("#fffbe6"));
+                bf.setBackground(selection_bg(theme));
             cursor.setBlockFormat(bf);
 
             // Title + current value inline

@@ -78,38 +78,54 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
         const double ic_pos = payload.value("IC_positive_rate").toDouble();
         const double pval = payload.value("p_value").toDouble();
         const bool sig = payload.value("is_significant").toBool();
+        // Flat prediction / return lists give one full-sample IC; the dispersion statistics need a
+        // rolling-IC series (>= 2 windows). Show a dash rather than the zeros the script fills in.
+        const bool rolling = payload.value("rolling_ic_available").toBool(true);
+        const QString dash = QString::fromUtf8("—");
 
         QList<QWidget*> top = {
-            gs_make_card(tr("IC MEAN"), QString::number(ic_mean, 'f', 4), this, gs_pos_neg_color(ic_mean)),
-            gs_make_card(tr("IC STD"), QString::number(ic_std, 'f', 4), this),
-            gs_make_card(tr("ICIR"), QString::number(icir, 'f', 3), this,
-                         icir >= 0.5 ? ui::colors::POSITIVE()
-                         : icir > 0  ? ui::colors::WARNING()
-                                     : ui::colors::NEGATIVE()),
-            gs_make_card(tr("POS RATE"), QString::number(ic_pos * 100, 'f', 1) + "%", this,
+            gs_make_card(rolling ? tr("IC MEAN") : tr("IC (FULL SAMPLE)"), QString::number(ic_mean, 'f', 4), this,
+                         gs_pos_neg_color(ic_mean)),
+            gs_make_card(tr("IC STD"), rolling ? QString::number(ic_std, 'f', 4) : dash, this),
+            gs_make_card(tr("ICIR"), rolling ? QString::number(icir, 'f', 3) : dash, this,
+                         !rolling        ? ui::colors::TEXT_PRIMARY()
+                         : icir >= 0.5 ? ui::colors::POSITIVE()
+                         : icir > 0    ? ui::colors::WARNING()
+                                       : ui::colors::NEGATIVE()),
+            gs_make_card(tr("POS RATE"), rolling ? QString::number(ic_pos * 100, 'f', 1) + "%" : dash, this,
                          ic_pos > 0.55 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
         QList<QWidget*> stats = {
-            gs_make_card(tr("IC MAX"), QString::number(payload.value("IC_max").toDouble(), 'f', 4), this,
-                         ui::colors::POSITIVE()),
-            gs_make_card(tr("IC MIN"), QString::number(payload.value("IC_min").toDouble(), 'f', 4), this,
-                         ui::colors::NEGATIVE()),
-            gs_make_card(tr("IC MEDIAN"), QString::number(payload.value("IC_median").toDouble(), 'f', 4), this),
+            gs_make_card(tr("IC MAX"), rolling ? QString::number(payload.value("IC_max").toDouble(), 'f', 4) : dash,
+                         this, ui::colors::POSITIVE()),
+            gs_make_card(tr("IC MIN"), rolling ? QString::number(payload.value("IC_min").toDouble(), 'f', 4) : dash,
+                         this, ui::colors::NEGATIVE()),
+            gs_make_card(tr("IC MEDIAN"),
+                         rolling ? QString::number(payload.value("IC_median").toDouble(), 'f', 4) : dash, this),
             gs_make_card(tr("OBSERVATIONS"), QString::number(payload.value("observations").toInt()), this),
         };
         results_layout_->addWidget(gs_card_row(stats, this));
 
         QList<QWidget*> moments = {
-            gs_make_card(tr("SKEWNESS"), QString::number(payload.value("IC_skewness").toDouble(), 'f', 4), this),
-            gs_make_card(tr("KURTOSIS"), QString::number(payload.value("IC_kurtosis").toDouble(), 'f', 4), this),
+            gs_make_card(tr("SKEWNESS"), rolling ? QString::number(payload.value("IC_skewness").toDouble(), 'f', 4) : dash,
+                         this),
+            gs_make_card(tr("KURTOSIS"), rolling ? QString::number(payload.value("IC_kurtosis").toDouble(), 'f', 4) : dash,
+                         this),
             gs_make_card(tr("p-VALUE"), QString::number(pval, 'f', 4), this,
                          pval < 0.05 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
             gs_make_card(tr("SIGNIFICANT"), sig ? tr("YES") : tr("NO"), this,
                          sig ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
         };
         results_layout_->addWidget(gs_card_row(moments, this));
+
+        const QString ic_note = payload.value("note").toString();
+        if (!ic_note.isEmpty()) {
+            auto* note = gs_section_header(ic_note, accent);
+            note->setWordWrap(true);
+            results_layout_->addWidget(note);
+        }
 
         // Sample IC series
         const auto series = payload.value("ic_series").toArray();
@@ -279,19 +295,27 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
         results_layout_->addWidget(gs_card_row(ic_cards, this));
 
         results_layout_->addWidget(gs_section_header(tr("QUANTILE ANALYSIS"), accent));
-        QList<QWidget*> qa_cards = {
-            gs_make_card(tr("L/S SHARPE"), QString::number(qa.value("long_short_sharpe").toDouble(), 'f', 3), this,
-                         qa.value("long_short_sharpe").toDouble() >= 1.0 ? ui::colors::POSITIVE()
-                                                                         : ui::colors::WARNING()),
-            gs_make_card(tr("SPREAD"), fmt_pct_safe(qa.value("spread"), 4), this,
-                         gs_pos_neg_color(qa.value("spread").toDouble())),
-            gs_make_card(tr("MONOTONICITY"), QString::number(qa.value("monotonicity").toDouble() * 100, 'f', 1) + "%",
-                         this,
-                         qa.value("monotonicity").toDouble() >= 0.7 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-            gs_make_card(tr("L/S MEAN RET"), fmt_pct_safe(qa.value("long_short_mean_return"), 4), this,
-                         gs_pos_neg_color(qa.value("long_short_mean_return").toDouble())),
-        };
-        results_layout_->addWidget(gs_card_row(qa_cards, this));
+        if (!qa.value("success").toBool(true)) {
+            auto* note = gs_section_header(qa.value("error").toString(tr("Quantile analysis unavailable")),
+                                           ui::colors::WARNING());
+            note->setWordWrap(true);
+            results_layout_->addWidget(note);
+        } else {
+            QList<QWidget*> qa_cards = {
+                gs_make_card(tr("L/S SHARPE"), QString::number(qa.value("long_short_sharpe").toDouble(), 'f', 3), this,
+                             qa.value("long_short_sharpe").toDouble() >= 1.0 ? ui::colors::POSITIVE()
+                                                                             : ui::colors::WARNING()),
+                gs_make_card(tr("SPREAD"), fmt_pct_safe(qa.value("spread"), 4), this,
+                             gs_pos_neg_color(qa.value("spread").toDouble())),
+                gs_make_card(tr("MONOTONICITY"),
+                             QString::number(qa.value("monotonicity").toDouble() * 100, 'f', 1) + "%", this,
+                             qa.value("monotonicity").toDouble() >= 0.7 ? ui::colors::POSITIVE()
+                                                                        : ui::colors::WARNING()),
+                gs_make_card(tr("L/S MEAN RET"), fmt_pct_safe(qa.value("long_short_mean_return"), 4), this,
+                             gs_pos_neg_color(qa.value("long_short_mean_return").toDouble())),
+            };
+            results_layout_->addWidget(gs_card_row(qa_cards, this));
+        }
 
         if (!turn.isEmpty()) {
             results_layout_->addWidget(gs_section_header(tr("TURNOVER"), accent));
@@ -429,6 +453,21 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
         }
         results_layout_->addWidget(gs_section_header(tr("WEIGHTS"), accent));
         results_layout_->addWidget(build_weights_table(weights, this));
+        // Risk parity scales the equal-risk weights to the target volatility, so they need not
+        // sum to 100%; show the gross exposure and the unscaled (fully invested) weights too.
+        if (payload.contains("gross_exposure")) {
+            auto* note = gs_section_header(tr("Scaled weights sum to %1% of capital to reach the target volatility "
+                                              "(100% = fully invested).")
+                                               .arg(payload.value("gross_exposure").toDouble() * 100.0, 0, 'f', 1),
+                                           accent);
+            note->setWordWrap(true);
+            results_layout_->addWidget(note);
+            const auto unscaled = payload.value("unscaled_weights").toObject();
+            if (!unscaled.isEmpty()) {
+                results_layout_->addWidget(gs_section_header(tr("UNSCALED WEIGHTS (FULLY INVESTED)"), accent));
+                results_layout_->addWidget(build_weights_table(unscaled, this));
+            }
+        }
     } else if (payload.contains("config")) {
         // TopK-Dropout / Enhanced Indexing / Weight Strategy: render config dict
         const auto cfg = payload.value("config").toObject();

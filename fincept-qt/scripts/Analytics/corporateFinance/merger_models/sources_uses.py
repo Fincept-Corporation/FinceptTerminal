@@ -212,10 +212,57 @@ class DetailedSourcesUses(SourcesUsesBuilder):
 
         return base_table
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `sources_uses.py calculate <flat-params-json>` (argv length 3). The native form is
+# `sources_uses deal_structure financing_structure`, so a service-style call is translated here and then falls
+# through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    deal = {
+        "purchase_price": _svc_num(p, "deal_value", "purchase_price", "equity_offered", default=0.0),
+        "target_debt_refinanced": _svc_num(p, "target_debt", "target_debt_refinanced", "target_debt_assumed",
+                                           default=0.0),
+    }
+    fees = _svc_num(p, "fees", "transaction_fees", default=None)
+    if fees is not None:
+        deal["transaction_fees"] = fees
+    financing = {
+        "acquirer_cash": _svc_num(p, "cash", "cash_on_hand", "acquirer_cash", "cash_offered", default=0.0),
+        "new_debt": _svc_num(p, "new_debt", "debt_raised", default=0.0),
+        "new_equity": _svc_num(p, "stock_issuance", "new_equity", default=0.0),
+    }
+    if "equity_offered" in p and "deal_value" not in p and "purchase_price" not in p:
+        # MCP shape: price = cash + equity consideration.
+        deal["purchase_price"] = (_svc_num(p, "equity_offered", default=0.0) + _svc_num(p, "cash_offered", default=0.0))
+        financing["new_equity"] = _svc_num(p, "equity_offered", default=0.0)
+    return [argv[0], "sources_uses", json.dumps(deal), json.dumps(financing)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified. Usage: sources_uses.py <command> [args...]"}
         print(json.dumps(result))

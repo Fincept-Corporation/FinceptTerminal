@@ -112,13 +112,10 @@ void NewsFeedModel::set_wire_articles(const QVector<services::NewsArticle>& arti
     article_id_to_row_.reserve(articles.size());
     formatted_rows_.clear();
     formatted_rows_.reserve(articles.size());
-    unseen_count_ = 0;
 
     for (int i = 0; i < articles.size(); ++i) {
         const auto& a = articles[i];
         article_id_to_row_.insert(a.id, i);
-        if (!seen_ids_.contains(a.id))
-            ++unseen_count_;
 
         // Pre-format once — avoids allocation in paint() on every frame
         FormattedRow fr;
@@ -139,6 +136,7 @@ void NewsFeedModel::set_wire_articles(const QVector<services::NewsArticle>& arti
         formatted_rows_.append(std::move(fr));
     }
 
+    recount_unseen();
     endResetModel();
 }
 
@@ -148,13 +146,26 @@ void NewsFeedModel::set_clusters(const QVector<services::NewsCluster>& clusters)
     // Rebuild O(1) lookup cache and incremental unseen counter
     cluster_id_to_row_.clear();
     cluster_id_to_row_.reserve(clusters.size());
-    unseen_count_ = 0;
-    for (int i = 0; i < clusters.size(); ++i) {
+    for (int i = 0; i < clusters.size(); ++i)
         cluster_id_to_row_.insert(clusters[i].lead_article.id, i);
-        if (!seen_ids_.contains(clusters[i].lead_article.id))
-            ++unseen_count_;
-    }
+    // Both set_wire_articles() and set_clusters() run on every refresh; each used
+    // to overwrite the counter with its own tally, so the WIRE view reported the
+    // cluster count (and vice versa). Only the active view's rows are counted.
+    recount_unseen();
     endResetModel();
+}
+
+void NewsFeedModel::recount_unseen() {
+    unseen_count_ = 0;
+    if (view_mode_ == "WIRE") {
+        for (const auto& a : std::as_const(articles_))
+            if (!seen_ids_.contains(a.id))
+                ++unseen_count_;
+    } else {
+        for (const auto& c : std::as_const(clusters_))
+            if (!seen_ids_.contains(c.lead_article.id))
+                ++unseen_count_;
+    }
 }
 
 void NewsFeedModel::set_view_mode(const QString& mode) {
@@ -162,6 +173,7 @@ void NewsFeedModel::set_view_mode(const QString& mode) {
         return;
     beginResetModel();
     view_mode_ = mode;
+    recount_unseen();
     endResetModel();
 }
 
@@ -193,7 +205,9 @@ void NewsFeedModel::set_monitor_matches(const QMap<QString, QVector<services::Ne
                 article_monitor_color_[article.id] = monitor.color;
         }
     }
-    emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {MonitorColorRole});
+    // An empty model has no valid index range to report.
+    if (rowCount() > 0)
+        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {MonitorColorRole});
 }
 
 void NewsFeedModel::mark_all_seen() {
@@ -205,18 +219,22 @@ void NewsFeedModel::mark_all_seen() {
             seen_ids_.insert(c.lead_article.id);
     }
     unseen_count_ = 0;
-    emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsNewRole});
+    if (rowCount() > 0)
+        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsNewRole});
 }
 
 void NewsFeedModel::mark_seen(const QString& article_id) {
     if (seen_ids_.contains(article_id))
         return;
     seen_ids_.insert(article_id);
-    if (unseen_count_ > 0)
-        --unseen_count_;
+    // Ids restored from the DB (or belonging to the other view) are not rows of
+    // the current list, so only a displayed row counts against the tally.
     const auto idx = index_for_article(article_id);
-    if (idx.isValid())
+    if (idx.isValid()) {
+        if (unseen_count_ > 0)
+            --unseen_count_;
         emit dataChanged(idx, idx, {IsNewRole, PulsePhaseRole});
+    }
 }
 
 int NewsFeedModel::unseen_count() const {
@@ -262,19 +280,19 @@ QString NewsFeedModel::monitor_color_for(const QString& article_id) const {
 
 void NewsFeedModel::set_geo_articles(const QSet<QString>& geolocated_ids) {
     geo_article_ids_ = geolocated_ids;
-    emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {HasGeoRole});
+    if (rowCount() > 0)
+        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {HasGeoRole});
 }
 
 void NewsFeedModel::advance_pulse() {
     pulse_phase_ = (pulse_phase_ + 1) % 4;
-    // Only emit for unseen articles (optimization)
-    for (int i = 0; i < rowCount(); ++i) {
-        QString aid = (view_mode_ == "WIRE" && i < articles_.size())
-                          ? articles_[i].id
-                          : (i < clusters_.size() ? clusters_[i].lead_article.id : QString());
-        if (!aid.isEmpty() && !seen_ids_.contains(aid))
-            emit dataChanged(index(i, 0), index(i, 0), {PulsePhaseRole});
-    }
+    if (unseen_count_ <= 0 || rowCount() == 0)
+        return; // nothing is pulsing
+    // One range notification instead of one per unseen row — the view only
+    // repaints what is visible, and PulsePhaseRole already answers -1 for rows
+    // that have been seen. (This used to emit up to a few hundred separate
+    // dataChanged signals every 500 ms.)
+    emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {PulsePhaseRole});
 }
 
 } // namespace fincept::screens

@@ -50,7 +50,9 @@ class PortfolioAnalyticsService : public QObject {
     PortfolioAnalyticsService() = default;
 
     /// Core dispatch: invoke `script` with `args_json` and decode result.
-    void run_script(const QString& script, const QString& args_json, AnalyticsCallback cb);
+    /// `via_stdin` feeds the JSON on the child's stdin (and closes it) instead of
+    /// argv - required for the scripts that only read stdin.
+    void run_script(const QString& script, const QString& args_json, AnalyticsCallback cb, bool via_stdin = false);
 };
 
 } // namespace fincept::services

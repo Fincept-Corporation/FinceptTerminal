@@ -15,8 +15,6 @@ namespace fincept::mcp::tools {
 
 using namespace fincept::services;
 
-static constexpr int kTimeoutMs = 15000;
-
 // ── Serialisers ──────────────────────────────────────────────────────────────
 
 static QJsonObject category_to_json(const ForumCategory& c) {
@@ -154,38 +152,38 @@ std::vector<ToolDef> get_forum_tools() {
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             bool ok = false;
-            QString err;
+            QString err = "Forum service did not respond";
             QJsonObject result;
-            bool fired = false;
 
-            QEventLoop loop;
-            QTimer::singleShot(kTimeoutMs, &loop, &QEventLoop::quit);
+            // This used to spin a QEventLoop on the worker thread and call
+            // ForumService (a main-thread QObject owning a QNetworkAccessManager)
+            // directly from it — the cross-thread hazard ThreadHelper.h documents,
+            // and a nested loop on the UI thread when called from there. Marshal
+            // the call to the service's thread like every other tool here.
+            detail::run_async_wait(&ForumService::instance(), [&](auto signal_done) {
+                ForumService::instance().fetch_categories(
+                    [&, signal_done](bool success, QVector<ForumCategory> cats, ForumPermissions perms) {
+                        ok = success;
+                        if (success) {
+                            QJsonArray arr;
+                            for (const auto& c : cats)
+                                arr.append(category_to_json(c));
+                            result = QJsonObject{
+                                {"categories", arr},
+                                {"permissions",
+                                 QJsonObject{
+                                     {"can_create_posts", perms.can_create_posts},
+                                     {"can_vote", perms.can_vote},
+                                     {"can_comment", perms.can_comment},
+                                 }},
+                            };
+                        } else {
+                            err = "Failed to load categories";
+                        }
+                        signal_done();
+                    });
+            });
 
-            ForumService::instance().fetch_categories(
-                [&](bool success, QVector<ForumCategory> cats, ForumPermissions perms) {
-                    fired = true;
-                    ok = success;
-                    if (success) {
-                        QJsonArray arr;
-                        for (const auto& c : cats)
-                            arr.append(category_to_json(c));
-                        result = QJsonObject{
-                            {"categories", arr},
-                            {"permissions",
-                             QJsonObject{
-                                 {"can_create_posts", perms.can_create_posts},
-                                 {"can_vote", perms.can_vote},
-                                 {"can_comment", perms.can_comment},
-                             }},
-                        };
-                    } else {
-                        err = "Failed to load categories";
-                    }
-                    loop.quit();
-                });
-
-            if (!fired)
-                loop.exec();
             if (!ok)
                 return ToolResult::fail(err);
             return ToolResult::ok_data(result);
@@ -361,6 +359,8 @@ std::vector<ToolDef> get_forum_tools() {
         t.description = "Create a new forum post in a category. "
                         "Requires can_create_posts permission (check forum_get_categories).";
         t.category = "forum";
+        // Publishes under the user's identity to a public community forum.
+        t.is_destructive = true;
         t.input_schema.properties = QJsonObject{
             {"category_id", QJsonObject{{"type", "integer"}, {"description", "Category ID to post in"}}},
             {"title", QJsonObject{{"type", "string"}, {"description", "Post title"}}},
@@ -392,6 +392,7 @@ std::vector<ToolDef> get_forum_tools() {
         t.description = "Reply to a forum post by its UUID. "
                         "Requires can_comment permission.";
         t.category = "forum";
+        t.is_destructive = true; // publishes publicly under the user's identity
         t.input_schema.properties = QJsonObject{
             {"post_uuid", QJsonObject{{"type", "string"}, {"description", "UUID of the post to reply to"}}},
             {"content", QJsonObject{{"type", "string"}, {"description", "Reply content"}}},
@@ -418,6 +419,7 @@ std::vector<ToolDef> get_forum_tools() {
         t.description = "Vote on a forum post. vote_type: 'up' to upvote, '' (empty) to clear vote. "
                         "Requires can_vote permission.";
         t.category = "forum";
+        t.is_destructive = true; // changes public vote counts / reputation
         t.input_schema.properties = QJsonObject{
             {"post_uuid", QJsonObject{{"type", "string"}, {"description", "Post UUID"}}},
             {"vote_type", QJsonObject{{"type", "string"}, {"description", "'up' to upvote, '' to clear"}}},
@@ -425,9 +427,11 @@ std::vector<ToolDef> get_forum_tools() {
         t.input_schema.required = {"post_uuid", "vote_type"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString uuid = args["post_uuid"].toString().trimmed();
-            QString vote_type = args["vote_type"].toString();
+            QString vote_type = args["vote_type"].toString().trimmed().toLower();
             if (uuid.isEmpty())
                 return ToolResult::fail("Missing 'post_uuid'");
+            if (vote_type != "up" && vote_type != "down" && !vote_type.isEmpty())
+                return ToolResult::fail("Invalid 'vote_type' — use 'up', 'down' or '' (empty) to clear");
 
             return run_forum_bool(
                 [uuid, vote_type](auto cb) { ForumService::instance().vote_post(uuid, vote_type, cb); });
@@ -442,6 +446,7 @@ std::vector<ToolDef> get_forum_tools() {
         t.description = "Vote on a forum comment. vote_type: 'up', 'down', or '' to clear. "
                         "Requires can_vote permission.";
         t.category = "forum";
+        t.is_destructive = true; // changes public vote counts / reputation
         t.input_schema.properties = QJsonObject{
             {"comment_uuid", QJsonObject{{"type", "string"}, {"description", "Comment UUID"}}},
             {"vote_type", QJsonObject{{"type", "string"}, {"description", "'up', 'down', or '' to clear"}}},
@@ -449,9 +454,11 @@ std::vector<ToolDef> get_forum_tools() {
         t.input_schema.required = {"comment_uuid", "vote_type"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString uuid = args["comment_uuid"].toString().trimmed();
-            QString vote_type = args["vote_type"].toString();
+            QString vote_type = args["vote_type"].toString().trimmed().toLower();
             if (uuid.isEmpty())
                 return ToolResult::fail("Missing 'comment_uuid'");
+            if (vote_type != "up" && vote_type != "down" && !vote_type.isEmpty())
+                return ToolResult::fail("Invalid 'vote_type' — use 'up', 'down' or '' (empty) to clear");
 
             return run_forum_bool(
                 [uuid, vote_type](auto cb) { ForumService::instance().vote_comment(uuid, vote_type, cb); });
@@ -503,6 +510,7 @@ std::vector<ToolDef> get_forum_tools() {
         t.description = "Update the current user's forum profile "
                         "(display name, bio, signature, avatar color).";
         t.category = "forum";
+        t.is_destructive = true; // edits the user's public profile
         t.input_schema.properties = QJsonObject{
             {"display_name", QJsonObject{{"type", "string"}, {"description", "Display name"}}},
             {"bio", QJsonObject{{"type", "string"}, {"description", "Short biography"}}},
@@ -510,10 +518,36 @@ std::vector<ToolDef> get_forum_tools() {
             {"avatar_color", QJsonObject{{"type", "string"}, {"description", "Hex color for avatar (e.g. #d97706)"}}},
         };
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString display_name = args["display_name"].toString();
-            QString bio = args["bio"].toString();
-            QString signature = args["signature"].toString();
-            QString avatar_color = args["avatar_color"].toString();
+            static const QStringList kFields = {"display_name", "bio", "signature", "avatar_color"};
+            bool any = false;
+            for (const auto& f : kFields)
+                any = any || args.contains(f);
+            if (!any)
+                return ToolResult::fail("No fields provided — pass at least one of: display_name, bio, signature, "
+                                        "avatar_color");
+
+            // The service call replaces all four fields at once, so a field the model
+            // left out used to be written back as "" (a bio-only edit blanked the
+            // display name, signature and avatar colour). Start from the current
+            // profile and overlay only what was supplied.
+            ForumProfile current;
+            bool have_current = false;
+            detail::run_async_wait(&ForumService::instance(), [&](auto signal_done) {
+                ForumService::instance().fetch_my_profile([&, signal_done](bool success, ForumProfile p) {
+                    have_current = success;
+                    if (success)
+                        current = std::move(p);
+                    signal_done();
+                });
+            });
+            if (!have_current)
+                return ToolResult::fail("Could not read the current forum profile — nothing was changed");
+
+            QString display_name = args.contains("display_name") ? args["display_name"].toString() : current.display_name;
+            QString bio = args.contains("bio") ? args["bio"].toString() : current.bio;
+            QString signature = args.contains("signature") ? args["signature"].toString() : current.signature;
+            QString avatar_color =
+                args.contains("avatar_color") ? args["avatar_color"].toString() : current.avatar_color;
 
             return run_forum_bool([display_name, bio, signature, avatar_color](auto cb) {
                 ForumService::instance().update_profile(display_name, bio, signature, avatar_color, cb);

@@ -161,6 +161,14 @@ void FeedPanel::pop_out(const QString& feed_id) {
         floating_.remove(id);
         rebuild();
     });
+    // The floating window is a parentless top-level, so it outlives this panel
+    // (e.g. when its host window closes) and would linger with dead header
+    // buttons. Close it with the panel; drop its connections first so its
+    // closed() signal cannot call back into a half-destroyed FeedPanel.
+    connect(this, &QObject::destroyed, win, [win]() {
+        win->disconnect();
+        win->close();
+    });
     floating_.insert(feed_id, win);
     win->show();
     rebuild(); // remove from docked stack while floating

@@ -231,15 +231,37 @@ void MAModulePanel::display_error(const QString& msg) {
     status_label_->setText(tr("Error"));
 }
 
+// Is this metric a rate whose sub-1.0 value is a fraction to show as a percentage (0.099 -> "9.9%")?
+// Previously EVERY value between 0.0001 and 1 was rendered as a percentage, so a beta of 0.8 or an
+// EV/Revenue multiple of 0.5 read "80.0%" / "50.0%". Keyed on the metric name instead.
+static bool is_rate_key(const QString& key) {
+    static const QStringList kHints = {"rate",    "margin",  "growth", "yield",     "irr",  "wacc",
+                                       "premium", "return",  "probabil", "weight", "ownership", "cagr", "discount"};
+    const QString k = key.toLower();
+    for (const QString& hint : kHints)
+        if (k.contains(hint))
+            return true;
+    return false;
+}
+
 // `intrinsic` pins the symbol to a fixed currency (e.g. "USD" for SEC/EDGAR
-// data); empty means follow the user's preferred currency.
-static QString format_value(const QJsonValue& val, const QString& intrinsic = QString()) {
+// data); empty means follow the user's preferred currency. `key` is the metric name (if known).
+static QString format_value(const QJsonValue& val, const QString& intrinsic = QString(),
+                            const QString& key = QString()) {
     if (val.isDouble()) {
         double v = val.toDouble();
+        // The scripts emit `*_pct` / `*_percent` fields already in percent (23.6, or 0.36 for 0.36%), so they
+        // are labelled, never rescaled.
+        if (key.contains(QLatin1String("pct"), Qt::CaseInsensitive) ||
+            key.contains(QLatin1String("percent"), Qt::CaseInsensitive))
+            return QString("%1%").arg(v, 0, 'f', 2);
         if (std::abs(v) >= 1e3)
             return cur::money(v, /*compact=*/true, intrinsic);
-        if (std::abs(v) < 1.0 && std::abs(v) > 0.0001)
-            return QString("%1%").arg(v * 100, 0, 'f', 1);
+        if (std::abs(v) < 1.0 && std::abs(v) > 0.0001) {
+            if (is_rate_key(key))
+                return QString("%1%").arg(v * 100, 0, 'f', 1);
+            return QString::number(v, 'g', 4);
+        }
         return QString::number(v, 'f', 2);
     }
     if (val.isBool())
@@ -289,7 +311,7 @@ static QTableWidget* build_json_table(const QJsonArray& arr, const QString& acce
     for (int r = 0; r < arr.size(); ++r) {
         auto obj = arr[r].toObject();
         for (int c = 0; c < cols.size(); ++c) {
-            auto* item = new QTableWidgetItem(format_value(obj[cols[c]], intrinsic));
+            auto* item = new QTableWidgetItem(format_value(obj[cols[c]], intrinsic, cols[c]));
             item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, c, item);
         }
@@ -338,7 +360,7 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
         auto* key_item = new QTableWidgetItem(label.toUpper());
         key_item->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         table->setItem(r, 0, key_item);
-        auto* val_item = new QTableWidgetItem(format_value(obj[keys[r]], intrinsic));
+        auto* val_item = new QTableWidgetItem(format_value(obj[keys[r]], intrinsic, keys[r]));
         val_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table->setItem(r, 1, val_item);
     }
@@ -346,8 +368,30 @@ static QTableWidget* build_kv_table(const QJsonObject& obj, const QString& accen
     return table;
 }
 
-void MAModulePanel::display_result(const QJsonObject& payload) {
+void MAModulePanel::display_result(const QJsonObject& envelope) {
     clear_results();
+
+    // Most scripts answer {"success": true, "data": <result>}: show the result itself, not a "SUCCESS: YES"
+    // card next to it. Other top-level scalars (count, filings_found, ...) are kept; the raw-JSON viewer
+    // below still shows the untouched envelope.
+    QJsonObject payload = envelope;
+    if (envelope.value(QStringLiteral("success")).toBool(false) && envelope.contains(QStringLiteral("data"))) {
+        const QJsonValue data = envelope.value(QStringLiteral("data"));
+        QJsonObject flat;
+        for (auto it = envelope.begin(); it != envelope.end(); ++it)
+            if (it.key() != QLatin1String("success") && it.key() != QLatin1String("data") &&
+                !it.value().isObject() && !it.value().isArray())
+                flat.insert(it.key(), it.value());
+        if (data.isObject()) {
+            const QJsonObject inner = data.toObject();
+            for (auto it = inner.begin(); it != inner.end(); ++it)
+                flat.insert(it.key(), it.value());
+            payload = flat;
+        } else if (data.isArray()) {
+            flat.insert(QStringLiteral("results"), data);
+            payload = flat;
+        }
+    }
 
     QString accent = QString("%1,%2,%3").arg(module_.color.red()).arg(module_.color.green()).arg(module_.color.blue());
 
@@ -379,8 +423,8 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
         has_scalars = true;
         QString label = it.key();
         label.replace('_', ' ');
-        auto* card =
-            build_metric_card(label.toUpper(), format_value(it.value(), intrinsic), module_.color.name(), grid);
+        auto* card = build_metric_card(label.toUpper(), format_value(it.value(), intrinsic, it.key()),
+                                       module_.color.name(), grid);
         gl->addWidget(card, row, col);
         col++;
         if (col >= 3) {
@@ -465,7 +509,7 @@ void MAModulePanel::display_result(const QJsonObject& payload) {
     raw_text->setReadOnly(true);
     raw_text->setVisible(false);
     raw_text->setMaximumHeight(300);
-    raw_text->setPlainText(QJsonDocument(payload).toJson(QJsonDocument::Indented));
+    raw_text->setPlainText(QJsonDocument(envelope).toJson(QJsonDocument::Indented));
     raw_text->setStyleSheet(QString("QTextEdit { background:%1; color:%2; border:1px solid %3;"
                                     "font-family:%4; font-size:%5px; padding:8px; }")
                                 .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM())
@@ -510,7 +554,20 @@ static const QHash<ModuleId, QStringList>& get_context_map() {
 void MAModulePanel::on_result_ready(const QString& context, const QJsonObject& payload) {
     auto it = get_context_map().find(module_.id);
     if (it != get_context_map().end() && it->contains(context)) {
+        // A script that answers {"success": false, ...} (without the "error" key PythonRunner looks for)
+        // used to be rendered as a result card reading "SUCCESS: NO".
+        const QJsonValue ok = payload.value(QStringLiteral("success"));
+        if (ok.isBool() && !ok.toBool()) {
+            QString text = payload.value(QStringLiteral("message")).toString();
+            if (text.isEmpty())
+                text = payload.value(QStringLiteral("error")).toString();
+            display_error(QString("[%1] %2").arg(context, text.isEmpty() ? tr("The analysis failed") : text));
+            return;
+        }
         display_result(payload);
+        // An empty deal database is the normal first-run state — say what to do about it.
+        if (module_.id == fincept::services::ma::ModuleId::Deals && payload.value(QStringLiteral("count")).toInt(-1) == 0)
+            status_label_->setText(tr("No deals stored yet - use SCAN SEC FILINGS, then LOAD ALL DEALS"));
     }
 }
 

@@ -11,6 +11,7 @@
 #include <QDateTimeAxis>
 #include <QHideEvent>
 #include <QLineSeries>
+#include <QPointer>
 #include <QShowEvent>
 #include <QValueAxis>
 
@@ -22,12 +23,6 @@ namespace fincept::screens::fno {
 using fincept::services::options::OISample;
 using fincept::services::options::OISnapshotter;
 using namespace fincept::ui;
-
-namespace {
-
-constexpr int kPollIntervalMs = 60'000; // OISnapshotter flush cadence.
-
-} // namespace
 
 IntradayOIChart::IntradayOIChart(QWidget* parent) : QChartView(parent) {
     setRenderHint(QPainter::Antialiasing, true);
@@ -82,10 +77,6 @@ IntradayOIChart::IntradayOIChart(QWidget* parent) : QChartView(parent) {
     ce_series_->attachAxis(axis_y_);
     pe_series_->attachAxis(axis_x_);
     pe_series_->attachAxis(axis_y_);
-
-    poll_timer_.setInterval(kPollIntervalMs);
-    poll_timer_.setSingleShot(false);
-    connect(&poll_timer_, &QTimer::timeout, this, &IntradayOIChart::poll_refresh);
 }
 
 IntradayOIChart::~IntradayOIChart() {
@@ -94,12 +85,8 @@ IntradayOIChart::~IntradayOIChart() {
 
 void IntradayOIChart::set_subscription(const QString& broker_id, qint64 ce_token, qint64 pe_token,
                                        const QString& window) {
-    auto& hub = fincept::datahub::DataHub::instance();
     // Drop prior subscriptions.
-    if (!ce_topic_.isEmpty())
-        hub.unsubscribe(this, ce_topic_);
-    if (!pe_topic_.isEmpty())
-        hub.unsubscribe(this, pe_topic_);
+    detach_topics();
 
     broker_id_ = broker_id;
     ce_token_ = ce_token;
@@ -115,19 +102,47 @@ void IntradayOIChart::set_subscription(const QString& broker_id, qint64 ce_token
         return;
     }
 
-    if (ce_token != 0) {
-        ce_topic_ = OISnapshotter::history_topic(broker_id, ce_token, window);
-        hub.subscribe(this, ce_topic_, [this, ce_token](const QVariant& v) { on_history(ce_token, v); });
-    } else {
-        ce_topic_.clear();
+    ce_topic_ = ce_token != 0 ? OISnapshotter::history_topic(broker_id, ce_token, window) : QString();
+    pe_topic_ = pe_token != 0 ? OISnapshotter::history_topic(broker_id, pe_token, window) : QString();
+    replot();
+    // Hidden (e.g. the OI tab was just built behind the Chain tab): showEvent attaches.
+    if (isVisible())
+        attach_topics();
+}
+
+void IntradayOIChart::attach_topics() {
+    if (attached_)
+        return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    QPointer<IntradayOIChart> self = this;
+    if (!ce_topic_.isEmpty()) {
+        const qint64 ce_token = ce_token_;
+        hub.subscribe(this, ce_topic_, [self, ce_token](const QVariant& v) {
+            if (self)
+                self->on_history(ce_token, v);
+        });
+        hub.request(ce_topic_, /*force*/ true); // cold start
     }
-    if (pe_token != 0) {
-        pe_topic_ = OISnapshotter::history_topic(broker_id, pe_token, window);
-        hub.subscribe(this, pe_topic_, [this, pe_token](const QVariant& v) { on_history(pe_token, v); });
-    } else {
-        pe_topic_.clear();
+    if (!pe_topic_.isEmpty()) {
+        const qint64 pe_token = pe_token_;
+        hub.subscribe(this, pe_topic_, [self, pe_token](const QVariant& v) {
+            if (self)
+                self->on_history(pe_token, v);
+        });
+        hub.request(pe_topic_, /*force*/ true);
     }
-    poll_refresh();
+    attached_ = true;
+}
+
+void IntradayOIChart::detach_topics() {
+    if (!attached_)
+        return;
+    auto& hub = fincept::datahub::DataHub::instance();
+    if (!ce_topic_.isEmpty())
+        hub.unsubscribe(this, ce_topic_);
+    if (!pe_topic_.isEmpty())
+        hub.unsubscribe(this, pe_topic_);
+    attached_ = false;
 }
 
 void IntradayOIChart::clear_subscription() {
@@ -177,22 +192,14 @@ void IntradayOIChart::replot() {
     axis_y_->setRange(0, oi_max > 0 ? oi_max * 1.1 : 1);
 }
 
-void IntradayOIChart::poll_refresh() {
-    auto& hub = fincept::datahub::DataHub::instance();
-    if (!ce_topic_.isEmpty())
-        hub.request(ce_topic_, /*force*/ true);
-    if (!pe_topic_.isEmpty())
-        hub.request(pe_topic_, /*force*/ true);
-}
-
 void IntradayOIChart::showEvent(QShowEvent* e) {
     QChartView::showEvent(e);
-    poll_timer_.start();
+    attach_topics();
 }
 
 void IntradayOIChart::hideEvent(QHideEvent* e) {
     QChartView::hideEvent(e);
-    poll_timer_.stop();
+    detach_topics();
 }
 
 void IntradayOIChart::changeEvent(QEvent* event) {

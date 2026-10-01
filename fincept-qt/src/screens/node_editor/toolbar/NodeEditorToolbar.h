@@ -22,6 +22,9 @@ class NodeEditorToolbar : public QWidget {
     void set_can_redo(bool can);
     void set_executing(bool running);
 
+    /// Replace the status badge text ("DRAFT" by default) — e.g. "SAVED 14:32", "UNSAVED".
+    void set_status_text(const QString& text);
+
   signals:
     void undo_clicked();
     void redo_clicked();
@@ -46,6 +49,7 @@ class NodeEditorToolbar : public QWidget {
 
     QLineEdit* name_edit_ = nullptr;
     QLabel* status_badge_ = nullptr;
+    QString status_override_; // custom badge text; empty = default "DRAFT"
     QPushButton* undo_btn_ = nullptr;
     QPushButton* redo_btn_ = nullptr;
     QPushButton* save_btn_ = nullptr;

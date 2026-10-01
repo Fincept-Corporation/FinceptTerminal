@@ -1,5 +1,6 @@
 #include "screens/equity_trading/PortfolioReplicationDialog.h"
 
+#include "screens/equity_trading/EquityTypes.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/PaperTrading.h"
@@ -21,6 +22,7 @@
 #include <QtConcurrent>
 
 #include <cmath>
+#include <memory>
 
 using namespace fincept::trading;
 using namespace fincept::trading::replication;
@@ -106,8 +108,10 @@ PortfolioReplicationDialog::PortfolioReplicationDialog(QWidget* parent) : QDialo
             &PortfolioReplicationDialog::reload_plan);
     connect(target_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this,
             &PortfolioReplicationDialog::reload_plan);
-    connect(inc_holdings_, &QCheckBox::toggled, this, &PortfolioReplicationDialog::reload_plan);
-    connect(inc_positions_, &QCheckBox::toggled, this, &PortfolioReplicationDialog::reload_plan);
+    // The scope toggles only re-filter what is already loaded — re-planning from the cached
+    // source items, not another round of broker calls per click.
+    connect(inc_holdings_, &QCheckBox::toggled, this, [this](bool) { fill_table(); });
+    connect(inc_positions_, &QCheckBox::toggled, this, [this](bool) { fill_table(); });
 
     populate_accounts();
 }
@@ -140,23 +144,50 @@ ReplicationOptions PortfolioReplicationDialog::current_options() const {
 }
 
 void PortfolioReplicationDialog::reload_plan() {
-    if (loading_)
-        return;
     const QString src_id = source_combo_->currentData().toString();
     const QString tgt_id = target_combo_->currentData().toString();
     if (src_id.isEmpty() || tgt_id.isEmpty())
         return;
 
+    // A new selection supersedes anything still loading for the old one. The previous
+    // `loading_` guard instead IGNORED the change while a fetch was in flight, so the
+    // table ended up showing the old source's holdings under the newly picked account.
+    const quint64 gen = ++plan_gen_;
     source_items_.clear();
+    // Drop the old plan too: REPLICATE stayed enabled over the cleared table and would
+    // have executed the previous selection's orders.
+    plan_ = trading::replication::ReplicationPlan{};
     table_->setRowCount(0);
+    footer_->clear();
+    replicate_btn_->setEnabled(false);
+    topup_btn_->setEnabled(false);
     status_->setText(tr("Loading source portfolio…"));
 
     const auto src = AccountManager::instance().get_account(src_id);
     const auto tgt = AccountManager::instance().get_account(tgt_id);
 
-    // Make sure both brokers' instruments are available for symbol mapping.
-    InstrumentService::instance().load_from_db(src.broker_id);
-    InstrumentService::instance().load_from_db(tgt.broker_id);
+    // The symbol resolver needs both brokers' instrument masters in memory.
+    // load_from_db() is an async shim now (a cold master loads on a worker), so the plan
+    // must wait for the load instead of resolving against an empty cache — which flagged
+    // every row as unmappable the first time a broker was used. Callbacks fire
+    // immediately on the UI thread when a cache is already warm.
+    QStringList broker_ids{src.broker_id};
+    if (tgt.broker_id != src.broker_id)
+        broker_ids << tgt.broker_id;
+    auto remaining = std::make_shared<int>(int(broker_ids.size()));
+    QPointer<PortfolioReplicationDialog> self = this;
+    for (const QString& bid : broker_ids) {
+        InstrumentService::instance().load_from_db_async(bid, [self, gen, src_id, remaining](int) {
+            if (!self || self->plan_gen_ != gen)
+                return;
+            if (--*remaining == 0)
+                self->fetch_source(src_id, gen);
+        });
+    }
+}
+
+void PortfolioReplicationDialog::fetch_source(const QString& src_id, quint64 gen) {
+    const auto src = AccountManager::instance().get_account(src_id);
 
     if (src.trading_mode == QStringLiteral("paper")) {
         apply_items(paper_source_items(src.paper_portfolio_id), QString());
@@ -169,10 +200,9 @@ void PortfolioReplicationDialog::reload_plan() {
         apply_items({}, tr("No credentials for source account"));
         return;
     }
-    loading_ = true;
     const QString bid = src.broker_id;
     QPointer<PortfolioReplicationDialog> self = this;
-    (void)QtConcurrent::run([self, bid, creds]() {
+    (void)QtConcurrent::run([self, gen, bid, creds]() {
         auto* broker = BrokerRegistry::instance().get(bid);
         QVector<BrokerHolding> holdings;
         QVector<BrokerPosition> positions;
@@ -190,12 +220,15 @@ void PortfolioReplicationDialog::reload_plan() {
             err = QStringLiteral("Broker unavailable");
         }
         auto items = to_source_items(holdings, positions);
+        // The dialog can be closed while the (blocking) broker calls run, and
+        // QMetaObject::invokeMethod asserts on a null receiver.
+        if (!self)
+            return;
         QMetaObject::invokeMethod(
             self,
-            [self, items, err]() {
-                if (!self)
-                    return;
-                self->loading_ = false;
+            [self, gen, items, err]() {
+                if (!self || self->plan_gen_ != gen)
+                    return; // the user picked another source/target while this was in flight
                 self->apply_items(items, err);
             },
             Qt::QueuedConnection);
@@ -241,7 +274,7 @@ void PortfolioReplicationDialog::fill_table() {
         table_->setItem(row, 2, new QTableWidgetItem(po.src_symbol));
         table_->setItem(row, 3, new QTableWidgetItem(po.norm_symbol));
         table_->setItem(row, 4, new QTableWidgetItem(po.side.toUpper()));
-        table_->setItem(row, 5, new QTableWidgetItem(QString::number(po.quantity, 'f', 0)));
+        table_->setItem(row, 5, new QTableWidgetItem(equity::format_quantity(po.quantity)));
         table_->setItem(row, 6, new QTableWidgetItem(QString::number(po.est_price, 'f', 2)));
         table_->setItem(row, 7, new QTableWidgetItem(po.warning.isEmpty() ? fmt_money(po.est_value) : po.warning));
     }

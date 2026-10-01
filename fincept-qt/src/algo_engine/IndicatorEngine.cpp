@@ -27,16 +27,26 @@ void IndicatorEngine::extract_arrays(const QVector<OhlcvCandle>& candles, QVecto
     }
 }
 
+// Both smoothers are also fed *derived* series that start with a run of NaN (the
+// MACD line, an EMA of an EMA for DEMA/TEMA, the stochastic %K). Seeding from
+// src[0..period) over such a series sums NaN, and the NaN then propagates through
+// every later bar — so MACD's signal line, DEMA, TEMA and %D were NaN forever and
+// every rule using them silently never fired. Skip the leading NaNs and seed from
+// the first full window of real values instead (identical output for plain price
+// series, which have no leading NaN).
 QVector<double> IndicatorEngine::sma_series(const QVector<double>& src, int period) {
     const int n = src.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
-    if (n < period)
+    int first = 0;
+    while (first < n && std::isnan(src[first]))
+        ++first;
+    if (n - first < period)
         return out;
     double sum = 0;
-    for (int i = 0; i < period; ++i)
+    for (int i = first; i < first + period; ++i)
         sum += src[i];
-    out[period - 1] = sum / period;
-    for (int i = period; i < n; ++i) {
+    out[first + period - 1] = sum / period;
+    for (int i = first + period; i < n; ++i) {
         sum += src[i] - src[i - period];
         out[i] = sum / period;
     }
@@ -46,14 +56,17 @@ QVector<double> IndicatorEngine::sma_series(const QVector<double>& src, int peri
 QVector<double> IndicatorEngine::ema_series(const QVector<double>& src, int period) {
     const int n = src.size();
     QVector<double> out(n, std::numeric_limits<double>::quiet_NaN());
-    if (n < period)
+    int first = 0;
+    while (first < n && std::isnan(src[first]))
+        ++first;
+    if (n - first < period)
         return out;
     double sum = 0;
-    for (int i = 0; i < period; ++i)
+    for (int i = first; i < first + period; ++i)
         sum += src[i];
-    out[period - 1] = sum / period;
+    out[first + period - 1] = sum / period;
     double mult = 2.0 / (period + 1);
-    for (int i = period; i < n; ++i)
+    for (int i = first + period; i < n; ++i)
         out[i] = (src[i] - out[i - 1]) * mult + out[i - 1];
     return out;
 }

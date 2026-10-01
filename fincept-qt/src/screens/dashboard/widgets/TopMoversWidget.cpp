@@ -31,7 +31,13 @@ TopMoversWidget::TopMoversWidget(QWidget* parent) : BaseWidget(tr("TOP MOVERS"),
     table_ = new ui::DataTable;
     table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG%")});
     table_->set_column_widths({100, 90, 80});
+    table_->setToolTip(tr("Double-click a row to open it in Equity Research"));
     content_layout()->addWidget(table_);
+
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int /*col*/) {
+        if (auto* it = table_->item(row, 0))
+            open_symbol(it->text());
+    });
 
     connect(this, &BaseWidget::refresh_requested, this, &TopMoversWidget::refresh_data);
 

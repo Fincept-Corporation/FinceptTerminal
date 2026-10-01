@@ -100,6 +100,14 @@ void BuilderAnalyticsRibbon::setup_ui() {
     add_kv(row2, lbl_margin_, key_margin_, tr("Margin"), row2_w);
     row2->addStretch(1);
     root->addWidget(row2_w);
+
+    // Units are the single biggest source of misreading on a Greeks strip.
+    for (QLabel* l : {key_vega_, lbl_vega_})
+        l->setToolTip(tr("Position vega: change in strategy value (₹) for a 1-point (1%) move in implied volatility."));
+    for (QLabel* l : {key_theta_, lbl_theta_})
+        l->setToolTip(tr("Position theta: change in strategy value (₹) per calendar day."));
+    for (QLabel* l : {key_delta_, lbl_delta_})
+        l->setToolTip(tr("Position delta: change in strategy value (₹) per 1-point move in the underlying."));
 }
 
 void BuilderAnalyticsRibbon::update_from(const Strategy& s, const StrategyAnalytics& a) {
@@ -142,7 +150,10 @@ void BuilderAnalyticsRibbon::update_from(const Strategy& s, const StrategyAnalyt
         lbl_theta_->setText(fmt_signed(a.combined.theta, 1));
         set_pnl_color(lbl_theta_, a.combined.theta >= 0 ? "positive" : "negative");
 
-        lbl_vega_->setText(fmt_signed(a.combined.vega, 1));
+        // combined.vega is in OptionGreeks' "per 1.00 σ" convention (Σ vega × lots × lot
+        // size). The figure a trader reads as "vega" is rupees per ONE vol point (1% IV),
+        // i.e. a hundredth of that — shown raw it was 100× too large.
+        lbl_vega_->setText(fmt_signed(a.combined.vega / 100.0, 1));
         set_pnl_color(lbl_vega_, "neutral");
     } else {
         for (auto* l : {lbl_delta_, lbl_gamma_, lbl_theta_, lbl_vega_}) {
@@ -199,6 +210,16 @@ void BuilderAnalyticsRibbon::retranslateUi() {
         key_vega_->setText(tr("Vega").toUpper());
     if (key_margin_)
         key_margin_->setText(tr("Margin").toUpper());
+    for (QLabel* l : {key_vega_, lbl_vega_})
+        if (l)
+            l->setToolTip(
+                tr("Position vega: change in strategy value (₹) for a 1-point (1%) move in implied volatility."));
+    for (QLabel* l : {key_theta_, lbl_theta_})
+        if (l)
+            l->setToolTip(tr("Position theta: change in strategy value (₹) per calendar day."));
+    for (QLabel* l : {key_delta_, lbl_delta_})
+        if (l)
+            l->setToolTip(tr("Position delta: change in strategy value (₹) per 1-point move in the underlying."));
 }
 
 } // namespace fincept::screens::fno

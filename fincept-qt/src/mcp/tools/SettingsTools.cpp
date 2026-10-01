@@ -68,7 +68,9 @@ std::vector<ToolDef> get_settings_tools() {
 
             EventBus::instance().publish("settings.changed", QVariantMap{{"key", key}, {"value", value}});
 
-            LOG_INFO(TAG, "Setting saved: " + key + " = " + value);
+            // Key only: set_setting can write API keys / tokens (see the auth note on
+            // this tool), and the value would land in the log file in clear (P14).
+            LOG_INFO(TAG, "Setting saved: " + key);
             return ToolResult::ok("Setting saved: " + key);
         };
         tools.push_back(std::move(t));
@@ -135,14 +137,36 @@ std::vector<ToolDef> get_settings_tools() {
         t.auth_required = AuthLevel::Authenticated;
         t.is_destructive = true;
         t.input_schema = ToolSchemaBuilder()
-                             .string("provider", "Provider id (openai, anthropic, ollama, groq, google, fincept)")
+                             .string("provider", "Id of a CONFIGURED provider — see get_llm_configs (e.g. openai, "
+                                                 "anthropic, ollama, groq, google, fincept)")
                              .required()
-                             .enums({"openai", "anthropic", "ollama", "groq", "google", "fincept"})
+                             .length(1, 64)
                              .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString provider = args["provider"].toString();
+            QString provider = args["provider"].toString().trimmed();
             if (provider.isEmpty())
                 return ToolResult::fail("Missing 'provider'");
+
+            // set_active() clears is_active on EVERY row and then sets it on the one
+            // that matches — for a provider with no saved config the second UPDATE
+            // matches nothing and still returns ok, leaving the terminal with NO active
+            // LLM while this tool reported success. (The old fixed enum made that easy
+            // to hit, and also hid every provider outside its six names.) Only switch
+            // to a provider that exists.
+            auto configs = LlmConfigRepository::instance().list_providers();
+            if (configs.is_err())
+                return ToolResult::fail("Failed to load LLM configs: " + QString::fromStdString(configs.error()));
+            QString canonical;
+            QStringList known;
+            for (const auto& c : configs.value()) {
+                known.append(c.provider);
+                if (c.provider.compare(provider, Qt::CaseInsensitive) == 0)
+                    canonical = c.provider;
+            }
+            if (canonical.isEmpty())
+                return ToolResult::fail("Provider '" + provider + "' is not configured. Configured providers: " +
+                                        (known.isEmpty() ? QStringLiteral("(none)") : known.join(", ")));
+            provider = canonical;
 
             auto r = LlmConfigRepository::instance().set_active(provider);
             if (r.is_err())

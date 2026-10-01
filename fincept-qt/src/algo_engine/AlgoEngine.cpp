@@ -503,12 +503,29 @@ void AlgoEngine::execute_basket(const AlgoOrderSignal& signal) {
 void AlgoEngine::persist_deployment(const services::algo::AlgoDeployment& d) {
     auto db = fincept::Database::instance().connection();
     QSqlQuery q(db);
-    q.prepare(QStringLiteral("INSERT OR REPLACE INTO algo_deployments "
-                             "(id, strategy_id, strategy_name, strategy_kind, symbol, exchange, product_type, "
-                             " mode, entry_side, backend, broker_id, broker_account_id, paper_portfolio_id, "
-                             " timeframe, quantity, max_order_value, max_daily_loss, "
-                             " instrument_type, underlying, status, created_at, updated_at) "
-                             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))"));
+    // UPSERT, not INSERT OR REPLACE: recover_orphaned() re-runs start_deployment() — and so
+    // this — for every deployment that was live before a restart. REPLACE deletes the
+    // existing row and re-inserts it with column defaults, which wiped resolved_legs_json /
+    // resolved_expiry (the open F&O basket the runner is about to reattach from that very
+    // row) before DeploymentRunner::restore_state_from_db() read it, and reset created_at.
+    // The UPDATE branch deliberately leaves those columns (and pid) alone.
+    q.prepare(QStringLiteral(
+        "INSERT INTO algo_deployments "
+        "(id, strategy_id, strategy_name, strategy_kind, symbol, exchange, product_type, "
+        " mode, entry_side, backend, broker_id, broker_account_id, paper_portfolio_id, "
+        " timeframe, quantity, max_order_value, max_daily_loss, "
+        " instrument_type, underlying, status, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now')) "
+        "ON CONFLICT(id) DO UPDATE SET "
+        " strategy_id=excluded.strategy_id, strategy_name=excluded.strategy_name, "
+        " strategy_kind=excluded.strategy_kind, symbol=excluded.symbol, exchange=excluded.exchange, "
+        " product_type=excluded.product_type, mode=excluded.mode, entry_side=excluded.entry_side, "
+        " backend=excluded.backend, broker_id=excluded.broker_id, "
+        " broker_account_id=excluded.broker_account_id, paper_portfolio_id=excluded.paper_portfolio_id, "
+        " timeframe=excluded.timeframe, quantity=excluded.quantity, max_order_value=excluded.max_order_value, "
+        " max_daily_loss=excluded.max_daily_loss, instrument_type=excluded.instrument_type, "
+        " underlying=excluded.underlying, status=excluded.status, error_message='', "
+        " updated_at=datetime('now')"));
     q.addBindValue(d.id);
     q.addBindValue(d.strategy_id);
     q.addBindValue(d.strategy_name);
@@ -722,6 +739,12 @@ services::algo::AlgoStrategy AlgoEngine::load_strategy(const QString& strategy_i
         s.stop_loss = q.value("stop_loss").toDouble();
         s.take_profit = q.value("take_profit").toDouble();
         s.trailing_stop = q.value("trailing_stop").toDouble();
+        // F&O strategies: the leg RULES live in legs_json. Without them a deployment
+        // resumed after a restart had strategy.legs == [] — resolve_entry_legs() then
+        // found no legs and the multi-leg runner could never enter again (silently).
+        const QString inst = q.value("instrument_type").toString();
+        s.instrument_type = inst.isEmpty() ? QStringLiteral("equity") : inst;
+        s.legs = QJsonDocument::fromJson(q.value("legs_json").toString().toUtf8()).array();
     }
     return s;
 }

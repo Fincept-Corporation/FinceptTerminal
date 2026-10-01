@@ -141,11 +141,24 @@ QVector<double> SpreadsheetItem::resolve_range(const QString& from, const QStrin
     if (c1 > c2)
         std::swap(c1, c2);
 
+    // Range functions only see NUMERIC cells, as in Excel: blanks and text are
+    // skipped rather than counted as 0. Previously every cell contributed (empty
+    // → 0.0), so AVERAGE(A1:A10) over 5 numbers returned half the true mean,
+    // COUNT returned the number of cells, and MIN/MAX returned 0 whenever the
+    // range held a blank.
     QVector<double> out;
+    const QTableWidget* tbl = tableWidget();
+    if (!tbl)
+        return out;
     for (int r = r1; r <= r2; ++r) {
         for (int c = c1; c <= c2; ++c) {
-            double v = resolve_cell_value(r, c);
-            out.append(v);
+            const QTableWidgetItem* item = tbl->item(r, c);
+            if (!item)
+                continue;
+            bool ok = false;
+            const double v = item->data(Qt::DisplayRole).toDouble(&ok);
+            if (ok)
+                out.append(v);
         }
     }
     return out;
@@ -211,8 +224,13 @@ QVariant SpreadsheetItem::evaluate_formula() const {
     if (fm.hasMatch()) {
         QString func = fm.captured(1);
         auto vals = resolve_range(fm.captured(2), fm.captured(3));
-        if (vals.isEmpty())
+        if (vals.isEmpty()) {
+            // Nothing numeric in range: AVERAGE has no defined result (Excel: #DIV/0!),
+            // the others are 0.
+            if (func == "AVG" || func == "AVERAGE")
+                return memo(QVariant("#DIV/0!"));
             return memo(0.0);
+        }
 
         if (func == "SUM")
             return memo(std::accumulate(vals.begin(), vals.end(), 0.0));

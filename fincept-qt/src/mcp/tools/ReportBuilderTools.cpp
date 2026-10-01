@@ -25,6 +25,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -268,6 +269,7 @@ std::vector<ToolDef> get_report_builder_tools() {
             "\n"
             "If insert_at is omitted, the component is appended.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{
             {"type",
              QJsonObject{{"type", "string"},
@@ -330,6 +332,7 @@ std::vector<ToolDef> get_report_builder_tools() {
             "config={'chart_type':...,'data':'...','labels':'...'}. See report_add_component description for "
             "the full config reference. Returns success and the resulting component.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{
             {"id", QJsonObject{{"type", "integer"},
                                {"description", "Stable component id from report_add_component "
@@ -398,6 +401,7 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.name = "report_move_component";
         t.description = "Move a component to a new position by stable id. Use `to_index` (zero-based).";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{
             {"id", QJsonObject{{"type", "integer"}, {"description", "Stable component id"}}},
             {"to_index", QJsonObject{{"type", "integer"}, {"description", "New zero-based index"}}},
@@ -448,6 +452,7 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.name = "report_set_metadata";
         t.description = "Update report metadata. Any field omitted from the call is left unchanged.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{
             {"title", QJsonObject{{"type", "string"}}},
             {"author", QJsonObject{{"type", "string"}}},
@@ -504,6 +509,7 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.description = "Set the report color theme. Valid names: 'Light Professional', 'Dark Corporate', "
                         "'Fincept Terminal', 'Midnight Blue'.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties =
             QJsonObject{{"name", QJsonObject{{"type", "string"}, {"description", "Theme name (case-sensitive)"}}}};
         t.input_schema.required = {"name"};
@@ -540,6 +546,7 @@ std::vector<ToolDef> get_report_builder_tools() {
                         "'Yield Curve Analysis', 'Quant Strategy Report', 'Risk Management Report', "
                         "'Business Performance', 'Project Status Report', 'Financial Statement'.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{{"name", QJsonObject{{"type", "string"}}}};
         t.input_schema.required = {"name"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
@@ -557,12 +564,28 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_save";
-        t.description = "Save the report to disk. If `path` is omitted, saves to the current file (errors if none).";
+        t.description = "Save the report to disk. If `path` is omitted, saves to the current file (errors if none). "
+                        "`path` is a filename or relative path inside the export directory; absolute paths "
+                        "elsewhere are refused.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties =
-            QJsonObject{{"path", QJsonObject{{"type", "string"}, {"description", "Absolute file path (.fincept)"}}}};
+            QJsonObject{{"path", QJsonObject{{"type", "string"},
+                                 {"description", "Output filename (.fincept) inside the export directory; omit to "
+                                                 "save to the current file"}}}};
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString path = args.value("path").toString();
+            QString path = args.value("path").toString().trimmed();
+            // `path` is raw model text that goes straight to a file write, with
+            // model-authored content — the same arbitrary-write primitive
+            // ExportPathGuard.h documents for report_export_pdf / export_layout /
+            // download_managed_file, which this tool was missed by. An empty path (save to
+            // the current file) is unaffected; anything else must live in the export dir.
+            if (!path.isEmpty()) {
+                const auto dest = resolve_export_path(path);
+                if (!dest.ok())
+                    return ToolResult::fail(dest.error);
+                path = dest.path;
+            }
             on_llm_mutation_start();
             QString resolved;
             QString err;
@@ -596,15 +619,46 @@ std::vector<ToolDef> get_report_builder_tools() {
     {
         ToolDef t;
         t.name = "report_load";
-        t.description = "Load a report from disk, replacing the current document.";
+        t.description = "Load a report from disk, replacing the current document. `path` must be inside the export "
+                        "directory or be a report already opened/saved in the Report Builder (report_get_state "
+                        "lists them).";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties =
-            QJsonObject{{"path", QJsonObject{{"type", "string"}, {"description", "Absolute file path"}}}};
+            QJsonObject{{"path", QJsonObject{{"type", "string"}, {"description", "Report file path — in the export directory, or one the Report "
+                                                                  "Builder already opened/saved"}}}};
         t.input_schema.required = {"path"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            QString path = args.value("path").toString();
+            QString path = args.value("path").toString().trimmed();
             if (path.isEmpty())
                 return ToolResult::fail("Missing 'path'");
+
+            // Reading an arbitrary model-named path replaces the live document with whatever
+            // parses there. Allow the files the user has already opened/saved in the Report
+            // Builder (current file + recents) and anything inside the export directory;
+            // refuse every other location.
+            bool known_report = false;
+            run_on_service_thread([&]() {
+                auto& svc = Service::instance();
+                const QFileInfo wanted(path);
+                if (!svc.current_file().isEmpty() && QFileInfo(svc.current_file()) == wanted)
+                    known_report = true;
+                for (const auto& rf : svc.recent_files()) {
+                    if (QFileInfo(rf) == wanted) {
+                        known_report = true;
+                        break;
+                    }
+                }
+            });
+            if (!known_report) {
+                const auto dest = resolve_export_path(path);
+                if (!dest.ok())
+                    return ToolResult::fail(dest.error + " Reports the user already opened or saved in the Report "
+                                                         "Builder (see report_get_state.recent_files) can also be "
+                                                         "loaded by their full path.");
+                path = dest.path;
+            }
+
             on_llm_mutation_start();
             QString err;
             run_on_service_thread([&]() {
@@ -630,6 +684,7 @@ std::vector<ToolDef> get_report_builder_tools() {
                         "designing the initial structure of a report so you don't burn one round-trip per section. "
                         "All components are appended at the end in order. Returns the assigned ids in order.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{
             {"components",
              QJsonObject{{"type", "array"},
@@ -805,7 +860,15 @@ std::vector<ToolDef> get_report_builder_tools() {
                 return ToolResult::fail(err);
             if (!dispatched)
                 return ToolResult::fail("Failed to dispatch PDF export");
-            return ToolResult::ok("Exported PDF to " + path, QJsonObject{{"path", path}});
+            // export_pdf_to() returns void and reports nothing, so the only evidence the export
+            // worked is the file. A missing or zero-byte PDF (unwritable folder, empty report,
+            // printer backend failure) used to be reported as success.
+            const QFileInfo pdf_info(path);
+            if (!pdf_info.exists() || pdf_info.size() == 0)
+                return ToolResult::fail("PDF export failed: no file was written at " + path +
+                                        " (check the folder is writable and the report has content)");
+            return ToolResult::ok("Exported PDF to " + path,
+                                  QJsonObject{{"path", path}, {"bytes", static_cast<double>(pdf_info.size())}});
         };
         tools.push_back(std::move(t));
     }
@@ -818,6 +881,7 @@ std::vector<ToolDef> get_report_builder_tools() {
                         "counts as one undo step; standalone edits each count separately. Returns "
                         "{undone:true|false, can_undo, can_redo}.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             bool undone = false, can_u = false, can_r = false;
@@ -840,6 +904,7 @@ std::vector<ToolDef> get_report_builder_tools() {
         t.name = "report_redo";
         t.description = "Redo the most recently undone report mutation.";
         t.category = "report-builder";
+        t.is_destructive = true; // mutates the live document / disk — must run alone, in the model's order (§M7)
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             bool redone = false, can_u = false, can_r = false;

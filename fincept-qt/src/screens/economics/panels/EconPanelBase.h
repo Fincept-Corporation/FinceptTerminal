@@ -29,6 +29,12 @@ class EconPanelBase : public QWidget {
     /// Called by EconomicsScreen when user switches to this panel.
     virtual void activate() = 0;
 
+    /// True while the panel shows fetched data (table or a panel-specific content page) or has a
+    /// request in flight. EconomicsScreen then skips activate() on re-selection — activate() resets
+    /// the panel to its intro text, which used to wipe the table (and the loading state) every time
+    /// the user tabbed away and back.
+    bool keeps_state_on_activate() const;
+
     /// Panel-level state for persistence (text fields, selections).
     /// Default returns empty — subclasses override to save their inputs.
     virtual QVariantMap save_panel_state() const { return {}; }

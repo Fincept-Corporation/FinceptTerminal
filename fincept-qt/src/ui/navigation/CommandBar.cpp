@@ -62,6 +62,18 @@ static QString drop_ss() {
         .arg(colors::BORDER_MED.get());
 }
 
+// The dropdown rows (built per keystroke in CommandBar_Input / _Suggestions /
+// _Assets) used to give every row widget and label its own setStyleSheet() —
+// five CSS parses per row, ten rows, on every debounce tick. They now carry only
+// an objectName and are styled here, once, by the list's own sheet. Descendant
+// selectors reach the item widgets (they live under the list's viewport), and the
+// sheet is rebuilt in refresh_theme(), so visible rows follow theme changes too.
+// objectName -> look:  cbRow  = row container (transparent)
+//   cbSlash/cbVerb    = amber 12px / 11px bold   cbHeader/cbNote = amber 10px / 11px
+//   cbAlias/cbAsset   = primary 11px / 12px bold  cbSep    = tertiary 12px separator
+//   cbDesc            = secondary 11px            cbExch   = tertiary 10px
+//   cbShortcut        = dim 10px                  cbEmpty  = tertiary 11px (no results)
+//   cbType            = amber 9px bold badge on a raised background
 static QString list_ss() {
     return QString("QListWidget{"
                    "  background:transparent;"
@@ -76,9 +88,37 @@ static QString list_ss() {
                    "QListWidget::item:selected{"
                    "  background:%1;"
                    "  border-left:3px solid %2;"
-                   "}")
+                   "}"
+                   "QListWidget QWidget#cbRow{background:transparent;}"
+                   "QListWidget QLabel#cbSlash{color:%2;font-size:12px;font-weight:700;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbVerb{color:%2;font-size:11px;font-weight:700;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbHeader{color:%2;font-size:10px;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbNote{color:%2;font-size:11px;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbAlias{color:%3;font-size:11px;font-weight:700;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbAsset{color:%3;font-size:12px;font-weight:700;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbSep{color:%5;font-size:12px;background:transparent;}"
+                   "QListWidget QLabel#cbDesc{color:%4;font-size:11px;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbExch{color:%5;font-size:10px;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbShortcut{color:%6;font-size:10px;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbEmpty{color:%5;font-size:11px;"
+                   "  font-family:'Consolas',monospace;background:transparent;}"
+                   "QListWidget QLabel#cbType{color:%2;font-size:9px;font-weight:700;"
+                   "  font-family:'Consolas',monospace;background:%1;padding:1px 4px;border-radius:2px;}")
         .arg(colors::BG_RAISED.get())
-        .arg(colors::AMBER.get());
+        .arg(colors::AMBER.get())
+        .arg(colors::TEXT_PRIMARY.get())
+        .arg(colors::TEXT_SECONDARY.get())
+        .arg(colors::TEXT_TERTIARY.get())
+        .arg(colors::TEXT_DIM.get());
 }
 
 // ── yfinance symbol conversion ───────────────────────────────────────────────

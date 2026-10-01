@@ -11,6 +11,8 @@
 #include <QUrl>
 #include <QUrlQuery>
 
+#include <algorithm>
+
 namespace fincept::services::polymarket {
 
 // ── API base URLs ────────────────────────────────────────────────────────────
@@ -61,6 +63,16 @@ Market Market::from_json(const QJsonObject& obj) {
     m.category = obj["category"].toString();
     const QJsonValue eid_val = obj["eventId"];
     m.event_id = eid_val.isString() ? eid_val.toString().toInt() : eid_val.toInt();
+    // Gamma's /markets rows carry no "eventId" — the parent event is the first entry of
+    // an "events" array. Without this event_id stayed 0 for every browsed market, so
+    // the detail panel's RELATED tab was never populated.
+    if (m.event_id == 0) {
+        const QJsonArray events_arr = obj["events"].toArray();
+        if (!events_arr.isEmpty()) {
+            const QJsonValue ev_id = events_arr.first().toObject()["id"];
+            m.event_id = ev_id.isString() ? ev_id.toString().toInt() : ev_id.toInt();
+        }
+    }
 
     auto outcomes_arr = parse_json_arr(obj["outcomes"]);
     auto prices_arr = parse_json_arr(obj["outcomePrices"]);
@@ -142,6 +154,15 @@ OrderBook OrderBook::from_json(const QJsonObject& obj) {
         auto ao = a.toObject();
         book.asks.append({num_or_str(ao["price"]), num_or_str(ao["size"])});
     }
+    // The CLOB returns bids ascending and asks DESCENDING (worst level first), but
+    // the book widget, the spread and click-to-price all treat index 0 as the best
+    // level — so the book used to show the far, irrelevant levels (bids 0.01, 0.02…
+    // / asks 0.99, 0.98…) and a 0.98 "spread". Sort best-first: bids high→low,
+    // asks low→high.
+    std::stable_sort(book.bids.begin(), book.bids.end(),
+                     [](const OrderLevel& a, const OrderLevel& b) { return a.price > b.price; });
+    std::stable_sort(book.asks.begin(), book.asks.end(),
+                     [](const OrderLevel& a, const OrderLevel& b) { return a.price < b.price; });
     return book;
 }
 
@@ -412,9 +433,31 @@ void PolymarketService::fetch_markets(const QString& sort_by, int limit, int off
         "FetchMarkets");
 }
 
+void PolymarketService::remember_tag_ids(const QJsonArray& tags) {
+    for (const auto& v : tags) {
+        const auto obj = v.toObject();
+        const QJsonValue id_val = obj["id"];
+        const QString id = id_val.isString() ? id_val.toString() : QString::number(id_val.toInt());
+        if (id.isEmpty() || id == QLatin1String("0"))
+            continue;
+        const QString label = obj["label"].toString().trimmed().toLower();
+        const QString slug = obj["slug"].toString().trimmed().toLower();
+        if (!label.isEmpty())
+            tag_ids_.insert(label, id);
+        if (!slug.isEmpty())
+            tag_ids_.insert(slug, id);
+    }
+}
+
 void PolymarketService::fetch_markets_by_tag(const QString& tag, const QString& sort_by, int limit, int offset) {
-    QString path = QString("/markets?tag=%1&closed=false&limit=%2&offset=%3&order=%4&ascending=false")
-                       .arg(QUrl::toPercentEncoding(tag))
+    // Gamma's /markets IGNORES a `tag=<label>` query (it returned the unfiltered list, so
+    // every category chip showed the same markets); the only working filter is tag_id.
+    // Resolve the label through the id map learned from fetch_tags().
+    const QString tag_id = tag_ids_.value(tag.trimmed().toLower());
+    const QString tag_param = tag_id.isEmpty() ? QString("tag=%1").arg(QString::fromLatin1(QUrl::toPercentEncoding(tag)))
+                                               : QString("tag_id=%1").arg(tag_id);
+    QString path = QString("/markets?%1&closed=false&limit=%2&offset=%3&order=%4&ascending=false")
+                       .arg(tag_param)
                        .arg(limit)
                        .arg(offset)
                        .arg(sort_by);
@@ -447,46 +490,46 @@ void PolymarketService::fetch_market_by_id(int id) {
 }
 
 void PolymarketService::search_markets(const QString& query, int limit) {
-    QString path = "/markets?_q=" + QUrl::toPercentEncoding(query) + "&limit=" + QString::number(limit);
+    // Gamma's /markets silently ignores `_q` (a search for "bitcoin" came back with
+    // unrelated rows such as "Xi Jinping out before 2027?"), and /search answers 401.
+    // The working text search is /public-search, which returns { events: [...] } with
+    // each event's markets nested inside it.
+    const int per_type = qBound(1, limit, 50);
+    const QString path = "/public-search?q=" + QString::fromLatin1(QUrl::toPercentEncoding(query)) +
+                         "&limit_per_type=" + QString::number(per_type);
 
     get_gamma(
         path,
-        [this](const QJsonDocument& doc) {
-            QVector<Market> result;
-            QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
-            result.reserve(arr.size());
-            for (const auto& v : arr)
-                result.append(Market::from_json(v.toObject()));
-            LOG_INFO("Polymarket", "Search returned " + QString::number(result.size()) + " markets");
-            emit search_results_ready(result, {});
+        [this, per_type](const QJsonDocument& doc) {
+            QVector<Market> markets;
+            QVector<Event> events;
+            if (doc.isObject()) {
+                for (const auto& v : doc.object()["events"].toArray()) {
+                    Event e = Event::from_json(v.toObject());
+                    for (Market m : e.markets) {
+                        if (m.event_id == 0)
+                            m.event_id = e.id;
+                        markets.append(m);
+                    }
+                    events.append(e);
+                }
+            }
+            // Live markets first — a hit on a popular topic is dominated by closed
+            // sub-markets of long-resolved events.
+            std::stable_partition(markets.begin(), markets.end(),
+                                  [](const Market& m) { return m.active && !m.closed; });
+            if (markets.size() > per_type)
+                markets.resize(per_type);
+            LOG_INFO("Polymarket", "Search returned " + QString::number(markets.size()) + " markets / " +
+                                       QString::number(events.size()) + " events");
+            emit search_results_ready(markets, events);
         },
         "SearchMarkets");
 }
 
 void PolymarketService::unified_search(const QString& query) {
-    // Use the Gamma search endpoint that returns markets and events
-    QString path = "/search?query=" + QUrl::toPercentEncoding(query) + "&limit=20";
-
-    get_gamma(
-        path,
-        [this](const QJsonDocument& doc) {
-            QVector<Market> markets;
-            QVector<Event> events;
-
-            if (doc.isObject()) {
-                auto obj = doc.object();
-                for (const auto& v : obj["markets"].toArray())
-                    markets.append(Market::from_json(v.toObject()));
-                for (const auto& v : obj["events"].toArray())
-                    events.append(Event::from_json(v.toObject()));
-            } else if (doc.isArray()) {
-                // Fallback: treat as market array
-                for (const auto& v : doc.array())
-                    markets.append(Market::from_json(v.toObject()));
-            }
-            emit search_results_ready(markets, events);
-        },
-        "UnifiedSearch");
+    // /search is not a public Gamma endpoint (401) — same backend as search_markets().
+    search_markets(query, 20);
 }
 
 void PolymarketService::fetch_events(const QString& sort_by, int limit, int offset, bool closed) {
@@ -526,6 +569,33 @@ void PolymarketService::fetch_events(const QString& sort_by, int limit, int offs
         "FetchEvents");
 }
 
+void PolymarketService::fetch_events_by_tag(const QString& tag, const QString& sort_by, int limit, int offset) {
+    // list_events() ignored the category entirely, so picking a category chip in the EVENTS
+    // view changed nothing. /events filters by tag_id (see fetch_markets_by_tag).
+    const QString tag_id = tag_ids_.value(tag.trimmed().toLower());
+    if (tag_id.isEmpty()) {
+        fetch_events(sort_by, limit, offset, /*closed=*/false); // unknown tag — unfiltered, as before
+        return;
+    }
+    const QString path = QString("/events?tag_id=%1&closed=false&limit=%2&offset=%3&order=%4&ascending=false")
+                             .arg(tag_id)
+                             .arg(limit)
+                             .arg(offset)
+                             .arg(sort_by);
+    get_gamma(
+        path,
+        [this](const QJsonDocument& doc) {
+            QVector<Event> result;
+            const QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
+            result.reserve(arr.size());
+            for (const auto& v : arr)
+                result.append(Event::from_json(v.toObject()));
+            LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " events by tag");
+            emit events_ready(result);
+        },
+        "FetchEventsByTag");
+}
+
 void PolymarketService::fetch_event_by_id(int id) {
     get_gamma(
         "/events/" + QString::number(id),
@@ -558,6 +628,7 @@ void PolymarketService::fetch_tags() {
     const QVariant cached = fincept::CacheManager::instance().get("polymarket:tags");
     if (!cached.isNull()) {
         QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
+        remember_tag_ids(arr);
         QVector<Tag> result;
         for (const auto& v : arr) {
             auto obj = v.toObject();
@@ -571,13 +642,46 @@ void PolymarketService::fetch_tags() {
         return;
     }
 
+    // Gamma's /tags is an unordered dump — its first 50 rows are one-off tags such as
+    // "caitlin clark" or "product marekt fit", so the category row was noise. Derive
+    // the categories from the tags carried by the top open events by volume, ranked by
+    // how many of them have the tag (Politics, Geopolitics, Sports, Crypto, …). Those
+    // tag objects also carry the numeric ids that /markets needs for filtering.
     get_gamma(
-        "/tags?limit=50",
+        "/events?closed=false&limit=100&order=volume&ascending=false",
         [this](const QJsonDocument& doc) {
-            QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
+            struct CountedTag {
+                QJsonObject tag;
+                int n = 0;
+            };
+            QHash<QString, CountedTag> counted;
+            const QJsonArray events = doc.isArray() ? doc.array() : QJsonArray();
+            for (const auto& ev : events) {
+                for (const auto& t : ev.toObject()["tags"].toArray()) {
+                    const QJsonObject tag = t.toObject();
+                    const QString label = tag["label"].toString().trimmed();
+                    // Skip blanks and promo / program tags ("Earn 4%", "Rewards 20, 4.5, 50").
+                    if (label.isEmpty() || label.contains(QLatin1Char('%')) || label.contains(QLatin1Char(',')))
+                        continue;
+                    CountedTag& c = counted[label];
+                    c.tag = tag;
+                    ++c.n;
+                }
+            }
+            QList<CountedTag> ranked = counted.values();
+            std::sort(ranked.begin(), ranked.end(), [](const CountedTag& a, const CountedTag& b) {
+                return a.n != b.n ? a.n > b.n : a.tag["label"].toString() < b.tag["label"].toString();
+            });
+            QJsonArray arr;
+            for (const auto& c : ranked) {
+                if (arr.size() >= 50)
+                    break;
+                arr.append(c.tag);
+            }
             fincept::CacheManager::instance().put(
                 "polymarket:tags", QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                 kTagsTtlSec, "polymarket");
+            remember_tag_ids(arr);
             QVector<Tag> result;
             for (const auto& v : arr) {
                 auto obj = v.toObject();
@@ -648,10 +752,11 @@ void PolymarketService::fetch_price_history(const QString& token_id, const QStri
 
     get_clob(
         path,
-        [this](const QJsonDocument& doc) {
+        [this, token_id](const QJsonDocument& doc) {
             if (doc.isObject()) {
                 auto history = PriceHistory::from_json(doc.object());
                 LOG_INFO("Polymarket", "Price history: " + QString::number(history.points.size()) + " points");
+                emit price_history_for_token(token_id, history);
                 emit price_history_ready(history);
             }
         },

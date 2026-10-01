@@ -62,6 +62,7 @@ class KeybindingsSection : public QWidget {
     QVBoxLayout* groups_layout_ = nullptr;
     QLineEdit* search_input_ = nullptr;
     QPushButton* reset_all_btn_ = nullptr;
+    bool rebuild_pending_ = false; // a coalesced rebuild_rows() is already queued
 };
 
 } // namespace fincept::screens

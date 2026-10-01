@@ -314,10 +314,42 @@ class TradingCompsAnalyzer:
             'y_values': y_vals
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `trading_comps.py calculate <flat-params-json>` (argv length 3). The native form
+# is `trading_comps target_ticker comp_tickers_json`, so a service-style call is translated here and then falls
+# through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    target = str(p.get("target_ticker", p.get("ticker", ""))).strip().upper()
+    peers = p.get("comp_tickers", p.get("peers", []))
+    if isinstance(peers, str):
+        # The panel sends the peer box as a comma/space separated string.
+        peers = peers.replace(";", ",").replace(" ", ",").split(",")
+    tickers = []
+    for t in peers if isinstance(peers, list) else []:
+        t = str(t).strip().upper()
+        if t and t != target and t not in tickers:
+            tickers.append(t)
+    return [argv[0], "trading_comps", target, json.dumps(tickers)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {
             "success": False,

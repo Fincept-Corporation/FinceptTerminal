@@ -119,10 +119,19 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     void disconnect_active_adapter();
     void connect_polymarket_extras();
     void install_presentation(const screens::polymarket::ExchangePresentation& p);
+    /// Enable/disable the trade ticket and open-orders blotter to match the active
+    /// adapter's credential state, and pull balance / positions / orders if connected.
+    void refresh_trading_state();
     void load_current_view();
     void select_market(const fincept::services::prediction::PredictionMarket& market);
     void subscribe_to_market(const fincept::services::prediction::PredictionMarket& market);
     void unsubscribe_current();
+    /// Fetch the chart's price history for the outcome + interval the chart toolbar is
+    /// currently showing (chart_outcome_idx_ / chart_interval_).
+    void fetch_chart_history();
+    /// True when `asset_id` is the selected market's primary outcome (the one the
+    /// order book panel displays). See on_order_book_ready().
+    bool is_primary_asset(const QString& asset_id) const;
 
     bool active_is_polymarket() const;
     fincept::services::prediction::PredictionExchangeAdapter* active_adapter() const;
@@ -141,6 +150,11 @@ class PolymarketScreen : public QWidget, public fincept::screens::IStatefulScree
     QString active_sort_ = "volume";
     fincept::services::prediction::PredictionMarket selected_market_;
     bool has_selection_ = false;
+    // What the chart toolbar is showing, so an interval change keeps the chosen outcome
+    // and an outcome / market change keeps the chosen interval.
+    QString chart_interval_ = QStringLiteral("1d");
+    int chart_outcome_idx_ = 0;
+    int orders_refresh_seq_ = 0; // coalesces the open-orders refresh after a burst of cancels
     bool first_show_ = true;
     std::atomic<int> request_generation_{0};
 

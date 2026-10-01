@@ -75,8 +75,10 @@ void CommandPalette::on_text_changed(const QString& text) {
         return;
     suggestions_->clear();
     auto matches = SuggestionIndex::instance().query(text.isEmpty() ? QStringLiteral("a") : text, /*limit=*/25);
-    if (matches.isEmpty() && !text.isEmpty()) {
-        // Empty query branch: still show top actions by walking the registry.
+    if (matches.isEmpty() && text.isEmpty()) {
+        // Empty query (nothing typed): still show top actions by walking the
+        // registry. A non-empty query with no match must stay EMPTY — listing
+        // unrelated actions made Enter run whichever happened to be first.
         for (const QString& id : ActionRegistry::instance().all_ids()) {
             const auto* def = ActionRegistry::instance().find(id);
             if (!def)
@@ -115,14 +117,22 @@ void CommandPalette::on_accept() {
         accept();
         return;
     }
+    // The palette is parented to the frame it was opened over; run the action
+    // there. WindowCycler::focused_frame() cannot be used on its own: while this
+    // popup is the active window it falls back to the FIRST registered frame,
+    // so in a multi-window setup the action ran against the wrong window.
     CommandContext ctx;
     ctx.shell = &TerminalShell::instance();
-    ctx.focused_frame = WindowCycler::instance().focused_frame();
+    ctx.focused_frame = qobject_cast<WindowFrame*>(parentWidget());
+    if (!ctx.focused_frame)
+        ctx.focused_frame = WindowCycler::instance().focused_frame();
+    // Dismiss the popup first so actions that open their own dialogs (layout
+    // save-as, file pickers, ...) don't do so from inside a live Qt::Popup.
+    accept();
     auto r = ActionRegistry::instance().invoke(action_id, ctx);
     if (r.is_err()) {
         ToastService::instance().post(ToastService::Severity::Warning, QString::fromStdString(r.error()), "palette");
     }
-    accept();
 }
 
 } // namespace fincept::ui

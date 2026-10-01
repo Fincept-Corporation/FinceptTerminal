@@ -612,12 +612,15 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
         return ToolResult::fail(text.isEmpty() ? "External tool error" : text);
 
     // Try to parse text as JSON data
+    // Parsed payloads go in `data` ONLY. Passing the raw text as `message` as well put every
+    // JSON result in the transcript twice, and each later round re-bills both copies (§M3);
+    // consumers (workflow MCP node, the tool loop) read `data` first.
     QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8());
     if (!doc.isNull()) {
         if (doc.isObject())
-            return ToolResult::ok(text, doc.object());
+            return ToolResult::ok_data(doc.object());
         if (doc.isArray())
-            return ToolResult::ok(text, doc.array());
+            return ToolResult::ok_data(doc.array());
     }
 
     return ToolResult::ok(text);

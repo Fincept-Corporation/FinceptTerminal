@@ -17,8 +17,11 @@
 #include <QHash>
 #include <QMutex>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QStringList>
+
+class QTimer;
 
 namespace fincept::trading {
 
@@ -64,6 +67,29 @@ class ExchangeSessionManager : public QObject, public fincept::datahub::Producer
     SessionPublisher build_publisher();
 
     bool hub_registered_ = false;
+
+    // ── DataHub-driven stream demand ───────────────────────────────────────
+    // `ws:<exchange>:ticker|trades|orderbook:<pair>` topics are push-only, so the
+    // hub never asks anyone to produce them — a dashboard tile subscribing to one
+    // would stay empty unless the Crypto Trading screen happened to be streaming
+    // that exchange. The manager watches the hub's topic_active / topic_idle
+    // signals and keeps a WS subprocess running for exactly the pairs that have a
+    // subscriber (debounced; stopped after a grace period once demand is gone).
+    void on_hub_topic_active(const QString& topic);
+    void on_hub_topic_idle(const QString& topic);
+    void schedule_hub_sync(const QString& exchange_id);
+    void sync_hub_exchange(const QString& exchange_id);
+    void heal_hub_streams();
+
+    struct HubDemand {
+        QStringList primary;  // pairs wanted for trades / orderbook (primary-only feeds)
+        QStringList watch;    // pairs wanted for ticker only
+        QSet<QString> topics; // concrete topics currently counted (guards double counting)
+    };
+    QHash<QString, HubDemand> hub_demand_; // exchange id -> demand (main thread only)
+    QSet<QString> hub_dirty_;              // exchanges awaiting a debounced sync
+    QTimer* hub_sync_timer_ = nullptr;
+    QTimer* hub_heal_timer_ = nullptr;
 
     mutable QMutex mutex_;
     // Owning pointers. Sessions are parented to `this` (the manager) so Qt

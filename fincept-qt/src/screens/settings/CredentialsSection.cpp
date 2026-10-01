@@ -52,6 +52,13 @@ const QList<CredDef> CRED_KEYS = {
 #undef FINCEPT_KEYED_CRED
 };
 
+// One place for the per-key status line's state colour. The handlers used to
+// call setStyleSheet() inline in every branch (five copies).
+void cred_set_status(QLabel* status, const QString& text, const QString& color) {
+    status->setText(text);
+    status->setStyleSheet(QString("color:%1;background:transparent;").arg(color));
+}
+
 } // namespace
 
 CredentialsSection::CredentialsSection(QWidget* parent) : QWidget(parent) {
@@ -106,14 +113,32 @@ void CredentialsSection::build_ui() {
                                 "QWidget#credHdr{background:%3;border-bottom:1px solid %2;}"
                                 "QLabel#credName{color:%4;font-weight:600;background:transparent;}"
                                 "QWidget#credBody{background:transparent;}"
-                                "QLineEdit#credField{background:%3;color:%4;border:1px solid %5;padding:6px;}"
-                                "QLineEdit#credField:focus{border:1px solid %6;}"
+                                "QLineEdit#credField,QLineEdit#credFilter{background:%3;color:%4;"
+                                "border:1px solid %5;padding:6px;}"
+                                "QLineEdit#credField:focus,QLineEdit#credFilter:focus{border:1px solid %6;}"
+                                "QLabel#credEmpty{color:%9;background:transparent;}"
                                 "QPushButton#credSave{background:%6;color:%7;border:none;font-weight:700;"
                                 "padding:0 16px;}"
                                 "QPushButton#credSave:hover{background:%8;}")
                             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::BG_RAISED(),
                                  ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED(), ui::colors::AMBER(),
-                                 ui::colors::BG_BASE(), ui::colors::AMBER_DIM()));
+                                 ui::colors::BG_BASE(), ui::colors::AMBER_DIM(), ui::colors::TEXT_DIM()));
+
+    // ~130 provider cards: finding one by scrolling is hopeless, and the Settings
+    // nav search only reaches this section, not a card inside it.
+    filter_edit_ = new QLineEdit;
+    filter_edit_->setObjectName(QStringLiteral("credFilter"));
+    filter_edit_->setPlaceholderText(tr("Filter providers..."));
+    filter_edit_->setClearButtonEnabled(true);
+    filter_edit_->setAccessibleName(tr("Filter credential providers"));
+    connect(filter_edit_, &QLineEdit::textChanged, this, &CredentialsSection::apply_filter);
+    vl->addWidget(filter_edit_);
+    vl->addSpacing(12);
+
+    no_match_lbl_ = new QLabel(tr("No provider matches the filter."));
+    no_match_lbl_->setObjectName(QStringLiteral("credEmpty"));
+    no_match_lbl_->hide();
+    vl->addWidget(no_match_lbl_);
 
     for (const auto& def : CRED_KEYS) {
         const QString& key = def.first;
@@ -135,8 +160,8 @@ void CredentialsSection::build_ui() {
         hhl->addWidget(name_lbl);
         hhl->addStretch();
 
-        auto* status_lbl = new QLabel(tr("Not set"));
-        status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+        auto* status_lbl = new QLabel;
+        cred_set_status(status_lbl, tr("Not set"), ui::colors::TEXT_SECONDARY());
         hhl->addWidget(status_lbl);
         cred_status_[key] = status_lbl;
 
@@ -191,31 +216,44 @@ void CredentialsSection::build_ui() {
                     if (reply != QMessageBox::Yes)
                         return;
                 }
-                SecureStorage::instance().remove(key);
+                const auto removed = SecureStorage::instance().remove(key);
+                if (removed.is_err()) {
+                    // The result was ignored, so "Cleared" was shown even when the
+                    // key was still in the keychain and still being injected into
+                    // every Python subprocess.
+                    cred_set_status(status_lbl, tr("Clear failed"), ui::colors::NEGATIVE());
+                    LOG_ERROR("Credentials", "Failed to clear " + key);
+                    return;
+                }
                 field->setPlaceholderText(tr("Not configured"));
-                status_lbl->setText(tr("Cleared"));
-                status_lbl->setStyleSheet(
-                    QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+                cred_set_status(status_lbl, tr("Cleared"), ui::colors::TEXT_SECONDARY());
                 LOG_INFO("Credentials", "Cleared key: " + key);
             } else {
                 auto r = SecureStorage::instance().store(key, val);
                 if (r.is_ok()) {
                     field->clear();
                     field->setPlaceholderText(tr("•••••••• (saved)"));
-                    status_lbl->setText(tr("Saved ✓"));
-                    status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
+                    cred_set_status(status_lbl, tr("Saved ✓"), ui::colors::POSITIVE());
                     LOG_INFO("Credentials", "Stored key: " + key);
                 } else {
-                    status_lbl->setText(tr("Save failed"));
-                    status_lbl->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
+                    cred_set_status(status_lbl, tr("Save failed"), ui::colors::NEGATIVE());
                     LOG_ERROR("Credentials", "Failed to store " + key);
                 }
             }
         });
 
         cvl->addWidget(body);
-        vl->addWidget(card);
-        vl->addSpacing(8);
+
+        // Each card sits in a wrapper that carries the 8px gap, so hiding the
+        // wrapper (see apply_filter) also hides the gap — a bare addSpacing()
+        // would pile up as blank space once most cards are filtered out.
+        auto* wrap = new QWidget(this);
+        auto* wrap_lay = new QVBoxLayout(wrap);
+        wrap_lay->setContentsMargins(0, 0, 0, 8);
+        wrap_lay->setSpacing(0);
+        wrap_lay->addWidget(card);
+        vl->addWidget(wrap);
+        cred_cards_[key] = wrap;
     }
 
     vl->addStretch();
@@ -235,15 +273,30 @@ void CredentialsSection::reload() {
         if (r.is_ok() && !r.value().isEmpty()) {
             field->clear();
             field->setPlaceholderText(tr("•••••••• (saved)"));
-            status->setText(tr("Saved ✓"));
-            status->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
+            cred_set_status(status, tr("Saved ✓"), ui::colors::POSITIVE());
         } else {
             field->clear();
             field->setPlaceholderText(tr("Not configured"));
-            status->setText(tr("Not set"));
-            status->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
+            cred_set_status(status, tr("Not set"), ui::colors::TEXT_SECONDARY());
         }
     }
+}
+
+void CredentialsSection::apply_filter(const QString& text) {
+    const QString needle = text.trimmed();
+    int visible = 0;
+    for (const auto& def : CRED_KEYS) {
+        auto* card = cred_cards_.value(def.first, nullptr);
+        if (!card)
+            continue;
+        const bool match = needle.isEmpty() || def.second.contains(needle, Qt::CaseInsensitive) ||
+                           def.first.contains(needle, Qt::CaseInsensitive);
+        card->setVisible(match);
+        if (match)
+            ++visible;
+    }
+    if (no_match_lbl_)
+        no_match_lbl_->setVisible(visible == 0);
 }
 
 void CredentialsSection::changeEvent(QEvent* event) {
@@ -257,6 +310,12 @@ void CredentialsSection::retranslateUi() {
         title_->setText(tr("API CREDENTIALS"));
     if (info_)
         info_->setText(tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
+    if (filter_edit_) {
+        filter_edit_->setPlaceholderText(tr("Filter providers..."));
+        filter_edit_->setAccessibleName(tr("Filter credential providers"));
+    }
+    if (no_match_lbl_)
+        no_match_lbl_->setText(tr("No provider matches the filter."));
 
     // Per-credential Save buttons. (Credential names are product/brand names —
     // not translated. Provider name labels stay as-is.)

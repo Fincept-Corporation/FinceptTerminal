@@ -116,7 +116,7 @@ void MaxPainChart::set_chain(const OptionChain& chain) {
                 pain += (r.strike - S) * double(r.pe_quote.oi);
         }
         pain_vals.append(pain);
-        categories.append(QString::number(S, 'f', S < 100 ? 2 : 0));
+        categories.append(fincept::services::options::format_strike(S));
         if (pain < min_pain) {
             min_pain = pain;
             min_idx = i - lo;

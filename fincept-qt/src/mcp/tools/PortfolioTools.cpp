@@ -7,6 +7,8 @@
 #include "storage/repositories/PortfolioHoldingsRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
 
+#include <algorithm>
+
 namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "PortfolioTools";
@@ -50,6 +52,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "add_holding";
         t.description = "Add or increase a position in the portfolio holdings list.";
         t.category = "portfolio";
+        t.is_destructive = true; // writes the user's holdings book (ordering matters between edits)
         t.input_schema.properties =
             QJsonObject{{"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL)"}}},
                         {"shares", QJsonObject{{"type", "number"}, {"description", "Number of shares/units"}}},
@@ -84,6 +87,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "update_holding";
         t.description = "Update shares and average cost for an existing holding by ID.";
         t.category = "portfolio";
+        t.is_destructive = true; // overwrites the stored position
         t.input_schema.properties =
             QJsonObject{{"id", QJsonObject{{"type", "integer"}, {"description", "Holding ID"}}},
                         {"shares", QJsonObject{{"type", "number"}, {"description", "Updated share count"}}},
@@ -197,6 +201,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "create_portfolio";
         t.description = "Create a new named investment portfolio.";
         t.category = "portfolio";
+        t.is_destructive = true; // persistent write; add_portfolio_asset / add_transaction depend on it existing
         t.input_schema.properties =
             QJsonObject{{"name", QJsonObject{{"type", "string"}, {"description", "Portfolio name"}}},
                         {"owner", QJsonObject{{"type", "string"}, {"description", "Owner name"}}},
@@ -286,6 +291,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "add_portfolio_asset";
         t.description = "Add a new asset/holding to a named portfolio.";
         t.category = "portfolio";
+        t.is_destructive = true; // upserts quantity / average price in the user's portfolio
         t.input_schema.properties = QJsonObject{
             {"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol (e.g. AAPL)"}}},
@@ -350,20 +356,28 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.category = "portfolio";
         t.input_schema.properties =
             QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
-                        {"limit", QJsonObject{{"type", "integer"}, {"description", "Max rows (default: 50)"}}}};
+                        {"limit", QJsonObject{{"type", "integer"},
+                                              {"description", "Max rows, most recent first (default: 50, max 500)"},
+                                              {"minimum", 1},
+                                              {"maximum", 500}}}};
         t.input_schema.required = {"portfolio_id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString id = args["portfolio_id"].toString().trimmed();
             if (id.isEmpty())
                 return ToolResult::fail("Missing 'portfolio_id'");
 
-            int limit = args["limit"].toInt(50);
-            auto r = PortfolioRepository::instance().get_transactions(id, limit);
+            const int limit = std::clamp(args["limit"].toInt(50), 1, 500);
+            // Ask for one row more than we will return: the extra row is the only way to
+            // know the ledger continues, so a full page is never mistaken for "everything".
+            auto r = PortfolioRepository::instance().get_transactions(id, limit + 1);
             if (r.is_err())
                 return ToolResult::fail("Failed to load transactions: " + QString::fromStdString(r.error()));
 
+            const bool more = r.value().size() > limit;
             QJsonArray arr;
             for (const auto& tx : r.value()) {
+                if (arr.size() >= limit)
+                    break;
                 arr.append(QJsonObject{{"id", tx.id},
                                        {"symbol", tx.symbol},
                                        {"type", tx.transaction_type},
@@ -374,6 +388,11 @@ std::vector<ToolDef> get_portfolio_tools() {
                                        {"notes", tx.notes},
                                        {"created_at", tx.created_at}});
             }
+            if (more)
+                return ToolResult::ok(QStringLiteral("Showing the %1 most recent transactions — older ones exist; "
+                                                     "raise `limit` (max 500) to see more.")
+                                          .arg(arr.size()),
+                                      arr);
             return ToolResult::ok_data(arr);
         };
         tools.push_back(std::move(t));
@@ -385,6 +404,7 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "add_transaction";
         t.description = "Record a transaction (BUY, SELL, DIVIDEND, SPLIT) in a portfolio.";
         t.category = "portfolio";
+        t.is_destructive = true; // appends to the user's transaction ledger
         t.input_schema.properties =
             QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
                         {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
@@ -452,22 +472,54 @@ std::vector<ToolDef> get_portfolio_tools() {
         t.name = "get_portfolio_snapshots";
         t.description = "Get historical performance snapshots for a portfolio.";
         t.category = "portfolio";
-        t.input_schema.properties =
-            QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
-                        {"days", QJsonObject{{"type", "integer"}, {"description", "Days of history (default: 365)"}}}};
+        t.input_schema.properties = QJsonObject{
+            {"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
+            {"days", QJsonObject{{"type", "integer"},
+                                 {"description", "Days of history (default: 365)"},
+                                 {"minimum", 1},
+                                 {"maximum", 3650}}},
+            {"max_points", QJsonObject{{"type", "integer"},
+                                       {"description", "Max snapshots returned (default 90, max 500). When the window "
+                                                       "holds more, they are sampled evenly and the latest is always "
+                                                       "included."},
+                                       {"minimum", 2},
+                                       {"maximum", 500}}}};
         t.input_schema.required = {"portfolio_id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString id = args["portfolio_id"].toString().trimmed();
             if (id.isEmpty())
                 return ToolResult::fail("Missing 'portfolio_id'");
 
-            int days = args["days"].toInt(365);
+            const int days = std::clamp(args["days"].toInt(365), 1, 3650);
+            const int max_points = std::clamp(args["max_points"].toInt(90), 2, 500);
             auto r = PortfolioRepository::instance().get_snapshots(id, days);
             if (r.is_err())
                 return ToolResult::fail("Failed to load snapshots: " + QString::fromStdString(r.error()));
 
+            // A year of daily snapshots is ~365 rows — far over the result budget, and the
+            // overflow shaper would keep the OLDEST rows and drop the recent ones, which
+            // are the ones that matter. Sample evenly (newest row always kept, order
+            // preserved) and say so.
+            const auto& all = r.value();
+            const qsizetype n = all.size();
+            QVector<qsizetype> picks;
+            if (n <= max_points) {
+                for (qsizetype i = 0; i < n; ++i)
+                    picks.append(i);
+            } else {
+                const double step = static_cast<double>(n - 1) / static_cast<double>(max_points - 1);
+                qsizetype last = -1;
+                for (int k = 0; k < max_points; ++k) {
+                    const qsizetype idx = std::min<qsizetype>(n - 1, static_cast<qsizetype>(k * step + 0.5));
+                    if (idx != last)
+                        picks.append(idx);
+                    last = idx;
+                }
+            }
+
             QJsonArray arr;
-            for (const auto& s : r.value()) {
+            for (const qsizetype pi : picks) {
+                const auto& s = all[pi];
                 arr.append(QJsonObject{{"id", s.id},
                                        {"total_value", s.total_value},
                                        {"total_cost_basis", s.total_cost_basis},
@@ -475,6 +527,14 @@ std::vector<ToolDef> get_portfolio_tools() {
                                        {"total_pnl_percent", s.total_pnl_percent},
                                        {"date", s.snapshot_date}});
             }
+            if (n > static_cast<qsizetype>(arr.size()))
+                return ToolResult::ok(QStringLiteral("%1 snapshots in the last %2 days, sampled evenly down to %3 "
+                                                     "(first and latest included). Raise `max_points` (max 500) or "
+                                                     "shorten `days` for finer resolution.")
+                                          .arg(n)
+                                          .arg(days)
+                                          .arg(arr.size()),
+                                      arr);
             return ToolResult::ok_data(arr);
         };
         tools.push_back(std::move(t));

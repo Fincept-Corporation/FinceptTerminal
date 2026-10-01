@@ -86,35 +86,35 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
 
             switch (status) {
                 case 400:
-                    msg = "Bad request. Please check your input.";
+                    msg = tr("Bad request. Please check your input.");
                     break;
                 case 401:
-                    msg = "Incorrect email or password.";
+                    msg = tr("Incorrect email or password.");
                     break;
                 case 403:
-                    msg = "Access denied. Your account may be suspended.";
+                    msg = tr("Access denied. Your account may be suspended.");
                     break;
                 case 404:
-                    msg = "Account not found. Please check your email.";
+                    msg = tr("Account not found. Please check your email.");
                     break;
                 case 409:
-                    msg = "An account with this email or username already exists.";
+                    msg = tr("An account with this email or username already exists.");
                     break;
                 case 422:
-                    msg = "Please check your input and try again.";
+                    msg = tr("Please check your input and try again.");
                     break;
                 case 429:
-                    msg = "Too many attempts. Please wait a moment and try again.";
+                    msg = tr("Too many attempts. Please wait a moment and try again.");
                     break;
                 case 500:
-                    msg = "Server error. Please try again later.";
+                    msg = tr("Server error. Please try again later.");
                     break;
                 case 503:
-                    msg = "Service unavailable. Please try again later.";
+                    msg = tr("Service unavailable. Please try again later.");
                     break;
                 default:
-                    msg = status > 0 ? QString("Request failed (HTTP %1). Please try again.").arg(status)
-                                     : "Network error. Check your connection.";
+                    msg = status > 0 ? tr("Request failed (HTTP %1). Please try again.").arg(status)
+                                     : tr("Network error. Check your connection.");
             }
             cb({false, {}, msg, status});
             return;
@@ -151,7 +151,7 @@ void AuthApi::request(const QString& method, const QString& endpoint, const QJso
             if (msg.isEmpty())
                 msg = obj.value("detail").toString();
             if (msg.isEmpty())
-                msg = "Request failed. Please try again.";
+                msg = tr("Request failed. Please try again.");
             cb({false, obj, msg, 200});
             return;
         }

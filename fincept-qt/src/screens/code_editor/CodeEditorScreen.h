@@ -77,6 +77,10 @@ class CellWidget : public QWidget {
     void set_outputs(const QVector<CellOutput>& outputs, int exec_count);
     void set_selected(bool selected);
     void set_index(int index);
+    /// Keep the widget's copy of the custom cell name in step with a rename —
+    /// cell_data() reads it back, so without this a rename was overwritten by the
+    /// stale title on the next sync/save.
+    void set_title(const QString& title) { title_ = title; }
     QString cell_id() const { return cell_id_; }
 
   signals:

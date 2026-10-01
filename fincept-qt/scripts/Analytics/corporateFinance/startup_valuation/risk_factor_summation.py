@@ -178,10 +178,45 @@ class RiskFactorSummation:
             'base_valuation': self.base_valuation
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `risk_factor_summation.py calculate <flat-params-json>` (argv length 3), with the
+# twelve -2..+2 assessments as a list. The native form is `risk_factor base_valuation assessments_json` keyed by
+# risk name, so a service-style call is translated here and then falls through to the native dispatch. Any other
+# argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+_SVC_RISKS = ("management", "stage", "legislation", "manufacturing", "sales_marketing", "funding", "competition",
+              "technology", "litigation", "international", "reputation", "exit")
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    base = p.get("base_valuation", 2000000)
+    if not isinstance(base, (int, float)) or isinstance(base, bool):
+        base = 2000000
+    assessments = p.get("assessments")
+    if isinstance(assessments, list):
+        # Panel order matches _SVC_RISKS.
+        assessments = {name: int(v) for name, v in zip(_SVC_RISKS, assessments)
+                       if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    elif not isinstance(assessments, dict):
+        assessments = {}
+    return [argv[0], "risk_factor", repr(float(base)), json.dumps(assessments)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

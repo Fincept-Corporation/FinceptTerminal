@@ -67,6 +67,11 @@ class NodeScene : public QGraphicsScene {
     /// Cancel temporary edge.
     void cancel_temp_edge();
 
+    /// True when a NEW connection between `a` and `b` (either order) is valid:
+    /// opposite directions, compatible types, not already connected, and - because
+    /// the executor rejects cyclic graphs outright - not closing a loop.
+    bool can_link(const PortItem* a, const PortItem* b) const;
+
   signals:
     void node_added(const QString& id);
     void node_removed(const QString& id);
@@ -103,6 +108,11 @@ class NodeScene : public QGraphicsScene {
   private:
     void adjust_edges_for_node(const QString& node_id);
     void tick_edge_animations();
+    /// True if `to_node` already reaches `from_node` - linking from->to would close a loop.
+    bool would_create_cycle(const QString& from_node, const QString& to_node) const;
+    /// Drag-to-connect feedback: green on ports `from` can link to, red on opposite-side
+    /// ports it cannot (type mismatch, duplicate, loop). `from == nullptr` clears.
+    void highlight_link_targets(const PortItem* from);
 
     QMap<QString, NodeItem*> nodes_;
     QMap<QString, EdgeItem*> edges_;

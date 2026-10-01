@@ -52,6 +52,12 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
 
     // ── Consumer-facing helpers ─────────────────────────────────────────────
 
+    /// Risk-free rate (decimal) the chain's Greeks are priced with for `broker_id`: the
+    /// `fno.risk_free_rate` setting for Indian brokers, a US T-bill level for Databento.
+    /// The Builder's target-day curve and POP reuse it so they price on the same curve as
+    /// the ribbon Greeks instead of a separate hard-coded default.
+    double risk_free_rate_for(const QString& broker_id);
+
     /// One-shot read of the current cached chain, or std::nullopt when no
     /// snapshot exists. Triggers no fetch — wrapper around DataHub::peek.
     /// Streaming consumers should subscribe to the topic instead.
@@ -125,6 +131,18 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// `option:atm_iv:<broker>:<underlying>` and per-leg `option:tick:*`.
     void enrich_with_greeks(const fincept::services::options::OptionChain& chain, const QString& topic);
 
+    /// True when `chain` belongs to the same (broker, underlying, expiry) series as
+    /// `last_chain_` but is OLDER than it — i.e. a newer snapshot was assembled while
+    /// an async Greeks job for `chain` was in flight, so republishing it would roll
+    /// the topic back to stale quotes.
+    bool is_superseded(const fincept::services::options::OptionChain& chain) const;
+
+    /// Adopt a Greeks-enriched snapshot as `last_chain_` (when it is the same
+    /// snapshot `last_chain_` holds) and tell signal consumers. `last_chain_` was
+    /// only ever the un-enriched REST assembly, so every `last_chain()` reader —
+    /// the Builder's payoff/Greeks ribbon, the leg-click path — saw IV = 0.
+    void commit_enriched_chain(const fincept::services::options::OptionChain& enriched);
+
     /// Push per-leg `option:tick:<broker>:<token>` BrokerQuote snapshots
     /// for every CE/PE row with a non-zero token. Phase 3 fan-out is
     /// chain-derived; broker-WS-driven publishes will replace this in a
@@ -177,6 +195,10 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// Per-token last Greeks compute timestamp (ms since epoch) — used to
     /// throttle py_vollib invocations to ≤1/500ms per strike per side.
     QHash<qint64, qint64> last_greeks_compute_ms_;
+    /// Last time (epoch ms) the day's ATM IV was written to `iv_history_daily`, per
+    /// underlying — the write is a synchronous SQLite upsert on the UI thread and the
+    /// value only needs minute resolution.
+    QHash<QString, qint64> iv_persist_ms_;
     /// Per-token IV cache (decimal) — reused when throttle skips compute.
     QHash<qint64, double> iv_cache_;
     /// Per-token Greeks cache — reused when throttle skips compute.

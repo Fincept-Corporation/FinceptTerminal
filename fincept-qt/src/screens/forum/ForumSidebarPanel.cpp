@@ -86,7 +86,10 @@ void ForumSidebarPanel::build_ui() {
     pc_hl->setContentsMargins(14, 12, 14, 12);
     pc_hl->setSpacing(12);
 
+    // Names / initials come from the server (user-authored): PlainText so markup
+    // in a display name can't be rendered as rich text.
     avatar_lbl_ = new QLabel("?");
+    avatar_lbl_->setTextFormat(Qt::PlainText);
     avatar_lbl_->setFixedSize(36, 36);
     avatar_lbl_->setAlignment(Qt::AlignCenter);
     avatar_lbl_->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;background:%2;"
@@ -98,10 +101,12 @@ void ForumSidebarPanel::build_ui() {
     profile_info->setContentsMargins(0, 0, 0, 0);
 
     profile_name_lbl_ = new QLabel(tr("Loading..."));
+    profile_name_lbl_->setTextFormat(Qt::PlainText);
     profile_name_lbl_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;background:transparent;%2")
                                          .arg(ui::colors::TEXT_PRIMARY(), M(12)));
 
     profile_sub_lbl_ = new QLabel("...");
+    profile_sub_lbl_->setTextFormat(Qt::PlainText);
     profile_sub_lbl_->setStyleSheet(
         QString("color:%1;font-size:10px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(10)));
 
@@ -307,7 +312,7 @@ void ForumSidebarPanel::build_ui() {
 // Data setters
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 void ForumSidebarPanel::set_my_profile(const services::ForumProfile& profile) {
-    QString color = profile.avatar_color.isEmpty() ? ui::colors::AMBER() : profile.avatar_color;
+    QString color = services::forum_safe_color(profile.avatar_color, ui::colors::AMBER());
     QString initials = profile.display_name.isEmpty() ? "?" : profile.display_name.left(2).toUpper();
     avatar_lbl_->setText(initials);
     avatar_lbl_->setStyleSheet(QString("color:%1;font-size:14px;font-weight:700;background:%2;"
@@ -382,7 +387,7 @@ void ForumSidebarPanel::rebuild_categories() {
 
     for (const auto& cat : categories_) {
         const bool active = (cat.id == active_category_id_);
-        QString color = cat.color.isEmpty() ? ui::colors::AMBER() : cat.color;
+        QString color = services::forum_safe_color(cat.color, ui::colors::AMBER());
 
         auto* row = new QWidget(this);
         row->setFixedHeight(34);
@@ -408,6 +413,7 @@ void ForumSidebarPanel::rebuild_categories() {
 
         // Name
         auto* name_lbl = new QLabel(cat.name.toLower().replace(' ', '-'));
+        name_lbl->setTextFormat(Qt::PlainText);
         name_lbl->setStyleSheet(active ? QString("color:%1;font-size:12px;font-weight:600;"
                                                  "background:transparent;%2")
                                              .arg(ui::colors::TEXT_PRIMARY(), M(12))
@@ -494,6 +500,7 @@ void ForumSidebarPanel::rebuild_contributors() {
 
         // Avatar
         auto* av = new QLabel(c.display_name.left(1).toUpper());
+        av->setTextFormat(Qt::PlainText);
         av->setFixedSize(22, 22);
         av->setAlignment(Qt::AlignCenter);
         av->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;background:%2;"
@@ -502,6 +509,7 @@ void ForumSidebarPanel::rebuild_contributors() {
 
         // Name
         auto* name = new QLabel(c.display_name.left(12));
+        name->setTextFormat(Qt::PlainText);
         name->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_SECONDARY(), M(11)));
 

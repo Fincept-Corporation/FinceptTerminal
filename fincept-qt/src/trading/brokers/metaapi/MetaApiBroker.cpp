@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QThread>
 #include <QTimeZone>
+#include <QUrl>
 
 #include <algorithm>
 #include <cmath>
@@ -277,8 +278,12 @@ OrderPlaceResponse MetaApiBroker::place_order(const BrokerCredentials& creds, co
         if (order.price > 0)
             body["openPrice"] = order.price;
     } else if (order.order_type == OrderType::StopLoss) {
-        if (order.price > 0)
-            body["openPrice"] = order.price;
+        // BUY_STOP / SELL_STOP: the trigger IS the pending order's opening price. The ticket supplies
+        // it as stop_price (price stays 0 for a stop-market order), which used to be sent as an
+        // attached stopLoss with no openPrice at all — a pending stop MT cannot accept.
+        const double trigger = order.stop_price > 0 ? order.stop_price : order.price;
+        if (trigger > 0)
+            body["openPrice"] = trigger;
     } else if (order.order_type == OrderType::StopLossLimit) {
         if (order.price > 0)
             body["openPrice"] = order.price;
@@ -286,8 +291,16 @@ OrderPlaceResponse MetaApiBroker::place_order(const BrokerCredentials& creds, co
             body["stopLimitPrice"] = order.stop_price;
     }
 
-    if (order.stop_price > 0 && order.order_type != OrderType::StopLossLimit)
-        body["stopLoss"] = order.stop_price;
+    // Protective legs attached to the resulting position. UnifiedOrder::stop_loss / take_profit are
+    // absolute prices (the ticket labels them "Stop loss price" / "Take profit price"); they used to
+    // be dropped on the floor, leaving the position unprotected after the user had typed them in.
+    if (order.stop_loss > 0)
+        body["stopLoss"] = order.stop_loss;
+    else if (order.stop_price > 0 &&
+             (order.order_type == OrderType::Market || order.order_type == OrderType::Limit))
+        body["stopLoss"] = order.stop_price; // legacy: a bare stop_price on a market/limit order meant SL
+    if (order.take_profit > 0)
+        body["takeProfit"] = order.take_profit;
 
     auto resp = BrokerHttp::instance().post_json(url, body, auth_headers(creds));
 
@@ -546,7 +559,11 @@ ApiResponse<QVector<BrokerHolding>> MetaApiBroker::get_holdings(const BrokerCred
         // TODO: invested/current ignore contract (lot) size; pnl from API 'profit' is authoritative.
         // quantity is in lots (e.g. 0.10), not units, so price*lots is off by the
         // contract size. The MetaAPI position payload carries no contract/lot-size
-        // field to scale by, so the arithmetic is left as-is.
+        // field to scale by, so the arithmetic is left as-is. (Investigated: contractSize is only
+        // on GET .../symbols/{symbol}/specification, and price*lots*contractSize is then in the
+        // symbol's QUOTE currency — JPY for USDJPY — not the account currency these two fields
+        // are displayed in, so a per-symbol spec fetch alone would swap one wrong number for
+        // another; it needs an FX conversion the broker layer cannot supply.)
         h.invested_value = p.avg_price * p.quantity;
         h.current_value = p.ltp * p.quantity;
         holdings.append(h);
@@ -606,8 +623,10 @@ ApiResponse<QVector<BrokerQuote>> MetaApiBroker::get_quotes(const BrokerCredenti
         if (!MetaApiRateLimiter::instance().try_consume(account_id, metaapi_credits::kRead))
             continue;
 
+        // Broker symbols can carry characters that are not URL-safe ("XAUUSD#", "US30.cash", "EURUSD+").
         const QString url =
-            base + QStringLiteral("/users/current/accounts/%1/symbols/%2/current-price").arg(account_id, sym);
+            base + QStringLiteral("/users/current/accounts/%1/symbols/%2/current-price")
+                       .arg(account_id, QString::fromUtf8(QUrl::toPercentEncoding(sym)));
 
         auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
         if (!resp.success)
@@ -647,6 +666,8 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
 
     const QString region = region_from_creds(creds);
     const QString tf = map_timeframe(resolution);
+    // The symbol is a URL path segment: percent-encode it ("XAUUSD#" would otherwise start a fragment).
+    const QString symbol_enc = QString::fromUtf8(QUrl::toPercentEncoding(symbol));
 
     // Parse a flexible date string (ISO / yyyy-MM-dd / yyyy-MM-dd HH:mm) into a
     // UTC QDateTime. Returns an invalid QDateTime if none of the forms match.
@@ -691,7 +712,7 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
             market_data_url(region) +
             QStringLiteral("/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
                            "?startTime=%4&limit=%5")
-                .arg(account_id, symbol, tf, start_str)
+                .arg(account_id, symbol_enc, tf, start_str)
                 .arg(kLimit);
 
         auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
@@ -739,7 +760,7 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
             market_data_url(region) +
             QStringLiteral("/users/current/accounts/%1/historical-market-data/symbols/%2/timeframes/%3/candles"
                            "?startTime=%4&limit=%5")
-                .arg(account_id, symbol, tf, start_str)
+                .arg(account_id, symbol_enc, tf, start_str)
                 .arg(kLimit);
 
         auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
@@ -806,11 +827,13 @@ ApiResponse<QVector<BrokerCandle>> MetaApiBroker::get_history(const BrokerCreden
                               [](const BrokerCandle& a, const BrokerCandle& b) { return a.timestamp == b.timestamp; }),
                   candles.end());
 
-    // Drop candles older than the requested lower bound (only when valid).
+    // Drop candles older than the requested lower bound (only when valid). BrokerCandle.timestamp
+    // is MILLISECONDS, so compare against ms: the bound used to be in seconds, which no candle was
+    // ever older than, so nothing was trimmed.
     if (from_valid) {
-        const int64_t from_ts = from_dt.toSecsSinceEpoch();
+        const int64_t from_ms = from_dt.toMSecsSinceEpoch();
         candles.erase(std::remove_if(candles.begin(), candles.end(),
-                                     [from_ts](const BrokerCandle& c) { return c.timestamp < from_ts; }),
+                                     [from_ms](const BrokerCandle& c) { return c.timestamp < from_ms; }),
                       candles.end());
     }
 

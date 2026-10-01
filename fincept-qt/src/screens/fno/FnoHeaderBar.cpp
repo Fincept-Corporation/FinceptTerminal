@@ -224,7 +224,7 @@ void FnoHeaderBar::update_from_chain(const OptionChain& chain) {
     lbl_change_->style()->unpolish(lbl_change_);
     lbl_change_->style()->polish(lbl_change_);
 
-    lbl_atm_->setText(chain.atm_strike > 0 ? QString::number(chain.atm_strike, 'f', 0) : "--");
+    lbl_atm_->setText(chain.atm_strike > 0 ? fincept::services::options::format_strike(chain.atm_strike) : "--");
     lbl_pcr_->setText(chain.pcr > 0 ? QString::number(chain.pcr, 'f', 3) : "--");
     lbl_max_pain_->setText(chain.max_pain > 0 ? QString::number(chain.max_pain, 'f', 0) : "--");
     lbl_ce_oi_->setText(fmt_compact(qint64(chain.total_ce_oi)));

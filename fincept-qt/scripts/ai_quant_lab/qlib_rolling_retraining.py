@@ -10,6 +10,11 @@ from typing import Any, Dict, Optional
 
 warnings.filterwarnings("ignore")
 
+# Recent MLflow releases refuse to open Qlib's file-based tracking store unless this is
+# set, which made every rolling retrain fail with "filesystem tracking backend ... is
+# in maintenance mode".
+os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+
 # ── Persistence paths ─────────────────────────────────────────────────────────
 FINCEPT_DIR = Path.home() / ".fincept"
 SCHEDULES_FILE = FINCEPT_DIR / "rolling_schedules.json"
@@ -214,7 +219,12 @@ def _qlib_init_from_conf(conf_path: str):
     init_cfg = cfg.get("qlib_init", {})
     provider_uri = init_cfg.get("provider_uri", str(Path.home() / ".qlib" / "qlib_data" / "us_data"))
     region = init_cfg.get("region", "us")
-    qlib.init(provider_uri=provider_uri, region=region)
+    # Experiment tracking under ~/.fincept rather than ./mlruns in the process's cwd.
+    qlib.init(provider_uri=provider_uri, region=region,
+              exp_manager={"class": "MLflowExpManager",
+                           "module_path": "qlib.workflow.expm",
+                           "kwargs": {"uri": (FINCEPT_DIR / "mlruns").as_uri(),
+                                      "default_exp_name": "Experiment"}})
 
 
 def cmd_preview(params: dict):

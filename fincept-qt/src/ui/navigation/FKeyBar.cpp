@@ -4,6 +4,8 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QEvent>
+#include <QStyle>
+#include <QVariant>
 
 namespace fincept::ui {
 
@@ -80,25 +82,38 @@ void TabBar::set_active(const QString& tab_id) {
 }
 
 void TabBar::refresh_theme() {
-    setStyleSheet(
-        QString("background:%1;border-bottom:1px solid %2;").arg(colors::BG_BASE()).arg(colors::BORDER_DIM()));
+    // One sheet for the whole bar. The per-button setStyleSheet() this replaces ran
+    // for ALL tabs on every navigation (set_active -> update_styles), i.e. a CSS
+    // re-parse per tab per screen change. The active tab is now a dynamic property
+    // ("active") matched by an attribute selector, so a navigation only re-polishes
+    // the two buttons whose state actually changed. The bare `*` rule keeps the
+    // previous selector-less look (it applied to the bar and its children). The
+    // active rule comes last so it also wins over :hover, as before.
+    setStyleSheet(QString("*{background:%1;border-bottom:1px solid %2;}"
+                          "QPushButton{background:transparent;color:%3;border:none;"
+                          "padding:0 8px;letter-spacing:0.5px;}"
+                          "QPushButton:hover{color:%4;background:%5;}"
+                          "QPushButton[active=\"true\"]{background:%4;color:%3;border:1px solid %6;"
+                          "padding:0 8px;font-weight:600;letter-spacing:0.5px;}")
+                      .arg(colors::BG_BASE())
+                      .arg(colors::BORDER_DIM())
+                      .arg(colors::TEXT_PRIMARY())
+                      .arg(colors::AMBER())
+                      .arg(colors::BG_RAISED())
+                      .arg(colors::AMBER_DIM()));
     update_styles();
 }
 
 void TabBar::update_styles() {
     for (auto* btn : tab_buttons_) {
-        bool active = btn->property("tab_id").toString() == active_id_;
-        btn->setStyleSheet(active ? QString("QPushButton{background:%1;color:%2;border:1px solid %3;"
-                                            "padding:0 8px;font-weight:600;letter-spacing:0.5px;}")
-                                        .arg(colors::AMBER())
-                                        .arg(colors::TEXT_PRIMARY())
-                                        .arg(colors::AMBER_DIM())
-                                  : QString("QPushButton{background:transparent;color:%1;border:none;"
-                                            "padding:0 8px;letter-spacing:0.5px;}"
-                                            "QPushButton:hover{color:%2;background:%3;}")
-                                        .arg(colors::TEXT_PRIMARY())
-                                        .arg(colors::AMBER())
-                                        .arg(colors::BG_RAISED()));
+        const bool active = btn->property("tab_id").toString() == active_id_;
+        const QVariant current = btn->property("active");
+        if (current.isValid() && current.toBool() == active)
+            continue; // unchanged — nothing to re-polish
+        btn->setProperty("active", active);
+        // Dynamic-property selectors are only re-evaluated on a fresh polish.
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
     }
 }
 

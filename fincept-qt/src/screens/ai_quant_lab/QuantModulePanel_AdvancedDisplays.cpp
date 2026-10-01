@@ -602,6 +602,38 @@ void QuantModulePanel::display_data_processors_result(const QString& command, co
                 this),
         };
         results_layout_->addWidget(gs_card_row(std_row, this));
+
+        // The processed values themselves (column -> {row -> value}). Only the shape and summary
+        // statistics were shown, so the point of the pipeline -- the transformed data -- was invisible.
+        const auto processed = payload.value("processed_data").toObject();
+        if (!processed.isEmpty()) {
+            const QStringList cols = processed.keys();
+            QStringList row_keys = processed.value(cols.first()).toObject().keys();
+            std::sort(row_keys.begin(), row_keys.end(),
+                      [](const QString& a, const QString& b) { return a.toLongLong() < b.toLongLong(); });
+            const int shown = static_cast<int>(qMin<qsizetype>(row_keys.size(), 15));
+            results_layout_->addWidget(gs_section_header(
+                tr("PROCESSED DATA  |  FIRST %1 OF %2 ROWS").arg(shown).arg(row_keys.size()), accent));
+            auto* table = new QTableWidget(shown, static_cast<int>(cols.size()), this);
+            table->setHorizontalHeaderLabels(cols);
+            table->setVerticalHeaderLabels(row_keys.mid(0, shown));
+            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+            // Styled by the panel-level table rules (refresh_theme), not an inline setStyleSheet.
+            table->setMaximumHeight(shown * 24 + 40);
+            for (int r = 0; r < shown; ++r) {
+                for (int c = 0; c < cols.size(); ++c) {
+                    const QJsonValue v = processed.value(cols[c]).toObject().value(row_keys[r]);
+                    auto* it = new QTableWidgetItem(v.isNull() || v.isUndefined()
+                                                        ? QString::fromUtf8("—")
+                                                        : QString::number(v.toDouble(), 'f', 4));
+                    it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                    table->setItem(r, c, it);
+                }
+                table->setRowHeight(r, 24);
+            }
+            results_layout_->addWidget(table);
+        }
         status_label_->setText(tr("Processed: %1 → %2").arg(shape_str(in_shape)).arg(shape_str(out_shape)));
         return;
     }

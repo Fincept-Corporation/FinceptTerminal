@@ -1165,7 +1165,8 @@ int main(int argc, char* argv[]) {
         // The connection uses Qt::SingleShotConnection (Qt 6.0+) so the lambda
         // fires exactly once even if setup_complete is somehow emitted twice.
         QObject::connect(
-            setup_screen, &fincept::screens::SetupScreen::setup_complete, [&app, &instance_lock, screen_guard]() {
+            setup_screen, &fincept::screens::SetupScreen::setup_complete, setup_screen,
+            [&app, &instance_lock, screen_guard]() {
                 if (!screen_guard)
                     return; // already cleaned up — ignore
                 screen_guard->hide();
@@ -1220,7 +1221,8 @@ int main(int argc, char* argv[]) {
                 QTimer::singleShot(0, &app, []() { fincept::services::AgentService::instance().discover_agents(); });
 
                 LOG_INFO("App", "Application ready (after setup)");
-            });
+            },
+            Qt::SingleShotConnection);
 
         return app.exec();
     }

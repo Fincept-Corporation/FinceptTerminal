@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 
 #include <cmath>
 
@@ -89,7 +90,18 @@ void ForumFeedPanel::build_ui() {
 
     // Posts container
     posts_container_ = new QWidget(this);
-    posts_container_->setStyleSheet("background:transparent;");
+    // One sheet for the container and the load-error state (see set_error()), so
+    // the error widgets need no inline styling of their own.
+    posts_container_->setStyleSheet(QString("QWidget{background:transparent;}"
+                                            "QLabel#forumFeedErrorIcon{color:%1;font-size:32px;}"
+                                            "QLabel#forumFeedErrorMsg{color:%2;font-weight:700;%3}"
+                                            "QPushButton#forumFeedErrorRetry{background:rgba(217,119,6,0.1);"
+                                            "color:%4;border:1px solid rgba(217,119,6,0.25);padding:0 20px;"
+                                            "font-weight:700;%5}"
+                                            "QPushButton#forumFeedErrorRetry:hover{"
+                                            "background:rgba(217,119,6,0.2);color:%6;}")
+                                        .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_TERTIARY(), M(13),
+                                             ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
     posts_vl_ = new QVBoxLayout(posts_container_);
     posts_vl_->setContentsMargins(0, 0, 0, 0);
     posts_vl_->setSpacing(0);
@@ -130,6 +142,7 @@ void ForumFeedPanel::build_toolbar() {
         QString("color:%1;font-size:22px;font-weight:700;background:transparent;%2").arg(ui::colors::AMBER(), M(22)));
 
     header_lbl_ = new QLabel(tr("DISCUSSIONS"));
+    header_lbl_->setTextFormat(Qt::PlainText); // category names / search text are not markup
     header_lbl_->setStyleSheet(QString("color:%1;font-size:15px;font-weight:700;letter-spacing:1px;"
                                        "background:transparent;%2")
                                    .arg(ui::colors::TEXT_PRIMARY(), M(15)));
@@ -238,6 +251,14 @@ void ForumFeedPanel::set_active_post(const QString& uuid) {
 }
 
 void ForumFeedPanel::set_posts(const services::ForumPostsPage& pg, const QString& cc) {
+    // A reload of the SAME list (after a vote) keeps the reading position; a
+    // different list (category / page / search) starts at the top — the scroll
+    // value used to carry over unchanged between unrelated lists.
+    const bool same_list = !page_.posts.isEmpty() && !pg.posts.isEmpty() && page_.page == pg.page &&
+                           page_.posts.first().post_uuid == pg.posts.first().post_uuid;
+    QScrollBar* bar = scroll_ ? scroll_->verticalScrollBar() : nullptr;
+    const int keep = (same_list && bar) ? bar->value() : 0;
+
     page_ = pg;
     cat_color_ = cc;
     skeleton_timer_->stop();
@@ -246,6 +267,54 @@ void ForumFeedPanel::set_posts(const services::ForumPostsPage& pg, const QString
         skeleton_w_ = nullptr;
     }
     rebuild_posts();
+    if (bar)
+        QTimer::singleShot(0, bar, [bar, keep]() { bar->setValue(keep); }); // after the new layout settles
+}
+
+void ForumFeedPanel::set_error(const QString& message) {
+    skeleton_timer_->stop();
+    if (skeleton_w_) {
+        skeleton_w_->deleteLater();
+        skeleton_w_ = nullptr;
+    }
+    page_ = {};
+    posts_container_->setUpdatesEnabled(false);
+    while (posts_vl_->count() > 0) {
+        auto* item = posts_vl_->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    header_count_lbl_->clear();
+
+    // Styled by the posts container's sheet via these object names.
+    auto* box = new QWidget(this);
+    box->setMinimumHeight(200);
+    auto* vl = new QVBoxLayout(box);
+    vl->setAlignment(Qt::AlignCenter);
+    vl->setSpacing(10);
+
+    auto* icon = new QLabel(QStringLiteral("!"));
+    icon->setObjectName("forumFeedErrorIcon");
+    icon->setAlignment(Qt::AlignCenter);
+
+    auto* msg = new QLabel(message);
+    msg->setObjectName("forumFeedErrorMsg");
+    msg->setTextFormat(Qt::PlainText);
+    msg->setWordWrap(true);
+    msg->setAlignment(Qt::AlignCenter);
+
+    auto* retry = new QPushButton(tr("RETRY"));
+    retry->setObjectName("forumFeedErrorRetry");
+    retry->setFixedHeight(30);
+    retry->setCursor(Qt::PointingHandCursor);
+    connect(retry, &QPushButton::clicked, this, [this]() { emit retry_requested(); });
+
+    vl->addWidget(icon);
+    vl->addWidget(msg);
+    vl->addWidget(retry, 0, Qt::AlignHCenter);
+    posts_vl_->addWidget(box);
+    posts_container_->setUpdatesEnabled(true);
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -261,9 +330,10 @@ void ForumFeedPanel::rebuild_category_chips() {
 
     for (const auto& cat : categories_) {
         const bool active = (cat.id == active_cat_id_);
-        QString cc = cat.color.isEmpty() ? ui::colors::AMBER() : cat.color;
+        QString cc = services::forum_safe_color(cat.color, ui::colors::AMBER());
 
-        auto* chip = new QPushButton(cat.name.toUpper());
+        // '&' in a button label is a mnemonic marker ("R&D" would lose the '&').
+        auto* chip = new QPushButton(cat.name.toUpper().replace('&', "&&"));
         chip->setFixedHeight(24);
         chip->setCursor(Qt::PointingHandCursor);
         chip->setStyleSheet(active ? QString("QPushButton{background:%1;color:%2;"
@@ -343,7 +413,7 @@ void ForumFeedPanel::rebuild_posts() {
     for (int i = 0; i < page_.posts.size(); ++i) {
         const auto& p = page_.posts[i];
         const bool active = (p.post_uuid == active_uuid_);
-        QString cc = p.category_color.isEmpty() ? det_color(p.category_name) : p.category_color;
+        QString cc = services::forum_safe_color(p.category_color, det_color(p.category_name));
         bool voted_up = (p.user_vote == "up");
 
         auto* card = new QWidget(this);
@@ -370,7 +440,11 @@ void ForumFeedPanel::rebuild_posts() {
         r1h->setSpacing(8);
 
         // Circular avatar
+        // Forum text is user-authored: QLabel's default AutoText would render
+        // anything that looks like markup, so every label that carries it is
+        // pinned to PlainText.
         auto* av = new QLabel(p.author_display_name.left(2).toUpper());
+        av->setTextFormat(Qt::PlainText);
         av->setFixedSize(28, 28);
         av->setAlignment(Qt::AlignCenter);
         QString avc = det_color(p.author_display_name);
@@ -384,6 +458,7 @@ void ForumFeedPanel::rebuild_posts() {
         author_col->setContentsMargins(0, 0, 0, 0);
 
         auto* au = new QLabel(p.author_display_name);
+        au->setTextFormat(Qt::PlainText);
         au->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;"
                                   "background:transparent;%2")
                               .arg(ui::colors::TEXT_PRIMARY(), M(12)));
@@ -397,6 +472,7 @@ void ForumFeedPanel::rebuild_posts() {
 
         // Category chip (pill style)
         auto* chip = new QLabel(p.category_name.toUpper());
+        chip->setTextFormat(Qt::PlainText);
         chip->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;background:transparent;"
                                     "border:1px solid %1;padding:2px 8px;letter-spacing:0.5px;"
                                     "border-radius:10px;%2")
@@ -410,6 +486,7 @@ void ForumFeedPanel::rebuild_posts() {
 
         // ── Row 2: title ──────────────────────────────────────────────────────
         auto* title = new QLabel(p.title);
+        title->setTextFormat(Qt::PlainText);
         title->setWordWrap(true);
         title->setStyleSheet(active ? QString("color:%1;font-size:15px;font-weight:700;"
                                               "background:transparent;line-height:1.3;%2")
@@ -425,6 +502,7 @@ void ForumFeedPanel::rebuild_posts() {
             if (p.content.length() > 180)
                 preview += "...";
             auto* body = new QLabel(preview);
+            body->setTextFormat(Qt::PlainText);
             body->setWordWrap(true);
             body->setMaximumHeight(40);
             body->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;"
@@ -460,8 +538,14 @@ void ForumFeedPanel::rebuild_posts() {
                                                  "border-color:rgba(217,119,6,0.2);}")
                                              .arg(like_col, M(10), ui::colors::AMBER()));
         auto post_uuid = p.post_uuid;
-        connect(up_btn, &QPushButton::clicked, this,
-                [this, post_uuid]() { emit vote_post_requested(post_uuid, "up"); });
+        connect(up_btn, &QPushButton::clicked, this, [this, post_uuid, up_btn]() {
+            // One vote per click: the button stays off until the feed reloads
+            // (which rebuilds it). The timer only matters when the vote fails and
+            // no reload follows; it is parented to the button so it dies with it.
+            up_btn->setEnabled(false);
+            QTimer::singleShot(4000, up_btn, [up_btn]() { up_btn->setEnabled(true); });
+            emit vote_post_requested(post_uuid, "up");
+        });
 
         auto mk_eng = [&](const QString& icon, const QString& val, const QString& col) {
             auto* lbl = new QLabel(icon + " " + val);

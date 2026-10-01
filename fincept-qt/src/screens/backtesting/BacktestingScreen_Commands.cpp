@@ -490,7 +490,16 @@ void BacktestingScreen::on_run() {
         return;
     }
 
+    // Date sanity: an inverted range reaches the Python provider as an empty download and
+    // comes back as a generic "no data" failure minutes later.
+    if (start_date_->date() >= end_date_->date()) {
+        display_error(tr("Start date must be before the end date."));
+        return;
+    }
+
     is_running_ = true;
+    running_provider_ = provider_info.slug;
+    running_command_ = command_id;
     run_button_->setEnabled(false);
     set_status_state(tr("EXECUTING…  0s"), ui::colors::WARNING, "rgba(217,119,6,0.08)");
     start_run_ticker();

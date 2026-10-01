@@ -76,27 +76,34 @@ QWidget* CodeEditorScreen::build_library_page() {
     root->addWidget(toolbar);
 
     // Filter chips: category row + difficulty row.
-    auto make_chip_row = [&](const QStringList& labels, QVector<QPushButton*>& store, bool is_category) {
+    // `keys` are the English catalog values the filters compare against;
+    // `labels` are their translated captions. The filter used to store the
+    // caption, so in any non-English UI "All" never matched and every category
+    // chip filtered the library down to nothing.
+    auto make_chip_row = [&](const QStringList& keys, const QStringList& labels, QVector<QPushButton*>& store,
+                             bool is_category) {
         auto* row = new QWidget(page);
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(14, 2, 14, 4);
         rl->setSpacing(6);
-        for (const QString& label : labels) {
-            auto* chip = new QPushButton(label, row);
+        for (int k = 0; k < keys.size() && k < labels.size(); ++k) {
+            const QString key = keys[k];
+            auto* chip = new QPushButton(labels[k], row);
             chip->setObjectName("nbChip");
             chip->setCursor(Qt::PointingHandCursor);
-            chip->setProperty("active", label == "All");
+            chip->setProperty("filterKey", key);
+            chip->setProperty("active", key == "All");
             chip->setStyleSheet(QString("font-family:%1; font-size:%2px;").arg(fonts::DATA_FAMILY).arg(fonts::TINY));
-            connect(chip, &QPushButton::clicked, this, [this, label, is_category]() {
+            connect(chip, &QPushButton::clicked, this, [this, key, is_category]() {
                 if (is_category)
-                    lib_category_filter_ = label;
+                    lib_category_filter_ = key;
                 else
-                    lib_difficulty_filter_ = label;
+                    lib_difficulty_filter_ = key;
                 // Re-read the member group through `this` (capturing the local
                 // reference parameter would dangle once build_library_page returns).
                 QVector<QPushButton*>& group = is_category ? cat_chips_ : diff_chips_;
                 for (QPushButton* c : group) {
-                    c->setProperty("active", c->text() == label);
+                    c->setProperty("active", c->property("filterKey").toString() == key);
                     c->style()->unpolish(c);
                     c->style()->polish(c);
                 }
@@ -108,10 +115,12 @@ QWidget* CodeEditorScreen::build_library_page() {
         rl->addStretch(1);
         root->addWidget(row);
     };
-    make_chip_row(
-        {tr("All"), tr("Finance"), tr("Economics"), tr("Trading"), tr("Investing"), tr("Portfolio"), tr("Quant")},
-        cat_chips_, true);
-    make_chip_row({tr("All"), tr("Beginner"), tr("Intermediate"), tr("Hard")}, diff_chips_, false);
+    make_chip_row({"All", "Finance", "Economics", "Trading", "Investing", "Portfolio", "Quant"},
+                  {tr("All"), tr("Finance"), tr("Economics"), tr("Trading"), tr("Investing"), tr("Portfolio"),
+                   tr("Quant")},
+                  cat_chips_, true);
+    make_chip_row({"All", "Beginner", "Intermediate", "Hard"},
+                  {tr("All"), tr("Beginner"), tr("Intermediate"), tr("Hard")}, diff_chips_, false);
 
     // Scrollable card grid.
     lib_scroll_ = new QScrollArea(page);

@@ -27,8 +27,14 @@ class DocumentCanvas : public QWidget {
     void render(const QVector<ReportComponent>& components, const ReportMetadata& metadata, const ReportTheme& theme,
                 int selected_index);
 
-    /// Returns the last (current) page editor — used for export.
+    /// Returns the last (current) page editor. NOT the whole report: every
+    /// page_break component starts a new editor, so this is only the content after
+    /// the last break. Use page_documents() for export/print.
     QTextEdit* text_edit() const { return pages_.isEmpty() ? nullptr : pages_.last(); }
+
+    /// The documents of every page, in order — what PDF export and print preview
+    /// must paint to cover the whole report.
+    QVector<QTextDocument*> page_documents() const;
 
   signals:
     void image_dropped(const QString& file_path);

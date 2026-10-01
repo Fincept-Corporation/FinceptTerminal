@@ -132,11 +132,45 @@ class BerkusMethod:
             }
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `berkus_method.py calculate <flat-params-json>` (argv length 3), with the five
+# factor scores as a list. The native form is `berkus <factor_scores_json>` keyed by factor name, so a service-style
+# call is translated here and then falls through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+_SVC_FACTORS = ("sound_idea", "prototype", "quality_team", "strategic_relationships", "product_rollout")
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    scores = p.get("scores")
+    if isinstance(scores, list):
+        # Panel order: sound idea, prototype, quality team, strategic relationships, product rollout.
+        mapped = {name: float(v) for name, v in zip(_SVC_FACTORS, scores)
+                  if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    elif isinstance(scores, dict):
+        mapped = dict(scores)
+    else:
+        mapped = {k: v for k, v in p.items() if k in _SVC_FACTORS or k == "max_value_per_factor"}
+    if "max_value_per_factor" in p and "max_value_per_factor" not in mapped:
+        mapped["max_value_per_factor"] = p["max_value_per_factor"]
+    return [argv[0], "berkus", json.dumps(mapped)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
     import sys
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

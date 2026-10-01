@@ -73,7 +73,6 @@ class DashboardStatusBar : public QWidget {
     QTimer ping_timer_;
     QTimer mem_timer_;
     QNetworkAccessManager* nam_ = nullptr;
-    QElapsedTimer ping_elapsed_;
 
     qint64 start_time_ = 0;
 };

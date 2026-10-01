@@ -32,6 +32,12 @@ class HoldingsBar : public QWidget {
     explicit HoldingsBar(QWidget* parent = nullptr);
     ~HoldingsBar() override;
 
+    /// Re-read which RPC provider is configured and update the chip. The bar
+    /// stays visible across every tab, so a Helius key saved on SETTINGS never
+    /// triggered showEvent and the chip kept saying PUBLIC; CryptoCenterScreen
+    /// calls this whenever the user switches tabs.
+    void refresh_rpc_indicator() { update_rpc_indicator(); }
+
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;

@@ -59,12 +59,20 @@ DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
                                              : std::min(canonical_cols_, 6);
 
         if (target_cols != layout_.cols) {
-            layout_.cols = target_cols;
-            for (auto& item : layout_.items) {
-                item.cell.w = std::min(item.cell.w, layout_.cols);
-                item.cell.x = std::min(item.cell.x, layout_.cols - item.cell.w);
+            // Leaving the canonical column count: the items are still in the
+            // user's own geometry (and may have been edited since the last
+            // snapshot), so capture them before folding.
+            if (layout_.cols == canonical_cols_) {
+                canonical_items_ = layout_.items;
+                canonical_valid_ = true;
             }
-            layout_.items = compact_vertical(layout_.items);
+            layout_.cols = target_cols;
+            // Fold from the layout as designed (when the user has not edited
+            // since), so widening the panel restores it rather than keeping an
+            // earlier narrow fold.
+            if (canonical_valid_)
+                layout_.items = canonical_items_;
+            fit_items_to_cols();
         }
 
         if (!dragging_tile_ && !resizing_tile_)
@@ -80,6 +88,27 @@ DashboardCanvas::~DashboardCanvas() {
 }
 
 // ── Layout management ─────────────────────────────────────────────────────────
+
+void DashboardCanvas::fit_items_to_cols() {
+    for (auto& item : layout_.items) {
+        item.cell.w = std::min(item.cell.w, layout_.cols);
+        item.cell.x = std::max(0, std::min(item.cell.x, layout_.cols - item.cell.w));
+    }
+    layout_.items = compact_vertical(layout_.items);
+}
+
+GridLayout DashboardCanvas::current_layout() const {
+    GridLayout out = layout_;
+    // While the visible grid is only a narrower fold of the user's layout (and
+    // they have not edited since), report/persist the layout as designed —
+    // otherwise merely having the dashboard open in a narrow panel and pressing
+    // SAVE (or changing a tile's settings) would permanently squash it.
+    if (canonical_valid_ && layout_.cols != canonical_cols_) {
+        out.items = canonical_items_;
+        out.cols = canonical_cols_;
+    }
+    return out;
+}
 
 void DashboardCanvas::load_layout(const GridLayout& layout) {
     for (auto* t : tiles_)
@@ -123,6 +152,18 @@ void DashboardCanvas::load_layout(const GridLayout& layout) {
         layout_.items = compact_vertical(kept);
         emit layout_changed(layout_);
     }
+
+    // Remember the layout exactly as designed, then fold it into the grid this
+    // width affords. A layout built for more columns than the panel has (a
+    // 12-column template in a panel under 1000 px, say) used to be left with its
+    // right-most tiles positioned past the canvas edge and clipped: only the
+    // debounced resize path folded items, and it does nothing when the column
+    // count already matches. Keeping the original lets the resize path snap back
+    // to it when the panel widens, instead of staying squashed.
+    canonical_items_ = layout_.items;
+    canonical_valid_ = true;
+    if (layout_.cols < canonical_cols_)
+        fit_items_to_cols();
 
     reflow_tiles();
     update_canvas_height();
@@ -182,6 +223,7 @@ void DashboardCanvas::add_widget(const QString& widget_type_id) {
 
     layout_.items.append(item);
     layout_.items = compact_vertical(layout_.items);
+    canonical_valid_ = false; // layout edited at the current column count
 
     auto* tile = new WidgetTile(item.instance_id, widget, this);
     connect_tile(tile);
@@ -207,6 +249,7 @@ void DashboardCanvas::remove_widget(const QString& instance_id) {
     }
 
     layout_.items = compact_vertical(layout_.items);
+    canonical_valid_ = false; // layout edited at the current column count
     reflow_tiles(true);
     update_canvas_height();
     emit widget_count_changed(tiles_.size());
@@ -303,6 +346,7 @@ void DashboardCanvas::on_drag_released(WidgetTile* tile, QPoint /*canvas_pos*/) 
         }
     }
     layout_.items = compact_vertical(layout_.items);
+    canonical_valid_ = false; // layout edited at the current column count
 
     dragging_tile_ = nullptr;
     tile->set_dragging(false);
@@ -413,6 +457,7 @@ void DashboardCanvas::on_resize_released(WidgetTile* tile) {
     moving.cell = ghost_cell_;
     layout_.items = resolve_collisions(layout_.items, moving);
     layout_.items = compact_vertical(layout_.items);
+    canonical_valid_ = false; // layout edited at the current column count
 
     resizing_tile_ = nullptr;
     tile->set_resizing(false);
@@ -594,6 +639,14 @@ void DashboardCanvas::connect_tile(WidgetTile* tile) {
         connect(content, &widgets::BaseWidget::config_changed, this, [this, instance_id](const QJsonObject& cfg) {
             if (auto* item = item_for_id(instance_id)) {
                 item->config = cfg;
+                // Geometry is untouched, so the as-designed snapshot stays valid
+                // - just keep its copy of the config in step.
+                for (auto& ci : canonical_items_) {
+                    if (ci.instance_id == instance_id) {
+                        ci.config = cfg;
+                        break;
+                    }
+                }
                 emit layout_changed(layout_);
             }
         });

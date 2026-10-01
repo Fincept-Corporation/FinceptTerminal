@@ -7,6 +7,7 @@
 #include "core/logging/Logger.h"
 #include "storage/cache/CacheManager.h"
 
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QNetworkAccessManager>
@@ -21,6 +22,10 @@ namespace fincept::services {
 
 static constexpr const char* kQuantLibClientTag = "QuantLibClient";
 
+// A hung connection otherwise leaves the screen's EXECUTE button on
+// "COMPUTING..." forever (Qt has no default transfer timeout).
+static constexpr int kQuantLibTransferTimeoutMs = 60 * 1000;
+
 // Endpoints that use GET (no request body).
 static const QStringList GET_ENDPOINTS = {
     "core/types/currencies",           "core/types/frequencies",        "scheduling/calendar/list",
@@ -30,6 +35,11 @@ static const QStringList GET_ENDPOINTS = {
 // Endpoints that take body fields as URL query params (POST with empty body).
 static const QStringList QUERY_PARAM_ENDPOINTS = {
     "core/types/spread/from-bps",
+    // Declared in the OpenAPI spec as `parameters: in: query` with no request body — a JSON body is
+    // ignored by the server and every call 422'd on the missing `pd` / `pre_money`.
+    "analysis/valuation/credit/expected-loss",
+    "analysis/valuation/credit/rating-pd",
+    "analysis/valuation/startup/dilution",
 };
 
 bool QuantLibClient::is_get_endpoint(const QString& endpoint) {
@@ -57,7 +67,8 @@ static QNetworkRequest build_request(const QString& endpoint, const QJsonObject&
     if (!query_params.isEmpty()) {
         QStringList parts;
         for (auto it = query_params.begin(); it != query_params.end(); ++it)
-            parts << (it.key() + "=" + it.value().toVariant().toString());
+            parts << (QString::fromLatin1(QUrl::toPercentEncoding(it.key())) + "=" +
+                      QString::fromLatin1(QUrl::toPercentEncoding(it.value().toVariant().toString())));
         url += "?" + parts.join("&");
     }
 
@@ -65,12 +76,46 @@ static QNetworkRequest build_request(const QString& endpoint, const QJsonObject&
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader("Accept", "application/json");
     req.setRawHeader("User-Agent", "FinceptTerminal/4.0.0");
+    req.setTransferTimeout(kQuantLibTransferTimeoutMs);
 
     auto& auth_mgr = auth::AuthManager::instance();
     if (auth_mgr.is_authenticated())
         req.setRawHeader("X-API-Key", auth_mgr.session().api_key.toUtf8());
 
     return req;
+}
+
+// ── HTTP error text ──────────────────────────────────────────────────────────
+
+// Qt reports every 4xx/5xx as a transport error, so parse_response() (and its
+// 422 handling) never saw the body and users got "Error transferring ...:
+// server replied: Unprocessable Entity" instead of the FastAPI message naming
+// the offending field. Prefer the server's own explanation, fall back to Qt's.
+static QString quantlib_http_error_text(const QByteArray& raw, const QString& transport_error) {
+    const QJsonDocument doc = QJsonDocument::fromJson(raw);
+    if (!doc.isObject())
+        return transport_error;
+    const QJsonObject obj = doc.object();
+
+    const QJsonValue detail = obj.value("detail");
+    if (detail.isArray()) {
+        QStringList lines;
+        for (const auto& item : detail.toArray()) {
+            const QJsonObject d = item.toObject();
+            const QJsonArray loc = d.value("loc").toArray();
+            const QString field = loc.isEmpty() ? QString() : loc.last().toVariant().toString();
+            const QString msg = d.value("msg").toString();
+            if (!msg.isEmpty())
+                lines << (field.isEmpty() ? msg : field + ": " + msg);
+        }
+        if (!lines.isEmpty())
+            return "Validation error: " + lines.join('\n');
+    } else if (detail.isString() && !detail.toString().isEmpty()) {
+        return detail.toString();
+    }
+
+    const QString message = obj.value("message").toString();
+    return message.isEmpty() ? transport_error : message;
 }
 
 // ── Response parser ──────────────────────────────────────────────────────────
@@ -164,8 +209,9 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
             if (!self)
                 return;
             if (reply->error() != QNetworkReply::NoError) {
-                LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + reply->errorString());
-                callback(mcp::ToolResult::fail(reply->errorString()));
+                const QString err = quantlib_http_error_text(reply->readAll(), reply->errorString());
+                LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + err);
+                callback(mcp::ToolResult::fail(err));
                 return;
             }
             int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -204,8 +250,9 @@ void QuantLibClient::call(const QString& endpoint, const QJsonObject& body, Quan
             return;
 
         if (reply->error() != QNetworkReply::NoError) {
-            LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + reply->errorString());
-            callback(mcp::ToolResult::fail(reply->errorString()));
+            const QString err = quantlib_http_error_text(reply->readAll(), reply->errorString());
+            LOG_ERROR(kQuantLibClientTag, "Network error on " + endpoint + ": " + err);
+            callback(mcp::ToolResult::fail(err));
             return;
         }
 

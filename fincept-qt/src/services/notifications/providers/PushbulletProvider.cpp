@@ -22,9 +22,11 @@ void PushbulletProvider::send(const NotificationRequest& req, std::function<void
         return;
     }
 
-    // Pushbullet requires the API key as the username in basic auth.
-    // We embed it in the URL since HttpClient doesn't have per-request auth.
-    const QString url = QString("https://%1:@api.pushbullet.com/v2/pushes").arg(api_key_);
+    // Pushbullet takes the API key in the "Access-Token" header. It used to be
+    // embedded in the URL as basic-auth userinfo, which is a credential in a URL.
+    const QString url = QStringLiteral("https://api.pushbullet.com/v2/pushes");
+    HttpClient::Headers headers;
+    headers.insert("Access-Token", api_key_.toUtf8());
 
     QJsonObject body;
     body["type"] = "note";
@@ -33,15 +35,18 @@ void PushbulletProvider::send(const NotificationRequest& req, std::function<void
     if (!channel_tag_.isEmpty())
         body["channel_tag"] = channel_tag_;
 
-    HttpClient::instance().post(url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        const auto obj = res.value().object();
-        const bool ok = !obj.contains("error");
-        cb(ok, ok ? QString{} : obj.value("error").toObject().value("message").toString());
-    });
+    HttpClient::instance().post(
+        url, body,
+        [cb](Result<QJsonDocument> res) {
+            if (res.is_err()) {
+                cb(false, QString::fromStdString(res.error()));
+                return;
+            }
+            const auto obj = res.value().object();
+            const bool ok = !obj.contains("error");
+            cb(ok, ok ? QString{} : obj.value("error").toObject().value("message").toString());
+        },
+        nullptr, headers);
 }
 
 } // namespace fincept::notifications

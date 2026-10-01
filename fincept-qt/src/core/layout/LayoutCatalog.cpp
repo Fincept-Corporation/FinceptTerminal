@@ -10,6 +10,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -145,12 +146,16 @@ Result<LayoutId> LayoutCatalog::save_workspace(const layout::Workspace& w_in) {
 
     // Write the JSON file first; if that fails, we don't want a stale
     // index row pointing at nothing.
+    // QSaveFile writes to a temp file and renames on commit(), so a crash or a
+    // full disk can no longer leave a truncated layout under the real name (the
+    // old Truncate-then-write also ignored a short write and reported success).
     const QString path = file_path_for_(w.id);
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
         return Result<LayoutId>::err(("Failed to open " + path + ": " + f.errorString()).toStdString());
     f.write(QJsonDocument(w.to_json()).toJson(QJsonDocument::Indented));
-    f.close();
+    if (!f.commit())
+        return Result<LayoutId>::err(("Failed to write " + path + ": " + f.errorString()).toStdString());
 
     auto idx = upsert_index_row(w);
     if (idx.is_err()) {
@@ -279,11 +284,12 @@ Result<void> LayoutCatalog::export_to(const LayoutId& id, const QString& path) {
     auto wr = load_workspace(id);
     if (wr.is_err())
         return Result<void>::err(wr.error());
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
         return Result<void>::err(("Export open failed: " + f.errorString()).toStdString());
     f.write(QJsonDocument(wr.value().to_json()).toJson(QJsonDocument::Indented));
-    f.close();
+    if (!f.commit())
+        return Result<void>::err(("Export write failed: " + f.errorString()).toStdString());
     return Result<void>::ok();
 }
 
@@ -339,6 +345,8 @@ Result<LayoutId> LayoutCatalog::import_from(const QString& path) {
     const QJsonDocument doc = QJsonDocument::fromJson(bytes, &err);
     if (err.error != QJsonParseError::NoError)
         return Result<LayoutId>::err(("Parse error: " + err.errorString()).toStdString());
+    if (!doc.isObject())
+        return Result<LayoutId>::err("Import failed: file is not a layout (JSON root is not an object)");
 
     layout::Workspace w = layout::Workspace::from_json(doc.object());
     // Mint a fresh id so two users importing the same shared file don't

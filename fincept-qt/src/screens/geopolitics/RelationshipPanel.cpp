@@ -3,8 +3,12 @@
 
 #include "ui/theme/Theme.h"
 
+#include <QAction>
+#include <QCursor>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QMenu>
+#include <QMouseEvent>
 #include <QScrollArea>
 
 namespace fincept::screens {
@@ -204,6 +208,16 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     card->setObjectName("nodeCard");
     card->setMinimumHeight(110);
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    // Conflict and crisis cards open a "show events / browse HDX" menu on click;
+    // organisations have no drill-down so they stay inert.
+    if (node.type == QLatin1String("conflict") || node.type == QLatin1String("crisis")) {
+        card->setProperty("node_id", node.id);
+        card->setProperty("node_type", node.type);
+        card->setProperty("node_label", node.label);
+        card->setCursor(Qt::PointingHandCursor);
+        card->setToolTip(tr("Click for related events and HDX datasets"));
+        card->installEventFilter(this);
+    }
     card->setStyleSheet(QString("#nodeCard { background:%1; border:1px solid rgba(%2,0.25);"
                                 "border-left:3px solid %3; }")
                             .arg(ui::colors::BG_RAISED())
@@ -307,6 +321,41 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
     }
 
     return card;
+}
+
+bool RelationshipPanel::eventFilter(QObject* obj, QEvent* event) {
+    // Labels inside a card ignore the press, so it propagates up to the card.
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto* card = qobject_cast<QWidget*>(obj);
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (card && me->button() == Qt::LeftButton && !card->property("node_type").toString().isEmpty()) {
+            show_node_menu(card);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
+void RelationshipPanel::show_node_menu(QWidget* card) {
+    const QString type = card->property("node_type").toString();
+    const QString id = card->property("node_id").toString();
+    const QString label = card->property("node_label").toString();
+
+    QMenu menu(this);
+    if (type == QLatin1String("conflict")) {
+        connect(menu.addAction(tr("Show %1 events in Monitor").arg(label)), &QAction::triggered, this,
+                [this, label]() { emit events_requested(label); });
+        connect(menu.addAction(tr("Browse %1 datasets on HDX").arg(label)), &QAction::triggered, this,
+                [this, label]() { emit hdx_country_requested(label); });
+    } else if (type == QLatin1String("crisis")) {
+        // Node ids are snake_case slugs ("food_security"); HDX topics are plain words.
+        QString topic = id;
+        topic.replace(QLatin1Char('_'), QLatin1Char(' '));
+        connect(menu.addAction(tr("Browse HDX datasets: %1").arg(label)), &QAction::triggered, this,
+                [this, topic]() { emit hdx_topic_requested(topic); });
+    }
+    if (!menu.isEmpty())
+        menu.exec(QCursor::pos());
 }
 
 void RelationshipPanel::changeEvent(QEvent* event) {

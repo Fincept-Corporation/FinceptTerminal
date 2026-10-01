@@ -20,6 +20,8 @@
 #include "trading/TradingTypes.h"
 #include "trading/UnifiedTrading.h"
 
+#include <algorithm>
+
 namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "LiveTradingTools";
@@ -768,6 +770,13 @@ std::vector<ToolDef> get_live_trading_tools() {
             }
             if (pairs.isEmpty())
                 return ToolResult::fail("Missing or empty 'symbols'");
+            // One broker call fans out per symbol and every quote is 16 fields; bound it
+            // rather than silently dropping symbols past some point.
+            constexpr qsizetype kMaxMultiQuoteSymbols = 50;
+            if (pairs.size() > kMaxMultiQuoteSymbols)
+                return ToolResult::fail(QString("Too many symbols (%1) — at most %2 per call; split the request")
+                                            .arg(pairs.size())
+                                            .arg(kMaxMultiQuoteSymbols));
 
             auto resp = UnifiedTrading::instance().get_multi_quotes(account_id, pairs);
             if (!resp.success)
@@ -842,9 +851,10 @@ std::vector<ToolDef> get_live_trading_tools() {
                              .required()
                              .string("expiry", "Expiry date (broker format, e.g. 2026-05-29)")
                              .required()
-                             .integer("strike_count", "Number of strikes around ATM (0 = broker default)")
-                             .default_int(0)
-                             .min(0.0)
+                             .integer("strike_count", "Number of strikes around ATM (default 10; 0 = the broker's "
+                                                      "full chain, which can be hundreds of strikes)")
+                             .default_int(10)
+                             .between(0, 200)
                              .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString account_id, err;
@@ -854,7 +864,10 @@ std::vector<ToolDef> get_live_trading_tools() {
             QString underlying = args["underlying"].toString().trimmed();
             QString exchange = args["exchange"].toString().trimmed();
             QString expiry = args["expiry"].toString().trimmed();
-            int strike_count = args["strike_count"].toInt(0);
+            // Default 10, not 0: the full chain carries two 16-field quotes per strike, and the
+            // overflow shaper keeps the FIRST strikes — the lowest, deep-ITM-call end — rather
+            // than the ones around the money.
+            int strike_count = std::clamp(args["strike_count"].toInt(10), 0, 200);
             if (underlying.isEmpty() || exchange.isEmpty() || expiry.isEmpty())
                 return ToolResult::fail("Missing required: underlying, exchange, expiry");
 
@@ -876,8 +889,16 @@ std::vector<ToolDef> get_live_trading_tools() {
                                           {"pe_symbol", e.pe_symbol},
                                           {"pe_quote", quote_to_json(e.pe_quote)}});
             }
-            return ToolResult::ok_data(
-                QJsonObject{{"underlying", underlying}, {"exchange", exchange}, {"expiry", expiry}, {"chain", result}});
+            QJsonObject chain_out{{"underlying", underlying}, {"exchange", exchange},
+                                  {"expiry", expiry},         {"strike_count", strike_count},
+                                  {"strikes_returned", result.size()}, {"chain", result}};
+            if (strike_count > 0)
+                return ToolResult::ok(QStringLiteral("Requested %1 strikes around ATM (got %2). Pass strike_count=0 "
+                                                     "for the broker's full chain.")
+                                          .arg(strike_count)
+                                          .arg(result.size()),
+                                      chain_out);
+            return ToolResult::ok_data(chain_out);
         };
         tools.push_back(std::move(t));
     }

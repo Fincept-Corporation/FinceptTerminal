@@ -78,6 +78,25 @@ class DataStreamManager : public QObject, public fincept::datahub::Producer {
     void clock_fetched(const QString& account_id, const MarketClock& clock);
     void connection_state_changed(const QString& account_id, ConnectionState state);
     void token_expired(const QString& account_id);
+    // restart_stream() replaced the account's AccountDataStream with a new object.
+    // Anything that connected to the old stream's signals must reconnect to
+    // stream_for(account_id); its subscriptions were already carried over.
+    void stream_restarted(const QString& account_id);
+
+    // Symbol-tagged twins of orderbook_fetched / time_sales_fetched /
+    // latest_trade_fetched (additive — the legacy signals above still fire, first).
+    // The legacy ones carry no symbol, so a late response for the previously
+    // selected symbol was shown under the new one; consumers that connect here can
+    // compare `symbol` with their current selection and drop stale payloads.
+    void orderbook_for_symbol(const QString& account_id, const QString& symbol,
+                              const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
+                              double spread, double spread_pct, const QVector<int>& bid_orders,
+                              const QVector<int>& ask_orders);
+    void time_sales_for_symbol(const QString& account_id, const QString& symbol, const QVector<BrokerTrade>& trades);
+    void latest_trade_for_symbol(const QString& account_id, const QString& symbol, const BrokerTrade& trade);
+    // Results of AccountDataStream::fetch_auctions() / fetch_condition_codes().
+    void auctions_fetched(const QString& account_id, const QString& symbol, const QVector<BrokerAuction>& auctions);
+    void condition_codes_fetched(const QString& account_id, const QMap<QString, QString>& codes);
 
   private:
     DataStreamManager();

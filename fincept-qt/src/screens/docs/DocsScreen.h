@@ -10,6 +10,7 @@
 
 class QSplitter;
 class QLineEdit;
+class QPushButton;
 
 namespace fincept::screens {
 
@@ -31,6 +32,11 @@ class DocsScreen : public QWidget {
     void apply_search(const QString& text);
     /// Recompute the "N TOPICS | M CATEGORIES" chip from the actual tree.
     void update_topic_count();
+    /// Show/hide the command-bar "OPEN SCREEN" button for the current topic.
+    void update_open_button();
+    /// Rebuild the keyboard-shortcuts page so it reflects the live key bindings
+    /// (the user may have rebound keys in Settings since the page was built).
+    void refresh_shortcuts_page();
 
     /// Re-apply tr() lookups. Static documentation content (sidebar tree + all
     /// pages) is rebuilt from scratch on QEvent::LanguageChange — caching the
@@ -60,9 +66,13 @@ class DocsScreen : public QWidget {
     QWidget* page_markets();
     QWidget* page_news();
     QWidget* page_watchlist();
+    QWidget* page_screener();
 
     // Trading
     QWidget* page_crypto_trading();
+    QWidget* page_crypto_center();
+    QWidget* page_equity_trading();
+    QWidget* page_fno();
     QWidget* page_paper_trading();
     QWidget* page_algo_trading();
     QWidget* page_backtesting();
@@ -86,12 +96,16 @@ class DocsScreen : public QWidget {
     QWidget* page_economics();
     QWidget* page_akshare();
     QWidget* page_gov_data();
+    QWidget* page_data_sources();
+    QWidget* page_asia_markets();
+    QWidget* page_trade_viz();
 
     // Geopolitics & Alt
     QWidget* page_geopolitics();
     QWidget* page_maritime();
     QWidget* page_polymarket();
     QWidget* page_alt_investments();
+    QWidget* page_relationship_map();
 
     // Tools
     QWidget* page_report_builder();
@@ -101,8 +115,12 @@ class DocsScreen : public QWidget {
     QWidget* page_notes();
     QWidget* page_mcp_servers();
     QWidget* page_data_mapping();
+    QWidget* page_file_manager();
 
     // Community
+    QWidget* page_forum();
+
+    // Account
     QWidget* page_settings();
     QWidget* page_profile();
 
@@ -115,6 +133,8 @@ class DocsScreen : public QWidget {
     QLabel* cmd_title_ = nullptr;
     QLabel* cmd_count_ = nullptr;
     QLineEdit* search_input_ = nullptr;
+    QPushButton* open_btn_ = nullptr; ///< "OPEN SCREEN" — opens the screen the current topic documents
+    QString current_topic_;           ///< section id of the page on top of pages_
     QMap<QString, int> page_index_; // section_id → stacked widget index
 };
 

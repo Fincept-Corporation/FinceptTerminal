@@ -64,7 +64,7 @@ QString type_label_text(int i) {
 }
 
 QString strike_label(const OptionChainRow& row) {
-    QString s = QString::number(row.strike, 'f', row.strike < 100 ? 2 : 0);
+    QString s = fincept::services::options::format_strike(row.strike);
     if (row.is_atm)
         s += "  " + QCoreApplication::translate("MultiStraddleSubTab", "(ATM)");
     return s;
@@ -170,13 +170,9 @@ void MultiStraddleSubTab::setup_ui() {
     split->setStretchFactor(1, 4);
     root->addWidget(split, 1);
 
-    connect(&fincept::services::options::OptionChainService::instance(),
-            &fincept::services::options::OptionChainService::chain_published, this,
-            [this](const fincept::services::options::OptionChain& chain) {
-                on_chain_published(QVariant::fromValue(chain));
-            });
-    chain_subscribed_ = true;
-
+    // No chain_published connection: it fired for every chain assembly for the
+    // widget's lifetime (hidden or not) and double-handled each publish once the
+    // hub subscription below was armed. Live updates come from showEvent().
     const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
     if (!cached.rows.isEmpty())
         on_chain_published(QVariant::fromValue(cached));
@@ -199,6 +195,10 @@ void MultiStraddleSubTab::showEvent(QShowEvent* e) {
         self->on_chain_published(v);
     });
     chain_subscribed_ = true;
+    // Catch up on a snapshot published while this tab was hidden.
+    const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
+    if (!cached.rows.isEmpty() && cached.timestamp_ms != last_chain_.timestamp_ms)
+        on_chain_published(QVariant::fromValue(cached));
 }
 
 void MultiStraddleSubTab::hideEvent(QHideEvent* e) {

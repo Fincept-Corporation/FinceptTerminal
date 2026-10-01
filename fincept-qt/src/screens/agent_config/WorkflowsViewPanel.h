@@ -40,6 +40,7 @@ class WorkflowsViewPanel : public QWidget {
 
     void on_workflow_selected(int row);
     void run_current_workflow();
+    void refresh_portfolios();
 
     // ── Left: catalog ────────────────────────────────────────────────────────
     QLabel* catalog_title_ = nullptr;
@@ -56,6 +57,11 @@ class WorkflowsViewPanel : public QWidget {
     QWidget* symbol_row_ = nullptr;
     QLabel* symbol_label_ = nullptr;
     QLineEdit* symbol_input_ = nullptr;
+
+    // Portfolio picker (portfolio rebalancing / risk assessment)
+    QWidget* portfolio_row_ = nullptr;
+    QLabel* portfolio_label_ = nullptr;
+    QComboBox* portfolio_combo_ = nullptr;
 
     // Custom query input (multi-query / custom)
     QWidget* query_row_ = nullptr;

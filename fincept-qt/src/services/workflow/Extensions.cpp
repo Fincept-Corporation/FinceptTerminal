@@ -358,7 +358,7 @@ QJsonValue call_extension(const QString& method, const QJsonValue& target, const
             return ObjectExt::has_field(obj, arg.toString());
     }
 
-    return {}; // unknown method
+    return QJsonValue(QJsonValue::Undefined); // unknown method for this value type
 }
 
 } // namespace fincept::workflow

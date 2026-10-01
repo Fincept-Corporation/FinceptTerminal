@@ -118,7 +118,7 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     mode_btn_->style()->unpolish(mode_btn_);
     mode_btn_->style()->polish(mode_btn_);
     order_entry_->set_mode(!is_live);
-    bottom_panel_->set_mode(!is_live);
+    sync_native_paper(); // blotter source: broker rows for LIVE + native paper, paper-engine rows otherwise
 
     exchange_label_->setText(selected_exchange_);
     symbol_input_->setText(selected_symbol_);
@@ -174,14 +174,15 @@ void EquityTradingScreen::on_account_changed(const QString& account_id) {
     // set_account_id). For a live account whose stream was already running, force
     // an immediate portfolio refetch so it refills with THIS account's positions/
     // holdings/orders right away instead of staying blank until the 5-min poll.
-    if (has_creds && is_live && stream_existed)
+    if (has_creds && (is_live || focused_native_paper_) && stream_existed)
         dsm.refresh_portfolio(account_id);
 
     // Each account's order book opens on today's session.
     orders_view_day_ = QDate::currentDate();
 
-    // Load paper portfolio orders into matcher
-    if (!account.paper_portfolio_id.isEmpty() && account.trading_mode == "paper") {
+    // Load paper portfolio orders into matcher (local simulator only — a native-paper
+    // account's orders live at the broker)
+    if (!account.paper_portfolio_id.isEmpty() && account.trading_mode == "paper" && !focused_native_paper_) {
         auto pending = pt_get_orders(account.paper_portfolio_id, "pending");
         for (const auto& o : pending) {
             if (o.order_type != "market")
@@ -312,25 +313,35 @@ void EquityTradingScreen::on_mode_toggled() {
     mode_btn_->style()->unpolish(mode_btn_);
     mode_btn_->style()->polish(mode_btn_);
     order_entry_->set_mode(!is_live);
-    bottom_panel_->set_mode(!is_live);
 
     // Update per-account trading mode
     AccountManager::instance().set_trading_mode(focused_account_id_, is_live ? "live" : "paper");
+    sync_native_paper(); // reads the mode just stored; also switches the blotter's data source
 
-    // Re-point hub subscriptions at the new mode: paper drops the live broker
+    // Re-point hub subscriptions at the new mode: local paper drops the live broker
     // positions/holdings/orders/balance topics so live data can't leak in.
     if (isVisible())
         hub_subscribe_streaming();
 
-    if (!is_live) {
+    if (!is_live && !focused_native_paper_) {
         refresh_paper_panels(); // positions/orders/trades/stats/funds from the paper engine
     } else {
-        // Switching to live: set_mode() just cleared the shared blotter and the
-        // stream is already running (so it won't re-fetch on its own). Force an
-        // immediate refresh so live positions/holdings/orders appear now instead
-        // of leaving the blotter blank until the 5-min poll.
+        // Switching to live (or to a native broker paper venue): set_mode() just
+        // cleared the shared blotter and the stream is already running (so it won't
+        // re-fetch on its own). Force an immediate refresh so broker
+        // positions/holdings/orders appear now instead of leaving the blotter blank
+        // until the 5-min poll.
         DataStreamManager::instance().refresh_portfolio(focused_account_id_);
     }
+}
+
+void EquityTradingScreen::sync_native_paper() {
+    const auto account = AccountManager::instance().get_account(focused_account_id_);
+    const bool is_live = (account.trading_mode == "live");
+    focused_native_paper_ = !is_live && UnifiedTrading::instance().uses_native_paper(focused_account_id_);
+    // The blotter renders paper-engine rows only for the LOCAL simulator; LIVE and native
+    // paper both feed it broker rows. (No-op when unchanged, so this is cheap to repeat.)
+    bottom_panel_->set_mode(!is_live && !focused_native_paper_);
 }
 
 void EquityTradingScreen::handle_token_expired(const QString& account_id) {
@@ -383,6 +394,21 @@ void EquityTradingScreen::on_accounts_clicked() {
             update_connection_status();
             return;
         }
+        // New credentials can flip the focused account between the local simulator and a
+        // broker paper venue (e.g. live keys replaced by paper keys): re-derive, re-point
+        // the hub topics and reload the matching data when that happened.
+        if (account_id == focused_account_id_) {
+            const bool was_native = focused_native_paper_;
+            sync_native_paper();
+            if (was_native != focused_native_paper_) {
+                if (isVisible())
+                    hub_subscribe_streaming();
+                if (focused_native_paper_)
+                    DataStreamManager::instance().refresh_portfolio(account_id);
+                else
+                    refresh_paper_panels();
+            }
+        }
         // Start/restart the stream with new credentials
         DataStreamManager::instance().start_stream(account_id);
         auto* stream = DataStreamManager::instance().stream_for(account_id);
@@ -410,7 +436,9 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
 
     auto account = AccountManager::instance().get_account(focused_account_id_);
 
-    if (account.trading_mode == "paper") {
+    // PAPER mode runs on the local simulator below, unless the broker has a verified native
+    // paper venue (focused_native_paper_) — then it takes the broker route like a LIVE order.
+    if (account.trading_mode == "paper" && !focused_native_paper_) {
         const QString portfolio_id = account.paper_portfolio_id;
         if (portfolio_id.isEmpty()) {
             order_entry_->show_order_status(tr("No paper portfolio for this account"), false);
@@ -482,7 +510,8 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         // Refresh paper portfolio (positions/holdings/orders/funds/stats).
         refresh_paper_panels();
     } else {
-        // Route to live broker via account-aware UnifiedTrading
+        // Route to the broker via account-aware UnifiedTrading (LIVE, or PAPER on a native
+        // broker paper venue — UnifiedTrading re-verifies that before sending).
         // Safety: capture account_id by value at click time (immutable per order lifecycle)
         const QString acct_id = focused_account_id_;
 
@@ -508,12 +537,18 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
             auto result = UnifiedTrading::instance().place_order(acct_id, order_copy);
             QMetaObject::invokeMethod(
                 self,
-                [self, result]() {
+                [self, acct_id, result]() {
                     if (!self)
                         return;
                     if (result.success) {
                         LOG_INFO(TAG, QString("Order placed: %1").arg(result.order_id));
                         self->order_entry_->show_order_status(self->tr("Order placed: %1").arg(result.order_id), true);
+                        // A native-paper blotter lives at the broker and otherwise only
+                        // refreshes on the 5-min poll — pull it now (async, stream-owned).
+                        // The response's own mode tag says whether THIS order went to a
+                        // broker paper venue, whatever account is focused by now.
+                        if (result.mode == QLatin1String("paper"))
+                            DataStreamManager::instance().refresh_portfolio(acct_id);
                     } else {
                         LOG_ERROR(TAG, QString("Order failed: %1").arg(result.message));
                         self->order_entry_->show_order_status(result.message, false);
@@ -724,7 +759,7 @@ void EquityTradingScreen::open_chart_order_ticket(bool is_buy, double price) {
 void EquityTradingScreen::on_cancel_order(const QString& order_id) {
     auto account = AccountManager::instance().get_account(focused_account_id_);
 
-    if (account.trading_mode == "paper") {
+    if (account.trading_mode == "paper" && !focused_native_paper_) {
         try {
             pt_cancel_order(order_id);
             OrderMatcher::instance().remove_order(order_id);
@@ -735,11 +770,23 @@ void EquityTradingScreen::on_cancel_order(const QString& order_id) {
         refresh_paper_panels();
     } else {
         const QString acct_id = focused_account_id_;
+        const bool native_paper = focused_native_paper_;
         QPointer<EquityTradingScreen> self = this;
-        (void)QtConcurrent::run([self, acct_id, order_id]() {
+        (void)QtConcurrent::run([self, acct_id, order_id, native_paper]() {
             if (!self)
                 return;
             UnifiedTrading::instance().cancel_order(acct_id, order_id);
+            // A native-paper blotter lives at the broker — pull it now instead of waiting
+            // for the 5-min poll (async, stream-owned).
+            if (native_paper) {
+                QMetaObject::invokeMethod(
+                    self,
+                    [self, acct_id]() {
+                        if (self)
+                            DataStreamManager::instance().refresh_portfolio(acct_id);
+                    },
+                    Qt::QueuedConnection);
+            }
         });
     }
 }
@@ -806,9 +853,19 @@ void EquityTradingScreen::refresh_paper_panels() {
     auto account = AccountManager::instance().get_account(focused_account_id_);
     // Keep the per-tick quote handler's cached context fresh — this also fires on
     // paper order events, where the portfolio id may have just been assigned.
-    focused_is_paper_ = account.trading_mode == "paper";
-    focused_paper_portfolio_id_ = focused_is_paper_ ? account.paper_portfolio_id : QString();
-    if (account.trading_mode != "paper" || account.paper_portfolio_id.isEmpty())
+    const bool local_paper = account.trading_mode == "paper" && !focused_native_paper_;
+    focused_is_paper_ = local_paper;
+    focused_paper_portfolio_id_ = local_paper ? account.paper_portfolio_id : QString();
+    if (account.trading_mode == "paper" && focused_native_paper_) {
+        // Native paper: the data is the broker's, delivered over the hub. Callers land here
+        // after something changed (a close, a cancel, a basket…), so pull a fresh snapshot
+        // now rather than waiting for the 5-min poll — async and stream-owned, never a
+        // blocking REST call on the GUI thread.
+        if (!focused_account_id_.isEmpty())
+            DataStreamManager::instance().refresh_portfolio(focused_account_id_);
+        return;
+    }
+    if (!local_paper || account.paper_portfolio_id.isEmpty())
         return; // live data flows from AccountDataStream via the hub
     // Persist any buffered tick prices first so the positions/funds snapshot below
     // reflects the latest LTP at this refresh/order moment, not a coalesce window ago.
@@ -932,7 +989,7 @@ void EquityTradingScreen::on_convert_position(const QString& position_id, const 
     if (focused_account_id_.isEmpty() || position_id.isEmpty())
         return;
     auto account = AccountManager::instance().get_account(focused_account_id_);
-    if (account.trading_mode != "paper" || account.paper_portfolio_id.isEmpty()) {
+    if (account.trading_mode != "paper" || focused_native_paper_ || account.paper_portfolio_id.isEmpty()) {
         order_entry_->show_order_status(tr("Product conversion is available for paper accounts"), false);
         return;
     }
@@ -956,7 +1013,9 @@ void EquityTradingScreen::on_convert_position(const QString& position_id, const 
 void EquityTradingScreen::on_orders_day_changed(const QDate& day) {
     orders_view_day_ = day;
     auto account = AccountManager::instance().get_account(focused_account_id_);
-    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty())
+    // The day filter belongs to the local paper order book; native-paper orders are the
+    // broker's own list (hub feed), unaffected by it.
+    if (account.trading_mode == "paper" && !focused_native_paper_ && !account.paper_portfolio_id.isEmpty())
         bottom_panel_->set_paper_orders(pt_get_orders_for_day(account.paper_portfolio_id, day));
 }
 
@@ -972,7 +1031,10 @@ void EquityTradingScreen::on_square_off_group(const QString& account_id, int sig
         QString product;
     };
     QVector<Target> targets;
-    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty()) {
+    // Local simulator positions, unless this account's PAPER mode is a broker paper venue
+    // (then the positions are the broker's, cached in live_positions_ like LIVE).
+    const bool native_paper = (account_id == focused_account_id_ && focused_native_paper_);
+    if (account.trading_mode == "paper" && !native_paper && !account.paper_portfolio_id.isEmpty()) {
         for (const auto& p : pt_get_positions(account.paper_portfolio_id)) {
             if (product_is_delivery(p.product))
                 continue; // CNC lives in Holdings — not squared by the positions buttons
@@ -1251,7 +1313,7 @@ void EquityTradingScreen::on_close_all_positions() {
         QString product;
     };
     QVector<Target> targets;
-    if (account.trading_mode == "paper" && !account.paper_portfolio_id.isEmpty()) {
+    if (account.trading_mode == "paper" && !focused_native_paper_ && !account.paper_portfolio_id.isEmpty()) {
         for (const auto& p : pt_get_positions(account.paper_portfolio_id)) {
             if (p.quantity == 0.0 || product_is_delivery(p.product))
                 continue; // CNC/delivery -> Holdings, not squared here

@@ -45,25 +45,20 @@ void CommandBar::show_slash_suggestions(const QString& partial) {
         item->setData(Qt::UserRole + 1, at.slash);
 
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName("cbRow");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 5, 10, 5);
         hl->setSpacing(8);
 
         auto* slash_lbl = new QLabel(at.slash);
-        slash_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;"
-                                         "font-family:'Consolas',monospace;background:transparent;")
-                                     .arg(colors::AMBER.get()));
+        slash_lbl->setObjectName("cbSlash");
         slash_lbl->setFixedWidth(80);
 
         auto* sep_lbl = new QLabel(QStringLiteral("\u203A"));
-        sep_lbl->setStyleSheet(
-            QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+        sep_lbl->setObjectName("cbSep");
 
         auto* desc_lbl = new QLabel(at.description);
-        desc_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
-                                        "font-family:'Consolas',monospace;")
-                                    .arg(colors::TEXT_SECONDARY.get()));
+        desc_lbl->setObjectName("cbDesc");
 
         hl->addWidget(slash_lbl);
         hl->addWidget(sep_lbl);
@@ -102,24 +97,20 @@ void CommandBar::show_dock_verb_suggestions(const QString& primary_id) {
         item->setData(Qt::UserRole + 1, primary_id); // primary screen id
 
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName("cbRow");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 5, 10, 5);
         hl->setSpacing(8);
 
         auto* verb_lbl = new QLabel(v.verb.toUpper());
-        verb_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
-                                        "font-family:'Consolas',monospace;background:transparent;")
-                                    .arg(colors::AMBER.get()));
+        verb_lbl->setObjectName("cbVerb");
         verb_lbl->setFixedWidth(64);
 
         auto* sep = new QLabel(QStringLiteral("\u203A"));
-        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+        sep->setObjectName("cbSep");
 
         auto* hint_lbl = new QLabel(v.hint);
-        hint_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
-                .arg(colors::TEXT_SECONDARY.get()));
+        hint_lbl->setObjectName("cbDesc");
 
         hl->addWidget(verb_lbl);
         hl->addWidget(sep);
@@ -142,12 +133,11 @@ void CommandBar::show_dock_secondary_suggestions(const QString& verb, const QStr
         auto* item = new QListWidgetItem(list_);
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName("cbRow");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 4, 10, 4);
         auto* lbl = new QLabel(QString("%1 — pick a screen:").arg(verb.toUpper()));
-        lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;background:transparent;")
-                               .arg(colors::AMBER.get()));
+        lbl->setObjectName("cbHeader");
         hl->addWidget(lbl);
         item->setSizeHint(QSize(0, 24));
         list_->setItemWidget(item, row);
@@ -160,24 +150,20 @@ void CommandBar::show_dock_secondary_suggestions(const QString& verb, const QStr
         item->setData(Qt::UserRole + 1, cmd.aliases.first());
 
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName("cbRow");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 5, 10, 5);
         hl->setSpacing(6);
 
         auto* alias_lbl = new QLabel(cmd.aliases.first().toUpper());
-        alias_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
-                                         "font-family:'Consolas',monospace;background:transparent;")
-                                     .arg(colors::TEXT_PRIMARY.get()));
+        alias_lbl->setObjectName("cbAlias");
         alias_lbl->setFixedWidth(72);
 
         auto* sep = new QLabel(QStringLiteral("\u203A"));
-        sep->setStyleSheet(QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+        sep->setObjectName("cbSep");
 
         auto* name_lbl = new QLabel(cmd.name);
-        name_lbl->setStyleSheet(
-            QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
-                .arg(colors::TEXT_SECONDARY.get()));
+        name_lbl->setObjectName("cbDesc");
 
         hl->addWidget(alias_lbl);
         hl->addWidget(sep);

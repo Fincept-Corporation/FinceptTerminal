@@ -103,6 +103,7 @@ class QuantStatsView : public QWidget {
     QJsonObject mc_data_; // parsed result from quantstats_monte_carlo.py
     bool qs_running_ = false;
     bool mc_running_ = false;
+    QString qs_signature_; // portfolio + holdings the last automatic run was started for
 };
 
 } // namespace fincept::screens

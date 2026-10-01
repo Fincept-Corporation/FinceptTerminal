@@ -604,6 +604,16 @@ void SetupScreen::on_setup_done(bool success, const QString& error) {
         for (auto it = steps_.keyBegin(); it != steps_.keyEnd(); ++it)
             stop_pulse(*it);
 
+        // The 15-minute watchdog belongs to the attempt that just ended. Left
+        // running it would later overwrite this failure message with the
+        // "taking longer than expected" text, which is wrong for a stopped run.
+        if (timeout_timer_)
+            timeout_timer_->stop();
+        // Don't make the user wait for the 45 s reveal to find the way out when
+        // setup has already failed.
+        if (skip_btn_)
+            skip_btn_->setVisible(true);
+
         begin_btn_->setEnabled(true);
         begin_btn_state_ = BeginBtnState::Retry;
         update_begin_button();
@@ -663,6 +673,11 @@ void SetupScreen::prefill_completed_steps() {
             self,
             [self, status]() {
                 if (!self)
+                    return;
+                // check_status() can take ~15 s; if the user already pressed BEGIN
+                // SETUP in the meantime the live progress events own the UI, and
+                // applying this stale snapshot would reset the button/status.
+                if (self->setup_started_ms_ != 0)
                     return;
 
                 if (status.uv_installed)

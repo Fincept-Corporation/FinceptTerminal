@@ -66,8 +66,11 @@ void agents_internal::register_discovery_tools(std::vector<ToolDef>& tools) {
                                                QJsonObject{{"agents", a_arr}, {"categories", c_arr}}));
                         holder->deleteLater();
                     });
+                // error_occurred carries a category, not a request id — only take our own (discover_agents).
                 QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (err_ctx != QLatin1String("discover_agents"))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -98,8 +101,11 @@ void agents_internal::register_discovery_tools(std::vector<ToolDef>& tools) {
                                                                              {"total_count", info.total_count}}));
                                      holder->deleteLater();
                                  });
+                // error_occurred carries a category, not a request id — only take our own (list_tools).
                 QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (err_ctx != QLatin1String("list_tools"))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -129,8 +135,11 @@ void agents_internal::register_discovery_tools(std::vector<ToolDef>& tools) {
                                          ToolResult::ok_data(QJsonObject{{"providers", provs}, {"count", info.count}}));
                                      holder->deleteLater();
                                  });
+                // error_occurred carries a category, not a request id — only take our own (list_models).
                 QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (err_ctx != QLatin1String("list_models"))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -162,8 +171,11 @@ void agents_internal::register_discovery_tools(std::vector<ToolDef>& tools) {
                                                                              {"features", feats}}));
                                      holder->deleteLater();
                                  });
+                // error_occurred carries a category, not a request id — only take our own (system_info).
                 QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (err_ctx != QLatin1String("system_info"))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });

@@ -151,10 +151,9 @@ OrderPlaceResponse TradierBroker::place_order(const BrokerCredentials& creds, co
         form.addQueryItem("price", QString::number(order.price, 'f', 2));
     if (order.stop_price > 0)
         form.addQueryItem("stop", QString::number(order.stop_price, 'f', 2));
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
-    form.addQueryItem("tag", make_client_order_ref(20));
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+    form.addQueryItem("tag", client_order_ref_for(order, 20));
 
     QMap<QString, QString> hdrs = auth_headers(creds);
     hdrs["Content-Type"] = "application/x-www-form-urlencoded";

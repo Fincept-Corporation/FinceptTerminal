@@ -20,6 +20,10 @@ void apply_template_to_service(ReportBuilderService* svc, const QString& name) {
 
     rep::ReportDocument doc;
     doc.metadata.date = QDateTime::currentDateTime().toString("yyyy-MM-dd");
+    // The theme is a look the user picked, not template content: a fresh ReportDocument
+    // carries Light Professional, so applying any template used to silently reset a
+    // Dark Corporate / Midnight Blue report back to white.
+    doc.theme = svc->theme();
 
     auto add = [&](const QString& type, const QString& content = {}, const QMap<QString, QString>& cfg = {}) {
         rep::ReportComponent c;

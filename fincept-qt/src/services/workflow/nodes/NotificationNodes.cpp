@@ -1,6 +1,7 @@
 #include "services/workflow/nodes/NotificationNodes.h"
 
 #include "services/notifications/NotificationService.h"
+#include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
 
 namespace fincept::workflow {
@@ -11,12 +12,33 @@ static auto make_execute(const QString& provider_id) {
                          std::function<void(bool, QJsonValue, QString)> cb) {
         using namespace fincept::notifications;
 
+        const QJsonValue pass_through = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+
+        QString message = params.value("message").toString();
+        if (message.trimmed().isEmpty() && !pass_through.isNull() && !pass_through.isUndefined()) {
+            // No message configured: forward what the upstream node produced (an agent's
+            // "response", a "message"/"text"/"summary" field, or the data itself as JSON).
+            if (pass_through.isObject()) {
+                const QJsonObject o = pass_through.toObject();
+                for (const char* key : {"message", "response", "text", "summary"}) {
+                    if (o.value(key).isString() && !o.value(key).toString().trimmed().isEmpty()) {
+                        message = o.value(key).toString();
+                        break;
+                    }
+                }
+            }
+            if (message.trimmed().isEmpty())
+                message = ExpressionEngine::value_to_string(pass_through);
+        }
+        if (message.trimmed().isEmpty()) {
+            cb(false, {}, "Notification message is empty — set Message or connect a node that produces text");
+            return;
+        }
+
         NotificationRequest req;
         req.title = params.value("title").toString("Workflow Alert");
-        req.message = params.value("message").toString();
+        req.message = message;
         req.trigger = NotifTrigger::WorkflowNode;
-
-        const QJsonValue pass_through = inputs.isEmpty() ? QJsonValue{} : inputs[0];
 
         NotificationService::instance().send_to(
             provider_id, req, [cb, pass_through](bool ok, const QString& err) { cb(ok, pass_through, err); });

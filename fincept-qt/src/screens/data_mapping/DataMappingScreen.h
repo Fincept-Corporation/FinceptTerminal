@@ -45,6 +45,7 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
     void on_test_mapping();
     void on_save_mapping();
     void on_run_mapping();
+    void on_edit_mapping();
     void on_template_selected(int index);
     void on_new_mapping();
     void on_delete_mapping();
@@ -83,7 +84,21 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
     void populate_mapping_list();
     void refresh_saved_mappings();
     void load_mappings_from_db();
-    void build_mapping_config(QJsonObject& config);
+    /// The non-empty rows of the field-mapping table as
+    /// [{target, expression, transform, default_val}] — the shape
+    /// DataNormalizationService reads (and the one persisted).
+    QJsonArray collect_field_mappings() const;
+    /// Snapshot of every wizard field as a DataMapping (id = the mapping being
+    /// edited, or empty for a new one).
+    DataMapping build_mapping_from_form() const;
+    /// Back to a blank wizard: fields, mapping table, sample data, test state,
+    /// and the "editing" marker.
+    void reset_wizard_state();
+    /// Fill the wizard from a saved mapping so it can be changed and re-saved.
+    void load_mapping_into_wizard(const DataMapping& dm);
+    /// Put the JSONPath of a sample-response tree node into the Expression cell of
+    /// the selected (else first empty) field-mapping row.
+    void use_tree_item_as_expression(QTreeWidgetItem* item);
 
   protected:
     void showEvent(QShowEvent* e) override;
@@ -101,6 +116,13 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
 
     // Saved mappings (persisted via DataMappingRepository)
     QVector<DataMapping> saved_mappings_;
+    /// Id of the saved mapping loaded into the wizard (SAVE overwrites it);
+    /// empty when composing a new mapping. editing_source_id_ carries its
+    /// data-source link through the edit unchanged.
+    QString editing_mapping_id_;
+    QString editing_source_id_;
+    /// A RUN is in flight (double-click on the list bypasses the disabled button).
+    bool run_in_flight_ = false;
 
     // View & step buttons
     QList<QPushButton*> view_btns_;
@@ -205,6 +227,7 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
     QLabel* test_save_panel_title_ = nullptr;
     QLabel* list_title_ = nullptr;
     QPushButton* list_run_btn_ = nullptr;
+    QPushButton* list_edit_btn_ = nullptr;
     QPushButton* list_del_btn_ = nullptr;
     QPushButton* list_new_btn_ = nullptr;
     QLabel* list_empty_ = nullptr;

@@ -139,11 +139,42 @@ std::vector<ToolDef> get_gov_data_tools() {
                              .array("args", "Positional string arguments", QJsonObject{{"type", "string"}})
                              .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString script = args["script"].toString();
+            const QString script = args["script"].toString().trimmed();
             const QString command = args["command"].toString();
+
+            // "Generic dispatcher on the gov-data backend" — but `script` went to
+            // PythonRunner verbatim, so this ran ANY .py under scripts/ (and a `..` path
+            // segment is not stopped by the length check). Restrict it to the provider
+            // scripts GovDataService actually registers, which is what the description
+            // says it is for (list_gov_data_providers shows them).
+            bool known_script = false;
+            for (const auto& p : services::GovDataService::providers()) {
+                if (p.script == script) {
+                    known_script = true;
+                    break;
+                }
+            }
+            if (!known_script) {
+                AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [script](auto resolve) {
+                    resolve(ToolResult::fail("Unknown gov-data script '" + script +
+                                             "' — use one of the `script` values from list_gov_data_providers"));
+                });
+                return;
+            }
+
             QStringList sargs;
-            for (const auto& v : args["args"].toArray())
-                sargs.append(v.toString());
+            for (const auto& v : args["args"].toArray()) {
+                // Positional args are strings, but models send numbers (limit=50, congress=118);
+                // v.toString() turned those into "" and shifted every later argument.
+                if (v.isString())
+                    sargs.append(v.toString());
+                else if (v.isDouble())
+                    sargs.append(QString::number(v.toDouble(), 'g', 15));
+                else if (v.isBool())
+                    sargs.append(v.toBool() ? QStringLiteral("true") : QStringLiteral("false"));
+                else
+                    sargs.append(QString());
+            }
             dispatch_gov_async(script, command, sargs, std::move(ctx), promise);
         };
         tools.push_back(std::move(t));

@@ -81,6 +81,10 @@ class KalshiAdapter : public fincept::services::prediction::PredictionExchangeAd
     /// Lookup a cached series fee config without refetching. Returns an
     /// empty object if we haven't fetched this series yet.
     QJsonObject cached_series(const QString& series_ticker) const;
+    /// GET /events?status=<status> (e.g. "settled" / "closed"). list_events() is hard-wired
+    /// to status=open, so the SETTLED view had no way to show settled events. Results arrive
+    /// on events_ready.
+    void list_events_by_status(const QString& status, const QString& category, int limit);
     /// GET /historical/markets / candlesticks / trades.
     void fetch_historical_markets(const QString& series_ticker = QString(), int limit = 100,
                                   const QString& cursor = QString());

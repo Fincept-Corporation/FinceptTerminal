@@ -30,6 +30,29 @@ static QString HDR_SS() {
     return QString("background:%1;border-bottom:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM());
 }
 
+// Replace a table's contents with one full-width message row. Used for "loading",
+// "failed" and "nothing to show": the Usage / Security / Billing tables used to sit
+// completely blank in all three cases, so a failed fetch looked like an empty account.
+static void profile_table_message(QTableWidget* table, const QString& text) {
+    if (!table)
+        return;
+    table->clearSpans();
+    table->setRowCount(0); // drop old rows' items first so none hide under the span
+    table->setRowCount(1);
+    auto* item = new QTableWidgetItem(text);
+    item->setFlags(Qt::ItemIsEnabled);
+    item->setTextAlignment(Qt::AlignCenter);
+    table->setItem(0, 0, item);
+    table->setSpan(0, 0, 1, table->columnCount());
+}
+
+// Same, but only while the table has nothing yet — a refetch must keep showing the
+// previous rows until the new ones arrive (P11).
+static void profile_table_loading(QTableWidget* table, const QString& text) {
+    if (table && table->rowCount() == 0)
+        profile_table_message(table, text);
+}
+
 QWidget* ProfileScreen::make_panel(const QString& title) {
     auto* w = new QWidget(this);
     w->setStyleSheet(PANEL_SS());
@@ -74,7 +97,7 @@ QWidget* ProfileScreen::make_stat_box(const QString& label, QLabel*& value_out, 
     auto* vl = new QVBoxLayout(w);
     vl->setContentsMargins(12, 14, 12, 14);
     vl->setAlignment(Qt::AlignCenter);
-    value_out = new QLabel("0");
+    value_out = new QLabel("\xe2\x80\x94");
     value_out->setAlignment(Qt::AlignCenter);
     value_out->setStyleSheet(
         QString("color:%1;font-size:28px;font-weight:700;background:transparent;%2").arg(color, MF));
@@ -183,8 +206,14 @@ void ProfileScreen::build_header(QVBoxLayout* root) {
                 "font-size:11px;font-weight:700;font-family:'Consolas',monospace;}QPushButton:hover{color:%4;}")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
                  ui::colors::TEXT_PRIMARY()));
-    connect(header_refresh_btn_, &QPushButton::clicked, this,
-            []() { auth::AuthManager::instance().refresh_user_data(); });
+    connect(header_refresh_btn_, &QPushButton::clicked, this, [this]() {
+        auth::AuthManager::instance().refresh_user_data();
+        // Usage / Security / Billing data is fetched only when its tab is opened, so
+        // REFRESH has to re-run the fetch for whichever tab is showing — it used to
+        // refresh just the account header and leave those tables stale.
+        if (sections_)
+            on_section_changed(sections_->currentIndex());
+    });
     hl->addWidget(header_refresh_btn_);
     root->addWidget(bar);
 }
@@ -256,6 +285,8 @@ QWidget* ProfileScreen::build_overview() {
     avl->addWidget(make_data_row(tr("COUNTRY"), ov_country_));
     avl->addWidget(make_data_row(tr("EMAIL VERIFIED"), ov_verified_));
     avl->addWidget(make_data_row(tr("2FA ENABLED"), ov_mfa_));
+    avl->addWidget(make_data_row(tr("MEMBER SINCE"), ov_member_since_));
+    avl->addWidget(make_data_row(tr("LAST LOGIN"), ov_last_login_));
     auto* eb = new QPushButton(tr("EDIT PROFILE"));
     eb->setFixedHeight(26);
     eb->setCursor(Qt::PointingHandCursor);
@@ -287,6 +318,7 @@ QWidget* ProfileScreen::build_overview() {
     sp->setStyleSheet(QString("background:%1;").arg(ui::colors::BORDER_DIM()));
     cvl2->addWidget(sp);
     cvl2->addWidget(make_data_row(tr("PLAN"), ov_plan_));
+    cvl2->addWidget(make_data_row(tr("CREDITS EXPIRE"), ov_credits_expire_));
     grid->addWidget(cred, 0, 1);
 
     auto* actions = make_panel(tr("QUICK ACTIONS"));
@@ -621,6 +653,18 @@ void ProfileScreen::refresh_all() {
     ov_mfa_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:700;background:transparent;%2")
                                .arg(s.user_info.mfa_enabled ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())
                                .arg(MF));
+    // Timestamps arrive as ISO-8601 ("2026-05-01T12:34:56Z"); these fields were
+    // parsed into the session but never shown anywhere.
+    auto fmt_stamp = [](const QString& iso, int chars) {
+        if (iso.isEmpty())
+            return QString::fromUtf8("\xe2\x80\x94");
+        QString v = iso.left(chars);
+        v.replace('T', ' ');
+        return v;
+    };
+    ov_member_since_->setText(fmt_stamp(s.user_info.created_at, 10));
+    ov_last_login_->setText(fmt_stamp(s.user_info.last_login_at, 16));
+    ov_credits_expire_->setText(fmt_stamp(s.user_info.credits_expire_at, 10));
     ov_credits_big_->setText(QString::number(static_cast<int>(s.user_info.credit_balance)));
     ov_plan_->setText(s.account_type().toUpper());
     ov_plan_->setStyleSheet(
@@ -648,12 +692,18 @@ void ProfileScreen::fetch_usage_data() {
     const int rl_limit = s.user_info.rate_limit.limit;
     usg_rate_->setText(rl_limit > 0 ? QString::number(rl_limit) : QStringLiteral("—"));
 
+    profile_table_loading(usg_daily_table_, tr("Loading..."));
+    profile_table_loading(usg_endpoint_table_, tr("Loading..."));
+
     QPointer<ProfileScreen> self = this;
     auth::UserApi::instance().get_user_usage(30, [self](auth::ApiResponse r) {
         if (!self)
             return;
         if (!r.success) {
             LOG_WARN("Profile", "Usage fetch failed: " + r.error);
+            const QString msg = tr("Could not load usage data — press REFRESH to retry.");
+            profile_table_message(self->usg_daily_table_, msg);
+            profile_table_message(self->usg_endpoint_table_, msg);
             return;
         }
         auto payload = r.data.contains("data") ? r.data["data"].toObject() : r.data;
@@ -670,8 +720,11 @@ void ProfileScreen::fetch_usage_data() {
             self->usg_avg_cred_->setText(QString::number(s["avg_credits_per_request"].toDouble(), 'f', 2));
             self->usg_avg_resp_->setText(QString::number(s["avg_response_time_ms"].toDouble(), 'f', 0));
         }
-        if (payload.contains("daily_usage")) {
+        {
+            // A payload without the key means "no rows", not "keep whatever was
+            // there" — otherwise the Loading... placeholder never goes away.
             auto d = payload["daily_usage"].toArray();
+            self->usg_daily_table_->clearSpans();
             self->usg_daily_table_->setRowCount(0);
             for (int i = d.size() - 1; i >= 0 && i >= d.size() - 10; i--) {
                 auto e = d[i].toObject();
@@ -683,9 +736,12 @@ void ProfileScreen::fetch_usage_data() {
                 self->usg_daily_table_->setItem(
                     row, 2, new QTableWidgetItem(QString::number(e["credits_used"].toDouble(), 'f', 0)));
             }
+            if (self->usg_daily_table_->rowCount() == 0)
+                profile_table_message(self->usg_daily_table_, tr("No usage recorded in the last 30 days."));
         }
-        if (payload.contains("endpoint_breakdown")) {
+        {
             auto eps = payload["endpoint_breakdown"].toArray();
+            self->usg_endpoint_table_->clearSpans();
             self->usg_endpoint_table_->setRowCount(0);
             for (const auto& v : eps) {
                 auto e = v.toObject();
@@ -699,12 +755,15 @@ void ProfileScreen::fetch_usage_data() {
                 self->usg_endpoint_table_->setItem(
                     row, 3, new QTableWidgetItem(QString::number(e["avg_response_time_ms"].toDouble(), 'f', 0)));
             }
+            if (self->usg_endpoint_table_->rowCount() == 0)
+                profile_table_message(self->usg_endpoint_table_, tr("No endpoint activity recorded."));
         }
     });
 }
 
 void ProfileScreen::fetch_billing_data() {
     LOG_INFO("Profile", "Fetching billing data...");
+    profile_table_loading(bill_history_, tr("Loading..."));
     QPointer<ProfileScreen> self = this;
     auth::UserApi::instance().get_user_subscription([self](auth::ApiResponse r) {
         if (!self)
@@ -723,6 +782,7 @@ void ProfileScreen::fetch_billing_data() {
             return;
         if (!r.success) {
             LOG_WARN("Profile", "Payment history failed: " + r.error);
+            profile_table_message(self->bill_history_, tr("Could not load payment history — press REFRESH to retry."));
             return;
         }
         auto d = r.data.contains("data") ? r.data["data"].toObject() : r.data;
@@ -731,6 +791,7 @@ void ProfileScreen::fetch_billing_data() {
             p = d["transactions"].toArray();
         if (p.isEmpty() && d.contains("data"))
             p = d["data"].toArray();
+        self->bill_history_->clearSpans();
         self->bill_history_->setRowCount(0);
         for (const auto& v : p) {
             auto e = v.toObject();
@@ -738,27 +799,36 @@ void ProfileScreen::fetch_billing_data() {
             self->bill_history_->insertRow(row);
             self->bill_history_->setItem(row, 0, new QTableWidgetItem(e["created_at"].toString().left(10)));
             self->bill_history_->setItem(row, 1, new QTableWidgetItem(e["plan_name"].toString()));
-            self->bill_history_->setItem(row, 2, new QTableWidgetItem(cur::money(e["amount_usd"].toDouble())));
+            // The field is amount_USD: it was charged in dollars, so pin the symbol
+            // instead of showing it in whatever display currency is selected (a
+            // $49 payment read "EUR 49.00" for a euro user — no conversion happens).
+            self->bill_history_->setItem(
+                row, 2, new QTableWidgetItem(cur::money(e["amount_usd"].toDouble(), false, QStringLiteral("USD"))));
             self->bill_history_->setItem(row, 3, new QTableWidgetItem(QString::number(e["credits_purchased"].toInt())));
             self->bill_history_->setItem(row, 4, new QTableWidgetItem(e["status"].toString().toUpper()));
         }
+        if (self->bill_history_->rowCount() == 0)
+            profile_table_message(self->bill_history_, tr("No payments yet."));
     });
 }
 
 void ProfileScreen::fetch_login_history() {
     LOG_INFO("Profile", "Fetching login history...");
+    profile_table_loading(sec_login_hist_, tr("Loading..."));
     QPointer<ProfileScreen> self = this;
     auth::UserApi::instance().get_login_history(20, 0, [self](auth::ApiResponse r) {
         if (!self)
             return;
         if (!r.success) {
             LOG_WARN("Profile", "Login history failed: " + r.error);
+            profile_table_message(self->sec_login_hist_, tr("Could not load login history — press REFRESH to retry."));
             return;
         }
         auto d = r.data.contains("data") ? r.data["data"].toObject() : r.data;
         auto h = d["login_history"].toArray();
         if (h.isEmpty())
             h = d["history"].toArray();
+        self->sec_login_hist_->clearSpans();
         self->sec_login_hist_->setRowCount(0);
         for (const auto& v : h) {
             auto e = v.toObject();
@@ -768,6 +838,8 @@ void ProfileScreen::fetch_login_history() {
             self->sec_login_hist_->setItem(row, 1, new QTableWidgetItem(e["ip_address"].toString()));
             self->sec_login_hist_->setItem(row, 2, new QTableWidgetItem(e["status"].toString().toUpper()));
         }
+        if (self->sec_login_hist_->rowCount() == 0)
+            profile_table_message(self->sec_login_hist_, tr("No login history recorded."));
     });
 }
 

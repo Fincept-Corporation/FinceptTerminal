@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QMimeDatabase>
+#include <QSaveFile>
 #include <QUuid>
 
 namespace fincept::services {
@@ -86,11 +87,17 @@ void FileManagerService::write_metadata(const QJsonArray& files) const {
     QDir().mkpath(storage_dir());
     QJsonObject root;
     root["files"] = files;
-    QFile file(metadata_path());
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
-        file.close();
+    // QSaveFile writes to a temp file and renames on commit(): a crash or full disk
+    // mid-write can no longer truncate metadata.json and orphan every managed file
+    // (the index is the only record of what is in storage).
+    QSaveFile file(metadata_path());
+    if (!file.open(QIODevice::WriteOnly)) {
+        LOG_ERROR(kFileManagerTag, "Cannot write metadata index: " + file.errorString());
+        return;
     }
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    if (!file.commit())
+        LOG_ERROR(kFileManagerTag, "Failed to commit metadata index: " + file.errorString());
 }
 
 // ── Serialisation helpers ─────────────────────────────────────────────────────
@@ -158,9 +165,40 @@ QJsonArray FileManagerService::files_by_mime(const QString& mime_fragment) const
 
 QString FileManagerService::import_file(const QString& source_path, const QString& source_screen) {
     QFileInfo info(source_path);
-    if (!info.exists()) {
-        LOG_WARN(kFileManagerTag, "import_file: source does not exist: " + source_path);
+    if (!info.isFile()) {
+        // exists() is also true for directories, which QFile::copy cannot import.
+        LOG_WARN(kFileManagerTag, "import_file: source is not a file: " + source_path);
         return {};
+    }
+
+    // A file that already lives in managed storage (e.g. a library notebook or an
+    // export a screen wrote straight into storage_dir()) must not be copied onto
+    // itself under a new id: every Ctrl+S in Code Editor / Excel used to add yet
+    // another duplicate entry. Refresh the existing record instead.
+#ifdef Q_OS_WIN
+    constexpr Qt::CaseSensitivity kStoragePathCase = Qt::CaseInsensitive;
+#else
+    constexpr Qt::CaseSensitivity kStoragePathCase = Qt::CaseSensitive;
+#endif
+    const QString storage_root = QDir::cleanPath(QDir(storage_dir()).absolutePath()) + '/';
+    const QString source_abs = QDir::cleanPath(info.absoluteFilePath());
+    if (source_abs.startsWith(storage_root, kStoragePathCase)) {
+        const QString stored = info.fileName();
+        if (is_safe_basename(stored) && source_abs.mid(storage_root.size()) == stored) {
+            for (int i = 0; i < files_cache_.size(); ++i) {
+                QJsonObject obj = files_cache_[i].toObject();
+                if (obj["name"].toString() != stored)
+                    continue;
+                obj["size"] = info.size();
+                files_cache_[i] = obj;
+                write_metadata(files_cache_);
+                emit files_changed();
+                return obj["id"].toString();
+            }
+            // On disk but unindexed — register it where it is.
+            return register_file(stored, stored, info.size(), QMimeDatabase().mimeTypeForFile(source_abs).name(),
+                                 source_screen);
+        }
     }
 
     QString id =
@@ -229,9 +267,16 @@ bool FileManagerService::remove_file(const QString& id) {
         if (obj["id"].toString() != id)
             continue;
 
-        // Remove physical file
-        QString stored = obj["name"].toString();
-        QFile::remove(full_path(stored));
+        // Remove physical file. If it is still there afterwards (locked by another
+        // program — common on Windows) keep the index entry and report failure so
+        // the screen's "may be open in another program" warning is reachable; the
+        // old code dropped the record and orphaned the file forever.
+        const QString stored = obj["name"].toString();
+        const QString on_disk = full_path(stored);
+        if (!on_disk.isEmpty() && QFile::exists(on_disk) && !QFile::remove(on_disk)) {
+            LOG_WARN(kFileManagerTag, "remove_file: could not delete " + on_disk);
+            return false;
+        }
 
         files_cache_.removeAt(i);
         write_metadata(files_cache_);

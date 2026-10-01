@@ -41,10 +41,25 @@ def compute_stats(symbols, weights, period="1y"):
         if not isinstance(close, pd.DataFrame):
             close = pd.DataFrame({symbols[0]: close})
 
+    # A symbol yfinance could not price is an all-NaN column; dropna() below would
+    # then discard every row. Keep only symbols that have data.
+    close = close.dropna(axis=1, how="all")
+    if close.shape[1] == 0:
+        return {"error": "No price data for any symbol"}
+
     returns = close.pct_change().dropna()
-    w = np.array(weights)
-    if len(w) != returns.shape[1]:
+    if returns.empty:
+        return {"error": "Insufficient price history"}
+
+    # Map weights by NAME onto the surviving columns. yfinance sorts columns
+    # alphabetically rather than in request order, so positional weights can be
+    # applied to the wrong symbols; re-normalise in case some were dropped.
+    wmap = {s: float(wt) for s, wt in zip(symbols, weights)}
+    w = np.array([wmap.get(str(c), 0.0) for c in close.columns], dtype=float)
+    if w.sum() <= 0:
         w = np.ones(returns.shape[1]) / returns.shape[1]
+    else:
+        w = w / w.sum()
 
     port_returns = (returns * w).sum(axis=1)
     cumulative = (1 + port_returns).cumprod()
@@ -121,7 +136,11 @@ def main():
         print(json.dumps({"error": "No input data"}))
         return
 
-    params = json.loads(stdin_data)
+    try:
+        params = json.loads(stdin_data)
+    except Exception as exc:
+        print(json.dumps({"error": f"JSON parse error: {exc}"}))
+        return
     symbols = params.get("symbols", [])
     weights = params.get("weights", [])
 
@@ -132,7 +151,10 @@ def main():
     if not weights:
         weights = [1.0 / len(symbols)] * len(symbols)
 
-    result = compute_stats(symbols, weights)
+    try:
+        result = compute_stats(symbols, weights)
+    except Exception as exc:  # yfinance / pandas failures must come back as JSON, not a traceback
+        result = {"error": str(exc)}
     print(json.dumps(convert_numpy(result)))
 
 

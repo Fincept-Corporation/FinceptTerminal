@@ -506,11 +506,45 @@ class MADatabase:
             self.conn.close()
             self.conn = None
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `database_schema.py create|update <flat-params-json>` (argv length 3). `create`
+# takes the deal row as-is but needs the NOT NULL columns, and the native `update <deal_id> <updates_json>` form
+# takes the id separately, so a service-style call is translated here (filling the mandatory columns a caller left
+# out) and then falls through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("create", "update")
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    if argv[1] == "update":
+        updates = dict(p)
+        deal_id = str(updates.pop("deal_id", ""))
+        return [argv[0], "update", deal_id, json.dumps(updates)]
+    from datetime import date
+    import uuid
+    deal = dict(p)
+    deal.setdefault("deal_id", "DEAL-" + uuid.uuid4().hex[:12].upper())
+    deal.setdefault("announcement_date", date.today().isoformat())
+    deal.setdefault("deal_type", "Merger")
+    deal.setdefault("deal_status", "Announced")
+    return [argv[0], "create", json.dumps(deal)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {
             "success": False,

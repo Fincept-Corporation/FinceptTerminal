@@ -76,7 +76,7 @@ class CFTCDataWrapper:
 
             # Energy
             "crude_oil": "067651",
-            "natural_gas": "02365B",
+            "natural_gas": "023651",
             "gasoline": "111659",
             "heating_oil": "022651",
 
@@ -99,7 +99,7 @@ class CFTCDataWrapper:
             "s&p_500": "13874A",
             "nasdaq_100": "209742",
             "dow_jones": "124603",
-            "nikkei": "240741",
+            "nikkei": "240743",
             "vix": "1170E1",
 
             # Interest Rates
@@ -204,8 +204,14 @@ class CFTCDataWrapper:
         if not identifier or identifier.lower() == "all":
             return ""
 
-        # Check if identifier is in our mappings
+        # Curated identifiers resolve to the exact CFTC contract-market code. A name search
+        # ("GOLD") also matches micro/mini variants, which interleave with the main contract
+        # on every report date and corrupt "latest report" / net-position calculations.
         identifier_lower = identifier.lower()
+        if identifier_lower in self.cot_codes:
+            return self.cot_codes[identifier_lower]
+
+        # Check if identifier is in our mappings
         if identifier_lower in self.market_mappings:
             # Use the exact market name from mappings
             return self.market_mappings[identifier_lower][0]
@@ -226,11 +232,13 @@ class CFTCDataWrapper:
         try:
             # Default dates
             if not start_date:
-                # Default to 1 year ago for specific codes, last week for general
-                if identifier.lower() != "all" and identifier and identifier.replace('-', '').isdigit():
+                # COT reports are WEEKLY (as-of Tuesday, published Friday). Default to a year for a
+                # specific market; for "all" use two weeks so the window always contains the latest
+                # report (a strict 7-day window is empty on most days of the week).
+                if identifier and identifier.lower() != "all":
                     start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
                 else:
-                    start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+                    start_date = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
 
             if not end_date:
                 end_date = datetime.now().strftime("%Y-%m-%d")
@@ -391,6 +399,34 @@ class CFTCDataWrapper:
 
     # MARKET SENTIMENT ANALYSIS ENDPOINTS
 
+    def _normalise_positions(self, record: Dict[str, Any]) -> Dict[str, int]:
+        """Map one COT record of any report type to commercial / speculator / non-reportable ints.
+
+        Column names are CFTC's own and differ per report:
+          legacy        comm_positions_*    (hedgers)  / noncomm_positions_*  (speculators)
+          disaggregated prod_merc_positions_* (hedgers) / m_money_positions_*  (speculators)
+          financial     dealer_positions_*  (dealers)  / lev_money_positions_* (speculators)
+        """
+        def pick(*names: str) -> int:
+            for name in names:
+                if record.get(name) not in (None, ""):
+                    return self._safe_int(record.get(name))
+            return 0
+
+        return {
+            "open_interest": pick("open_interest_all"),
+            "comm_long": pick("comm_positions_long_all", "comm_long_all", "prod_merc_positions_long",
+                              "prod_merc_positions_long_all", "dealer_positions_long_all"),
+            "comm_short": pick("comm_positions_short_all", "comm_short_all", "prod_merc_positions_short",
+                               "prod_merc_positions_short_all", "dealer_positions_short_all"),
+            "noncomm_long": pick("noncomm_positions_long_all", "noncomm_long_all", "m_money_positions_long_all",
+                                 "lev_money_positions_long"),
+            "noncomm_short": pick("noncomm_positions_short_all", "noncomm_short_all", "m_money_positions_short_all",
+                                  "lev_money_positions_short"),
+            "nonrept_long": pick("nonrept_positions_long_all", "nonreportable_long_all"),
+            "nonrept_short": pick("nonrept_positions_short_all", "nonreportable_short_all"),
+        }
+
     def analyze_market_sentiment(self, identifier: str, report_type: str = "disaggregated") -> Dict[str, Any]:
         """Analyze market sentiment from COT data"""
         try:
@@ -416,35 +452,40 @@ class CFTCDataWrapper:
             latest_data = cot_data[0]
             previous_data = cot_data[1] if len(cot_data) > 1 else None
 
+            # Socrata returns every number as a string and the column names differ per report
+            # type, so normalise both records to ints before doing any arithmetic.
+            latest = self._normalise_positions(latest_data)
+            previous = self._normalise_positions(previous_data) if previous_data else None
+
             # Calculate sentiment metrics
             sentiment_analysis = {
                 "latest_report": latest_data.get("report_date_as_yyyy_mm_dd"),
                 "market_name": latest_data.get("market_and_exchange_names", ""),
-                "open_interest": latest_data.get("open_interest_all", 0),
+                "open_interest": latest["open_interest"],
                 "change_in_oi": 0,
                 "commercial_positions": {
-                    "long": latest_data.get("comm_long_all", 0),
-                    "short": latest_data.get("comm_short_all", 0),
-                    "net": latest_data.get("comm_long_all", 0) - latest_data.get("comm_short_all", 0)
+                    "long": latest["comm_long"],
+                    "short": latest["comm_short"],
+                    "net": latest["comm_long"] - latest["comm_short"]
                 },
                 "non_commercial_positions": {
-                    "long": latest_data.get("noncomm_long_all", 0),
-                    "short": latest_data.get("noncomm_short_all", 0),
-                    "net": latest_data.get("noncomm_long_all", 0) - latest_data.get("noncomm_short_all", 0)
+                    "long": latest["noncomm_long"],
+                    "short": latest["noncomm_short"],
+                    "net": latest["noncomm_long"] - latest["noncomm_short"]
                 },
                 "non_reportable_positions": {
-                    "long": latest_data.get("nonreportable_long_all", 0),
-                    "short": latest_data.get("nonreportable_short_all", 0)
+                    "long": latest["nonrept_long"],
+                    "short": latest["nonrept_short"]
                 }
             }
 
             # Calculate week-over-week changes if previous data exists
-            if previous_data:
-                sentiment_analysis["change_in_oi"] = latest_data.get("open_interest_all", 0) - previous_data.get("open_interest_all", 0)
-                sentiment_analysis["commercial_positions"]["long_change"] = latest_data.get("comm_long_all", 0) - previous_data.get("comm_long_all", 0)
-                sentiment_analysis["commercial_positions"]["short_change"] = latest_data.get("comm_short_all", 0) - previous_data.get("comm_short_all", 0)
-                sentiment_analysis["non_commercial_positions"]["long_change"] = latest_data.get("noncomm_long_all", 0) - previous_data.get("noncomm_long_all", 0)
-                sentiment_analysis["non_commercial_positions"]["short_change"] = latest_data.get("noncomm_short_all", 0) - previous_data.get("noncomm_short_all", 0)
+            if previous:
+                sentiment_analysis["change_in_oi"] = latest["open_interest"] - previous["open_interest"]
+                sentiment_analysis["commercial_positions"]["long_change"] = latest["comm_long"] - previous["comm_long"]
+                sentiment_analysis["commercial_positions"]["short_change"] = latest["comm_short"] - previous["comm_short"]
+                sentiment_analysis["non_commercial_positions"]["long_change"] = latest["noncomm_long"] - previous["noncomm_long"]
+                sentiment_analysis["non_commercial_positions"]["short_change"] = latest["noncomm_short"] - previous["noncomm_short"]
 
             # Calculate sentiment scores
             total_oi = sentiment_analysis["open_interest"]

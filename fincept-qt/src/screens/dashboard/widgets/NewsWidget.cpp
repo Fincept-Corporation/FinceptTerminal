@@ -5,13 +5,18 @@
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QLabel>
+#include <QMouseEvent>
+#include <QUrl>
 
 namespace fincept::screens::widgets {
 
 namespace {
 constexpr const char* kTopic = "news:general";
 constexpr int kMaxArticles = 30; // headline cap; NewsService publishes the full feed
+// Dynamic property carrying a row's article URL (see eventFilter()).
+constexpr const char* kNewsRowLinkProp = "fincept_news_link";
 } // namespace
 
 NewsWidget::NewsWidget(QWidget* parent) : BaseWidget(tr("MARKET NEWS"), parent, ui::colors::CYAN) {
@@ -149,10 +154,34 @@ void NewsWidget::populate(const QVector<services::NewsArticle>& articles) {
             rl->addWidget(src);
         }
 
+        // Click → open the article. Child labels are made transparent to the
+        // mouse so the click lands on the row, where eventFilter() sees it.
+        if (!article.link.isEmpty()) {
+            for (auto* lbl : row->findChildren<QLabel*>())
+                lbl->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+            row->setCursor(Qt::PointingHandCursor);
+            row->setToolTip(article.summary.isEmpty() ? article.headline : article.summary);
+            row->setProperty(kNewsRowLinkProp, article.link);
+            row->installEventFilter(this);
+        }
+
         // Insert before the stretch
         news_layout_->insertWidget(news_layout_->count() - 1, row);
         ++rendered;
     }
+}
+
+bool NewsWidget::eventFilter(QObject* obj, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonRelease && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+        const QUrl url(obj->property(kNewsRowLinkProp).toString());
+        // Only web links: the feed is third-party data, so never hand an
+        // arbitrary scheme (file:, ms-*:, …) to the OS.
+        if (url.isValid() && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https"))) {
+            QDesktopServices::openUrl(url);
+            return true;
+        }
+    }
+    return BaseWidget::eventFilter(obj, event);
 }
 
 void NewsWidget::retranslateUi() {

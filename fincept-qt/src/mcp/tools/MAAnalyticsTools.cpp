@@ -32,44 +32,54 @@ static constexpr const char* TAG = "MAAnalyticsTools";
 //                   Cancellation observed via ctx.cancelled before resolve.
 //                   Trigger MUST capture inputs by value — it runs on the
 //                   service thread after the calling lambda has returned.
-static ToolResult run_ma_sync(const QString& context, std::function<void()> trigger) {
-    QJsonObject result_data;
-    QString error_msg;
+
+// State shared between the waiting worker and the service-thread callbacks. It lives on
+// the heap (shared_ptr captured by value) because run_async_wait gives up after its bound
+// (120 s) while a Python run can legitimately take longer — Monte Carlo, regressions,
+// backtests, the VisionQuant index build. With the old reference captures the callback that
+// finally arrived wrote into a stack frame that had long since been unwound.
+struct MaSyncWaitState {
+    QJsonObject data;
+    QString error;
     bool got_result = false;
+};
+
+static ToolResult run_ma_sync(const QString& context, std::function<void()> trigger) {
+    auto st = std::make_shared<MaSyncWaitState>();
 
     auto& svc = fincept::services::ma::MAAnalyticsService::instance();
 
-    detail::run_async_wait(&svc, [&](auto signal_done) {
+    detail::run_async_wait(&svc, [&svc, st, context, trigger = std::move(trigger)](auto signal_done) {
         auto* gate = new QObject;
         QObject::connect(&svc, &fincept::services::ma::MAAnalyticsService::result_ready, gate,
-                         [&, gate, signal_done](const QString& ctx, const QJsonObject& data) {
+                         [st, gate, context, signal_done](const QString& ctx, const QJsonObject& data) {
                              if (ctx != context)
                                  return;
-                             result_data = data;
-                             got_result = true;
+                             st->data = data;
+                             st->got_result = true;
                              gate->deleteLater();
                              signal_done();
                          });
         QObject::connect(&svc, &fincept::services::ma::MAAnalyticsService::error_occurred, gate,
-                         [&, gate, signal_done](const QString& ctx, const QString& msg) {
+                         [st, gate, context, signal_done](const QString& ctx, const QString& msg) {
                              if (ctx != context)
                                  return;
-                             error_msg = msg;
-                             got_result = true;
+                             st->error = msg;
+                             st->got_result = true;
                              gate->deleteLater();
                              signal_done();
                          });
         trigger();
     });
 
-    if (!got_result)
-        return ToolResult::fail("M&A result missing: " + context);
-    if (!error_msg.isEmpty())
-        return ToolResult::fail(error_msg);
-    return ToolResult::ok_data(result_data);
+    if (!st->got_result)
+        return ToolResult::fail("M&A result missing: " + context +
+                                " (no response from the analytics service within the wait bound)");
+    if (!st->error.isEmpty())
+        return ToolResult::fail(st->error);
+    return ToolResult::ok_data(st->data);
 }
 
-[[maybe_unused]]
 static void run_ma_async(const QString& context, std::function<void()> trigger, ToolContext ctx,
                          std::shared_ptr<QPromise<ToolResult>> promise) {
     auto* svc = &fincept::services::ma::MAAnalyticsService::instance();
@@ -102,18 +112,36 @@ static void run_ma_async(const QString& context, std::function<void()> trigger, 
 // valuation, …). Each forwards its args straight to the Python analytic and
 // waits on `context`, which matches the service method's run_python_json result
 // context (so results route unambiguously).
+//
+// `async_timeout_ms` > 0 opts the tool into the async/job protocol (§M1): it gets an
+// async_handler and that declared budget, so a run that outlasts the grace window is
+// backgrounded instead of holding the provider's HTTP turn — and a pool thread — for as long
+// as the Python process takes. Leave it 0 for the quick analytics, which stay on the
+// bounded synchronous path. The budget should track what PythonRunner allows the script:
+// 5 min by default, 60 min under vision_quant/ and Analytics/backtesting/.
 using MaMethod = void (fincept::services::ma::MAAnalyticsService::*)(const QJsonObject&);
 static ToolDef make_ma_tool(const char* name, const char* desc, const QString& context, MaMethod method,
-                            QJsonObject props, QStringList required) {
+                            QJsonObject props, QStringList required, int async_timeout_ms = 0) {
     ToolDef t;
     t.name = name;
     t.description = desc;
     t.category = "ma-analytics";
     t.input_schema.properties = std::move(props);
     t.input_schema.required = std::move(required);
+    if (async_timeout_ms > 0) {
+        t.default_timeout_ms = async_timeout_ms;
+        t.async_handler = [method, context](const QJsonObject& args, ToolContext ctx,
+                                            std::shared_ptr<QPromise<ToolResult>> promise) {
+            run_ma_async(
+                context,
+                [args, method]() { (fincept::services::ma::MAAnalyticsService::instance().*method)(args); },
+                std::move(ctx), promise);
+        };
+        return t;
+    }
     t.handler = [method, context](const QJsonObject& args) -> ToolResult {
         return run_ma_sync(context,
-                           [&, method]() { (fincept::services::ma::MAAnalyticsService::instance().*method)(args); });
+                           [args, method]() { (fincept::services::ma::MAAnalyticsService::instance().*method)(args); });
     };
     return t;
 }
@@ -122,15 +150,29 @@ static ToolDef make_ma_tool(const char* name, const char* desc, const QString& c
 // a fixed `command` and forwards the tool args as that command's params.
 using MaCmdMethod = void (fincept::services::ma::MAAnalyticsService::*)(const QString&, const QJsonObject&);
 static ToolDef make_ma_cmd_tool(const char* name, const char* desc, const QString& context, MaCmdMethod method,
-                                const QString& command, QJsonObject props, QStringList required) {
+                                const QString& command, QJsonObject props, QStringList required,
+                                int async_timeout_ms = 0) {
     ToolDef t;
     t.name = name;
     t.description = desc;
     t.category = "ma-analytics";
     t.input_schema.properties = std::move(props);
     t.input_schema.required = std::move(required);
+    if (async_timeout_ms > 0) { // see make_ma_tool: opt into the async/job protocol with a real budget
+        t.default_timeout_ms = async_timeout_ms;
+        t.async_handler = [method, context, command](const QJsonObject& args, ToolContext ctx,
+                                                     std::shared_ptr<QPromise<ToolResult>> promise) {
+            run_ma_async(
+                context,
+                [args, method, command]() {
+                    (fincept::services::ma::MAAnalyticsService::instance().*method)(command, args);
+                },
+                std::move(ctx), promise);
+        };
+        return t;
+    }
     t.handler = [method, context, command](const QJsonObject& args) -> ToolResult {
-        return run_ma_sync(context, [&, method, command]() {
+        return run_ma_sync(context, [args, method, command]() {
             (fincept::services::ma::MAAnalyticsService::instance().*method)(command, args);
         });
     };
@@ -199,7 +241,7 @@ static void append_data_connector_tools(std::vector<ToolDef>& tools) {
             for (const auto& v : args.value("args").toArray())
                 full << v.toVariant().toString();
             const QString ctx = base_ctx + QStringLiteral("_") + command;
-            return run_ma_sync(ctx, [&]() { MASvc::instance().run_data_connector(script, full, ctx); });
+            return run_ma_sync(ctx, [script, full, ctx]() { MASvc::instance().run_data_connector(script, full, ctx); });
         };
         tools.push_back(std::move(t));
     }
@@ -764,6 +806,7 @@ std::vector<ToolDef> get_ma_analytics_tools() {
         t.name = "ma_create_deal";
         t.description = "Add a new deal record to the M&A deal database.";
         t.category = "ma-analytics";
+        t.is_destructive = true; // writes to the persistent deal database
         t.input_schema.properties = QJsonObject{
             {"acquirer", QJsonObject{{"type", "string"}, {"description", "Acquirer company name"}}},
             {"target", QJsonObject{{"type", "string"}, {"description", "Target company name"}}},
@@ -786,6 +829,7 @@ std::vector<ToolDef> get_ma_analytics_tools() {
         t.name = "ma_update_deal";
         t.description = "Update an existing deal record in the M&A database.";
         t.category = "ma-analytics";
+        t.is_destructive = true; // rewrites a persisted deal record
         t.input_schema.properties =
             QJsonObject{{"deal_id", QJsonObject{{"type", "string"}, {"description", "Deal ID to update"}}},
                         {"updates", QJsonObject{{"type", "object"},
@@ -1097,9 +1141,14 @@ std::vector<ToolDef> get_ma_analytics_tools() {
             {"wacc_mean", QJsonObject{{"type", "number"}, {"description", "Mean WACC"}}},
             {"wacc_std", QJsonObject{{"type", "number"}, {"description", "Std dev of WACC"}}}};
         t.input_schema.required = {"base_value", "std_dev_pct"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
-            return run_ma_sync("monte_carlo",
-                               [&]() { fincept::services::ma::MAAnalyticsService::instance().run_monte_carlo(args); });
+        // Up to 100K simulations in Python: this can run for minutes, well past what the
+        // synchronous path will wait for (and the process itself is allowed 5 min).
+        t.default_timeout_ms = 300000;
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
+            run_ma_async(
+                "monte_carlo",
+                [args]() { fincept::services::ma::MAAnalyticsService::instance().run_monte_carlo(args); },
+                std::move(ctx), promise);
         };
         tools.push_back(std::move(t));
     }
@@ -1739,15 +1788,25 @@ std::vector<ToolDef> get_ma_analytics_tools() {
                             {"resolution", str("daily or hourly (default daily).")},
                             {"strategy_params", obj("Optional strategy-specific parameters.")}};
             t.input_schema.required = {"provider", "strategy_id", "symbols", "start_date", "end_date", "initial_cash"};
-            t.handler = [](const QJsonObject& args) -> ToolResult {
+            // A backtest over multi-year data (Analytics/backtesting/ scripts are allowed up to
+            // 60 min by PythonRunner) - minutes is normal. Async so a long run is backgrounded
+            // instead of pinning a tool thread, and the late result is never written to an
+            // unwound stack frame.
+            t.default_timeout_ms = 900000;
+            t.async_handler = [](const QJsonObject& args, ToolContext ctx,
+                                 std::shared_ptr<QPromise<ToolResult>> promise) {
                 const QString provider = args.value("provider").toString("bt");
                 const QString strategy_id = args.value("strategy_id").toString();
                 QJsonObject params = args;
                 params.remove("provider");
                 params.remove("strategy_id");
-                return run_ma_sync("backtest_" + provider, [&]() {
-                    fincept::services::ma::MAAnalyticsService::instance().run_backtest(provider, strategy_id, params);
-                });
+                run_ma_async(
+                    "backtest_" + provider,
+                    [provider, strategy_id, params]() {
+                        fincept::services::ma::MAAnalyticsService::instance().run_backtest(provider, strategy_id,
+                                                                                           params);
+                    },
+                    std::move(ctx), promise);
             };
             tools.push_back(std::move(t));
         }
@@ -1776,7 +1835,9 @@ std::vector<ToolDef> get_ma_analytics_tools() {
                         {"date", str("As-of date YYYY-MM-DD (default latest).")},
                         {"top_k", num("Number of similar patterns to return (default 10).")},
                         {"lookback", num("Chart lookback window in bars (default 60).")}},
-            {"symbol"}));
+            {"symbol"},
+            // Loads the CNN + FAISS index on a cold start - tens of seconds, not milliseconds.
+            120000));
         tools.push_back(
             make_ma_cmd_tool("vq_encode", "VisionQuant: encode a chart image file into its pattern embedding vector.",
                              "vq_engine_encode", &MASvc::run_vision_engine, "encode",
@@ -1821,13 +1882,16 @@ std::vector<ToolDef> get_ma_analytics_tools() {
                         {"entry_rsi", num("RSI entry threshold (default 40).")},
                         {"exit_rsi", num("RSI exit threshold (default 70).")},
                         {"ma_period", num("Moving-average period (default 60).")}},
-            {"symbol", "start", "end"}));
+            {"symbol", "start", "end"},
+            // vision_quant/ scripts get PythonRunner's long-run budget (a CNN + FAISS backtest).
+            900000));
 
         // setup_index.py — status | build (build trains the CNN + builds FAISS: long-running)
         tools.push_back(make_ma_cmd_tool("vq_index_status",
                                          "VisionQuant: status of the pattern model + FAISS index build.",
                                          "vq_index_status", &MASvc::run_vision_index, "status", QJsonObject{}, {}));
-        tools.push_back(make_ma_cmd_tool(
+        {
+        ToolDef build_index = make_ma_cmd_tool(
             "vq_build_index",
             "VisionQuant: build the pattern index — download charts, train the CNN autoencoder, and build the FAISS "
             "index. LONG-RUNNING (minutes). Run once before vq_search / vq_score.",
@@ -1838,7 +1902,17 @@ std::vector<ToolDef> get_ma_analytics_tools() {
                         {"window", num("Chart window in bars (default 60).")},
                         {"epochs", num("Training epochs (default 30).")},
                         {"batch_size", num("Training batch size (default 32).")}},
-            {}));
+            {},
+            // "LONG-RUNNING (minutes)": it trains a CNN. This was a sync tool, so the call gave
+            // up after the 120 s wait bound ("result missing") while training carried on, and
+            // the late result then landed in a dead stack frame. PythonRunner allows
+            // vision_quant/ scripts 60 min; match it so the call is backgrounded, not abandoned.
+            3600000);
+        // Downloads data, trains a model for minutes and rewrites the on-disk index — an
+        // expensive, state-changing operation the user should have to allow (§M7).
+        build_index.is_destructive = true;
+        tools.push_back(std::move(build_index));
+        }
     }
 
     // Data-source connectors (auto-generated dispatcher tools; keyless + keyed).

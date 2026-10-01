@@ -435,8 +435,14 @@ void FinceptInternalAdapter::emit_mock_tags() {
 
 void FinceptInternalAdapter::emit_demo_unavailable(const QString& context) {
     QPointer<FinceptInternalAdapter> self = this;
-    const auto msg = QStringLiteral("Fincept Internal markets are in demo mode — set "
-                                    "`fincept.markets_endpoint` in SecureStorage to enable live data.");
+    // Be honest about WHY there is no data: the "set fincept.markets_endpoint" hint was
+    // shown even when an endpoint was already configured (only the live HTTP path is
+    // missing), sending the user off to fix a setting that was not the problem.
+    const auto msg = is_demo_mode()
+                         ? QStringLiteral("Fincept Internal markets are in demo mode — set "
+                                          "`fincept.markets_endpoint` in SecureStorage to enable live data.")
+                         : QStringLiteral("Fincept Internal live markets are not available yet — an endpoint is "
+                                          "configured, but the live HTTP client has not been implemented in this build.");
     QTimer::singleShot(0, this, [self, context, msg]() {
         if (!self)
             return;

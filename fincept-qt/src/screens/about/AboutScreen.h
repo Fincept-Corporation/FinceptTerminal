@@ -19,12 +19,16 @@ class AboutScreen : public QWidget {
 
   private:
     void retranslateUi();
+    /// Show the "update available" line when UpdateService has found a newer
+    /// release (its update_available()/latest_version() accessors were unused).
+    void refresh_update_status();
 
     // Version panel
     QLabel* version_header_ = nullptr;
     QLabel* app_name_ = nullptr;
     QLabel* app_subtitle_ = nullptr;
     QPushButton* check_btn_ = nullptr;
+    QLabel* update_status_ = nullptr;
     bool check_in_progress_ = false;
     QLabel* copyright_ = nullptr;
 
@@ -38,6 +42,7 @@ class AboutScreen : public QWidget {
     QLabel* diag_header_ = nullptr;
     QLabel* crash_dumps_label_ = nullptr;
     QPushButton* open_folder_btn_ = nullptr;
+    QPushButton* copy_info_btn_ = nullptr;
 
     // Trademarks
     QLabel* trademarks_header_ = nullptr;

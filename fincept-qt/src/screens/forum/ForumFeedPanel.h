@@ -21,6 +21,10 @@ class ForumFeedPanel : public QWidget {
     explicit ForumFeedPanel(QWidget* parent = nullptr);
 
     void set_posts(const services::ForumPostsPage& page, const QString& cat_color = {});
+    /// Replace the list with a "could not load" state + Retry button. Used when a
+    /// fetch fails — otherwise the previous list stayed on screen under the new
+    /// category's header, or a misleading "NO DISCUSSIONS YET" was shown.
+    void set_error(const QString& message);
     void set_loading(bool on);
     void set_active_post(const QString& uuid);
     void clear_active();
@@ -38,6 +42,7 @@ class ForumFeedPanel : public QWidget {
     void profile_edit_requested();
     void new_post_clicked();
     void vote_post_requested(const QString& post_uuid, const QString& vote_type);
+    void retry_requested();
 
   protected:
     void changeEvent(QEvent* event) override;

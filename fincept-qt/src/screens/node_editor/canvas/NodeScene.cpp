@@ -7,6 +7,7 @@
 #include "screens/node_editor/canvas/TempEdge.h"
 #include "services/workflow/NodeRegistry.h"
 
+#include <QSet>
 #include <QUuid>
 
 namespace fincept::workflow {
@@ -144,6 +145,12 @@ void NodeScene::deserialize(const WorkflowDef& workflow) {
 
     auto& registry = NodeRegistry::instance();
     for (const auto& nd : workflow.nodes) {
+        // The canvas indexes nodes by id; a second node with the same id would orphan
+        // the first (still drawn, no longer addressable) - refuse it.
+        if (nodes_.contains(nd.id)) {
+            LOG_WARN("NodeEditor", QString("Duplicate node id %1 (%2) - skipped").arg(nd.id, nd.type));
+            continue;
+        }
         const auto* type_def = registry.find(nd.type);
         if (type_def)
             add_node(nd, *type_def);
@@ -151,8 +158,14 @@ void NodeScene::deserialize(const WorkflowDef& workflow) {
             LOG_WARN("NodeEditor", QString("Unknown node type: %1").arg(nd.type));
     }
 
-    for (const auto& ed : workflow.edges)
-        add_edge(ed);
+    int dropped_edges = 0;
+    for (const auto& ed : workflow.edges) {
+        if (edges_.contains(ed.id) || !add_edge(ed))
+            ++dropped_edges;
+    }
+    if (dropped_edges > 0)
+        LOG_WARN("NodeEditor", QString("%1 connection(s) could not be restored (missing node/port or duplicate id)")
+                                   .arg(dropped_edges));
 }
 
 NodeItem* NodeScene::find_node(const QString& id) const {
@@ -172,6 +185,7 @@ void NodeScene::start_temp_edge(PortItem* from) {
     cancel_temp_edge();
     temp_edge_ = new TempEdge(from);
     addItem(temp_edge_);
+    highlight_link_targets(from);
 }
 
 void NodeScene::update_temp_edge(const QPointF& scene_pos) {
@@ -184,7 +198,7 @@ void NodeScene::finish_temp_edge(PortItem* target) {
         return;
 
     auto* source = temp_edge_->source_port();
-    if (source->can_connect_to(target)) {
+    if (can_link(source, target)) {
         // Determine which is output and which is input
         PortItem* out_port = (source->def().direction == PortDirection::Output) ? source : target;
         PortItem* in_port = (source->def().direction == PortDirection::Output) ? target : source;
@@ -224,6 +238,71 @@ void NodeScene::cancel_temp_edge() {
         removeItem(temp_edge_);
         delete temp_edge_;
         temp_edge_ = nullptr;
+    }
+    highlight_link_targets(nullptr);
+}
+
+bool NodeScene::would_create_cycle(const QString& from_node, const QString& to_node) const {
+    if (from_node == to_node)
+        return true;
+
+    QHash<QString, QStringList> adjacency;
+    for (auto it = edges_.constBegin(); it != edges_.constEnd(); ++it) {
+        const EdgeItem* e = it.value();
+        if (!e->source_port() || !e->target_port())
+            continue;
+        adjacency[e->source_port()->parent_node()->node_def().id].append(
+            e->target_port()->parent_node()->node_def().id);
+    }
+
+    // Does to_node already reach from_node? Then from->to would complete a loop.
+    QStringList stack{to_node};
+    QSet<QString> seen{to_node};
+    while (!stack.isEmpty()) {
+        const QString cur = stack.takeLast();
+        if (cur == from_node)
+            return true;
+        for (const QString& next : adjacency.value(cur)) {
+            if (!seen.contains(next)) {
+                seen.insert(next);
+                stack.append(next);
+            }
+        }
+    }
+    return false;
+}
+
+bool NodeScene::can_link(const PortItem* a, const PortItem* b) const {
+    if (!a || !b || !a->can_connect_to(b))
+        return false;
+
+    const PortItem* out_port = (a->def().direction == PortDirection::Output) ? a : b;
+    const PortItem* in_port = (a->def().direction == PortDirection::Output) ? b : a;
+    const QString out_node = out_port->parent_node()->node_def().id;
+    const QString in_node = in_port->parent_node()->node_def().id;
+
+    // Already connected (same node + port on both ends)?
+    for (auto it = edges_.constBegin(); it != edges_.constEnd(); ++it) {
+        const EdgeItem* e = it.value();
+        if (e->source_port() == out_port && e->target_port() == in_port)
+            return false;
+    }
+    return !would_create_cycle(out_node, in_node);
+}
+
+void NodeScene::highlight_link_targets(const PortItem* from) {
+    for (auto it = nodes_.constBegin(); it != nodes_.constEnd(); ++it) {
+        auto apply = [&](PortItem* p) {
+            int state = 0;
+            if (from && p != from && p->def().direction != from->def().direction)
+                state = can_link(from, p) ? 1 : -1;
+            if (p->connect_highlight() != state)
+                p->set_connect_highlight(state);
+        };
+        for (auto* p : it.value()->input_ports())
+            apply(p);
+        for (auto* p : it.value()->output_ports())
+            apply(p);
     }
 }
 

@@ -666,7 +666,8 @@ int64_t EquityChart::synth_ts_for(int candle_index) const {
 }
 
 int EquityChart::candle_index_from_synth(int64_t synth_ts) const {
-    if (synth_slot_ms_ <= 0)
+    // display_count_ is 0 when every loaded candle failed validation; clamp(lo > hi) is UB.
+    if (synth_slot_ms_ <= 0 || display_count_ <= 0)
         return display_start_;
     int idx = display_start_ + static_cast<int>((synth_ts - synth_base_ts_) / synth_slot_ms_);
     return std::clamp(idx, display_start_, display_start_ + display_count_ - 1);

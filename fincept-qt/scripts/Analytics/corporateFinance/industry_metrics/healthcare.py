@@ -506,11 +506,64 @@ def _build_healthcare_standard_output(analysis: dict, sector: str) -> dict:
     }
 
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `healthcare.py calculate <flat-params-json>` (argv length 3) with the sector inside
+# the JSON and ratios as FRACTIONS (the panel divides percent inputs by 100). The native form is
+# `healthcare <sector> <data_json>`, written for a front end that sent percentages and different key names
+# (`pipeline_value`, `r_and_d_spend`, `phase3_count`), so a service-style call is translated here and then falls
+# through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    data = dict(p)
+    sector = str(data.pop("sector", "pharma"))
+    revenue = _svc_num(data, "revenue", default=0.0)
+    margin = _svc_num(data, "ebitda_margin", default=None)
+    # Key names the native helpers read.
+    for src, dst in (("pipeline_npv", "pipeline_value"), ("rd_spend", "r_and_d_spend"),
+                     ("phase3_candidates", "phase3_count")):
+        if src in data and dst not in data:
+            data[dst] = data[src]
+    # Percent-valued inputs: the panel sends fractions, the native code expects percent.
+    for key in ("ebitda_margin", "patent_expiry_revenue"):
+        v = _svc_num(data, key)
+        if v is not None:
+            data[key] = v * 100.0
+    low = sector.lower()
+    if "biotech" in low:
+        data.setdefault("cash_position", revenue)
+        data.setdefault("burn_rate", _svc_num(data, "r_and_d_spend", default=0.0) / 12.0)
+    elif "device" in low:
+        # No gross margin field on the panel: assume it sits ~30 points above EBITDA margin.
+        data.setdefault("gross_margin", min((margin if margin is not None else 0.25) + 0.30, 0.90))
+    return [argv[0], "healthcare", sector, json.dumps(data)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

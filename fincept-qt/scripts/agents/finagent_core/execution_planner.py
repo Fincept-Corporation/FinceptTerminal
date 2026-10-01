@@ -309,8 +309,16 @@ class ExecutionPlanner:
     - Error handling and recovery
     """
 
-    def __init__(self, api_keys: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        api_keys: Optional[Dict[str, str]] = None,
+        model_config: Optional[Dict[str, Any]] = None,
+    ):
         self.api_keys = api_keys or {}
+        # Resolved LLM (provider/model/key) applied to agent steps that do not
+        # name their own model. None keeps the old behaviour (provider guessed
+        # from api_keys inside CoreAgent).
+        self.model_config = model_config or None
         self.plans: Dict[str, ExecutionPlan] = {}
         self.checkpoints: Dict[str, Dict[str, Any]] = {}
 
@@ -431,9 +439,16 @@ class ExecutionPlanner:
 
         query = step.config.get("query", "")
         agent_config = step.config.get("agent_config", {})
+        if self.model_config and not agent_config.get("model"):
+            # Copy — never mutate the plan's own step config.
+            agent_config = {**agent_config, "model": self.model_config}
 
         # Interpolate context into query
         query = self._interpolate(query, plan.context)
+        if not str(query).strip():
+            # A blank query would burn an LLM call on nothing; fail the step with
+            # a message the planner UI shows next to it.
+            raise ValueError("agent step has no query")
 
         agent = CoreAgent(api_keys=self.api_keys)
         response = agent.run(query, agent_config)
@@ -776,8 +791,16 @@ def create_stock_analysis_plan(symbol: str) -> Dict[str, Any]:
     return plan.to_dict()
 
 
-def execute_plan(plan_dict: Dict[str, Any], api_keys: Dict[str, str] = None) -> Dict[str, Any]:
-    """Execute a plan from dict"""
+def execute_plan(
+    plan_dict: Dict[str, Any],
+    api_keys: Dict[str, str] = None,
+    config: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Execute a plan from dict.
+
+    `config` is the optional caller config; its `model` block (the user's
+    resolved LLM) is applied to every agent step that does not carry its own.
+    """
     # Reconstruct plan from dict
     plan = ExecutionPlan(
         id=plan_dict["id"],
@@ -787,17 +810,30 @@ def execute_plan(plan_dict: Dict[str, Any], api_keys: Dict[str, str] = None) -> 
     )
 
     for step_dict in plan_dict.get("steps", []):
+        try:
+            step_type = StepType(step_dict["step_type"])
+        except (KeyError, ValueError):
+            # An unknown/missing type used to escape as a bare ValueError
+            # ("'run' is not a valid StepType"). Return a clean failure the
+            # caller can show instead.
+            valid = ", ".join(t.value for t in StepType)
+            return {
+                "success": False,
+                "error": (f"Step '{step_dict.get('name', step_dict.get('id', '?'))}' has an invalid type "
+                          f"{step_dict.get('step_type')!r} (valid: {valid})"),
+            }
         step = PlanStep(
             id=step_dict["id"],
             name=step_dict["name"],
-            step_type=StepType(step_dict["step_type"]),
+            step_type=step_type,
             config=step_dict.get("config", {}),
             dependencies=step_dict.get("dependencies", []),
             status=StepStatus(step_dict.get("status", "pending"))
         )
         plan.add_step(step)
 
-    planner = ExecutionPlanner(api_keys=api_keys)
+    model_config = (config or {}).get("model") if isinstance(config, dict) else None
+    planner = ExecutionPlanner(api_keys=api_keys, model_config=model_config)
     return planner.execute_plan(plan)
 
 

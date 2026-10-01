@@ -1,5 +1,7 @@
 #include "screens/info/HelpScreen.h"
 
+#include "core/events/EventBus.h"
+#include "screens/launchpad/OnboardingTour.h"
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
@@ -7,8 +9,10 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMetaMethod>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -112,8 +116,10 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
     scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }");
-    scroll_->setWidget(build_page());
     root->addWidget(scroll_, 1);
+    // The page (~120 widgets, each with its own stylesheet) is built on first
+    // show — see showEvent(). This screen is constructed eagerly for the
+    // pre-login info stack and would otherwise pay for it at every window start.
 
     // ── Theme wiring ──────────────────────────────────────────────────────────
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
@@ -126,8 +132,19 @@ HelpScreen::HelpScreen(QWidget* parent) : QWidget(parent) {
 // the page from scratch rather than caching every label/button as a member.
 // QScrollArea::setWidget() takes ownership and deletes the previous content.
 
+void HelpScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // Built here rather than in the constructor so build_page() can tell which
+    // host it is in: by first show, WindowFrame has already connected the
+    // pre-login navigation signals (or, for a docked copy, never will).
+    if (!page_built_) {
+        page_built_ = true;
+        scroll_->setWidget(build_page());
+    }
+}
+
 void HelpScreen::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange && scroll_) {
+    if (event->type() == QEvent::LanguageChange && scroll_ && page_built_) {
         scroll_->setWidget(build_page());
     }
     QWidget::changeEvent(event);
@@ -136,6 +153,12 @@ void HelpScreen::changeEvent(QEvent* event) {
 // ── Page builder ──────────────────────────────────────────────────────────────
 
 QWidget* HelpScreen::build_page() {
+    // True for the copy in the pre-login info stack (WindowFrame connects
+    // navigate_back to "return to login"); false for a copy docked after sign-in,
+    // where Create Account / Reset Password make no sense and the in-app
+    // Docs / Support panels are the useful destinations.
+    const bool in_auth_stack = isSignalConnected(QMetaMethod::fromSignal(&HelpScreen::navigate_back));
+
     auto* page = new QWidget;
     page->setStyleSheet(QString("background: %1;").arg(colors::BG_BASE()));
     auto* vl = new QVBoxLayout(page);
@@ -223,14 +246,20 @@ QWidget* HelpScreen::build_page() {
             QString label;
             QString desc;
         };
-        const Action actions[] = {
-            {"", "create_account", tr("Create Account"), tr("Register for full access")},
-            {"", "reset_password", tr("Reset Password"), tr("Recover your account")},
-            {"", "documentation", tr("Documentation"), tr("Guides, tutorials & API ref")},
-            {"", "report_bug", tr("Report a Bug"), tr("Open a GitHub issue")},
-            {"", "join_discord", tr("Join Discord"), tr("Community & live support")},
-            {"", "support_tickets", tr("Email Support"), tr("Or open a ticket in the Support tab")},
-        };
+        QList<Action> actions;
+        if (in_auth_stack) {
+            actions.append({"", "create_account", tr("Create Account"), tr("Register for full access")});
+            actions.append({"", "reset_password", tr("Reset Password"), tr("Recover your account")});
+        }
+        actions.append({"", "documentation", tr("Documentation"),
+                        in_auth_stack ? tr("Guides, tutorials & API ref") : tr("Open the in-app documentation")});
+        actions.append({"", "report_bug", tr("Report a Bug"), tr("Open a GitHub issue")});
+        actions.append({"", "join_discord", tr("Join Discord"), tr("Community & live support")});
+        if (!in_auth_stack) {
+            actions.append({"", "open_support", tr("Support Tickets"), tr("Open a ticket in the Support tab")});
+            actions.append({"", "replay_tour", tr("Replay Welcome Tour"), tr("A 30-second walkthrough")});
+        }
+        actions.append({"", "support_tickets", tr("Email Support"), tr("support@fincept.in")});
 
         int col = 0, row = 0;
         for (const auto& a : actions) {
@@ -285,12 +314,33 @@ QWidget* HelpScreen::build_page() {
             auto open = [btn](const QString& url) {
                 QObject::connect(btn, &QPushButton::clicked, btn, [url]() { QDesktopServices::openUrl(QUrl(url)); });
             };
+            // In-app destinations: publish on the navigation bus, which opens the
+            // panel (constructing it if needed) in the frame this screen lives in.
+            auto open_panel = [btn](const char* screen_id) {
+                QObject::connect(btn, &QPushButton::clicked, btn, [screen_id]() {
+                    EventBus::instance().publish(
+                        QStringLiteral("nav.switch_screen"),
+                        QVariantMap{{QStringLiteral("screen_id"), QString::fromLatin1(screen_id)}});
+                });
+            };
             if (key == "create_account")
                 connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_register);
             else if (key == "reset_password")
                 connect(btn, &QPushButton::clicked, this, &HelpScreen::navigate_forgot_password);
-            else if (key == "documentation")
-                open(QStringLiteral("https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs"));
+            else if (key == "documentation") {
+                if (in_auth_stack)
+                    open(QStringLiteral("https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs"));
+                else
+                    open_panel("docs");
+            } else if (key == "open_support")
+                open_panel("support");
+            else if (key == "replay_tour")
+                connect(btn, &QPushButton::clicked, this, [this]() {
+                    // Same behaviour as the help.replay_tour action: re-arm the
+                    // first-run flag, then show the tour over this window.
+                    OnboardingTour::reset_seen();
+                    OnboardingTour::show_for(window());
+                });
             else if (key == "report_bug")
                 open(QStringLiteral("https://github.com/Fincept-Corporation/FinceptTerminal/issues/new"));
             else if (key == "join_discord")
@@ -316,23 +366,27 @@ QWidget* HelpScreen::build_page() {
         };
         const FAQ faqs[] = {
             {"", tr("How do I reset my password?"),
-             tr("Click \"Forgot Password\" on the login screen. Enter your email address and we'll "
-                "send you a reset link. The link expires in 24 hours.")},
+             tr("Click \"Forgot Password\" on the login screen and enter your email address. We'll "
+                "email you a verification code — enter it on the next screen together with your "
+                "new password.")},
 
-            {"", tr("What is Guest Access?"),
-             tr("Guest access lets you explore the terminal without creating an account. "
-                "Features like trading, portfolio management, and AI analytics require a "
-                "registered account.")},
+            {"", tr("Do I need an account?"),
+             tr("Yes. Register with your email (you'll confirm it with a verification code) or "
+                "sign in with Google, then pick a plan. The Free plan lets you continue straight "
+                "into the terminal; paid plans add more credits and higher limits.")},
 
             {"", tr("What is a Credit?"),
              tr("Credits are the in-app currency used for premium features such as AI analysis, "
                 "advanced data feeds, and quantitative analytics. Free accounts receive a limited "
-                "number of credits on signup. Additional credits can be purchased in Settings → Billing.")},
+                "number of credits on signup. Your current balance and payment history are under "
+                "Profile → Billing.")},
 
             {"", tr("How do I connect a broker?"),
-             tr("Navigate to Settings → Brokers, select your broker from the list, and enter your "
-                "API key and secret. Fincept supports 16 brokers including Zerodha, Angel One, "
-                "Upstox, Interactive Brokers, and more.")},
+             tr("Open Equity Trading and click ACCOUNTS to add a broker account, then enter your "
+                "API key and secret (or follow the broker's sign-in flow) and press CONNECT. "
+                "Fincept supports 20+ brokers including Zerodha, Angel One, Upstox, Interactive "
+                "Brokers, Alpaca, and more. API keys for data providers and crypto exchanges are "
+                "managed under Settings → Credentials.")},
 
             {"", tr("Why does Python install at first launch?"),
              tr("Fincept embeds Python 3.11 for its analytics scripts covering equity, "
@@ -351,8 +405,9 @@ QWidget* HelpScreen::build_page() {
 
             {"", tr("How do I report a bug?"),
              tr("Open a ticket in the Support tab with category \"Bug Report\", or file a GitHub "
-                "issue. Include your OS, version, steps to reproduce, and any error messages you "
-                "see. If the app crashed, attach the dump from About → Diagnostics.")},
+                "issue. Include your OS and version (About → Diagnostics → Copy System Info), steps "
+                "to reproduce, and any error messages you see. If the app crashed, attach the dump "
+                "from About → Diagnostics.")},
         };
 
         for (const auto& f : faqs)

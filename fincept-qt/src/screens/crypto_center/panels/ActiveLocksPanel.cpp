@@ -250,6 +250,9 @@ void ActiveLocksPanel::on_wallet_disconnected() {
     current_topic_.clear();
     current_pubkey_.clear();
     latest_.clear();
+    // A previous wallet's feed error must not carry over to the next one.
+    feed_error_ = false;
+    clear_error_strip();
     rebuild_table();
 }
 
@@ -299,6 +302,7 @@ void ActiveLocksPanel::on_locks_update(const QVariant& v) {
     if (!v.canConvert<QVector<fincept::wallet::LockPosition>>())
         return;
     latest_ = v.value<QVector<fincept::wallet::LockPosition>>();
+    feed_error_ = false;
     rebuild_table();
 }
 
@@ -306,15 +310,31 @@ void ActiveLocksPanel::on_topic_error(const QString& topic, const QString& error
     if (topic != current_topic_)
         return;
     show_error_strip(tr("Locks feed error: %1").arg(error));
+    // Without cached positions the panel would otherwise read "LIVE · No active
+    // locks" next to an error — a claim nothing established. Say "unavailable".
+    if (latest_.isEmpty()) {
+        feed_error_ = true;
+        rebuild_table();
+    }
 }
 
 void ActiveLocksPanel::rebuild_table() {
     if (latest_.isEmpty()) {
         table_->setRowCount(0);
         table_->hide();
+        empty_state_->setText(feed_error_ ? tr("Locks unavailable — the locks feed returned an error.")
+                                          : tr("No active locks. Lock $FNCPT above to start earning yield."));
         empty_state_->show();
         summary_label_->setText(tr("0 positions · 0 veFNCPT"));
-        update_demo_chip(false);
+        if (feed_error_) {
+            // Reuse the amber "DEMO" pill style for the not-live state.
+            status_pill_->setText(tr("UNAVAILABLE"));
+            status_pill_->setObjectName(QStringLiteral("activeLocksPillDemo"));
+            status_pill_->style()->unpolish(status_pill_);
+            status_pill_->style()->polish(status_pill_);
+        } else {
+            update_demo_chip(false);
+        }
         return;
     }
     empty_state_->hide();
@@ -340,11 +360,21 @@ void ActiveLocksPanel::rebuild_table() {
         table_->setItem(i, 2, new QTableWidgetItem(format_unlock_date(p.unlock_ts)));
         table_->setItem(i, 3, new QTableWidgetItem(format_token(weight_ui, 1)));
         table_->setItem(i, 4, new QTableWidgetItem(format_usdc(p.lifetime_yield_usdc)));
+        if (p.is_mock) {
+            // Per-row cue: the head pill sits at the far edge and a fabricated
+            // "2,000 $FNCPT locked · $1,240 lifetime yield" under the user's own
+            // address is exactly what must not be mistaken for chain data.
+            for (int c = 0; c < 5; ++c) {
+                if (auto* cell = table_->item(i, c))
+                    cell->setToolTip(tr("Demo position — fincept_lock is not deployed, so this is not read "
+                                        "from your wallet's on-chain locks."));
+            }
+        }
     }
 
     // TOTAL row — visually distinct via item-level styling.
     const int total_row = latest_.size();
-    auto* tot_label = new QTableWidgetItem(tr("TOTAL"));
+    auto* tot_label = new QTableWidgetItem(any_mock ? tr("TOTAL (DEMO)") : tr("TOTAL"));
     tot_label->setData(Qt::UserRole, QString()); // no position id
     table_->setItem(total_row, 0, tot_label);
     table_->setItem(total_row, 1, new QTableWidgetItem(QStringLiteral("—")));
@@ -353,7 +383,9 @@ void ActiveLocksPanel::rebuild_table() {
     table_->setItem(total_row, 4, new QTableWidgetItem(format_usdc(total_yield_ui)));
 
     // Plural form is a translator's decision, not an English "s" suffix.
-    summary_label_->setText(tr("%n position(s) · %1 veFNCPT", "", latest_.size()).arg(format_token(total_weight_ui, 1)));
+    const QString summary_text =
+        tr("%n position(s) · %1 veFNCPT", "", latest_.size()).arg(format_token(total_weight_ui, 1));
+    summary_label_->setText(any_mock ? tr("DEMO · ") + summary_text : summary_text);
     update_demo_chip(any_mock);
     clear_error_strip();
 }

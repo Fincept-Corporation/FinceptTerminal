@@ -158,7 +158,12 @@ ResultStore::Page ResultStore::page(const QString& id, int offset, int limit) co
     p.tool = it->tool;
     p.total_bytes = static_cast<int>(it->text.size());
     p.offset = std::clamp(offset, 0, p.total_bytes);
-    const int take = std::clamp(limit, 1, p.total_bytes - p.offset);
+    // Paging at/after the end (next_offset == total_bytes after the last page is exactly
+    // what a model sends next) used to call std::clamp(limit, 1, 0): lo > hi violates the
+    // precondition (an assertion in MSVC debug builds, unspecified otherwise). An empty
+    // final page is the correct answer there.
+    const int remaining = p.total_bytes - p.offset;
+    const int take = remaining <= 0 ? 0 : std::clamp(limit, 1, remaining);
     p.text = QString::fromUtf8(it->text.mid(p.offset, take));
     p.returned = take;
     p.has_more = p.offset + take < p.total_bytes;

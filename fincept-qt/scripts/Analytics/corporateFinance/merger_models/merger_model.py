@@ -221,10 +221,160 @@ class MergerModel:
 
         return summary
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `merger_model.py <command> <flat-params-json>` (argv length 3) for build /
+# accretion_dilution / pro_forma. The native forms are positional (`build acquirer target terms`,
+# `accretion_dilution model_json`, `pro_forma acquirer target year`), so a service-style call is handled here by
+# building the three inputs from the flat panel / MCP params and running the same MergerModel. Any other argv
+# shape is untouched.
+_SERVICE_COMMANDS = ("build", "accretion_dilution", "pro_forma")
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _svc_company(p, role, ref_margin, tax_rate):
+    """Company dict from `p[role]` (panel) and/or `<role>_<field>` keys (MCP), with the gaps filled."""
+    d = dict(p[role]) if isinstance(p.get(role), dict) else {}
+    for k in ("revenue", "ebitda", "ebit", "net_income", "shares_outstanding", "shares", "eps", "cash", "debt",
+              "stock_price", "total_assets", "total_liabilities", "shareholders_equity", "depreciation",
+              "interest_expense"):
+        v = p.get(role + "_" + k)
+        if v is not None and k not in d:
+            d[k] = v
+    if "shares" in d and "shares_outstanding" not in d:
+        d["shares_outstanding"] = d["shares"]
+    revenue = float(d.get("revenue") or 0.0)
+    dep = float(d.setdefault("depreciation", revenue * 0.03))
+    interest = float(d.setdefault("interest_expense", 0.0))
+    ni = d.get("net_income")
+    if ni is None and d.get("eps") and d.get("shares_outstanding"):
+        ni = float(d["eps"]) * float(d["shares_outstanding"])
+    ebitda = d.get("ebitda")
+    ebit = d.get("ebit")
+    # Fill the income statement from whatever was supplied: EBITDA/EBIT first, then back-solve from net income,
+    # then fall back to the acquirer's EBITDA margin applied to revenue.
+    if not ebitda and not ebit:
+        if ni:
+            ebit = float(ni) / (1.0 - tax_rate) + interest
+            ebitda = ebit + dep
+        else:
+            ebitda = revenue * ref_margin
+            ebit = ebitda - dep
+    elif not ebitda:
+        ebitda = float(ebit) + dep
+    elif ebit is None:
+        ebit = float(ebitda) - dep
+    d["ebitda"] = float(ebitda)
+    d["ebit"] = float(ebit)
+    if not revenue and d["ebitda"] and ref_margin > 0:
+        revenue = d["ebitda"] / ref_margin  # only profit was supplied: infer a revenue base
+        d["revenue"] = revenue
+    # The pro-forma builder rebuilds EBIT from revenue - COGS - SG&A, so make those consistent with the EBITDA.
+    d.setdefault("sg_a", revenue * 0.20)
+    d.setdefault("r_d", 0.0)
+    d.setdefault("cogs", max(revenue - float(d["sg_a"]) - float(d["r_d"]) - d["ebitda"], 0.0))
+    d.setdefault("gross_profit", revenue - float(d["cogs"]))
+    if ni is None:
+        ni = (d["ebit"] - interest) * (1.0 - tax_rate)
+    d["net_income"] = float(ni)
+    ni = float(d["net_income"])
+    if "ebt" not in d:
+        d["ebt"] = ni / (1.0 - tax_rate) if tax_rate < 1 else ni
+    d.setdefault("taxes", float(d["ebt"]) - ni)
+    shares = float(d.get("shares_outstanding") or 0.0)
+    if shares <= 0:
+        eps_given = float(d.get("eps") or 0.0)
+        # No share count supplied: derive it from EPS, else assume $2.00 of EPS (acquirer: 100M shares).
+        shares = ni / eps_given if (eps_given > 0 and ni > 0) else (100e6 if role == "acquirer" else max(ni / 2.0, 1e6))
+    d["shares_outstanding"] = shares
+    d["eps"] = float(d.get("eps") or (ni / shares))
+    return d
+
+
+def _svc_merger_inputs(p):
+    tax_rate = _svc_num(p, "tax_rate", default=0.21)
+    acq_src = p.get("acquirer") if isinstance(p.get("acquirer"), dict) else {}
+    acq_rev = _svc_num(acq_src, "revenue", default=_svc_num(p, "acquirer_revenue", default=0.0))
+    acq_ebitda = _svc_num(acq_src, "ebitda", default=_svc_num(p, "acquirer_ebitda"))
+    ref_margin = (acq_ebitda / acq_rev) if (acq_rev and acq_ebitda) else 0.20
+    acquirer = _svc_company(p, "acquirer", ref_margin, tax_rate)
+    target = _svc_company(p, "target", ref_margin, tax_rate)
+    if "acquirer_eps" in p and not (isinstance(p.get("acquirer"), dict) and p["acquirer"].get("eps")):
+        acquirer["eps"] = float(p["acquirer_eps"])
+    price = _svc_num(p, "deal_value", "purchase_price", "target_deal_value", default=None)
+    if not price:
+        price = max(float(target["net_income"]), 1.0) * 20.0
+    cash_pct = _svc_num(p, "cash_pct", "cash_percentage", default=0.5)
+    if cash_pct > 1.0:
+        cash_pct /= 100.0
+    synergies = _svc_num(p, "synergies", default=None)
+    if synergies is None:
+        synergies = _svc_num(p, "cost_synergies", default=0.0) + _svc_num(p, "revenue_synergies", default=0.0)
+    terms = {
+        "purchase_price": price,
+        "cash_consideration": price * cash_pct,
+        "stock_consideration": price * (1.0 - cash_pct),
+        "acquirer_stock_price": _svc_num(p, "acquirer_stock_price", "new_share_price",
+                                         default=float(acquirer.get("stock_price") or acquirer["eps"] * 15.0 or 50.0)),
+        "synergies": synergies,
+        "integration_costs": _svc_num(p, "integration_costs", default=0.0),
+        "tax_rate": tax_rate,
+        "debt_interest_rate": _svc_num(p, "debt_interest_rate", default=0.05),
+    }
+    return acquirer, target, terms
+
+
+def _service_dispatch(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return False
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return False
+    if not isinstance(p, dict):
+        return False
+    if "acquirer_data" in p or "deal_terms" in p:
+        return False  # the native `accretion_dilution <model_data_json>` form (same argv shape) — not a flat call
+    try:
+        acquirer, target, terms = _svc_merger_inputs(p)
+        results = MergerModel(acquirer, target, terms).build_complete_model()
+        if argv[1] == "build":
+            data = results
+        elif argv[1] == "accretion_dilution":
+            data = {
+                "accretion_dilution": results.get("accretion_dilution", {}),
+                "breakeven_synergies": results.get("breakeven_synergies", 0),
+                "deal_overview": results.get("deal_overview", {}),
+            }
+        else:
+            year = int(_svc_num(p, "years", "year", default=1.0))
+            projections = results.get("multi_year_projections", {})
+            data = {
+                "pro_forma": projections.get(str(year), results.get("pro_forma_year1", {})),
+                "year": year,
+                "standalone_vs_proforma": results.get("standalone_vs_proforma", {}),
+            }
+        print(json.dumps({"success": True, "data": data}, default=str))
+    except Exception as e:
+        print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
+        sys.exit(1)
+    return True
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    if _service_dispatch(sys.argv):
+        return
     if len(sys.argv) < 2:
         result = {
             "success": False,

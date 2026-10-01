@@ -80,8 +80,13 @@ void AiChatScreen::show_typing(bool show) {
 // ── Session management ────────────────────────────────────────────────────────
 
 void AiChatScreen::on_send() {
-    if (streaming_)
+    if (streaming_) {
+        // While a reply is streaming the Send button is the Stop button (see
+        // set_input_enabled). Only the streaming path can be interrupted.
+        if (stoppable_)
+            ai_chat::LlmService::instance().cancel_active_request(pending_req_session_);
         return;
+    }
     const QString raw_text = input_box_->toPlainText().trimmed();
     if (raw_text.isEmpty() && attached_file_path_.isEmpty())
         return;
@@ -100,32 +105,67 @@ void AiChatScreen::on_send() {
     // Build final text: prepend file contents if attached
     QString text = raw_text;
     if (!attached_file_path_.isEmpty()) {
+        const QFileInfo fi(attached_file_path_);
+        QString attach_error;
+        QString file_content;
+        bool truncated = false;
+        constexpr qsizetype kAttachMaxChars = 32000;
         QFile f(attached_file_path_);
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&f);
-            in.setEncoding(QStringConverter::Utf8);
-            QString file_content = in.read(32000); // cap at 32K chars
+        if (!f.open(QIODevice::ReadOnly)) {
+            attach_error = tr("Could not read the attached file \"%1\": %2").arg(fi.fileName(), f.errorString());
+        } else {
+            // 4 bytes/char worst case for UTF-8, so this always covers the character cap.
+            const QByteArray raw = f.read(kAttachMaxChars * 4);
+            truncated = !f.atEnd();
             f.close();
-            QFileInfo fi(attached_file_path_);
-            text = QString("[Attached file: %1]\n\n%2\n\n---\n\n%3").arg(fi.fileName(), file_content, raw_text);
+            if (raw.contains('\0')) {
+                // The picker offers PDF / notebooks / "All files": a binary one used to be
+                // decoded as text and sent to the model as garbage.
+                attach_error = tr("\"%1\" looks like a binary file (PDF, image, archive…) and can't be sent as text. "
+                                  "Attach a text-based file such as .txt, .md, .csv, .json or .ipynb.")
+                                   .arg(fi.fileName());
+            } else {
+                file_content = QString::fromUtf8(raw);
+                if (file_content.startsWith(QChar(0xFEFF)))
+                    file_content.remove(0, 1);
+                if (file_content.size() > kAttachMaxChars) {
+                    file_content.truncate(kAttachMaxChars);
+                    truncated = true;
+                }
+            }
         }
-        // Reset attach state
+        // Reset attach state either way: the file is consumed or unusable.
         attached_file_path_.clear();
         if (attach_badge_)
             attach_badge_->setVisible(false);
         if (attach_btn_)
             attach_btn_->setProperty("active", false);
+        ScreenStateManager::instance().notify_changed(this);
+        if (!attach_error.isEmpty()) {
+            // Nothing was sent — the typed message stays in the box.
+            add_message_bubble("system", attach_error);
+            return;
+        }
+        // A silently clipped file reads as the whole file, so the model is told when it
+        // is one. This is prompt text (stored in history), not UI — deliberately not tr().
+        const QString header =
+            truncated ? QStringLiteral("[Attached file: %1 — truncated to the first %2 characters]")
+                            .arg(fi.fileName())
+                            .arg(kAttachMaxChars)
+                      : QStringLiteral("[Attached file: %1]").arg(fi.fileName());
+        text = QString("%1\n\n%2\n\n---\n\n%3").arg(header, file_content, raw_text);
     }
 
     // Phase 7: prepend the linked-group symbol context so the LLM has the
     // security in scope. Only emitted on the wire — the visible bubble
     // still shows the user's raw_text. The user's bubble below is
     // unchanged, but `text` (the LLM payload) carries the prefix.
-    if (linked_symbol_.is_valid()) {
+    if (linked_symbol_.is_valid() && linked_context_pending_) {
         text = QString("[Context: %1 (%2)]\n\n%3")
                    .arg(linked_symbol_.symbol,
                         linked_symbol_.asset_class.isEmpty() ? QStringLiteral("equity") : linked_symbol_.asset_class,
                         text);
+        linked_context_pending_ = false; // one-shot: the history now carries the context
     }
 
     // Capture request‑time context for correct persistence
@@ -138,6 +178,9 @@ void AiChatScreen::on_send() {
     pending_req_model_ = req_model;
     input_box_->clear();
     input_box_->setFixedHeight(44);
+    // Only the streaming path can be interrupted (cancel_active_request); it turns the
+    // Send button into Stop for the duration of the reply.
+    stoppable_ = ai_chat::provider_supports_streaming(req_provider);
     set_input_enabled(false);
     streaming_ = true;
     show_welcome(false);
@@ -163,8 +206,7 @@ void AiChatScreen::on_send() {
     reset_thinking_state();
     reset_tools_state();
 
-    const QString provider = ai_chat::LlmService::instance().active_provider();
-    if (ai_chat::provider_supports_streaming(provider)) {
+    if (stoppable_) {
         QPointer<AiChatScreen> self = this;
         auto first_chunk = std::make_shared<bool>(true);
         ai_chat::LlmService::instance().chat_streaming(
@@ -190,8 +232,11 @@ void AiChatScreen::on_send() {
             ai_chat::LlmService::ToolPolicy::All, active_session_id_);
     } else {
         QPointer<AiChatScreen> self = this;
-        (void)QtConcurrent::run([self, text, hist_copy]() {
+        (void)QtConcurrent::run([self, text, hist_copy, req_session]() {
             auto resp = ai_chat::LlmService::instance().chat(text, hist_copy);
+            // on_streaming_done() only accepts a response that carries this request's
+            // session id (the signal path stamps it itself; this direct path must too).
+            resp.origin_session_id = req_session;
             QMetaObject::invokeMethod(
                 qApp,
                 [self, resp]() {
@@ -245,7 +290,17 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
 }
 
 void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
+    // finished_streaming() is a process-wide signal and the floating Quick Chat bubble
+    // listens to the same one. Without this check every Quick Chat answer landed here
+    // too — rendered into this tab's transcript, appended to its history and written
+    // to the database under an empty session id — and, symmetrically, this tab's own
+    // answers leaked into the bubble. Only the response to OUR request (same session
+    // id, while we are waiting for one) is ours.
+    if (!streaming_ || response.origin_session_id != pending_req_session_)
+        return;
+
     streaming_ = false;
+    stoppable_ = false;
     show_typing(false);
 
     // Lock in the Thinking and Tools cards (swap their live headers for final
@@ -267,13 +322,49 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     set_input_enabled(true);
 
     if (!response.success) {
-        if (streaming_bubble_) {
+        // Text that streamed before the failure / Stop stays on screen. Replacing the
+        // bubble with the error used to discard it — up to minutes of generated answer.
+        QString partial = streaming_bubble_ ? streaming_bubble_->property("acc").toString() : QString();
+        if (partial == tr("Calling tool...") || partial == QLatin1String("Calling tool..."))
+            partial.clear();
+        partial = partial.trimmed();
+
+        if (response.cancelled) {
+            LOG_INFO("AiChat", QString("LLM request stopped by user (%1 chars kept)").arg(partial.size()));
+            if (streaming_bubble_) {
+                if (partial.isEmpty())
+                    fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, tr("Stopped."));
+                else
+                    fincept::ai_chat::ChatBubbleFactory::finalize_streaming(
+                        streaming_bubble_, partial + QStringLiteral("\n\n*") + tr("(stopped)") + QStringLiteral("*"));
+            }
+            if (!partial.isEmpty()) {
+                // Keep the partial answer in the transcript (and tell the model it was cut off
+                // on the next turn) so reloading the session shows what the user saw.
+                const QString saved = partial + QStringLiteral("\n\n*(stopped)*");
+                history_.push_back({"assistant", saved});
+                total_messages_++;
+                update_stats();
+                ChatRepository::instance().add_message(pending_req_session_, "assistant", saved, pending_req_provider_,
+                                                       pending_req_model_, response.total_tokens);
+            }
+        } else {
             const QString err =
                 response.error.isEmpty() ? tr("Error: request failed") : tr("Error: %1").arg(response.error);
-            fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, err);
+            if (streaming_bubble_) {
+                if (partial.isEmpty())
+                    fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, err);
+                else
+                    fincept::ai_chat::ChatBubbleFactory::finalize_streaming(
+                        streaming_bubble_, partial + QStringLiteral("\n\n**") + err + QStringLiteral("**"));
+            }
+            LOG_WARN("AiChat", QString("LLM request failed: %1").arg(response.error));
         }
-        LOG_WARN("AiChat", QString("LLM request failed: %1").arg(response.error));
         streaming_bubble_ = nullptr;
+        pending_req_session_.clear();
+        pending_req_provider_.clear();
+        pending_req_model_.clear();
+        scroll_to_bottom();
         return;
     }
 
@@ -588,13 +679,15 @@ void AiChatScreen::scroll_to_bottom() {
 
 void AiChatScreen::set_input_enabled(bool enabled) {
     input_box_->setEnabled(enabled);
-    send_btn_->setEnabled(enabled);
+    // While a streamed reply is running the send button stays live as "Stop"
+    // (on_send() routes the click to cancel_active_request()).
+    send_btn_->setEnabled(enabled || stoppable_);
     new_btn_->setEnabled(enabled);
     search_edit_->setEnabled(enabled);
     session_list_->setEnabled(enabled);
     delete_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
     rename_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
-    send_btn_->setText(enabled ? tr("Send") : "···");
+    send_btn_->setText(enabled ? tr("Send") : (stoppable_ ? tr("Stop") : QStringLiteral("···")));
 
     // Status dot + label
     const QString status_color = enabled ? col::POSITIVE() : col::AMBER();

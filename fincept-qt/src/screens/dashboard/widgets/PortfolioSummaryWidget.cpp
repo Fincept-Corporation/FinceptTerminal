@@ -105,18 +105,22 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     // refresh. PortfolioService is the single source of truth; we listen to
     // its signals rather than polling.
     auto& svc = services::PortfolioService::instance();
+    // load_holdings() (re)subscribes to the hub, so these reloads only run while
+    // the tile is visible — otherwise a hidden tile would take a subscription
+    // that hideEvent() has already released, and keep it. showEvent() reloads
+    // when hub_active_ is false, so a change made while hidden is picked up then.
     connect(&svc, &services::PortfolioService::asset_added, this, [this](const QString& pid) {
-        if (pid == selected_portfolio_id_)
+        if (pid == selected_portfolio_id_ && isVisible())
             load_holdings();
     });
     connect(&svc, &services::PortfolioService::asset_sold, this, [this](const QString& pid) {
-        if (pid == selected_portfolio_id_)
+        if (pid == selected_portfolio_id_ && isVisible())
             load_holdings();
     });
     connect(&svc, &services::PortfolioService::portfolio_created, this, [this](const portfolio::Portfolio&) {
         refresh_portfolio_cache();
         // If we had no selection yet, pick the first one now.
-        if (selected_portfolio_id_.isEmpty())
+        if (selected_portfolio_id_.isEmpty() && isVisible())
             load_holdings();
     });
     connect(&svc, &services::PortfolioService::portfolio_deleted, this, [this](const QString& deleted_id) {
@@ -125,7 +129,8 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
             selected_portfolio_id_.clear();
             selected_portfolio_name_.clear();
             emit config_changed(config());
-            load_holdings();
+            if (isVisible())
+                load_holdings();
         }
     });
 
@@ -380,17 +385,26 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
         double price = q ? q->price : 0;
         double value = price * h.shares;
         double cost = h.avg_cost * h.shares;
-        double pnl = value - cost;
+        // A holding with no price yet (quotes stream in one symbol at a time,
+        // and a delisted/unknown symbol never prices) used to contribute its
+        // full cost basis to total_cost with zero value — so TOTAL P&L read as a
+        // huge loss until every quote landed, and forever if one never did.
+        // Leave unpriced holdings out of the value/cost/P&L totals entirely.
+        const bool priced = price > 0;
+        double pnl = priced ? value - cost : 0;
         double day_chg = q ? (q->change * h.shares) : 0;
 
-        total_value += value;
-        total_cost += cost;
+        if (priced) {
+            total_value += value;
+            total_cost += cost;
+        }
         day_pnl += day_chg;
 
         // No setStyleSheet in this loop — colours come from the single
         // stylesheet on list_widget_ (see apply_styles) via these object names.
         auto* row = new QWidget(list_widget_);
         row->setObjectName(alt ? QStringLiteral("psRowAlt") : QStringLiteral("psRow"));
+        link_symbol(row, h.symbol); // double-click a holding → Equity Research
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
@@ -411,7 +425,11 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
 
         QString pnl_str = pnl >= 0 ? QStringLiteral("+") + sym + QString::number(pnl, 'f', 0)
                                    : QStringLiteral("-") + sym + QString::number(-pnl, 'f', 0);
-        cell(pnl_str, Qt::AlignRight, pnl >= 0 ? QStringLiteral("psPnlPos") : QStringLiteral("psPnlNeg"));
+        if (!priced)
+            pnl_str = QStringLiteral("--");
+        cell(pnl_str, Qt::AlignRight,
+             !priced ? QStringLiteral("psNum")
+                     : (pnl >= 0 ? QStringLiteral("psPnlPos") : QStringLiteral("psPnlNeg")));
 
         list_layout_->addWidget(row);
         alt = !alt;

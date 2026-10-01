@@ -66,6 +66,7 @@ class CryptoCredentials : public QDialog {
     QLabel* totp_code_label_ = nullptr;
     QLabel* totp_countdown_label_ = nullptr;
     QTimer* totp_timer_ = nullptr;
+    int totp_remaining_ = 0; // seconds left in the current code window (counted down locally)
 };
 
 } // namespace fincept::screens::crypto

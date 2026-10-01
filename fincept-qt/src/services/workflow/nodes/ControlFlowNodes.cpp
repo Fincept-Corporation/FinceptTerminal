@@ -162,9 +162,43 @@ void register_control_flow_nodes(NodeRegistry& registry) {
                 {"mode", "Mode", "select", "append", {"append", "merge_by_key", "keep_first"}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>& inputs,
+            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                // Combine all inputs into an array
+                // The "Mode" select was never read: every merge was an append.
+                const QString mode = params.value("mode").toString("append");
+
+                if (mode == "keep_first") {
+                    // First branch that actually delivered data wins.
+                    for (const auto& input : inputs) {
+                        if (!input.isNull() && !input.isUndefined()) {
+                            cb(true, input, {});
+                            return;
+                        }
+                    }
+                    cb(true, QJsonValue{}, {});
+                    return;
+                }
+
+                if (mode == "merge_by_key") {
+                    // Combine object branches into one object; later branches win on a key clash.
+                    // (Anything that is not an object cannot be merged by key and falls through
+                    // to the append behaviour.)
+                    bool all_objects = !inputs.isEmpty();
+                    for (const auto& input : inputs)
+                        all_objects = all_objects && input.isObject();
+                    if (all_objects) {
+                        QJsonObject combined;
+                        for (const auto& input : inputs) {
+                            const QJsonObject o = input.toObject();
+                            for (auto it = o.constBegin(); it != o.constEnd(); ++it)
+                                combined.insert(it.key(), it.value());
+                        }
+                        cb(true, combined, {});
+                        return;
+                    }
+                }
+
+                // append: combine all inputs into an array
                 QJsonArray merged;
                 for (const auto& input : inputs)
                     merged.append(input);
@@ -190,7 +224,9 @@ void register_control_flow_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                int ms = static_cast<int>(params.value("seconds").toDouble(1.0) * 1000);
+                // A negative interval never fires (the run would hang) and a huge one overflows
+                // int; clamp to 0..24 h.
+                const int ms = static_cast<int>(qBound(0.0, params.value("seconds").toDouble(1.0), 86400.0) * 1000.0);
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
                 QTimer::singleShot(ms, [cb, data]() { cb(true, data, {}); });
             },
@@ -215,8 +251,21 @@ void register_control_flow_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject&, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                cb(true, data, {});
+                // WorkflowExecutor feeds this node an error record ({_error, error, node_id,
+                // node_name}) when an upstream node failed. Annotate the branch so
+                // output_error / output_success carry data only on the matching side.
+                QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                bool had_error = false;
+                for (const auto& in : inputs) {
+                    if (in.isObject() && in.toObject().value("_error").toBool(false)) {
+                        data = in;
+                        had_error = true;
+                        break;
+                    }
+                }
+                QJsonObject out = data.isObject() ? data.toObject() : QJsonObject{{"value", data}};
+                out["_branch"] = had_error ? "false" : "true";
+                cb(true, out, {});
             },
     });
 }

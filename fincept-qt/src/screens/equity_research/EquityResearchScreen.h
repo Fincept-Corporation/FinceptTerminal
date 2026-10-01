@@ -59,7 +59,13 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     QWidget* build_title_bar();
     QWidget* build_quote_bar();
     void update_quote_bar(const services::equity::QuoteData& q);
-    void load_symbol(const QString& symbol);
+    /// Blank every quote-bar field that belongs to the previous symbol (change, volume,
+    /// H/L, market cap, recommendation) while the new symbol's data is in flight.
+    void reset_quote_bar();
+    /// `publish_to_group` = false when the symbol was translated from a linked panel's own
+    /// form (see research_symbol_from_ref): echoing the yfinance form back would make e.g.
+    /// Equity Trading select "RELIANCE.NS" as a broker symbol.
+    void load_symbol(const QString& symbol, bool publish_to_group = true);
     void retranslateUi();
     void hub_subscribe_broker_quote();
     void hub_unsubscribe_broker_quote();
@@ -95,6 +101,9 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     QString current_symbol_;
     QString current_currency_;
     double last_price_ = 0.0; // freshest quote price, seeds the order ticket
+    // Freshest quote for the current symbol — re-rendered when the instrument's
+    // currency becomes known (the quote usually lands before the info does).
+    services::equity::QuoteData last_quote_;
     bool hub_broker_active_ = false;
 
     // Symbol group link — SymbolGroup::None when unlinked.

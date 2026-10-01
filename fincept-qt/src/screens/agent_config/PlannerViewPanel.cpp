@@ -395,6 +395,40 @@ void PlannerViewPanel::setup_connections() {
         }
     });
 
+    // The Step / Type cells are editable (double-click), but execute_plan()
+    // serialises current_plan_ — never the table — so every edit used to be
+    // cosmetic and was silently dropped at EXECUTE. Write edits back to the plan.
+    connect(steps_table_, &QTableWidget::itemChanged, this, [this](QTableWidgetItem* item) {
+        if (!item)
+            return;
+        const int row = item->row();
+        if (row < 0 || row >= current_plan_.steps.size())
+            return;
+        auto& step = current_plan_.steps[row];
+        if (item->column() == 1) {
+            const QString name = item->text().trimmed();
+            // An agent step runs its `query`. A hand-added step has none, so the
+            // name the user typed is the instruction — but never overwrite a
+            // query that differs from the name (generated plans carry a full one).
+            if (step.step_type == QLatin1String("agent") &&
+                (!step.config.contains("query") || step.config.value("query").toString() == step.name))
+                step.config["query"] = name;
+            step.name = name;
+        } else if (item->column() == 2) {
+            static const QStringList kStepTypes = {"agent", "tool", "condition", "parallel", "loop", "wait",
+                                                   "checkpoint"};
+            const QString type = item->text().trimmed().toLower();
+            if (!kStepTypes.contains(type)) {
+                // Not a type the planner can run — put the old one back.
+                QSignalBlocker block(steps_table_);
+                item->setText(step.step_type);
+                plan_status_->setText(tr("INVALID TYPE"));
+                return;
+            }
+            step.step_type = type;
+        }
+    });
+
     // History selection
     connect(history_list_, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row >= 0 && row < plan_history_.size()) {
@@ -535,8 +569,11 @@ void PlannerViewPanel::add_step() {
     int row = steps_table_->rowCount();
     services::PlanStep step;
     step.id = QString("step_%1").arg(row + 1);
-    step.name = "New Step";
-    step.step_type = "run";
+    step.name = tr("Describe this step...");
+    // "run" is not a planner step type — finagent_core rejected the whole plan
+    // with "'run' is not a valid StepType". An agent step runs its query, which
+    // is taken from the name once the user edits it (itemChanged above).
+    step.step_type = "agent";
     step.status = "pending";
     current_plan_.steps.append(step);
     steps_table_->setRowCount(row + 1);

@@ -213,11 +213,30 @@ QString KotakBroker::with_sid(const QString& base_path, const TokenParts& p) {
     return p.base_url + base_path + sep + "sId=" + p.server_id;
 }
 
+// Kotak spells its error text `emsg` on the quick/portfolio endpoints but `errMsg` on the
+// login endpoints (and some gateway replies); read either.
+static QString kotak_error_text(const BrokerHttpResponse& resp) {
+    QString msg = resp.json.value("emsg").toString();
+    if (msg.isEmpty())
+        msg = resp.json.value("errMsg").toString();
+    return msg;
+}
+
+// Kotak answers an empty order/trade/position/holding list with stat "Not_Ok" and a
+// "no data" style message instead of an empty array. That is an empty book, not a failure.
+static bool kotak_is_no_data(const BrokerHttpResponse& resp) {
+    if (resp.json.value("stat").toString() != "Not_Ok")
+        return false;
+    const QString m = kotak_error_text(resp).toLower();
+    return m.contains("no data") || m.contains("no record") || m.contains("no order") || m.contains("no trade") ||
+           m.contains("no position") || m.contains("no holding");
+}
+
 // ── Token expiry detection ────────────────────────────────────────────────────
 bool KotakBroker::is_token_expired(const BrokerHttpResponse& resp) {
     if (resp.status_code == 401 || resp.status_code == 403)
         return true;
-    const QString emsg = resp.json.value("emsg").toString().toLower();
+    const QString emsg = kotak_error_text(resp).toLower();
     if (emsg.contains("invalid session") || emsg.contains("session expired") || emsg.contains("unauthorized") ||
         emsg.contains("not logged in") || emsg.contains("token expired") || emsg.contains("please login"))
         return true;
@@ -225,7 +244,7 @@ bool KotakBroker::is_token_expired(const BrokerHttpResponse& resp) {
 }
 
 QString KotakBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
-    QString msg = resp.json.value("emsg").toString();
+    QString msg = kotak_error_text(resp);
     if (msg.isEmpty())
         msg = resp.json.value("message").toString();
     if (msg.isEmpty())
@@ -318,7 +337,8 @@ TokenExchangeResponse KotakBroker::exchange_token(const QString& api_key, const 
 
     const QString view_token = d1.value("token").toString();
     const QString view_sid = d1.value("sid").toString();
-    LOG_INFO(TAG, "Kotak Step1 OK, sid=" + view_sid);
+    // The view session id is a live session credential — log only that it arrived (P14).
+    LOG_INFO(TAG, QString("Kotak Step1 OK, view session %1").arg(view_sid.isEmpty() ? "missing" : "received"));
 
     // ── Step 2: MPIN validation ───────────────────────────────────────────────
     QJsonObject step2_body;
@@ -526,6 +546,8 @@ ApiResponse<QVector<BrokerOrderInfo>> KotakBroker::get_orders(const BrokerCreden
     hdrs["Content-Type"] = "application/json";
     auto resp = BrokerHttp::instance().get(with_sid("/quick/user/orders", p), hdrs);
 
+    if (kotak_is_no_data(resp))
+        return {true, QVector<BrokerOrderInfo>{}, "", ts};
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_orders failed"), ts};
 
@@ -566,6 +588,8 @@ ApiResponse<QJsonObject> KotakBroker::get_trade_book(const BrokerCredentials& cr
     hdrs["Content-Type"] = "application/json";
     auto resp = BrokerHttp::instance().get(with_sid("/quick/user/trades", p), hdrs);
 
+    if (kotak_is_no_data(resp))
+        return {true, QJsonObject{{"stat", "Ok"}, {"data", QJsonArray{}}}, "", ts};
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_trade_book failed"), ts};
     return {true, resp.json, "", ts};
@@ -584,6 +608,8 @@ ApiResponse<QVector<BrokerPosition>> KotakBroker::get_positions(const BrokerCred
     hdrs["Content-Type"] = "application/json";
     auto resp = BrokerHttp::instance().get(with_sid("/quick/user/positions", p), hdrs);
 
+    if (kotak_is_no_data(resp))
+        return {true, QVector<BrokerPosition>{}, "", ts};
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_positions failed"), ts};
 
@@ -637,6 +663,8 @@ ApiResponse<QVector<BrokerHolding>> KotakBroker::get_holdings(const BrokerCreden
     hdrs["Content-Type"] = "application/json";
     auto resp = BrokerHttp::instance().get(with_sid("/portfolio/v1/holdings", p), hdrs);
 
+    if (kotak_is_no_data(resp))
+        return {true, QVector<BrokerHolding>{}, "", ts};
     if (!resp.success || resp.json.value("stat").toString() == "Not_Ok")
         return {false, std::nullopt, checked_error(resp, "get_holdings failed"), ts};
 

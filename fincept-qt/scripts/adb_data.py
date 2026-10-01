@@ -16,7 +16,7 @@ from datetime import datetime
 import urllib.parse
 
 # --- CONFIGURATION ---
-BASE_URL = "https://kidb.adb.org/api/v4/sdmx"
+BASE_URL = "https://kidb.adb.org/api/v5/sdmx"
 TIMEOUT = 30
 RATE_LIMIT_DELAY = 2.1  # ~28 queries per minute to stay under limit
 
@@ -27,16 +27,23 @@ FREQUENCIES = {
     'M': 'Monthly'
 }
 
-# Major dataflow codes (can be expanded)
+# Major dataflow codes (can be expanded). KIDB moved to API v5 and renamed its dataflows
+# (the old EO_* / PPL_* ids now answer "Unknown dataflow"); full list: get_dataflows.
 DATAFLOWS = {
-    'EO_NA': 'National Accounts',
-    'PPL_POP': 'Population',
-    'EO_FI': 'Financial Indicators',
-    'EO_TR': 'Trade',
-    'EO_PM': 'Price Management',
-    'EO_GOV': 'Government Finance',
-    'EO_EL': 'External Sector'
+    'DF_NA': 'National Accounts',
+    'DF_PPSI_POP': 'Population',
+    'DF_MF_FIN': 'Financial Indicators',
+    'DF_GLOB': 'Globalization (trade, balance of payments, FDI, tourism, remittances)',
+    'DF_PRI': 'Prices',
+    'DF_GOV_FIN': 'Government Finance',
+    'DF_EXT': 'External Indebtedness'
 }
+
+# Dataflow ids used by the convenience commands below.
+DF_NATIONAL_ACCOUNTS = 'DF_NA'
+DF_POPULATION = 'DF_PPSI_POP'
+DF_FINANCIAL = 'DF_MF_FIN'
+DF_TRADE = 'DF_GLOB'
 
 # Common economy codes (ISO 3-letter country codes)
 ECONOMIES = {
@@ -54,8 +61,34 @@ ECONOMIES = {
     'TWN': 'Taiwan',
     'AUS': 'Australia',
     'NZL': 'New Zealand',
+    # ADB's own economy codes (what the KIDB API actually keys on)
+    'SIN': 'Singapore',
+    'PRC': 'China',
+    'MAL': 'Malaysia',
+    'INO': 'Indonesia',
+    'VIE': 'Viet Nam',
+    'TAP': 'Taipei,China',
     'all': 'All Economies'
 }
+
+# KIDB does not use ISO-3 for every economy. Accept the ISO-3 codes this tool has always
+# advertised (and the Economics panel sends) and translate them to ADB's codes.
+ISO3_TO_ADB = {
+    'SGP': 'SIN',
+    'CHN': 'PRC',
+    'MYS': 'MAL',
+    'IDN': 'INO',
+    'VNM': 'VIE',
+    'TWN': 'TAP',
+}
+
+
+def _adb_economy(code: str) -> str:
+    """Normalise a user-supplied economy code (single code or 'A+B+C') to ADB's codes."""
+    if not code or str(code).lower() == 'all':
+        return ''  # SDMX wildcard = empty key segment
+    parts = [p.strip().upper() for p in str(code).split('+')]
+    return '+'.join(ISO3_TO_ADB.get(p, p) for p in parts)
 
 def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None, format_type: str = "sdmx-json") -> Dict[str, Any]:
     """
@@ -204,6 +237,7 @@ def _parse_sdmx_data(sdmx_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
         # Extract time periods from structure
         time_periods = []
+        series_dims = []
         if structures:
             struct = structures[0]
             obs_dims = struct.get('dimensions', {}).get('observation', [])
@@ -211,6 +245,25 @@ def _parse_sdmx_data(sdmx_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if od.get('id') == 'TIME_PERIOD':
                     time_periods = [v.get('value') or v.get('id') for v in od.get('values', [])]
                     break
+            series_dims = struct.get('dimensions', {}).get('series', [])
+
+        def _series_labels(series_key: str) -> Dict[str, Any]:
+            """Resolve a positional series key ("0.2.0") to indicator / economy ids and names."""
+            labels: Dict[str, Any] = {}
+            for pos, v_idx in enumerate(str(series_key).replace(':', '.').split('.')):
+                if pos >= len(series_dims):
+                    break
+                try:
+                    val = series_dims[pos].get('values', [])[int(v_idx)]
+                except (ValueError, IndexError):
+                    continue
+                dim_id = series_dims[pos].get('id')
+                if dim_id == 'INDICATOR':
+                    labels['indicator'] = val.get('id')
+                    labels['indicator_name'] = val.get('name')
+                elif dim_id == 'ECONOMY_CODE':
+                    labels['economy'] = val.get('id')
+            return labels
 
         # Parse datasets
         for dataset in datasets:
@@ -218,6 +271,7 @@ def _parse_sdmx_data(sdmx_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
             for series_key, series_data in series_dict.items():
                 observations = series_data.get('observations', {})
+                series_labels = _series_labels(series_key)
 
                 # Parse each observation
                 for obs_idx, obs_value in observations.items():
@@ -242,6 +296,7 @@ def _parse_sdmx_data(sdmx_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 "value": numeric_value,
                                 "series_key": series_key
                             }
+                            data_point.update(series_labels)
                             parsed_data.append(data_point)
 
         # Sort by time period
@@ -254,19 +309,55 @@ def _parse_sdmx_data(sdmx_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 # --- CORE API FUNCTIONS ---
 
+def _get_structure_list(path: str, element: str, description: str) -> Dict[str, Any]:
+    """
+    Fetch an SDMX-ML structure message (v5 serves structures as XML only) and list its
+    <element> entries as [{"id", "agency", "version", "name"}].
+    """
+    import xml.etree.ElementTree as ET
+
+    url = f"{BASE_URL}/{path}"
+    metadata = {
+        "source": "Asian Development Bank (ADB) - Key Indicators Database",
+        "endpoint": path,
+        "description": description,
+        "last_updated": datetime.now().isoformat()
+    }
+    try:
+        response = requests.get(url, timeout=TIMEOUT)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+    except requests.exceptions.RequestException as e:
+        return {"data": [], "metadata": metadata, "error": f"Request error: {str(e)}"}
+    except ET.ParseError as e:
+        return {"data": [], "metadata": metadata, "error": f"Invalid XML response from ADB API: {str(e)}"}
+
+    items = []
+    for node in root.iter():
+        if node.tag.split('}')[-1] != element:
+            continue
+        name = ''
+        for child in node:
+            if child.tag.split('}')[-1] == 'Name':
+                name = child.text or ''
+                break
+        items.append({
+            "id": node.attrib.get('id'),
+            "agency": node.attrib.get('agencyID'),
+            "version": node.attrib.get('version'),
+            "name": name
+        })
+    metadata["total_count"] = len(items)
+    return {"data": items, "metadata": metadata, "error": None}
+
 def get_all_dataflows() -> Dict[str, Any]:
     """
     Get all available dataflows from ADB KIDB
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
-    endpoint = "structure/ADB,all,latest"
-    result = _make_request(endpoint)
-
-    # Enhance metadata
-    if result['metadata']:
-        result['metadata']['description'] = "All available dataflows in ADB Key Indicators Database"
-        result['metadata']['total_dataflows'] = len(result['data']) if isinstance(result['data'], list) else 0
-
+    result = _get_structure_list("structure/dataflow/all/all/", "Dataflow",
+                                 "All available dataflows in ADB Key Indicators Database")
+    result['metadata']['total_dataflows'] = len(result['data'])
     return result
 
 def get_all_codelists() -> Dict[str, Any]:
@@ -274,32 +365,22 @@ def get_all_codelists() -> Dict[str, Any]:
     Get all available codelists from ADB KIDB
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
-    endpoint = "codelist/ADB,all,latest"
-    result = _make_request(endpoint)
-
-    # Enhance metadata
-    if result['metadata']:
-        result['metadata']['description'] = "All available codelists in ADB Key Indicators Database"
-        result['metadata']['total_codelists'] = len(result['data']) if isinstance(result['data'], list) else 0
-
+    result = _get_structure_list("structure/codelist/all/all/", "Codelist",
+                                 "All available codelists in ADB Key Indicators Database")
+    result['metadata']['total_codelists'] = len(result['data'])
     return result
 
 def get_dataflow_details(dataflow_code: str) -> Dict[str, Any]:
     """
     Get detailed information for a specific dataflow
     Args:
-        dataflow_code: Dataflow code (e.g., 'EO_NA', 'PPL_POP')
+        dataflow_code: Dataflow code (e.g., 'DF_NA', 'DF_PPSI_POP')
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
-    endpoint = f"dataflow/ADB/{dataflow_code}/latest"
-    result = _make_request(endpoint)
-
-    # Enhance metadata
-    if result['metadata']:
-        result['metadata']['dataflow_code'] = dataflow_code
-        result['metadata']['dataflow_name'] = DATAFLOWS.get(dataflow_code, 'Unknown')
-        result['metadata']['description'] = f"Details for dataflow {dataflow_code} ({DATAFLOWS.get(dataflow_code, 'Unknown')})"
-
+    result = _get_structure_list(f"structure/dataflow/ADB/{dataflow_code}/", "Dataflow",
+                                 f"Details for dataflow {dataflow_code}")
+    result['metadata']['dataflow_code'] = dataflow_code
+    result['metadata']['dataflow_name'] = DATAFLOWS.get(dataflow_code, 'Unknown')
     return result
 
 def get_population_data(economy: str = "all", indicator: Optional[str] = None, start_period: Optional[str] = None, end_period: Optional[str] = None) -> Dict[str, Any]:
@@ -313,11 +394,12 @@ def get_population_data(economy: str = "all", indicator: Optional[str] = None, s
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
     # Build SDMX key: A.INDICATOR.ECONOMY or A..ECONOMY for all indicators
+    adb_economy = _adb_economy(economy)
     if indicator:
-        sdmx_key = f"A.{indicator}.{economy}"
+        sdmx_key = f"A.{indicator}.{adb_economy}"
     else:
-        sdmx_key = f"A..{economy}"
-    endpoint = f"data/ADB,PPL_POP/{sdmx_key}"
+        sdmx_key = f"A..{adb_economy}"
+    endpoint = f"data/ADB,{DF_POPULATION}/{sdmx_key}"
 
     params = {}
     if start_period:
@@ -338,7 +420,7 @@ def get_population_data(economy: str = "all", indicator: Optional[str] = None, s
         result['metadata']['indicator'] = indicator
         result['metadata']['start_period'] = start_period
         result['metadata']['end_period'] = end_period
-        result['metadata']['dataflow'] = 'PPL_POP'
+        result['metadata']['dataflow'] = DF_POPULATION
         result['metadata']['description'] = f"Population data for {ECONOMIES.get(economy, economy)}" + (f" - {indicator}" if indicator else "")
         result['metadata']['total_records'] = len(result['data']) if isinstance(result['data'], list) else 0
 
@@ -354,9 +436,9 @@ def get_gdp_data(economy: str, indicator: str = "NGDP_XDC", start_period: Option
         end_period: End year (e.g., '2020')
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
-    # Build SDMX key: A.EO_NA.INDICATOR.ECONOMY
-    sdmx_key = f"A.{indicator}.{economy}"
-    endpoint = f"data/ADB,EO_NA/{sdmx_key}"
+    # Build SDMX key (dataflow DF_NA): A.INDICATOR.ECONOMY
+    sdmx_key = f"A.{indicator}.{_adb_economy(economy)}"
+    endpoint = f"data/ADB,{DF_NATIONAL_ACCOUNTS}/{sdmx_key}"
 
     params = {}
     if start_period:
@@ -377,7 +459,7 @@ def get_gdp_data(economy: str, indicator: str = "NGDP_XDC", start_period: Option
         result['metadata']['indicator'] = indicator
         result['metadata']['start_period'] = start_period
         result['metadata']['end_period'] = end_period
-        result['metadata']['dataflow'] = 'EO_NA'
+        result['metadata']['dataflow'] = DF_NATIONAL_ACCOUNTS
         result['metadata']['description'] = f"GDP data for {ECONOMIES.get(economy, economy)} - {indicator}"
         result['metadata']['total_records'] = len(result['data']) if isinstance(result['data'], list) else 0
 
@@ -400,10 +482,10 @@ def get_multiple_indicators(economy: str, indicators: List[str], start_period: O
             "error": "At least one indicator must be specified"
         }
 
-    # Build SDMX key: A.EO_NA.INDICATOR1+INDICATOR2.ECONOMY
+    # Build SDMX key (dataflow DF_NA): A.INDICATOR1+INDICATOR2.ECONOMY
     indicators_str = "+".join(indicators)
-    sdmx_key = f"A.{indicators_str}.{economy}"
-    endpoint = f"data/ADB,EO_NA/{sdmx_key}"
+    sdmx_key = f"A.{indicators_str}.{_adb_economy(economy)}"
+    endpoint = f"data/ADB,{DF_NATIONAL_ACCOUNTS}/{sdmx_key}"
 
     params = {}
     if start_period:
@@ -425,7 +507,7 @@ def get_multiple_indicators(economy: str, indicators: List[str], start_period: O
         result['metadata']['indicators_count'] = len(indicators)
         result['metadata']['start_period'] = start_period
         result['metadata']['end_period'] = end_period
-        result['metadata']['dataflow'] = 'EO_NA'
+        result['metadata']['dataflow'] = DF_NATIONAL_ACCOUNTS
         result['metadata']['description'] = f"Multiple indicators for {ECONOMIES.get(economy, economy)}: {', '.join(indicators)}"
         result['metadata']['total_records'] = len(result['data']) if isinstance(result['data'], list) else 0
 
@@ -448,10 +530,10 @@ def get_multiple_economies_data(indicator: str, economies: List[str], start_peri
             "error": "At least one economy must be specified"
         }
 
-    # Build SDMX key: A.EO_NA.INDICATOR.ECONOMY1+ECONOMY2
-    economies_str = "+".join(economies)
+    # Build SDMX key (dataflow DF_NA): A.INDICATOR.ECONOMY1+ECONOMY2
+    economies_str = _adb_economy("+".join(economies))
     sdmx_key = f"A.{indicator}.{economies_str}"
-    endpoint = f"data/ADB,EO_NA/{sdmx_key}"
+    endpoint = f"data/ADB,{DF_NATIONAL_ACCOUNTS}/{sdmx_key}"
 
     params = {}
     if start_period:
@@ -473,7 +555,7 @@ def get_multiple_economies_data(indicator: str, economies: List[str], start_peri
         result['metadata']['economy_names'] = [ECONOMIES.get(econ, econ) for econ in economies]
         result['metadata']['start_period'] = start_period
         result['metadata']['end_period'] = end_period
-        result['metadata']['dataflow'] = 'EO_NA'
+        result['metadata']['dataflow'] = DF_NATIONAL_ACCOUNTS
         result['metadata']['description'] = f"Indicator {indicator} for economies: {', '.join([ECONOMIES.get(econ, econ) for econ in economies])}"
         result['metadata']['total_records'] = len(result['data']) if isinstance(result['data'], list) else 0
 
@@ -488,9 +570,9 @@ def get_financial_indicators(economy: str, start_period: Optional[str] = None, e
         end_period: End year (e.g., '2020')
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
-    # Build SDMX key: A.EO_FI.all.ECONOMY
-    sdmx_key = f"A..{economy}"
-    endpoint = f"data/ADB,EO_FI/{sdmx_key}"
+    # Build SDMX key (dataflow DF_MF_FIN): A..ECONOMY
+    sdmx_key = f"A..{_adb_economy(economy)}"
+    endpoint = f"data/ADB,{DF_FINANCIAL}/{sdmx_key}"
 
     params = {}
     if start_period:
@@ -510,7 +592,7 @@ def get_financial_indicators(economy: str, start_period: Optional[str] = None, e
         result['metadata']['economy_name'] = ECONOMIES.get(economy, 'Unknown')
         result['metadata']['start_period'] = start_period
         result['metadata']['end_period'] = end_period
-        result['metadata']['dataflow'] = 'EO_FI'
+        result['metadata']['dataflow'] = DF_FINANCIAL
         result['metadata']['description'] = f"Financial indicators for {ECONOMIES.get(economy, economy)}"
         result['metadata']['total_records'] = len(result['data']) if isinstance(result['data'], list) else 0
 
@@ -525,9 +607,9 @@ def get_trade_data(economy: str, start_period: Optional[str] = None, end_period:
         end_period: End year (e.g., '2020')
     Returns: {"data": [...], "metadata": {...}, "error": None/error_msg}
     """
-    # Build SDMX key: A.EO_TR.all.ECONOMY
-    sdmx_key = f"A..{economy}"
-    endpoint = f"data/ADB,EO_TR/{sdmx_key}"
+    # Build SDMX key (dataflow DF_GLOB): A..ECONOMY
+    sdmx_key = f"A..{_adb_economy(economy)}"
+    endpoint = f"data/ADB,{DF_TRADE}/{sdmx_key}"
 
     params = {}
     if start_period:
@@ -547,7 +629,7 @@ def get_trade_data(economy: str, start_period: Optional[str] = None, end_period:
         result['metadata']['economy_name'] = ECONOMIES.get(economy, 'Unknown')
         result['metadata']['start_period'] = start_period
         result['metadata']['end_period'] = end_period
-        result['metadata']['dataflow'] = 'EO_TR'
+        result['metadata']['dataflow'] = DF_TRADE
         result['metadata']['description'] = f"Trade data for {ECONOMIES.get(economy, economy)}"
         result['metadata']['total_records'] = len(result['data']) if isinstance(result['data'], list) else 0
 
@@ -569,13 +651,14 @@ def search_datasets(keyword: str) -> Dict[str, Any]:
 
     # Filter dataflows by keyword
     matching_dataflows = []
-    if isinstance(dataflows_result['data'], dict) and 'dataflows' in dataflows_result['data']:
-        all_dataflows = dataflows_result['data']['dataflows']
-        for dataflow in all_dataflows:
-            if 'name' in dataflow and keyword.lower() in str(dataflow['name']).lower():
-                matching_dataflows.append(dataflow)
-            elif 'description' in dataflow and keyword.lower() in str(dataflow['description']).lower():
-                matching_dataflows.append(dataflow)
+    all_dataflows = dataflows_result['data']
+    if isinstance(all_dataflows, dict):
+        all_dataflows = all_dataflows.get('dataflows', [])
+    for dataflow in all_dataflows:
+        needle = keyword.lower()
+        haystack = " ".join(str(dataflow.get(k, '')) for k in ('name', 'id', 'description')).lower()
+        if needle in haystack:
+            matching_dataflows.append(dataflow)
 
     return {
         "data": matching_dataflows,

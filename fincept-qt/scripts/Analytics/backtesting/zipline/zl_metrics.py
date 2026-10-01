@@ -50,15 +50,18 @@ def extract_performance(
         std_ret = float(np.std(daily_returns, ddof=1)) if n_days > 1 else 1e-8
         sharpe = (mean_ret * 252) / (std_ret * np.sqrt(252)) if std_ret > 1e-8 else 0.0
 
-        # Sortino ratio
-        downside = daily_returns[daily_returns < 0]
-        downside_std = float(np.std(downside, ddof=1) * np.sqrt(252)) if len(downside) > 1 else 1e-8
+        # Sortino ratio — standard downside deviation: sqrt(mean(min(r, 0)^2)) over ALL bars
+        # (it was the sample std of only the negative bars, which re-centres them and divides
+        # by the loss count, overstating downside risk).
+        downside_std = float(np.sqrt(np.mean(np.minimum(daily_returns, 0.0) ** 2)) * np.sqrt(252)) if n_days > 1 else 1e-8
         sortino = (mean_ret * 252) / downside_std if downside_std > 1e-8 else 0.0
 
         # Max drawdown — emit as positive magnitude to match the convention
         # used by every other backtesting provider (vectorbt/backtestingpy/bt/
         # fasttrade). Frontend treats it as a percent in [0, 1].
-        cumulative = np.cumprod(1 + daily_returns)
+        # The curve starts at 1.0 (initial capital): a loss on the very first bar is a drawdown
+        # from that start, which a peak seeded with the first POST-return value never saw.
+        cumulative = np.concatenate(([1.0], np.cumprod(1 + daily_returns)))
         running_max = np.maximum.accumulate(cumulative)
         drawdowns = (cumulative - running_max) / running_max
         max_drawdown = abs(float(np.min(drawdowns))) if len(drawdowns) > 0 else 0.0
@@ -91,8 +94,12 @@ def extract_performance(
 
         # Profit factor
         gross_profit = sum(wins) if wins else 0.0
-        gross_loss = abs(sum(losses)) if losses else 1e-8
-        profit_factor = gross_profit / gross_loss if gross_loss > 1e-8 else 0.0
+        gross_loss = abs(sum(losses)) if losses else 0.0
+        if gross_loss > 1e-8:
+            profit_factor = gross_profit / gross_loss
+        else:
+            # winners and no losing trade: +inf (serialised as null; the UI shows "∞")
+            profit_factor = float('inf') if gross_profit > 0 else 0.0
 
         return {
             'total_return': _safe_float(total_return),
@@ -102,7 +109,7 @@ def extract_performance(
             'max_drawdown': _safe_float(max_drawdown),
             'win_rate': _safe_float(win_rate),
             'loss_rate': _safe_float(loss_rate),
-            'profit_factor': _safe_float(profit_factor),
+            'profit_factor': profit_factor if math.isinf(profit_factor) else _safe_float(profit_factor),  # inf -> null in JSON
             'volatility': _safe_float(volatility),
             'calmar_ratio': _safe_float(calmar),
             'total_trades': total_trades,

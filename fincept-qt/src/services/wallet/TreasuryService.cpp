@@ -33,7 +33,19 @@ constexpr const char* kDefaultMultisigUrl = "https://app.squads.so/";
 // Fetch the live SOL price by peeking the hub. Returns 0 if unavailable.
 double sol_price_usd_from_hub() {
     auto& hub = fincept::datahub::DataHub::instance();
-    const auto v = hub.peek(QStringLiteral("market:price:token:") + QString::fromLatin1(kWrappedSolMint));
+    const auto topic = QStringLiteral("market:price:token:") + QString::fromLatin1(kWrappedSolMint);
+    // peek() honours the topic TTL (60 s) and returns an invalid QVariant for an
+    // aged-out value. The treasury refresh cadence is slower than that TTL, so
+    // peek() routinely missed and the SOL leg was valued at $0, understating
+    // total reserves and runway. A SOL quote a few minutes old is far closer
+    // to the truth than zero — fall back to the last-known-good value.
+    auto v = hub.peek(topic);
+    if (!v.isValid())
+        v = hub.peek_raw(topic);
+    if (!v.isValid()) {
+        // Nothing cached at all: warm the topic so the next refresh has a price.
+        hub.request(topic, /*force=*/false);
+    }
     if (v.canConvert<TokenPrice>()) {
         const auto p = v.value<TokenPrice>();
         if (p.valid)
@@ -170,7 +182,11 @@ void TreasuryService::refresh_real(const QString& treasury_pubkey) {
                 hub.publish(QString::fromLatin1(kTopicReserves), QVariant::fromValue(r));
 
                 // Derive runway from the same total — single source of truth.
-                self->publish_runway(total_usd, /*is_mock=*/false);
+                // With SOL on the books but no SOL price the total is only the
+                // USDC leg; a runway computed from it would be a confident
+                // under-estimate, so report "unavailable" (months = 0) instead.
+                const bool sol_unpriced = sol_lamports > 0 && sol_price <= 0.0;
+                self->publish_runway(sol_unpriced ? 0.0 : total_usd, /*is_mock=*/false);
             });
     });
 }
@@ -183,7 +199,10 @@ void TreasuryService::publish_mock_reserves() {
     const double sol_ui = 234.0;
     const double usdc = 1'840'000.0;
     TreasuryReserves r;
-    r.pubkey_b58 = QStringLiteral("FinceptTreasuryMockVaultXXXXXXXXXXXXXXXXXXXX");
+    // Deliberately empty: a placeholder base58-looking string would be
+    // indistinguishable from a real vault address to any consumer that
+    // ignores is_mock.
+    r.pubkey_b58.clear();
     r.sol_lamports = static_cast<quint64>(sol_ui * 1e9);
     r.usdc_amount = usdc;
     r.sol_usd_price = sol_price;

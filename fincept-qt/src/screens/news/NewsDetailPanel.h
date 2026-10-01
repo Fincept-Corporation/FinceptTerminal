@@ -27,6 +27,15 @@ class NewsDetailPanel : public QWidget {
     void show_monitor_matches(const QVector<QPair<services::NewsMonitor, QStringList>>& matches);
     void show_entities(const services::EntityResult& entities);
     void show_infrastructure(const QVector<services::InfrastructureItem>& items);
+    /// Tell the user the ANALYZE request failed (and re-arm the button) instead
+    /// of leaving it spinning until the 30 s guard fires.
+    void show_analysis_failed();
+    /// Re-read the bookmark state of the current article from the DB and
+    /// reflect it on the BOOKMARK button (also reverts a failed toggle).
+    void refresh_bookmark_state();
+    /// Link of the article currently shown (empty when none) — lets the screen
+    /// drop an analysis result that belongs to an article the user has left.
+    QString current_article_link() const { return has_article_ ? current_article_.link : QString(); }
     void clear();
 
     /// Show/hide the panel

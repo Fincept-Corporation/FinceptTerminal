@@ -37,7 +37,7 @@ class EquityNewsTab : public QWidget {
     void retranslateUi();
     void populate(const QVector<services::equity::NewsArticle>& articles);
     void clear_cards();
-    void start_fetch();                   ///< (re)fetch current symbol with the selected provider
+    void start_fetch(bool force = false); ///< (re)fetch current symbol with the selected provider; force skips the cache
     void refresh_provider_availability(); ///< enable/disable the NewsAPI item by key presence
 
     QString current_symbol_;

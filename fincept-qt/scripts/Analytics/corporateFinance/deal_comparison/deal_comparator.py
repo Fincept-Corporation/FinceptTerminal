@@ -273,11 +273,53 @@ class DealComparator:
             }
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `deal_comparator.py <command> <flat-params-json>` (argv length 3, the JSON being an
+# OBJECT such as {"deals": [...]}). The native forms are positional and take the deals array itself
+# (`compare <deals>`, `rank <deals> <criteria>`, `benchmark <target_deal> <comparables>`, `payment_analysis <deals>`,
+# `industry_analysis <deals>`), so a service-style call is translated here and then falls through to the native
+# dispatch. Native invocations (JSON array / extra args) are untouched.
+_SERVICE_COMMANDS = ("compare", "rank", "benchmark", "payment_structures", "industry")
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    deals = p.get("deals")
+    if not isinstance(deals, list):
+        deals = []
+    if argv[1] == "compare":
+        return [argv[0], "compare", json.dumps(deals)]
+    if argv[1] == "rank":
+        return [argv[0], "rank", json.dumps(deals), str(p.get("criteria", "premium"))]
+    if argv[1] == "benchmark":
+        comparables = p.get("comparables")
+        if not isinstance(comparables, list):
+            comparables = []
+        premium = p.get("target_premium", 0.0)
+        if not isinstance(premium, (int, float)) or isinstance(premium, bool):
+            premium = 0.0
+        # Deal premiums are in percent; the panel sends the target premium as a fraction.
+        target = {"target_name": str(p.get("target_name", "Target")), "premium_1day": float(premium) * 100.0}
+        return [argv[0], "benchmark", json.dumps(target), json.dumps(comparables)]
+    native = "payment_analysis" if argv[1] == "payment_structures" else "industry_analysis"
+    return [argv[0], native, json.dumps(deals)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

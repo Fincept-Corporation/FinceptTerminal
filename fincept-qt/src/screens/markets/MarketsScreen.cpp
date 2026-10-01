@@ -44,6 +44,23 @@ static QString lbl_ss(const QString& color, bool bold = false, int px = -1) {
 // ---------------------------------------------------------------------------
 
 MarketsScreen::MarketsScreen(QWidget* parent) : QWidget(parent) {
+    // Restore the AUTO toggle and refresh interval. Both were session-only: every launch
+    // went back to ON / 10M no matter what the user had chosen (they are saved by the header
+    // controls below). Must run before build_header_bar(), which reads them.
+    {
+        auto& settings = SettingsRepository::instance();
+        const auto auto_res = settings.get("markets_auto_update");
+        if (auto_res.is_ok() && !auto_res.value().isEmpty())
+            auto_update_ = auto_res.value() != QLatin1String("0");
+        const auto interval_res = settings.get("markets_update_interval_ms");
+        if (interval_res.is_ok()) {
+            bool ok = false;
+            const int ms = interval_res.value().toInt(&ok);
+            if (ok && ms >= 60000 && ms <= 86400000)
+                update_interval_ms_ = ms;
+        }
+    }
+
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
@@ -404,6 +421,7 @@ QWidget* MarketsScreen::build_header_bar() {
     connect(auto_btn_, &QPushButton::clicked, this, [this]() {
         auto_update_ = !auto_update_;
         update_auto_style();
+        SettingsRepository::instance().set("markets_auto_update", auto_update_ ? "1" : "0", "market_data");
         if (!isVisible())
             return;
         if (auto_update_)
@@ -424,7 +442,13 @@ QWidget* MarketsScreen::build_header_bar() {
     iv->addItem(tr("1H"), 3600000);
     iv->addItem(tr("4H"), 14400000);
     iv->addItem(tr("1D"), 86400000);
-    iv->setCurrentIndex(1);
+    // Select the saved interval (10M when nothing valid was saved). Done before the
+    // currentIndexChanged connection below, so it doesn't write the setting back.
+    {
+        const int saved_idx = iv->findData(update_interval_ms_);
+        iv->setCurrentIndex(saved_idx >= 0 ? saved_idx : 1);
+        update_interval_ms_ = iv->itemData(iv->currentIndex()).toInt();
+    }
     interval_combo_ = iv;
     iv->setStyleSheet(QString("QComboBox{background:transparent;color:%1;border:none;"
                               "font-size:%6px;font-family:'%7';padding:0 4px;}"
@@ -438,6 +462,8 @@ QWidget* MarketsScreen::build_header_bar() {
     connect(iv, &QComboBox::currentIndexChanged, this, [this, iv](int i) {
         update_interval_ms_ = iv->itemData(i).toInt();
         auto_refresh_timer_->setInterval(update_interval_ms_);
+        SettingsRepository::instance().set("markets_update_interval_ms", QString::number(update_interval_ms_),
+                                           "market_data");
     });
     h->addWidget(iv);
 

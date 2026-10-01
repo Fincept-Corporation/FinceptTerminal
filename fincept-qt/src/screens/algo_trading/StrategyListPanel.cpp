@@ -407,7 +407,7 @@ void StrategyListPanel::on_backtest_clicked(int row) {
     const int abs_index = current_page_ * kPageSize + row;
     if (abs_index < 0 || abs_index >= filtered_.size())
         return;
-    const auto& strategy = filtered_[abs_index];
+    const AlgoStrategy strategy = filtered_[abs_index]; // copy: a modal exec() below outlives any reload of filtered_
 
     // Prompt for symbol + date range before running.
     QDialog dlg(this);
@@ -452,8 +452,25 @@ void StrategyListPanel::on_deploy_clicked(int row) {
     if (abs_index < 0 || abs_index >= filtered_.size())
         return;
 
-    const auto& strategy = filtered_[abs_index];
-    AlgoDeployDialog dialog(strategy.id, strategy.name, this);
+    const AlgoStrategy strategy = filtered_[abs_index]; // copy: the modal dialog below outlives any reload of filtered_
+
+    // An option/future strategy deploys as a multi-leg basket on an underlying + expiry
+    // rule that only the Builder collects. Deploying it from here went through the
+    // plain-equity path: the leg rules were ignored and the runner would evaluate and
+    // place a single-symbol equity order on whatever was typed into the symbol box.
+    if (strategy.instrument_type != QLatin1String("equity")) {
+        QMessageBox::information(this, tr("Deploy"),
+                                 tr("\"%1\" is an F&O strategy. Open it in the Builder to pick the underlying and "
+                                    "expiry, then deploy from there.")
+                                     .arg(strategy.name));
+        emit edit_requested(strategy);
+        return;
+    }
+
+    // Strategy-aware constructor: seeds the deploy dialog's timeframe from the strategy
+    // (the (id, name) form left it on its fixed default, so a "15m" strategy deployed
+    // from this list evaluated on the wrong bars).
+    AlgoDeployDialog dialog(strategy, this);
     if (dialog.exec() == QDialog::Accepted) {
         auto deployment = dialog.result();
         fincept::algo::AlgoEngine::instance().start_deployment(deployment, strategy);

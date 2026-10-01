@@ -37,6 +37,9 @@ inline QWidget* gs_make_card(const QString& label, const QString& value, QWidget
     l->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px; background:transparent;")
                          .arg(ui::colors::TEXT_TERTIARY()));
     auto* v = new QLabel(value, card);
+    // Cards carry model IDs, pipeline IDs, model keys and tickers that the next tab asks the user
+    // to paste back in (Backtest / Feature Importance / Ensemble / Process Data); make them copyable.
+    v->setTextInteractionFlags(Qt::TextSelectableByMouse);
     v->setStyleSheet(
         QString("color:%1; font-size:13px; font-weight:700; font-family:'Courier New'; background:transparent;")
             .arg(value_color.isEmpty() ? QString(ui::colors::TEXT_PRIMARY()) : value_color));

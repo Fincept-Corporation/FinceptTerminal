@@ -54,7 +54,13 @@ void FeeDiscountService::refresh(const QStringList& topics) {
 void FeeDiscountService::publish_for(const QString& topic, const QString& pubkey) {
     auto& hub = fincept::datahub::DataHub::instance();
     const auto bal_topic = balance_topic_for(pubkey);
-    const auto v = hub.peek(bal_topic);
+    // peek() returns an invalid QVariant once the balance topic's 30 s TTL has
+    // aged out, and the branch below would then publish eligible=false — a
+    // holder of 5,000 $FNCPT flickering to "LOCKED" whenever this producer
+    // refreshes between two balance polls. Prefer the last-known-good value.
+    auto v = hub.peek(bal_topic);
+    if (!v.isValid())
+        v = hub.peek_raw(bal_topic);
 
     fincept::wallet::FncptDiscount d;
     d.pubkey_b58 = pubkey;

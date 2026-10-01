@@ -71,6 +71,19 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     void hub_resubscribe_stocks();
     void hub_unsubscribe_all();
     void rebuild_from_cache();
+
+    /// Rename the watchlist at `row` (WatchlistRepository::update existed but nothing called it).
+    void rename_watchlist(int row);
+    /// Right-click menus: sidebar list (rename / delete) and stock rows (open in …, backtest, remove).
+    void show_watchlist_menu(const QPoint& pos);
+    void show_stock_menu(const QPoint& pos);
+    /// Hand `symbol` to another screen through the app-wide `nav.open_symbol` event.
+    void open_symbol_in(const QString& screen_id, const QString& symbol);
+    /// Ticker of the table row at `row` (column 0 — sort-safe), or empty.
+    QString symbol_at_row(int row) const;
+    /// symbol → human-readable name (yfinance, disk-cached by MarketDataService). The quote
+    /// feed only carries the ticker as "name", so the NAME column used to repeat the symbol.
+    QHash<QString, QString> names_;
     /// Coalesce a burst of per-symbol hub callbacks into ONE table rebuild.
     void schedule_table_rebuild();
     QTimer* rebuild_timer_ = nullptr;

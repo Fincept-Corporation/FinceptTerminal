@@ -174,6 +174,7 @@ class VectorBTProvider(BacktestingProviderBase):
                             f'allocation: {[f"${c:.0f}" for c in capital_alloc]}')
 
                 all_trades = []
+                per_symbol_records = []  # per-symbol trade DataFrames -> combined trade stats
                 per_symbol_equity = {}
                 combined_equity_values = None
 
@@ -203,6 +204,12 @@ class VectorBTProvider(BacktestingProviderBase):
 
                     sym_trades = self._parse_trades(sym_portfolio, [sym_col])
                     all_trades.extend(sym_trades)
+                    try:
+                        sym_records = sym_portfolio.trades.records_readable
+                        if len(sym_records) > 0:
+                            per_symbol_records.append(sym_records)
+                    except Exception:
+                        pass
 
                     n_sym_trades = len(sym_trades)
                     logs.append(f'{self._current_timestamp()}: {sym_col}: {n_sym_trades} trades, '
@@ -213,7 +220,9 @@ class VectorBTProvider(BacktestingProviderBase):
 
                 # Build combined portfolio from merged equity
                 combined_portfolio = pf.SimplePortfolio.from_equity_series(
-                    combined_equity_values, initial_capital
+                    combined_equity_values, initial_capital,
+                    trade_records=(pd.concat(per_symbol_records, ignore_index=True)
+                                   if per_symbol_records else None),
                 )
 
                 portfolio = combined_portfolio
@@ -1738,9 +1747,12 @@ class VectorBTProvider(BacktestingProviderBase):
             import yfinance as yf
 
             # Try downloading with normalized symbols
+            # yfinance has no 4h interval (the UI offers it): the request failed outright
+            # and the run silently fell through to SYNTHETIC data. Fetch 1h and resample.
+            dl_interval = '1h' if interval == '4h' else interval
             raw_data = yf.download(
                 normalized_symbols if len(normalized_symbols) > 1 else normalized_symbols[0],
-                start=start_date, end=end_date, interval=interval, progress=False
+                start=start_date, end=end_date, interval=dl_interval, progress=False
             )
 
             if raw_data is None or (hasattr(raw_data, 'empty') and raw_data.empty):
@@ -1750,6 +1762,9 @@ class VectorBTProvider(BacktestingProviderBase):
 
             if close_data is None or (hasattr(close_data, 'empty') and close_data.empty):
                 raise ValueError(f'No Close data for {normalized_symbols}')
+
+            if interval == '4h':
+                close_data = close_data.resample('4h').last().dropna(how='all')
 
             if isinstance(close_data, pd.DataFrame):
                 if multi_asset and close_data.shape[1] > 1:
@@ -1910,6 +1925,7 @@ class VectorBTProvider(BacktestingProviderBase):
             if hasattr(portfolio, 'trades') and hasattr(portfolio.trades, 'records_readable'):
                 records = portfolio.trades.records_readable
                 value_index = portfolio.value().index
+                intraday = self._index_is_intraday(value_index)
 
                 for idx in range(len(records)):
                     row = records.iloc[idx]
@@ -1918,8 +1934,8 @@ class VectorBTProvider(BacktestingProviderBase):
                     entry_idx = int(row.get('Entry Idx', 0))
                     exit_idx = int(row.get('Exit Idx', entry_idx))
 
-                    entry_date = str(value_index[entry_idx]).split(' ')[0] if entry_idx < len(value_index) else ''
-                    exit_date = str(value_index[exit_idx]).split(' ')[0] if exit_idx < len(value_index) else ''
+                    entry_date = self._fmt_ts(value_index[entry_idx], intraday) if entry_idx < len(value_index) else ''
+                    exit_date = self._fmt_ts(value_index[exit_idx], intraday) if exit_idx < len(value_index) else ''
 
                     pnl = float(row.get('PnL', 0))
                     entry_price = float(row.get('Entry Price', 0))
@@ -1930,7 +1946,12 @@ class VectorBTProvider(BacktestingProviderBase):
 
                     # Determine exit reason
                     exit_reason = 'signal'
-                    if 'Status' in records.columns:
+                    # The simulator labels each exit ('signal' | 'stop_loss' | 'take_profit' |
+                    # 'trailing_stop' | 'end_of_data'); every trade used to read 'signal' even
+                    # when a stop closed it.
+                    if 'Exit Reason' in records.columns and isinstance(row.get('Exit Reason'), str):
+                        exit_reason = row.get('Exit Reason')
+                    elif 'Status' in records.columns:
                         status = str(row.get('Status', ''))
                         if 'StopLoss' in status:
                             exit_reason = 'stop_loss'
@@ -1980,12 +2001,33 @@ class VectorBTProvider(BacktestingProviderBase):
 
         return trades
 
+    @staticmethod
+    def _index_is_intraday(index) -> bool:
+        """True when any bar carries a time of day (i.e. not a pure daily/weekly index)."""
+        try:
+            import pandas as pd
+            idx = pd.DatetimeIndex(index)
+            return bool(((idx.hour != 0) | (idx.minute != 0) | (idx.second != 0)).any())
+        except Exception:
+            return False
+
+    @staticmethod
+    def _fmt_ts(ts, intraday: bool) -> str:
+        """'YYYY-MM-DD' for daily data, 'YYYY-MM-DD HH:MM:SS' (tz suffix dropped) for intraday."""
+        text = str(ts)
+        if intraday:
+            return text.replace('T', ' ')[:19]
+        return text.split(' ')[0].split('T')[0]
+
     def _build_equity_curve(self, portfolio, initial_capital: float) -> list:
         """Build equity curve with returns and drawdown."""
         equity = []
         try:
             value_series = portfolio.value()
             peak = initial_capital
+            # Intraday runs must keep the time of day: truncating every bar to its date gave
+            # ~7 (1h) to ~78 (5m) equity points per date, which the chart stacked on one x.
+            intraday = self._index_is_intraday(value_series.index)
 
             for date, value in value_series.items():
                 returns = (value - initial_capital) / initial_capital if initial_capital > 0 else 0
@@ -1993,7 +2035,7 @@ class VectorBTProvider(BacktestingProviderBase):
                 drawdown = (value - peak) / peak if peak > 0 else 0
 
                 equity.append(EquityPoint(
-                    date=str(date).split(' ')[0],
+                    date=self._fmt_ts(date, intraday),
                     equity=float(value),
                     returns=float(returns),
                     drawdown=float(drawdown),
@@ -2017,7 +2059,9 @@ class VectorBTProvider(BacktestingProviderBase):
             dates_list = [str(d).split(' ')[0] for d in portfolio.value().index]
 
             # Load benchmark
-            benchmark_symbol = request.get('benchmark', '')
+            # The UI sends `benchmarkSymbol`; legacy callers `benchmark`. Only the latter was
+            # read, so the benchmark overlay / alpha / beta never ran for UI backtests.
+            benchmark_symbol = request.get('benchmark') or request.get('benchmarkSymbol') or ''
             benchmark_normalized = None
             if benchmark_symbol:
                 benchmark_normalized = self._load_benchmark(
@@ -2034,11 +2078,17 @@ class VectorBTProvider(BacktestingProviderBase):
             if benchmark_normalized is not None:
                 benchmark_equity = benchmark_normalized * equity_values[0]
 
+            try:
+                risk_free = float(request.get('riskFreeRate', 0.0) or 0.0)
+            except (TypeError, ValueError):
+                risk_free = 0.0
+            ppy = float(portfolio.periods_per_year()) if hasattr(portfolio, 'periods_per_year') else 252.0
             advanced = calc_advanced(
                 equity_values,
                 benchmark_series=benchmark_equity,
-                risk_free_rate=0.0,
+                risk_free_rate=risk_free,
                 dates=dates_list,
+                periods_per_year=ppy,
             )
 
             result_dict['advanced_metrics'] = advanced

@@ -86,6 +86,14 @@ class RelNode : public QGraphicsItem {
 
     void add_edge(RelEdge* edge) { edges_.append(edge); }
     Role role() const { return role_; }
+    /// Mark this node as a tradable symbol: double-clicking it asks the screen to open
+    /// that ticker in Equity Research.
+    void set_symbol(const QString& symbol) {
+        symbol_ = symbol;
+        setToolTip(symbol_.isEmpty()
+                       ? QString()
+                       : RelationshipGraphScene::tr("Double-click to open %1 in Equity Research").arg(symbol_));
+    }
 
     QRectF boundingRect() const override { return QRectF(-w_ / 2 - 2, -h_ / 2 - 2, w_ + 4, h_ + 4); }
 
@@ -257,10 +265,9 @@ class RelNode : public QGraphicsItem {
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override {
         if (event->button() == Qt::LeftButton) {
             if (auto* rms = qobject_cast<RelationshipGraphScene*>(scene())) {
-                if (role_ == Role::Center)
-                    emit rms->center_card_clicked(label_.split(" ").first());
                 // Every node (not just the center) opens the right-side detail
-                // panel. The panel slot looks up rich data by this label.
+                // panel. The panel slot looks up rich data by this label. A single
+                // click only inspects; navigating away is a deliberate double-click.
                 const QString category = (role_ == Role::Center) ? QStringLiteral("COMPANY")
                                          : (role_ == Role::Hub)  ? QStringLiteral("SECTOR / GROUP")
                                                                  : QStringLiteral("PEER / RELATED");
@@ -274,9 +281,19 @@ class RelNode : public QGraphicsItem {
         update();
         QGraphicsItem::mouseReleaseEvent(event);
     }
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton && !symbol_.isEmpty()) {
+            if (auto* rms = qobject_cast<RelationshipGraphScene*>(scene()))
+                emit rms->symbol_open_requested(symbol_);
+            event->accept();
+            return;
+        }
+        QGraphicsItem::mouseDoubleClickEvent(event);
+    }
 
   private:
     QVector<RelEdge*> edges_;
+    QString symbol_;
     QString label_, sub_;
     QColor accent_;
     qreal w_, h_;
@@ -325,6 +342,91 @@ void RelEdge::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*
     painter->drawLine(source_pt_, dest_pt_);
 }
 
+// ── Radial placement ──────────────────────────────────────────────────────────
+// Each cluster owns an angular sector (proportional to its leaf count); the hub sits
+// mid-sector and its leaves fan out across it, pushed outward along their own ray until
+// they clear every box placed so far. Deterministic, and overlap-free by construction.
+struct RelClusterPos {
+    QPointF hub;
+    QVector<QPointF> leaves;
+};
+
+static QRectF relmap_rect_at(const QPointF& c, qreal w, qreal h) {
+    return QRectF(c.x() - w / 2, c.y() - h / 2, w, h);
+}
+
+static bool relmap_hits_any(const QRectF& r, const QVector<QRectF>& placed, qreal gap) {
+    const QRectF probe = r.adjusted(-gap, -gap, gap, gap);
+    for (const auto& p : placed)
+        if (probe.intersects(p))
+            return true;
+    return false;
+}
+
+static QVector<RelClusterPos> relmap_radial_positions(const QVector<int>& leaf_counts) {
+    const int nc = leaf_counts.size();
+    QVector<RelClusterPos> out(nc);
+    if (nc == 0)
+        return out;
+
+    constexpr qreal kHubRadius = 330.0;
+    constexpr qreal kLeafRingStep = 215.0; // first leaf ring beyond the hub
+    constexpr qreal kGap = 6.0;
+    constexpr qreal kSectorGapDeg = 4.0;
+    constexpr qreal kPushStep = 12.0;
+
+    qreal total_w = 0;
+    for (int n : leaf_counts)
+        total_w += n + 1.5; // +1.5: the hub's own share of the sector
+    const qreal usable_deg = 360.0 - (nc > 1 ? nc * kSectorGapDeg : 0.0);
+
+    QVector<qreal> start_deg(nc), span_deg(nc);
+    qreal a = -90.0;
+    for (int i = 0; i < nc; ++i) {
+        start_deg[i] = a;
+        span_deg[i] = usable_deg * (leaf_counts[i] + 1.5) / total_w;
+        a += span_deg[i] + (nc > 1 ? kSectorGapDeg : 0.0);
+    }
+
+    QVector<QRectF> placed;
+    placed.append(relmap_rect_at(QPointF(0, 0), kCenterW, kCenterH));
+
+    // Hubs first so the leaves route around them.
+    QVector<qreal> hub_r(nc, kHubRadius);
+    for (int i = 0; i < nc; ++i) {
+        const qreal th = qDegreesToRadians(start_deg[i] + span_deg[i] / 2.0);
+        qreal r = kHubRadius;
+        for (int it = 0; it < 200; ++it) {
+            const QPointF c(r * std::cos(th), r * std::sin(th));
+            if (!relmap_hits_any(relmap_rect_at(c, kHubW, kHubH), placed, kGap))
+                break;
+            r += kPushStep;
+        }
+        hub_r[i] = r;
+        out[i].hub = QPointF(r * std::cos(th), r * std::sin(th));
+        placed.append(relmap_rect_at(out[i].hub, kHubW, kHubH));
+    }
+
+    for (int i = 0; i < nc; ++i) {
+        const int n = leaf_counts[i];
+        out[i].leaves.reserve(n);
+        for (int j = 0; j < n; ++j) {
+            const qreal th = qDegreesToRadians(start_deg[i] + (j + 0.5) * span_deg[i] / n);
+            qreal r = hub_r[i] + kLeafRingStep;
+            QPointF c(r * std::cos(th), r * std::sin(th));
+            for (int it = 0; it < 240; ++it) {
+                c = QPointF(r * std::cos(th), r * std::sin(th));
+                if (!relmap_hits_any(relmap_rect_at(c, kLeafW, kLeafH), placed, kGap))
+                    break;
+                r += kPushStep;
+            }
+            out[i].leaves.append(c);
+            placed.append(relmap_rect_at(c, kLeafW, kLeafH));
+        }
+    }
+    return out;
+}
+
 // ── Scene ─────────────────────────────────────────────────────────────────────
 RelationshipGraphScene::RelationshipGraphScene(QObject* parent) : QGraphicsScene(parent) {
     setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
@@ -357,7 +459,7 @@ void RelationshipGraphScene::clear_graph() {
 //   Center node sits at Y=0 (visual midpoint).
 
 void RelationshipGraphScene::build_graph(const RelationshipData& data, const FilterState& filters,
-                                         LayoutMode /*layout*/) {
+                                         LayoutMode layout) {
     clear_graph();
 
     const QColor cAmber("#d97706");
@@ -382,6 +484,7 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
 
     auto* center_node = new RelNode(data.company.ticker, center_sub, cAmber, kCenterW, kCenterH, RelNode::Role::Center);
     center_node->setPos(0, 0);
+    center_node->set_symbol(data.company.ticker);
     addItem(center_node);
     nodes_.append(center_node);
 
@@ -394,18 +497,19 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
         QString label;
         QColor color;
         QVector<LeafInfo> leaves;
-        bool right; // true = right side
+        bool right;              // true = right side
+        bool leaves_are_tickers; // leaf labels are tradable symbols (peers)
     };
 
     QVector<ClusterDef> right_side, left_side;
 
-    auto push_right = [&](const QString& lbl, const QColor& col, QVector<LeafInfo>&& lv) {
+    auto push_right = [&](const QString& lbl, const QColor& col, QVector<LeafInfo>&& lv, bool tickers = false) {
         if (!lv.isEmpty())
-            right_side.push_back({lbl, col, std::move(lv), true});
+            right_side.push_back({lbl, col, std::move(lv), true, tickers});
     };
     auto push_left = [&](const QString& lbl, const QColor& col, QVector<LeafInfo>&& lv) {
         if (!lv.isEmpty())
-            left_side.push_back({lbl, col, std::move(lv), false});
+            left_side.push_back({lbl, col, std::move(lv), false, false});
     };
 
     // PEERS → right
@@ -417,7 +521,7 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
             QColor acc = (p.week52_change >= 0) ? cPeer : QColor("#dc2626");
             lv.append({p.ticker, QString("$%1").arg(p.current_price, 0, 'f', 2), acc});
         }
-        push_right(tr("Peers (%1/%2)").arg(lv.size()).arg(data.peers.size()), cPeer, std::move(lv));
+        push_right(tr("Peers (%1/%2)").arg(lv.size()).arg(data.peers.size()), cPeer, std::move(lv), /*tickers=*/true);
     }
 
     // INSTITUTIONAL → right
@@ -557,6 +661,37 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
         return h;
     };
 
+    // Instantiate one cluster (hub, leaves, edges) at positions the active layout chose.
+    auto make_cluster = [&](const ClusterDef& c, const QPointF& hub_pos, const QVector<QPointF>& leaf_pos) {
+        auto* hub = new RelNode(c.label, QString(), c.color, kHubW, kHubH, RelNode::Role::Hub);
+        hub->setPos(hub_pos);
+        addItem(hub);
+        nodes_.append(hub);
+
+        // Edge: center → hub
+        auto* ce = new RelEdge(center_node, hub, c.color, false);
+        addItem(ce);
+        ce->adjust();
+        center_node->add_edge(ce);
+        hub->add_edge(ce);
+
+        for (int i = 0; i < c.leaves.size() && i < leaf_pos.size(); ++i) {
+            auto* leaf = new RelNode(c.leaves[i].label, c.leaves[i].sub, c.leaves[i].accent, kLeafW, kLeafH,
+                                     RelNode::Role::Leaf);
+            leaf->setPos(leaf_pos[i]);
+            if (c.leaves_are_tickers)
+                leaf->set_symbol(c.leaves[i].label);
+            addItem(leaf);
+            nodes_.append(leaf);
+
+            auto* le = new RelEdge(hub, leaf, c.color, true);
+            addItem(le);
+            le->adjust();
+            hub->add_edge(le);
+            leaf->add_edge(le);
+        }
+    };
+
     // Place one side: hub at hub_cx, leaves at leaf_cx, stacked vertically
     auto place_side = [&](const QVector<ClusterDef>& side, qreal hub_cx, qreal leaf_cx) {
         qreal tot = total_h(side);
@@ -567,44 +702,35 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
             qreal bh = band_h(c);
             qreal bcy = y + (bh - kClusterGap) / 2.0; // band vertical center
 
-            // Hub
-            auto* hub = new RelNode(c.label, QString(), c.color, kHubW, kHubH, RelNode::Role::Hub);
-            hub->setPos(hub_cx, bcy);
-            addItem(hub);
-            nodes_.append(hub);
-
-            // Edge: center → hub
-            auto* ce = new RelEdge(center_node, hub, c.color, false);
-            addItem(ce);
-            ce->adjust();
-            center_node->add_edge(ce);
-            hub->add_edge(ce);
-
             // Leaves — vertical column centered on bcy
             qreal col_h = n * kLeafH + (n - 1) * kLeafGap;
             qreal ly0 = bcy - col_h / 2.0; // top-left Y of first leaf
+            QVector<QPointF> leaf_pos;
+            leaf_pos.reserve(n);
+            for (int i = 0; i < n; ++i)
+                leaf_pos.append(QPointF(leaf_cx, ly0 + i * (kLeafH + kLeafGap) + kLeafH / 2.0));
 
-            for (int i = 0; i < n; ++i) {
-                qreal lcy = ly0 + i * (kLeafH + kLeafGap) + kLeafH / 2.0;
-                auto* leaf = new RelNode(c.leaves[i].label, c.leaves[i].sub, c.leaves[i].accent, kLeafW, kLeafH,
-                                         RelNode::Role::Leaf);
-                leaf->setPos(leaf_cx, lcy);
-                addItem(leaf);
-                nodes_.append(leaf);
-
-                auto* le = new RelEdge(hub, leaf, c.color, true);
-                addItem(le);
-                le->adjust();
-                hub->add_edge(le);
-                leaf->add_edge(le);
-            }
-
+            make_cluster(c, QPointF(hub_cx, bcy), leaf_pos);
             y += bh; // advance to next band
         }
     };
 
-    place_side(right_side, kHubX_R, kLeafX_R);
-    place_side(left_side, kHubX_L, kLeafX_L);
+    if (layout == LayoutMode::Radial) {
+        // The layout selector used to be cosmetic (every mode fell through to the banded
+        // columns). RADIAL fans all clusters around the centre card.
+        QVector<ClusterDef> ring = right_side;
+        ring += left_side;
+        QVector<int> counts;
+        counts.reserve(ring.size());
+        for (const auto& c : std::as_const(ring))
+            counts.append(c.leaves.size());
+        const QVector<RelClusterPos> placement = relmap_radial_positions(counts);
+        for (int i = 0; i < ring.size(); ++i)
+            make_cluster(ring[i], placement[i].hub, placement[i].leaves);
+    } else {
+        place_side(right_side, kHubX_R, kLeafX_R);
+        place_side(left_side, kHubX_L, kLeafX_L);
+    }
 
     // Fit scene rect tightly around content
     QRectF bounds = itemsBoundingRect().adjusted(-80, -80, 80, 80);

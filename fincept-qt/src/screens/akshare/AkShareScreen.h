@@ -69,11 +69,15 @@ class AkShareScreen : public QWidget, public IStatefulScreen {
 
     void load_endpoints(const AkShareSource& source);
     void populate_endpoint_list(const QJsonObject& result);
-    void execute_query(const QString& script, const QString& endpoint, const QStringList& args);
+    /// `force` skips (and evicts) the 2-minute result cache — used by REFRESH.
+    void execute_query(const QString& script, const QString& endpoint, const QStringList& args, bool force = false);
     void display_table_data(const QJsonArray& data, const QStringList& columns = {});
     void display_json_data(const QJsonArray& data);
     void display_error(const QString& error);
     void set_loading(bool loading);
+    void run_query(bool force = false);
+    /// Select (without executing) the endpoint remembered by restore_state(), once the list exists.
+    void apply_pending_endpoint();
 
     // Data sources
     QList<AkShareSource> sources_;
@@ -124,6 +128,12 @@ class AkShareScreen : public QWidget, public IStatefulScreen {
 
     bool is_table_view_ = true;
     bool loading_ = false;
+
+    // Bumped whenever the source or the query changes; an async callback that finds a different
+    // value is stale (e.g. the endpoint list of source A arriving after the user moved on to B)
+    // and must not touch the UI.
+    int request_seq_ = 0;
+    QString pending_endpoint_; // endpoint to re-select once the list is populated (restore_state)
 };
 
 } // namespace fincept::screens

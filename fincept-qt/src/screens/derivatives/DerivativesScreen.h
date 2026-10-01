@@ -94,6 +94,16 @@ class DerivativesScreen : public QWidget, public IStatefulScreen {
     QComboBox* bond_freq_ = nullptr;
     QDoubleSpinBox* bond_clean_price_ = nullptr;
 
+    // The YTM-from-price card's OWN inputs. They are separate fields on screen from the
+    // price calculator's, and must be the ones sent to the solver - they used to be
+    // unnamed locals, so edits to this card's dates / coupon / frequency were
+    // silently discarded and the left card's values were solved instead.
+    QDateEdit* ytm_issue_date_ = nullptr;
+    QDateEdit* ytm_settle_date_ = nullptr;
+    QDateEdit* ytm_maturity_date_ = nullptr;
+    QDoubleSpinBox* ytm_coupon_ = nullptr;
+    QComboBox* ytm_freq_ = nullptr;
+
     // Equity option inputs
     QDoubleSpinBox* opt_strike_ = nullptr;
     QDoubleSpinBox* opt_spot_ = nullptr;
@@ -141,6 +151,8 @@ class DerivativesScreen : public QWidget, public IStatefulScreen {
     QDoubleSpinBox* cds_recovery_ = nullptr;
     QDoubleSpinBox* cds_spread_ = nullptr;
     QDoubleSpinBox* cds_notional_ = nullptr;
+    QDoubleSpinBox* cds_coupon_ = nullptr; // contractual premium (bps); spread above is the MARKET level
+    QDoubleSpinBox* cds_rate_ = nullptr;   // flat risk-free rate (%) used to discount both legs
 };
 
 } // namespace fincept::screens

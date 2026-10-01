@@ -126,7 +126,7 @@ const QList<MappingTemplate>& templates() {
          "Accept: application/json",
          "",
          "JSONPath",
-         {{"symbol", "$.bitcoin", "", "bitcoin"},
+         {{"symbol", "", "", "bitcoin"}, // "$.bitcoin" would select the whole {usd, ...} object, not a symbol
           {"price", "$.bitcoin.usd", "", "0"},
           {"volume", "$.bitcoin.usd_24h_vol", "", "0"},
           {"changePercent", "$.bitcoin.usd_24h_change", "", "0"},
@@ -152,6 +152,7 @@ const QList<MappingTemplate>& templates() {
           {"high", "$[*][2]", "", "0"},
           {"low", "$[*][3]", "", "0"},
           {"close", "$[*][4]", "", "0"},
+          {"volume", "", "to_number", "0"}, // the OHLC endpoint has no volume; OHLCV requires the field
           {"symbol", "", "", "bitcoin"}}},
 
         {"yahoo_quote",
@@ -226,7 +227,8 @@ const QList<MappingTemplate>& templates() {
           {"open", "$.openPrice", "to_number", "0"},
           {"high", "$.highPrice", "to_number", "0"},
           {"low", "$.lowPrice", "to_number", "0"},
-          {"previousClose", "$.prevClosePrice", "to_number", "0"}}},
+          {"previousClose", "$.prevClosePrice", "to_number", "0"},
+          {"timestamp", "$.closeTime", "unix_ms_to_iso", ""}}}, // QUOTE requires a timestamp
 
         {"kraken_ohlcv",
          "Kraken OHLC → OHLCV",
@@ -425,7 +427,8 @@ const QList<MappingTemplate>& templates() {
           {"open", "$.quotes.quote.open", "", "0"},
           {"high", "$.quotes.quote.high", "", "0"},
           {"low", "$.quotes.quote.low", "", "0"},
-          {"previousClose", "$.quotes.quote.prevclose", "", "0"}}},
+          {"previousClose", "$.quotes.quote.prevclose", "", "0"},
+          {"timestamp", "$.quotes.quote.trade_date", "unix_ms_to_iso", ""}}}, // QUOTE requires a timestamp
 
         // Macro / economic data.
 
@@ -445,7 +448,13 @@ const QList<MappingTemplate>& templates() {
          "",
          "JSONPath",
          {{"timestamp", "$.series.docs[0].period", "", ""},
+          // A macro series is one value per period, not a candle: use it for every price field
+          // (OHLCV requires them all) and default the volume it does not have.
+          {"open", "$.series.docs[0].value", "", "0"},
+          {"high", "$.series.docs[0].value", "", "0"},
+          {"low", "$.series.docs[0].value", "", "0"},
           {"close", "$.series.docs[0].value", "", "0"},
+          {"volume", "", "to_number", "0"},
           {"symbol", "$.series.docs[0].series_code", "", ""}}},
     };
     return g;

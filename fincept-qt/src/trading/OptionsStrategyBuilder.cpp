@@ -98,10 +98,13 @@ QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id) {
 
 QString OptionsStrategyBuilder::build_option_symbol(const QString& underlying, const QString& expiry, double strike,
                                                     const QString& opt_type) {
-    // TODO: Replace with InstrumentService lookup. Real broker tradingsymbols
-    // (e.g. Zerodha "NIFTY25MAR24500CE", Dhan numeric security IDs) must be
-    // resolved from the instrument master — this placeholder is a human-readable
-    // approximation only and is not guaranteed to be tradable as-is.
+    // Human-readable placeholder only (previews, saved-strategy labels, and the
+    // last-resort fallback). The tradable symbol is NOT derived here: the order path
+    // (to_basket_order -> resolve_leg_symbol) already looks every leg up in the
+    // InstrumentService master (underlying + expiry + strike + CE/PE) and uses this
+    // string only when the master isn't loaded or the contract can't be found, in
+    // which case it logs a warning. Real broker tradingsymbols / numeric security
+    // IDs therefore never come from this function.
     return underlying.toUpper() + compact_expiry(expiry) + strike_str(strike) + opt_type.toUpper();
 }
 

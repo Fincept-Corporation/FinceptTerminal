@@ -124,6 +124,9 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     mutable QMutex history_mutex_;
     std::vector<ai_chat::ConversationMessage> history_;
     bool streaming_ = false;
+    // True while the in-flight request is a streamed one that cancel_active_request()
+    // can interrupt; makes the send button double as "Stop" (see set_input_enabled).
+    bool stoppable_ = false;
     bool scroll_pending_ = false;
     // Auto-follow the newest content. Cleared when the user scrolls up to read,
     // re-armed when they come back to the bottom or send a new message.
@@ -210,6 +213,11 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     // it. Consumed (one-shot) on send; the linked symbol persists so the
     // badge keeps showing until the group changes.
     fincept::SymbolRef linked_symbol_;
+    // True from the moment a linked symbol arrives until the next message is sent. The
+    // doc above promises the "[Context: …]" prefix is one-shot, but nothing ever
+    // consumed it: linked_symbol_ persists (for the badge), so EVERY later message kept
+    // being tagged with a symbol the conversation had long moved on from.
+    bool linked_context_pending_ = false;
 };
 
 } // namespace fincept::screens

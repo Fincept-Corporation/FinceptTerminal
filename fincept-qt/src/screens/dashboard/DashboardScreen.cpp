@@ -1,5 +1,6 @@
 #include "screens/dashboard/DashboardScreen.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
@@ -64,6 +65,11 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     vl->addWidget(ticker_bar_);
     // When user saves a new symbol list, re-fetch quotes immediately.
     connect(ticker_bar_, &TickerBar::symbols_changed, this, &DashboardScreen::refresh_ticker);
+    // Double-click a symbol in the strip → open it in Equity Research.
+    connect(ticker_bar_, &TickerBar::symbol_activated, this, [](const QString& sym) {
+        EventBus::instance().publish("nav.open_symbol",
+                                     QVariantMap{{"screen_id", "equity_research"}, {"symbol", sym}});
+    });
 
     // ── Main Content: Canvas (in scroll) + Market Pulse ──
     content_split_ = new QSplitter(Qt::Horizontal);
@@ -159,7 +165,10 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
     connect(toolbar_, &DashboardToolBar::refresh_clicked, this, &DashboardScreen::on_refresh_clicked);
 
     connect(toolbar_, &DashboardToolBar::toggle_compact_clicked, this, [this]() {
-        compact_rows_ = !compact_rows_;
+        // Derive the current mode from the canvas, not from a flag that starts
+        // false: a restored layout can already be compact (row_h is persisted),
+        // and the first click then did nothing visible (40 -> 40).
+        compact_rows_ = canvas_->current_layout().row_h > 40;
         canvas_->set_row_height(compact_rows_ ? 40 : 60);
     });
 
@@ -175,10 +184,12 @@ DashboardScreen::DashboardScreen(QWidget* parent) : QWidget(parent) {
         sc->setContext(Qt::WindowShortcut);
         connect(sc, &QShortcut::activated, this, handler);
     };
-    add_shortcut(QKeySequence(Qt::Key_F5), [this]() { on_refresh_clicked(); });
+    // No local F5 / Ctrl+P: those are the global Refresh and Screenshot actions in
+    // the same window, and two window-scoped shortcuts on one key are ambiguous to
+    // Qt, so neither fired. F5 still refreshes the dashboard — the frame's Refresh
+    // action invokes the focused panel's on_refresh_clicked() slot.
     add_shortcut(QKeySequence(QKeySequence::Save), [this]() { save_layout(); });
     add_shortcut(QKeySequence(Qt::CTRL | Qt::Key_N), open_add_widget);
-    add_shortcut(QKeySequence(Qt::CTRL | Qt::Key_P), toggle_pulse);
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -231,7 +242,7 @@ void DashboardScreen::showEvent(QShowEvent* event) {
     }
 
     // Subscribe to current ticker symbols — hub schedules refreshes per TopicPolicy.
-    hub_resubscribe_ticker();
+    hub_resubscribe_ticker(/*force_fetch=*/false);
 
     // Set splitter sizes on first show using actual pixel width.
     // Must be done here (not in constructor) because the widget has no size yet
@@ -264,6 +275,13 @@ void DashboardScreen::hideEvent(QHideEvent* event) {
 void DashboardScreen::refresh_ticker() {
     if (!ticker_bar_)
         return;
+    // TickerBar emits symbols_changed when its saved list finishes loading from
+    // the settings DB (async, started in its constructor). That can land while
+    // the dashboard is not on screen; subscribing then would leave the hub
+    // subscription alive past hideEvent(). showEvent() re-reads
+    // ticker_bar_->symbols() and subscribes, so nothing is lost by skipping.
+    if (!isVisible())
+        return;
     // Hub path: user edited symbols → drop old subs, attach to new set,
     // kick the hub so consumers see data immediately.
     //
@@ -271,7 +289,7 @@ void DashboardScreen::refresh_ticker() {
     // *previous* symbols subscribed and still scrolling after the user cleared
     // the bar. hub_resubscribe_ticker() handles the empty case correctly
     // (unsubscribe, then no-op).
-    hub_resubscribe_ticker();
+    hub_resubscribe_ticker(/*force_fetch=*/true);
 }
 
 void DashboardScreen::on_refresh_clicked() {
@@ -310,13 +328,16 @@ void DashboardScreen::rebuild_ticker_from_cache() {
         if (!ticker_cache_.contains(sym))
             continue;
         const auto& q = ticker_cache_.value(sym);
-        entries.append({q.symbol, q.price, q.change});
+        // TickerBar renders this value with a trailing "%", so it must be the
+        // percent change — q.change is the absolute price move (e.g. +2.35 on a
+        // 190 stock showed as "+2.35%" instead of "+1.25%").
+        entries.append({q.symbol, q.price, q.change_pct});
     }
     if (!entries.isEmpty())
         ticker_bar_->set_data(entries);
 }
 
-void DashboardScreen::hub_resubscribe_ticker() {
+void DashboardScreen::hub_resubscribe_ticker(bool force_fetch) {
     if (!ticker_bar_)
         return;
 
@@ -345,11 +366,11 @@ void DashboardScreen::hub_resubscribe_ticker() {
             rebuild_ticker_from_cache();
         });
     }
-    // force=true: ticker bar re-subscribe happens on user edits and tab shows —
-    // bypass min_interval so the ticker doesn't sit blank. Subscribe's built-in
-    // cold-start fetch (task 4) already handles the cold case; force is for
-    // the "symbols changed, existing cache is for old symbols" case.
-    hub.request(topics, /*force=*/true);
+    // Force only after a user edit of the symbol list. On a plain tab show the
+    // subscribe() above already delivers fresh cached quotes and cold-starts a
+    // fetch for any stale/missing topic, so a forced request here just re-hit
+    // the upstream API on every tab flip.
+    hub.request(topics, force_fetch);
     hub_active_ = true;
 }
 

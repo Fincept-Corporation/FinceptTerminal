@@ -350,6 +350,24 @@ void test_position_manager_multileg() {
     check(!pm.has_position(), "single-position path untouched: no position after multi-leg exit");
 }
 
+void test_daily_loss_latch() {
+    using fincept::algo::PositionManager;
+    using fincept::algo::PositionSide;
+    std::fprintf(stdout, "[7b2] daily-loss halt latches on the realizing exit\n");
+
+    // No SL/TP/trail; max daily loss = 1000.
+    PositionManager pm("latch", 0.0, 0.0, 0.0, 0.0, 1000.0);
+    pm.record_entry(PositionSide::Long, 100, 50.0, 0);
+    pm.record_exit(100, 45.0, 1); // -500, inside the limit
+    check(!pm.is_paused(), "not paused after a loss inside the daily limit");
+    pm.record_entry(PositionSide::Long, 100, 50.0, 2);
+    pm.record_exit(100, 39.0, 3); // -1100 -> cumulative -1600, breach
+    check(!pm.has_position(), "flat after the breaching exit (check_risk can no longer see the breach)");
+    check(pm.is_paused(), "halt latched by the exit that realized the breach, before any further entry");
+    pm.reset_daily();
+    check(!pm.is_paused(), "reset_daily clears the latch");
+}
+
 void test_fno_execution() {
     using fincept::algo::AlgoLegPosition;
     using fincept::algo::fno::build_exit_legs;
@@ -652,6 +670,7 @@ int run_fno_algo_selftest() {
     test_leg_rule_editor();
     test_fno_data_bridge();
     test_position_manager_multileg();
+    test_daily_loss_latch();
     test_fno_execution();
     test_paper_basket_flow();
     test_fno_leg_marks_and_persistence();

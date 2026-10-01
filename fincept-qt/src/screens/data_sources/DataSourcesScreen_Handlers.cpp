@@ -37,6 +37,7 @@ const QString TAG = "DataSources";
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
@@ -140,10 +141,17 @@ void DataSourcesScreen::on_connector_clicked(const QString& connector_id) {
 
 void DataSourcesScreen::on_connection_add() {
     if (selected_connector_id_.isEmpty()) {
-        const auto filtered = filtered_connectors();
-        if (filtered.isEmpty())
-            return;
-        selected_connector_id_ = filtered.first().id;
+        // "+ ADD" on the Connections page has no connector to configure. It used to
+        // open the dialog for whichever connector happened to be first in the list
+        // (PostgreSQL, usually) — a connection for a type the user never chose. Send
+        // them to the browser to pick one instead.
+        if (browse_tab_)
+            browse_tab_->click();
+        if (search_edit_) {
+            search_edit_->setFocus();
+            search_edit_->selectAll();
+        }
+        return;
     }
     if (const auto* cfg = find_connector_config(selected_connector_id_))
         show_config_dialog(*cfg);
@@ -162,20 +170,60 @@ void DataSourcesScreen::on_connection_edit(const QString& conn_id) {
 }
 
 void DataSourcesScreen::on_connection_delete(const QString& conn_id) {
+    QString name = conn_id;
+    for (const auto& ds : connections_cache_) {
+        if (ds.id == conn_id) {
+            name = ds.display_name;
+            break;
+        }
+    }
+    if (QMessageBox::question(this, tr("Delete Connection"),
+                              tr("Delete the connection \"%1\"?\n\nThis cannot be undone.").arg(name),
+                              QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes)
+        return;
+
     const auto result = DataSourceRepository::instance().remove(conn_id);
     if (result.is_err()) {
         LOG_ERROR(TAG, QString("Failed to remove connection %1").arg(conn_id));
+        QMessageBox::warning(this, tr("Delete Connection"),
+                             tr("Could not delete \"%1\":\n\n%2").arg(name, QString::fromStdString(result.error())));
         return;
     }
+    live_status_cache_.remove(conn_id);
     if (selected_connection_id_ == conn_id)
         selected_connection_id_.clear();
     refresh_connections();
+}
+
+void DataSourcesScreen::show_connection_menu(const QString& conn_id, const QPoint& global_pos) {
+    if (conn_id.isEmpty())
+        return;
+    QMenu menu(this);
+    QAction* edit_act = menu.addAction(tr("Edit..."));
+    QAction* dup_act = menu.addAction(tr("Duplicate..."));
+    QAction* test_act = menu.addAction(tr("Test connection"));
+    menu.addSeparator();
+    QAction* del_act = menu.addAction(tr("Delete..."));
+
+    // exec() has returned (menu closed) before any dialog below opens.
+    QAction* chosen = menu.exec(global_pos);
+    if (!chosen)
+        return;
+    if (chosen == edit_act)
+        on_connection_edit(conn_id);
+    else if (chosen == dup_act)
+        on_connection_duplicate(conn_id);
+    else if (chosen == test_act)
+        on_connection_test(conn_id);
+    else if (chosen == del_act)
+        on_connection_delete(conn_id);
 }
 
 void DataSourcesScreen::on_connection_enabled_changed(const QString& conn_id, bool enabled) {
     const auto result = DataSourceRepository::instance().set_enabled(conn_id, enabled);
     if (result.is_err()) {
         LOG_ERROR(TAG, QString("Failed to update connection state for %1").arg(conn_id));
+        refresh_connections(); // the checkbox already flipped — put it back to what the store says
         return;
     }
     LOG_INFO(TAG, QString("%1 connection %2").arg(enabled ? "Enabled" : "Disabled", conn_id));
@@ -478,21 +526,15 @@ void DataSourcesScreen::on_poll_timer() {
     for (int i = 0; i < probes; ++i) {
         const auto& ds = candidates[(poll_cursor_ + i) % candidates.size()];
 
+        // Same endpoint resolution as the TEST button. This used to understand only a
+        // `host` field and a probe URL, so connectors configured through brokers /
+        // servers / uri / connectionString fields (Kafka, Mongo, Redis clusters, ...)
+        // and URL-valued `host` fields (Solr, Meilisearch) never got a status.
         const auto cfg_obj = QJsonDocument::fromJson(ds.config.toUtf8()).object();
-        const QString probe_url = provider_probe_url(ds.provider, cfg_obj);
-
-        QString host = cfg_obj.value("host").toString().trimmed();
-        int port = cfg_obj.value("port").toVariant().toInt();
-
-        if (host.isEmpty() && !probe_url.isEmpty()) {
-            const QUrl u(probe_url);
-            host = u.host();
-            if (port <= 0) {
-                const QString s = u.scheme().toLower();
-                port = u.port((s == "https" || s == "wss") ? 443 : 80);
-            }
-        }
-        if (host.isEmpty() || port <= 0)
+        const ProbeEndpoint endpoint = resolve_probe_endpoint(ds.provider, cfg_obj);
+        QString host;
+        int port = 0;
+        if (!probe_target(endpoint, &host, &port))
             continue;
 
         QPointer<DataSourcesScreen> self = this;
@@ -501,7 +543,7 @@ void DataSourcesScreen::on_poll_timer() {
         const int cap_port = port;
         // The probe URL usually embeds the API key — redact before it can ever
         // reach the status tooltip.
-        const QString cap_probe = redact_url(probe_url);
+        const QString cap_probe = redact_url(endpoint.url);
 
         (void)QtConcurrent::run([self, conn_id, cap_host, cap_port, cap_probe]() {
             QTcpSocket socket;

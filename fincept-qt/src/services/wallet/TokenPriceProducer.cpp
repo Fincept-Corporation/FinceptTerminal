@@ -78,6 +78,7 @@ void TokenPriceProducer::refresh(const QStringList& topics) {
     QNetworkRequest req{QUrl(url)};
     req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setTransferTimeout(15 * 1000);
     auto* reply = nam_->get(req);
 
     QPointer<TokenPriceProducer> self = this;
@@ -99,6 +100,13 @@ void TokenPriceProducer::refresh(const QStringList& topics) {
         const auto doc = QJsonDocument::fromJson(reply->readAll(), &pe);
         if (pe.error != QJsonParseError::NoError || !doc.isObject()) {
             LOG_WARN("TokenPrice", "invalid JSON from Jupiter");
+            // Report it so the hub clears in_flight and subscribers see the
+            // failure; returning silently left every topic waiting out the
+            // scheduler's refresh timeout with no error surfaced.
+            for (auto it = topic_by_mint.constBegin(); it != topic_by_mint.constEnd(); ++it) {
+                for (const auto& t : it.value())
+                    hub.publish_error(t, QStringLiteral("invalid JSON from price API"));
+            }
             return;
         }
         const auto root = doc.object();

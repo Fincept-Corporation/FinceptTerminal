@@ -111,8 +111,7 @@ cd FinceptTerminal
 # Linux / macOS — 一鍵建置
 chmod +x setup.sh && ./setup.sh
 
-# Windows（在 VS 2022 Developer Command Prompt 執行）
-setup.bat
+# Windows：沒有一鍵建置腳本，請依 docs/GETTING_STARTED.md 手動建置（在 VS 2022 Developer Command Prompt 執行）
 ```
 
 ### 安裝 Python 相依套件

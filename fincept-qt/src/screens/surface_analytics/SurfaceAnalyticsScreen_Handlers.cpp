@@ -17,6 +17,7 @@
 #include "SurfaceTableWidget.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "services/markets/MarketDataService.h"
@@ -144,12 +145,22 @@ void SurfaceAnalyticsScreen::on_controls_changed() {
     update_inspector_lineage();
 }
 
-void SurfaceAnalyticsScreen::on_control_symbol_changed(const QString& /*sym*/) {
-    // Rebuild demo surfaces with the new underlying so the chart isn't stale.
+void SurfaceAnalyticsScreen::on_control_symbol_changed(const QString& sym) {
+    // Follow the new underlying's quote, then rebuild the sample surfaces around it so
+    // the chart isn't stale.
+    resubscribe_spot();
     load_demo_data();
     update_chart();
     update_metrics();
     update_inspector_lineage();
+
+    // A user-typed OPRA underlying drives the linked group (a symbol applied FROM the
+    // group is not echoed back). Only for option-underlying surfaces: the other
+    // surfaces take a commodity root or a basket, which isn't an equity ticker.
+    if (!applying_group_symbol_ && link_group_ != fincept::SymbolGroup::None && !sym.isEmpty() &&
+        QString::fromUtf8(capability_for(active_chart_).dataset) == QLatin1String("OPRA.PILLAR")) {
+        fincept::SymbolContext::instance().set_group_symbol(link_group_, fincept::SymbolRef::equity(sym), this);
+    }
 }
 
 void SurfaceAnalyticsScreen::on_fetch_requested() {
@@ -164,6 +175,29 @@ void SurfaceAnalyticsScreen::on_fetch_requested() {
         if (data_inspector_) {
             data_inspector_->set_status(tr("No Databento API key configured"), false);
             data_inspector_->set_error(tr("Add a key in Settings → Credentials → Databento."));
+        }
+        return;
+    }
+
+    // Option-surface fetches take the spot as a hard input (strike window around it, IV
+    // solved against it). spot_for() falls back to a 100.0 placeholder when no quote is
+    // known - fine for sample data, but sending it makes e.g. a $600 underlying return
+    // an empty or nonsensical grid that is then labelled as live data. Wait for a quote.
+    const bool spot_dependent =
+        active_chart_ == ChartType::Volatility || active_chart_ == ChartType::DeltaSurface ||
+        active_chart_ == ChartType::GammaSurface || active_chart_ == ChartType::VegaSurface ||
+        active_chart_ == ChartType::ThetaSurface || active_chart_ == ChartType::SkewSurface ||
+        active_chart_ == ChartType::LocalVolSurface || active_chart_ == ChartType::ImpliedDividend ||
+        active_chart_ == ChartType::LiquidityHeatmap;
+    if (spot_dependent && !has_live_spot(control_panel_->state().symbol)) {
+        const QString sym = control_panel_->state().symbol;
+        fincept::datahub::DataHub::instance().request(QString("market:quote:%1").arg(sym), /*force*/ true);
+        if (data_inspector_) {
+            data_inspector_->set_status(tr("Waiting for a live %1 quote").arg(sym), false);
+            data_inspector_->set_error(
+                tr("No live spot price for %1 yet, and an option surface can't be built without one. "
+                   "A quote has been requested - press FETCH again in a moment.")
+                    .arg(sym));
         }
         return;
     }
@@ -247,28 +281,131 @@ void SurfaceAnalyticsScreen::dispatch_csv(const QString& path) {
         return;
     }
 
+    // Load into a copy and commit only on success: several loaders reset their target
+    // (`out = {}`) before they can fail, which would otherwise blank the surface on a
+    // rejected file.
+    auto load_into = [&rows, &err](auto& target, auto&& loader) {
+        auto staged = target;
+        if (!loader(rows, staged, err))
+            return false;
+        target = std::move(staged);
+        return true;
+    };
+    auto greeks = [](const char* name) {
+        return [name](const auto& r, GreeksSurfaceData& o, std::string& e) {
+            return load_greeks_surface(r, o, e, name);
+        };
+    };
+
+    // Every surface has a loader in SurfaceCsvImporter (the header promises "all 35"),
+    // but only five were ever reachable from here; the rest answered "not implemented".
     bool loaded = false;
     switch (active_chart_) {
         case ChartType::Volatility:
-            loaded = load_vol_surface(rows, vol_data_, err);
+            loaded = load_into(vol_data_, load_vol_surface);
             break;
         case ChartType::DeltaSurface:
-            loaded = load_greeks_surface(rows, delta_data_, err, "Delta");
+            loaded = load_into(delta_data_, greeks("Delta"));
             break;
         case ChartType::GammaSurface:
-            loaded = load_greeks_surface(rows, gamma_data_, err, "Gamma");
+            loaded = load_into(gamma_data_, greeks("Gamma"));
             break;
         case ChartType::VegaSurface:
-            loaded = load_greeks_surface(rows, vega_data_, err, "Vega");
+            loaded = load_into(vega_data_, greeks("Vega"));
             break;
         case ChartType::ThetaSurface:
-            loaded = load_greeks_surface(rows, theta_data_, err, "Theta");
+            loaded = load_into(theta_data_, greeks("Theta"));
             break;
-        default:
-            report(tr("CSV import is only implemented for the Vol / Delta / Gamma / Vega / Theta surfaces. "
-                      "Switch to one of those first."),
-                   false);
-            return;
+        case ChartType::SkewSurface:
+            loaded = load_into(skew_data_, load_skew_surface);
+            break;
+        case ChartType::LocalVolSurface:
+            loaded = load_into(local_vol_data_, load_local_vol);
+            break;
+        case ChartType::YieldCurve:
+            loaded = load_into(yield_data_, load_yield_curve);
+            break;
+        case ChartType::SwaptionVol:
+            loaded = load_into(swaption_data_, load_swaption_vol);
+            break;
+        case ChartType::CapFloorVol:
+            loaded = load_into(capfloor_data_, load_capfloor_vol);
+            break;
+        case ChartType::BondSpread:
+            loaded = load_into(bond_spread_data_, load_bond_spread);
+            break;
+        case ChartType::OISBasis:
+            loaded = load_into(ois_data_, load_ois_basis);
+            break;
+        case ChartType::RealYield:
+            loaded = load_into(real_yield_data_, load_real_yield);
+            break;
+        case ChartType::ForwardRate:
+            loaded = load_into(fwd_rate_data_, load_forward_rate);
+            break;
+        case ChartType::FXVol:
+            loaded = load_into(fx_vol_data_, load_fx_vol);
+            break;
+        case ChartType::FXForwardPoints:
+            loaded = load_into(fx_fwd_data_, load_fx_forward);
+            break;
+        case ChartType::CrossCurrencyBasis:
+            loaded = load_into(xccy_data_, load_xccy_basis);
+            break;
+        case ChartType::CDSSpread:
+            loaded = load_into(cds_data_, load_cds_spread);
+            break;
+        case ChartType::CreditTransition:
+            loaded = load_into(credit_trans_data_, load_credit_trans);
+            break;
+        case ChartType::RecoveryRate:
+            loaded = load_into(recovery_data_, load_recovery_rate);
+            break;
+        case ChartType::CommodityForward:
+            loaded = load_into(cmdty_fwd_data_, load_cmdty_forward);
+            break;
+        case ChartType::CommodityVol:
+            loaded = load_into(cmdty_vol_data_, load_cmdty_vol);
+            break;
+        case ChartType::CrackSpread:
+            loaded = load_into(crack_data_, load_crack_spread);
+            break;
+        case ChartType::ContangoBackwardation:
+            loaded = load_into(contango_data_, load_contango);
+            break;
+        case ChartType::Correlation:
+            loaded = load_into(corr_data_, load_correlation);
+            break;
+        case ChartType::PCA:
+            loaded = load_into(pca_data_, load_pca);
+            break;
+        case ChartType::VaR:
+            loaded = load_into(var_data_, load_var);
+            break;
+        case ChartType::StressTestPnL:
+            loaded = load_into(stress_data_, load_stress_test);
+            break;
+        case ChartType::FactorExposure:
+            loaded = load_into(factor_data_, load_factor_exposure);
+            break;
+        case ChartType::LiquidityHeatmap:
+            loaded = load_into(liquidity_data_, load_liquidity);
+            break;
+        case ChartType::Drawdown:
+            loaded = load_into(drawdown_data_, load_drawdown);
+            break;
+        case ChartType::BetaSurface:
+            loaded = load_into(beta_data_, load_beta);
+            break;
+        case ChartType::ImpliedDividend:
+            loaded = load_into(impl_div_data_, load_implied_div);
+            break;
+        case ChartType::InflationExpectations:
+            loaded = load_into(inflation_data_, load_inflation);
+            break;
+        case ChartType::MonetaryPolicyPath:
+            loaded = load_into(monetary_data_, load_monetary);
+            break;
     }
 
     if (!loaded) {

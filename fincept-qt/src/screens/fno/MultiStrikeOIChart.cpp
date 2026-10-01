@@ -106,7 +106,7 @@ void MultiStrikeOIChart::set_chain(const OptionChain& chain) {
     // (Sensibull convention).
     for (int i = hi; i >= lo; --i) {
         const OptionChainRow& row = chain.rows[i];
-        const QString cat = QString::number(row.strike, 'f', row.strike < 100 ? 2 : 0);
+        const QString cat = fincept::services::options::format_strike(row.strike);
         categories.append(cat);
         const double ce = double(row.ce_quote.oi);
         const double pe = double(row.pe_quote.oi);

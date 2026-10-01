@@ -37,12 +37,18 @@ class RelationshipMapService : public QObject, public fincept::datahub::Producer
   private:
     RelationshipMapService() = default;
 
-    void parse_result(const QString& json_output);
+    /// Parse a script payload and emit data_ready. Returns false (after emitting
+    /// fetch_failed) when the payload is an error envelope or carries no market data.
+    bool parse_result(const QString& json_output);
+    /// Emit fetch_failed and tell the hub (it is waiting on this topic's refresh).
+    void fail_fetch(const QString& message);
     relmap::ValuationSignal compute_valuation(const relmap::CompanyInfo& co, const QVector<relmap::PeerCompany>& peers);
 
     relmap::RelationshipData data_;
     bool loading_ = false;
     QString current_ticker_;
+    /// Latest ticker requested while another was still downloading (empty = none).
+    QString pending_ticker_;
 
     bool hub_registered_ = false;
 };

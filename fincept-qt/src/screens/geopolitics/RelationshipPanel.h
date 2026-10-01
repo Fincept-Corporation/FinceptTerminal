@@ -15,13 +15,24 @@ class RelationshipPanel : public QWidget {
   public:
     explicit RelationshipPanel(QWidget* parent = nullptr);
 
+  signals:
+    /// A conflict card asked for that country's events in the Conflict Monitor.
+    void events_requested(const QString& country);
+    /// A conflict card asked for HDX datasets for that country.
+    void hdx_country_requested(const QString& country);
+    /// A crisis card asked for HDX datasets on that topic.
+    void hdx_topic_requested(const QString& topic);
+
   protected:
     void changeEvent(QEvent* event) override;
+    /// Click on an actionable (conflict / crisis) node card opens its action menu.
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   private:
     void build_ui();
     void build_network_view();
     QWidget* build_node_card(const fincept::services::geo::RelationshipNode& node, QWidget* parent);
+    void show_node_menu(QWidget* card);
     void retranslateUi();
 
     QVBoxLayout* network_layout_ = nullptr;

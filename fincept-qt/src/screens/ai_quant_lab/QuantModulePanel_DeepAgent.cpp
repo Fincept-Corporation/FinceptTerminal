@@ -589,12 +589,19 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
         AIQuantLabService::instance().rd_agent_stop_task(tid);
     });
 
-    connect(resume_btn, &QPushButton::clicked, this, [resolve_task_id, status_txt]() {
+    connect(resume_btn, &QPushButton::clicked, this, [this, resolve_task_id, status_txt, llm_combo, rd_error]() {
         const QString tid = resolve_task_id();
         if (tid.isEmpty())
             return;
+        // cmd_resume_task() applies config["llm_*"] before rebuilding the loop; without the
+        // profile the resumed task had no LLM credentials and failed on its first call.
+        const QJsonObject cfg = llm_config_from_combo(llm_combo);
+        if (cfg.isEmpty()) {
+            rd_error(tr("Select an LLM profile before resuming (Settings → LLM Config)."));
+            return;
+        }
         status_txt->setText(tr("Resuming %1...").arg(tid));
-        AIQuantLabService::instance().rd_agent_resume_task(tid);
+        AIQuantLabService::instance().rd_agent_resume_task(tid, cfg);
     });
 
     connect(factors_btn, &QPushButton::clicked, this, [resolve_task_id, status_txt]() {

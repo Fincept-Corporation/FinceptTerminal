@@ -282,7 +282,8 @@ void HoldingsBar::on_discount_update(const QVariant& v) {
         return;
     if (d.eligible) {
         discount_chip_->setText(QStringLiteral("%1% OFF").arg(d.discount_pct));
-        discount_chip_->setToolTip(tr("Holding ≥ %1 $FNCPT — you qualify for the fee discount.")
+        discount_chip_->setToolTip(tr("Holding ≥ %1 $FNCPT — you qualify for the fee discount. "
+                                      "Projected only: it is not applied automatically at checkout yet.")
                                        .arg(d.threshold_raw / std::pow(10.0, d.threshold_decimals), 0, 'f', 0));
         discount_chip_->show();
     } else {

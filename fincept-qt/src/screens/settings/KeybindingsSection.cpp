@@ -15,7 +15,10 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QTimer>
 #include <QVBoxLayout>
+
+#include <utility>
 
 namespace fincept::screens {
 
@@ -111,9 +114,18 @@ void KeyCaptureDialog::keyPressEvent(QKeyEvent* event) {
 KeybindingsSection::KeybindingsSection(QWidget* parent) : QWidget(parent) {
     build_ui();
 
-    // Rebuild rows whenever any key changes (live update)
-    connect(&KeyConfigManager::instance(), &KeyConfigManager::key_changed, this,
-            [this](KeyAction, QKeySequence) { rebuild_rows(); });
+    // Rebuild rows whenever any key changes (live update). "Reset All" emits one
+    // key_changed per action (~40); coalesce them into a single rebuild instead
+    // of tearing down and recreating every row each time.
+    connect(&KeyConfigManager::instance(), &KeyConfigManager::key_changed, this, [this](KeyAction, QKeySequence) {
+        if (rebuild_pending_)
+            return;
+        rebuild_pending_ = true;
+        QTimer::singleShot(0, this, [this]() {
+            rebuild_pending_ = false;
+            rebuild_rows();
+        });
+    });
 }
 
 void KeybindingsSection::build_ui() {
@@ -189,8 +201,16 @@ void KeybindingsSection::rebuild_rows() {
         groups[KeyConfigManager::instance().group_name(a)].append(a);
     }
 
-    const QStringList group_order = {"Global", "Navigation", "News", "Code Editor"};
-    for (const QString& group : group_order) {
+    // Known groups first, in a fixed order; then anything else KeyConfigManager
+    // reports. The old hard-coded list omitted "Windows" (focus / cycle / move-to-
+    // monitor shortcuts), so those ~25 actions could never be rebound here.
+    QStringList group_order = {"Global", "Navigation", "News", "Code Editor", "Windows"};
+    const QStringList extra_groups = groups.keys();
+    for (const QString& g : extra_groups) {
+        if (!group_order.contains(g))
+            group_order.append(g);
+    }
+    for (const QString& group : std::as_const(group_order)) {
         if (!groups.contains(group))
             continue;
         groups_layout_->addWidget(build_group(group, groups[group]));

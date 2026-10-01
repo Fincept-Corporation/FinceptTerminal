@@ -116,7 +116,7 @@ QVariant OptionChainModel::data(const QModelIndex& index, int role) const {
         case ColCeLtp:
             return fmt_price(r.ce_quote.ltp);
         case ColStrike:
-            return QString::number(r.strike, 'f', r.strike < 100 ? 2 : 0);
+            return fincept::services::options::format_strike(r.strike);
         case ColPeLtp:
             return fmt_price(r.pe_quote.ltp);
         case ColPeIv:

@@ -109,8 +109,34 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
     retranslateUi();
 
     auto& auth = auth::AuthManager::instance();
-    connect(&auth, &auth::AuthManager::forgot_password_sent, this, [this]() { pages_->setCurrentIndex(1); });
+    connect(&auth, &auth::AuthManager::forgot_password_sent, this, [this]() {
+        send_btn_->setEnabled(true);
+        send_btn_->setText(tr("  SEND CODE  "));
+        sent_resend_btn_->setEnabled(true);
+        // The user left the flow while the request was in flight (hideEvent has
+        // reset the form to the email page); don't resurrect a half-filled page.
+        if (!isVisible())
+            return;
+        // A confirmation while the "check your email" page is already showing
+        // is the answer to RESEND — acknowledge it only now, once the server
+        // has actually accepted the request.
+        if (pages_->currentIndex() == 1) {
+            sent_status_->setText(tr("Verification code re-sent to %1").arg(email_input_->text().trimmed()));
+            return;
+        }
+        sent_status_->clear();
+        pages_->setCurrentIndex(1);
+    });
     connect(&auth, &auth::AuthManager::forgot_password_failed, this, [this](const QString& err) {
+        send_btn_->setEnabled(true);
+        send_btn_->setText(tr("  SEND CODE  "));
+        sent_resend_btn_->setEnabled(true);
+        // A failed RESEND happens on the "check your email" page, where the
+        // email page's error label is not visible.
+        if (pages_->currentIndex() == 1) {
+            sent_status_->setText(err);
+            return;
+        }
         error_label_->setText(err);
         error_label_->show();
     });
@@ -131,10 +157,8 @@ ForgotPasswordScreen::ForgotPasswordScreen(QWidget* parent) : QWidget(parent) {
             reset_btn_->setEnabled(true);
         pages_->setCurrentIndex(3);
     });
-    connect(&auth, &auth::AuthManager::password_reset_failed, this, [this](const QString& err) {
-        error_label_->setText(err);
-        error_label_->show();
-    });
+    // password_reset_failed is handled where the reset form is built
+    // (build_reset_page) — it must show in reset_error_, not on the email page.
 }
 
 // ── Background ───────────────────────────────────────────────────────────────
@@ -533,14 +557,20 @@ void ForgotPasswordScreen::retranslateUi() {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void ForgotPasswordScreen::on_send_code() {
+    // Enter in the email field and the button both land here; one request at a time.
+    if (!send_btn_->isEnabled())
+        return;
     error_label_->hide();
     QString email = email_input_->text().trimmed();
     auto v = auth::validate_email(email);
     if (!v.valid) {
-        error_label_->setText(v.error);
+        // validate_email() text is untranslated English; map onto tr() strings.
+        error_label_->setText(email.isEmpty() ? tr("Email is required") : tr("Invalid email format"));
         error_label_->show();
         return;
     }
+    send_btn_->setEnabled(false);
+    send_btn_->setText(tr("  SENDING...  "));
     auth::AuthManager::instance().forgot_password(email);
 }
 
@@ -549,6 +579,9 @@ void ForgotPasswordScreen::on_reset_password() {
     // PASSWORD with mismatched or short passwords did nothing at all, with no
     // message, which reads as a broken button.
     if (!reset_error_)
+        return;
+    // Enter on any field of this page submits; ignore it while a reset is in flight.
+    if (!reset_btn_->isEnabled())
         return;
     reset_error_->hide();
 
@@ -586,10 +619,13 @@ void ForgotPasswordScreen::on_reset_password() {
 }
 
 void ForgotPasswordScreen::on_resend() {
+    if (!sent_resend_btn_->isEnabled())
+        return; // a resend is already in flight
     const QString email = email_input_->text().trimmed();
-    auth::AuthManager::instance().forgot_password(email);
+    sent_resend_btn_->setEnabled(false);
     if (sent_status_)
-        sent_status_->setText(tr("Verification code re-sent to %1").arg(email));
+        sent_status_->setText(tr("Sending a new code to %1…").arg(email));
+    auth::AuthManager::instance().forgot_password(email);
 }
 
 } // namespace fincept::screens

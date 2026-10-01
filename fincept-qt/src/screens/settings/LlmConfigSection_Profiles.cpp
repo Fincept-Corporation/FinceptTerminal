@@ -27,6 +27,8 @@ constexpr const char* TAG_PROFILES = "LlmConfigSection";
 #include <QScrollArea>
 #include <QSplitter>
 #include <QTimer>
+#include <QUrl>
+#include <QUuid>
 #include <QVBoxLayout>
 
 #include <memory>
@@ -275,6 +277,10 @@ void LlmConfigSection::load_profiles() {
             if (p.is_default)
                 item->setForeground(QColor("" + QString(ui::colors::AMBER()) + ""));
             profile_list_->addItem(item);
+            // Keep the profile being edited highlighted across a reload (signals
+            // are blocked, so this does not re-populate the form).
+            if (!editing_profile_id_.isEmpty() && p.id == editing_profile_id_)
+                profile_list_->setCurrentItem(item);
         }
     }
 
@@ -428,23 +434,53 @@ void LlmConfigSection::on_save_profile() {
         }
     }
 
+    // A custom endpoint must be a real http(s) URL — a typo otherwise only surfaces
+    // as an opaque connection error the first time an agent uses the profile.
+    const QString base_url = profile_base_url_edit_->text().trimmed();
+    if (!base_url.isEmpty()) {
+        const QUrl u(base_url, QUrl::StrictMode);
+        const QString scheme = u.scheme().toLower();
+        if (!u.isValid() || u.host().isEmpty() || (scheme != QLatin1String("http") && scheme != QLatin1String("https"))) {
+            show_profile_status(tr("Base URL must be a full http:// or https:// address"), true);
+            return;
+        }
+    }
+
+    // save_profile() is INSERT OR REPLACE, so is_default has to be carried over
+    // from the stored row: hard-coding false silently cleared the default flag
+    // every time the default profile was edited and saved.
+    bool was_default = false;
+    if (!editing_profile_id_.isEmpty()) {
+        const auto existing = LlmProfileRepository::instance().get_profile(editing_profile_id_);
+        if (existing.is_ok())
+            was_default = existing.value().is_default;
+    }
+
     LlmProfile profile;
-    profile.id = editing_profile_id_; // empty = new (repo generates UUID)
+    // New profiles get their id here (same format the repository would mint) so the
+    // form keeps editing that row afterwards — otherwise a second click on SAVE
+    // inserted a duplicate profile.
+    profile.id = editing_profile_id_.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces)
+                                               : editing_profile_id_;
     profile.name = name;
     profile.provider = provider.toLower();
     profile.model_id = model;
     profile.api_key = api_key;
-    profile.base_url = profile_base_url_edit_->text().trimmed();
+    profile.base_url = base_url;
     profile.temperature = profile_temp_spin_->value();
     profile.max_tokens = profile_tokens_spin_->value();
     profile.system_prompt = profile_prompt_edit_->toPlainText().trimmed();
-    profile.is_default = false;
+    profile.is_default = was_default;
 
     auto r = LlmProfileRepository::instance().save_profile(profile);
     if (r.is_err()) {
         show_profile_status(tr("Save failed: ") + QString::fromStdString(r.error()), true);
         return;
     }
+
+    editing_profile_id_ = profile.id;
+    profile_delete_btn_->setEnabled(true);
+    profile_default_btn_->setEnabled(!was_default);
 
     show_profile_status(tr("Profile saved"), false);
     load_profiles();

@@ -535,6 +535,11 @@ bool DockScreenRouter::move_panel_to_frame(const QString& id, DockScreenRouter* 
     manager_->removeDockWidget(dw);
     dw->deleteLater();
     dock_widgets_.remove(id);
+    // The screen is about to be destroyed: drop its raw IGroupLinked* too, or the
+    // next SymbolContext broadcast would call group() on a dangling pointer in
+    // on_group_symbol_changed_external().
+    group_linked_.remove(id);
+    group_badges_.remove(id);
     if (auto* sw = screens_.take(id))
         sw->deleteLater();
     factories_.remove(id);
@@ -570,20 +575,24 @@ bool DockScreenRouter::tear_off_to_new_frame(const QString& id) {
 
     // Spawn a new frame on the next monitor. Reuses WindowCycler's smart
     // placement so tear-offs land somewhere sensible (decision 5.6).
+    const auto frames_before = WindowRegistry::instance().frames();
     WindowCycler::instance().new_window_on_next_monitor();
 
     // Find the freshly-created frame. WindowCycler::new_window_on_next_monitor
-    // doesn't return a pointer, but the new frame is the most-recently-added
-    // entry in WindowRegistry.
-    auto frames = WindowRegistry::instance().frames();
-    if (frames.isEmpty()) {
-        LOG_ERROR("DockRouter", "tear_off_to_new_frame: spawned frame not found in registry");
+    // doesn't return a pointer, so diff the registry against the snapshot taken
+    // above. The monitor picker can be cancelled, in which case no frame is
+    // created — blindly taking the last registered frame would then move the
+    // panel into some other, unrelated window.
+    WindowFrame* new_frame = nullptr;
+    for (WindowFrame* f : WindowRegistry::instance().frames()) {
+        if (f && !frames_before.contains(f))
+            new_frame = f; // frames() is sorted by window_id; keep the highest new one
+    }
+    if (!new_frame) {
+        LOG_INFO("DockRouter", QString("tear_off_to_new_frame('%1'): no new window was created (cancelled?)").arg(id));
         return false;
     }
-    // The newly-created frame has the highest window_id, so it's last in
-    // the (ascending) sorted list.
-    WindowFrame* new_frame = frames.last();
-    if (!new_frame || !new_frame->dock_router()) {
+    if (!new_frame->dock_router()) {
         LOG_ERROR("DockRouter", "tear_off_to_new_frame: spawned frame has no router");
         return false;
     }

@@ -10,6 +10,7 @@
 
 #include <QJsonDocument>
 #include <QObject>
+#include <QTimer>
 #include <QUuid>
 #include <QtConcurrent/QtConcurrent>
 
@@ -20,7 +21,7 @@ static QString json_to_context(const QJsonValue& v) {
     if (v.isString())
         return v.toString();
     if (v.isDouble())
-        return QString::number(v.toDouble());
+        return QString::number(v.toDouble(), 'g', 15); // default precision cuts numbers to 6 digits
     if (v.isBool())
         return v.toBool() ? "true" : "false";
     if (v.isObject())
@@ -141,12 +142,23 @@ void register_agent_nodes(NodeRegistry& registry) {
                 if (!agent_id.isEmpty())
                     config["agent_id"] = agent_id;
 
-                // Build query — prepend upstream context if any
+                // Build query — prepend upstream context if any. Every connected branch counts: only
+                // inputs[0] used to be read, so a node fed by two branches (e.g. a mediator that
+                // receives a bull case and a bear case) silently ignored the second one.
                 QString query;
-                if (!inputs.isEmpty() && !inputs[0].isNull() && !inputs[0].isUndefined()) {
-                    QString ctx = json_to_context(inputs[0]);
+                QStringList ctx_parts;
+                for (const auto& in : inputs) {
+                    if (in.isNull() || in.isUndefined())
+                        continue;
+                    const QString ctx = json_to_context(in);
                     if (!ctx.isEmpty())
-                        query = "Context:\n" + ctx + "\n\n";
+                        ctx_parts << ctx;
+                }
+                if (ctx_parts.size() == 1) {
+                    query = "Context:\n" + ctx_parts[0] + "\n\n";
+                } else if (ctx_parts.size() > 1) {
+                    for (int i = 0; i < ctx_parts.size(); ++i)
+                        query += QString("Context %1:\n%2\n\n").arg(i + 1).arg(ctx_parts[i]);
                 }
                 if (!instructions.isEmpty() && query.isEmpty())
                     query = instructions;
@@ -177,6 +189,14 @@ void register_agent_nodes(NodeRegistry& registry) {
                 auto* guard = new Guard(&svc); // parent ensures cleanup if result never fires
                 guard->cb = cb;
                 guard->req_id = req_id;
+                // Watchdog: an agent run that never reports back (provider hang, lost request)
+                // would hold the whole workflow open indefinitely. The guard is the timer's
+                // context, so a result that arrives first (guard deleted) cancels it.
+                QTimer::singleShot(20 * 60 * 1000, guard, [guard]() {
+                    QObject::disconnect(guard->conn);
+                    guard->cb(false, {}, "Agent did not respond within 20 minutes");
+                    guard->deleteLater();
+                });
                 guard->conn = QObject::connect(
                     &svc, &fincept::services::AgentService::agent_result, guard,
                     [guard](const fincept::services::AgentExecutionResult& result) {

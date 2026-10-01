@@ -11,6 +11,10 @@
 
 #include <QJsonDocument>
 
+#include <algorithm>
+#include <cstring>
+#include <memory>
+
 namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "EdgarTools";
@@ -19,6 +23,37 @@ static constexpr const char* SCRIPT = "mcp/edgar/main.py";
 static constexpr int kEdgarTtlSec = 30 * 60; // 30 min — SEC filings rarely change intra-day
 
 // ── Helper: run mcp/edgar/main.py synchronously and return parsed JSON ───────
+
+// Integer tool args are interpolated straight into the script's argv, so a negative or
+// absurd value (limit=-1, max_length=999999999) went to the Python side unchecked. Clamp
+// each to a sane window; the bounds are per-argument-name because they are the same
+// concept in every tool that uses them.
+static int edgar_int_arg(const QJsonObject& args, const char* key, int fallback) {
+    struct Bounds {
+        const char* name;
+        int lo;
+        int hi;
+    };
+    static const Bounds kBounds[] = {
+        {"periods", 1, 20},      {"max_length", 500, 200000}, {"max_results", 1, 50}, {"limit", 1, 200},
+        {"quarters", 1, 8},      {"top_n", 1, 100},           {"months_back", 1, 120},
+    };
+    const int v = args[QLatin1String(key)].toInt(fallback);
+    for (const auto& b : kBounds) {
+        if (std::strcmp(b.name, key) == 0)
+            return std::clamp(v, b.lo, b.hi);
+    }
+    return v;
+}
+
+// State shared with the PythonRunner callback. Heap-allocated because run_async_wait stops
+// waiting after its bound (120 s) while the script may still be running or queued behind
+// the runner's 3-process cap; the callback that finally fires must write into live memory,
+// not a stack frame that has been unwound.
+struct EdgarWaitState {
+    QJsonObject result;
+    QString error;
+};
 
 static ToolResult run_edgar(const QStringList& args) {
     // Cache key: join all args
@@ -30,46 +65,47 @@ static ToolResult run_edgar(const QStringList& args) {
             return ToolResult::ok_data(doc.object());
     }
 
-    QJsonObject result;
-    QString error;
+    auto st = std::make_shared<EdgarWaitState>();
+    st->error = QStringLiteral("EDGAR request did not complete in time (the Python runner may be busy) — try again");
 
     // Marshal the PythonRunner::run() call onto the runner's thread (main).
     // The previous worker-thread QEventLoop pattern caused QObject parentage
     // violations since QProcess signals fire on the main thread and never
     // wake the worker's loop. See mcp/tools/ThreadHelper.h.
     auto* runner = &fincept::python::PythonRunner::instance();
-    detail::run_async_wait(runner, [&](auto signal_done) {
-        runner->run(SCRIPT, args, [&, signal_done](const fincept::python::PythonResult& r) {
+    detail::run_async_wait(runner, [runner, st, args](auto signal_done) {
+        runner->run(SCRIPT, args, [st, signal_done](const fincept::python::PythonResult& r) {
+            st->error.clear();
             if (!r.success) {
-                error = r.error.isEmpty() ? r.output : r.error;
+                st->error = r.error.isEmpty() ? r.output : r.error;
             } else {
                 QString text = fincept::python::extract_json(r.output);
                 QJsonParseError pe;
                 auto doc = QJsonDocument::fromJson(text.toUtf8(), &pe);
                 if (pe.error != QJsonParseError::NoError) {
-                    error = QString("JSON parse error: %1").arg(pe.errorString());
+                    st->error = QString("JSON parse error: %1").arg(pe.errorString());
                 } else {
                     QJsonObject obj = doc.object();
                     if (obj.value("success").toBool(true) == false)
-                        error = obj.value("error").toString("unknown error");
+                        st->error = obj.value("error").toString("unknown error");
                     else
-                        result = obj;
+                        st->result = obj;
                 }
             }
             signal_done();
         });
     });
 
-    if (!error.isEmpty()) {
-        LOG_WARN(TAG, QString("edgar error [%1]: %2").arg(args.value(0), error));
-        return ToolResult::fail(error);
+    if (!st->error.isEmpty()) {
+        LOG_WARN(TAG, QString("edgar error [%1]: %2").arg(args.value(0), st->error));
+        return ToolResult::fail(st->error);
     }
 
     fincept::CacheManager::instance().put(
-        cache_key, QVariant(QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact))), kEdgarTtlSec,
-        "edgar");
+        cache_key, QVariant(QString::fromUtf8(QJsonDocument(st->result).toJson(QJsonDocument::Compact))),
+        kEdgarTtlSec, "edgar");
 
-    return ToolResult::ok_data(result);
+    return ToolResult::ok_data(st->result);
 }
 
 // ── Tool definitions ─────────────────────────────────────────────────────────
@@ -131,7 +167,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString cik = args["cik"].toString().trimmed();
             if (cik.isEmpty())
                 return ToolResult::fail("Missing 'cik'");
-            int periods = args["periods"].toInt(4);
+            int periods = edgar_int_arg(args, "periods", 4);
             return run_edgar({"get_financials", cik, QString::number(periods), "true"});
         };
         tools.push_back(std::move(t));
@@ -181,7 +217,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString form = args["form"].toString().trimmed();
             if (form.isEmpty())
                 form = "8-K";
-            int months = args["months_back"].toInt(12);
+            int months = edgar_int_arg(args, "months_back", 12);
             return run_edgar({"search_filings", ticker, form, QString::number(months)});
         };
         tools.push_back(std::move(t));
@@ -297,7 +333,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int max_len = args["max_length"].toInt(20000);
+            int max_len = edgar_int_arg(args, "max_length", 20000);
             return run_edgar({"10k_full_text", ticker, QString::number(max_len)});
         };
         tools.push_back(std::move(t));
@@ -320,7 +356,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString query = args["query"].toString().trimmed();
             if (ticker.isEmpty() || query.isEmpty())
                 return ToolResult::fail("Missing 'ticker' or 'query'");
-            int max_results = args["max_results"].toInt(10);
+            int max_results = edgar_int_arg(args, "max_results", 10);
             return run_edgar({"10k_search", ticker, query, QString::number(max_results)});
         };
         tools.push_back(std::move(t));
@@ -372,7 +408,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int max_len = args["max_length"].toInt(15000);
+            int max_len = edgar_int_arg(args, "max_length", 15000);
             return run_edgar({"10q_full_text", ticker, QString::number(max_len)});
         };
         tools.push_back(std::move(t));
@@ -397,7 +433,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int limit = args["limit"].toInt(20);
+            int limit = edgar_int_arg(args, "limit", 20);
             return run_edgar({"8k_events", ticker, QString::number(limit)});
         };
         tools.push_back(std::move(t));
@@ -418,7 +454,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int max_len = args["max_length"].toInt(10000);
+            int max_len = edgar_int_arg(args, "max_length", 10000);
             return run_edgar({"8k_full_text", ticker, QString::number(max_len)});
         };
         tools.push_back(std::move(t));
@@ -443,7 +479,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int limit = args["limit"].toInt(25);
+            int limit = edgar_int_arg(args, "limit", 25);
             return run_edgar({"insider_transactions", ticker, QString::number(limit)});
         };
         tools.push_back(std::move(t));
@@ -463,7 +499,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int limit = args["limit"].toInt(50);
+            int limit = edgar_int_arg(args, "limit", 50);
             return run_edgar({"insider_summary", ticker, QString::number(limit)});
         };
         tools.push_back(std::move(t));
@@ -488,7 +524,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int quarters = args["quarters"].toInt(2);
+            int quarters = edgar_int_arg(args, "quarters", 2);
             return run_edgar({"13f_holdings", ticker, QString::number(quarters)});
         };
         tools.push_back(std::move(t));
@@ -508,7 +544,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int top_n = args["top_n"].toInt(20);
+            int top_n = edgar_int_arg(args, "top_n", 20);
             return run_edgar({"13f_top_holdings", ticker, QString::number(top_n)});
         };
         tools.push_back(std::move(t));
@@ -630,7 +666,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString query = args["query"].toString().trimmed();
             if (ticker.isEmpty() || query.isEmpty())
                 return ToolResult::fail("Missing 'ticker' or 'query'");
-            int max_results = args["max_results"].toInt(10);
+            int max_results = edgar_int_arg(args, "max_results", 10);
             return run_edgar({"10q_search", ticker, query, QString::number(max_results)});
         };
         tools.push_back(std::move(t));
@@ -655,7 +691,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int limit = args["limit"].toInt(30);
+            int limit = edgar_int_arg(args, "limit", 30);
             return run_edgar({"8k_events_categorized", ticker, QString::number(limit)});
         };
         tools.push_back(std::move(t));
@@ -677,7 +713,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString query = args["query"].toString().trimmed();
             if (ticker.isEmpty() || query.isEmpty())
                 return ToolResult::fail("Missing 'ticker' or 'query'");
-            int max_results = args["max_results"].toInt(10);
+            int max_results = edgar_int_arg(args, "max_results", 10);
             return run_edgar({"8k_search", ticker, query, QString::number(max_results)});
         };
         tools.push_back(std::move(t));
@@ -701,7 +737,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
                 return ToolResult::fail("Missing 'ticker'");
-            int limit = args["limit"].toInt(25);
+            int limit = edgar_int_arg(args, "limit", 25);
             return run_edgar({"insider_transactions_detailed", ticker, QString::number(limit)});
         };
         tools.push_back(std::move(t));
@@ -830,7 +866,7 @@ std::vector<ToolDef> get_edgar_tools() {
             QString query = args["query"].toString().trimmed();
             if (query.isEmpty())
                 return ToolResult::fail("Missing 'query'");
-            int top_n = args["top_n"].toInt(10);
+            int top_n = edgar_int_arg(args, "top_n", 10);
             return run_edgar({"find_company", query, QString::number(top_n)});
         };
         tools.push_back(std::move(t));

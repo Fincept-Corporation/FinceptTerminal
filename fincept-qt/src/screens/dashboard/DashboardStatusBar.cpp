@@ -282,11 +282,15 @@ void DashboardStatusBar::update_memory() {
 void DashboardStatusBar::ping_api() {
     QNetworkRequest req(QUrl(fincept::AppConfig::instance().api_base_url() + "/health"));
     req.setTransferTimeout(5000);
-    ping_elapsed_.restart();
+    // Per-request timer. A single shared member was restarted by every new probe,
+    // and showEvent() fires one on each tab show on top of the 30 s cadence — so
+    // a probe still in flight reported the age of the newest one (a too-small LAT).
+    QElapsedTimer started;
+    started.start();
     QNetworkReply* reply = nam_->get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, started]() {
         reply->deleteLater();
-        set_latency(reply->error() == QNetworkReply::NoError ? static_cast<int>(ping_elapsed_.elapsed()) : -1);
+        set_latency(reply->error() == QNetworkReply::NoError ? static_cast<int>(started.elapsed()) : -1);
     });
 }
 

@@ -11,6 +11,7 @@
 #include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPointer>
+#include <QSet>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -158,7 +159,9 @@ void ChatSessionPanel::refresh_sessions() {
             return;
         }
         sessions_ = std::move(sessions);
-        populate_list(sessions_);
+        // Through the filter, not around it: every stream finish refreshes the list, and
+        // populating from the full set dropped whatever the user had typed in the search box.
+        apply_filter(search_edit_->text());
     });
 }
 
@@ -170,6 +173,8 @@ void ChatSessionPanel::populate_list(const QVector<ChatSession>& sessions) {
         item->setText(display + "\n" + tr("%1 msg").arg(s.message_count));
         item->setData(Qt::UserRole, s.uuid);
         item->setData(Qt::UserRole + 1, s.title);
+        if (search_hits_.contains(s.uuid))
+            item->setForeground(QColor(ui::colors::AMBER()));
         if (s.uuid == active_uuid_) {
             item->setSelected(true);
             session_list_->setCurrentItem(item);
@@ -187,7 +192,7 @@ void ChatSessionPanel::apply_filter(const QString& text) {
     }
     QVector<ChatSession> filtered;
     for (const auto& s : sessions_) {
-        if (s.title.contains(text, Qt::CaseInsensitive))
+        if (s.title.contains(text, Qt::CaseInsensitive) || search_hits_.contains(s.uuid))
             filtered.append(s);
     }
     populate_list(filtered);
@@ -309,6 +314,8 @@ void ChatSessionPanel::on_export_clicked() {
 }
 
 void ChatSessionPanel::on_search_changed(const QString& text) {
+    // Hits belong to the previous text; the debounced server search below refills them.
+    search_hits_.clear();
     // Local filter immediately
     apply_filter(text);
     // Debounce server-side search for better results
@@ -324,24 +331,27 @@ void ChatSessionPanel::on_search_server() {
         return;
 
     QPointer<ChatSessionPanel> self = this;
-    ChatModeService::instance().search_messages(query, [this, self](bool ok, QVector<ChatMessage> results, QString) {
+    ChatModeService::instance().search_messages(query, [this, self, query](bool ok, QVector<ChatMessage> results, QString) {
         if (!self || !ok || results.isEmpty())
             return;
-        // Highlight sessions that have matching messages
-        for (int i = 0; i < session_list_->count(); ++i) {
-            auto* item = session_list_->item(i);
-            bool has_match = false;
-            for (const auto& r : results) {
-                // Check if this message's content matches any session
-                if (item->text().contains(r.content.left(20), Qt::CaseInsensitive)) {
-                    has_match = true;
-                    break;
-                }
-            }
-            if (has_match && !item->isSelected()) {
-                item->setForeground(QColor(ui::colors::AMBER()));
-            }
+        // The box moved on while the request was out (a newer query has its own search
+        // in flight) — don't mark the list for text that is no longer typed.
+        if (search_edit_->text().trimmed() != query)
+            return;
+        // Sessions that have a matching MESSAGE. The old test looked for the first 20
+        // characters of the message inside the sidebar row's text (title + "N msg"), which
+        // can never be true, so server-side search highlighted nothing.
+        QSet<QString> hit_sessions;
+        for (const auto& r : results) {
+            if (!r.session_uuid.isEmpty())
+                hit_sessions.insert(r.session_uuid);
         }
+        if (hit_sessions.isEmpty())
+            return;
+        // Re-filter so sessions matched only by message content join the list (the title
+        // filter had already hidden them) and get the highlight from populate_list().
+        search_hits_ = hit_sessions;
+        apply_filter(search_edit_->text());
     });
 }
 
@@ -380,7 +390,7 @@ void ChatSessionPanel::retranslateUi() {
         stats_lbl_->setText(
             tr("%1 sessions | %2 messages").arg(last_stats_.total_sessions).arg(last_stats_.total_messages));
     // Re-render the session list so "(Untitled)" / "%1 msg" pick up the language.
-    populate_list(sessions_);
+    apply_filter(search_edit_ ? search_edit_->text() : QString());
 }
 
 } // namespace fincept::chat_mode

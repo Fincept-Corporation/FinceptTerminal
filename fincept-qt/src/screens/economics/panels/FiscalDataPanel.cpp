@@ -28,8 +28,10 @@ struct FiscalSeries {
 };
 
 static const QList<FiscalSeries> kFiscalDataSeries = {
-    {"Debt to the Penny", "debt-to-penny", {"--all"}},   {"Avg Interest Rates", "avg-interest-rates", {"--all"}},
-    {"Interest Expense", "interest-expense", {"--all"}}, {"US Treasury Exchange Rates", "exchange-rates", {}},
+    {"Debt to the Penny", "debt-to-penny", {"--all"}},
+    {"Avg Interest Rates", "avg-interest-rates", {"--all"}},
+    {"Interest Expense", "interest-expense", {"--all"}},
+    {"US Treasury Exchange Rates", "exchange-rates", {"--limit=250"}},
     {"Record-Setting Auction Debt", "record-debt", {}},
 };
 

@@ -247,7 +247,9 @@ void AiChatScreen::retranslateUi() {
         typing_dots_lbl_->setText(tr("AI is thinking"));
     // Re-run the helpers that compose live state strings so their tr() calls
     // pick up the new language for the current state.
-    set_input_enabled(send_btn_ ? send_btn_->isEnabled() : true);
+    // The send button is live while "Stop" is showing, so its enabled state no longer
+    // says whether the composer is idle — the streaming flag does.
+    set_input_enabled(!streaming_);
     update_stats();
 }
 
@@ -352,8 +354,10 @@ void AiChatScreen::set_group(fincept::SymbolGroup g) {
     link_group_ = g;
     // Drop the cached symbol when leaving a group — otherwise the next send
     // would still tag a context the user can't see was inherited.
-    if (g == fincept::SymbolGroup::None)
+    if (g == fincept::SymbolGroup::None) {
         linked_symbol_ = {};
+        linked_context_pending_ = false;
+    }
 }
 
 void AiChatScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
@@ -363,9 +367,11 @@ void AiChatScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
     // the user typed; the prefix is only on the LLM payload.
     if (!ref.is_valid()) {
         linked_symbol_ = {};
+        linked_context_pending_ = false;
         return;
     }
     linked_symbol_ = ref;
+    linked_context_pending_ = true; // tag the next message, once (see on_send)
 }
 
 } // namespace fincept::screens

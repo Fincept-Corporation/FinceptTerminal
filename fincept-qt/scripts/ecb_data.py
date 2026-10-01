@@ -27,6 +27,13 @@ from typing import Dict, List, Optional, Union, Literal
 import aiohttp
 import pandas as pd
 
+# aiohttp defaults to aiodns when it is installed, and aiodns times out on many
+# Windows setups ("Timeout while contacting DNS servers"). The threaded resolver
+# uses the OS resolver instead (same fix as bis_data.py).
+if sys.platform == "win32":
+    import aiohttp.connector as _aiohttp_connector
+    _aiohttp_connector.DefaultResolver = aiohttp.ThreadedResolver
+
 class ECBError(Exception):
     """Custom exception for ECB data errors"""
     pass

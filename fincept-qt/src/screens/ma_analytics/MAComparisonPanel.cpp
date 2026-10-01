@@ -6,12 +6,18 @@
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -20,6 +26,28 @@ using namespace fincept::services::ma;
 namespace fincept::screens {
 
 using namespace fincept::services::ma;
+
+namespace {
+// The deal boxes used to send whatever QJsonDocument::fromJson made of the text — an empty array for any typo —
+// so a malformed paste produced a confusing script error (or an empty result). Validate up front.
+bool parse_deals_array(const QString& text, QJsonArray* out, QString* error) {
+    QJsonParseError perr{};
+    const QJsonDocument doc = QJsonDocument::fromJson(text.toUtf8(), &perr);
+    if (perr.error != QJsonParseError::NoError) {
+        *error = QCoreApplication::translate("MAComparisonPanel", "Deals JSON is not valid: %1 (offset %2)")
+                     .arg(perr.errorString())
+                     .arg(perr.offset);
+        return false;
+    }
+    if (!doc.isArray() || doc.array().isEmpty()) {
+        *error = QCoreApplication::translate("MAComparisonPanel", "Enter a non-empty JSON array of deals, e.g. "
+                                                                  "[{\"acquirer\":\"...\",\"target\":\"...\",\"deal_value\":N}]");
+        return false;
+    }
+    *out = doc.array();
+    return true;
+}
+} // namespace
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODULE 8: DEAL COMPARISON
@@ -65,9 +93,15 @@ QWidget* MAModulePanel::build_comparison_panel() {
     auto* cmp_run = make_run_button(tr("COMPARE DEALS"), cmp);
     connect(cmp_run, &QPushButton::clicked, this, [this, cmp_text]() {
         status_label_->setText(tr("Comparing Deals..."));
-        auto doc = QJsonDocument::fromJson(cmp_text->toPlainText().toUtf8());
+        QJsonArray deals;
+        QString parse_error;
+        if (!parse_deals_array(cmp_text->toPlainText(), &deals, &parse_error)) {
+            status_label_->setText(tr("Invalid JSON"));
+            display_error(parse_error);
+            return;
+        }
         QJsonObject params;
-        params["deals"] = doc.array();
+        params["deals"] = deals;
         MAAnalyticsService::instance().compare_deals(params);
     });
     cmp_vl->addWidget(cmp_run);
@@ -99,9 +133,15 @@ QWidget* MAModulePanel::build_comparison_panel() {
     auto* rank_run = make_run_button(tr("RANK DEALS"), rank);
     connect(rank_run, &QPushButton::clicked, this, [this, rank_text]() {
         status_label_->setText(tr("Ranking Deals..."));
-        auto doc = QJsonDocument::fromJson(rank_text->toPlainText().toUtf8());
+        QJsonArray deals;
+        QString parse_error;
+        if (!parse_deals_array(rank_text->toPlainText(), &deals, &parse_error)) {
+            status_label_->setText(tr("Invalid JSON"));
+            display_error(parse_error);
+            return;
+        }
         QJsonObject params;
-        params["deals"] = doc.array();
+        params["deals"] = deals;
         params["criteria"] = combo_inputs_["rank_criteria"]->currentText();
         MAAnalyticsService::instance().rank_deals(params);
     });
@@ -128,10 +168,16 @@ QWidget* MAModulePanel::build_comparison_panel() {
     auto* bench_run = make_run_button(tr("BENCHMARK PREMIUM"), bench);
     connect(bench_run, &QPushButton::clicked, this, [this, bench_text]() {
         status_label_->setText(tr("Benchmarking Premium..."));
-        auto doc = QJsonDocument::fromJson(bench_text->toPlainText().toUtf8());
+        QJsonArray comparables;
+        QString parse_error;
+        if (!parse_deals_array(bench_text->toPlainText(), &comparables, &parse_error)) {
+            status_label_->setText(tr("Invalid JSON"));
+            display_error(parse_error);
+            return;
+        }
         QJsonObject params;
         params["target_premium"] = double_inputs_["bench_premium"]->value() / 100.0;
-        params["comparables"] = doc.array();
+        params["comparables"] = comparables;
         MAAnalyticsService::instance().benchmark_deal_premium(params);
     });
     bench_vl->addWidget(bench_run);
@@ -153,9 +199,15 @@ QWidget* MAModulePanel::build_comparison_panel() {
     auto* pay_run = make_run_button(tr("ANALYZE PAYMENT STRUCTURES"), pay);
     connect(pay_run, &QPushButton::clicked, this, [this, pay_text]() {
         status_label_->setText(tr("Analyzing Payment Structures..."));
-        auto doc = QJsonDocument::fromJson(pay_text->toPlainText().toUtf8());
+        QJsonArray deals;
+        QString parse_error;
+        if (!parse_deals_array(pay_text->toPlainText(), &deals, &parse_error)) {
+            status_label_->setText(tr("Invalid JSON"));
+            display_error(parse_error);
+            return;
+        }
         QJsonObject params;
-        params["deals"] = doc.array();
+        params["deals"] = deals;
         MAAnalyticsService::instance().analyze_payment_structures(params);
     });
     pay_vl->addWidget(pay_run);
@@ -177,9 +229,15 @@ QWidget* MAModulePanel::build_comparison_panel() {
     auto* ind_run = make_run_button(tr("ANALYZE BY INDUSTRY"), ind);
     connect(ind_run, &QPushButton::clicked, this, [this, ind_text]() {
         status_label_->setText(tr("Analyzing Industry Deals..."));
-        auto doc = QJsonDocument::fromJson(ind_text->toPlainText().toUtf8());
+        QJsonArray deals;
+        QString parse_error;
+        if (!parse_deals_array(ind_text->toPlainText(), &deals, &parse_error)) {
+            status_label_->setText(tr("Invalid JSON"));
+            display_error(parse_error);
+            return;
+        }
         QJsonObject params;
-        params["deals"] = doc.array();
+        params["deals"] = deals;
         MAAnalyticsService::instance().analyze_industry_deals(params);
     });
     ind_vl->addWidget(ind_run);

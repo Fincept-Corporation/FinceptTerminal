@@ -1,6 +1,7 @@
 // EquityWatchlist.cpp — compact watchlist with live quote updates
 #include "screens/equity_trading/EquityWatchlist.h"
 
+#include "core/events/EventBus.h"
 #include "core/symbol/SymbolDragSource.h"
 #include "core/symbol/SymbolRef.h"
 #include "screens/equity_trading/EquityTypes.h"
@@ -342,9 +343,34 @@ void EquityWatchlist::on_table_context_menu(const QPoint& pos) {
         return;
 
     QMenu menu(this);
+    // Hand the ticker to other screens (nav.open_symbol). A watchlist row carries no
+    // exchange of its own, so the focused broker's default exchange picks the Yahoo suffix
+    // (RELIANCE -> RELIANCE.NS); derivative contracts have no research page and get no entry.
+    QString exchange;
+    if (auto* broker = trading::BrokerRegistry::instance().get(broker_id_))
+        exchange = broker->profile().default_exchange;
+    const QString ticker = research_ticker_for(sym, exchange);
+    QAction* research_act = nullptr;
+    QAction* news_act = nullptr;
+    if (!ticker.isEmpty()) {
+        research_act = menu.addAction(tr("Open %1 in Equity Research").arg(sym));
+        news_act = menu.addAction(tr("News for %1").arg(sym));
+        menu.addSeparator();
+    }
     QAction* remove_act = menu.addAction(tr("Remove %1").arg(sym));
-    if (menu.exec(table_->viewport()->mapToGlobal(pos)) == remove_act)
+    QAction* chosen = menu.exec(table_->viewport()->mapToGlobal(pos));
+    if (!chosen)
+        return;
+    if (chosen == remove_act) {
         emit symbol_removed(sym);
+    } else if (chosen == research_act) {
+        EventBus::instance().publish("nav.open_symbol", {{"screen_id", QStringLiteral("equity_research")},
+                                                         {"symbol", ticker},
+                                                         {"exchange", exchange}});
+    } else if (chosen == news_act) {
+        EventBus::instance().publish("nav.open_symbol",
+                                     {{"screen_id", QStringLiteral("news")}, {"symbol", sym}, {"exchange", exchange}});
+    }
 }
 
 void EquityWatchlist::changeEvent(QEvent* event) {
@@ -366,10 +392,20 @@ void EquityWatchlist::retranslateUi() {
 
 void EquityWatchlist::set_symbols(const QStringList& symbols) {
     QMutexLocker lock(&mutex_);
+    // The list is re-set whenever the watchlist OR the position/holding union changes,
+    // and a re-set used to blank every row to "--" until its next tick. Carry the
+    // last-known quote forward for symbols that survive (P11: never blank a stale row).
+    QHash<QString, WatchlistEntry> previous;
+    previous.reserve(entries_.size());
+    for (const auto& e : entries_)
+        previous.insert(e.symbol, e);
     entries_.clear();
     entries_.reserve(symbols.size());
     for (const auto& sym : symbols) {
         WatchlistEntry e;
+        const auto prev = previous.constFind(sym);
+        if (prev != previous.constEnd())
+            e = prev.value();
         e.symbol = sym;
         entries_.append(e);
     }

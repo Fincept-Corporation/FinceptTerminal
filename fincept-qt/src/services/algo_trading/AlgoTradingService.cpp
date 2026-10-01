@@ -9,11 +9,20 @@
 #include "trading/AccountManager.h"
 
 #include <QDate>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTime>
+#include <QTimeZone>
 #include <QUuid>
 
+#include <cmath>
+
 namespace fincept::services::algo {
+
+// Bars of history kept before the backtest From date. Must match BacktestEngine's
+// kWarmupBars (indicator warm-up it skips before evaluating) so evaluation starts on From.
+static constexpr int kAlgoSvcBtWarmupBars = 50;
 
 AlgoTradingService& AlgoTradingService::instance() {
     static AlgoTradingService inst;
@@ -186,14 +195,30 @@ void AlgoTradingService::delete_strategy(const QString& id) {
 // ── Backtesting (native C++ engine) ────────────────────────────────────────────
 void AlgoTradingService::run_backtest(const AlgoStrategy& strategy, const QString& symbol, const QString& start_date,
                                       const QString& end_date, double capital) {
-    // Derive the historical window from the date range (fallback: 1 year).
-    int lookback_days = 365;
+    // CandleDataFetcher only knows "the last N days, ending now". The From/To pickers used
+    // to be reduced to just the span (To - From), so asking for 2021 silently backtested
+    // the most recent span instead. Fetch from (From - indicator warm-up) up to today, then
+    // trim to [From, To] below once the candles are in hand.
     const QDate d1 = QDate::fromString(start_date, "yyyy-MM-dd");
     const QDate d2 = QDate::fromString(end_date, "yyyy-MM-dd");
-    if (d1.isValid() && d2.isValid() && d1 < d2)
-        lookback_days = static_cast<int>(d1.daysTo(d2));
+    const bool have_range = d1.isValid() && d2.isValid() && d1 < d2;
+    const QString tf_for_warmup = strategy.timeframe.isEmpty() ? QStringLiteral("1d") : strategy.timeframe;
+    // BacktestEngine skips its first 50 bars for indicator warm-up; pull enough extra
+    // history that evaluation starts on the requested From date. A session is ~6.5h, so
+    // 50 bars of N seconds is 50*N/23400 trading days; x1.5 turns that into calendar days.
+    const int tf_secs = fincept::algo::timeframe_seconds(fincept::algo::timeframe_from_string(tf_for_warmup));
+    const int warm_days = qMax(3, static_cast<int>(std::ceil(50.0 * tf_secs / 23400.0 * 1.5)));
+    int lookback_days = 365;
+    if (have_range)
+        lookback_days = static_cast<int>(d1.daysTo(QDate::currentDate())) + warm_days + 1;
     if (lookback_days < 1)
         lookback_days = 365;
+    const qint64 range_start_ms =
+        have_range ? QDateTime(d1, QTime(0, 0), QTimeZone::UTC).toMSecsSinceEpoch() : 0;
+    const qint64 range_end_ms =
+        have_range ? QDateTime(d2.addDays(1), QTime(0, 0), QTimeZone::UTC).toMSecsSinceEpoch() : 0; // exclusive
+    // Latest-request-wins: a slow earlier fetch must not paint over a newer run's report.
+    const int my_seq = ++backtest_seq_;
 
     // Data source: a connected broker if one exists, otherwise native Yahoo.
     QString broker_id, account_id;
@@ -225,11 +250,44 @@ void AlgoTradingService::run_backtest(const AlgoStrategy& strategy, const QStrin
     // Singleton — `this` outlives any async work, so capture directly.
     fincept::algo::CandleDataFetcher::instance().fetch(
         symbol, timeframe, lookback_days, source, broker_id, account_id,
-        [this, entry, exit, entry_logic, exit_logic, sl, tp, trail, size_pct, capital, timeframe,
-         symbol](bool ok, const QVector<fincept::algo::OhlcvCandle>& candles, const QString& err) {
-            if (!ok || candles.isEmpty()) {
+        [this, entry, exit, entry_logic, exit_logic, sl, tp, trail, size_pct, capital, timeframe, symbol, my_seq,
+         have_range, range_start_ms, range_end_ms,
+         warm_bars = kAlgoSvcBtWarmupBars](bool ok, const QVector<fincept::algo::OhlcvCandle>& fetched,
+                                           const QString& err) {
+            if (my_seq != backtest_seq_)
+                return; // superseded by a newer run
+            if (!ok || fetched.isEmpty()) {
                 emit error_occurred("backtest", err.isEmpty() ? QStringLiteral("No data") : err);
                 return;
+            }
+
+            // Trim to the requested [From, To] window, keeping `warm_bars` of history before
+            // From so indicators are already warm on the first evaluated bar.
+            QVector<fincept::algo::OhlcvCandle> candles = fetched;
+            if (have_range) {
+                int first = 0;
+                while (first < fetched.size() && fetched[first].open_time < range_start_ms)
+                    ++first;
+                int last = fetched.size();
+                while (last > first && fetched[last - 1].open_time >= range_end_ms)
+                    --last;
+                if (last <= first) {
+                    emit error_occurred("backtest",
+                                        QStringLiteral("No %1 bars between %2 and %3 — the data source only returned "
+                                                       "history from %4. Intraday history is capped by the provider; "
+                                                       "pick a more recent range.")
+                                            .arg(timeframe,
+                                                 QDateTime::fromMSecsSinceEpoch(range_start_ms, QTimeZone::UTC)
+                                                     .toString("yyyy-MM-dd"),
+                                                 QDateTime::fromMSecsSinceEpoch(range_end_ms - 1, QTimeZone::UTC)
+                                                     .toString("yyyy-MM-dd"),
+                                                 QDateTime::fromMSecsSinceEpoch(fetched.first().open_time,
+                                                                                QTimeZone::UTC)
+                                                     .toString("yyyy-MM-dd")));
+                    return;
+                }
+                const int begin = qMax(0, first - warm_bars);
+                candles = fetched.mid(begin, last - begin);
             }
             const QJsonObject result = fincept::algo::BacktestEngine::run(candles, entry, entry_logic, exit, exit_logic,
                                                                           sl, tp, trail, capital, timeframe, size_pct);

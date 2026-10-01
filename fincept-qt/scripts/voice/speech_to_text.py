@@ -15,6 +15,7 @@ The process runs until stdin is closed or it receives SIGTERM.
 import json
 import sys
 import signal
+import time
 
 
 def emit(obj: dict) -> None:
@@ -120,19 +121,27 @@ def main() -> None:
         sys.exit(1)
 
     # Main listening loop
+    #
+    # `consecutive_errors` counts loop iterations that failed OUTSIDE the speech
+    # round-trip (opening/reading the mic: unplugged, device busy, permission
+    # revoked). Those fail instantly, so without a bound the loop spun at full speed
+    # printing an {"error"} line per turn forever — a CPU burn and a flood of UI
+    # error events. A few in a row means the mic is gone: report it and exit.
+    consecutive_errors = 0
     while running:
         emit({"status": "listening"})
         try:
             with mic as source:
                 audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
+            consecutive_errors = 0  # the mic opened and read — failures below are not its fault
 
             text = recognizer.recognize_google(audio)
             if text and text.strip():
                 emit({"text": text.strip()})
 
         except sr.WaitTimeoutError:
-            # No speech detected within timeout — loop and try again
-            pass
+            # No speech detected within timeout — the mic is fine; loop and try again
+            consecutive_errors = 0
         except sr.UnknownValueError:
             # Could not understand audio — not an error, just try again
             pass
@@ -141,7 +150,12 @@ def main() -> None:
         except KeyboardInterrupt:
             break
         except Exception as e:
+            consecutive_errors += 1
             emit({"error": f"Unexpected error: {e}"})
+            if consecutive_errors >= 3:
+                emit({"fatal": f"Microphone unavailable: {e}"})
+                sys.exit(1)
+            time.sleep(0.5)
 
     emit({"status": "stopped"})
 

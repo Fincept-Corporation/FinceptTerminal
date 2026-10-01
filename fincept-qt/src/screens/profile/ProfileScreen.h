@@ -50,8 +50,11 @@ class ProfileScreen : public QWidget {
     QLabel* ov_country_ = nullptr;
     QLabel* ov_verified_ = nullptr;
     QLabel* ov_mfa_ = nullptr;
+    QLabel* ov_member_since_ = nullptr;
+    QLabel* ov_last_login_ = nullptr;
     QLabel* ov_credits_big_ = nullptr;
     QLabel* ov_plan_ = nullptr;
+    QLabel* ov_credits_expire_ = nullptr;
 
     // Security
     QLabel* sec_api_key_ = nullptr;

@@ -199,7 +199,9 @@ void MarketsListPanel::retranslateUi() {
     if (table_) {
         table_->setHorizontalHeaderLabels({tr("MARKET"), tr("YES"), tr("NO"), tr("24h VOL"), tr("EXPIRES")});
     }
-    if (footer_note_)
+    // The footer is state-dependent (demo note / empty / order-entry hint) and is
+    // only the fixed demo text while the pill reads DEMO.
+    if (footer_note_ && status_pill_ && status_pill_->objectName() == QLatin1String("marketsListStatusDemo"))
         footer_note_->setText(tr("Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
                                  "deploy the fincept_market Anchor program for live trading."));
     // Re-apply the status pill text using its objectName as the state flag so
@@ -218,7 +220,17 @@ void MarketsListPanel::retranslateUi() {
 // ── Adapter callbacks ──────────────────────────────────────────────────────
 
 void MarketsListPanel::on_markets_ready(const QVector<pr::PredictionMarket>& markets) {
+    // A successful list clears a previous ERROR pill. The pill used to stay red
+    // after a retry succeeded (set_status_demo was only called once, on show),
+    // and the footer kept announcing "Demo dataset" even against a live endpoint.
+    if (auto* adapter = fincept_adapter())
+        set_status_demo(adapter->is_demo_mode());
+    status_pill_->setToolTip(QString());
     rebuild_table(markets);
+    if (markets.isEmpty()) {
+        footer_note_->setText(tr("No markets are listed yet."));
+        footer_note_->show();
+    }
 }
 
 void MarketsListPanel::on_error(const QString& context, const QString& message) {
@@ -234,9 +246,13 @@ void MarketsListPanel::on_row_double_clicked(int row, int /*column*/) {
     if (market_id.isEmpty())
         return;
     LOG_INFO("MarketsListPanel", QString("market double-clicked: %1").arg(market_id));
-    // The order-entry panel is part of Phase 4 polish — wired via a
-    // signal in the next iteration. For now, surface the click via the
-    // log so the seam is testable.
+    // The order-entry panel is part of Phase 4 polish and has no UI yet. Say so
+    // on screen — a double-click that silently does nothing reads as a broken
+    // row. (The log line above keeps the seam testable.)
+    footer_note_->setText(tr("Trading on \"%1\" opens once the fincept_market program is deployed — "
+                             "order entry is not available yet.")
+                              .arg(item->text()));
+    footer_note_->show();
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────
@@ -245,9 +261,13 @@ void MarketsListPanel::set_status_demo(bool demo) {
     if (demo) {
         status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("marketsListStatusDemo"));
+        footer_note_->setText(tr("Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
+                                 "deploy the fincept_market Anchor program for live trading."));
+        footer_note_->show();
     } else {
         status_pill_->setText(tr("● LIVE"));
         status_pill_->setObjectName(QStringLiteral("marketsListStatusLive"));
+        footer_note_->hide();
     }
     status_pill_->style()->unpolish(status_pill_);
     status_pill_->style()->polish(status_pill_);

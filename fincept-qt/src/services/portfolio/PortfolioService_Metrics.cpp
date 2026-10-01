@@ -71,6 +71,20 @@ void PortfolioService::fetch_correlation(const QStringList& symbols) {
         return;
     }
 
+    // Order-independent key: the same book re-requested on every refresh tick
+    // must not respawn a yfinance download each time.
+    QStringList sorted_syms = symbols;
+    sorted_syms.sort();
+    const QString cache_key = sorted_syms.join(QLatin1Char(','));
+    if (corr_cache_.key == cache_key &&
+        (QDateTime::currentSecsSinceEpoch() - corr_cache_.timestamp) < kCorrelationTtlSec) {
+        emit correlation_computed(corr_cache_.matrix);
+        return;
+    }
+    if (corr_inflight_key_ == cache_key)
+        return; // identical request already running - it will emit when it lands
+    corr_inflight_key_ = cache_key;
+
     // Build inline Python that embeds the symbol list, fetches 30-day closes,
     // and prints a JSON correlation matrix to stdout.
     QJsonArray sym_arr;
@@ -134,25 +148,36 @@ print(json.dumps(matrix))
                              .arg(sym_json);
 
     QPointer<PortfolioService> self = this;
-    python::PythonRunner::instance().run_code(code, [self](python::PythonResult result) {
+    python::PythonRunner::instance().run_code(code, [self, cache_key](python::PythonResult result) {
         if (!self)
             return;
+        // A newer request for a different book may have superseded this one
+        // while it ran; emitting the stale matrix over the newer book's would
+        // show the wrong correlations, so the older result is cached but silent.
+        const bool is_latest = (self->corr_inflight_key_ == cache_key);
+        if (is_latest)
+            self->corr_inflight_key_.clear();
         if (!result.success || result.output.trimmed().isEmpty()) {
             LOG_WARN("PortfolioSvc", "Correlation fetch failed: " + result.error.left(200));
-            emit self->correlation_computed({});
+            if (is_latest)
+                emit self->correlation_computed({});
             return;
         }
         QJsonParseError err;
         const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
         if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-            emit self->correlation_computed({});
+            if (is_latest)
+                emit self->correlation_computed({});
             return;
         }
         QHash<QString, double> matrix;
         const auto obj = doc.object();
         for (auto it = obj.begin(); it != obj.end(); ++it)
             matrix[it.key()] = it.value().toDouble();
-        emit self->correlation_computed(matrix);
+        if (!matrix.isEmpty())
+            self->corr_cache_ = {cache_key, QDateTime::currentSecsSinceEpoch(), matrix};
+        if (is_latest)
+            emit self->correlation_computed(matrix);
     });
 }
 
@@ -185,6 +210,20 @@ void PortfolioService::fetch_benchmark_history(const QString& symbol, const QStr
     // Allow callers to omit the symbol → defaults to SPY (legacy behaviour).
     const QString sym = symbol.isEmpty() ? QStringLiteral("SPY") : symbol;
 
+    // The screen asks for the benchmark(s) on every summary refresh; a 1-year
+    // daily series barely moves in 30 minutes, so replay it from memory instead
+    // of respawning Python + yfinance each minute.
+    const QString bench_key = sym + QLatin1Char('|') + period;
+    const auto cached = bench_cache_.constFind(bench_key);
+    if (cached != bench_cache_.constEnd() &&
+        (QDateTime::currentSecsSinceEpoch() - cached->timestamp) < kBenchmarkTtlSec) {
+        publish_benchmark(sym, cached->dates, cached->closes);
+        return;
+    }
+    if (bench_inflight_.contains(bench_key))
+        return; // already downloading - the landing result fires the signals
+    bench_inflight_.insert(bench_key);
+
     const QString code = QString(R"python(
 import json, sys
 import yfinance as yf
@@ -208,9 +247,10 @@ except Exception as e:
                              .arg(sym, period);
 
     QPointer<PortfolioService> self = this;
-    python::PythonRunner::instance().run_code(code, [self, sym](python::PythonResult result) {
+    python::PythonRunner::instance().run_code(code, [self, sym, bench_key](python::PythonResult result) {
         if (!self)
             return;
+        self->bench_inflight_.remove(bench_key);
         QStringList dates;
         QVector<double> closes;
         if (!result.success || result.output.trimmed().isEmpty()) {
@@ -231,16 +271,25 @@ except Exception as e:
             }
         }
 
-        // Beta computation in compute_metrics() always regresses against SPY,
-        // so only update that cache when SPY is what the caller asked for —
-        // otherwise we would corrupt Beta with e.g. TSX returns.
-        if (sym == QStringLiteral("SPY")) {
-            self->spy_dates_cache_ = dates;
-            self->spy_closes_cache_ = closes;
-            emit self->spy_history_loaded(dates, closes);
-        }
-        emit self->benchmark_history_loaded(sym, dates, closes);
+        // Only a real series is worth replaying; a failed download (empty) is
+        // retried on the next request instead of being pinned for 30 minutes.
+        if (!dates.isEmpty() && dates.size() == closes.size())
+            self->bench_cache_.insert(bench_key, {dates, closes, QDateTime::currentSecsSinceEpoch()});
+        self->publish_benchmark(sym, dates, closes);
     });
+}
+
+void PortfolioService::publish_benchmark(const QString& symbol, const QStringList& dates,
+                                         const QVector<double>& closes) {
+    // Beta computation in compute_metrics() always regresses against SPY,
+    // so only update that cache when SPY is what the caller asked for —
+    // otherwise we would corrupt Beta with e.g. TSX returns.
+    if (symbol == QStringLiteral("SPY")) {
+        spy_dates_cache_ = dates;
+        spy_closes_cache_ = closes;
+        emit spy_history_loaded(dates, closes);
+    }
+    emit benchmark_history_loaded(symbol, dates, closes);
 }
 
 // ── Risk-free rate (FRED DGS10) ───────────────────────────────────────────────
@@ -302,20 +351,26 @@ else:
         if (!self)
             return;
         double rate = kDefaultRiskFreeRate; // fallback
+        bool used_fallback = true;
         if (result.success && !result.output.trimmed().isEmpty()) {
             QJsonParseError err;
             const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
             if (err.error == QJsonParseError::NoError && doc.object().contains("rate")) {
                 rate = doc.object()["rate"].toDouble(kDefaultRiskFreeRate);
                 const QString note = doc.object().value("error").toString();
-                if (!note.isEmpty())
+                used_fallback = !note.isEmpty();
+                if (used_fallback)
                     LOG_WARN("PortfolioSvc",
                              "Risk-free rate: " + note + " (using " + QString::number(rate * 100, 'f', 2) + "%)");
             }
         }
-        // Persist to 24h cache
+        // Persist to the 24h cache. A FALLBACK rate (no FRED key configured, or
+        // the request failed) is back-dated so it expires after an hour rather
+        // than masquerading as a live yield for a day - otherwise adding a key
+        // in Settings had no effect until the next day.
         auto& settings = SettingsRepository::instance();
-        settings.set("portfolio.rf_rate_timestamp", QString::number(now_secs));
+        const qint64 stamp = used_fallback ? (now_secs - 86400 + 3600) : now_secs;
+        settings.set("portfolio.rf_rate_timestamp", QString::number(stamp));
         settings.set("portfolio.rf_rate_value", QString::number(rate, 'f', 6));
         self->rf_rate_ = rate;
         emit self->risk_free_rate_loaded(rate);
@@ -390,8 +445,12 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
             const double rf_daily = rf_rate_ / 252.0;
             if (daily_vol > 1e-6)
                 metrics.sharpe = ((mean / 100.0 - rf_daily) / (daily_vol / 100.0)) * std::sqrt(252.0);
-            if (summary.total_market_value > 0)
-                metrics.var_95 = summary.total_market_value * std::abs(mean / 100.0 - kVar95Z * daily_vol / 100.0);
+            if (summary.total_market_value > 0) {
+                // Loss at the 5th percentile = z*sigma - mean. abs() turned a
+                // positive-drift day into a reported "loss" of the same size.
+                const double loss_frac = kVar95Z * daily_vol / 100.0 - mean / 100.0;
+                metrics.var_95 = summary.total_market_value * std::max(loss_frac, 0.0);
+            }
             const double vol_score = std::min(ann_vol / kVolCapPct, 1.0) * kWVolDegraded;
             const double conc_score = std::min(conc / kConcentrationCapPct, 1.0) * kWConcDegraded;
             metrics.risk_score = vol_score + conc_score;

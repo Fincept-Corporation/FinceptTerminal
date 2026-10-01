@@ -726,12 +726,11 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     retrainvl->setContentsMargins(12, 12, 12, 12);
     retrainvl->setSpacing(10);
 
-    // NOTE: AIQuantLabService::rolling_execute_retrain() parses the script's
-    // JSON event lines only after the process exits, so the per-window log is
-    // replayed on completion rather than streamed. Don't promise "live".
+    // AIQuantLabService::rolling_execute_retrain() forwards the script's JSON event lines as they
+    // are printed, so the progress bar and per-window log below update while the run is going.
     auto* rt_info = new QLabel(tr("Executes a full rolling retrain for a scheduled model. Each window trains "
-                                  "independently; the per-window log below is filled in when the run finishes. "
-                                  "Long runs can take many minutes with no intermediate output."),
+                                  "independently; the progress bar and per-window log below update as each "
+                                  "window starts. Long runs can take many minutes."),
                                retrain_tab);
     rt_info->setWordWrap(true);
     rt_info->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
@@ -761,12 +760,13 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
     auto* rr_log = new QTextEdit(retrain_tab);
     rr_log->setObjectName("rr_log");
     rr_log->setReadOnly(true);
-    rr_log->setPlaceholderText(tr("Per-window training log appears here when the run completes..."));
+    rr_log->setPlaceholderText(tr("Per-window training log appears here as the run progresses..."));
     rr_log->setStyleSheet(output_ss());
     rr_log->setMinimumHeight(140);
     retrainvl->addWidget(rr_log, 1);
 
     auto* rr_exec = make_run_button(tr("EXECUTE RETRAIN NOW"), retrain_tab);
+    rr_exec->setProperty("rrRetrain", true);
     connect(rr_exec, &QPushButton::clicked, this, [this]() {
         const QString mid = text_inputs_["rr_exec_id"]->text().trimmed();
         if (mid.isEmpty()) {
@@ -781,6 +781,7 @@ QWidget* QuantModulePanel::build_rolling_retraining_panel() {
         if (auto* log = this->findChild<QTextEdit*>("rr_log"))
             log->clear();
         status_label_->setText(tr("Retraining..."));
+        set_retrain_busy(this, true); // re-enabled by the run's done / error event
         QJsonObject params;
         params["model_id"] = mid;
         AIQuantLabService::instance().rolling_execute_retrain(params);

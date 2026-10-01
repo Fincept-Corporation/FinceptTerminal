@@ -68,14 +68,27 @@ class FinceptStrategyRunner:
         # Execute strategy file
         exec(code, namespace)
 
-        # Find the algorithm class (inherits from QCAlgorithm)
-        strategy_class = None
-        for name, obj in namespace.items():
-            if (isinstance(obj, type) and
-                issubclass(obj, QCAlgorithm) and
-                obj is not QCAlgorithm):
-                strategy_class = obj
-                break
+        # Find the algorithm class (inherits from QCAlgorithm).
+        # The strategy file starts with `from AlgorithmImports import *`, which drags several
+        # unrelated QCAlgorithm subclasses into `namespace` (QCAlgorithmFramework,
+        # OptionAssignmentRegressionAlgorithm, ...). Taking the FIRST subclass found therefore
+        # instantiated one of those instead of the strategy, whose empty initialize() never
+        # subscribed anything: nearly every backtest ran flat with zero trades. Only classes
+        # DEFINED by the strategy code (exec leaves their __module__ at the namespace's
+        # __name__, 'builtins') count; the last one defined wins.
+        own_module = namespace.get('__name__', 'builtins')
+        defined = [obj for obj in namespace.values()
+                   if isinstance(obj, type) and issubclass(obj, QCAlgorithm) and obj is not QCAlgorithm
+                   and getattr(obj, '__module__', None) == own_module]
+        strategy_class = defined[-1] if defined else None
+        if strategy_class is None:
+            # Unusual layout (class imported from a helper module): fall back to the old scan.
+            for name, obj in namespace.items():
+                if (isinstance(obj, type) and
+                    issubclass(obj, QCAlgorithm) and
+                    obj is not QCAlgorithm):
+                    strategy_class = obj
+                    break
 
         if not strategy_class:
             raise ValueError(f"No QCAlgorithm subclass found in {info['path']}")
@@ -195,6 +208,7 @@ class FinceptStrategyRunner:
                     all_timestamps.add(bar['time'])
 
             timestamps = sorted(all_timestamps)
+            stamped_orders = set()  # tickets already given their bar time (see below)
 
             for timestamp_str in timestamps:
                 timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
@@ -219,16 +233,33 @@ class FinceptStrategyRunner:
                         slice_data.add(symbol_str, bar)
 
                 # Update securities with current prices
+                bar_prices = {}
                 for symbol_str in slice_data._data.keys():
                     if symbol_str in algorithm.securities:
                         price = slice_data[symbol_str].close
                         algorithm.securities[symbol_str].update_price(price)
+                        bar_prices[symbol_str] = price
+                # Mark open positions to this bar's close. The portfolio only re-priced a
+                # holding at the moment it was FILLED, so equity stayed flat between trades
+                # (a buy-and-hold year reported exactly the starting capital).
+                if bar_prices and hasattr(algorithm.portfolio, 'update_market_prices'):
+                    algorithm.portfolio.update_market_prices(bar_prices)
 
                 # Call OnData
                 if hasattr(algorithm, 'on_data'):
                     algorithm.on_data(slice_data)
                 elif hasattr(algorithm, 'OnData'):
                     algorithm.OnData(slice_data)
+
+                # Orders are stamped with the wall clock when created; give the ones this bar
+                # produced the BAR's time so fills carry their simulated date (not "today").
+                for oid, ticket in algorithm.transactions._orders.items():
+                    if oid not in stamped_orders:
+                        stamped_orders.add(oid)
+                        try:
+                            ticket.time = timestamp
+                        except Exception:
+                            pass
 
                 # Record equity
                 portfolio_value = algorithm.portfolio.total_portfolio_value
@@ -252,10 +283,26 @@ class FinceptStrategyRunner:
                         'type': order.order_type.name
                     })
 
+            # Positions still open at the end of the run (symbol/qty/avg cost/last price) so
+            # callers can report them; additive key, existing consumers ignore it.
+            open_positions = []
+            try:
+                for ticker, h in algorithm.portfolio.get_holdings_summary().items():
+                    open_positions.append({
+                        'symbol': ticker,
+                        'quantity': h['quantity'],
+                        'avg_price': h['avg_price'],
+                        'market_price': h['market_price'],
+                        'time': timestamps[-1] if timestamps else None,
+                    })
+            except Exception:
+                pass
+
             # Return results
             return {
                 'success': True,
                 'data': {
+                    'open_positions': open_positions,
                     'performance': {
                         'total_return': total_return,
                         'final_equity': final_equity,

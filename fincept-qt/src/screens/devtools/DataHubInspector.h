@@ -4,6 +4,7 @@
 #include <QTimer>
 #include <QWidget>
 
+class QLineEdit;
 class QTableWidget;
 
 namespace fincept::screens::devtools {
@@ -25,6 +26,7 @@ class DataHubInspector : public QWidget {
     void refresh();
     void retranslateUi();
 
+    QLineEdit* filter_edit_ = nullptr; // substring filter over the topic column
     QTableWidget* table_ = nullptr;
     QTimer refresh_timer_;
     bool initial_sized_ = false;

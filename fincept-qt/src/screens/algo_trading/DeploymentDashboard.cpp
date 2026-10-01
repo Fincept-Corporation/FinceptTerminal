@@ -296,12 +296,15 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
                total_pnl >= 0 ? fincept::ui::colors::POSITIVE : fincept::ui::colors::NEGATIVE,
                fincept::ui::fonts::TITLE, &h.pnl);
     add_metric(tr("WIN RATE"), QString("%1%").arg(d.win_rate, 0, 'f', 1), fincept::ui::colors::TEXT_PRIMARY,
-               fincept::ui::fonts::SMALL, nullptr);
+               fincept::ui::fonts::SMALL, &h.win_rate);
     add_metric(tr("POSITION"), tr("FLAT"), fincept::ui::colors::TEXT_TERTIARY, fincept::ui::fonts::SMALL, &h.position);
     add_metric(tr("TRADES"), QString::number(d.total_trades), fincept::ui::colors::TEXT_PRIMARY,
                fincept::ui::fonts::SMALL, &h.trades);
-    add_metric(tr("MAX DD"), QString("-%1%").arg(std::abs(d.max_drawdown), 0, 'f', 2), fincept::ui::colors::NEGATIVE,
-               fincept::ui::fonts::SMALL, nullptr);
+    // max_drawdown is an absolute P&L drawdown (peak realised P&L minus current, in the broker's
+    // currency — PositionManager::update_drawdown), not a percentage; the old "-12.34%" label
+    // overstated it by whatever the position size was.
+    add_metric(tr("MAX DD"), QString("-%1%2").arg(cs).arg(std::abs(d.max_drawdown), 0, 'f', 2),
+               fincept::ui::colors::NEGATIVE, fincept::ui::fonts::SMALL, &h.max_dd);
 
     metrics->addStretch();
     vl->addLayout(metrics);
@@ -325,18 +328,20 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
                                   .arg(kMonoFont()));
     vl->addWidget(h.activity);
 
-    cards_.insert(d.id, h);
-
     // ── Win rate progress bar ────────────────────────────────────────────────
     auto* win_bar = new QProgressBar(card);
     win_bar->setFixedHeight(4);
     win_bar->setRange(0, 100);
     win_bar->setValue(static_cast<int>(d.win_rate));
     win_bar->setTextVisible(false);
+    h.win_bar = win_bar;
     win_bar->setStyleSheet(QString("QProgressBar { background: %1; border: none; border-radius: 2px; }"
                                    "QProgressBar::chunk { background: %2; border-radius: 2px; }")
                                .arg(fincept::ui::colors::BG_RAISED(), fincept::ui::colors::POSITIVE()));
     vl->addWidget(win_bar);
+
+    // Handles are complete now (win_bar was the last live-updated widget) — register them.
+    cards_.insert(d.id, h);
 
     // ── Error message if any ────────────────────────────────────────────────
     if (!d.error_message.isEmpty()) {
@@ -738,6 +743,15 @@ void DeploymentDashboard::on_live_update(const QString& deployment_id, const fin
     }
     if (h.trades)
         h.trades->setText(QString::number(m.total_trades));
+    // WIN RATE / MAX DD / the win bar were only filled when the card was built (from the DB row)
+    // and the card is deliberately not rebuilt while the deployment set is unchanged — so they
+    // froze at their first values for as long as the deployment ran.
+    if (h.win_rate)
+        h.win_rate->setText(QString("%1%").arg(m.win_rate, 0, 'f', 1));
+    if (h.win_bar)
+        h.win_bar->setValue(static_cast<int>(m.win_rate));
+    if (h.max_dd)
+        h.max_dd->setText(QString("-%1%2").arg(cs).arg(std::abs(m.max_drawdown), 0, 'f', 2));
 
     // Update the per-condition status rows IN PLACE (only rebuild if the count
     // changed) so they don't flicker every tick.

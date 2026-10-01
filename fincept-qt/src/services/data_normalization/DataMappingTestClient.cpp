@@ -10,20 +10,20 @@ DataMappingTestClient& DataMappingTestClient::instance() {
 }
 
 void DataMappingTestClient::test_api(Method method, const QString& url, const QJsonObject& body, const QObject* context,
-                                     Callback callback) {
+                                     Callback callback, const QMap<QByteArray, QByteArray>& headers) {
     auto& http = HttpClient::instance();
     switch (method) {
         case Method::Get:
-            http.get(url, std::move(callback), context);
+            http.get(url, std::move(callback), context, headers);
             return;
         case Method::Post:
-            http.post(url, body, std::move(callback), context);
+            http.post(url, body, std::move(callback), context, headers);
             return;
         case Method::Put:
-            http.put(url, body, std::move(callback), context);
+            http.put(url, body, std::move(callback), context, headers);
             return;
         case Method::Delete:
-            http.del(url, body, std::move(callback), context);
+            http.del(url, body, std::move(callback), context, headers);
             return;
     }
 }

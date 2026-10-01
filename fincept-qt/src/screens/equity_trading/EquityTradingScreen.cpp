@@ -163,6 +163,12 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
     DataStreamManager::instance().start_all_active();
     DataStreamManager::instance().resume_all();
 
+    // Credentials can change while this screen is hidden (ACCOUNTS dialog elsewhere), which
+    // flips an account between the local simulator and a broker paper venue — re-derive
+    // that before subscribing so the hub topics match.
+    if (!focused_account_id_.isEmpty())
+        sync_native_paper();
+
     // Hub subscriptions for streaming data (D4)
     hub_subscribe_streaming();
 
@@ -171,7 +177,7 @@ void EquityTradingScreen::showEvent(QShowEvent* event) {
     // portfolio. Force an immediate live refresh so Holdings/Positions/Orders show
     // current broker data right away instead of staying stale (or blank) until the
     // 5-min poll. Paper data is repainted by refresh_paper_panels() just below.
-    if (initialized_ && !focused_is_paper_ && !focused_account_id_.isEmpty())
+    if (initialized_ && !focused_is_paper_ && !focused_native_paper_ && !focused_account_id_.isEmpty())
         DataStreamManager::instance().refresh_portfolio(focused_account_id_);
 
     // Catch up intraday auto-square for paper portfolios (e.g. the app was closed

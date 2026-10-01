@@ -44,7 +44,10 @@ MaritimeScreen::MaritimeScreen(QWidget* parent) : QWidget(parent) {
     // Auto-refresh is opt-in (the AUTO toggle in the map toolbar), so it never
     // silently burns API credits. The timer and the manual button share
     // do_refresh().
-    connect(refresh_timer_, &QTimer::timeout, this, &MaritimeScreen::do_refresh);
+    connect(refresh_timer_, &QTimer::timeout, this, [this]() {
+        do_refresh();
+        auto_refresh_pending_ = true; // after do_refresh(), which clears it for manual loads
+    });
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { apply_theme(); });
@@ -83,6 +86,12 @@ void MaritimeScreen::showEvent(QShowEvent* e) {
 void MaritimeScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     refresh_timer_->stop();
+    // A typeahead debounce still pending when the screen is left would fire a
+    // geocoder / Wikidata request for a screen nobody is looking at.
+    if (place_debounce_)
+        place_debounce_->stop();
+    if (ports_debounce_)
+        ports_debounce_->stop();
 }
 
 void MaritimeScreen::connect_service() {
@@ -184,6 +193,13 @@ void MaritimeScreen::apply_theme() {
 }
 
 void MaritimeScreen::do_refresh() {
+    // The last load was driven by drawn shapes: re-run it through them so the in-shape
+    // filter survives (a plain bbox reload dropped it and showed every vessel in the
+    // shapes' bounding box).
+    if (filter_to_shapes_ && map_widget_ && !map_widget_->shapes().isEmpty()) {
+        on_shapes_changed();
+        return;
+    }
     // Re-issue whichever mode produced the most recent set: a bbox load if the
     // user had typed/selected one, otherwise the global sample.
     const bool valid_bbox = area_min_lat_ && area_max_lat_ && area_min_lng_ && area_max_lng_ &&
@@ -247,6 +263,10 @@ void MaritimeScreen::retranslateUi() {
     // Center
     if (center_title_)
         center_title_->setText(tr("LIVE VESSEL MAP"));
+    if (refresh_btn_)
+        refresh_btn_->setText(tr("⟳ REFRESH"));
+    if (auto_refresh_btn_)
+        auto_refresh_btn_->setText(auto_refresh_btn_->isChecked() ? tr("AUTO ⟳ 5m") : tr("AUTO ⟳ OFF"));
     if (basemap_cap_)
         basemap_cap_->setText(tr("BASEMAP"));
     if (vessels_table_)
@@ -339,6 +359,7 @@ void MaritimeScreen::set_status(const QString& text, const ui::ColorToken& color
     if (!status_label_)
         return;
     status_label_->setText(text);
+    status_label_->setToolTip(QString()); // drop any earlier error detail
     status_label_->setStyleSheet(
         QString("color:%1; font-size:8px; font-weight:700; font-family:%2;").arg(C(color)).arg(ui::fonts::DATA_FAMILY));
 }

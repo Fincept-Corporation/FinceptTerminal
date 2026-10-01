@@ -427,7 +427,12 @@ void AnalyticsSectorsView::retranslateUi() {
 QVector<AnalyticsSectorsView::SectorInfo> AnalyticsSectorsView::compute_sectors() const {
     QHash<QString, SectorInfo> map;
     for (const auto& h : summary_.holdings) {
-        QString sec = h.sector.isEmpty() ? QStringLiteral("Unclassified") : h.sector;
+        // tr(), not a bare literal: the sector name round-trips through
+        // sector_selected() into PortfolioScreen, which matches holdings with
+        // tr("Unclassified") (as does PortfolioSectorPanel). A literal here made
+        // clicking the Unclassified slice filter the blotter to nothing on any
+        // non-English locale.
+        QString sec = h.sector.isEmpty() ? tr("Unclassified") : h.sector;
         auto& info = map[sec];
         info.name = sec;
         info.weight += h.weight;

@@ -20,6 +20,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
+#include <QMessageBox>
 #include <QScrollArea>
 #include <QSplitter>
 
@@ -256,6 +257,11 @@ QWidget* BacktestingScreen::build_center_panel() {
             f.close();
             services::FileManagerService::instance().import_file(path, "backtesting");
             LOG_INFO("Backtesting", "Exported results to: " + path);
+        } else {
+            // Was silent: a read-only folder / locked file looked like a successful export.
+            LOG_ERROR("Backtesting", "Export failed for " + path + ": " + f.errorString());
+            QMessageBox::warning(this, tr("Export Backtest Results"),
+                                 tr("Could not write %1:\n%2").arg(path, f.errorString()));
         }
     });
     hhl->addWidget(export_json_btn_);

@@ -44,7 +44,10 @@ ExchangeDaemonPool::~ExchangeDaemonPool() {
 }
 
 void ExchangeDaemonPool::start() {
-    if (process_ && process_->state() == QProcess::Running)
+    // Starting counts as "already launched" too: only Running used to be checked,
+    // so a second start() during the spawn window created a second daemon and
+    // orphaned the first (it kept running, unowned, until app exit).
+    if (process_ && process_->state() != QProcess::NotRunning)
         return;
 
     const QString python_path = python::PythonRunner::instance().python_path();
@@ -56,6 +59,10 @@ void ExchangeDaemonPool::start() {
 
     process_ = new QProcess(this);
     process_->setProcessChannelMode(QProcess::SeparateChannels);
+    // Identify THIS spawn in its handlers: stop() detaches process_ before the old
+    // daemon has actually exited, so a restart can leave an old process's signals
+    // arriving while process_ already names its replacement.
+    QProcess* const spawned = process_;
 
     connect(process_, &QProcess::readyReadStandardOutput, this, &ExchangeDaemonPool::drain_buffer);
     connect(process_, &QProcess::readyReadStandardError, this, [this]() {
@@ -65,9 +72,27 @@ void ExchangeDaemonPool::start() {
         if (!err.isEmpty())
             LOG_DEBUG(kPoolTag, "Daemon stderr: " + err);
     });
+    // finished() is NOT emitted when the interpreter never started at all (bad
+    // path, blocked by AV, missing runtime DLL) — only errorOccurred(FailedToStart)
+    // fires. Without this, process_ stayed non-null forever, so wait_for_ready()
+    // never re-kicked start() and every call() burned its full ready-wait.
+    connect(process_, &QProcess::errorOccurred, this, [this, spawned](QProcess::ProcessError err) {
+        if (err != QProcess::FailedToStart)
+            return; // Crashed et al. are followed by finished(); the rest are transient I/O
+        LOG_ERROR(kPoolTag, QString("Daemon failed to start: %1").arg(spawned->errorString()));
+        if (process_ == spawned) {
+            ready_ = false;
+            process_ = nullptr; // next call()/wait_for_ready() retries start()
+        }
+        spawned->deleteLater();
+    });
     connect(process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [this](int code, QProcess::ExitStatus status) {
+            [this, spawned](int code, QProcess::ExitStatus status) {
                 LOG_WARN(kPoolTag, QString("Daemon exited (code=%1, status=%2)").arg(code).arg(status));
+                // A newer daemon has already replaced this one (stop() then start()):
+                // its ready flag, creds and pending replies are not ours to reset.
+                if (process_ && process_ != spawned)
+                    return;
                 ready_ = false;
                 if (process_) {
                     process_->deleteLater();

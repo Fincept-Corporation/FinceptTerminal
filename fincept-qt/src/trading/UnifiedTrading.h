@@ -28,6 +28,17 @@ class UnifiedTrading : public QObject {
     UnifiedOrderResponse place_order(const UnifiedOrder& order);
     UnifiedOrderResponse cancel_order(const QString& order_id);
 
+    // True when `account_id` is in PAPER mode AND that PAPER mode runs on the broker's own
+    // paper venue (e.g. Alpaca paper-api) instead of the local pt_* simulator: the broker
+    // offers native paper and the account's stored credentials are positively its paper
+    // environment (IBroker::is_paper_environment). Every order/cancel/modify/close below
+    // follows this same decision, and the UI mode tag stays "paper".
+    // Fails CLOSED: live keys, an unidentifiable environment or a broker that has not opted
+    // in all answer false and keep the local simulator, so a "paper" ticket can never reach a
+    // real exchange. Reads credentials from secure storage — call from user-action paths,
+    // not per tick.
+    bool uses_native_paper(const QString& account_id) const;
+
     // Account-aware order routing (new — uses AccountManager for credentials)
     UnifiedOrderResponse place_order(const QString& account_id, const UnifiedOrder& order);
     UnifiedOrderResponse cancel_order(const QString& account_id, const QString& order_id);

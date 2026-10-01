@@ -17,6 +17,40 @@ static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
 }
 
+// Market-data snapshot fields arrive as strings that may carry a one-letter status prefix
+// ('C' = previous close while the market is shut, 'H' = trading halted): "C189.50".
+// toDouble() on that is 0, which published a 0 last price outside market hours.
+static double ibkr_snapshot_num(const QJsonValue& v) {
+    if (v.isDouble())
+        return v.toDouble();
+    QString s = v.toString().trimmed();
+    while (!s.isEmpty() && s.at(0).isLetter())
+        s.remove(0, 1);
+    s.remove(',');
+    return s.toDouble();
+}
+
+// Field 87 (volume) is abbreviated by the gateway: "435K", "12.5M", "1.2B".
+static double ibkr_snapshot_volume(const QJsonValue& v) {
+    if (v.isDouble())
+        return v.toDouble();
+    QString s = v.toString().trimmed();
+    s.remove(',');
+    if (s.isEmpty())
+        return 0.0;
+    double scale = 1.0;
+    const QChar suffix = s.at(s.size() - 1).toUpper();
+    if (suffix == QLatin1Char('K'))
+        scale = 1e3;
+    else if (suffix == QLatin1Char('M'))
+        scale = 1e6;
+    else if (suffix == QLatin1Char('B'))
+        scale = 1e9;
+    if (scale != 1.0)
+        s.chop(1);
+    return s.toDouble() * scale;
+}
+
 // ---------- Static helpers ----------
 
 QString IBKRBroker::gateway_url(const BrokerCredentials& creds) {
@@ -209,10 +243,10 @@ OrderPlaceResponse IBKRBroker::place_order(const BrokerCredentials& creds, const
     if (order.stop_price > 0)
         order_obj["auxPrice"] = order.stop_price;
     order_obj["acctId"] = acct;
-    // Customer order id: unique per attempt so a retry after an 8s client-side
-    // timeout is rejected by IBKR as a duplicate rather than creating a second
-    // live order (see BrokerClientOrderId.h).
-    order_obj["cOID"] = make_client_order_ref(40);
+    // Customer order id: stable per order intent (UnifiedOrder::client_order_id), so a retry
+    // after an 8s client-side timeout is rejected by IBKR as a duplicate rather than creating a
+    // second live order (see BrokerClientOrderId.h).
+    order_obj["cOID"] = client_order_ref_for(order, 40);
 
     QJsonObject body;
     body["orders"] = QJsonArray{order_obj};
@@ -581,12 +615,16 @@ ApiResponse<QVector<BrokerQuote>> IBKRBroker::get_quotes(const BrokerCredentials
         BrokerQuote quote;
         quote.symbol = conid_to_name.value(conid, conid);
         // Field codes returned as string keys "31", "70" etc.
-        quote.ltp = o.value("31").toString().toDouble();
-        quote.high = o.value("70").toString().toDouble();
-        quote.low = o.value("71").toString().toDouble();
-        quote.open = o.value("7295").toString().toDouble();
-        quote.close = o.value("7296").toString().toDouble();
-        quote.volume = o.value("87").toString().toLongLong();
+        quote.ltp = ibkr_snapshot_num(o.value("31"));
+        quote.high = ibkr_snapshot_num(o.value("70"));
+        quote.low = ibkr_snapshot_num(o.value("71"));
+        quote.open = ibkr_snapshot_num(o.value("7295"));
+        quote.close = ibkr_snapshot_num(o.value("7296"));
+        quote.volume = ibkr_snapshot_volume(o.value("87"));
+        // The gateway's FIRST snapshot call for a conid only opens the stream and carries no
+        // fields. Don't publish that as a 0.00 quote; the next poll returns the data.
+        if (quote.ltp <= 0.0 && quote.open <= 0.0 && quote.close <= 0.0)
+            continue;
         if (quote.close > 0)
             quote.change_pct = (quote.ltp - quote.close) / quote.close * 100.0;
         quote.change = quote.ltp - quote.close;

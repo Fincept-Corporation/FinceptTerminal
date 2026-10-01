@@ -263,6 +263,7 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
     for (const auto& q : rows) {
         auto* row = new QWidget(list_widget_);
         row->setObjectName(alt ? QStringLiteral("scRowAlt") : QStringLiteral("scRow"));
+        link_symbol(row, q.symbol);
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 

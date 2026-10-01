@@ -10,6 +10,7 @@ class QFrame;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QShowEvent;
 class QSlider;
 
 namespace fincept::screens {
@@ -31,6 +32,7 @@ class SettingsTab : public QWidget {
     ~SettingsTab() override;
 
   protected:
+    void showEvent(QShowEvent* e) override;
     void changeEvent(QEvent* event) override;
 
   private:
@@ -43,6 +45,7 @@ class SettingsTab : public QWidget {
     void on_clear_helius_key();
     void on_slippage_changed(int bps);
     void on_show_unverified_toggled(bool checked);
+    void apply_rpc_change();
 
     void apply_mode_to_buttons(bool is_stream);
     void load_initial_values();

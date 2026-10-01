@@ -11,6 +11,7 @@
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerModifyFields.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
@@ -73,6 +74,19 @@ static const ClientContext& client_context() {
         return c;
     }();
     return ctx;
+}
+
+// SmartAPI sends the same kind of field as a JSON string on one endpoint and as a
+// JSON number on another (e.g. getAllHolding / getOrderBook prices are numbers,
+// getPosition / getRMS are strings). QJsonValue::toString() on a number is "", so
+// `.toString().toDouble()` silently reads 0 whenever the broker sends a number.
+// Accept both.
+static double ao_json_num(const QJsonValue& v) {
+    if (v.isDouble())
+        return v.toDouble();
+    if (v.isString())
+        return v.toString().toDouble();
+    return 0.0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -383,6 +397,12 @@ TokenExchangeResponse AngelOneBroker::refresh_token(const BrokerCredentials& cre
 // ─────────────────────────────────────────────────────────────────────────────
 
 OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
+    // ao_enum_map() folds CoverOrder/BracketOrder into plain INTRADAY and ao_variety() never
+    // emits ROBO, so these would go out as an ordinary order without the stop-loss / target
+    // legs the caller asked for. Refuse rather than silently downgrade.
+    if (order.product_type == ProductType::BracketOrder || order.product_type == ProductType::CoverOrder)
+        return {false, "", "Angel One: Bracket/Cover orders are not supported — place a regular order instead"};
+
     QString token = lookup_token(order.symbol, order.exchange);
 
     QJsonObject payload{
@@ -422,26 +442,64 @@ OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds, c
 ApiResponse<QJsonObject> AngelOneBroker::modify_order(const BrokerCredentials& creds, const QString& order_id,
                                                       const QJsonObject& mods) {
     int64_t ts = QDateTime::currentSecsSinceEpoch();
-    QJsonObject payload = mods;
-    payload["orderid"] = order_id;
-    if (!payload.contains("variety")) {
-        // Recover the order's real variety (STOPLOSS/AMO) from the order book so
-        // the modify isn't rejected; fall back to NORMAL on any failure.
-        QString variety = QStringLiteral("NORMAL");
+
+    // SmartAPI modifyOrder takes the order's full identity — variety, orderid, ordertype,
+    // producttype, duration, price, quantity, tradingsymbol, symboltoken, exchange — not
+    // just the changed fields. The terminal's modify callers send only {quantity, price}
+    // (plus side/symbol/exchange/... under other spellings), so recover the rest from the
+    // resting order in the order book and overlay the requested changes.
+    QJsonObject resting;
+    {
         auto ob = BrokerHttp::instance().get(BASE_AO + "/rest/secure/angelbroking/order/v1/getOrderBook",
                                              auth_headers(creds));
         if (ob.success && ob.json.value("status").toBool())
             for (const auto& v : ob.json.value("data").toArray()) {
                 const auto o = v.toObject();
                 if (o.value("orderid").toString() == order_id) {
-                    const QString vr = o.value("variety").toString();
-                    if (!vr.isEmpty())
-                        variety = vr;
+                    resting = o;
                     break;
                 }
             }
-        payload["variety"] = variety;
     }
+
+    QJsonObject payload;
+    if (resting.isEmpty()) {
+        // Order not found / book unreadable: keep the legacy pass-through (variety defaults to NORMAL).
+        payload = mods;
+        if (!payload.contains("variety"))
+            payload["variety"] = QStringLiteral("NORMAL");
+    } else {
+        // Caller-supplied Angel-native values win; the resting order fills every gap.
+        auto pick = [&mods, &resting](const char* key) {
+            const QString m = mods.value(QLatin1String(key)).toVariant().toString().trimmed();
+            return m.isEmpty() ? resting.value(QLatin1String(key)).toVariant().toString().trimmed() : m;
+        };
+        const QString variety = pick("variety");
+        payload["variety"] = variety.isEmpty() ? QStringLiteral("NORMAL") : variety;
+        payload["ordertype"] = pick("ordertype");
+        payload["producttype"] = pick("producttype");
+        const QString duration = pick("duration");
+        payload["duration"] = duration.isEmpty() ? QStringLiteral("DAY") : duration;
+        payload["tradingsymbol"] = pick("tradingsymbol");
+        payload["symboltoken"] = pick("symboltoken");
+        payload["exchange"] = pick("exchange");
+
+        const double price = modify_fields::has_any(mods, modify_fields::kPrice)
+                                 ? modify_fields::number(mods, modify_fields::kPrice)
+                                 : ao_json_num(resting.value("price"));
+        payload["price"] = QString::number(price, 'f', 2);
+        const double qty = modify_fields::has_any(mods, modify_fields::kQuantity)
+                               ? modify_fields::number(mods, modify_fields::kQuantity)
+                               : ao_json_num(resting.value("quantity"));
+        payload["quantity"] = QString::number(static_cast<int>(qty));
+        // Stop-loss orders keep their trigger; a plain limit/market order has none to send.
+        const double trigger = modify_fields::has_any(mods, modify_fields::kTrigger)
+                                   ? modify_fields::number(mods, modify_fields::kTrigger)
+                                   : ao_json_num(resting.value("triggerprice"));
+        if (trigger > 0.0)
+            payload["triggerprice"] = QString::number(trigger, 'f', 2);
+    }
+    payload["orderid"] = order_id;
 
     auto resp = BrokerHttp::instance().post_json(BASE_AO + "/rest/secure/angelbroking/order/v1/modifyOrder", payload,
                                                  auth_headers(creds));
@@ -525,11 +583,11 @@ ApiResponse<QVector<BrokerOrderInfo>> AngelOneBroker::get_orders(const BrokerCre
         info.side = o.value("transactiontype").toString().toLower();
         info.order_type = o.value("ordertype").toString();
         info.product_type = o.value("producttype").toString();
-        info.quantity = o.value("quantity").toString().toDouble();
-        info.price = o.value("price").toString().toDouble();
-        info.trigger_price = o.value("triggerprice").toString().toDouble();
-        info.filled_qty = o.value("filledshares").toString().toDouble();
-        info.avg_price = o.value("averageprice").toString().toDouble();
+        info.quantity = ao_json_num(o.value("quantity"));
+        info.price = ao_json_num(o.value("price"));
+        info.trigger_price = ao_json_num(o.value("triggerprice"));
+        info.filled_qty = ao_json_num(o.value("filledshares"));
+        info.avg_price = ao_json_num(o.value("averageprice"));
         info.status = map_ao_status(o.value("status").toString());
         info.timestamp = o.value("updatetime").toString(); // OpenAlgo: updatetime not orderentryTime
         info.message = o.value("text").toString();
@@ -568,7 +626,7 @@ ApiResponse<QVector<BrokerPosition>> AngelOneBroker::get_positions(const BrokerC
     auto arr = resp.json.value("data").toArray();
     for (const auto& v : arr) {
         auto p = v.toObject();
-        double qty = p.value("netqty").toString().toDouble();
+        double qty = ao_json_num(p.value("netqty"));
         if (qty == 0)
             continue; // skip flat positions
 
@@ -577,14 +635,14 @@ ApiResponse<QVector<BrokerPosition>> AngelOneBroker::get_positions(const BrokerC
         pos.exchange = p.value("exchange").toString();
         pos.product_type = p.value("producttype").toString();
         pos.quantity = qty;
-        pos.avg_price = p.value("avgnetprice").toString().toDouble(); // OpenAlgo: avgnetprice
-        pos.ltp = p.value("ltp").toString().toDouble();
+        pos.avg_price = ao_json_num(p.value("avgnetprice")); // OpenAlgo: avgnetprice
+        pos.ltp = ao_json_num(p.value("ltp"));
         // unrealised = floating P&L on the open position; pnl/realised = booked.
         // day_pnl is the intraday mark-to-market, surfaced by SmartAPI as `unrealised`.
-        const double unreal = p.value("unrealised").toString().toDouble();
-        const double real = p.value("realised").toString().toDouble();
+        const double unreal = ao_json_num(p.value("unrealised"));
+        const double real = ao_json_num(p.value("realised"));
         pos.pnl = unreal + real;
-        pos.day_pnl = unreal != 0.0 ? unreal : p.value("pnl").toString().toDouble();
+        pos.day_pnl = unreal != 0.0 ? unreal : ao_json_num(p.value("pnl"));
         pos.side = qty >= 0 ? "buy" : "sell";
         if (pos.avg_price > 0)
             pos.pnl_pct = (pos.ltp - pos.avg_price) / pos.avg_price * 100.0 * (qty >= 0 ? 1 : -1);
@@ -612,14 +670,14 @@ ApiResponse<QVector<BrokerHolding>> AngelOneBroker::get_holdings(const BrokerCre
         BrokerHolding hold;
         hold.symbol = h.value("tradingsymbol").toString();
         hold.exchange = h.value("exchange").toString();
-        hold.quantity = h.value("quantity").toString().toDouble();
-        hold.avg_price = h.value("averageprice").toString().toDouble();
-        hold.ltp = h.value("ltp").toString().toDouble();
+        hold.quantity = ao_json_num(h.value("quantity"));
+        hold.avg_price = ao_json_num(h.value("averageprice"));
+        hold.ltp = ao_json_num(h.value("ltp"));
         hold.invested_value = hold.quantity * hold.avg_price;
         hold.current_value = hold.quantity * hold.ltp;
         // Use API-provided pnl fields directly (more accurate than computed)
-        hold.pnl = h.value("profitandloss").toString().toDouble();
-        hold.pnl_pct = h.value("pnlpercentage").toString().toDouble();
+        hold.pnl = ao_json_num(h.value("profitandloss"));
+        hold.pnl_pct = ao_json_num(h.value("pnlpercentage"));
         if (hold.pnl == 0 && hold.invested_value > 0) {
             hold.pnl = hold.current_value - hold.invested_value;
             hold.pnl_pct = hold.pnl / hold.invested_value * 100.0;
@@ -645,14 +703,13 @@ ApiResponse<BrokerFunds> AngelOneBroker::get_funds(const BrokerCredentials& cred
     // getRMS: `net` is the authoritative net cash balance; `availablecash` is
     // free cash before considering used margin; `utiliseddebits` and friends
     // are debit components, not additive to total. Compute used = sum of debits.
-    funds.available_balance = d.value("availablecash").toString().toDouble();
-    funds.used_margin =
-        d.value("utiliseddebits").toString().toDouble() + d.value("utilisedspan").toString().toDouble() +
-        d.value("utilisedoptionpremium").toString().toDouble() + d.value("utilisedholdingsales").toString().toDouble() +
-        d.value("utilisedexposure").toString().toDouble();
-    const double net = d.value("net").toString().toDouble();
+    funds.available_balance = ao_json_num(d.value("availablecash"));
+    funds.used_margin = ao_json_num(d.value("utiliseddebits")) + ao_json_num(d.value("utilisedspan")) +
+                        ao_json_num(d.value("utilisedoptionpremium")) + ao_json_num(d.value("utilisedholdingsales")) +
+                        ao_json_num(d.value("utilisedexposure"));
+    const double net = ao_json_num(d.value("net"));
     funds.total_balance = net > 0 ? net : (funds.available_balance + funds.used_margin);
-    funds.collateral = d.value("collateral").toString().toDouble();
+    funds.collateral = ao_json_num(d.value("collateral"));
     funds.raw_data = d;
     return {true, funds, "", ts};
 }
@@ -1139,9 +1196,14 @@ bool AngelOneBroker::is_token_expired(const BrokerHttpResponse& resp) {
     if (msg.contains("invalid token") || msg.contains("access token is expired") || msg.contains("token expired") ||
         msg.contains("session expired"))
         return true;
-    // errorCode AB1010 = invalid/expired token per Angel One Smart API docs
-    const QString code = resp.json.value("errorCode").toString();
-    if (code == "AB1010" || code == "AB1011")
+    // errorCode AB1010 = invalid/expired token per Angel One Smart API docs. The envelope
+    // spells the key "errorcode" (lower-case) on most endpoints, "errorCode" on others —
+    // read either. AG8001 invalid token / AG8002 token expired / AG8003 token missing are
+    // the SmartAPI session-token codes; none of them can be a transient or rate-limit error.
+    QString code = resp.json.value("errorcode").toString();
+    if (code.isEmpty())
+        code = resp.json.value("errorCode").toString();
+    if (code == "AB1010" || code == "AB1011" || code == "AG8001" || code == "AG8002" || code == "AG8003")
         return true;
     return false;
 }

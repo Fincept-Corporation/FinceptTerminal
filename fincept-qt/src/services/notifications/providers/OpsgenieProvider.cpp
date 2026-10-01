@@ -33,9 +33,11 @@ void OpsgenieProvider::send(const NotificationRequest& req, std::function<void(b
         }
     }();
 
-    // Opsgenie requires the API key in the Authorization header.
-    // We embed it as a query param since HttpClient has shared auth headers.
-    const QString url = "https://api.opsgenie.com/v2/alerts?apiKey=" + api_key_;
+    // Opsgenie v2 authenticates with "Authorization: GenieKey <key>". Sent as a
+    // per-request header (HttpClient::Headers) so the key never sits in the URL.
+    const QString url = "https://api.opsgenie.com/v2/alerts";
+    HttpClient::Headers headers;
+    headers.insert("Authorization", QByteArray("GenieKey ") + api_key_.toUtf8());
 
     QJsonObject body;
     body["message"] = req.title;
@@ -43,15 +45,18 @@ void OpsgenieProvider::send(const NotificationRequest& req, std::function<void(b
     body["priority"] = priority;
     body["source"] = "Fincept Terminal";
 
-    HttpClient::instance().post(url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        const auto obj = res.value().object();
-        const bool ok = obj.contains("requestId");
-        cb(ok, ok ? QString{} : obj.value("message").toString());
-    });
+    HttpClient::instance().post(
+        url, body,
+        [cb](Result<QJsonDocument> res) {
+            if (res.is_err()) {
+                cb(false, QString::fromStdString(res.error()));
+                return;
+            }
+            const auto obj = res.value().object();
+            const bool ok = obj.contains("requestId");
+            cb(ok, ok ? QString{} : obj.value("message").toString());
+        },
+        nullptr, headers);
 }
 
 } // namespace fincept::notifications

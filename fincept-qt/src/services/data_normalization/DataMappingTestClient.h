@@ -2,8 +2,10 @@
 
 #include "core/result/Result.h"
 
+#include <QByteArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 #include <QObject>
 #include <QString>
 
@@ -32,8 +34,11 @@ class DataMappingTestClient : public QObject {
 
     /// Issue a single test request. `context` scopes the callback's lifetime
     /// (Qt-style — when context is destroyed, the callback is dropped).
+    /// `headers` are applied to this request only (see
+    /// DataNormalizationService::build_request_headers) — they may carry
+    /// credentials, so never log them.
     void test_api(Method method, const QString& url, const QJsonObject& body, const QObject* context,
-                  Callback callback);
+                  Callback callback, const QMap<QByteArray, QByteArray>& headers = {});
 
   private:
     DataMappingTestClient() = default;

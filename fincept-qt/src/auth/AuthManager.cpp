@@ -254,13 +254,20 @@ void AuthManager::validate_saved_session() {
     fetch_user_profile([this] { emit subscription_fetched(); });
 }
 
-void AuthManager::fetch_user_profile(std::function<void()> on_done) {
-    AuthApi::instance().get_user_profile([this, on_done = std::move(on_done)](ApiResponse r) mutable {
+void AuthManager::fetch_user_profile(std::function<void()> on_done, std::function<void(const QString&)> on_rejected) {
+    AuthApi::instance().get_user_profile([this, on_done = std::move(on_done),
+                                          on_rejected = std::move(on_rejected)](ApiResponse r) mutable {
         if (!r.success && (r.status_code == 401 || r.status_code == 403)) {
             // API key is revoked or invalid — force re-login
             LOG_WARN("Auth", "Profile fetch returned 401/403 — API key invalid, clearing session");
             clear_session();
             set_loading(false);
+            // A login/OTP/MFA attempt that got this far would otherwise never hear it
+            // failed (only auth_state_changed fires) — tell the flow that started it,
+            // before auth_state_changed so screens' fallbacks find themselves reset.
+            if (on_rejected)
+                on_rejected(tr("Sign-in could not be completed: the server rejected the new session. "
+                               "Please try again."));
             emit auth_state_changed();
             return;
         }
@@ -339,7 +346,7 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
     AuthApi::instance().login(req, [this](ApiResponse r) {
         if (!r.success) {
             set_loading(false);
-            emit login_failed(r.error.isEmpty() ? "Login failed" : r.error);
+            emit login_failed(r.error.isEmpty() ? tr("Login failed") : r.error);
             return;
         }
 
@@ -347,7 +354,7 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
 
         if (data["active_session"].toBool()) {
             set_loading(false);
-            emit login_active_session(data["message"].toString("You are already logged in on another device."));
+            emit login_active_session(data["message"].toString(tr("You are already logged in on another device.")));
             return;
         }
 
@@ -360,7 +367,7 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
         const QString api_key = data["api_key"].toString();
         if (api_key.isEmpty()) {
             set_loading(false);
-            emit login_failed("No API key returned from server");
+            emit login_failed(tr("No API key returned from server"));
             return;
         }
 
@@ -375,7 +382,8 @@ void AuthManager::login(const QString& email, const QString& password, bool forc
         session_.device_id = generate_device_id();
 
         // Fetch profile then subscription; on_done emits login_succeeded
-        fetch_user_profile([this] { emit login_succeeded(); });
+        fetch_user_profile([this] { emit login_succeeded(); },
+                           [this](const QString& msg) { emit login_failed(msg); });
     });
 }
 
@@ -391,7 +399,7 @@ void AuthManager::login_with_google() {
         AuthApi::instance().redeem_desktop_handoff(code, [this](ApiResponse r) {
             if (!r.success) {
                 set_loading(false);
-                emit login_failed(r.error.isEmpty() ? "Google login failed" : r.error);
+                emit login_failed(r.error.isEmpty() ? tr("Google login failed") : r.error);
                 return;
             }
             const auto data = unwrap_data(r.data);
@@ -410,7 +418,7 @@ void AuthManager::login_with_google() {
 void AuthManager::complete_desktop_login(const QString& api_key, const QString& session_token) {
     if (api_key.isEmpty()) {
         set_loading(false);
-        emit login_failed("No API key returned from server");
+        emit login_failed(tr("No API key returned from server"));
         return;
     }
 
@@ -425,7 +433,7 @@ void AuthManager::complete_desktop_login(const QString& api_key, const QString& 
     session_.device_id = generate_device_id();
 
     LOG_INFO("Auth", "Desktop (Google) login successful");
-    fetch_user_profile([this] { emit login_succeeded(); });
+    fetch_user_profile([this] { emit login_succeeded(); }, [this](const QString& msg) { emit login_failed(msg); });
 }
 
 // ── Signup ───────────────────────────────────────────────────────────────────
@@ -447,7 +455,7 @@ void AuthManager::signup(const QString& username, const QString& email, const QS
         if (r.success)
             emit signup_succeeded();
         else
-            emit signup_failed(r.error.isEmpty() ? "Registration failed" : r.error);
+            emit signup_failed(r.error.isEmpty() ? tr("Registration failed") : r.error);
     });
 }
 
@@ -463,7 +471,7 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
     AuthApi::instance().verify_otp(req, [this](ApiResponse r) {
         if (!r.success) {
             set_loading(false);
-            emit otp_failed(r.error.isEmpty() ? "Verification failed" : r.error);
+            emit otp_failed(r.error.isEmpty() ? tr("Verification failed") : r.error);
             return;
         }
 
@@ -471,7 +479,7 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
         const QString api_key = data["api_key"].toString();
         if (api_key.isEmpty()) {
             set_loading(false);
-            emit otp_failed("No API key returned");
+            emit otp_failed(tr("No API key returned"));
             return;
         }
 
@@ -484,7 +492,7 @@ void AuthManager::verify_otp(const QString& email, const QString& otp) {
         session_.device_id = generate_device_id();
 
         LOG_INFO("Auth", "OTP verified successfully");
-        fetch_user_profile([this] { emit otp_verified(); });
+        fetch_user_profile([this] { emit otp_verified(); }, [this](const QString& msg) { emit otp_failed(msg); });
     });
 }
 
@@ -496,7 +504,7 @@ void AuthManager::verify_mfa(const QString& email, const QString& otp) {
     AuthApi::instance().verify_mfa(sanitize_input(email).toLower(), sanitize_input(otp), [this](ApiResponse r) {
         if (!r.success) {
             set_loading(false);
-            emit mfa_failed(r.error.isEmpty() ? "MFA verification failed" : r.error);
+            emit mfa_failed(r.error.isEmpty() ? tr("MFA verification failed") : r.error);
             return;
         }
 
@@ -504,7 +512,7 @@ void AuthManager::verify_mfa(const QString& email, const QString& otp) {
         const QString api_key = data["api_key"].toString();
         if (api_key.isEmpty()) {
             set_loading(false);
-            emit mfa_failed("No API key returned");
+            emit mfa_failed(tr("No API key returned"));
             return;
         }
 
@@ -517,7 +525,7 @@ void AuthManager::verify_mfa(const QString& email, const QString& otp) {
         session_.device_id = generate_device_id();
 
         LOG_INFO("Auth", "MFA verified successfully");
-        fetch_user_profile([this] { emit mfa_verified(); });
+        fetch_user_profile([this] { emit mfa_verified(); }, [this](const QString& msg) { emit mfa_failed(msg); });
     });
 }
 
@@ -534,7 +542,7 @@ void AuthManager::forgot_password(const QString& email) {
         if (r.success)
             emit forgot_password_sent();
         else
-            emit forgot_password_failed(r.error.isEmpty() ? "Failed to send reset code" : r.error);
+            emit forgot_password_failed(r.error.isEmpty() ? tr("Failed to send reset code") : r.error);
     });
 }
 
@@ -553,7 +561,7 @@ void AuthManager::reset_password(const QString& email, const QString& otp, const
         if (r.success)
             emit password_reset_succeeded();
         else
-            emit password_reset_failed(r.error.isEmpty() ? "Password reset failed" : r.error);
+            emit password_reset_failed(r.error.isEmpty() ? tr("Password reset failed") : r.error);
     });
 }
 

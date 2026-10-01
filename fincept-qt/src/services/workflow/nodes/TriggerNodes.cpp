@@ -1,6 +1,9 @@
 #include "services/workflow/nodes/TriggerNodes.h"
 
+#include "python/PythonRunner.h"
 #include "services/workflow/NodeRegistry.h"
+
+#include <QJsonDocument>
 
 namespace fincept::workflow {
 
@@ -28,12 +31,63 @@ void register_trigger_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>&,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                QJsonObject out;
-                out["symbol"] = params.value("symbol").toString();
-                out["condition"] = params.value("condition").toString();
-                out["price"] = params.value("price").toDouble();
-                out["triggered"] = true;
-                cb(true, out, {});
+                const QString symbol = params.value("symbol").toString().trimmed();
+                const QString condition = params.value("condition").toString("above");
+                const double threshold = params.value("price").toDouble();
+                if (symbol.isEmpty()) {
+                    cb(false, {}, "Price Alert needs a symbol");
+                    return;
+                }
+
+                // This trigger used to report "triggered" unconditionally, so a workflow like
+                // "buy AAPL when it is above $200" fired its order at ANY price. A run is a
+                // manual "check now" (there is no scheduler), so look at the live quote and only
+                // let the workflow continue when the condition actually holds.
+                fincept::python::PythonRunner::instance().run(
+                    "yfinance_data.py", {"quote", symbol},
+                    [cb, symbol, condition, threshold](const fincept::python::PythonResult& res) {
+                        if (!res.success) {
+                            cb(false, {}, res.error.isEmpty() ? QStringLiteral("Quote request failed") : res.error);
+                            return;
+                        }
+                        const auto doc = QJsonDocument::fromJson(fincept::python::extract_json(res.output).trimmed().toUtf8());
+                        const QJsonObject quote = doc.object();
+                        const double price = quote.value("price").toDouble(0);
+                        if (!doc.isObject() || price <= 0) {
+                            cb(false, {}, QString("No price available for %1").arg(symbol));
+                            return;
+                        }
+
+                        bool met = false;
+                        if (condition == "below") {
+                            met = price < threshold;
+                        } else if (condition == "crosses") {
+                            // Crossed since the previous close, in either direction.
+                            const double prev = quote.value("previous_close").toDouble(0);
+                            met = prev > 0 && ((prev < threshold && price >= threshold) ||
+                                               (prev > threshold && price <= threshold));
+                        } else {
+                            met = price > threshold;
+                        }
+
+                        QJsonObject out;
+                        out["symbol"] = symbol;
+                        out["condition"] = condition;
+                        out["price"] = threshold; // the configured threshold (unchanged output key)
+                        out["current_price"] = price;
+                        out["triggered"] = met;
+                        if (!met) {
+                            // Not met: nothing downstream should run. "_skipped" is the executor's
+                            // marker for a node that produced no data for its consumers.
+                            out["_skipped"] = true;
+                            out["reason"] = QString("%1 is %2 (alert: %3 %4)")
+                                                .arg(symbol)
+                                                .arg(price)
+                                                .arg(condition)
+                                                .arg(threshold);
+                        }
+                        cb(true, out, {});
+                    });
             },
     });
 

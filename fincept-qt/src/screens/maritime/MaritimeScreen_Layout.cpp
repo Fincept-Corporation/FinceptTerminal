@@ -350,26 +350,9 @@ QWidget* MaritimeScreen::build_center_panel() {
         if (id < 0 || id >= rendered_vessels_.size())
             return;
         const auto& v = rendered_vessels_[id];
-        if (search_result_card_)
-            search_result_card_->setVisible(true);
-        if (search_result_label_)
-            search_result_label_->setVisible(false);
-        if (sr_name_)
-            sr_name_->setText(v.name);
-        if (sr_imo_)
-            sr_imo_->setText(tr("IMO: %1").arg(v.imo));
-        if (sr_position_)
-            sr_position_->setText(tr("Position: %1, %2").arg(v.latitude, 0, 'f', 4).arg(v.longitude, 0, 'f', 4));
-        if (sr_speed_)
-            sr_speed_->setText(tr("Speed: %1 kn").arg(v.speed, 0, 'f', 1));
-        if (sr_from_)
-            sr_from_->setText(tr("From: %1").arg(v.from_port.isEmpty() ? QStringLiteral("—") : v.from_port));
-        if (sr_to_)
-            sr_to_->setText(tr("To: %1").arg(v.to_port.isEmpty() ? QStringLiteral("—") : v.to_port));
-        // Sync the IMO field too so the user can hit "VOYAGE HISTORY" right
+        // Also syncs the IMO field so the user can hit "VOYAGE HISTORY" right
         // after clicking a pin without retyping.
-        if (imo_edit_)
-            imo_edit_->setText(v.imo);
+        show_vessel_card(v);
         // Highlight the corresponding row in the vessels table if it's
         // currently rendered (table may be in a different sort order).
         if (vessels_table_) {
@@ -395,6 +378,13 @@ QWidget* MaritimeScreen::build_center_panel() {
     vessels_table_->verticalHeader()->setVisible(false);
     vessels_table_->setSortingEnabled(true);
     vessels_table_->setStyleSheet(table_ss());
+    // Click a row to inspect that vessel in the right-hand card (mirrors a map pin
+    // click); Enter / double-click additionally flies the map there. Deliberately not
+    // currentCellChanged: a reload moves the current cell and would overwrite the card.
+    connect(vessels_table_, &QTableWidget::cellClicked, this,
+            [this](int row, int) { on_vessel_row_picked(row, false); });
+    connect(vessels_table_, &QTableWidget::cellActivated, this,
+            [this](int row, int) { on_vessel_row_picked(row, true); });
     splitter->addWidget(vessels_table_);
 
     vessels_table_->setMinimumHeight(180);
@@ -447,8 +437,8 @@ QWidget* MaritimeScreen::build_right_panel() {
     history_btn_->setCursor(Qt::PointingHandCursor);
     history_btn_->setStyleSheet(btn_outline_ss());
     connect(history_btn_, &QPushButton::clicked, this, [this]() {
-        auto imo = imo_edit_->text().trimmed();
-        if (imo.isEmpty())
+        QString imo;
+        if (!read_imo(&imo))
             return;
         set_status(tr("LOADING HISTORY..."), ui::colors::AMBER);
         show_map_loading(tr("LOADING HISTORY"));
@@ -516,6 +506,7 @@ QWidget* MaritimeScreen::build_right_panel() {
             return;
         if (place_status_)
             place_status_->setText(tr("Searching…"));
+        place_req_ctx_ = q; // GeocodingService echoes the trimmed query as the context
         services::maritime::GeocodingService::instance().search(q);
     };
     connect(place_query_edit_, &QLineEdit::returnPressed, this, run_place_search);
@@ -554,6 +545,7 @@ QWidget* MaritimeScreen::build_right_panel() {
             return;
         if (place_status_)
             place_status_->setText(tr("Searching…"));
+        place_req_ctx_ = q;
         services::maritime::GeocodingService::instance().search(q);
     });
     // textEdited (not textChanged) so programmatic fills don't trigger searches.
@@ -675,6 +667,7 @@ QWidget* MaritimeScreen::build_right_panel() {
             return;
         if (ports_status_)
             ports_status_->setText(tr("Searching…"));
+        ports_req_ctx_ = PortsCatalog::name_context(q);
         PortsCatalog::instance().search_by_name(q);
     };
     connect(ports_query_edit_, &QLineEdit::returnPressed, this, run_name_search);
@@ -723,6 +716,7 @@ QWidget* MaritimeScreen::build_right_panel() {
             return;
         if (ports_status_)
             ports_status_->setText(tr("Searching…"));
+        ports_req_ctx_ = PortsCatalog::name_context(q);
         PortsCatalog::instance().search_by_name(q);
     });
     connect(ports_query_edit_, &QLineEdit::textEdited, this, [this](const QString&) { ports_debounce_->start(); });
@@ -751,6 +745,7 @@ QWidget* MaritimeScreen::build_right_panel() {
         }
         if (ports_status_)
             ports_status_->setText(tr("Searching…"));
+        ports_req_ctx_ = PortsCatalog::bbox_context(mn_lat, mx_lat, mn_lng, mx_lng);
         PortsCatalog::instance().search_by_bbox(mn_lat, mx_lat, mn_lng, mx_lng);
     });
     vl->addWidget(ports_in_view_btn_);

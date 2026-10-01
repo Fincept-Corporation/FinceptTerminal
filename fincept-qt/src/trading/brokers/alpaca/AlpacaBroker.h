@@ -42,6 +42,9 @@ class AlpacaBroker : public IBroker {
     static QString trading_url(const BrokerCredentials& creds);
     static QString data_url() { return "https://data.alpaca.markets"; }
 
+    // PK* paper keys (or credentials that authenticated against paper-api) — never live.
+    bool is_paper_environment(const BrokerCredentials& creds) const override;
+
     TokenExchangeResponse exchange_token(const QString& api_key, const QString& api_secret,
                                          const QString& auth_code) override;
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;

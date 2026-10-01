@@ -127,6 +127,10 @@ QWidget* AlphaArenaScreen::build_header() {
     new_btn->setStyleSheet("background:#FF8800;color:#000;font-weight:700;");
     for (auto* b : {pause_btn_, force_btn_, kill_btn_, new_btn})
         b->setFixedHeight(24);
+    // Run controls act on the ENGINE's active competition; they stay disabled until
+    // show_competition()/update_badges() sees the viewed one is that competition.
+    for (auto* b : {pause_btn_, force_btn_, kill_btn_})
+        b->setEnabled(false);
     connect(new_btn, &QPushButton::clicked, this, &AlphaArenaScreen::on_new_competition);
     for (auto* b : {pause_btn_, force_btn_, kill_btn_, new_btn})
         h->addWidget(b);
@@ -397,6 +401,8 @@ void AlphaArenaScreen::show_competition(const QString& id) {
     if (id.isEmpty()) {
         live_mode_ = false;
         body_->setCurrentIndex(0);
+        for (auto* b : {pause_btn_, force_btn_, kill_btn_})
+            b->setEnabled(false);
         return;
     }
     competition_id_ = id;
@@ -404,6 +410,8 @@ void AlphaArenaScreen::show_competition(const QString& id) {
     if (comp.is_err()) {
         live_mode_ = false;
         body_->setCurrentIndex(0);
+        for (auto* b : {pause_btn_, force_btn_, kill_btn_})
+            b->setEnabled(false);
         return;
     }
     // Cached so header actions (FORCE ROUND) can gate on real-money mode
@@ -566,6 +574,15 @@ void AlphaArenaScreen::update_badges(const QString& status) {
         status_badge_->setStyleSheet("background:#222;color:#888;padding:1px 7px;font-weight:700;font-size:10px;");
         pause_btn_->setText(tr("▶ RESUME"));
     }
+    // PAUSE / FORCE ROUND / KILL ALL only make sense for the live engine competition.
+    // Viewing an ended one (or another one while a different run is active) used to
+    // leave them clickable: PAUSE→"no active competition" dialog, FORCE ROUND a silent
+    // no-op, KILL ALL ending the competition the user was NOT looking at.
+    const bool controllable = (status == QLatin1String("running") || status == QLatin1String("paused")) &&
+                              !competition_id_.isEmpty() &&
+                              ArenaEngine::instance().active_competition_id() == competition_id_;
+    for (auto* b : {pause_btn_, force_btn_, kill_btn_})
+        b->setEnabled(controllable);
 }
 
 void AlphaArenaScreen::restore_state(const QVariantMap& state) {

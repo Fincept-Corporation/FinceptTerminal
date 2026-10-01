@@ -343,6 +343,12 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QJsonArray pending_weights_;
     bool first_show_ = true;
     bool is_running_ = false;
+    // Identity of the in-flight run (slug + command id), so on_result()/on_error() only
+    // consume THEIR run. BacktestingService is a process-wide singleton whose
+    // result_ready/error_occurred signals also carry other screens' runs (Portfolio's
+    // "backtest current weights") and background catalogue loads.
+    QString running_provider_;
+    QString running_command_;
     // Set when a caller requests an immediate backtest but strategies are still
     // loading; the get_strategies callback fires the deferred run once ready.
     bool pending_auto_run_ = false;

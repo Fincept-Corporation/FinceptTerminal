@@ -193,6 +193,7 @@ void GeopoliticsEventsWidget::populate(const QVariant& payload) {
 
         auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
+        link_screen(row, QStringLiteral("geopolitics"), tr("Double-click to open the Geopolitics screen"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 

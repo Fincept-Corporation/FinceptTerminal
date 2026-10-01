@@ -6,6 +6,7 @@
 #include "services/wallet/ConnectWalletDialog.h"
 #include "services/wallet/PumpFunSwapService.h"
 #include "services/wallet/SignTransactionDialog.h"
+#include "services/wallet/SolanaRpcClient.h"
 #include "services/wallet/TokenPriceProducer.h"
 #include "services/wallet/WalletActivityProducer.h"
 #include "services/wallet/WalletBalanceProducer.h"
@@ -209,10 +210,37 @@ void WalletService::sign_and_send(const QString& tx_base64, const QString& dialo
     dlg->setAttribute(Qt::WA_DeleteOnClose);
 
     QPointer<SignTransactionDialog> guard = dlg;
-    connect(dlg, &QDialog::accepted, this, [guard, cb]() {
+    connect(dlg, &QDialog::accepted, this, [this, guard, cb]() {
         if (!cb || !guard)
             return;
-        cb(Result<QString>::ok(guard->signature()));
+        const QString result = guard->signature();
+
+        // resources/wallet/swap.html has two outcomes. A wallet that exposes
+        // signAndSendTransaction broadcasts the tx itself and the page posts the
+        // base58 signature. A wallet that only exposes signTransaction cannot
+        // broadcast, so the page posts "BYTES:<base64 signed tx>" and leaves the
+        // forwarding to us ("caller forwards via RPC" in the page source). Nothing
+        // in the C++ side handled that prefix, so the raw "BYTES:…" string was
+        // handed back as if it were a signature: callers polled
+        // getSignatureStatuses with it for a minute and reported a timeout while
+        // the signed transaction was never sent.
+        static const QString kSignedBytesPrefix = QStringLiteral("BYTES:");
+        if (!result.startsWith(kSignedBytesPrefix)) {
+            cb(Result<QString>::ok(result));
+            return;
+        }
+        const QString signed_b64 = result.mid(kSignedBytesPrefix.size());
+        if (signed_b64.isEmpty()) {
+            cb(Result<QString>::err("empty_signed_tx"));
+            return;
+        }
+        LOG_INFO("WalletService", "wallet returned a signed transaction without sending — broadcasting via RPC");
+        auto* rpc = new SolanaRpcClient(this);
+        rpc->reload_endpoint();
+        rpc->send_transaction(signed_b64, [rpc, cb](Result<QString> sent) {
+            rpc->deleteLater();
+            cb(std::move(sent));
+        });
     });
     connect(dlg, &QDialog::rejected, this, [guard, cb]() {
         if (!cb || !guard)

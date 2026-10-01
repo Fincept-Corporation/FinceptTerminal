@@ -5,6 +5,8 @@
 #include "core/logging/Logger.h"
 #include "trading/ExchangeService.h"
 
+#include <algorithm>
+
 namespace fincept::mcp::tools {
 
 std::vector<ToolDef> get_crypto_trading_tools() {
@@ -58,11 +60,16 @@ std::vector<ToolDef> get_crypto_trading_tools() {
         t.category = "crypto-trading";
         t.input_schema.properties =
             QJsonObject{{"symbol", QJsonObject{{"type", "string"}, {"description", "Trading pair"}}},
-                        {"limit", QJsonObject{{"type", "integer"}, {"description", "Number of levels (default: 20)"}}}};
+                        {"limit", QJsonObject{{"type", "integer"},
+                                              {"description", "Number of levels per side (default: 20, max 100)"},
+                                              {"minimum", 1},
+                                              {"maximum", 100}}}};
         t.input_schema.required = {"symbol"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString symbol = args["symbol"].toString().trimmed();
-            int limit = args["limit"].toInt(20);
+            // Bounded: the value goes straight to the exchange daemon, and a deep book is
+            // thousands of levels of tokens the model cannot use.
+            int limit = std::clamp(args["limit"].toInt(20), 1, 100);
             if (symbol.isEmpty())
                 return ToolResult::fail("Missing 'symbol'");
 
@@ -101,12 +108,15 @@ std::vector<ToolDef> get_crypto_trading_tools() {
         t.input_schema.properties = QJsonObject{
             {"symbol", QJsonObject{{"type", "string"}, {"description", "Trading pair"}}},
             {"timeframe", QJsonObject{{"type", "string"}, {"description", "Candle interval (default: 1h)"}}},
-            {"limit", QJsonObject{{"type", "integer"}, {"description", "Number of candles (default: 100)"}}}};
+            {"limit", QJsonObject{{"type", "integer"},
+                                  {"description", "Number of candles (default: 100, max 1000)"},
+                                  {"minimum", 1},
+                                  {"maximum", 1000}}}};
         t.input_schema.required = {"symbol"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString symbol = args["symbol"].toString().trimmed();
             QString timeframe = args["timeframe"].toString("1h");
-            int limit = args["limit"].toInt(100);
+            int limit = std::clamp(args["limit"].toInt(100), 1, 1000);
             if (symbol.isEmpty())
                 return ToolResult::fail("Missing 'symbol'");
 
@@ -125,6 +135,11 @@ std::vector<ToolDef> get_crypto_trading_tools() {
                                               {"close", c.close},
                                               {"volume", c.volume}});
                 }
+                // An unknown pair / unsupported timeframe can come back as an empty list; do not
+                // present that as a successful (empty) dataset.
+                if (result.isEmpty())
+                    return ToolResult::fail("No candles returned for " + symbol + " (" + timeframe +
+                                            ") — check the symbol and timeframe against the exchange");
                 return ToolResult::ok_data(result);
             } catch (const std::exception& e) {
                 return ToolResult::fail(e.what());

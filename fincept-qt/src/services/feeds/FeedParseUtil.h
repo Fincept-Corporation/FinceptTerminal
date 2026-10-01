@@ -20,4 +20,9 @@ bool looks_like_html(const QByteArray& body);
 /// Sniff the format from raw bytes (used when sub.format == Auto).
 FeedFormat sniff_format(const QByteArray& body);
 
+/// True for an absolute http(s) URL with a host. Feed items carry publisher-
+/// supplied links; anything else (file:, javascript:, custom protocol handlers)
+/// must never reach QDesktopServices::openUrl.
+bool feed_link_is_web_url(const QString& url);
+
 } // namespace fincept::feeds

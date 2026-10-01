@@ -112,3 +112,18 @@ FINCEPT_KEYED_CRED("WORLDPOP_API_KEY", "Worldpop")
 FINCEPT_KEYED_CRED("WORLD_BANK_API_KEY", "World Bank")
 FINCEPT_KEYED_CRED("YH_FINANCE_API_KEY", "YH Finance")
 FINCEPT_KEYED_CRED("ZENODO_ACCESS_TOKEN", "Zenodo")
+
+// ── Hand-maintained additions (the generator above isn't in the repo) ──────
+// Keys these scripts read but the generated list missed. PythonRunner's
+// strip_unmanaged_credentials() drops every *_API_KEY not listed here, so
+// without an entry the connector could never receive a key and Settings ›
+// Credentials had no card to store one.
+FINCEPT_KEYED_CRED("AUS_DATA_API_KEY", "data.gov.au")
+FINCEPT_KEYED_CRED("BEA_API_KEY", "BEA")
+FINCEPT_KEYED_CRED("BLS_API_KEY", "BLS")
+FINCEPT_KEYED_CRED("CONGRESS_GOV_API_KEY", "Congress.gov")
+FINCEPT_KEYED_CRED("DATAGOVUK_API_KEY", "data.gov.uk")
+FINCEPT_KEYED_CRED("ENTREPRISE_API_KEY", "API Entreprise (FR)")
+FINCEPT_KEYED_CRED("TRADING_ECONOMICS_API_KEY", "Trading Economics")
+FINCEPT_KEYED_CRED("UN_COMTRADE_API_KEY", "UN Comtrade")
+FINCEPT_KEYED_CRED("WTO_API_KEY", "WTO")

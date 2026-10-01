@@ -292,7 +292,16 @@ static bool extract_error_envelope(const QJsonDocument& doc, QString* out) {
         return false; // absent, or explicitly "no error"
 
     QString msg;
-    if (err.isString())
+    if (err.isBool()) {
+        // `"error": false` is the "no error" half of a boolean flag (databento_provider.py,
+        // Analytics/options/*) and must not be read as a failure whose text is "false".
+        // `"error": true` is a failure; the explanation, if any, lives in `message`.
+        if (!err.toBool())
+            return false;
+        msg = obj.value(QLatin1String("message")).toString().trimmed();
+        if (msg.isEmpty())
+            msg = QStringLiteral("Script reported an error");
+    } else if (err.isString())
         msg = err.toString();
     else if (err.isObject())
         msg = QString::fromUtf8(QJsonDocument(err.toObject()).toJson(QJsonDocument::Compact));
@@ -646,7 +655,10 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
     file.close();
 
     // Queue as a special request — use the temp file path directly
-    queue_.enqueue({"__code__:" + temp_path, {}, std::move(cb), {}, {}, false});
+    // A watchdog floor here too: an endless cell would otherwise hold one of the
+    // three concurrency slots forever. A notebook cell may legitimately train for
+    // a long time, so use the long-run budget rather than the 5-minute default.
+    queue_.enqueue({"__code__:" + temp_path, {}, std::move(cb), {}, {}, false, true, kLongRunTimeoutMs});
     start_next();
 }
 
@@ -812,12 +824,15 @@ void PythonRunner::start_next() {
         // invoke `on_line(line, is_stderr)` per line, advance `offset`. Trailing
         // partial line (no \n yet) stays in the buffer for the next read.
         auto drain_lines = [this, proc](bool is_stderr) {
-            auto& bufs = proc_buffers_[proc];
-            if (!bufs.on_line)
-                return;
-            QByteArray& buf = is_stderr ? bufs.stderr_buf : bufs.stdout_buf;
-            int& off = is_stderr ? bufs.stderr_streamed : bufs.stdout_streamed;
             while (true) {
+                // Look the buffers up afresh on every line: the stream callback may
+                // re-enter run() → start_next(), which inserts into proc_buffers_ and
+                // can rehash it, leaving any reference taken before the call dangling.
+                auto it = proc_buffers_.find(proc);
+                if (it == proc_buffers_.end() || !it->on_line)
+                    return;
+                QByteArray& buf = is_stderr ? it->stderr_buf : it->stdout_buf;
+                int& off = is_stderr ? it->stderr_streamed : it->stdout_streamed;
                 int nl = buf.indexOf('\n', off);
                 if (nl < 0)
                     break;
@@ -826,7 +841,8 @@ void PythonRunner::start_next() {
                 if (line.endsWith('\r'))
                     line.chop(1);
                 off = nl + 1;
-                bufs.on_line(QString::fromUtf8(line), is_stderr);
+                const StreamCallback on_line = it->on_line; // copy: the hash entry may move during the call
+                on_line(QString::fromUtf8(line), is_stderr);
             }
         };
 
@@ -840,6 +856,18 @@ void PythonRunner::start_next() {
         connect(proc, &QProcess::readyReadStandardError, this, [this, proc, drain_lines]() {
             proc_buffers_[proc].stderr_buf.append(proc->readAllStandardError());
             drain_lines(true);
+
+            // stderr is only ever used as the error text, so only its tail matters.
+            // A chatty script (tqdm bars, per-row warnings) under a 60-minute
+            // watchdog otherwise grows this buffer without bound. Complete lines were
+            // already streamed above, so dropping the head loses nothing.
+            constexpr qsizetype kStderrKeepBytes = qsizetype{1} << 20;
+            auto it = proc_buffers_.find(proc);
+            if (it != proc_buffers_.end() && it->stderr_buf.size() > 2 * kStderrKeepBytes) {
+                const qsizetype drop = it->stderr_buf.size() - kStderrKeepBytes;
+                it->stderr_buf.remove(0, drop);
+                it->stderr_streamed = static_cast<int>(qMax<qsizetype>(0, it->stderr_streamed - drop));
+            }
         });
 
         // Share cb across both slots and gate on a once-flag so exactly one of
@@ -849,11 +877,15 @@ void PythonRunner::start_next() {
         // Crash, e.g. a broken venv python or a segfault in numpy/torch/faiss.)
         auto cb = std::make_shared<Callback>(std::move(req.cb));
         auto handled = std::make_shared<std::atomic_bool>(false);
+        // Set by the watchdog just before it kills the process, so the completion
+        // handlers can report "timed out" rather than a bare crash with no message.
+        auto timed_out = std::make_shared<std::atomic_bool>(false);
+        const int budget_ms = req.timeout_ms;
         auto script_name = std::move(req.script);
 
         connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-                [this, proc, cb, handled, script_name, is_code, temp_file, expect_json = req.expect_json](
-                    int exit_code, QProcess::ExitStatus) {
+                [this, proc, cb, handled, timed_out, budget_ms, script_name, is_code, temp_file,
+                 expect_json = req.expect_json](int exit_code, QProcess::ExitStatus) {
                     if (handled->exchange(true))
                         return; // errorOccurred already handled this proc
                     // Collect any remaining buffered data
@@ -936,6 +968,12 @@ void PythonRunner::start_next() {
                         }
                     }
 
+                    if (timed_out->load()) {
+                        result.success = false;
+                        if (result.error.isEmpty())
+                            result.error = QString("Script timed out after %1 s and was killed").arg(budget_ms / 1000);
+                    }
+
                     if (!result.success && !is_code) {
                         LOG_ERROR("Python", QString("Script %1 failed in %2ms (exit=%3): %4")
                                                 .arg(script_name)
@@ -953,10 +991,28 @@ void PythonRunner::start_next() {
                 });
 
         connect(proc, &QProcess::errorOccurred, this,
-                [this, proc, cb, handled, is_code, temp_file](QProcess::ProcessError) {
+                [this, proc, cb, handled, timed_out, budget_ms, is_code, temp_file](QProcess::ProcessError err) {
+                    // WriteError (the script exited without reading stdin) and ReadError
+                    // are not fatal: the process is alive or about to emit finished()
+                    // with its real output. Treating them as terminal reported a failure
+                    // for a script that went on to print a good result, and freed the
+                    // concurrency slot while the process still ran.
+                    if (err == QProcess::WriteError || err == QProcess::ReadError || err == QProcess::Timedout) {
+                        LOG_WARN("Python", "Non-fatal process I/O error: " + proc->errorString());
+                        return;
+                    }
                     if (handled->exchange(true))
                         return; // finished already handled this proc
                     QString error_msg = proc->errorString();
+                    // A crash (segfault in numpy/torch, or the watchdog's kill) arrives
+                    // here BEFORE finished(), so the output buffered so far would
+                    // otherwise be discarded — keep stderr's tail for the message.
+                    QString stderr_tail;
+                    const auto bufs_it = proc_buffers_.find(proc);
+                    if (bufs_it != proc_buffers_.end()) {
+                        bufs_it->stderr_buf.append(proc->readAllStandardError());
+                        stderr_tail = QString::fromUtf8(bufs_it->stderr_buf.right(2000)).trimmed();
+                    }
                     proc_buffers_.remove(proc);
                     // Clean up any spilled arg temp files
                     auto spilled = proc->property("spilled_files").toStringList();
@@ -965,7 +1021,12 @@ void PythonRunner::start_next() {
                     proc->deleteLater();
                     if (is_code && !temp_file.isEmpty())
                         QFile::remove(temp_file);
-                    (*cb)({false, {}, "Process error: " + error_msg, -1});
+                    QString message = "Process error: " + error_msg;
+                    if (timed_out->load())
+                        message = QString("Script timed out after %1 s and was killed").arg(budget_ms / 1000);
+                    else if (err == QProcess::Crashed && !stderr_tail.isEmpty())
+                        message += "\n" + stderr_tail;
+                    (*cb)({false, {}, message, -1});
 
                     --active_count_;
                     start_next(); // drain queue
@@ -1014,12 +1075,14 @@ void PythonRunner::start_next() {
             auto* watchdog = new QTimer(proc);
             watchdog->setSingleShot(true);
             watchdog->setInterval(req.timeout_ms);
-            const QString wd_script = req.script;
+            // req.script was moved into script_name above, so name the script from there.
+            const QString wd_script = script_name;
             const int wd_budget = req.timeout_ms;
-            connect(watchdog, &QTimer::timeout, proc, [proc, wd_script, wd_budget]() {
+            connect(watchdog, &QTimer::timeout, proc, [proc, wd_script, wd_budget, timed_out]() {
                 if (proc->state() == QProcess::NotRunning)
                     return;
                 LOG_ERROR("Python", QString("Killing %1 — exceeded %2 ms watchdog budget").arg(wd_script).arg(wd_budget));
+                timed_out->store(true);
                 proc->kill();
             });
             watchdog->start();

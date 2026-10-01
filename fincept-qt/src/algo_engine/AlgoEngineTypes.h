@@ -25,7 +25,7 @@ struct OhlcvCandle {
 
 // ── Timeframe ───────────────────────────────────────────────────────────────
 
-enum class Timeframe { M1, M3, M5, M15, M30, H1, H4, D1 };
+enum class Timeframe { M1, M3, M5, M10, M15, M30, H1, H4, D1 };
 
 inline int timeframe_seconds(Timeframe tf) {
     switch (tf) {
@@ -35,6 +35,8 @@ inline int timeframe_seconds(Timeframe tf) {
             return 180;
         case Timeframe::M5:
             return 300;
+        case Timeframe::M10:
+            return 600;
         case Timeframe::M15:
             return 900;
         case Timeframe::M30:
@@ -56,6 +58,11 @@ inline Timeframe timeframe_from_string(const QString& s) {
         return Timeframe::M3;
     if (s == "5m")
         return Timeframe::M5;
+    // "10m" is offered by algo_timeframes() (builder / scanner / alerts / deploy) but
+    // had no enum value, so it silently fell through to M5 below — a "10m" strategy
+    // deployed and scanned on 5-minute bars.
+    if (s == "10m")
+        return Timeframe::M10;
     if (s == "15m")
         return Timeframe::M15;
     if (s == "30m")
@@ -77,6 +84,8 @@ inline QString timeframe_to_string(Timeframe tf) {
             return QStringLiteral("3m");
         case Timeframe::M5:
             return QStringLiteral("5m");
+        case Timeframe::M10:
+            return QStringLiteral("10m");
         case Timeframe::M15:
             return QStringLiteral("15m");
         case Timeframe::M30:

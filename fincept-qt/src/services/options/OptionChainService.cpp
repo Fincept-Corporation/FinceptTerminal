@@ -64,6 +64,7 @@ const QString kAtmIvPrefix = QStringLiteral("option:atm_iv:");
 const QString kPcrPrefix = QStringLiteral("fno:pcr:");
 const QString kMaxPainPrefix = QStringLiteral("fno:max_pain:");
 
+constexpr int kIvPersistMinGapMs = 60'000;     // iv_history_daily upsert floor, per underlying
 constexpr int kGreeksThrottleMs = 500;         // per-strike Greeks recompute floor
 constexpr int kPerLegTickCoalesceMs = 100;     // option:tick coalesce window
 constexpr double kDefaultRiskFreeRate = 0.067; // RBI 91-day T-bill ballpark
@@ -81,6 +82,27 @@ QString cache_key(const QString& broker, const QString& underlying) {
 // symbol (options-chain-v3 vs the HSM brsymbol differ — e.g. "...CE" vs "...C").
 QString opt_leg_key(double strike, bool is_call) {
     return QString::number(strike, 'f', 2) + (is_call ? QLatin1Char('C') : QLatin1Char('P'));
+}
+
+// A script payload reports failure with `error: true` or a non-empty `error` string
+// (databento_fno_chain.py emits the message string; older builds emitted `true` plus
+// `message`). `msg` receives the best human-readable text. A missing / false / empty
+// `error` is success.
+bool opt_chain_json_error(const QJsonObject& j, QString& msg) {
+    const QJsonValue e = j.value(QStringLiteral("error"));
+    bool failed = false;
+    if (e.isBool())
+        failed = e.toBool();
+    else if (e.isString())
+        failed = !e.toString().trimmed().isEmpty();
+    if (!failed)
+        return false;
+    msg = j.value(QStringLiteral("message")).toString();
+    if (msg.isEmpty() && e.isString())
+        msg = e.toString();
+    if (msg.isEmpty())
+        msg = QStringLiteral("Unknown error");
+    return true;
 }
 
 // Parse a Fyers F&O brsymbol (e.g. "NIFTY09JUN26C22650") into strike + call/put.
@@ -185,12 +207,20 @@ void OptionChainService::refresh(const QStringList& topics) {
                 last_chain_.total_ce_oi = tce;
                 last_chain_.total_pe_oi = tpe;
                 last_chain_.max_pain = compute_max_pain(last_chain_.rows);
+                // The quotes in last_chain_ are live (WS-patched), so stamp the snapshot
+                // with "now". Left at the original REST time, OISnapshotter (which
+                // buckets samples by chain.timestamp_ms) kept overwriting one stale
+                // minute, and the header's freshness label read STALE on a live feed.
+                last_chain_.timestamp_ms = QDateTime::currentMSecsSinceEpoch();
                 auto& hub = fincept::datahub::DataHub::instance();
                 hub.publish(topic, QVariant::fromValue(last_chain_));
                 hub.publish(kPcrPrefix + broker + ":" + underlying + ":" + expiry,
                             QVariant::fromValue(last_chain_.pcr));
                 hub.publish(kMaxPainPrefix + broker + ":" + underlying + ":" + expiry,
                             QVariant::fromValue(last_chain_.max_pain));
+                // Signal consumers (Builder / OI / Screener) were only ever told about
+                // REST assemblies, so on a WS-driven chain their LTP/P&L froze.
+                emit chain_published(last_chain_);
                 continue;
             }
             in_flight_[topic] = true;
@@ -260,9 +290,12 @@ void OptionChainService::list_databento_expiries(const QString& underlying, std:
                 auto doc = QJsonDocument::fromJson(result.output.toUtf8(), &err);
                 if (err.error == QJsonParseError::NoError && doc.isObject()) {
                     auto j = doc.object();
-                    if (!j[QStringLiteral("error")].toBool(false)) {
+                    QString script_err;
+                    if (!opt_chain_json_error(j, script_err)) {
                         for (const auto& v : j[QStringLiteral("expiries")].toArray())
                             expiries.append(v.toString());
+                    } else {
+                        LOG_WARN("OptionChain", QString("Databento expiries failed: %1").arg(script_err));
                     }
                 }
             }
@@ -511,11 +544,13 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
 
 void OptionChainService::refresh_chain_databento(const QString& underlying, const QString& expiry) {
     const QString topic = chain_topic(kDatabentoBrokerId, underlying, expiry);
-    if (in_flight_.value(topic, false))
-        return;
-
+    // refresh() has already claimed in_flight_[topic] before dispatching here (it is
+    // the only caller), so re-checking it would make every Databento refresh return
+    // before any work was done — and leave the flag stuck, blocking all later
+    // refreshes too. The guard lives in refresh(); this function only releases it.
     auto& db_svc = fincept::DatabentoService::instance();
     if (!db_svc.has_api_key()) {
+        in_flight_.remove(topic);
         fincept::datahub::DataHub::instance().publish_error(topic, "No Databento API key configured");
         return;
     }
@@ -551,8 +586,7 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
                 return;
             }
             auto j = doc.object();
-            if (j[QStringLiteral("error")].toBool(false)) {
-                QString msg = j[QStringLiteral("message")].toString(QStringLiteral("Unknown error"));
+            if (QString msg; opt_chain_json_error(j, msg)) {
                 fincept::datahub::DataHub::instance().publish_error(topic, msg);
                 emit self->chain_failed(topic, msg);
                 return;
@@ -786,6 +820,30 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
                 for (auto it = by_strike.constBegin(); it != by_strike.constEnd(); ++it)
                     chain.rows.append(it->row);
 
+                // OptionGreeks::vega is "per 1.00 σ" (the py_vollib worker's convention,
+                // which the Builder ribbon divides by 100 for display). Vendors normally
+                // quote vega per 1% vol, so decide the unit from magnitude instead of
+                // assuming: BSM vega per 1.00 σ is S·φ(d1)·√t, and a quoted value far
+                // below that (< 1/10th — the two conventions differ by 100×) is per-1%.
+                if (spot > 0) {
+                    const double r_fyers = self->risk_free_rate();
+                    const double t_fyers = OptionChainService::compute_t_years(expiry);
+                    auto norm_vega = [&](double strike, double iv, OptionGreeks& g) {
+                        if (!g.valid || g.vega <= 0 || iv <= 0 || strike <= 0)
+                            return;
+                        const double sd = iv * std::sqrt(t_fyers);
+                        const double d1 = (std::log(spot / strike) + (r_fyers + 0.5 * iv * iv) * t_fyers) / sd;
+                        constexpr double kSqrt2Pi = 2.5066282746310002;
+                        const double per_unit = spot * std::exp(-0.5 * d1 * d1) / kSqrt2Pi * std::sqrt(t_fyers);
+                        if (per_unit > 0 && g.vega < per_unit / 10.0)
+                            g.vega *= 100.0;
+                    };
+                    for (auto& row : chain.rows) {
+                        norm_vega(row.strike, row.ce_iv, row.ce_greeks);
+                        norm_vega(row.strike, row.pe_iv, row.pe_greeks);
+                    }
+                }
+
                 // options-chain-v3 omits lot size — backfill from the instrument
                 // master (all NFO legs of an underlying share one lot) so the chain,
                 // strategy builder, and right-click order path all have it.
@@ -882,6 +940,10 @@ double OptionChainService::risk_free_rate() {
     return risk_free_rate_;
 }
 
+double OptionChainService::risk_free_rate_for(const QString& broker_id) {
+    return broker_id == kDatabentoBrokerId ? kUSRiskFreeRate : risk_free_rate();
+}
+
 double OptionChainService::compute_t_years(const QString& expiry) {
     QDate exp = QDate::fromString(expiry, "dd-MMM-yy");
     if (!exp.isValid())
@@ -893,6 +955,19 @@ double OptionChainService::compute_t_years(const QString& expiry) {
     if (days <= 0)
         return 1.0 / 365.0; // expiry day or past — clamp to one day
     return double(days) / 365.0;
+}
+
+bool OptionChainService::is_superseded(const OptionChain& chain) const {
+    return last_chain_.broker_id == chain.broker_id && last_chain_.underlying == chain.underlying &&
+           last_chain_.expiry == chain.expiry && last_chain_.timestamp_ms > chain.timestamp_ms;
+}
+
+void OptionChainService::commit_enriched_chain(const OptionChain& enriched) {
+    if (last_chain_.broker_id != enriched.broker_id || last_chain_.underlying != enriched.underlying ||
+        last_chain_.expiry != enriched.expiry || last_chain_.timestamp_ms != enriched.timestamp_ms)
+        return; // a different series / snapshot is current — leave it alone
+    last_chain_ = enriched;
+    emit chain_published(last_chain_);
 }
 
 void OptionChainService::publish_per_leg_ticks(const OptionChain& chain) {
@@ -1162,7 +1237,12 @@ void OptionChainService::publish_atm_iv(const OptionChain& chain) {
     // Persist the latest ATM IV for the day — IV percentile pill reads
     // back the trailing 90-day window from this table. Idempotent UPSERT
     // keyed on (underlying, today) so the last refresh of the day wins.
-    if (atm_iv > 0) {
+    // P1: this runs on every chain publish (seconds apart, UI thread) and the upsert is a
+    // synchronous SQLite write — at most once a minute per underlying is plenty for a
+    // daily series, and the last write of the day still wins.
+    const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+    if (atm_iv > 0 && now_ms - iv_persist_ms_.value(chain.underlying, 0) >= kIvPersistMinGapMs) {
+        iv_persist_ms_[chain.underlying] = now_ms;
         const QString today = QDate::currentDate().toString(Qt::ISODate);
         auto r = fincept::IvHistoryRepository::instance().upsert(chain.underlying, today, atm_iv);
         if (r.is_err()) {
@@ -1181,7 +1261,7 @@ void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QStr
     if (chain.rows.isEmpty() || chain.spot <= 0)
         return;
 
-    const double r = (chain.broker_id == kDatabentoBrokerId) ? kUSRiskFreeRate : risk_free_rate();
+    const double r = risk_free_rate_for(chain.broker_id);
     const double t = compute_t_years(chain.expiry);
     // q=0 for indices and stocks v1 (no per-stock dividend lookup yet).
     const double q = 0.0;
@@ -1250,6 +1330,7 @@ void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QStr
         if (!iv_cache_.isEmpty() || !greeks_cache_.isEmpty()) {
             fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(enriched));
             publish_atm_iv(enriched);
+            commit_enriched_chain(enriched);
         }
         return;
     }
@@ -1315,8 +1396,16 @@ void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QStr
                 }
             }
 
+            // A newer REST snapshot may have been published while the worker ran;
+            // the Greeks above are already cached for it, so don't roll the topic back.
+            if (self->is_superseded(enriched)) {
+                LOG_DEBUG("OptionChain", QString("Greeks for %1 arrived after a newer snapshot — not republished")
+                                             .arg(topic));
+                return;
+            }
             fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(enriched));
             self->publish_atm_iv(enriched);
+            self->commit_enriched_chain(enriched);
             LOG_DEBUG("OptionChain",
                       QString("Greeks enriched %1 contracts; republished %2").arg(new_iv.size()).arg(topic));
         });
@@ -1330,6 +1419,19 @@ double OptionChainService::compute_max_pain(const QVector<OptionChainRow>& rows)
     // Total pain = CE pain + PE pain. The strike with minimum total pain is
     // the one option writers would prefer the underlying to settle at.
     if (rows.isEmpty())
+        return 0;
+    // No open interest at all (pre-open, or a provider that omits OI) makes every
+    // candidate's pain 0, so the "minimum" was simply the first — lowest — strike,
+    // shown as a confident Max Pain. There is no answer; report none (the header
+    // renders a dash for 0).
+    bool any_oi = false;
+    for (const auto& r : rows) {
+        if (r.ce_quote.oi > 0 || r.pe_quote.oi > 0) {
+            any_oi = true;
+            break;
+        }
+    }
+    if (!any_oi)
         return 0;
     double best_strike = rows.first().strike;
     double best_pain = std::numeric_limits<double>::infinity();

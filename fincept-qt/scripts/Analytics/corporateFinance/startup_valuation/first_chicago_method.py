@@ -186,10 +186,44 @@ class FirstChicagoMethod:
 
         return max(0, min(1, breakeven_prob))
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `first_chicago_method.py calculate <flat-params-json>` (argv length 3). The
+# native form is `first_chicago <scenarios_json>`, so a service-style call is translated here and then falls
+# through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+_SVC_NAMES = ("Bull Case", "Base Case", "Bear Case")
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    scenarios = p.get("scenarios")
+    if not isinstance(scenarios, list):
+        return [argv[0], "first_chicago", json.dumps(p)]  # legacy {best_case, base_case, worst_case} dict
+    named = []
+    for i, s in enumerate(scenarios):
+        if not isinstance(s, dict):
+            continue
+        s = dict(s)
+        s.setdefault("name", _SVC_NAMES[i] if i < len(_SVC_NAMES) else "Scenario %d" % (i + 1))
+        s.setdefault("exit_year", int(p.get("years_to_exit", 5)))
+        named.append(s)
+    return [argv[0], "first_chicago", json.dumps(named)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

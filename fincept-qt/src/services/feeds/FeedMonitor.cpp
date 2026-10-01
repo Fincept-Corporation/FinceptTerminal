@@ -181,6 +181,11 @@ void FeedMonitor::remove(const QString& id) {
     FeedSubscriptionRepository::instance().remove(id);
     FeedItemRepository::instance().clear(id); // drop stored history too
     disarm_timer(id);
+    // The per-feed QTimer is parented to this singleton, so dropping the map
+    // entry alone leaked one timer per removed feed.
+    const auto removed = feeds_.find(id);
+    if (removed != feeds_.end() && removed->timer)
+        removed->timer->deleteLater();
     feeds_.remove(id);
     emit subscriptions_changed();
 }

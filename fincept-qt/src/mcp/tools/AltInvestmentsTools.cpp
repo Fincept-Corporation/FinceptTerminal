@@ -36,8 +36,12 @@ static void run_alt_async(const QString& command, const QJsonObject& params, Too
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
         if (!doc.isNull() && doc.isObject()) {
-            promise->addResult(ToolResult::ok_data(doc.object()));
-            promise->finish();
+            // Resolve through the shared single-winner guard (ctx.resolve_guard) like every
+            // other path in this file — a bare addResult()/finish() left that flag unset,
+            // so the provider's watchdog (same atomic) could still claim the call later.
+            AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [obj = doc.object()](auto resolve) {
+                resolve(ToolResult::ok_data(obj));
+            });
             return;
         }
     }

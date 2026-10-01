@@ -14,6 +14,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVariant>
@@ -37,6 +38,19 @@ QString format_token_amount(double v, int max_dp = 4) {
     if (v < 0.0001)
         return QString::number(v, 'g', 4);
     return QString::number(v, 'f', max_dp);
+}
+
+/// `QNetworkReply::errorString()` embeds the full request URL for HTTP-level
+/// failures, and the Helius key travels in the query string. Scrub it before
+/// the message is logged or published to the hub (it ends up in the ACTIVITY
+/// footer) — P14: never log credentials.
+QString redact_api_key(QString s, const QString& key) {
+    if (!key.isEmpty())
+        s.replace(key, QStringLiteral("***"));
+    static const QRegularExpression kKeyParam(QStringLiteral("(api[-_]?key=)[^&\\s\"']+"),
+                                              QRegularExpression::CaseInsensitiveOption);
+    s.replace(kKeyParam, QStringLiteral("\\1***"));
+    return s;
 }
 
 QString resolve_symbol(const QString& mint) {
@@ -90,7 +104,7 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
                 in_sym = resolve_symbol(first.value(QStringLiteral("mint")).toString());
                 const auto raw = first.value(QStringLiteral("rawTokenAmount")).toObject();
                 bool ok = false;
-                const auto qty = raw.value(QStringLiteral("tokenAmount")).toString().toLongLong(&ok);
+                const double qty = raw.value(QStringLiteral("tokenAmount")).toString().toDouble(&ok); // u64-safe
                 const int dp = raw.value(QStringLiteral("decimals")).toInt();
                 if (ok)
                     in_amt = format_token_amount(qty / std::pow(10.0, dp), 4);
@@ -108,7 +122,7 @@ ParsedActivity parse_helius_tx(const QJsonObject& tx, const QString& owner) {
                 out_sym = resolve_symbol(first.value(QStringLiteral("mint")).toString());
                 const auto raw = first.value(QStringLiteral("rawTokenAmount")).toObject();
                 bool ok = false;
-                const auto qty = raw.value(QStringLiteral("tokenAmount")).toString().toLongLong(&ok);
+                const double qty = raw.value(QStringLiteral("tokenAmount")).toString().toDouble(&ok); // u64-safe
                 const int dp = raw.value(QStringLiteral("decimals")).toInt();
                 if (ok)
                     out_amt = format_token_amount(qty / std::pow(10.0, dp), 2);
@@ -219,16 +233,17 @@ void WalletActivityProducer::refresh_via_helius(const QString& topic, const QStr
     QNetworkRequest req(url);
     req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    req.setTransferTimeout(15 * 1000);
     auto* reply = nam_->get(req);
 
     QPointer<WalletActivityProducer> self = this;
-    connect(reply, &QNetworkReply::finished, this, [self, reply, topic, pubkey]() {
+    connect(reply, &QNetworkReply::finished, this, [self, reply, topic, pubkey, helius_key]() {
         reply->deleteLater();
         if (!self)
             return;
         auto& hub = fincept::datahub::DataHub::instance();
         if (reply->error() != QNetworkReply::NoError) {
-            const auto err = reply->errorString();
+            const auto err = api::redact_api_key(reply->errorString(), helius_key);
             LOG_WARN("WalletActivity", "Helius fetch failed: " + err);
             hub.publish_error(topic, err);
             return;

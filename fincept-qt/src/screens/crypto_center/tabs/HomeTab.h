@@ -93,6 +93,11 @@ class HomeTab : public QWidget {
     QLabel* roadmap_body_ = nullptr;
 
     QString current_pubkey_;
+    /// The strip currently shows the producer's informational "STREAM unavailable
+    /// on this RPC — using poll" notice. Unlike a fetch failure it is not
+    /// resolved by the next successful publish (the poll that follows IS the
+    /// fallback), so it must survive until the mode / RPC changes.
+    bool error_is_stream_notice_ = false;
 };
 
 } // namespace fincept::screens

@@ -271,7 +271,7 @@ void PricingScreen::fetch_plans() {
         });
 
         render_plan_cards();
-    });
+    }, this); // context: the reply handler is dropped if the screen is destroyed first
 }
 
 void PricingScreen::refresh_plans() {
@@ -573,7 +573,8 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
                     if (state == Qt::ApplicationActive && awaiting_payment_)
                         poll_payment_status();
                 });
-        });
+        },
+        this); // context: this call spans a payment-provider round trip — see AuthApi::request()
 }
 
 void PricingScreen::stop_payment_polling() {
@@ -601,6 +602,13 @@ void PricingScreen::poll_payment_status() {
     }
 
     auto& auth = auth::AuthManager::instance();
+    // refresh_user_data() is a silent no-op for a logged-out session, so no
+    // auth_state_changed would ever clear payment_poll_in_flight_ and the poll
+    // would wedge. A logged-out user has nothing to poll for anyway.
+    if (!auth.is_authenticated()) {
+        stop_payment_polling();
+        return;
+    }
     payment_poll_in_flight_ = true;
 
     auto conn = std::make_shared<QMetaObject::Connection>();

@@ -135,10 +135,66 @@ class DebtSchedule:
             'total_interest_paid': total_interest_paid
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `debt_schedule.py analyze <flat-params-json>` (argv length 3). The native form is
+# `debt_schedule debt_structure cash_flows [sweep]`, so a service-style call is translated here and then falls
+# through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("analyze",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    senior = _svc_num(p, "senior_debt", default=0.0)
+    sub = _svc_num(p, "sub_debt", default=0.0)
+    revolver = _svc_num(p, "revolver", default=0.0)
+    structure = {
+        "senior": {"amount": senior, "rate": _svc_num(p, "senior_rate", default=0.055), "term": 7},
+        "subordinated": {"amount": sub, "rate": _svc_num(p, "sub_rate", default=0.085), "term": 10},
+        "revolver": {"amount": revolver, "rate": _svc_num(p, "revolver_rate", default=0.04)},
+    }
+    years = int(_svc_num(p, "years", "projection_years", default=7.0))
+    years = min(max(years, 1), 20)
+    ebitda = _svc_num(p, "ebitda", default=0.0)
+    growth = _svc_num(p, "ebitda_growth", default=0.0)
+    capex = _svc_num(p, "capex", default=0.0)
+    tax_rate = _svc_num(p, "tax_rate", default=0.21)
+    # Interest is approximated at the opening balances (the schedule recomputes it as debt is repaid); cash
+    # taxes at `tax_rate` of EBITDA less capex.
+    interest = (senior * structure["senior"]["rate"] + sub * structure["subordinated"]["rate"]
+                + revolver * structure["revolver"]["rate"])
+    ebitda_by_year = [ebitda * (1.0 + growth) ** i for i in range(years)]
+    cash_flows = {
+        "ebitda": ebitda_by_year,
+        "capex": [capex] * years,
+        "taxes": [max(e - capex, 0.0) * tax_rate for e in ebitda_by_year],
+        "interest_paid": [interest] * years,
+    }
+    return [argv[0], "debt_schedule", json.dumps(structure), json.dumps(cash_flows),
+            repr(_svc_num(p, "sweep_pct", "sweep_percentage", default=0.5))]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified. Usage: debt_schedule.py <command> [args...]"}
         print(json.dumps(result))

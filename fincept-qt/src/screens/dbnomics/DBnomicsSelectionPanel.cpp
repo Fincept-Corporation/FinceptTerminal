@@ -646,6 +646,14 @@ void DBnomicsSelectionPanel::populate_providers(const QVector<services::DbnProvi
         provider_list_->addItem(item);
     }
 
+    // Highlight the remembered provider (state restore) — setCurrentItem emits no itemClicked.
+    for (int i = 0; i < provider_list_->count() && !selected_provider_.isEmpty(); ++i) {
+        if (provider_list_->item(i)->data(Qt::UserRole).toString() == selected_provider_) {
+            provider_list_->setCurrentRow(i);
+            break;
+        }
+    }
+
     set_status(tr("%1 providers").arg(providers.size()));
 }
 
@@ -661,6 +669,13 @@ void DBnomicsSelectionPanel::populate_datasets(const QVector<services::DbnDatase
         item->setData(Qt::UserRole, ds.code);
         item->setToolTip(ds.code);
         dataset_list_->addItem(item);
+    }
+
+    for (int i = 0; i < dataset_list_->count() && !selected_dataset_.isEmpty(); ++i) {
+        if (dataset_list_->item(i)->data(Qt::UserRole).toString() == selected_dataset_) {
+            dataset_list_->setCurrentRow(i);
+            break;
+        }
     }
 
     datasets_next_offset_ = page.offset + page.limit;
@@ -683,6 +698,13 @@ void DBnomicsSelectionPanel::populate_series(const QVector<services::DbnSeriesIn
         item->setData(Qt::UserRole, s.code);
         item->setToolTip(s.code + " \u2014 " + s.name);
         series_list_->addItem(item);
+    }
+
+    for (int i = 0; i < series_list_->count() && !selected_series_.isEmpty(); ++i) {
+        if (series_list_->item(i)->data(Qt::UserRole).toString() == selected_series_) {
+            series_list_->setCurrentRow(i);
+            break;
+        }
     }
 
     series_next_offset_ = page.offset + page.limit;
@@ -865,6 +887,13 @@ void DBnomicsSelectionPanel::update_slot_series(int slot_index, const QVector<se
 
         slot_layout->addWidget(row);
     }
+}
+
+void DBnomicsSelectionPanel::restore_selection(const QString& provider, const QString& dataset,
+                                               const QString& series) {
+    selected_provider_ = provider;
+    selected_dataset_ = dataset;
+    selected_series_ = series;
 }
 
 // ── Search text accessors (for state persistence) ────────────────────────────

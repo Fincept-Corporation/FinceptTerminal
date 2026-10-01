@@ -23,6 +23,13 @@ static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
 }
 
+// The vendor API is not consistent about JSON number vs numeric-string between endpoints.
+// toInt()/toDouble() on the wrong one silently read 0 (a position skipped as flat, a 0 price);
+// toVariant().toDouble() accepts both.
+static double ab_num(const QJsonValue& v) {
+    return v.toVariant().toDouble();
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -160,9 +167,23 @@ TokenExchangeResponse AliceBlueBroker::exchange_token(const QString& api_key, co
 OrderPlaceResponse AliceBlueBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
     auto hdrs = auth_headers(creds);
 
-    // instrumentId must be the numeric exchange token (string)
-    // InstrumentService lookup would go here in production; use "0" as fallback
-    QString instrument_id = order.instrument_token.isEmpty() ? "0" : order.instrument_token;
+    // instrumentId must be the numeric exchange token (string) — it is the ONLY symbol
+    // identifier in the vendor placeorder payload. The equity ticket does not carry one
+    // (only the F&O chain fills UnifiedOrder::instrument_token), so resolve it from the
+    // instrument master exactly as get_history() does. Sending the old "0" placeholder
+    // could never match a contract; refuse instead of transmitting it.
+    QString instrument_id = order.instrument_token;
+    if (instrument_id.isEmpty() || instrument_id == QLatin1String("0")) {
+        instrument_id.clear();
+        const QString bid = creds.broker_id.isEmpty() ? QStringLiteral("aliceblue") : creds.broker_id;
+        const auto tok = InstrumentService::instance().instrument_token(order.symbol, order.exchange, bid);
+        if (tok.has_value() && tok.value() > 0)
+            instrument_id = QString::number(static_cast<qlonglong>(tok.value()));
+    }
+    if (instrument_id.isEmpty())
+        return {false, "",
+                "AliceBlue place_order: instrument token not found for " + order.exchange + ":" + order.symbol +
+                    " (instrument master not loaded yet?)"};
 
     QJsonObject item;
     item["exchange"] = order.exchange;
@@ -185,10 +206,9 @@ OrderPlaceResponse AliceBlueBroker::place_order(const BrokerCredentials& creds, 
     item["trailingSlAmount"] = "";
     item["apiOrderSource"] = "";
     item["algoId"] = "";
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
-    item["orderTag"] = make_client_order_ref(20);
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+    item["orderTag"] = client_order_ref_for(order, 20);
 
     // API expects an array of one item
     QJsonArray payload;
@@ -323,10 +343,10 @@ ApiResponse<QVector<BrokerOrderInfo>> AliceBlueBroker::get_orders(const BrokerCr
         info.symbol = o["formattedInstrumentName"].toString().isEmpty() ? o["tradingSymbol"].toString()
                                                                         : o["formattedInstrumentName"].toString();
         info.exchange = o["exchange"].toString();
-        info.quantity = o["quantity"].toInt();
-        info.filled_qty = o["filledQuantity"].toInt();
-        info.price = o["price"].toDouble();
-        info.trigger_price = o["slTriggerPrice"].toDouble();
+        info.quantity = ab_num(o["quantity"]);
+        info.filled_qty = ab_num(o["filledQuantity"]);
+        info.price = ab_num(o["price"]);
+        info.trigger_price = ab_num(o["slTriggerPrice"]);
         info.status = parse_status(o["orderStatus"].toString());
         info.side = (o["transactionType"].toString() == "BUY") ? "buy" : "sell";
         info.order_type = o["orderType"].toString();
@@ -376,8 +396,8 @@ ApiResponse<QVector<BrokerPosition>> AliceBlueBroker::get_positions(const Broker
 
     for (const auto& item : results) {
         QJsonObject p = item.toObject();
-        int net_qty = p["netQuantity"].toInt();
-        if (net_qty == 0)
+        const double net_qty = ab_num(p["netQuantity"]);
+        if (net_qty == 0.0)
             continue;
 
         BrokerPosition pos;
@@ -385,9 +405,9 @@ ApiResponse<QVector<BrokerPosition>> AliceBlueBroker::get_positions(const Broker
                                                              : p["tradingSymbol"].toString();
         pos.exchange = p["exchange"].toString();
         pos.quantity = net_qty;
-        pos.avg_price = p["dayBuyPrice"].toDouble() > 0 ? p["dayBuyPrice"].toDouble() : p["netAveragePrice"].toDouble();
-        pos.ltp = p["ltp"].toDouble();
-        pos.pnl = p["unrealisedPnl"].toDouble();
+        pos.avg_price = ab_num(p["dayBuyPrice"]) > 0 ? ab_num(p["dayBuyPrice"]) : ab_num(p["netAveragePrice"]);
+        pos.ltp = ab_num(p["ltp"]);
+        pos.pnl = ab_num(p["unrealisedPnl"]);
         pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = p["product"].toString();
         // netQuantity carries the sign, but PortfolioReplicationService takes
@@ -435,13 +455,13 @@ ApiResponse<QVector<BrokerHolding>> AliceBlueBroker::get_holdings(const BrokerCr
 
             // totalQuantity is the true total holding (settled + T1); dpQuantity is
             // settled-only and would drop unsettled T1 quantity.
-            int qty = h["totalQuantity"].toInt();
-            if (qty == 0)
-                qty = h["dpQuantity"].toInt();
-            double avg_price = h["averageTradedPrice"].toDouble();
+            double qty = ab_num(h["totalQuantity"]);
+            if (qty == 0.0)
+                qty = ab_num(h["dpQuantity"]);
+            double avg_price = ab_num(h["averageTradedPrice"]);
             if (avg_price == 0.0)
-                avg_price = h["investedPrice"].toDouble();
-            double ltp = h["ltp"].toDouble();
+                avg_price = ab_num(h["investedPrice"]);
+            double ltp = ab_num(h["ltp"]);
 
             BrokerHolding holding;
             holding.symbol = symbol;
@@ -486,9 +506,9 @@ ApiResponse<BrokerFunds> AliceBlueBroker::get_funds(const BrokerCredentials& cre
         return {false, std::nullopt, "Empty limits response", ts};
 
     QJsonObject item = results[0].toObject();
-    double trading_limit = item["tradingLimit"].toDouble();
-    double collateral = item["collateralMargin"].toDouble();
-    double utilized = item["utilizedMargin"].toDouble();
+    double trading_limit = ab_num(item["tradingLimit"]);
+    double collateral = ab_num(item["collateralMargin"]);
+    double utilized = ab_num(item["utilizedMargin"]);
 
     BrokerFunds funds;
     funds.available_balance = trading_limit + collateral;
@@ -601,11 +621,11 @@ ApiResponse<QVector<BrokerCandle>> AliceBlueBroker::get_history(const BrokerCred
         QDateTime dt = QDateTime::fromString(c["time"].toString(), "yyyy-MM-dd HH:mm:ss");
         dt.setTimeZone(QTimeZone(19800)); // interpret wall-clock as IST (+5:30)
         candle.timestamp = dt.toMSecsSinceEpoch();
-        candle.open = c["open"].toDouble();
-        candle.high = c["high"].toDouble();
-        candle.low = c["low"].toDouble();
-        candle.close = c["close"].toDouble();
-        candle.volume = c["volume"].toDouble();
+        candle.open = ab_num(c["open"]);
+        candle.high = ab_num(c["high"]);
+        candle.low = ab_num(c["low"]);
+        candle.close = ab_num(c["close"]);
+        candle.volume = ab_num(c["volume"]);
         result.append(candle);
     }
 

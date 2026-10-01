@@ -239,10 +239,10 @@ OrderPlaceResponse DhanBroker::place_order(const BrokerCredentials& creds, const
     body["price"] = order.price;
     body["triggerPrice"] = order.stop_price;
     body["disclosedQuantity"] = 0;
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Dhan caps correlationId at 25 chars.
-    body["correlationId"] = make_client_order_ref(25);
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+    // Dhan caps correlationId at 25 chars.
+    body["correlationId"] = client_order_ref_for(order, 25);
     if (order.amo)
         body["afterMarketOrder"] = true;
 
@@ -265,16 +265,37 @@ ApiResponse<QJsonObject> DhanBroker::modify_order(const BrokerCredentials& creds
                                                   const QJsonObject& mods) {
     int64_t ts = now_ts();
 
+    // The modify body is a full replace: a field the caller did not name used to go out as
+    // 0 (a stop-loss order's triggerPrice, the quantity of a price-only edit) or "DAY" (an
+    // IOC order's validity). The terminal's modify callers send only {quantity, price}, so
+    // read the resting order (GET /v2/orders/{orderId}) and keep its values for the rest.
+    QJsonObject resting;
+    if (!mods.contains("quantity") || !mods.contains("price") || !mods.contains("trigger_price") ||
+        !mods.contains("validity")) {
+        auto cur = BrokerHttp::instance().get(BASE + "/v2/orders/" + order_id, auth_headers(creds));
+        if (cur.success && cur.json.value("errorType").toString().isEmpty()) {
+            resting = cur.json;
+            if (resting.isEmpty()) { // some deployments return a one-element array
+                const auto arr = QJsonDocument::fromJson(cur.raw_body.toUtf8()).array();
+                if (!arr.isEmpty())
+                    resting = arr.first().toObject();
+            }
+        }
+    }
+    auto resting_num = [&resting](const char* key) { return resting.value(QLatin1String(key)).toVariant().toDouble(); };
+
     QJsonObject body;
     body["dhanClientId"] = creds.api_key;
     body["orderId"] = order_id;
-    body["orderType"] = mods.value("order_type").toString("LIMIT");
+    body["orderType"] = mods.value("order_type").toString(resting.value("orderType").toString("LIMIT"));
     body["legName"] = "ENTRY_LEG";
-    body["quantity"] = mods.value("quantity").toInt(0);
-    body["price"] = mods.value("price").toDouble(0);
-    body["triggerPrice"] = mods.value("trigger_price").toDouble(0);
+    body["quantity"] = mods.contains("quantity") ? mods.value("quantity").toInt(0)
+                                                 : static_cast<int>(resting_num("quantity"));
+    body["price"] = mods.contains("price") ? mods.value("price").toDouble(0) : resting_num("price");
+    body["triggerPrice"] =
+        mods.contains("trigger_price") ? mods.value("trigger_price").toDouble(0) : resting_num("triggerPrice");
     body["disclosedQuantity"] = mods.value("disclosed_quantity").toInt(0);
-    body["validity"] = "DAY";
+    body["validity"] = mods.value("validity").toString(resting.value("validity").toString("DAY"));
 
     auto resp = BrokerHttp::instance().put_json(BASE + "/v2/orders/" + order_id, body, auth_headers(creds));
     if (!resp.success || resp.json.value("errorType").toString().length() > 0)

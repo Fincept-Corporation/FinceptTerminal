@@ -10,16 +10,19 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "network/http/HttpClient.h"
+#include "services/feeds/FeedParseUtil.h"
 #include "services/news/NewsService.h"
 #include "storage/cache/CacheManager.h"
 
 #include <QAtomicInt>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QRegularExpression>
 #include <QSet>
+#include <QUrl>
 #include <QUuid>
 #include <QXmlStreamReader>
 
@@ -35,6 +38,35 @@ namespace fincept::services {
 // Max chars retained from an item's description after HTML stripping.
 static constexpr int kSummaryMaxChars = 300;
 
+// A feed clock running ahead of ours by more than this is treated as "now" so a
+// mis-dated item can't pin itself to the top of the list indefinitely.
+static constexpr int64_t kNewsMaxFutureSkewSec = 300;
+
+// ── Stable ids + link hygiene ───────────────────────────────────────────────
+
+QString NewsService::stable_article_id(const QString& link, const QString& source, const QString& headline) {
+    QString key = link.trimmed();
+    if (key.isEmpty()) {
+        key = source.toLower() + QLatin1Char('|') + headline.trimmed().toLower();
+    } else {
+        const int frag = key.indexOf(QLatin1Char('#'));
+        if (frag >= 0)
+            key.truncate(frag);
+        while (key.endsWith(QLatin1Char('/')))
+            key.chop(1);
+    }
+    const QByteArray digest = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha1).toHex();
+    return QStringLiteral("n") + QString::fromLatin1(digest.left(16));
+}
+
+bool NewsService::is_web_url(const QString& url) {
+    const QUrl u(url.trimmed());
+    if (!u.isValid() || u.host().isEmpty())
+        return false;
+    const QString scheme = u.scheme().toLower();
+    return scheme == QLatin1String("http") || scheme == QLatin1String("https");
+}
+
 // ── RSS XML parser ──────────────────────────────────────────────────────────
 
 QVector<NewsArticle> NewsService::parse_rss_xml(const QByteArray& xml, const RSSFeed& feed) {
@@ -44,7 +76,7 @@ QVector<NewsArticle> NewsService::parse_rss_xml(const QByteArray& xml, const RSS
     bool in_item = false;
     NewsArticle current;
     QString current_tag;
-    int item_idx = 0;
+    QSet<QString> ids_in_feed; // guards against a feed that reuses one link for every item
 
     while (!reader.atEnd()) {
         auto token = reader.readNext();
@@ -54,13 +86,12 @@ QVector<NewsArticle> NewsService::parse_rss_xml(const QByteArray& xml, const RSS
 
             if (current_tag == "item" || current_tag == "entry") {
                 in_item = true;
-                item_idx++;
                 current = {};
                 current.category = feed.category;
                 current.source = feed.source;
                 current.region = feed.region;
                 current.tier = feed.tier;
-                current.id = QString("%1-%2-%3").arg(feed.id).arg(QDateTime::currentMSecsSinceEpoch()).arg(item_idx);
+                // id is derived from the link/headline once the item is complete.
             }
 
             // Atom <link href="..."/> or <link rel="alternate" href="..."/>
@@ -98,9 +129,20 @@ QVector<NewsArticle> NewsService::parse_rss_xml(const QByteArray& xml, const RSS
                         dt = QDateTime::fromString(text, "ddd, dd MMM yyyy HH:mm:ss");
                     if (dt.isValid()) {
                         current.sort_ts = dt.toSecsSinceEpoch();
-                        current.time = dt.toString("MMM dd, HH:mm");
+                        current.time = dt.toLocalTime().toString("MMM dd, HH:mm");
                     } else {
-                        current.time = text.left(22);
+                        // Named zones (IST, PDT...), epoch values, "05-Jun-2026 ..." —
+                        // the shared feed parser covers what Qt's stock formats don't.
+                        // An undated item otherwise falls back to "now" below and
+                        // pins an old story to the top of the list.
+                        QString display;
+                        const qint64 parsed_ts = fincept::feeds::parse_feed_datetime(text, display);
+                        if (parsed_ts > 0) {
+                            current.sort_ts = parsed_ts;
+                            current.time = QDateTime::fromSecsSinceEpoch(parsed_ts).toString("MMM dd, HH:mm");
+                        } else {
+                            current.time = text.left(22);
+                        }
                     }
                 }
             }
@@ -113,8 +155,21 @@ QVector<NewsArticle> NewsService::parse_rss_xml(const QByteArray& xml, const RSS
 
                 if (current.time.isEmpty())
                     current.time = QDateTime::currentDateTime().toString("MMM dd, HH:mm");
-                if (current.sort_ts == 0)
-                    current.sort_ts = QDateTime::currentSecsSinceEpoch();
+                const int64_t now_ts = QDateTime::currentSecsSinceEpoch();
+                if (current.sort_ts == 0 || current.sort_ts > now_ts + kNewsMaxFutureSkewSec) {
+                    current.sort_ts = now_ts;
+                    current.time = QDateTime::fromSecsSinceEpoch(now_ts).toString("MMM dd, HH:mm");
+                }
+
+                // Untrusted link: keep web URLs only (see is_web_url()).
+                if (!is_web_url(current.link))
+                    current.link.clear();
+
+                current.id = stable_article_id(current.link, current.source, current.headline);
+                if (ids_in_feed.contains(current.id))
+                    current.id = stable_article_id(current.link + QLatin1Char('|') + current.headline, current.source,
+                                                   current.headline);
+                ids_in_feed.insert(current.id);
 
                 enrich_article(current);
                 articles.append(std::move(current));
@@ -141,8 +196,11 @@ void NewsService::enrich_article(NewsArticle& article) {
     const QString combined = article.headline + " " + article.summary;
     const QString text = combined.toLower();
 
-    // Priority
-    if (text.contains("breaking") || text.contains("alert"))
+    // Priority. FLASH drives banners, sounds and system notifications, so match
+    // whole words: a bare substring test flagged "record-breaking", "alerted"
+    // and the like as breaking news.
+    static const QRegularExpression flash_re(QStringLiteral("(?<![\\w-])(?:breaking|alerts?)\\b"));
+    if (flash_re.match(text).hasMatch())
         article.priority = Priority::FLASH;
     else if (text.contains("urgent") || text.contains("emergency"))
         article.priority = Priority::URGENT;
@@ -232,19 +290,54 @@ void NewsService::enrich_article(NewsArticle& article) {
              text.contains("gaza") || text.contains("sanctions") || text.contains("geopolit"))
         article.category = "GEOPOLITICS";
 
-    // Extract tickers: uppercase 2-5 letter words
-    static QRegularExpression ticker_re("\\b[A-Z]{2,5}\\b");
-    static QSet<QString> common_words = {"THE",  "FOR",  "AND",  "BUT",  "NOT",  "FROM", "WITH", "THIS", "THAT", "HAVE",
-                                         "WILL", "BEEN", "THEY", "WERE", "SAID", "HAS",  "ITS",  "NEW",  "ARE",  "WAS"};
-    auto it = ticker_re.globalMatch(combined); // reuse already-built string
-    QSet<QString> found;
-    while (it.hasNext() && found.size() < 5) {
-        auto m = it.next();
-        QString t = m.captured();
-        if (!common_words.contains(t))
-            found.insert(t);
+    // Extract tickers. Explicit cashtags ($AAPL) always count; bare uppercase
+    // 2-5 letter words only count when they are not a common word or a news/
+    // finance acronym (US, CEO, GDP, FED ...), and not when the whole headline
+    // is shouted in capitals (every word would look like a symbol). Kept in
+    // order of appearance — QSet::values() order is arbitrary.
+    static const QRegularExpression cashtag_re("\\$([A-Z]{1,5})\\b");
+    static const QRegularExpression ticker_re("\\b[A-Z]{2,5}\\b");
+    static const QSet<QString> common_words = {
+        "THE",  "FOR",  "AND",   "BUT",  "NOT",  "FROM", "WITH", "THIS", "THAT", "HAVE", "WILL", "BEEN", "THEY",
+        "WERE", "SAID", "HAS",   "ITS",  "NEW",  "ARE",  "WAS",  "WHO",  "HOW",  "WHY",  "ALL",  "CAN",  "MAY",
+        "NOW",  "OUT",  "ONE",   "TWO",  "OUR",  "YOU",  "HER",  "HIS",  "SAYS", "SAY",  "GET",  "GOT",  "LET",
+        "TOP",  "BIG",  "NEXT",  "OVER", "INTO", "AFTER", "WHAT", "WHEN", "ABOUT", "AM",  "PM",   "TV",   "PC",
+        "OK",   "VS",   "NO",    "OR",   "IN",   "IS",   "OF",   "ON",   "TO",   "AT",   "BY",   "AS",   "AN",
+        "IF",   "SO",   "UP",    "DO",   "GO",   "BE",   "WE",   "HE",   "ME",   "MY",   "US",   "UK",   "EU",
+        "UN",   "UAE",  "USA",   "AI",   "CEO",  "CFO",  "COO",  "CTO",  "IPO",  "ETF",  "GDP",  "CPI",  "PPI",
+        "PMI",  "FED",  "FOMC",  "ECB",  "BOE",  "BOJ",  "PBOC", "IMF",  "WTO",  "WHO",  "NATO", "OPEC", "SEC",
+        "FDA",  "DOJ",  "FBI",   "CIA",  "NSA",  "IRS",  "FTC",  "FCC",  "EPA",  "NYSE", "DOW",  "USD",  "EUR",
+        "GBP",  "JPY",  "CNY",   "INR",  "AUD",  "CAD",  "CHF",  "GOP",  "ESG",  "COVID", "UPDATE", "LIVE", "VIDEO",
+        "WATCH", "EXCLUSIVE", "ALERT", "BREAKING", "URGENT", "NEWS", "TIMES", "POST",
+    };
+    QStringList found;
+    auto add_ticker = [&found](const QString& t) {
+        if (found.size() < 5 && !found.contains(t))
+            found.append(t);
+    };
+    {
+        auto cashtags = cashtag_re.globalMatch(combined);
+        while (cashtags.hasNext())
+            add_ticker(cashtags.next().captured(1));
     }
-    article.tickers = found.values();
+    int letters = 0, upper = 0;
+    for (const QChar ch : combined) {
+        if (ch.isLetter()) {
+            ++letters;
+            if (ch.isUpper())
+                ++upper;
+        }
+    }
+    const bool shouting = letters >= 24 && upper * 10 >= letters * 6;
+    if (!shouting) {
+        auto it = ticker_re.globalMatch(combined); // reuse already-built string
+        while (it.hasNext() && found.size() < 5) {
+            const QString t = it.next().captured();
+            if (!common_words.contains(t))
+                add_ticker(t);
+        }
+    }
+    article.tickers = found;
 
     // Language detection — check for CJK, Cyrillic, Arabic, Devanagari characters
     auto detect_lang = [](const QString& s) -> QString {

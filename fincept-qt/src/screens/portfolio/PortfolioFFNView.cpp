@@ -433,8 +433,22 @@ QChartView* PortfolioFFNView::make_chart_view(const QString& title) {
 // ── set_data ──────────────────────────────────────────────────────────────────
 
 void PortfolioFFNView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
+    const bool portfolio_changed = summary.portfolio.id != summary_.portfolio.id;
     summary_ = summary;
     currency_ = currency;
+    // FFN output (per-symbol stats, optimiser weights, rebased/drawdown/rolling
+    // series) belongs to the portfolio it was run for. Left in place after a
+    // switch, the OVERVIEW would present the previous book's "current" portfolio
+    // stats as this one's.
+    if (portfolio_changed && !ffn_data_.isEmpty()) {
+        ffn_data_ = QJsonObject();
+        for (QStackedWidget* st : {opt_stack_, rebased_stack_, drawdowns_stack_, rolling_stack_}) {
+            if (st)
+                st->setCurrentIndex(0);
+        }
+        if (status_label_)
+            status_label_->clear();
+    }
     update_overview();
 }
 
@@ -1006,7 +1020,11 @@ void PortfolioFFNView::run_ffn() {
                 self->run_btn_->setEnabled(true);
 
                 if (!r.success) {
-                    self->status_label_->setText(tr("FFN failed — check Python/yfinance"));
+                    // Keep the generic hint, but include the script's own reason
+                    // (e.g. "Could not fetch price data") instead of only logging it.
+                    const QString reason = r.error.left(120).simplified();
+                    self->status_label_->setText(reason.isEmpty() ? tr("FFN failed — check Python/yfinance")
+                                                                  : tr("FFN failed: %1").arg(reason));
                     self->status_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::NEGATIVE()));
                     LOG_ERROR("FFNView", "FFN script failed: " + r.error.left(300));
                     return;

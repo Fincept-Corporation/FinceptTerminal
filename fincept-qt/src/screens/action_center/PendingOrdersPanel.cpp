@@ -454,6 +454,11 @@ void PendingOrdersPanel::refresh() {
             set(kColActions, "→ " + o.broker_order_id);
         } else if (!o.rejection_reason.isEmpty()) {
             set(kColActions, o.rejection_reason);
+            // The 170px column elides the reason ("Expired: queued 22 minutes ago…", a broker
+            // rejection, a basket's per-leg failures) — the full text is the point of the row.
+            if (auto* reason_item = table_->item(row, kColActions))
+                reason_item->setToolTip(o.rejection_reason);
+            status_item->setToolTip(o.rejection_reason);
         }
     }
 

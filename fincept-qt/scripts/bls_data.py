@@ -12,6 +12,15 @@ import pandas as pd
 import asyncio
 import aiohttp
 
+# Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
+# system DNS configuration on Windows and fails every request with
+# "Timeout while contacting DNS servers". Use the threaded getaddrinfo resolver
+# (same fix as scripts/exchange/ws_stream.py). Gated to Windows so Linux/macOS
+# keep the native resolver.
+if sys.platform == "win32":
+    import aiohttp.connector as _aiohttp_connector
+    _aiohttp_connector.DefaultResolver = aiohttp.ThreadedResolver
+
 # BLS API Configuration
 BLS_API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 BLS_FTP_BASE = "https://download.bls.gov/pub/time.series/"

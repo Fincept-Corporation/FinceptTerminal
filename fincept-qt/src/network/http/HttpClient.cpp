@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 
 #include <chrono>
@@ -22,11 +23,60 @@ namespace {
 /// log level. The error path in handle_reply() already strips the query for
 /// exactly this reason; the request path must do the same. Fixed here, once,
 /// rather than at each call site.
-QString log_url(const QString& url) {
+///
+/// The query is not the only place a secret lives: a Telegram bot token is in
+/// the *path* (`/bot<token>/sendMessage`), and Slack/Discord/Teams/Mattermost
+/// webhook paths are themselves the credential. So for any host other than the
+/// Fincept API host only `scheme://host[:port]/<redacted>` is logged; the path
+/// of a Fincept API call is kept (it carries ids, never secrets). User-info
+/// (`https://user:pass@host`) is always dropped.
+QString http_log_url(const QString& url, const QString& base_url) {
     const QUrl parsed(url);
-    if (!parsed.hasQuery())
-        return url;
-    return parsed.adjusted(QUrl::RemoveQuery).toString() + QStringLiteral("?<redacted>");
+    const QString host = parsed.host();
+    if (host.isEmpty()) {
+        // A relative Fincept API path ("/user/login?x=1"); anything else with no
+        // host is not a URL we can reason about — never echo it.
+        if (!url.startsWith(QLatin1Char('/')))
+            return QStringLiteral("<invalid url>");
+        const int q = static_cast<int>(url.indexOf(QLatin1Char('?')));
+        return q < 0 ? url : url.left(q) + QStringLiteral("?<redacted>");
+    }
+
+    const QString base_host = QUrl(base_url).host();
+    if (base_host.isEmpty() || host.compare(base_host, Qt::CaseInsensitive) != 0) {
+        return parsed.adjusted(QUrl::RemoveUserInfo | QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment)
+                   .toString() +
+               QStringLiteral("/<redacted>");
+    }
+
+    const QUrl stripped = parsed.adjusted(QUrl::RemoveUserInfo | QUrl::RemoveQuery | QUrl::RemoveFragment);
+    return parsed.hasQuery() ? stripped.toString() + QStringLiteral("?<redacted>") : stripped.toString();
+}
+
+/// True for an absolute http(s) URL (the only absolute form HttpClient sends).
+bool http_is_absolute_url(const QString& url) {
+    return url.startsWith(QLatin1String("http://"), Qt::CaseInsensitive) ||
+           url.startsWith(QLatin1String("https://"), Qt::CaseInsensitive);
+}
+
+/// A request is only well-formed if it is an absolute http(s) URL or a Fincept
+/// API path ("/user/login"). build_request() resolves a relative path against the
+/// Fincept base URL and attaches the user's X-API-Key / X-Session-Token to it, so
+/// a scheme-less third-party target ("hooks.slack.com/services/..." typed
+/// without "https://") must NOT fall into that branch — it would POST the
+/// webhook payload plus the user's Fincept credentials to the Fincept backend.
+bool http_is_sendable_url(const QString& url) {
+    return http_is_absolute_url(url) || url.startsWith(QLatin1Char('/'));
+}
+
+/// Deliver a "bad URL" failure through the same async callback path as a real
+/// reply (queued, never re-entrant into the caller). Nothing about the URL is
+/// echoed: it may be a webhook secret.
+void http_reject_bad_url(const QObject* receiver, HttpClient::JsonCallback callback) {
+    LOG_WARN("HTTP", "Rejected request: URL must be absolute http(s):// or an API path starting with '/'");
+    QTimer::singleShot(0, receiver, [cb = std::move(callback)]() {
+        cb(Result<QJsonDocument>::err("Invalid URL: expected http:// or https:// (or an API path starting with '/')"));
+    });
 }
 
 /// Error text for a failed response: `"HTTP_<status>: <server message>"`, or a
@@ -122,7 +172,7 @@ HttpClient::HttpClient() {
 }
 
 QNetworkRequest HttpClient::build_request(const QString& url, const Headers& extra_headers) const {
-    const bool is_relative = !url.startsWith("http");
+    const bool is_relative = !http_is_absolute_url(url);
     const QString full_url = is_relative ? (base_url_ + url) : url;
     QUrl qurl(full_url);
     QNetworkRequest req{qurl};
@@ -161,7 +211,7 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback, const
     // leaks until app exit. deleteLater() is idempotent, so a double-call when
     // the lambda also runs is harmless.
     connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
-    connect(reply, &QNetworkReply::finished, receiver, [reply, cb = std::move(callback)]() {
+    connect(reply, &QNetworkReply::finished, receiver, [reply, cb = std::move(callback), base_url = base_url_]() {
         reply->deleteLater();
 
         QByteArray data = reply->readAll();
@@ -171,15 +221,30 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback, const
         QJsonDocument doc = QJsonDocument::fromJson(data, &parse_err);
 
         if (reply->error() != QNetworkReply::NoError) {
-            QUrl sanitized = reply->url();
-            sanitized.setQuery(QString{}); // strip query to keep tokens out of logs
-            LOG_WARN("HTTP",
-                     QString("HTTP %1: %2 — %3").arg(status).arg(sanitized.toString()).arg(reply->errorString()));
+            // Qt's errorString() for an HTTP failure embeds the full request URL
+            // ("Error transferring <url> - server replied: ..."), query and secret
+            // path included — scrub it with the same redaction as the URL itself.
+            const QString safe_url = http_log_url(reply->url().toString(), base_url);
+            QString safe_error = reply->errorString();
+            for (const QString& raw : {reply->url().toString(), reply->url().toString(QUrl::FullyEncoded),
+                                       reply->request().url().toString(), reply->request().url().toString(QUrl::FullyEncoded)}) {
+                if (!raw.isEmpty())
+                    safe_error.replace(raw, safe_url);
+            }
+            LOG_WARN("HTTP", QString("HTTP %1: %2 — %3").arg(status).arg(safe_url).arg(safe_error));
 
             // 401/403 stay a bare "HTTP_<status>" — session-expiry detection in
             // AuthApi/AuthManager/SessionGuard matches on exactly that string.
             if (status == 401 || status == 403) {
                 cb(Result<QJsonDocument>::err(QString("HTTP_%1").arg(status).toStdString()));
+                return;
+            }
+
+            // No HTTP status at all: a transport failure (DNS, refused, TLS, timeout).
+            // Surface Qt's (URL-scrubbed) reason instead of a bare "HTTP_0" that tells
+            // the user nothing. status_from_error() still yields 0 for this form.
+            if (status == 0) {
+                cb(Result<QJsonDocument>::err(QStringLiteral("Network error: %1").arg(safe_error).toStdString()));
                 return;
             }
 
@@ -205,36 +270,81 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback, const
 }
 
 void HttpClient::get(const QString& url, JsonCallback callback, const QObject* context, const Headers& extra_headers) {
-    LOG_DEBUG("HTTP", "GET " + log_url(url));
+    if (!http_is_sendable_url(url)) {
+        http_reject_bad_url(context ? context : this, std::move(callback));
+        return;
+    }
+    LOG_DEBUG("HTTP", "GET " + http_log_url(url, base_url_));
     auto* reply = nam_->get(build_request(url, extra_headers));
     handle_reply(reply, std::move(callback), context);
 }
 
 void HttpClient::post(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context,
                       const Headers& extra_headers) {
-    LOG_DEBUG("HTTP", "POST " + log_url(url));
+    if (!http_is_sendable_url(url)) {
+        http_reject_bad_url(context ? context : this, std::move(callback));
+        return;
+    }
+    LOG_DEBUG("HTTP", "POST " + http_log_url(url, base_url_));
     QJsonDocument doc(body);
     auto* reply = nam_->post(build_request(url, extra_headers), doc.toJson());
     handle_reply(reply, std::move(callback), context);
 }
 
+void HttpClient::post_form(const QString& url, const QMap<QString, QString>& fields, JsonCallback callback,
+                           const QObject* context, const Headers& extra_headers) {
+    if (!http_is_sendable_url(url)) {
+        http_reject_bad_url(context ? context : this, std::move(callback));
+        return;
+    }
+    LOG_DEBUG("HTTP", "POST(form) " + http_log_url(url, base_url_));
+
+    // Percent-encode by hand: QUrlQuery leaves '+' alone in a value, and a server
+    // decodes a bare '+' as a space — which would turn "+14155238886" into
+    // " 14155238886".
+    QByteArray encoded;
+    for (auto it = fields.constBegin(); it != fields.constEnd(); ++it) {
+        if (!encoded.isEmpty())
+            encoded += '&';
+        encoded += QUrl::toPercentEncoding(it.key()) + '=' + QUrl::toPercentEncoding(it.value());
+    }
+
+    QNetworkRequest req = build_request(url, extra_headers);
+    if (!extra_headers.contains("Content-Type"))
+        req.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+    auto* reply = nam_->post(req, encoded);
+    handle_reply(reply, std::move(callback), context);
+}
+
 void HttpClient::put(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context,
                      const Headers& extra_headers) {
-    LOG_DEBUG("HTTP", "PUT " + log_url(url));
+    if (!http_is_sendable_url(url)) {
+        http_reject_bad_url(context ? context : this, std::move(callback));
+        return;
+    }
+    LOG_DEBUG("HTTP", "PUT " + http_log_url(url, base_url_));
     QJsonDocument doc(body);
     auto* reply = nam_->put(build_request(url, extra_headers), doc.toJson());
     handle_reply(reply, std::move(callback), context);
 }
 
 void HttpClient::del(const QString& url, JsonCallback callback, const QObject* context, const Headers& extra_headers) {
-    LOG_DEBUG("HTTP", "DELETE " + log_url(url));
+    if (!http_is_sendable_url(url)) {
+        http_reject_bad_url(context ? context : this, std::move(callback));
+        return;
+    }
+    LOG_DEBUG("HTTP", "DELETE " + http_log_url(url, base_url_));
     auto* reply = nam_->deleteResource(build_request(url, extra_headers));
     handle_reply(reply, std::move(callback), context);
 }
 
 void HttpClient::del(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context,
                      const Headers& extra_headers) {
-    LOG_DEBUG("HTTP", "DELETE " + log_url(url));
+    if (!http_is_sendable_url(url)) {
+        http_reject_bad_url(context ? context : this, std::move(callback));
+        return;
+    }
+    LOG_DEBUG("HTTP", "DELETE " + http_log_url(url, base_url_));
     QJsonDocument doc(body);
     auto* reply =
         nam_->sendCustomRequest(build_request(url, extra_headers), "DELETE", doc.toJson(QJsonDocument::Compact));

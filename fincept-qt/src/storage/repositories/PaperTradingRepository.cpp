@@ -136,13 +136,34 @@ Result<void> PaperTradingRepository::update_balance(const QString& id, double ne
 }
 
 Result<void> PaperTradingRepository::delete_portfolio(const QString& id) {
-    // Cascade via foreign keys, but be explicit for safety
-    exec_write("DELETE FROM pt_trades WHERE portfolio_id = ?", {id});
-    exec_write("DELETE FROM pt_positions WHERE portfolio_id = ?", {id});
-    exec_write("DELETE FROM pt_orders WHERE portfolio_id = ?", {id});
-    exec_write("DELETE FROM pt_margin_blocks WHERE portfolio_id = ?", {id});
-    exec_write("DELETE FROM pt_holdings WHERE portfolio_id = ?", {id});
-    return exec_write("DELETE FROM pt_portfolios WHERE id = ?", {id});
+    // Cascade via foreign keys, but be explicit for safety. Six statements whose
+    // results used to be discarded: a failure part-way left a half-deleted
+    // portfolio (orders gone, positions still there). All-or-nothing now; if the
+    // caller already holds a transaction, BEGIN fails and we join theirs.
+    const bool own_tx = db().begin_transaction().is_ok();
+    Result<void> r = Result<void>::ok();
+    for (const char* sql : {"DELETE FROM pt_trades WHERE portfolio_id = ?",
+                            "DELETE FROM pt_positions WHERE portfolio_id = ?",
+                            "DELETE FROM pt_orders WHERE portfolio_id = ?",
+                            "DELETE FROM pt_margin_blocks WHERE portfolio_id = ?",
+                            "DELETE FROM pt_holdings WHERE portfolio_id = ?",
+                            "DELETE FROM pt_portfolios WHERE id = ?"}) {
+        r = exec_write(QString::fromLatin1(sql), {id});
+        if (r.is_err())
+            break;
+    }
+    if (own_tx) {
+        if (r.is_ok()) {
+            auto c = db().commit();
+            if (c.is_err()) {
+                db().rollback();
+                return c;
+            }
+        } else {
+            db().rollback();
+        }
+    }
+    return r;
 }
 
 // ── Orders ───────────────────────────────────────────────────────────────────

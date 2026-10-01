@@ -11,7 +11,9 @@ namespace fincept::services {
 // Tokenize headline into lowercase words for Jaccard similarity
 static QSet<QString> tokenize(const QString& text) {
     QSet<QString> tokens;
-    for (const auto& w : text.toLower().split(QRegularExpression("\\W+"), Qt::SkipEmptyParts)) {
+    // Compiled once — this runs per article on every filter pass.
+    static const QRegularExpression non_word_re("\\W+");
+    for (const auto& w : text.toLower().split(non_word_re, Qt::SkipEmptyParts)) {
         if (w.size() > 2)
             tokens.insert(w);
     }

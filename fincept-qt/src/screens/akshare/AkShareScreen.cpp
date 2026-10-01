@@ -550,10 +550,15 @@ QWidget* AkShareScreen::create_status_bar() {
 // ── Slots ───────────────────────────────────────────────────────────────────
 
 void AkShareScreen::on_source_clicked(int index) {
-    if (index == active_source_)
+    // Re-clicking the active source is a no-op, unless its endpoint list is empty (the load
+    // failed) — then it is the only way to retry.
+    if (index == active_source_ && endpoint_list_->count() > 0)
         return;
     active_source_ = index;
     active_endpoint_.clear();
+    ++request_seq_;      // anything still in flight belongs to the previous source
+    set_loading(false);
+    refresh_btn_->setEnabled(false);
 
     // Update button states
     for (int i = 0; i < source_btns_.size(); ++i) {
@@ -587,8 +592,9 @@ void AkShareScreen::on_endpoint_clicked(QListWidgetItem* item) {
 
     fincept::ScreenStateManager::instance().notify_changed(this);
 
-    // Auto-execute
-    on_execute();
+    // Auto-execute. Picking another endpoint while a query is running supersedes it (the old
+    // result is dropped as stale) instead of being silently ignored.
+    run_query();
 }
 
 void AkShareScreen::on_search_changed(const QString& text) {
@@ -602,7 +608,13 @@ void AkShareScreen::on_search_changed(const QString& text) {
 }
 
 void AkShareScreen::on_execute() {
-    if (loading_ || active_source_ < 0 || active_endpoint_.isEmpty())
+    if (loading_)
+        return;
+    run_query();
+}
+
+void AkShareScreen::run_query(bool force) {
+    if (active_source_ < 0 || active_endpoint_.isEmpty())
         return;
 
     QStringList args;
@@ -617,7 +629,7 @@ void AkShareScreen::on_execute() {
         args << param_end_->text().trimmed();
     }
 
-    execute_query(sources_[active_source_].script, active_endpoint_, args);
+    execute_query(sources_[active_source_].script, active_endpoint_, args, force);
 }
 
 void AkShareScreen::on_view_toggle() {
@@ -628,7 +640,11 @@ void AkShareScreen::on_view_toggle() {
 }
 
 void AkShareScreen::on_refresh() {
-    on_execute();
+    // REFRESH used to be a second EXECUTE and was answered from the 2-minute result cache, i.e. it
+    // refreshed nothing. Bypass the cache.
+    if (loading_)
+        return;
+    run_query(true);
 }
 
 // ── Data loading ────────────────────────────────────────────────────────────
@@ -648,28 +664,44 @@ void AkShareScreen::load_endpoints(const AkShareSource& source) {
 
     set_loading(true);
     endpoint_list_->clear();
+    endpoint_count_->setText(tr("%1 endpoints").arg(0));
+    if (empty_state_)
+        empty_state_->hide();
     data_status_->setText(tr("Loading endpoints..."));
 
     QPointer<AkShareScreen> self = this;
+    const int seq = ++request_seq_;
 
     services::akshare::AkShareService::instance().fetch_endpoints(
-        source.script, [self, script = source.script, cache_key](const services::akshare::EndpointsResult& r) {
+        source.script, [self, seq, script = source.script, cache_key](const services::akshare::EndpointsResult& r) {
             if (!self)
+                return;
+
+            // Cache a good listing even when the user has already moved on to another source...
+            if (r.success) {
+                fincept::CacheManager::instance().put(
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(r.data).toJson(QJsonDocument::Compact))),
+                    60 * 60, "akshare");
+                self->endpoint_cache_[script] = r.data;
+            }
+            // ...but never paint a stale listing over the current source's list.
+            if (seq != self->request_seq_)
                 return;
 
             self->set_loading(false);
 
             if (!r.success) {
+                const QString why = r.error.isEmpty() ? AkShareScreen::tr("Failed to load endpoints") : r.error;
                 self->data_status_->setText(AkShareScreen::tr("Failed to load endpoints"));
+                if (self->empty_state_) {
+                    self->empty_state_->setText(why.left(300) + AkShareScreen::tr("\n\nClick the source again to retry"));
+                    self->empty_state_->show();
+                }
+                LOG_ERROR("AkShare", "Endpoint load failed for " + script + ": " + why.left(300));
                 return;
             }
 
-            const QJsonObject obj = r.data;
-            fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 60 * 60,
-                "akshare");
-            self->endpoint_cache_[script] = obj;
-            self->populate_endpoint_list(obj);
+            self->populate_endpoint_list(r.data);
         });
 }
 
@@ -711,13 +743,17 @@ void AkShareScreen::populate_endpoint_list(const QJsonObject& result) {
                 }
             }
         }
-    } else if (data_obj.contains("available_endpoints") && data_obj["available_endpoints"].isArray()) {
-        for (auto ep : data_obj["available_endpoints"].toArray()) {
-            QString ep_name = ep.toString();
-            auto* item = new QListWidgetItem(ep_name);
-            item->setData(Qt::UserRole, ep_name);
-            endpoint_list_->addItem(item);
-            all_endpoints << ep_name;
+    } else {
+        // Flat lists: "available_endpoints" (most scripts) or "endpoints" (akshare_alternative).
+        const char* flat_key = data_obj.contains("available_endpoints") ? "available_endpoints" : "endpoints";
+        if (data_obj.value(flat_key).isArray()) {
+            for (auto ep : data_obj.value(flat_key).toArray()) {
+                QString ep_name = ep.toString();
+                auto* item = new QListWidgetItem(ep_name);
+                item->setData(Qt::UserRole, ep_name);
+                endpoint_list_->addItem(item);
+                all_endpoints << ep_name;
+            }
         }
     }
 
@@ -737,13 +773,34 @@ void AkShareScreen::populate_endpoint_list(const QJsonObject& result) {
     }
     data_status_->setText(all_endpoints.isEmpty() ? tr("No endpoints available") : tr("Select an endpoint"));
     LOG_INFO("AkShare", "Loaded " + QString::number(all_endpoints.size()) + " endpoints");
+    apply_pending_endpoint();
 }
 
-void AkShareScreen::execute_query(const QString& script, const QString& endpoint, const QStringList& args) {
+void AkShareScreen::apply_pending_endpoint() {
+    if (pending_endpoint_.isEmpty() || !endpoint_list_ || endpoint_list_->count() == 0)
+        return;
+    const QString ep = pending_endpoint_;
+    pending_endpoint_.clear();
+    for (int i = 0; i < endpoint_list_->count(); ++i) {
+        auto* item = endpoint_list_->item(i);
+        if (item && item->data(Qt::UserRole).toString() == ep) {
+            endpoint_list_->setCurrentItem(item);
+            active_endpoint_ = ep;
+            status_endpoint_->setText(ep);
+            refresh_btn_->setEnabled(!loading_);
+            return;
+        }
+    }
+}
+
+void AkShareScreen::execute_query(const QString& script, const QString& endpoint, const QStringList& args,
+                                  bool force) {
     QStringList full_args;
     full_args << endpoint << args;
 
     const QString cache_key = "akshare:query:" + script + ":" + full_args.join(":");
+    if (force)
+        fincept::CacheManager::instance().remove(cache_key);
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
@@ -772,10 +829,15 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
     record_count_->hide();
 
     QPointer<AkShareScreen> self = this;
+    const int seq = ++request_seq_;
 
     services::akshare::AkShareService::instance().query(
-        script, endpoint, args, [self, endpoint, cache_key](const services::akshare::QueryResult& r) {
+        script, endpoint, args, [self, seq, endpoint, cache_key](const services::akshare::QueryResult& r) {
             if (!self)
+                return;
+
+            // The user switched source or picked another endpoint while this ran: drop the result.
+            if (seq != self->request_seq_)
                 return;
 
             self->set_loading(false);
@@ -902,7 +964,8 @@ void AkShareScreen::display_json_data(const QJsonArray& rows_json) {
 }
 
 void AkShareScreen::display_error(const QString& error) {
-    data_status_->setText(tr("Error"));
+    // The JSON tab may not be the visible one — put the reason where the user is looking.
+    data_status_->setText(tr("Error: %1").arg(error.simplified().left(160)));
     record_count_->hide();
 
     // Clear table
@@ -951,9 +1014,13 @@ QVariantMap AkShareScreen::save_state() const {
 }
 
 void AkShareScreen::restore_state(const QVariantMap& state) {
+    // Remember the endpoint before switching source: the list may arrive asynchronously (script
+    // round trip) or synchronously (cache) and populate_endpoint_list() applies it either way.
+    pending_endpoint_ = state.value("endpoint").toString();
     const int src = state.value("source", -1).toInt();
     if (src >= 0 && src < sources_.size())
         on_source_clicked(src);
+    apply_pending_endpoint(); // same source as before: the list is already there
 
     const QString search = state.value("search").toString();
     if (search_input_ && !search.isEmpty())
@@ -969,26 +1036,6 @@ void AkShareScreen::restore_state(const QVariantMap& state) {
         param_start_->setText(state.value("param_start").toString());
     if (param_end_ && state.contains("param_end"))
         param_end_->setText(state.value("param_end").toString());
-
-    // Endpoint selection requires the endpoint list to be populated first,
-    // which happens async after load_endpoints(). Defer restore.
-    const QString ep = state.value("endpoint").toString();
-    if (!ep.isEmpty() && endpoint_list_) {
-        QPointer<AkShareScreen> self = this;
-        QTimer::singleShot(500, this, [self, ep]() {
-            if (!self || !self->endpoint_list_)
-                return;
-            for (int i = 0; i < self->endpoint_list_->count(); ++i) {
-                auto* item = self->endpoint_list_->item(i);
-                if (item && item->data(Qt::UserRole).toString() == ep) {
-                    self->endpoint_list_->setCurrentItem(item);
-                    self->active_endpoint_ = ep;
-                    self->status_endpoint_->setText(ep);
-                    break;
-                }
-            }
-        });
-    }
 
     if (json_view_ && state.contains("json_result"))
         json_view_->setPlainText(state.value("json_result").toString());

@@ -2,6 +2,7 @@
 
 #include "services/polymarket/PolymarketTypes.h"
 
+#include <QHash>
 #include <QNetworkAccessManager>
 #include <QObject>
 
@@ -27,6 +28,8 @@ class PolymarketService : public QObject {
     void search_markets(const QString& query, int limit = 50);
     void unified_search(const QString& query);
     void fetch_events(const QString& sort_by = "volume", int limit = 100, int offset = 0, bool closed = false);
+    /// Open events carrying the tag (label or slug as listed by fetch_tags()).
+    void fetch_events_by_tag(const QString& tag, const QString& sort_by = "volume", int limit = 100, int offset = 0);
     void fetch_event_by_id(int id);
     void fetch_related_markets(int event_id);
     void fetch_tags();
@@ -63,6 +66,10 @@ class PolymarketService : public QObject {
     // CLOB
     void order_book_ready(const OrderBook& book);
     void price_history_ready(const PriceHistory& history);
+    /// Same payload as price_history_ready, tagged with the token it was requested for
+    /// (the history rows themselves carry no token id, so a reply could be attributed
+    /// to whichever request the caller happened to issue last).
+    void price_history_for_token(const QString& token_id, const PriceHistory& history);
     void price_summary_ready(const PriceSummary& summary);
 
     // Data
@@ -85,6 +92,11 @@ class PolymarketService : public QObject {
     void get_clob(const QString& path, JsonCallback on_success, const QString& error_ctx = "CLOB");
     void get_data(const QString& path, JsonCallback on_success, const QString& error_ctx = "Data");
     void get_json(QNetworkAccessManager* nam, const QString& url, JsonCallback on_success, const QString& error_ctx);
+    void remember_tag_ids(const QJsonArray& tags);
+
+    /// lower-cased tag label / slug -> Gamma tag id. /markets only filters by tag_id;
+    /// the UI works in labels, so the mapping is learned from fetch_tags().
+    QHash<QString, QString> tag_ids_;
 
     QNetworkAccessManager* gamma_nam_ = nullptr;
     QNetworkAccessManager* clob_nam_ = nullptr;

@@ -9,7 +9,8 @@ class QListWidget;
 
 namespace fincept::ui {
 
-/// Phase 9: Ctrl+K palette overlay. Fuzzy search over `SuggestionIndex`.
+/// Phase 9: Ctrl+Shift+P palette overlay (Ctrl+K is the Component Browser).
+/// Fuzzy search over `SuggestionIndex`.
 ///
 /// Modal-ish: blocks input to the underlying frame while open (similar
 /// to VSCode's command palette). Esc dismisses. Enter invokes the

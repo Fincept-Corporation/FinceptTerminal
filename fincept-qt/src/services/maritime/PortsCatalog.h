@@ -36,6 +36,12 @@ class PortsCatalog : public QObject, public fincept::datahub::Producer {
     void refresh(const QStringList& topics) override;
     int max_requests_per_sec() const override;
 
+    /// The `context` string ports_found/error_occurred will echo for a given request.
+    /// Exposed so a caller can remember which request it is waiting for and drop the
+    /// replies of superseded ones (typeahead replies can arrive out of order).
+    static QString name_context(const QString& query);
+    static QString bbox_context(double min_lat, double max_lat, double min_lng, double max_lng);
+
     /// Free-text name search. Falls back to Marine Regions if Wikidata
     /// returns zero rows. `limit` caps the returned vector size.
     void search_by_name(const QString& query, int limit = 50);
@@ -63,8 +69,10 @@ class PortsCatalog : public QObject, public fincept::datahub::Producer {
     void fetch_wikidata_by_bbox(double min_lat, double max_lat, double min_lng, double max_lng, int limit,
                                 const QString& context);
     void fetch_marineregions_by_name(const QString& query, int limit, const QString& context);
+    /// `seed` = ports Wikidata already found for this bbox; they are merged with the OSM
+    /// hits (and returned on their own if Overpass fails) instead of being dropped.
     void fetch_overpass_by_bbox(double min_lat, double max_lat, double min_lng, double max_lng, int limit,
-                                const QString& context);
+                                const QString& context, const QVector<PortRecord>& seed = {});
 
     QNetworkAccessManager* nam_ = nullptr;
     bool hub_registered_ = false;

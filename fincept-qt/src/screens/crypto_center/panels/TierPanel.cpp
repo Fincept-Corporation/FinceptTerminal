@@ -260,13 +260,18 @@ void TierPanel::on_tier_update(const QVariant& v) {
         return;
     const auto s = v.value<fincept::wallet::TierStatus>();
     const double weight_ui = atomic_to_ui(s.weight_raw, s.decimals);
+    // next_threshold_raw is the ABSOLUTE weight of the next tier (e.g. 1,000),
+    // not what is still missing. The footer used to say "lock 1,000 veFNCPT to
+    // reach the next tier" to a wallet that already held 750 — overstating the
+    // gap. Show the remainder instead.
     const double next_ui = atomic_to_ui(s.next_threshold_raw, s.decimals);
+    const double remaining_ui = std::ceil(std::max(0.0, next_ui - weight_ui));
     render_state(s.tier, QStringLiteral("%1 veFNCPT").arg(format_token(weight_ui, 1)),
-                 next_ui > 0.0 ? QStringLiteral("%1 veFNCPT").arg(format_token(next_ui, 0)) : QString(), s.is_mock);
+                 (next_ui > 0.0 && remaining_ui > 0.0) ? format_token(remaining_ui, 0) : QString(), s.is_mock);
 }
 
 void TierPanel::render_state(fincept::wallet::TierStatus::Tier current, const QString& weight_ui_str,
-                             const QString& next_threshold_ui_str, bool is_mock) {
+                             const QString& remaining_ui_str, bool is_mock) {
     using Tier = fincept::wallet::TierStatus::Tier;
 
     auto set_row = [](TierRow& row, bool achieved, bool is_current) {
@@ -294,8 +299,14 @@ void TierPanel::render_state(fincept::wallet::TierStatus::Tier current, const QS
     if (current_pubkey_.isEmpty()) {
         footer_->setText(tr("Connect a wallet to see your tier."));
         footer_->show();
-    } else if (!next_threshold_ui_str.isEmpty()) {
-        footer_->setText(tr("Next: lock %1 to reach the next tier.").arg(next_threshold_ui_str));
+    } else if (is_mock) {
+        // The tier above is derived from the staking producer's sample
+        // positions, not from this wallet — say so under the number too.
+        footer_->setText(tr("DEMO — derived from sample positions, not your on-chain locks "
+                            "(fincept_lock is not deployed)."));
+        footer_->show();
+    } else if (!remaining_ui_str.isEmpty()) {
+        footer_->setText(tr("%1 more veFNCPT weight needed to reach the next tier.").arg(remaining_ui_str));
         footer_->show();
     } else if (current == Tier::Gold) {
         footer_->setText(tr("All Fincept Terminal features unlocked."));

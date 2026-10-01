@@ -3,6 +3,7 @@
 
 #include "core/symbol/SymbolDragSource.h"
 #include "core/symbol/SymbolRef.h"
+#include "screens/crypto_trading/CryptoTypes.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -78,6 +79,11 @@ CryptoWatchlist::CryptoWatchlist(QWidget* parent) : QWidget(parent) {
     filter_edit_->setFixedHeight(24);
     connect(filter_edit_, &QLineEdit::textChanged, this, &CryptoWatchlist::on_filter_changed);
     layout->addWidget(filter_edit_);
+
+    search_timer_ = new QTimer(this); // UI-only debounce, not a data-refresh timer
+    search_timer_->setSingleShot(true);
+    search_timer_->setInterval(250);
+    connect(search_timer_, &QTimer::timeout, this, [this]() { emit search_requested(pending_search_); });
 
     // Table — 3 columns: Symbol | Price | Chg%
     // No horizontal scrollbar — all 3 columns fit the watchlist width.
@@ -216,16 +222,9 @@ void CryptoWatchlist::update_prices(const QVector<trading::TickerData>& tickers)
         if (!sym_item || !price_item || !chg_item)
             continue;
 
-        // Format price — fewer decimals for large prices to save width
-        QString price_str;
-        if (e.price >= 1000.0)
-            price_str = QString::number(e.price, 'f', 2);
-        else if (e.price >= 1.0)
-            price_str = QString::number(e.price, 'f', 4);
-        else
-            price_str = QString::number(e.price, 'f', 6);
-
-        price_item->setText(price_str);
+        // Magnitude-scaled precision (same as the rest of the screen) — the old
+        // fixed 6 dp rendered a 0.0000085 pair as "0.000009".
+        price_item->setText(format_price_plain(e.price));
         price_item->setForeground(kColorPrimary());
 
         chg_item->setText(QString("%1%").arg(e.change_pct, 0, 'f', 2));
@@ -265,8 +264,12 @@ void CryptoWatchlist::on_cell_clicked(int row, int /*col*/) {
 void CryptoWatchlist::on_filter_changed(const QString& text) {
     const QString filter = text.trimmed().toUpper();
     showing_search_ = (filter.length() >= 2);
-    if (showing_search_)
-        emit search_requested(filter);
+    if (showing_search_) {
+        pending_search_ = filter;
+        search_timer_->start(); // restarts the debounce window on every keystroke
+    } else {
+        search_timer_->stop();
+    }
     rebuild_table();
 }
 
@@ -352,14 +355,8 @@ void CryptoWatchlist::rebuild_table() {
 
         // Price — adaptive decimal places
         QString price_str = "--";
-        if (e.has_data) {
-            if (e.price >= 1000.0)
-                price_str = QString::number(e.price, 'f', 2);
-            else if (e.price >= 1.0)
-                price_str = QString::number(e.price, 'f', 4);
-            else
-                price_str = QString::number(e.price, 'f', 6);
-        }
+        if (e.has_data)
+            price_str = format_price_plain(e.price);
         ensure(1, price_str, e.has_data ? kColorPrimary() : kColorDim(), Qt::AlignRight | Qt::AlignVCenter);
 
         ensure(2, e.has_data ? QString("%1%").arg(e.change_pct, 0, 'f', 2) : QString("--"),

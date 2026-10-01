@@ -22,10 +22,21 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     if params is None:
         params = {}
-    if API_KEY:
-        params["key"] = API_KEY
+    # The Census API now redirects every keyless request to missing_key.html (an empty 302 body,
+    # which used to surface as the cryptic "Expecting value: line 1 column 1"). Say what is wrong.
+    if not API_KEY:
+        return {"error": "Census API key required. Set CENSUS_API_KEY (Settings > Credentials) - "
+                         "free at https://api.census.gov/data/key_signup.html",
+                "error_code": "MISSING_API_KEY"}
+    params["key"] = API_KEY
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=30, allow_redirects=False)
+        if response.status_code in (301, 302, 303, 307, 308):
+            target = response.headers.get("Location", "")
+            if "invalid_key" in target or "missing_key" in target:
+                return {"error": "Census API rejected the key (CENSUS_API_KEY invalid or not yet activated).",
+                        "error_code": "INVALID_API_KEY"}
+            response = session.get(target, timeout=30)
         response.raise_for_status()
         data = response.json()
         if isinstance(data, list) and len(data) > 1:
@@ -34,9 +45,9 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
             return {"headers": headers, "data": [dict(zip(headers, row)) for row in rows], "count": len(rows)}
         return data
     except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        return {"error": f"HTTP {e.response.status_code}: {str(e).replace(API_KEY, '***')}"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
+        return {"error": f"Request failed: {str(e).replace(API_KEY, '***')}"}
     except (json.JSONDecodeError, ValueError) as e:
         return {"error": f"JSON decode error: {str(e)}"}
 

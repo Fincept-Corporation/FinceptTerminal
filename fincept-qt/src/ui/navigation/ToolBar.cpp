@@ -151,7 +151,7 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
     connect(clock_timer_, &QTimer::timeout, this, &ToolBar::update_clock);
-    clock_timer_->start();
+    // Started in showEvent() and stopped in hideEvent() (§P3).
     update_clock();
 
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,
@@ -169,6 +169,17 @@ void ToolBar::changeEvent(QEvent* e) {
         retranslateUi();
     }
     QWidget::changeEvent(e);
+}
+
+void ToolBar::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    update_clock(); // catch up immediately after being hidden
+    clock_timer_->start();
+}
+
+void ToolBar::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    clock_timer_->stop();
 }
 
 void ToolBar::retranslateUi() {

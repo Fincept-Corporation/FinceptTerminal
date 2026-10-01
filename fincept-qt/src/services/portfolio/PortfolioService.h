@@ -12,6 +12,10 @@
 #include <QSet>
 #include <QTimer>
 
+namespace fincept {
+struct CustomIndex; // storage/repositories/CustomIndexRepository.h
+}
+
 namespace fincept::services {
 
 /// Singleton service managing portfolio data, live quotes, and computed metrics.
@@ -98,6 +102,15 @@ class PortfolioService : public QObject {
     // ── Cache control ────────────────────────────────────────────────────────
     void invalidate_cache(const QString& portfolio_id);
 
+    // ── Custom indices ───────────────────────────────────────────────────────
+    /// Current level of @p idx given the live prices in @p summary. A
+    /// constituent with no live price falls back to its creation price, so an
+    /// index built on a portfolio the summary does not describe reads as its
+    /// base value rather than garbage. Shared by the Indices view (creation)
+    /// and the per-refresh recorder so the two can never disagree.
+    static double compute_custom_index_value(const fincept::CustomIndex& idx,
+                                             const portfolio::PortfolioSummary& summary);
+
   signals:
     void portfolios_loaded(QVector<portfolio::Portfolio> portfolios);
     void portfolio_created(portfolio::Portfolio portfolio);
@@ -115,6 +128,9 @@ class PortfolioService : public QObject {
     void asset_sold(QString portfolio_id);
 
     void export_complete(QString file_path);
+    /// An export could not be written (unreadable portfolio or unwritable
+    /// path). Previously this was log-only, so the user saw nothing happen.
+    void export_failed(QString file_path, QString error);
     void import_complete(portfolio::ImportResult result);
 
     /// Pairwise Pearson correlation matrix keyed by "SYM1|SYM2".
@@ -149,6 +165,15 @@ class PortfolioService : public QObject {
     void finalize_summary(const QString& portfolio_id, const QVector<portfolio::PortfolioAsset>& assets,
                           const portfolio::Portfolio& portfolio, const QHash<QString, QuoteData>& quote_map);
 
+    /// Persist today's level for every custom index built on this portfolio, so
+    /// the Indices view has a real value history instead of only the level at
+    /// creation time.
+    void record_custom_index_values(const portfolio::PortfolioSummary& summary);
+
+    /// Single exit path for a benchmark download (live or cache hit): refreshes
+    /// the SPY beta cache and fires both history signals.
+    void publish_benchmark(const QString& symbol, const QStringList& dates, const QVector<double>& closes);
+
     /// Try to fetch live quotes via the broker linked to `portfolio.broker_account_id`.
     /// On success, calls finalize_summary with broker-sourced QuoteData.
     /// On any failure (no account, disconnected, broker null, API error),
@@ -181,6 +206,33 @@ class PortfolioService : public QObject {
     // Canonical fallback used wherever the live FRED rate is unavailable.
     static constexpr double kDefaultRiskFreeRate = 0.04; // 4%
     double rf_rate_ = kDefaultRiskFreeRate;              // default until FRED responds
+
+    // ── Aux-fetch caches ─────────────────────────────────────────────────────
+    // The screen re-requests correlation + benchmark history on EVERY summary
+    // refresh (60 s by default). Each is a Python spawn that downloads from
+    // yfinance, and neither changes minute to minute, so serve repeats from
+    // memory and collapse identical in-flight requests into one.
+    struct CorrelationCache {
+        QString key; // sorted symbol list
+        qint64 timestamp = 0;
+        QHash<QString, double> matrix;
+    };
+    CorrelationCache corr_cache_;
+    QString corr_inflight_key_;
+    struct BenchmarkCache {
+        QStringList dates;
+        QVector<double> closes;
+        qint64 timestamp = 0;
+    };
+    QHash<QString, BenchmarkCache> bench_cache_; // "SYMBOL|period"
+    QSet<QString> bench_inflight_;
+    static constexpr int kCorrelationTtlSec = 15 * 60;
+    static constexpr int kBenchmarkTtlSec = 30 * 60;
+
+    // ── Sector-resolved refresh debounce ─────────────────────────────────────
+    // A fresh import resolves one sector per holding; each resolution used to
+    // trigger its own quote fetch + summary rebuild. Batch them.
+    QSet<QString> sector_refresh_pending_;
 
     // ── Backfill state ───────────────────────────────────────────────────────
     // Per-portfolio guard so compute_metrics doesn't kick off backfill on

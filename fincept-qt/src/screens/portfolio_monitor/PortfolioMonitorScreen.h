@@ -36,6 +36,7 @@ class PortfolioMonitorScreen : public QWidget {
 
   protected:
     void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private slots:
     void rebuild_positions();

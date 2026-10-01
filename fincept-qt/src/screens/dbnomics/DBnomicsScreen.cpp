@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "datahub/DataHub.h"
 #include "screens/dbnomics/DBnomicsChartWidget.h"
 #include "screens/dbnomics/DBnomicsDataTable.h"
 #include "screens/dbnomics/DBnomicsSelectionPanel.h"
@@ -40,7 +41,8 @@ DBnomicsScreen::DBnomicsScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::DBnomicsService::providers_loaded, this, &DBnomicsScreen::on_providers_loaded);
     connect(&svc, &services::DBnomicsService::datasets_loaded, this, &DBnomicsScreen::on_datasets_loaded);
     connect(&svc, &services::DBnomicsService::series_loaded, this, &DBnomicsScreen::on_series_loaded);
-    connect(&svc, &services::DBnomicsService::observations_loaded, this, &DBnomicsScreen::on_observations_loaded);
+    // Observations arrive through the DataHub (watch_series()), not the service's broadcast signal:
+    // that signal also fires for MCP-tool fetches and hub refreshes of other series.
     connect(&svc, &services::DBnomicsService::search_results_loaded, this, &DBnomicsScreen::on_search_results_loaded);
     connect(&svc, &services::DBnomicsService::error_occurred, this, &DBnomicsScreen::on_service_error);
 
@@ -99,11 +101,65 @@ void DBnomicsScreen::showEvent(QShowEvent* event) {
         selection_panel_->set_providers_loading(true);
         services::DBnomicsService::instance().fetch_providers();
     }
+    // Visibility-driven hub lifecycle (P3 / D3): resume the series this screen shows. A cached,
+    // still-fresh observation set is delivered immediately on subscribe.
+    const QSet<QString> watched = watched_series_;
+    for (const QString& series_id : watched)
+        watch_series(series_id);
 }
 
 void DBnomicsScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+    datahub::DataHub::instance().unsubscribe(this);
     LOG_INFO("DBnomicsScreen", "Screen hidden");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DataHub subscriptions for observations
+// ─────────────────────────────────────────────────────────────────────────────
+QString DBnomicsScreen::series_topic(const QString& series_id) {
+    const QStringList parts = series_id.split('/');
+    if (parts.size() != 3 || parts[0].isEmpty() || parts[1].isEmpty() || parts[2].isEmpty())
+        return {};
+    // The producer splits the topic on ':' into exactly 4 segments, so a code containing ':' cannot
+    // be addressed through the hub.
+    if (series_id.contains(':'))
+        return {};
+    return QStringLiteral("dbnomics:") + parts.join(':');
+}
+
+void DBnomicsScreen::watch_series(const QString& series_id) {
+    watched_series_.insert(series_id);
+    const QString topic = series_topic(series_id);
+    if (topic.isEmpty() || !isVisible())
+        return; // hidden: showEvent() subscribes everything in watched_series_
+    auto& hub = datahub::DataHub::instance();
+    hub.unsubscribe(this, topic); // idempotent re-subscribe (no duplicate delivery)
+    hub.subscribe<services::DbnDataPoint>(
+        this, topic, [this](const services::DbnDataPoint& point) { on_observations_loaded(point); });
+}
+
+void DBnomicsScreen::unwatch_unused_series() {
+    QSet<QString> in_use;
+    if (!pending_series_id_.isEmpty())
+        in_use.insert(pending_series_id_);
+    for (const auto& s : std::as_const(single_series_))
+        in_use.insert(s.series_id);
+    for (const auto& slot : std::as_const(slots_))
+        for (const auto& s : slot.series)
+            in_use.insert(s.series_id);
+
+    auto& hub = datahub::DataHub::instance();
+    for (auto it = watched_series_.begin(); it != watched_series_.end();) {
+        if (in_use.contains(*it)) {
+            ++it;
+            continue;
+        }
+        const QString topic = series_topic(*it);
+        if (!topic.isEmpty())
+            hub.unsubscribe(this, topic);
+        it = watched_series_.erase(it);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -511,12 +567,16 @@ void DBnomicsScreen::on_series_loaded(const QVector<services::DbnSeriesInfo>& se
 }
 
 void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& point) {
-    last_loaded_data_ = point;
-    has_pending_data_ = true;
-
-    // Always stop loading spinners — data has arrived
-    chart_widget_->set_loading(false);
-    data_table_->set_loading(false);
+    // Hub deliveries also cover refreshes of series that are already on screen. Only the series the
+    // user just picked becomes the "current" one for ADD TO SINGLE VIEW / ADD TO SLOT, and only its
+    // arrival ends the loading spinner.
+    const bool is_selection = point.series_id == pending_series_id_;
+    if (is_selection) {
+        last_loaded_data_ = point;
+        has_pending_data_ = true;
+        chart_widget_->set_loading(false);
+        data_table_->set_loading(false);
+    }
 
     // Update every place this series is already shown — single view AND any
     // comparison slot (slots used to be skipped, so REFRESH silently left
@@ -543,7 +603,7 @@ void DBnomicsScreen::on_observations_loaded(const services::DbnDataPoint& point)
         render_single_view();
     if (in_slot)
         rebuild_comparison_view();
-    if (in_view || in_slot)
+    if (in_view || in_slot || !is_selection)
         return;
 
     // Not yet in view — prompt user
@@ -582,17 +642,16 @@ void DBnomicsScreen::on_refresh_clicked() {
     // Refresh every loaded series, in BOTH views — comparison slots used to be
     // ignored entirely, so REFRESH looked like a no-op in COMPARE mode.
     QSet<QString> seen;
-    int n = 0;
+    QStringList topics;
     auto refresh_one = [&](const services::DbnDataPoint& s) {
         if (seen.contains(s.series_id))
             return;
         seen.insert(s.series_id);
-        // series_id format: "PROV/DS/CODE"
-        const QStringList parts = s.series_id.split('/');
-        if (parts.size() == 3) {
-            services::DBnomicsService::instance().fetch_observations(parts[0], parts[1], parts[2]);
-            ++n;
-        }
+        const QString topic = series_topic(s.series_id);
+        if (topic.isEmpty())
+            return;
+        watch_series(s.series_id);
+        topics << topic;
     };
 
     for (const auto& s : std::as_const(single_series_))
@@ -601,11 +660,14 @@ void DBnomicsScreen::on_refresh_clicked() {
         for (const auto& s : slot.series)
             refresh_one(s);
 
-    if (n == 0) {
+    if (topics.isEmpty()) {
         set_status(tr("Nothing to refresh — add a series first"));
         return;
     }
-    set_status(tr("Refreshing %1 series…").arg(n));
+    // force=true: a user-driven refresh bypasses the topic's min_interval (per-producer rate
+    // limiting still applies).
+    datahub::DataHub::instance().request(topics, /*force=*/true);
+    set_status(tr("Refreshing %1 series…").arg(topics.size()));
 }
 
 void DBnomicsScreen::on_export_csv() {
@@ -725,9 +787,20 @@ void DBnomicsScreen::on_dataset_selected(const QString& code) {
 
 void DBnomicsScreen::on_series_selected(const QString& prov, const QString& ds, const QString& code) {
     set_status(tr("Fetching observations..."));
+    const QString series_id = prov + "/" + ds + "/" + code;
+    const QString topic = series_topic(series_id);
+    if (topic.isEmpty()) {
+        set_status(tr("ERROR [observations]: unsupported series id %1").arg(series_id));
+        LOG_WARN("DBnomicsScreen", "Series id cannot be addressed through the hub: " + series_id);
+        return;
+    }
+    pending_series_id_ = series_id;
+    unwatch_unused_series(); // a previously browsed series that never made it into a view stops refreshing
     chart_widget_->set_loading(true);
     data_table_->set_loading(true);
-    services::DBnomicsService::instance().fetch_observations(prov, ds, code);
+    // Subscribe first (a still-fresh cached set is delivered at once), then ask for a refresh.
+    watch_series(series_id);
+    datahub::DataHub::instance().request(topic, /*force=*/true);
     ScreenStateManager::instance().notify_changed(this);
 }
 
@@ -789,6 +862,8 @@ void DBnomicsScreen::on_clear_all() {
     single_series_.clear();
     slots_.clear();
     has_pending_data_ = false;
+    pending_series_id_.clear();
+    unwatch_unused_series();
     chart_widget_->clear();
     data_table_->clear();
     selection_panel_->clear_slots();
@@ -851,6 +926,7 @@ void DBnomicsScreen::on_remove_from_slot(int slot_index, const QString& series_i
 
     selection_panel_->update_slot_series(slot_index, slot.series);
     rebuild_comparison_view();
+    unwatch_unused_series();
 
     set_status(tr("Removed series from slot %1").arg(slot_index + 1));
     LOG_INFO("DBnomicsScreen", QString("Removed %1 from slot %2").arg(series_id).arg(slot_index));
@@ -862,6 +938,7 @@ void DBnomicsScreen::on_remove_slot(int slot_index) {
     slots_.removeAt(slot_index);
     selection_panel_->remove_comparison_slot(slot_index);
     rebuild_comparison_view();
+    unwatch_unused_series();
     set_status(tr("Slot removed. %1 slot(s) remaining").arg(slots_.size()));
     LOG_INFO("DBnomicsScreen", QString("Slot %1 removed. Remaining: %2").arg(slot_index + 1).arg(slots_.size()));
 }
@@ -1064,6 +1141,10 @@ void DBnomicsScreen::restore_state(const QVariantMap& state) {
     if (mode == 1 && compare_btn_)
         compare_btn_->click();
 
+    // The handlers below read the panel's remembered provider/dataset (on_dataset_selected() asks it
+    // for the provider), which a fresh panel doesn't have — seed it first, otherwise the dataset
+    // and series requests were issued with an empty provider.
+    selection_panel_->restore_selection(prov, ds, ser);
     if (!prov.isEmpty())
         on_provider_selected(prov);
     if (!ds.isEmpty())

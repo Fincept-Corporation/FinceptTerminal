@@ -131,7 +131,19 @@ void CryptoTradingScreen::flush_ws_updates() {
                     };
                     Result r;
                     try {
-                        const int orders_before = pt_get_orders(pid, "open").size();
+                        // Resting paper orders are stored with status "pending"/"partial"
+                        // (never "open"), and a resting order that fills drops out of that
+                        // set. SL/TP triggers close positions without touching orders, so
+                        // also watch the newest trade id — either change means a fill.
+                        const auto resting_orders = [&pid]() {
+                            return pt_get_orders(pid, "pending").size() + pt_get_orders(pid, "partial").size();
+                        };
+                        const auto newest_trade_id = [&pid]() {
+                            const auto t = pt_get_trades(pid, 1);
+                            return t.isEmpty() ? QString() : t.first().id;
+                        };
+                        const auto orders_before = resting_orders();
+                        const QString trade_before = newest_trade_id();
                         for (const auto& ticker : batch) {
                             if (ticker.last <= 0)
                                 continue;
@@ -145,8 +157,7 @@ void CryptoTradingScreen::flush_ws_updates() {
                             OrderMatcher::instance().check_sl_tp_triggers(pid, ticker.symbol, ticker.last);
                         }
                         r.positions = pt_get_positions(pid);
-                        const int orders_after = pt_get_orders(pid, "open").size();
-                        r.fill_occurred = orders_after < orders_before;
+                        r.fill_occurred = resting_orders() != orders_before || newest_trade_id() != trade_before;
                         if (r.fill_occurred) {
                             r.portfolio = pt_get_portfolio(pid);
                             r.orders = pt_get_orders(pid);
@@ -349,6 +360,13 @@ void CryptoTradingScreen::refresh_market_info() {
                     return;
                 if (self->selected_symbol_ != symbol)
                     return; // user switched symbols — discard stale result
+                if (fr.symbol.isEmpty()) {
+                    // Daemon error / venue without funding (spot): keep the readouts at "--"
+                    // rather than publishing a fabricated 0.0000 % / $0 mark, and hide the
+                    // ribbon's mark/index chips.
+                    self->ticker_bar_->update_mark_price(0.0, 0.0);
+                    return;
+                }
                 self->market_info_cache_.funding_rate = fr.funding_rate;
                 self->market_info_cache_.mark_price = fr.mark_price;
                 self->market_info_cache_.index_price = fr.index_price;
@@ -371,6 +389,8 @@ void CryptoTradingScreen::refresh_market_info() {
                     return;
                 if (self->selected_symbol_ != symbol)
                     return; // user switched symbols — discard stale result
+                if (oi.symbol.isEmpty())
+                    return; // daemon error / unsupported — leave "--" instead of a fake $0 OI
                 self->market_info_cache_.open_interest = oi.open_interest;
                 self->market_info_cache_.open_interest_value = oi.open_interest_value;
                 self->market_info_cache_.has_data = true;

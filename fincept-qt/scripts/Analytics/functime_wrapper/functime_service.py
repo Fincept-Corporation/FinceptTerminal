@@ -108,7 +108,25 @@ def _series_from_list(values, dates=None, name="series"):
         idx = pd.to_datetime(dates)
     else:
         idx = pd.date_range("2020-01-01", periods=len(values), freq="B")
-    return pd.Series(np.asarray(values, dtype=float), index=idx, name=name)
+    series = pd.Series(np.asarray(values, dtype=float), index=idx, name=name)
+    # Without caller-supplied dates the index is an invented business-day calendar
+    # starting 2020-01-01; remember that so results are labelled by position rather
+    # than presented as real (and long-past) dates.
+    series.attrs["synthetic_index"] = not dates
+    return series
+
+
+def _stamp(ref, ts, step=None):
+    """Label for one point: the ISO date when the caller supplied dates, otherwise an
+    observation number ("obs 12") or, for forecast steps, "t+<step>"."""
+    if not ref.attrs.get("synthetic_index"):
+        return str(ts)[:10]
+    if step is not None:
+        return f"t+{step}"
+    try:
+        return f"obs {int(ref.index.get_loc(ts))}"
+    except Exception:
+        return str(ts)[:10]
 
 
 def _safe_float(v, default=0.0):
@@ -131,16 +149,20 @@ def _safe_int(v, default=0):
         return default
 
 
-def _sample_curve(series, max_points=250):
-    """Return [{date, value}] sampled to ~max_points entries, always including the last."""
+def _sample_curve(series, max_points=250, ref=None):
+    """Return [{date, value}] sampled to ~max_points entries, always including the last.
+
+    ``ref`` is the series whose index provenance (real vs generated dates) applies --
+    derived series such as a trend component carry no attrs of their own."""
     out = []
     if series is None or len(series) == 0:
         return out
+    ref = ref if ref is not None else series
     step = max(1, len(series) // max_points)
     for i, (d, v) in enumerate(series.items()):
         if i % step == 0:
-            out.append({"date": str(d)[:10], "value": _safe_float(v)})
-    last_date = str(series.index[-1])[:10]
+            out.append({"date": _stamp(ref, d), "value": _safe_float(v)})
+    last_date = _stamp(ref, series.index[-1])
     if not out or out[-1]["date"] != last_date:
         out.append({"date": last_date, "value": _safe_float(series.iloc[-1])})
     return out
@@ -293,7 +315,7 @@ def op_forecast(data):
     in_sample_curve = []
     for d, v in fitted.items():
         if not math.isnan(v):
-            in_sample_curve.append({"date": str(d)[:10], "value": _safe_float(v)})
+            in_sample_curve.append({"date": _stamp(series, d), "value": _safe_float(v)})
     # Subsample fitted to ~250 too
     if len(in_sample_curve) > 250:
         step = max(1, len(in_sample_curve) // 250)
@@ -312,8 +334,8 @@ def op_forecast(data):
         "history": history,
         "fitted": in_sample_curve,
         "forecast": [
-            {"date": str(d)[:10], "value": _safe_float(v)}
-            for d, v in zip(forecast_dates, forecast)
+            {"date": _stamp(series, d, step=i + 1), "value": _safe_float(v)}
+            for i, (d, v) in enumerate(zip(forecast_dates, forecast))
         ],
         "forecast_min": _safe_float(min(forecast) if forecast else 0.0),
         "forecast_max": _safe_float(max(forecast) if forecast else 0.0),
@@ -390,7 +412,7 @@ def op_anomaly_detection(data):
     for i in range(n):
         if flags[i]:
             anomalies.append({
-                "date": str(series.index[i])[:10],
+                "date": _stamp(series, series.index[i]),
                 "value": _safe_float(arr[i]),
                 "score": _safe_float(scores[i]),
                 "index": int(i),
@@ -478,9 +500,9 @@ def op_seasonality(data):
         "seasonal_strength": _safe_float(seasonal_strength),
         "residual_std": _safe_float(float(resid.std())),
         "history": _sample_curve(series, 300),
-        "trend": _sample_curve(trend, 300),
-        "seasonal": _sample_curve(seasonal, 300),
-        "residual": _sample_curve(resid, 300),
+        "trend": _sample_curve(trend, 300, ref=series),
+        "seasonal": _sample_curve(seasonal, 300, ref=series),
+        "residual": _sample_curve(resid, 300, ref=series),
     }
 
 
@@ -622,13 +644,13 @@ def op_confidence_intervals(data):
 
     intervals = [
         {
-            "date": str(d)[:10],
+            "date": _stamp(series, d, step=i + 1),
             "point": _safe_float(p),
             "lower": _safe_float(l),
             "upper": _safe_float(u),
             "width": _safe_float(u - l),
         }
-        for d, p, l, u in zip(forecast_dates, point, lower, upper)
+        for i, (d, p, l, u) in enumerate(zip(forecast_dates, point, lower, upper))
     ]
 
     return {

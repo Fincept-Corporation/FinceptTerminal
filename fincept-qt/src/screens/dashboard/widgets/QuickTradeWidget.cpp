@@ -318,14 +318,25 @@ void QuickTradeWidget::submit_order() {
     // entry (Equity/Crypto Trading), which has account selection, paper/live
     // routing and an explicit confirmation. (Wiring Quick Trade to an account is
     // tracked as a follow-up.)
-    QMessageBox::information(
-        this, tr("Quick Trade"),
-        tr("Quick Trade is a preview widget and is not connected to a trading account — no order was placed.\n\n"
-           "To place %1 %2 %3, use the Equity Trading or Crypto Trading screen, which routes the order to your "
-           "selected broker/paper account with confirmation.")
-            .arg(side)
-            .arg(qty, 0, 'f', 0)
-            .arg(sym));
+    // The dialog now offers a one-click hand-off: "Open Equity Trading" selects
+    // this symbol there via nav.open_symbol. That is navigation only - it never
+    // creates or sends an order; the order is still entered and confirmed on
+    // the trading screen.
+    QMessageBox box(QMessageBox::Information, tr("Quick Trade"),
+                    tr("Quick Trade is a preview widget and is not connected to a trading account — no order was "
+                       "placed.\n\n"
+                       "To place %1 %2 %3, use the Equity Trading or Crypto Trading screen, which routes the order to "
+                       "your selected broker/paper account with confirmation.")
+                        .arg(side)
+                        .arg(qty, 0, 'f', 0)
+                        .arg(sym),
+                    QMessageBox::NoButton, this);
+    QPushButton* open_btn = box.addButton(tr("Open Equity Trading"), QMessageBox::AcceptRole);
+    box.addButton(QMessageBox::Close);
+    box.setDefaultButton(QMessageBox::Close);
+    box.exec();
+    if (box.clickedButton() == open_btn)
+        open_symbol(sym, QStringLiteral("equity_trading"));
 }
 
 void QuickTradeWidget::retranslateUi() {

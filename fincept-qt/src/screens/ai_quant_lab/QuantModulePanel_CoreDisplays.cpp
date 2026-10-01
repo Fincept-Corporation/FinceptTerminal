@@ -457,6 +457,64 @@ void QuantModulePanel::display_model_library_result(const QString& command, cons
         return;
     }
 
+    // ── run_backtest ─────────────────────────────────────────────────────────
+    // Metrics are a nested object, which the generic key/value table skips; render them as cards.
+    if (command == "run_backtest") {
+        const auto m = payload.value("metrics").toObject();
+        const auto period = payload.value("period").toObject();
+        auto pct = [&m](const char* key, int decimals = 2) {
+            const QJsonValue v = m.value(QLatin1String(key));
+            return v.isNull() || v.isUndefined() ? QString::fromUtf8("—") : gs_fmt_pct(v.toDouble(), decimals);
+        };
+        auto num = [&m](const char* key, int decimals = 3) {
+            const QJsonValue v = m.value(QLatin1String(key));
+            return v.isNull() || v.isUndefined() ? QString::fromUtf8("—") : gs_fmt_num(v.toDouble(), decimals);
+        };
+        const double total_ret = m.value("total_return").toDouble();
+        const double sharpe = m.value("sharpe_ratio").toDouble();
+
+        QList<QWidget*> row1 = {
+            gs_make_card(tr("TOTAL RETURN"), pct("total_return"), this, gs_pos_neg_color(total_ret)),
+            gs_make_card(tr("ANN. RETURN"), pct("annualized_return"), this,
+                         gs_pos_neg_color(m.value("annualized_return").toDouble())),
+            gs_make_card(tr("SHARPE"), num("sharpe_ratio"), this,
+                         sharpe >= 1.0 ? ui::colors::POSITIVE()
+                         : sharpe > 0  ? ui::colors::WARNING()
+                                       : ui::colors::NEGATIVE()),
+            gs_make_card(tr("MAX DRAWDOWN"), pct("max_drawdown"), this, ui::colors::NEGATIVE()),
+        };
+        results_layout_->addWidget(gs_card_row(row1, this));
+
+        QList<QWidget*> row2 = {
+            gs_make_card(tr("VOLATILITY"), pct("volatility"), this),
+            gs_make_card(tr("WIN RATE"), pct("win_rate", 1), this),
+            gs_make_card(tr("EXCESS ANN. RETURN"), pct("excess_annualized_return"), this,
+                         gs_pos_neg_color(m.value("excess_annualized_return").toDouble())),
+            gs_make_card(tr("INFO RATIO"), num("information_ratio"), this),
+        };
+        results_layout_->addWidget(gs_card_row(row2, this));
+
+        QList<QWidget*> row3 = {
+            gs_make_card(tr("SORTINO"), num("sortino_ratio"), this),
+            gs_make_card(tr("CALMAR"), num("calmar_ratio"), this),
+            gs_make_card(tr("AVG DAILY TURNOVER"), pct("avg_daily_turnover", 1), this),
+            gs_make_card(tr("TRADING DAYS"), QString::number(m.value("trading_days").toInt()), this),
+        };
+        results_layout_->addWidget(gs_card_row(row3, this));
+
+        const QString bench = payload.value("benchmark").toString();
+        auto* lbl = new QLabel(tr("%1  |  top-%2, drop %3  |  %4 → %5  |  benchmark: %6")
+                                   .arg(payload.value("model_id").toString())
+                                   .arg(payload.value("topk").toInt())
+                                   .arg(payload.value("n_drop").toInt())
+                                   .arg(period.value("start").toString(), period.value("end").toString(),
+                                        bench.isEmpty() ? tr("none") : bench));
+        lbl->setWordWrap(true);
+        results_layout_->addWidget(lbl);
+        status_label_->setText(tr("Backtest: return %1  |  Sharpe %2").arg(pct("total_return"), num("sharpe_ratio", 2)));
+        return;
+    }
+
     display_result(payload);
 }
 
@@ -568,17 +626,31 @@ void QuantModulePanel::display_live_signals_result(const QString& command, const
             return;
         }
 
-        // Legacy shape: factors = [{name, ic, sharpe}]
+        // Factor-library table: factors = [{name, ic, sharpe(=ICIR)}]. Produced both by the
+        // universe/date-range analysis (analysis_type "factor_ic", ranked by |rank IC|) and by the
+        // legacy per-model shape.
         const auto factors = payload.value("factors").toArray();
+        const bool factor_ic = analysis == QLatin1String("factor_ic");
+        const auto range = payload.value("date_range").toObject();
         QList<QWidget*> top = {
-            gs_make_card(tr("FACTORS"), QString::number(factors.size()), this, ui::colors::POSITIVE()),
-            gs_make_card(tr("MODEL"), model_id.isEmpty() ? "—" : model_id, this),
+            gs_make_card(factor_ic ? tr("TOP FACTORS") : tr("FACTORS"), QString::number(factors.size()), this,
+                         ui::colors::POSITIVE()),
+            gs_make_card(factor_ic ? tr("FACTORS TESTED") : tr("MODEL"),
+                         factor_ic ? QString::number(payload.value("n_factors").toInt())
+                                   : (model_id.isEmpty() ? QStringLiteral("—") : model_id),
+                         this),
         };
+        if (factor_ic) {
+            top << gs_make_card(tr("TRADING DAYS"), QString::number(payload.value("n_days").toInt()), this)
+                << gs_make_card(tr("PERIOD"), tr("%1 → %2").arg(range.value("start").toString(),
+                                                              range.value("end").toString()),
+                                this);
+        }
         results_layout_->addWidget(gs_card_row(top, this));
 
         if (!factors.isEmpty()) {
             auto* table = new QTableWidget(factors.size(), 3, this);
-            table->setHorizontalHeaderLabels({tr("Factor"), tr("IC"), tr("Sharpe")});
+            table->setHorizontalHeaderLabels({tr("Factor"), tr("IC"), factor_ic ? tr("ICIR") : tr("Sharpe")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);

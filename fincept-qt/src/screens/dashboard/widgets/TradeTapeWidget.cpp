@@ -98,7 +98,9 @@ void TradeTapeWidget::on_trade(const QVariant& v) {
     trades_.prepend(t);
     while (trades_.size() > max_rows_)
         trades_.removeLast();
-    render();
+    // Coalesce a burst of prints into one table rebuild — render() re-creates
+    // every cell, and a busy pair delivers many trades per event-loop turn.
+    schedule_render([this]() { render(); });
 }
 
 void TradeTapeWidget::render() {

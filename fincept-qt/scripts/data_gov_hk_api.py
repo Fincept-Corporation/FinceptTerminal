@@ -482,15 +482,16 @@ class DataGovHKWrapper:
 
         return result
 
-    def get_all_category_datasets(self, category_id: str) -> Dict[str, Any]:
+    def get_all_category_datasets(self, category_id: str, limit: int = 100) -> Dict[str, Any]:
         """
-        Get all datasets within a specific category
+        Get the datasets within a specific category
 
         Args:
             category_id: Category identifier
+            limit: Maximum number of datasets to return (default 100)
 
         Returns:
-            All datasets in the category with enhanced metadata
+            Datasets in the category with their metadata, keyed by dataset name
         """
         result = {
             "success": True,
@@ -501,7 +502,7 @@ class DataGovHKWrapper:
         }
 
         try:
-            # Get category details
+            # Category title / description
             category_result = self.get_category_details(category_id)
             if category_result.get('error'):
                 return {
@@ -509,44 +510,47 @@ class DataGovHKWrapper:
                     "error": category_result['error'],
                     "category_id": category_id
                 }
-
             category_data = category_result.get('data', {})
-            packages = category_data.get('packages', [])
+
+            # group_show no longer embeds a category's datasets (CKAN only includes them when
+            # include_datasets is set, and then caps the list at 10), so this returned 0 datasets
+            # for every category - and the old fallback made one package_show request per dataset.
+            # A single package_search filtered by group returns them all with full metadata.
+            search_result = self._make_ckan_request('package_search', {
+                'fq': f'groups:{category_id}',
+                'rows': limit,
+                'sort': 'metadata_modified desc'
+            })
+            if search_result.get('error'):
+                return {
+                    "success": False,
+                    "error": search_result['error'],
+                    "category_id": category_id
+                }
+
+            search_data = search_result.get('data', {})
+            packages = search_data.get('results', [])
 
             result["category_info"] = {
                 "name": self._translate_text_if_needed(category_id),
                 "title": category_data.get('title', category_id),
                 "description": category_data.get('description', ''),
-                "dataset_count": len(packages)
+                "dataset_count": search_data.get('count', len(packages))
             }
 
-            # Get details for each dataset
             for package in packages:
                 package_name = package.get('name', '')
-                if package_name:
-                    try:
-                        dataset_result = self.get_dataset_details(package_name)
-                        if not dataset_result.get('error'):
-                            result["datasets"][package_name] = {
-                                "name": package_name,
-                                "title": dataset_result['data'].get('title', ''),
-                                "notes": dataset_result['data'].get('notes', ''),
-                                "resources": dataset_result['data'].get('resources', []),
-                                "tags": [tag.get('display_name', '') for tag in dataset_result['data'].get('tags', [])],
-                                "metadata": dataset_result['data']
-                            }
-                        else:
-                            result["failed_datasets"].append({
-                                "dataset": package_name,
-                                "error": dataset_result['error']
-                            })
-                    except Exception as e:
-                        result["failed_datasets"].append({
-                            "dataset": package_name,
-                            "error": str(e)
-                        })
-
-            result["success"] = len(result["failed_datasets"]) < len(packages)
+                if not package_name:
+                    continue
+                result["datasets"][package_name] = {
+                    "name": package_name,
+                    "title": package.get('title', ''),
+                    "notes": package.get('notes', ''),
+                    "resources": package.get('resources', []),
+                    "tags": [tag.get('display_name', '') for tag in package.get('tags', [])],
+                    "metadata_modified": package.get('metadata_modified', ''),
+                    "metadata": package
+                }
 
         except Exception as e:
             return {
@@ -559,6 +563,7 @@ class DataGovHKWrapper:
             "source": "Data.gov.hk API",
             "language": self.language,
             "operation": "get_all_category_datasets",
+            "total_count": result["category_info"]["dataset_count"],
             "last_updated": datetime.now().isoformat()
         }
 
@@ -579,7 +584,7 @@ def main():
                 "dataset_details <dataset_id>",
                 "historical_files <start_date> <end_date> [category] [format]",
                 "catalogue_overview",
-                "category_datasets <category_id>",
+                "category_datasets <category_id> [limit]",
                 "test_all"
             ]
         }, indent=2))
@@ -603,8 +608,8 @@ def main():
         if len(sys.argv) > 2:
             _hk_alias_dataset_id = sys.argv[2]
     elif command == "search":
-        # search <query> <limit> -> datasets_list (HK has no text search, use datasets_list)
-        command = "datasets_list"
+        # search <query> [limit] -> datasets_list filtered client-side (HK has no text search)
+        command = "search_datasets_list"
 
     # Initialize wrapper with English language by default
     language = os.environ.get('DATA_GOV_HK_LANGUAGE', 'en')
@@ -625,6 +630,16 @@ def main():
             limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
             offset = int(sys.argv[3]) if len(sys.argv) > 3 else None
             result = wrapper.get_datasets_list(limit=limit, offset=offset)
+
+        elif command == "search_datasets_list":
+            query = (sys.argv[2] if len(sys.argv) > 2 else "").lower()
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3].isdigit() else 50
+            listing = wrapper.get_datasets_list()
+            if not listing.get("error"):
+                names = [n for n in listing.get("data", []) if isinstance(n, str) and query in n.lower()]
+                listing["data"] = names[:limit]
+                listing["metadata"]["total_count"] = len(names)
+            result = listing
 
         elif command == "dataset_details":
             dataset_id = _hk_alias_dataset_id or (sys.argv[2] if len(sys.argv) > 2 else None)
@@ -651,7 +666,8 @@ def main():
             if not category_id:
                 print(json.dumps({"error": "Category ID is required"}))
                 sys.exit(1)
-            result = wrapper.get_all_category_datasets(category_id)
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3].isdigit() else 100
+            result = wrapper.get_all_category_datasets(category_id, limit)
 
         elif command == "test_all":
             # Test all endpoints
@@ -702,7 +718,12 @@ def main():
 
         # Normalize dataset_details: wrap resources list into {data:[...]}
         if command == "dataset_details" and isinstance(result, dict):
-            resources = result.get("resources", [])
+            # package_show wraps the package in {"data": {...}}; its resources live one level down
+            # (reading them from the top level always produced an empty list). Keep the upstream
+            # error instead of replacing it with None.
+            upstream_error = result.get("error")
+            package = result.get("data") if isinstance(result.get("data"), dict) else result
+            resources = package.get("resources", [])
             normalized = []
             for r in resources:
                 if isinstance(r, dict):
@@ -711,7 +732,7 @@ def main():
                     r.setdefault("url", r.get("url", ""))
                     r.setdefault("last_modified", r.get("last_modified", ""))
                     normalized.append(r)
-            result = {"data": normalized, "metadata": {"total_count": len(normalized)}, "error": None}
+            result = {"data": normalized, "metadata": {"total_count": len(normalized)}, "error": upstream_error}
 
         sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', errors='replace', closefd=False)
         print(json.dumps(result, indent=2, ensure_ascii=False))

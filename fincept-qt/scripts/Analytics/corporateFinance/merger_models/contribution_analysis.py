@@ -53,10 +53,69 @@ class ContributionAnalyzer:
             }
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `contribution_analysis.py analyze <flat-params-json>` (argv length 3). The native
+# form is `contribution acquirer target ownership_split`, so a service-style call is translated here and then falls
+# through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("analyze",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _svc_company(p, role):
+    """Company dict from `p[role]` (panel) and/or `<role>_<field>` keys (MCP); `shares` -> `shares_outstanding`."""
+    d = dict(p[role]) if isinstance(p.get(role), dict) else {}
+    for k in ("revenue", "ebitda", "ebit", "net_income", "shares_outstanding", "shares", "cash", "debt",
+              "total_assets", "shareholders_equity"):
+        v = p.get(role + "_" + k)
+        if v is not None and k not in d:
+            d[k] = v
+    if "shares" in d and "shares_outstanding" not in d:
+        d["shares_outstanding"] = d["shares"]
+    d.pop("shares", None)
+    revenue = float(d.get("revenue") or 0.0)
+    if not d.get("ebitda") and revenue:
+        d["ebitda"] = revenue * 0.20  # not supplied: assume a 20% EBITDA margin
+    if not d.get("ebit") and d.get("ebitda"):
+        d["ebit"] = float(d["ebitda"]) - revenue * 0.03
+    return d
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    split = _svc_num(p, "ownership_split", default=None)
+    if split is None:
+        # MCP shape: the target's share of the combined entity from the two market values.
+        acq_cap = _svc_num(p, "acquirer_market_cap", default=0.0)
+        tgt_val = _svc_num(p, "target_deal_value", default=0.0)
+        split = tgt_val / (acq_cap + tgt_val) if (acq_cap + tgt_val) > 0 else 0.2
+    if split > 1.0:
+        split /= 100.0
+    split = min(max(split, 0.0), 0.99)
+    return [argv[0], "contribution", json.dumps(_svc_company(p, "acquirer")), json.dumps(_svc_company(p, "target")),
+            repr(split)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

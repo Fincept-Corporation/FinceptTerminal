@@ -76,6 +76,10 @@ class ActiveLocksPanel : public QWidget {
     QString current_pubkey_;
     QString current_topic_;
     QVector<fincept::wallet::LockPosition> latest_;
+    /// True after the locks feed reported an error and before the next good
+    /// publish. Lets the empty state say "unavailable" instead of asserting
+    /// the wallet has no locks (which the producer never established).
+    bool feed_error_ = false;
 };
 
 } // namespace fincept::screens::panels

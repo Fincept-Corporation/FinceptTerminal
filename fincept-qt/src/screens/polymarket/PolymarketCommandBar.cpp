@@ -416,6 +416,19 @@ void PolymarketCommandBar::set_loading(bool loading) {
 
 void PolymarketCommandBar::set_ws_status(bool connected) {
     ws_connected_ = connected;
+    // Say what "OFF" means. Kalshi's streaming client is a stub (it needs signed WS
+    // headers that aren't wired yet) and the Fincept demo adapter has no feed at all,
+    // so for those the indicator can never turn on — that read as a broken connection.
+    if (connected) {
+        ws_indicator_->setToolTip(tr("Live WebSocket feed connected"));
+    } else if (presentation_.exchange_id == QStringLiteral("kalshi") ||
+               presentation_.exchange_id == QStringLiteral("fincept")) {
+        ws_indicator_->setToolTip(tr("Live streaming is not available for %1 in this build — prices, books and trades "
+                                     "update when you refresh or re-select a market.")
+                                      .arg(presentation_.display_name));
+    } else {
+        ws_indicator_->setToolTip(tr("WebSocket disconnected — it reconnects when a market is selected."));
+    }
     if (connected) {
         ws_indicator_->setText(tr("● LIVE"));
         ws_indicator_->setStyleSheet(

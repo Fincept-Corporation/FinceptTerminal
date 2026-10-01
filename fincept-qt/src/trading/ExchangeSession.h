@@ -71,8 +71,21 @@ class ExchangeSession : public QObject {
     // ── WS lifecycle ───────────────────────────────────────────────────────
     /// Returns true if the WS subprocess was spawned; see
     /// ExchangeService::start_ws_stream for full semantics.
-    bool start_ws(const QString& primary_symbol, const QStringList& all_symbols);
+    /// `hub_owned` marks a stream launched on behalf of DataHub subscribers
+    /// (ExchangeSessionManager) rather than by a screen; screens never pass it.
+    bool start_ws(const QString& primary_symbol, const QStringList& all_symbols, bool hub_owned = false);
     void stop_ws();
+    /// True when the running WS subprocess was launched by the DataHub demand path
+    /// (and may therefore be stopped by it once no subscriber remains).
+    bool is_ws_hub_owned() const { return ws_hub_owned_; }
+    /// Symbols the current / most recent WS launch was asked to stream (a copy).
+    /// Main thread only, like start_ws().
+    QStringList ws_symbols() const { return ws_all_symbols_; }
+    /// Pairs DataHub subscribers need streamed on this exchange. start_ws() folds
+    /// them into every launch list, so a screen (re)starting the stream does not
+    /// silently drop the tiles that are subscribed to `ws:<exchange>:*` topics.
+    /// Main thread only.
+    void set_hub_pairs(const QStringList& pairs) { hub_pairs_ = pairs; }
     bool is_ws_connected() const { return ws_connected_.load(); }
     /// True once a WS subprocess has been spawned and has not yet exited.
     /// Distinct from `is_ws_connected` — the process may be up but the remote
@@ -149,6 +162,8 @@ class ExchangeSession : public QObject {
 
     QProcess* ws_process_ = nullptr;
     std::atomic<bool> ws_connected_{false};
+    bool ws_hub_owned_ = false;   // current subprocess was started by the DataHub demand path
+    QStringList hub_pairs_;       // pairs DataHub subscribers need (folded into every launch)
     bool ws_should_run_ = false;  // true between a successful start_ws() and stop_ws()
     int ws_restart_attempts_ = 0; // consecutive auto-restarts; reset after a healthy run
     QElapsedTimer ws_uptime_;     // since the current ws_process_ was spawned

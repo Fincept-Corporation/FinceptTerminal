@@ -270,8 +270,8 @@ def main():
     tracker = MADealTracker()
 
     try:
-        if command == "update":
-            # Update deal database
+        if command in ("update", "scan"):
+            # Update deal database ("scan" is the name the Qt MAAnalyticsService uses)
             days_back = int(sys.argv[2]) if len(sys.argv) > 2 else 7
             result = tracker.update_deal_database(days_back=days_back)
 
@@ -306,13 +306,25 @@ def main():
             }
             print(json.dumps(output, default=str))
 
-        elif command == "search":
-            # Search deals by industry
-            if len(sys.argv) < 3:
-                raise ValueError("Industry name required")
+        elif command == "list":
+            # Every deal in the local database (used by the Deals panel's LOAD ALL DEALS)
+            deals = tracker.search_deals()
 
-            industry = sys.argv[2]
-            deals = tracker.search_deals(industry=industry)
+            result = {
+                "success": True,
+                "data": deals,
+                "count": len(deals)
+            }
+            print(json.dumps(result, default=str))
+
+        elif command == "search":
+            # Search deals: free-text across target / acquirer / industry / tickers (a superset of the old
+            # exact-industry match, which made the Deals panel's search box return nothing for company names)
+            if len(sys.argv) < 3:
+                raise ValueError("Search text required")
+
+            query = sys.argv[2]
+            deals = tracker.search_deals(query=query)
 
             result = {
                 "success": True,
@@ -365,7 +377,7 @@ def main():
         else:
             result = {
                 "success": False,
-                "error": f"Unknown command: {command}. Available: update, search, track, summary, comps"
+                "error": f"Unknown command: {command}. Available: update, scan, list, search, track, summary, comps"
             }
             print(json.dumps(result))
             sys.exit(1)

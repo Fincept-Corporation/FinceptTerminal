@@ -1,7 +1,9 @@
 #include "trading/brokers/fivepaisa/FivePaisaBroker.h"
 
+#include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
+#include "trading/instruments/InstrumentService.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -15,6 +17,34 @@ static const char* BASE_URL = "https://Openapi.5paisa.com";
 
 static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
+}
+
+// 5paisa addresses modify/cancel by ExchOrderID — the exchange's order number — which is a
+// different value from BrokerOrderId, the id place_order and get_orders hand the rest of the
+// terminal. Look the order up in the order book and return its ExchOrderID; empty when the
+// book is unreadable, the order is unknown, or the exchange has not assigned a number yet
+// (callers then fall back to the id they were given, as before).
+static QString fp_lookup_exch_order_id(const QString& base_url, const QString& app_key, const QString& client_code,
+                                       const QMap<QString, QString>& headers, const QString& broker_order_id) {
+    QJsonObject head;
+    head["key"] = app_key;
+    QJsonObject book_body;
+    book_body["ClientCode"] = client_code;
+    QJsonObject req;
+    req["head"] = head;
+    req["body"] = book_body;
+
+    auto resp = BrokerHttp::instance().post_json(base_url + "/VendorsAPI/Service1.svc/V3/OrderBook", req, headers);
+    if (!resp.success)
+        return {};
+    for (const auto& item : resp.json["body"].toObject()["OrderBookDetail"].toArray()) {
+        const QJsonObject o = item.toObject();
+        if (o["BrokerOrderId"].toVariant().toString() != broker_order_id)
+            continue;
+        const QString exch = o["ExchOrderID"].toVariant().toString().trimmed();
+        return (exch.isEmpty() || exch == QLatin1String("0")) ? QString() : exch;
+    }
+    return {};
 }
 
 // ============================================================================
@@ -226,13 +256,28 @@ OrderPlaceResponse FivePaisaBroker::place_order(const BrokerCredentials& creds, 
 
     bool is_intraday = (order.product_type == ProductType::Intraday);
 
+    // ScripCode is the only contract identifier in the payload. The equity ticket does not carry
+    // one (only the F&O chain fills UnifiedOrder::instrument_token), so resolve it from the
+    // instrument master; transmitting the old 0 could never match a contract.
+    qint64 scrip_code = order.instrument_token.toLongLong();
+    if (scrip_code <= 0) {
+        const auto tok = InstrumentService::instance().instrument_token(order.symbol, order.exchange,
+                                                                        QStringLiteral("fivepaisa"));
+        if (tok.has_value() && tok.value() > 0)
+            scrip_code = tok.value();
+    }
+    if (scrip_code <= 0)
+        return {false, "",
+                "5Paisa place_order: ScripCode not found for " + order.exchange + ":" + order.symbol +
+                    " (instrument master not loaded yet?)"};
+
     QJsonObject body;
     // PlaceOrderRequest uses the long-form transaction string ("BUY"/"SELL");
     // the legacy "B"/"S" short form is reserved for the BO/CO BuySell field.
     body["OrderType"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
     body["Exchange"] = fp_exchange(order.exchange);
     body["ExchangeType"] = fp_exchange_type(order.exchange);
-    body["ScripCode"] = order.instrument_token.isEmpty() ? 0 : order.instrument_token.toInt();
+    body["ScripCode"] = scrip_code;
     body["Price"] = (order.order_type == OrderType::Market) ? 0.0 : order.price;
     body["Qty"] = order.quantity;
     body["StopLossPrice"] = (order.order_type == OrderType::StopLoss || order.order_type == OrderType::StopLossLimit)
@@ -241,9 +286,14 @@ OrderPlaceResponse FivePaisaBroker::place_order(const BrokerCredentials& creds, 
     body["DisQty"] = 0;
     body["IsIntraday"] = is_intraday;
     body["AHPlaced"] = order.amo ? "Y" : "N";
-    // Per-order UUID-ish — 5Paisa rejects duplicates with the same RemoteOrderID.
-    body["RemoteOrderID"] = "FCPT-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + "-" +
-                            QString::number(QRandomGenerator::global()->bounded(10000));
+    // 5Paisa rejects duplicates with the same RemoteOrderID, so use the stable per-intent reference
+    // (UnifiedOrder::client_order_id) when UnifiedTrading stamped one: a re-submit after the 8s
+    // client-side timeout is then refused instead of opening a second order. Callers that bypass
+    // UnifiedTrading keep the per-attempt timestamp form.
+    body["RemoteOrderID"] = order.client_order_id.isEmpty()
+                                ? "FCPT-" + QString::number(QDateTime::currentMSecsSinceEpoch()) + "-" +
+                                      QString::number(QRandomGenerator::global()->bounded(10000))
+                                : "FCPT-" + client_order_ref_for(order, 40);
     body["AppSource"] = 0; // required: 0 = open API
     body["IOCOrder"] = false;
     body["IsStopLossOrder"] = (order.order_type == OrderType::StopLoss || order.order_type == OrderType::StopLossLimit);
@@ -288,9 +338,10 @@ ApiResponse<QJsonObject> FivePaisaBroker::modify_order(const BrokerCredentials& 
     auto kp = unpack_key(creds.api_key);
     auto hdrs = auth_headers(creds);
 
-    // 5paisa modify uses ExchOrderID — treat passed order_id as ExchOrderID
+    // 5paisa modify addresses the order by ExchOrderID, not the BrokerOrderId the terminal holds.
+    const QString exch_id = fp_lookup_exch_order_id(BASE_URL, kp.app_key, kp.client_id, hdrs, order_id);
     QJsonObject body;
-    body["ExchOrderID"] = order_id;
+    body["ExchOrderID"] = exch_id.isEmpty() ? order_id : exch_id;
     body["Price"] = mods.value("price").toDouble(0.0);
     body["Qty"] = mods.value("quantity").toInt(0);
     body["StopLossPrice"] = mods.value("trigger_price").toDouble(0.0);
@@ -320,8 +371,10 @@ ApiResponse<QJsonObject> FivePaisaBroker::cancel_order(const BrokerCredentials& 
     auto kp = unpack_key(creds.api_key);
     auto hdrs = auth_headers(creds);
 
+    // Cancel addresses the order by ExchOrderID, not the BrokerOrderId the terminal holds.
+    const QString exch_id = fp_lookup_exch_order_id(BASE_URL, kp.app_key, kp.client_id, hdrs, order_id);
     QJsonObject body;
-    body["ExchOrderID"] = order_id;
+    body["ExchOrderID"] = exch_id.isEmpty() ? order_id : exch_id;
 
     QJsonObject head;
     head["key"] = kp.app_key;
@@ -391,7 +444,8 @@ ApiResponse<QVector<BrokerOrderInfo>> FivePaisaBroker::get_orders(const BrokerCr
         info.quantity = o["Qty"].toInt();
         info.filled_qty = o["TradedQty"].toInt();
         info.price = o["Rate"].toDouble();
-        info.trigger_price = o["TriggerRate"].toDouble();
+        info.trigger_price = o["SLTriggerRate"].toDouble(o["TriggerRate"].toDouble());
+        info.exchange_order_id = o["ExchOrderID"].toVariant().toString();
         info.status = parse_status(o["OrderStatus"].toString());
         info.side = (o["BuySell"].toString() == "B") ? "buy" : "sell";
         info.order_type = (o["AtMarket"].toString() == "Y") ? "MARKET" : "LIMIT";

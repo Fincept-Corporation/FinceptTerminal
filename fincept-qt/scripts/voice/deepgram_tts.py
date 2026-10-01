@@ -56,10 +56,20 @@ def play_stream(audio_iter, sd_mod) -> None:
 
     try:
         emit({"status": "speaking"})
+        # The HTTP body arrives in arbitrary-sized pieces (chunked transfer encoding does
+        # not respect sample boundaries), but RawOutputStream.write() raises ValueError for
+        # anything that isn't a whole number of frames — an odd-length piece aborted the
+        # utterance halfway through with a "Deepgram TTS error". Carry the stray byte over.
+        frame_bytes = 2 * CHANNELS  # int16
+        pending = b""
         for chunk in audio_iter:
             if not chunk:
                 continue
-            stream.write(chunk)
+            pending += chunk
+            usable = len(pending) - (len(pending) % frame_bytes)
+            if usable:
+                stream.write(pending[:usable])
+                pending = pending[usable:]
     finally:
         try:
             stream.stop()

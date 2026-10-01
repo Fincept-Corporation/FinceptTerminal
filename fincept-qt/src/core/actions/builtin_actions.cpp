@@ -702,7 +702,10 @@ void register_builtins() {
         "Open Command Palette",
         "Command",
         {"palette", "command palette"},
-        QKeySequence(QStringLiteral("Ctrl+K")),
+        // Ctrl+K is KeyAction::BrowseComponents (documented, user-rebindable and
+        // persisted under keybindings.*); sharing it made the shortcut ambiguous.
+        // Ctrl+Shift+P is the conventional palette key and is unused elsewhere.
+        QKeySequence(QStringLiteral("Ctrl+Shift+P")),
         require_unlocked_frame(),
         &handler_palette_open,
         {},

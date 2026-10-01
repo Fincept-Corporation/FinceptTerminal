@@ -18,7 +18,10 @@ EdgeItem::EdgeItem(const QString& id, PortItem* source, PortItem* target, QGraph
     setFlag(ItemIsFocusable);
     setAcceptHoverEvents(true);
     setZValue(0); // edges behind nodes
-    setPen(QPen(QColor(ui::ThemeManager::instance().tokens().border_med), 2.0, Qt::SolidLine, Qt::RoundCap));
+    // paint() draws with its own 2 px pen; this pen only defines shape()/boundingRect(),
+    // and is deliberately wide so a connection is a click-able target (select / Delete /
+    // context menu) instead of a 2 px sliver.
+    setPen(QPen(QColor(ui::ThemeManager::instance().tokens().border_med), 10.0, Qt::SolidLine, Qt::RoundCap));
 
     source_->add_edge(this);
     target_->add_edge(this);

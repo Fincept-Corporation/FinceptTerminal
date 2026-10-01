@@ -9,6 +9,7 @@
 // Shared QSS helpers live in DocsScreen_internal.h.
 #include "screens/docs/DocsScreen.h"
 
+#include "core/events/EventBus.h"
 #include "screens/docs/DocsScreen_internal.h"
 #include "ui/theme/Theme.h"
 
@@ -18,7 +19,9 @@
 #include <QHeaderView>
 #include <QKeySequence>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QShortcut>
 #include <QSplitter>
 #include <QTreeWidgetItemIterator>
@@ -53,6 +56,28 @@ static QString SIDEBAR_SS() {
 }
 
 // SCROLL_SS lives in DocsScreen_internal.h so the page-builder TUs can reuse it.
+
+// Maps a documentation topic to the terminal screen it describes, or an empty
+// string for topics that are not a screen (Welcome, First Steps, Shortcuts).
+// Every id returned here must be registered in WindowFrame::setup_dock_screens()
+// — nav.switch_screen silently ignores an unknown id.
+static QString docs_screen_target(const QString& topic) {
+    static const QSet<QString> kScreenTopics = {
+        "dashboard",     "markets",         "news",          "watchlist",       "screener",
+        "crypto_trading", "crypto_center",  "equity_trading", "fno",            "algo_trading",
+        "backtesting",   "equity_research", "surface_analytics", "derivatives", "portfolio",
+        "ma_analytics",  "ai_quant_lab",    "quantlib",      "ai_chat",         "agent_config",
+        "alpha_arena",   "dbnomics",        "economics",     "akshare",         "gov_data",
+        "data_sources",  "asia_markets",    "trade_viz",     "geopolitics",     "maritime",
+        "polymarket",    "alt_investments", "relationship_map", "report_builder", "node_editor",
+        "code_editor",   "excel",           "notes",         "mcp_servers",     "data_mapping",
+        "file_manager",  "forum",           "settings",      "profile",
+    };
+    // Paper trading is a mode of the crypto terminal, not a screen of its own.
+    if (topic == QLatin1String("paper_trading"))
+        return QStringLiteral("crypto_trading");
+    return kScreenTopics.contains(topic) ? topic : QString();
+}
 
 // ============================================================================
 // Helpers
@@ -250,10 +275,14 @@ void DocsScreen::build_sidebar() {
     add_item(core, tr("Markets"), "markets");
     add_item(core, tr("News"), "news");
     add_item(core, tr("Watchlist"), "watchlist");
+    add_item(core, tr("Screener"), "screener");
 
     // ── Trading ──────────────────────────────────────────────────────────────
     auto* trading = add_category(tr("TRADING"));
     add_item(trading, tr("Crypto Trading"), "crypto_trading");
+    add_item(trading, tr("Crypto Center"), "crypto_center");
+    add_item(trading, tr("Equity Trading"), "equity_trading");
+    add_item(trading, tr("F&O"), "fno");
     add_item(trading, tr("Paper Trading"), "paper_trading");
     add_item(trading, tr("Algo Trading"), "algo_trading");
     add_item(trading, tr("Backtesting"), "backtesting");
@@ -280,6 +309,9 @@ void DocsScreen::build_sidebar() {
     add_item(data_cat, tr("Economics"), "economics");
     add_item(data_cat, tr("AkShare Data"), "akshare");
     add_item(data_cat, tr("Government Data"), "gov_data");
+    add_item(data_cat, tr("Asia Markets"), "asia_markets");
+    add_item(data_cat, tr("Trade Viz"), "trade_viz");
+    add_item(data_cat, tr("Data Sources"), "data_sources");
 
     // ── Geopolitics & Alt ────────────────────────────────────────────────────
     auto* geo = add_category(tr("GEOPOLITICS & ALT"));
@@ -287,6 +319,7 @@ void DocsScreen::build_sidebar() {
     add_item(geo, tr("Maritime"), "maritime");
     add_item(geo, tr("Prediction Markets"), "polymarket");
     add_item(geo, tr("Alt Investments"), "alt_investments");
+    add_item(geo, tr("Relationship Map"), "relationship_map");
 
     // ── Tools ────────────────────────────────────────────────────────────────
     auto* tools = add_category(tr("TOOLS"));
@@ -297,6 +330,11 @@ void DocsScreen::build_sidebar() {
     add_item(tools, tr("Notes"), "notes");
     add_item(tools, tr("MCP Servers"), "mcp_servers");
     add_item(tools, tr("Data Mapping"), "data_mapping");
+    add_item(tools, tr("File Manager"), "file_manager");
+
+    // ── Community ────────────────────────────────────────────────────────────
+    auto* community = add_category(tr("COMMUNITY"));
+    add_item(community, tr("Forum"), "forum");
 
     // ── Account ──────────────────────────────────────────────────────────────
     auto* account = add_category(tr("ACCOUNT"));
@@ -337,9 +375,13 @@ void DocsScreen::build_content_pages() {
     add("markets", page_markets());
     add("news", page_news());
     add("watchlist", page_watchlist());
+    add("screener", page_screener());
 
     // Trading
     add("crypto_trading", page_crypto_trading());
+    add("crypto_center", page_crypto_center());
+    add("equity_trading", page_equity_trading());
+    add("fno", page_fno());
     add("paper_trading", page_paper_trading());
     add("algo_trading", page_algo_trading());
     add("backtesting", page_backtesting());
@@ -363,12 +405,16 @@ void DocsScreen::build_content_pages() {
     add("economics", page_economics());
     add("akshare", page_akshare());
     add("gov_data", page_gov_data());
+    add("asia_markets", page_asia_markets());
+    add("trade_viz", page_trade_viz());
+    add("data_sources", page_data_sources());
 
     // Geopolitics
     add("geopolitics", page_geopolitics());
     add("maritime", page_maritime());
     add("polymarket", page_polymarket());
     add("alt_investments", page_alt_investments());
+    add("relationship_map", page_relationship_map());
 
     // Tools
     add("report_builder", page_report_builder());
@@ -378,6 +424,10 @@ void DocsScreen::build_content_pages() {
     add("notes", page_notes());
     add("mcp_servers", page_mcp_servers());
     add("data_mapping", page_data_mapping());
+    add("file_manager", page_file_manager());
+
+    // Community
+    add("forum", page_forum());
 
     // Account
     add("settings", page_settings());
@@ -385,10 +435,40 @@ void DocsScreen::build_content_pages() {
 }
 
 void DocsScreen::navigate_to(const QString& section_id) {
+    // The shortcuts page reads the live key bindings, so rebuild it on each visit.
+    if (section_id == QLatin1String("shortcuts"))
+        refresh_shortcuts_page();
     auto it = page_index_.find(section_id);
     if (it != page_index_.end()) {
         pages_->setCurrentIndex(it.value());
+        current_topic_ = section_id;
+        update_open_button();
     }
+}
+
+void DocsScreen::update_open_button() {
+    if (!open_btn_)
+        return;
+    const QString target = docs_screen_target(current_topic_);
+    open_btn_->setVisible(!target.isEmpty());
+}
+
+void DocsScreen::refresh_shortcuts_page() {
+    auto it = page_index_.find(QStringLiteral("shortcuts"));
+    if (it == page_index_.end() || !pages_)
+        return;
+    const int idx = it.value();
+    QWidget* old_page = pages_->widget(idx);
+    if (!old_page)
+        return;
+    const bool was_current = pages_->currentIndex() == idx;
+    // Re-insert at the same index so every other topic's stacked-widget index
+    // stays valid.
+    pages_->removeWidget(old_page);
+    old_page->deleteLater();
+    pages_->insertWidget(idx, page_keyboard_shortcuts());
+    if (was_current)
+        pages_->setCurrentIndex(idx);
 }
 
 // ── Topic count + search ─────────────────────────────────────────────────────
@@ -446,7 +526,15 @@ void DocsScreen::apply_search(const QString& text) {
 
 DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("docsScreen");
-    setStyleSheet(QString("QWidget#docsScreen { background: %1; }").arg(ui::colors::BG_BASE()));
+    // One stylesheet for the screen chrome, including the OPEN SCREEN button
+    // (styled by objectName instead of a per-widget setStyleSheet()).
+    setStyleSheet(QString("QWidget#docsScreen { background: %1; }"
+                          "QPushButton#docsOpenBtn { background: %2; color: %3; border: 1px solid %4;"
+                          "  padding: 2px 10px; font-size: 11px; font-weight: bold; letter-spacing: 0.5px;"
+                          "  font-family: 'Consolas','Courier New',monospace; }"
+                          "QPushButton#docsOpenBtn:hover { background: %3; color: %1; }")
+                      .arg(ui::colors::BG_BASE(), ui::colors::BG_RAISED(), ui::colors::AMBER(),
+                           ui::colors::AMBER_DIM()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -500,6 +588,23 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     cmd_hl->addWidget(search_input_);
 
     cmd_hl->addStretch();
+
+    // Jump from a documentation topic to the screen it describes. Hidden for
+    // topics that are not a screen (Welcome, First Steps, Shortcuts).
+    open_btn_ = new QPushButton(tr("OPEN SCREEN"));
+    open_btn_->setObjectName("docsOpenBtn");
+    open_btn_->setCursor(Qt::PointingHandCursor);
+    open_btn_->setFixedHeight(22);
+    open_btn_->setToolTip(tr("Open the screen this topic describes"));
+    open_btn_->setAccessibleName(tr("Open the screen this topic describes"));
+    open_btn_->setVisible(false);
+    connect(open_btn_, &QPushButton::clicked, this, [this]() {
+        const QString target = docs_screen_target(current_topic_);
+        if (!target.isEmpty())
+            EventBus::instance().publish(QStringLiteral("nav.switch_screen"),
+                                         QVariantMap{{QStringLiteral("screen_id"), target}});
+    });
+    cmd_hl->addWidget(open_btn_);
 
     cmd_count_ = new QLabel;
     cmd_count_->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent;"
@@ -556,6 +661,11 @@ void DocsScreen::retranslateUi() {
         cmd_title_->setText(tr("DOCUMENTATION"));
     if (search_input_)
         search_input_->setPlaceholderText(tr("Search topics…  (Ctrl+F)"));
+    if (open_btn_) {
+        open_btn_->setText(tr("OPEN SCREEN"));
+        open_btn_->setToolTip(tr("Open the screen this topic describes"));
+        open_btn_->setAccessibleName(tr("Open the screen this topic describes"));
+    }
 
     // Rebuild sidebar + content pages so their tr() strings pick up the new
     // language. Preserve the currently displayed section across the rebuild.

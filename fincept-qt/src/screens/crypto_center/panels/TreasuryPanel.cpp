@@ -249,10 +249,21 @@ void TreasuryPanel::on_reserves_update(const QVariant& v) {
     update_demo_chip();
 
     usdc_value_->setText(format_usd_compact(r.usdc_amount));
-    sol_value_->setText(QStringLiteral("%1 SOL  (%2)")
-                            .arg(format_sol(r.sol_lamports))
-                            .arg(format_usd_compact(static_cast<double>(r.sol_lamports) / 1e9 * r.sol_usd_price)));
-    total_usd_value_->setText(format_usd_compact(r.total_usd));
+    // sol_usd_price is 0 when no SOL quote has reached the hub yet. Rendering
+    // that as "(0 USD)" and a total that silently omits the SOL leg understates
+    // reserves with full confidence — flag it instead.
+    const bool sol_unpriced = r.sol_lamports > 0 && r.sol_usd_price <= 0.0;
+    if (sol_unpriced) {
+        sol_value_->setText(tr("%1 SOL  (USD price n/a)").arg(format_sol(r.sol_lamports)));
+        total_usd_value_->setText(tr("%1 + SOL (unpriced)").arg(format_usd_compact(r.total_usd)));
+        total_usd_value_->setToolTip(tr("No live SOL price yet — the total excludes the SOL balance."));
+    } else {
+        sol_value_->setText(QStringLiteral("%1 SOL  (%2)")
+                                .arg(format_sol(r.sol_lamports))
+                                .arg(format_usd_compact(static_cast<double>(r.sol_lamports) / 1e9 * r.sol_usd_price)));
+        total_usd_value_->setText(format_usd_compact(r.total_usd));
+        total_usd_value_->setToolTip(QString());
+    }
 
     multisig_url_ = r.multisig_url;
     multisig_button_->setText(r.multisig_label.isEmpty() ? QStringLiteral("—") : r.multisig_label);

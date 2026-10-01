@@ -18,7 +18,15 @@ QuoteTableWidget::QuoteTableWidget(const QString& title, const QStringList& symb
     table_ = new ui::DataTable;
     table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
     table_->set_column_widths({130, 100, 80, 70});
+    table_->setToolTip(tr("Double-click a row to open it in Equity Research"));
     content_layout()->addWidget(table_);
+
+    // Row → symbol link. The raw symbol rides on the SYMBOL cell (the cell text
+    // is the display label, e.g. "S&P 500" for ^GSPC).
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int /*col*/) {
+        if (auto* it = table_->item(row, 0))
+            open_symbol(it->data(Qt::UserRole).toString());
+    });
 
     connect(this, &BaseWidget::refresh_requested, this, &QuoteTableWidget::refresh_data);
 
@@ -103,6 +111,8 @@ void QuoteTableWidget::render_from_cache() {
 
         table_->add_row({display_name, price_str, chg_str, pct_str});
         int row = table_->rowCount() - 1;
+        if (auto* sym_item = table_->item(row, 0))
+            sym_item->setData(Qt::UserRole, sym);
         table_->set_cell_color(row, 2, ui::change_color(q.change_pct));
         table_->set_cell_color(row, 3, ui::change_color(q.change_pct));
     }

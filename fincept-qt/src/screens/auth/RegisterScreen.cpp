@@ -124,7 +124,8 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
     connect(&auth, &auth::AuthManager::signup_succeeded, this, [this]() {
         register_btn_->setEnabled(true);
         register_btn_->setText(tr("  CREATE ACCOUNT  "));
-        otp_email_->setText(email_->text().trimmed());
+        otp_email_->setText(tr("A verification code was sent to %1. Enter it below to activate your account.")
+                                .arg(email_->text().trimmed()));
         otp_input_->clear();
         otp_error_->hide();
         pages_->setCurrentIndex(1);
@@ -132,11 +133,19 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
     connect(&auth, &auth::AuthManager::signup_failed, this, [this](const QString& err) {
         register_btn_->setEnabled(true);
         register_btn_->setText(tr("  CREATE ACCOUNT  "));
+        // A failed RESEND happens while the OTP page is showing — the form's
+        // error label is on the other page and would swallow the message.
+        if (pages_->currentIndex() == 1) {
+            otp_error_->setText(err);
+            otp_error_->show();
+            return;
+        }
         error_label_->setText(err);
         error_label_->show();
     });
     connect(&auth, &auth::AuthManager::otp_verified, this, [this]() {
         verify_btn_->setEnabled(true);
+        verify_btn_->setText(tr("  VERIFY  ")); // was left on "VERIFYING..." for the next sign-up
         for (QLineEdit* w : {first_name_, last_name_, username_, email_, phone_, country_code_, password_,
                              confirm_pw_, otp_input_}) {
             if (w)
@@ -601,6 +610,9 @@ void RegisterScreen::update_password_strength() {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 void RegisterScreen::on_register() {
+    // Enter in any field submits; ignore it while a request is already in flight.
+    if (!register_btn_->isEnabled())
+        return;
     error_label_->hide();
 
     QString fn = first_name_->text().trimmed();
@@ -641,7 +653,8 @@ void RegisterScreen::on_register() {
     }
     auto ev = auth::validate_email(em);
     if (!ev.valid) {
-        error_label_->setText(ev.error);
+        // validate_email() text is untranslated English; map onto tr() strings.
+        error_label_->setText(em.isEmpty() ? tr("Email is required") : tr("Invalid email format"));
         error_label_->show();
         return;
     }
@@ -662,6 +675,8 @@ void RegisterScreen::on_register() {
 }
 
 void RegisterScreen::on_verify_otp() {
+    if (!verify_btn_->isEnabled())
+        return; // Enter on the code field while a verification is in flight
     otp_error_->hide();
     QString code = otp_input_->text().trimmed();
     if (code.isEmpty()) {

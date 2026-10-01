@@ -35,6 +35,9 @@ class EquityPeersTab : public QWidget {
     QStringList default_peers(const QString& symbol) const;
 
     QString current_symbol_;
+    /// Anchor + peers of the request in flight — peers_loaded() carries no symbol, so a
+    /// response is matched against this to drop one that belongs to an older request.
+    QStringList requested_symbols_;
     QLineEdit* peers_edit_ = nullptr;
     QLabel* peers_caption_ = nullptr; ///< "PEERS (comma-separated):"
     QLabel* status_label_ = nullptr;

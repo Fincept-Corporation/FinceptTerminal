@@ -282,6 +282,16 @@ void MarketPanelEditor::fire_search(const QString& query) {
                         return; // stale response
                     on_search_results(items);
                 });
+        // A failed lookup used to vanish: the dropdown simply never appeared and the user had
+        // no idea whether the box was broken. Say so, and that Enter still adds the typed ticker.
+        connect(&svc, &services::MarketSearchService::search_failed, this,
+                [this](const QString& request_id, const QString& q, const QString&) {
+                    const QString my_rid = QString::number(reinterpret_cast<quintptr>(this), 16);
+                    if (request_id != my_rid || pending_query_ != q)
+                        return;
+                    show_validation_error(
+                        tr("Symbol search is unavailable — press Enter to add \"%1\" as typed.").arg(q.toUpper()));
+                });
         search_connected_ = true;
     }
     svc.search(query, /*type=*/QString(), kMaxResults, rid);

@@ -30,6 +30,7 @@ namespace fincept::screens {
 using namespace fincept::screens::support_internal;
 
 void SupportScreen::load_tickets() {
+    last_load_ms_ = QDateTime::currentMSecsSinceEpoch();
     set_busy(true);
 
     QPointer<SupportScreen> self(this);
@@ -109,8 +110,7 @@ void SupportScreen::rebuild_ticket_rows() {
     auto* lay = qobject_cast<QVBoxLayout*>(ticket_container_->layout());
     if (!lay)
         return;
-    while (lay->count() > 1)
-        delete lay->takeAt(0)->widget();
+    clear_layout_keep_stretch(lay);
     active_row_btn_ = nullptr;
 
     const QString needle = search_input_ ? search_input_->text().trimmed().toLower() : QString();
@@ -158,6 +158,10 @@ void SupportScreen::rebuild_ticket_rows() {
             auto obj = v.toObject();
             QString id = obj["id"].toVariant().toString();
             QString subject = obj["subject"].toString();
+            // The demo row's subject is rendered here rather than taken from the
+            // cached JSON so a language switch re-translates it without a refetch.
+            if (id == QLatin1String("DEMO-001"))
+                subject = tr("Welcome to Fincept Support");
             QString status = obj["status"].toString();
             QString priority = obj["priority"].toString();
             QString category = obj["category"].toString();
@@ -257,8 +261,7 @@ void SupportScreen::rebuild_ticket_rows() {
 
                 // Clear messages
                 auto* mcl2 = qobject_cast<QVBoxLayout*>(messages_container_->layout());
-                while (mcl2->count() > 1)
-                    delete mcl2->takeAt(0)->widget();
+                clear_layout_keep_stretch(mcl2);
 
                 if (demo_c) {
                     // Canned demo message
@@ -283,10 +286,15 @@ void SupportScreen::rebuild_ticket_rows() {
                 } else {
                     set_busy(true);
                     QPointer<SupportScreen> guard(this);
-                    auth::UserApi::instance().get_ticket_details(id_int, [this, guard](auth::ApiResponse dr) {
+                    auth::UserApi::instance().get_ticket_details(id_int, [this, guard, id_int](auth::ApiResponse dr) {
                         if (!guard)
                             return;
                         set_busy(false);
+                        // The user may have clicked another ticket while this reply was
+                        // in flight; painting it now would show ticket A's conversation
+                        // under ticket B's header.
+                        if (selected_is_demo_ || selected_ticket_id_ != id_int)
+                            return;
                         if (!dr.success) {
                             auto* mcl_err = qobject_cast<QVBoxLayout*>(messages_container_->layout());
                             if (mcl_err)
@@ -309,8 +317,7 @@ void SupportScreen::rebuild_ticket_rows() {
                         }
 
                         auto* mcl3 = qobject_cast<QVBoxLayout*>(messages_container_->layout());
-                        while (mcl3->count() > 1)
-                            delete mcl3->takeAt(0)->widget();
+                        clear_layout_keep_stretch(mcl3);
 
                         for (const auto& mv : msgs) {
                             auto mo = mv.toObject();
@@ -366,6 +373,12 @@ void SupportScreen::rebuild_ticket_rows() {
             });
 
             lay->insertWidget(lay->count() - 1, btn);
+
+            // A refresh (close/reopen, ↻, filter change) rebuilds every row; keep the
+            // ticket that is open in the detail pane highlighted.
+            if (content_stack_ && content_stack_->currentIndex() == 2 &&
+                ((is_demo && selected_is_demo_) || (!is_demo && !selected_is_demo_ && id_int == selected_ticket_id_)))
+                select_ticket_row(btn);
         }
     }
 }
@@ -428,6 +441,10 @@ void SupportScreen::on_create_ticket() {
 
 void SupportScreen::on_send_message() {
     if (selected_ticket_id_ < 0 || selected_is_demo_)
+        return;
+    // Ctrl+Enter bypasses the button's disabled state, so a held/repeated key
+    // would send the same reply several times while the first is in flight.
+    if (send_btn_ && !send_btn_->isEnabled())
         return;
     QString msg = msg_input_->toPlainText().trimmed();
     if (msg.isEmpty())

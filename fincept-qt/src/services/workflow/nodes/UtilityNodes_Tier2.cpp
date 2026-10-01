@@ -4,17 +4,150 @@
 //
 // Part of the topic-based split of UtilityNodes.cpp.
 
+#include "core/logging/Logger.h"
+#include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
+#include "services/workflow/WorkflowCache.h"
 #include "services/workflow/nodes/UtilityNodes.h"
 
 #include <QCryptographicHash>
+#include <QDate>
 #include <QDateTime>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QTimeZone>
+
+#include <algorithm>
 
 namespace fincept::workflow {
+
+namespace {
+
+// Epoch seconds of a history row: numeric `timestamp` (seconds, or milliseconds when > 1e11), or an
+// ISO `date` / `datetime` string. Returns false when the row has no usable time.
+bool t2_row_epoch(const QJsonObject& row, qint64* out) {
+    static const char* const kKeys[] = {"timestamp", "time", "date", "datetime", "Date"};
+    for (const char* key : kKeys) {
+        const QJsonValue v = row.value(key);
+        if (v.isDouble()) {
+            double t = v.toDouble();
+            if (t > 1e11)
+                t /= 1000.0; // milliseconds
+            *out = static_cast<qint64>(t);
+            return true;
+        }
+        if (v.isString()) {
+            QDateTime dt = QDateTime::fromString(v.toString(), Qt::ISODate);
+            if (!dt.isValid())
+                dt = QDateTime::fromString(v.toString(), QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+            if (dt.isValid()) {
+                dt.setTimeZone(QTimeZone::utc());
+                *out = dt.toSecsSinceEpoch();
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Bucket id for a timestamp at a target frequency; -1 for an unknown frequency.
+qint64 t2_bucket(qint64 epoch, const QString& freq) {
+    static const QHash<QString, qint64> kSeconds = {{"1m", 60},    {"5m", 300},    {"15m", 900}, {"1h", 3600},
+                                                    {"4h", 14400}, {"1d", 86400},  {"1w", 604800}};
+    if (freq == "1M") {
+        const QDate d = QDateTime::fromSecsSinceEpoch(epoch, QTimeZone::utc()).date();
+        return static_cast<qint64>(d.year()) * 12 + (d.month() - 1);
+    }
+    const qint64 step = kSeconds.value(freq, 0);
+    if (step <= 0)
+        return -1;
+    // Weeks start on Monday: day 0 of the Unix epoch is a Thursday, so shift by 3 days.
+    return freq == "1w" ? (epoch + 3 * 86400) / step : epoch / step;
+}
+
+// Aggregate time-ordered rows into coarser bars. ohlc_mode: first open / max high / min low /
+// last close / summed volume; otherwise the last row of each bucket is kept. Rows that carry no
+// usable time are dropped.
+QJsonArray t2_resample(const QJsonArray& rows, const QString& freq, bool ohlc_mode) {
+    struct Bar {
+        QJsonObject last;
+        double open = 0, high = 0, low = 0, close = 0, volume = 0;
+        bool has_ohlc = false;
+        qint64 start = 0;
+    };
+    QVector<qint64> order;
+    QHash<qint64, Bar> bars;
+    for (const QJsonValue& rv : rows) {
+        if (!rv.isObject())
+            continue;
+        const QJsonObject row = rv.toObject();
+        qint64 epoch = 0;
+        if (!t2_row_epoch(row, &epoch))
+            continue;
+        const qint64 b = t2_bucket(epoch, freq);
+        if (b < 0)
+            continue;
+        const bool has_ohlc = row.value("open").isDouble() && row.value("high").isDouble() &&
+                              row.value("low").isDouble() && row.value("close").isDouble();
+        auto it = bars.find(b);
+        if (it == bars.end()) {
+            Bar bar;
+            bar.start = epoch;
+            if (has_ohlc) {
+                bar.open = row.value("open").toDouble();
+                bar.high = row.value("high").toDouble();
+                bar.low = row.value("low").toDouble();
+                bar.close = row.value("close").toDouble();
+                bar.has_ohlc = true;
+            }
+            bar.volume = row.value("volume").toDouble();
+            bar.last = row;
+            bars.insert(b, bar);
+            order.append(b);
+        } else {
+            Bar& bar = it.value();
+            if (has_ohlc) {
+                if (!bar.has_ohlc) {
+                    bar.open = row.value("open").toDouble();
+                    bar.high = row.value("high").toDouble();
+                    bar.low = row.value("low").toDouble();
+                    bar.has_ohlc = true;
+                } else {
+                    bar.high = std::max(bar.high, row.value("high").toDouble());
+                    bar.low = std::min(bar.low, row.value("low").toDouble());
+                }
+                bar.close = row.value("close").toDouble();
+            }
+            bar.volume += row.value("volume").toDouble();
+            bar.last = row;
+        }
+    }
+
+    std::sort(order.begin(), order.end());
+    QJsonArray out;
+    for (qint64 b : order) {
+        const Bar& bar = bars.value(b);
+        QJsonObject row = bar.last;
+        if (ohlc_mode && bar.has_ohlc) {
+            row["open"] = bar.open;
+            row["high"] = bar.high;
+            row["low"] = bar.low;
+            row["close"] = bar.close;
+            if (row.contains("volume"))
+                row["volume"] = bar.volume;
+        }
+        // Stamp the bar with the time of its first row.
+        if (row.value("timestamp").isDouble())
+            row["timestamp"] = static_cast<double>(bar.start);
+        out.append(row);
+    }
+    return out;
+}
+
+} // namespace
 
 void register_utility_tier2(NodeRegistry& registry) {
     // ── Tier 2: Data & Transformation ──────────────────────────────
@@ -39,30 +172,82 @@ void register_utility_tier2(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                QString op = params.value("operation").toString("flatten");
-                QString key = params.value("key").toString();
-                QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                // The executor here used to be a copy of Reshape's (it read "operation" /
+                // "key", which this node does not have) so none of Index / Columns /
+                // Values / Aggregation did anything and the input came back unchanged.
+                const QString index_field = params.value("index").toString();
+                const QString column_field = params.value("columns").toString();
+                const QString value_field = params.value("values").toString();
+                const QString agg = params.value("agg").toString("sum");
+                const QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
 
-                if (op == "flatten" && data.isArray()) {
-                    QJsonArray out;
-                    for (const QJsonValue& v : data.toArray()) {
-                        if (v.isArray())
-                            for (const QJsonValue& inner : v.toArray())
-                                out.append(inner);
-                        else
-                            out.append(v);
+                if (!data.isArray()) {
+                    cb(false, {}, "transform.pivot needs an array of records as input");
+                    return;
+                }
+                if (index_field.isEmpty() || column_field.isEmpty() || value_field.isEmpty()) {
+                    cb(false, {}, "transform.pivot needs the Index, Column and Values fields");
+                    return;
+                }
+
+                struct PivotCell {
+                    double sum = 0;
+                    double first = 0;
+                    double last = 0;
+                    int n = 0;
+                };
+                QStringList row_order;
+                QStringList col_order;
+                QHash<QString, QHash<QString, PivotCell>> cells;
+
+                for (const QJsonValue& item : data.toArray()) {
+                    if (!item.isObject())
+                        continue;
+                    const QJsonObject rec = item.toObject();
+                    const QString row = ExpressionEngine::value_to_string(rec.value(index_field));
+                    const QString col = ExpressionEngine::value_to_string(rec.value(column_field));
+                    const QJsonValue raw = rec.value(value_field);
+                    const double v = raw.isDouble() ? raw.toDouble() : raw.toString().toDouble();
+
+                    if (!row_order.contains(row))
+                        row_order << row;
+                    if (!col_order.contains(col))
+                        col_order << col;
+
+                    PivotCell& cell = cells[row][col];
+                    if (cell.n == 0)
+                        cell.first = v;
+                    cell.last = v;
+                    cell.sum += v;
+                    ++cell.n;
+                }
+
+                QJsonArray out;
+                for (const QString& row : row_order) {
+                    QJsonObject out_row;
+                    out_row[index_field] = row;
+                    for (const QString& col : col_order) {
+                        const auto row_it = cells.constFind(row);
+                        const auto cell_it = row_it->constFind(col);
+                        if (cell_it == row_it->constEnd()) {
+                            out_row[col] = QJsonValue::Null;
+                            continue;
+                        }
+                        const PivotCell& c = cell_it.value();
+                        double value = c.sum;
+                        if (agg == "mean")
+                            value = c.n > 0 ? c.sum / c.n : 0.0;
+                        else if (agg == "count")
+                            value = c.n;
+                        else if (agg == "first")
+                            value = c.first;
+                        else if (agg == "last")
+                            value = c.last;
+                        out_row[col] = value;
                     }
-                    cb(true, out, {});
-                    return;
+                    out.append(out_row);
                 }
-                if (op == "nest" && data.isArray()) {
-                    // Wrap each item under "key" if provided, else wrap all items under "items"
-                    QJsonObject out;
-                    out[key.isEmpty() ? "items" : key] = data.toArray();
-                    cb(true, out, {});
-                    return;
-                }
-                cb(true, data, {});
+                cb(true, out, {});
             },
     });
 
@@ -294,9 +479,27 @@ void register_utility_tier2(NodeRegistry& registry) {
                 {"ohlc_mode", "OHLC Mode", "boolean", true, {}, "Use OHLC resampling for price data"},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>& inputs,
+            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(true, inputs.isEmpty() ? QJsonValue{} : inputs[0], {});
+                // Used to hand the input back unchanged (Target Frequency / OHLC Mode were ignored).
+                const QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                const QString freq = params.value("target_freq").toString("1h");
+                const bool ohlc_mode = params.value("ohlc_mode").toBool(true);
+
+                if (!data.isArray()) {
+                    cb(true, data, {});
+                    return;
+                }
+                if (t2_bucket(0, freq) < 0) {
+                    cb(false, {}, QString("Unknown target frequency '%1'").arg(freq));
+                    return;
+                }
+                const QJsonArray out = t2_resample(data.toArray(), freq, ohlc_mode);
+                if (out.isEmpty() && !data.toArray().isEmpty()) {
+                    cb(false, {}, "Resample needs rows with a timestamp / date field");
+                    return;
+                }
+                cb(true, out, {});
             },
     });
 
@@ -320,24 +523,28 @@ void register_utility_tier2(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                static QHash<QString, QPair<QJsonValue, qint64>> cache;
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                int ttl = static_cast<int>(params.value("ttl_seconds").toDouble(300)) * 1000;
+                // TTL in milliseconds, computed in double and clamped (ttl_seconds * 1000 overflowed int).
+                const int ttl_ms = static_cast<int>(qBound(1.0, params.value("ttl_seconds").toDouble(300), 2000000.0) * 1000.0);
                 QString key = params.value("cache_key").toString();
                 if (key.isEmpty()) {
-                    // Auto-key from data fingerprint
-                    key =
-                        data.isObject()
-                            ? QString::fromUtf8(QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)).left(64)
-                            : data.toVariant().toString().left(64);
+                    // Auto-key from a hash of the WHOLE input. The old key was the first 64 characters
+                    // of its JSON, so two different datasets that start alike (rows of the same table)
+                    // shared a key and the second one got the first one's data back.
+                    const QByteArray json = data.isObject()  ? QJsonDocument(data.toObject()).toJson(QJsonDocument::Compact)
+                                            : data.isArray() ? QJsonDocument(data.toArray()).toJson(QJsonDocument::Compact)
+                                                             : data.toVariant().toString().toUtf8();
+                    key = QString::fromLatin1(QCryptographicHash::hash(json, QCryptographicHash::Sha1).toHex());
                 }
-                qint64 now = QDateTime::currentMSecsSinceEpoch();
-                auto it = cache.find(key);
-                if (it != cache.end() && (now - it.value().second) < ttl) {
-                    cb(true, it.value().first, {});
+                // The shared, bounded, TTL-aware WorkflowCache (CacheManager) replaces a private
+                // process-wide hash that never expired anything or shrank.
+                auto& cache = WorkflowCache::instance();
+                const QString cache_key = QStringLiteral("node:") + key;
+                if (cache.has(cache_key)) {
+                    cb(true, cache.get(cache_key), {});
                     return;
                 }
-                cache.insert(key, {data, now});
+                cache.put(cache_key, data, ttl_ms);
                 cb(true, data, {});
             },
     });
@@ -359,7 +566,9 @@ void register_utility_tier2(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                int ms = static_cast<int>(params.value("delay_ms").toDouble(1000));
+                // QTimer::singleShot() ignores a negative interval, so the node would never
+                // report back and the run would hang; clamp to a sane window.
+                const int ms = static_cast<int>(qBound(0.0, params.value("delay_ms").toDouble(1000), 86400000.0));
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
                 QTimer::singleShot(ms, [cb, data]() { cb(true, data, {}); });
             },
@@ -384,8 +593,24 @@ void register_utility_tier2(NodeRegistry& registry) {
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                const QString label = params.value("label").toString("DEBUG");
+                const QString level = params.value("level").toString("info");
+
+                // "Log data to console/file for debugging" — it never wrote anything to the log;
+                // the Level select was ignored too. Long payloads are cut so one node cannot flood it.
+                const QString text =
+                    QString("[%1] %2").arg(label, ExpressionEngine::value_to_string(data).left(2000));
+                if (level == "debug")
+                    LOG_DEBUG("WorkflowLog", text);
+                else if (level == "warn")
+                    LOG_WARN("WorkflowLog", text);
+                else if (level == "error")
+                    LOG_ERROR("WorkflowLog", text);
+                else
+                    LOG_INFO("WorkflowLog", text);
+
                 QJsonObject out;
-                out["label"] = params.value("label").toString("DEBUG");
+                out["label"] = label;
                 out["logged_data"] = data;
                 cb(true, out, {});
             },
@@ -413,39 +638,14 @@ void register_utility_tier2(NodeRegistry& registry) {
                 QString condition = params.value("condition").toString();
                 QString message = params.value("message").toString("Assertion failed");
 
-                // Evaluate simple expressions: field op value
-                // Supports: {{field}} > value, {{field}} == value, {{field}} != value
+                // Same evaluator as If / Else — the placeholder this node advertises
+                // (={{$input.value > 0}}) matched none of the old regex, so with a non-empty
+                // condition the assertion silently PASSED; non-object input passed too.
                 bool passed = true;
-                if (!condition.isEmpty() && data.isObject()) {
-                    QJsonObject obj = data.toObject();
-                    static const QRegularExpression expr_re(R"(\{\{(\w+)\}\}\s*(==|!=|>|<|>=|<=|contains)\s*(.+))");
-                    QRegularExpressionMatch m = expr_re.match(condition.trimmed());
-                    if (m.hasMatch()) {
-                        QString field = m.captured(1);
-                        QString op = m.captured(2).trimmed();
-                        QString rhs = m.captured(3).trimmed();
-                        QJsonValue lhsv = obj.value(field);
-                        double lhsd = lhsv.toDouble();
-                        double rhsd = rhs.toDouble();
-                        QString lhss = lhsv.isString() ? lhsv.toString() : QString::number(lhsd);
-                        if (op == "==")
-                            passed = (lhss == rhs);
-                        else if (op == "!=")
-                            passed = (lhss != rhs);
-                        else if (op == ">")
-                            passed = (lhsd > rhsd);
-                        else if (op == "<")
-                            passed = (lhsd < rhsd);
-                        else if (op == ">=")
-                            passed = (lhsd >= rhsd);
-                        else if (op == "<=")
-                            passed = (lhsd <= rhsd);
-                        else if (op == "contains")
-                            passed = lhss.contains(rhs);
-                    }
-                }
+                if (!condition.trimmed().isEmpty())
+                    passed = ExpressionEngine::evaluate_condition(condition, data);
                 if (!passed)
-                    cb(false, {}, message);
+                    cb(false, {}, QString("%1 [%2]").arg(message, condition.trimmed()));
                 else
                     cb(true, data, {});
             },
@@ -470,27 +670,19 @@ void register_utility_tier2(NodeRegistry& registry) {
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 QString tmpl = params.value("template").toString();
-                QJsonObject input_obj = inputs.isEmpty() ? QJsonObject{} : inputs[0].toObject();
+                QString out_key = params.value("output_key").toString("rendered").trimmed();
+                if (out_key.isEmpty())
+                    out_key = "rendered";
+                const QJsonValue input = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                const QJsonObject input_obj = input.isObject() ? input.toObject() : QJsonObject{{"value", input}};
 
-                // Replace all {{field}} occurrences with the corresponding input field.
-                static const QRegularExpression placeholder_re(R"(\{\{(\w+)\}\})");
-                QString rendered = tmpl;
-                QRegularExpressionMatchIterator it = placeholder_re.globalMatch(tmpl);
-                // Collect replacements first to avoid offset issues.
-                QVector<std::pair<QString, QString>> replacements;
-                while (it.hasNext()) {
-                    QRegularExpressionMatch m = it.next();
-                    QString full_match = m.captured(0); // e.g. "{{name}}"
-                    QString key = m.captured(1);        // e.g. "name"
-                    QJsonValue val = input_obj.value(key);
-                    QString replacement = val.isString() ? val.toString() : QString::number(val.toDouble());
-                    replacements.append({full_match, replacement});
-                }
-                for (const auto& [placeholder, value] : replacements)
-                    rendered.replace(placeholder, value);
+                // {{name}}, {{$input.quote.price}}, {{items[0].p}}, {{prices.sum()}} ... The old
+                // \w+-only regex could not follow a path, printed a missing field as "0", and
+                // QString::number() cut every number to 6 significant digits.
+                const QString rendered = ExpressionEngine::value_to_string(ExpressionEngine::evaluate(tmpl, input_obj));
 
                 QJsonObject out;
-                out["rendered"] = rendered;
+                out[out_key] = rendered; // "Output Key" was declared but ignored (always "rendered")
                 cb(true, out, {});
             },
     });

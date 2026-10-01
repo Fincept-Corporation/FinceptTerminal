@@ -28,6 +28,7 @@
 
 #include "screens/crypto_trading/CryptoChart.h"
 
+#include "screens/crypto_trading/CryptoTypes.h"
 #include "ui/charts/CandleData.h"
 #include "ui/charts/ChartOverlayManager.h"
 #include "ui/charts/IndicatorPicker.h"
@@ -422,7 +423,6 @@ void CryptoChart::set_active_tf(int idx) {
             st->polish(tf_buttons_[i]);
         }
     }
-    pending_tf_ = TF_LABELS[idx];
     active_tf_ = idx;
     emit timeframe_changed(TF_LABELS[idx]);
 }
@@ -440,12 +440,10 @@ void CryptoChart::set_candles(const QVector<trading::Candle>& candles) {
     overlay_mgr_->set_candles(fincept::ui::CandleData::from_candles(candles_));
     apply_tf_axis_format();
     update_last_price_marker();
-
-    if (!pending_tf_.isEmpty()) {
-        const QString tf = pending_tf_;
-        pending_tf_.clear();
-        emit timeframe_changed(tf);
-    }
+    // (A "pending timeframe" re-emit used to live here: every timeframe click
+    // fired timeframe_changed twice — once on click and again when the candles
+    // landed — doubling the REST fetch and WS re-point and resetting the view.
+    // The screen now re-issues a dropped fetch itself, see async_fetch_candles.)
 }
 
 void CryptoChart::append_candle(const trading::Candle& candle) {
@@ -564,6 +562,9 @@ void CryptoChart::update_axes(double min_price, double max_price, qint64 min_tim
     const double p_max = max_price + padding;
 
     if (p_min != last_min_price_ || p_max != last_max_price_) {
+        // Axis tick labels follow the price magnitude too ("%.2f" rendered every
+        // tick of a sub-cent pair as 0.00).
+        price_axis_->setLabelFormat(QStringLiteral("%.%1f").arg(price_decimals(p_max)));
         price_axis_->setRange(p_min, p_max);
         last_min_price_ = p_min;
         last_max_price_ = p_max;
@@ -717,7 +718,8 @@ void CryptoChart::update_last_price_marker() {
     // Update the always-visible "last price" tag on the right axis.
     if (last_tag_bg_ && last_tag_txt_ && chart_) {
         const QPointF anchor = chart_->mapToPosition(QPointF(last_max_time_, price), series_);
-        const QString text = QString::number(price, 'f', 2);
+        // Magnitude-scaled precision — a fixed 2 dp printed every sub-cent pair as 0.00.
+        const QString text = format_price_plain(price);
         last_tag_txt_->setText(text);
         const QRectF tb = last_tag_txt_->boundingRect();
         const qreal pad_x = 6, pad_y = 2;
@@ -771,7 +773,7 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
     // Clamp Y so the tag never extends past the plot edges into the time tag.
     {
         const double price = chart_value_pos.y();
-        price_tag_txt_->setText(QString::number(price, 'f', 2));
+        price_tag_txt_->setText(format_price_plain(price));
         const QRectF tb = price_tag_txt_->boundingRect();
         const qreal w = tb.width() + 2 * kPadX;
         const qreal h = tb.height() + 2 * kPadY;
@@ -859,13 +861,13 @@ void CryptoChart::on_hover_position(const QPointF& chart_value_pos, const QPoint
         ohlc_tooltip_->setText(tpl.arg(dim)                                  // %1 dim/label colour
                                    .arg(time_str)                            // %2 timestamp
                                    .arg(fg)                                  // %3 open colour
-                                   .arg(QString::number(hit->open, 'f', 2))  // %4
+                                   .arg(format_price_plain(hit->open))       // %4
                                    .arg(green)                               // %5 high colour
-                                   .arg(QString::number(hit->high, 'f', 2))  // %6
+                                   .arg(format_price_plain(hit->high))       // %6
                                    .arg(red)                                 // %7 low colour
-                                   .arg(QString::number(hit->low, 'f', 2))   // %8
+                                   .arg(format_price_plain(hit->low))        // %8
                                    .arg(dir_color)                           // %9 close + Δ%
-                                   .arg(QString::number(hit->close, 'f', 2)) // %10
+                                   .arg(format_price_plain(hit->close))      // %10
                                    .arg(chg));                               // %11
         ohlc_tooltip_->adjustSize();
         ohlc_tooltip_->setVisible(true);

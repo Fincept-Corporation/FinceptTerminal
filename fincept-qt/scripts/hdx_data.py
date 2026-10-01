@@ -190,13 +190,78 @@ def extract_dataset_details(dataset: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _fail(message: str) -> str:
+    """Print + return a JSON error. Early-exit paths used to return without printing,
+    which left callers with an empty stdout and no error to show."""
+    output = json.dumps({"error": message}, indent=2)
+    print(output)
+    return output
+
+
+# HDX groups countries by lowercase ISO3 slug ("ukr"); the CKAN `groups:` filter only
+# understands that slug, while the terminal UI passes display names ("Ukraine", "Gaza").
+# Aliases cover the critical-region list plus names HDX titles differently.
+_COUNTRY_ALIASES = {
+    "ukraine": "ukr", "gaza": "pse", "west bank": "pse", "palestine": "pse",
+    "state of palestine": "pse", "occupied palestinian territory": "pse",
+    "sudan": "sdn", "south sudan": "ssd", "yemen": "yem", "syria": "syr",
+    "afghanistan": "afg", "myanmar": "mmr", "burma": "mmr", "ethiopia": "eth",
+    "haiti": "hti", "somalia": "som", "venezuela": "ven", "lebanon": "lbn",
+    "iraq": "irq", "libya": "lby", "nigeria": "nga", "mali": "mli",
+    "democratic republic of the congo": "cod", "drc": "cod", "dr congo": "cod",
+}
+
+# The legacy topic tags ("conflict, violence and peace", "humanitarian access-aid-workers")
+# no longer exist on HDX, so searches built on them always returned 0 datasets.
+_CONFLICT_TOPIC_QUERY = '(vocab_Topics:"conflict-violence" OR vocab_Topics:"complex emergency-conflict-security")'
+_HUMANITARIAN_TOPIC_QUERY = ('(vocab_Topics:"humanitarian access" OR vocab_Topics:"humanitarian needs overview-hno"'
+                             ' OR vocab_Topics:"humanitarian response plan-hrp")')
+_TOPIC_ALIASES = {
+    "conflict": _CONFLICT_TOPIC_QUERY,
+    "conflict, violence and peace": _CONFLICT_TOPIC_QUERY,
+    "humanitarian": _HUMANITARIAN_TOPIC_QUERY,
+}
+
+
+def resolve_country_code(country: str) -> Optional[str]:
+    """Map a country name (or ISO3 code) to the HDX group slug; None if unknown."""
+    name = (country or "").strip().lower()
+    if not name:
+        return None
+    if name in _COUNTRY_ALIASES:
+        return _COUNTRY_ALIASES[name]
+    if len(name) == 3 and name.isalpha():
+        return name
+    try:
+        groups = group_list(all_fields=True)
+    except Exception:
+        return None
+    for g in groups:
+        if str(g.get("title", "")).strip().lower() == name:
+            return g.get("name") or None
+    for g in groups:
+        title = str(g.get("title", "")).strip().lower()
+        if title and (name in title or title in name):
+            return g.get("name") or None
+    return None
+
+
+def country_query(country: str) -> str:
+    """CKAN query fragment restricting results to one country."""
+    code = resolve_country_code(country)
+    if code:
+        return f"groups:{code}"
+    # Unknown name — fall back to free text rather than a filter that matches nothing.
+    return f'"{country.strip()}"'
+
+
 def main(args: Optional[List[str]] = None) -> str:
     """Main entry point for script execution"""
     if args is None:
         args = sys.argv[1:]
 
     if len(args) < 1:
-        return json.dumps({"error": "Usage: hdx_data.py <command> [args...]"})
+        return _fail("Usage: hdx_data.py <command> [args...]")
 
     command = args[0]
 
@@ -209,7 +274,7 @@ def main(args: Optional[List[str]] = None) -> str:
             limit = int(args[2]) if len(args) > 2 else 10
 
             if not query:
-                return json.dumps({"error": "Query parameter required"})
+                return _fail("Query parameter required")
 
             search_result = package_search(q=query, rows=limit, sort="last_modified desc")
 
@@ -227,7 +292,7 @@ def main(args: Optional[List[str]] = None) -> str:
             dataset_id = args[1] if len(args) > 1 else ""
 
             if not dataset_id:
-                return json.dumps({"error": "Dataset ID required"})
+                return _fail("Dataset ID required")
 
             dataset = package_show(id=dataset_id)
 
@@ -244,15 +309,13 @@ def main(args: Optional[List[str]] = None) -> str:
             # Build query using CKAN field syntax
             query_parts = []
 
-            # Add country filter if specified
+            # Add country filter if specified (name or ISO3 code)
             if country:
-                # Try to convert country name to ISO3 code (lowercase)
-                country_code = country.lower()[:3]
-                query_parts.append(f"groups:{country_code}")
+                query_parts.append(country_query(country))
 
             # Add conflict-related topic tags
             # Using vocab_Topics field for thematic tags
-            query_parts.append('vocab_Topics:"conflict, violence and peace"')
+            query_parts.append(_CONFLICT_TOPIC_QUERY)
 
             query = " ".join(query_parts)
 
@@ -276,11 +339,10 @@ def main(args: Optional[List[str]] = None) -> str:
             query_parts = []
 
             if country:
-                country_code = country.lower()[:3]
-                query_parts.append(f"groups:{country_code}")
+                query_parts.append(country_query(country))
 
             # Add humanitarian-related topic tags
-            query_parts.append('vocab_Topics:"humanitarian access-aid-workers"')
+            query_parts.append(_HUMANITARIAN_TOPIC_QUERY)
 
             query = " ".join(query_parts) if query_parts else "humanitarian"
 
@@ -301,9 +363,10 @@ def main(args: Optional[List[str]] = None) -> str:
             limit = int(args[2]) if len(args) > 2 else 10
 
             if not country_code:
-                return json.dumps({"error": "Country code required"})
+                return _fail("Country code required")
 
-            query = f"groups:{country_code.lower()}"
+            # Accepts an ISO3 code ("ukr") or a display name ("Ukraine", "Gaza")
+            query = country_query(country_code)
             search_result = package_search(q=query, rows=limit, sort="last_modified desc")
 
             result = {
@@ -321,7 +384,7 @@ def main(args: Optional[List[str]] = None) -> str:
             limit = int(args[2]) if len(args) > 2 else 10
 
             if not org_slug:
-                return json.dumps({"error": "Organization slug required"})
+                return _fail("Organization slug required")
 
             query = f"organization:{org_slug}"
             search_result = package_search(q=query, rows=limit, sort="last_modified desc")
@@ -341,10 +404,13 @@ def main(args: Optional[List[str]] = None) -> str:
             limit = int(args[2]) if len(args) > 2 else 10
 
             if not topic:
-                return json.dumps({"error": "Topic required"})
+                return _fail("Topic required")
 
+            # Legacy/umbrella topic names map to the tags HDX actually carries
+            if topic.strip().lower() in _TOPIC_ALIASES:
+                query = _TOPIC_ALIASES[topic.strip().lower()]
             # Quote topic if it contains spaces
-            if " " in topic:
+            elif " " in topic:
                 query = f'vocab_Topics:"{topic}"'
             else:
                 query = f'vocab_Topics:{topic}'
@@ -366,7 +432,7 @@ def main(args: Optional[List[str]] = None) -> str:
             limit = int(args[2]) if len(args) > 2 else 10
 
             if not series_name:
-                return json.dumps({"error": "Data series name required"})
+                return _fail("Data series name required")
 
             # Quote series name as it likely contains spaces
             query = f'dataseries_name:"{series_name}"'
@@ -456,13 +522,13 @@ def main(args: Optional[List[str]] = None) -> str:
             resource_index = int(args[2]) if len(args) > 2 else 0
 
             if not dataset_id:
-                return json.dumps({"error": "Dataset ID required"})
+                return _fail("Dataset ID required")
 
             dataset = package_show(id=dataset_id)
             resources = dataset.get("resources", [])
 
             if resource_index >= len(resources):
-                return json.dumps({"error": f"Resource index {resource_index} out of range (max: {len(resources) - 1})"})
+                return _fail(f"Resource index {resource_index} out of range (max: {len(resources) - 1})")
 
             resource = resources[resource_index]
 

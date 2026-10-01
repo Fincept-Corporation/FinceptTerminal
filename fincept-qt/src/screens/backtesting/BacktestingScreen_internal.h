@@ -100,6 +100,11 @@ inline void apply_pill_geometry(QWidget* w) {
 inline QString fmt_metric(const QString& key, const QJsonValue& val) {
     using namespace fincept::services::backtest;
 
+    // JSON has no Infinity, so the providers' sanitiser turns a profit factor with
+    // winners but ZERO losing trades (gross-loss denominator 0) into null. Showing "—" or
+    // dropping the card hides the best possible result; say what it is.
+    if (val.isNull() && (key == QLatin1String("profitFactor") || key == QLatin1String("profit_factor")))
+        return QString::fromUtf8("∞");
     if (val.isString())
         return val.toString();
     if (val.isBool())

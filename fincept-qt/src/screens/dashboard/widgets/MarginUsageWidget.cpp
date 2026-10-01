@@ -3,6 +3,7 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
 #include "ui/theme/Theme.h"
@@ -19,12 +20,18 @@
 namespace fincept::screens::widgets {
 
 namespace {
-QString fmt_money(double v) {
+// Lakh / crore only reads right for rupee accounts. Applying it to a USD/EUR/GBP
+// broker (Alpaca, IBKR, Tradier, Saxo) printed 150,000 as "1.50L".
+QString fmt_money(double v, bool inr) {
     QString s;
-    if (std::abs(v) >= 1.0e7)
+    if (inr && std::abs(v) >= 1.0e7)
         s = QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    else if (std::abs(v) >= 1.0e5)
+    else if (inr && std::abs(v) >= 1.0e5)
         s = QString::number(v / 1.0e5, 'f', 2) + "L";
+    else if (!inr && std::abs(v) >= 1.0e9)
+        s = QString::number(v / 1.0e9, 'f', 2) + "B";
+    else if (!inr && std::abs(v) >= 1.0e6)
+        s = QString::number(v / 1.0e6, 'f', 2) + "M";
     else
         s = QString::number(v, 'f', 2);
     return s;
@@ -75,6 +82,20 @@ MarginUsageWidget::MarginUsageWidget(const QJsonObject& cfg, QWidget* parent) : 
     vl->addWidget(usage_bar_);
 
     vl->addStretch(1);
+
+    // Title-bar refresh = "retry". It used to be wired to nothing, so the 20 s
+    // "No data yet - click refresh to retry" prompt pointed at a dead button.
+    // The account stream polls on its own cadence, so the only thing a retry can
+    // do is (re)start that stream, show the loading state again, and ask the hub.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (broker_id_.isEmpty() || account_id_.isEmpty())
+            return;
+        ensure_stream_running();
+        if (last_usage_pct_ < 0)
+            set_loading(true);
+        datahub::DataHub::instance().request(
+            trading::broker_topic(broker_id_, account_id_, QStringLiteral("balance")), /*force=*/true);
+    });
 
     set_configurable(true);
     apply_styles();
@@ -132,6 +153,8 @@ void MarginUsageWidget::hub_resubscribe() {
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
     const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("balance"));
+    if (last_usage_pct_ < 0)
+        set_loading(true); // nothing shown yet — see OpenPositionsWidget::hub_resubscribe
     hub.subscribe(this, topic, [this](const QVariant& v) {
         if (!v.canConvert<trading::BrokerFunds>())
             return;
@@ -161,10 +184,13 @@ void MarginUsageWidget::hideEvent(QHideEvent* e) {
 }
 
 void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
-    available_val_->setText(fmt_money(funds.available_balance));
-    used_val_->setText(fmt_money(funds.used_margin));
-    total_val_->setText(fmt_money(funds.total_balance));
-    collateral_val_->setText(fmt_money(funds.collateral));
+    // Unknown broker -> keep the historical (rupee) notation.
+    const auto* broker = trading::BrokerRegistry::instance().get(broker_id_);
+    const bool inr = !broker || broker->profile().currency == QLatin1String("INR");
+    available_val_->setText(fmt_money(funds.available_balance, inr));
+    used_val_->setText(fmt_money(funds.used_margin, inr));
+    total_val_->setText(fmt_money(funds.total_balance, inr));
+    collateral_val_->setText(fmt_money(funds.collateral, inr));
 
     const double denom = funds.total_balance > 0 ? funds.total_balance : (funds.available_balance + funds.used_margin);
     int pct = 0;

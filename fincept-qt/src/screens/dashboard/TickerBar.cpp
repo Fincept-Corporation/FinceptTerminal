@@ -8,6 +8,7 @@
 #include <QContextMenuEvent>
 #include <QHBoxLayout>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPointer>
@@ -34,7 +35,7 @@ TickerBar::TickerBar(QWidget* parent)
     setContextMenuPolicy(Qt::DefaultContextMenu);
     setAccessibleName(tr("Market ticker"));
     setAccessibleDescription(tr("Scrolling price ticker. Right-click to edit the symbol list."));
-    setToolTip(tr("Right-click to edit ticker symbols"));
+    setToolTip(tr("Double-click a symbol to open it; right-click to edit ticker symbols"));
 
     auto apply_bg = [this]() { setStyleSheet(QString("background-color: %1;").arg(ui::colors::BG_BASE())); };
     apply_bg();
@@ -216,6 +217,28 @@ void TickerBar::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     scroll_timer_.stop();
     hide_edit_bar();
+}
+
+void TickerBar::mouseDoubleClickEvent(QMouseEvent* event) {
+    // Hit-test the scrolled strip exactly as paintEvent() lays it out: entries
+    // repeat in passes, starting at -offset_.
+    if (!entries_.isEmpty() && total_width_ > 0 && !edit_bar_->isVisible() && event->button() == Qt::LeftButton) {
+        const double click_x = event->position().x();
+        double x = -offset_;
+        const int passes = (width() / total_width_) + 2;
+        for (int pass = 0; pass < passes; ++pass) {
+            for (const auto& e : entries_) {
+                // total_width includes the trailing gap, so a click between two
+                // symbols still resolves to the nearer (left) one.
+                if (click_x >= x && click_x < x + e.total_width) {
+                    emit symbol_activated(e.symbol);
+                    return;
+                }
+                x += e.total_width;
+            }
+        }
+    }
+    QWidget::mouseDoubleClickEvent(event);
 }
 
 void TickerBar::resizeEvent(QResizeEvent* event) {

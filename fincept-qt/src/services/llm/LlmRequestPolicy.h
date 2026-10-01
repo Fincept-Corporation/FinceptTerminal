@@ -32,10 +32,12 @@
 #include <QJsonObject>
 #include <QSet>
 #include <QString>
+#include <QThread>
 
 #include <QtConcurrent>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <utility>
@@ -130,6 +132,53 @@ struct ChatSessionGuard {
     ChatSessionGuard(const ChatSessionGuard&) = delete;
     ChatSessionGuard& operator=(const ChatSessionGuard&) = delete;
 };
+
+// ── Cooperative cancellation ─────────────────────────────────────────────────
+//
+// A turn can run for minutes (reasoning model + multi-round tool loop) and the
+// request threads were uninterruptible: the only way out was to wait for the
+// 10-minute loop deadline. LlmService::cancel_active_request() bumps a
+// generation counter; every worker thread records the value when its request
+// starts (CancelScope) and polls it at the places that can block — the SSE read
+// loop, each blocking POST, the Fincept poll loop and the top of every tool
+// round. A request that has not armed a scope (any other thread) is never
+// reported as cancelled, so a stray call can't abort unrelated work.
+inline std::atomic<quint64> g_llm_cancel_generation{0};
+inline thread_local bool t_cancel_armed = false;
+inline thread_local quint64 t_cancel_baseline = 0;
+
+inline bool cancel_requested() {
+    return t_cancel_armed && g_llm_cancel_generation.load(std::memory_order_acquire) != t_cancel_baseline;
+}
+
+struct CancelScope {
+    bool prev_armed;
+    quint64 prev_baseline;
+    CancelScope() : prev_armed(t_cancel_armed), prev_baseline(t_cancel_baseline) {
+        t_cancel_armed = true;
+        t_cancel_baseline = g_llm_cancel_generation.load(std::memory_order_acquire);
+    }
+    ~CancelScope() {
+        t_cancel_armed = prev_armed;
+        t_cancel_baseline = prev_baseline;
+    }
+    CancelScope(const CancelScope&) = delete;
+    CancelScope& operator=(const CancelScope&) = delete;
+};
+
+/// Sleep `ms` in short slices so a cancel lands within ~100 ms. Returns false
+/// if the request was cancelled while waiting.
+inline bool cancellable_sleep(int ms) {
+    int left = ms;
+    while (left > 0) {
+        if (cancel_requested())
+            return false;
+        const int slice = std::min(left, 100);
+        QThread::msleep(static_cast<unsigned long>(slice));
+        left -= slice;
+    }
+    return !cancel_requested();
+}
 
 struct ToolPolicyGuard {
     LlmService::ToolPolicy prev;

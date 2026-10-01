@@ -5,9 +5,13 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QColor>
+#include <QHash>
+#include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 #include <QVector>
+
+#include <cmath>
 
 namespace fincept::screens::equity {
 
@@ -133,6 +137,45 @@ inline QString currency_symbol(const QString& currency) {
     if (currency == "JPY")
         return QString::fromUtf8("\u00A5");
     return "$";
+}
+
+// -- Cross-screen symbol hand-off ---------------------------------------------
+
+// Yahoo-style ticker for a broker symbol \u2014 what Equity Research (yfinance) expects:
+// "RELIANCE" on NSE -> "RELIANCE.NS". Empty when the instrument has no equity
+// counterpart (option / future / commodity contracts), so callers hide the action.
+inline QString research_ticker_for(const QString& symbol, const QString& exchange) {
+    static const QHash<QString, QString> kSuffix = {
+        {"NSE", ".NS"}, {"BSE", ".BO"}, {"HKEX", ".HK"}, {"TSE", ".T"},   {"KRX", ".KS"}, {"SGX", ".SI"},
+        {"ASX", ".AX"}, {"LSE", ".L"},  {"TSX", ".TO"},  {"XETR", ".DE"}, {"SIX", ".SW"},
+    };
+    static const QStringList kNoEquity = {"NFO", "BFO", "MCX", "CDS", "BCD", "NCDEX"};
+    // Contract names end in strike+CE/PE or FUT (e.g. NIFTY2660923200CE, RELIANCE26JULFUT).
+    static const QRegularExpression kDerivativeTail(QStringLiteral("(\\d(CE|PE)|FUT)$"));
+
+    const QString sym = symbol.trimmed().toUpper();
+    const QString ex = exchange.trimmed().toUpper();
+    if (sym.isEmpty() || kNoEquity.contains(ex) || kDerivativeTail.match(sym).hasMatch())
+        return {};
+    const auto it = kSuffix.constFind(ex);
+    if (it == kSuffix.constEnd() || sym.contains(QLatin1Char('.')))
+        return sym;
+    return sym + it.value();
+}
+
+// Order / position quantity for display: whole numbers without a decimal point, fractional
+// shares (Alpaca) with up to 6 decimals and no trailing zeros. QString::number(q, 'f', 0)
+// rounded 2.35 shares to "2" (and a confirm dialog showed 0.5 as "1"), while arg(double)
+// printed 1,000,000 as "1e+06".
+inline QString format_quantity(double qty) {
+    if (!std::isfinite(qty))
+        return QStringLiteral("--");
+    QString s = QString::number(qty, 'f', 6);
+    while (s.endsWith(QLatin1Char('0')))
+        s.chop(1);
+    if (s.endsWith(QLatin1Char('.')))
+        s.chop(1);
+    return (s.isEmpty() || s == QLatin1String("-0")) ? QStringLiteral("0") : s;
 }
 
 // \u2500\u2500 Funds / Stats view-models

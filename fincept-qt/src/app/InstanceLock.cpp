@@ -30,6 +30,11 @@ constexpr int kSendTimeoutMs = 1000;
 // rest of the bytes on a slow connection.
 constexpr const char* kPendingLenProp = "_pendingLen";
 
+// Upper bound on one framed argv payload. Real payloads are well under 1 KiB;
+// the length prefix comes straight off the socket, so without a cap a bogus
+// prefix (up to 4 GiB) would make the primary buffer-wait on that client forever.
+constexpr quint32 kInstanceLockMaxFrameBytes = 1u << 20; // 1 MiB
+
 QByteArray serialise_args(const QStringList& args) {
     QJsonArray arr;
     for (const auto& a : args)
@@ -158,6 +163,13 @@ void InstanceLock::on_new_connection() {
                 QDataStream in(client);
                 in.setVersion(QDataStream::Qt_6_0);
                 in >> len;
+                if (len > kInstanceLockMaxFrameBytes) {
+                    LOG_WARN(kTag, QString("Rejecting IPC frame of %1 bytes (cap %2)")
+                                       .arg(len)
+                                       .arg(kInstanceLockMaxFrameBytes));
+                    client->disconnectFromServer();
+                    return;
+                }
                 client->setProperty(kPendingLenProp, len);
             }
 

@@ -55,6 +55,14 @@ class ChainSubTab : public QWidget {
     /// other Yellow-group panels can follow.
     QString active_underlying() const;
 
+    /// Screen-level lifecycle, driven by FnoScreen. The chain topic must stay
+    /// subscribed for as long as the F&O SCREEN is visible, not just this sub-tab:
+    /// the OI / Builder / Multi-Straddle / Screener tabs all read the chain this tab
+    /// subscribes to, and the hub only refreshes topics with a concrete subscriber —
+    /// so switching to any of them used to freeze every chain after the first view.
+    void on_screen_shown();
+    void on_screen_hidden();
+
   protected:
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
@@ -74,10 +82,18 @@ class ChainSubTab : public QWidget {
     void rebuild_picker_for_broker(const QString& broker_id, bool keep_selection);
     void rebuild_expiries_for_underlying(const QString& broker_id, const QString& underlying, bool keep_selection);
     void resubscribe();
+    /// Unsubscribe the chain topic + per-leg tick pattern (hub + error channel).
+    void drop_subscription();
+    /// True while the owning FnoScreen is on screen (this tab may be a hidden page).
+    bool owning_screen_visible() const;
     void show_empty_state(const QString& message);
     void hide_empty_state();
 
     QString current_topic() const;
+    /// True when the table currently holds rows belonging to `topic`'s
+    /// (broker, underlying, expiry) — i.e. what's on screen is not a leftover
+    /// from a previous picker selection.
+    bool holds_rows_for(const QString& topic) const;
 
     FnoHeaderBar* header_ = nullptr;
     OptionChainTable* table_ = nullptr;
@@ -91,8 +107,9 @@ class ChainSubTab : public QWidget {
     /// used to patch single cells from the WS feed. Empty when not subscribed.
     QString tick_pattern_;
 
-    /// Whether the widget is currently visible — gates re-subscribe paths
-    /// triggered by combo changes from non-visible state.
+    /// Whether the chain subscription is wanted: this tab is shown, or the owning F&O
+    /// screen is (see on_screen_shown). Gates re-subscribe paths triggered by combo
+    /// changes.
     bool is_visible_ = false;
 
     /// Last-applied selection — used to avoid clobbering user choice on

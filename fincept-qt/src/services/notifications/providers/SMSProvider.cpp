@@ -26,23 +26,31 @@ void SMSProvider::send(const NotificationRequest& req, std::function<void(bool, 
         return;
     }
 
-    const QString url = QString("https://%1:%2@api.twilio.com/2010-04-01/Accounts/%3/Messages.json")
-                            .arg(account_sid_, auth_token_, account_sid_);
+    // Twilio's Messages API only accepts application/x-www-form-urlencoded (a JSON
+    // body is rejected) and authenticates with HTTP Basic: send it as a form with an
+    // Authorization header rather than credentials embedded in the URL.
+    const QString url = QString("https://api.twilio.com/2010-04-01/Accounts/%1/Messages.json").arg(account_sid_);
 
-    QJsonObject body;
-    body["To"] = to_number_;
-    body["From"] = from_number_;
-    body["Body"] = QString("[Fincept] %1: %2").arg(req.title, req.message);
+    QMap<QString, QString> form;
+    form["To"] = to_number_;
+    form["From"] = from_number_;
+    form["Body"] = QString("[Fincept] %1: %2").arg(req.title, req.message);
 
-    HttpClient::instance().post(url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        const auto obj = res.value().object();
-        const bool ok = !obj.contains("code");
-        cb(ok, ok ? QString{} : obj.value("message").toString());
-    });
+    HttpClient::Headers headers;
+    headers.insert("Authorization", "Basic " + QString("%1:%2").arg(account_sid_, auth_token_).toUtf8().toBase64());
+
+    HttpClient::instance().post_form(
+        url, form,
+        [cb](Result<QJsonDocument> res) {
+            if (res.is_err()) {
+                cb(false, QString::fromStdString(res.error()));
+                return;
+            }
+            const auto obj = res.value().object();
+            const bool ok = !obj.contains("code");
+            cb(ok, ok ? QString{} : obj.value("message").toString());
+        },
+        nullptr, headers);
 }
 
 } // namespace fincept::notifications

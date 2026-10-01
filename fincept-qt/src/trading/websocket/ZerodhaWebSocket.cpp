@@ -152,6 +152,10 @@ void ZerodhaWebSocket::on_binary_message(const QByteArray& data) {
             tick = parse_quote_packet(pkt);
         } else if (pkt_len == 184) {
             tick = parse_full_packet(pkt);
+        } else if (pkt_len == 28 || pkt_len == 32) {
+            // Index quote/full. These used to hit the "unknown size" branch and be
+            // dropped, so an index token (NIFTY 50, BANKNIFTY, …) never produced a tick.
+            tick = parse_index_packet(pkt, pkt_len);
         } else {
             // Unknown packet size — skip
             offset += pkt_len;
@@ -296,6 +300,29 @@ ZerodhaTick ZerodhaWebSocket::parse_quote_packet(const uchar* p) const {
     t.high = price_from_wire(read_i32(p + 32), t.instrument_token);
     t.low = price_from_wire(read_i32(p + 36), t.instrument_token);
     t.close = price_from_wire(read_i32(p + 40), t.instrument_token);
+    return t;
+}
+
+ZerodhaTick ZerodhaWebSocket::parse_index_packet(const uchar* p, int len) const {
+    // Index packet layout (all int32 BE, prices in paise) — per KiteTicker:
+    // 0-3   instrument_token
+    // 4-7   last_price
+    // 8-11  high          (NB: H, L, O, C — not the O, H, L, C order of stock quotes)
+    // 12-15 low
+    // 16-19 open
+    // 20-23 close
+    // 24-27 price change (derived by consumers from ltp/close; not stored)
+    // 28-31 exchange_timestamp (unix epoch seconds) — 32-byte "full" packets only
+    ZerodhaTick t;
+    t.instrument_token = read_u32(p);
+    t.tradable = false;
+    t.ltp = price_from_wire(read_i32(p + 4), t.instrument_token);
+    t.high = price_from_wire(read_i32(p + 8), t.instrument_token);
+    t.low = price_from_wire(read_i32(p + 12), t.instrument_token);
+    t.open = price_from_wire(read_i32(p + 16), t.instrument_token);
+    t.close = price_from_wire(read_i32(p + 20), t.instrument_token);
+    if (len >= 32)
+        t.exchange_timestamp = QDateTime::fromSecsSinceEpoch(read_i32(p + 28), QTimeZone::UTC);
     return t;
 }
 

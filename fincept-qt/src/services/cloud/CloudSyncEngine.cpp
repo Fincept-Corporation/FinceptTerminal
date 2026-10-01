@@ -14,6 +14,8 @@
 #include <QMetaType>
 #include <QTimer>
 
+#include <memory>
+
 namespace fincept::services::cloud {
 
 namespace {
@@ -41,9 +43,26 @@ void CloudSyncEngine::initialize() {
     fincept::cloud::CloudClient::instance().set_base_url(fincept::AppConfig::instance().cloud_base_url());
     update_credentials();
 
-    // Keep credentials fresh as the user logs in / out.
+    // Keep credentials fresh as the user logs in / out. A previously-enabled
+    // session must also RESUME when the sign-in completes: initialize() runs while
+    // the saved session is still being validated (AuthManager never trusts the
+    // persisted `authenticated` flag), so its own resume check below almost always
+    // sees "not signed in" and nothing would otherwise drain the backlog or pull
+    // until the next local edit. Only the signed-out -> signed-in edge triggers it;
+    // auth_state_changed also fires on every periodic profile refresh.
+    auto was_signed_in = std::make_shared<bool>(can_enable());
     connect(&fincept::auth::AuthManager::instance(), &fincept::auth::AuthManager::auth_state_changed, this,
-            [this]() { update_credentials(); });
+            [this, was_signed_in]() {
+                update_credentials();
+                const bool signed_in = can_enable();
+                const bool just_signed_in = signed_in && !*was_signed_in;
+                *was_signed_in = signed_in;
+                if (just_signed_in && master_enabled()) {
+                    LOG_INFO("CloudSync", "Signed in — resuming cloud sync");
+                    schedule_drain();
+                    refresh_all();
+                }
+            });
 
     // Debounced drain timer.
     drain_timer_ = new QTimer(this);
@@ -134,7 +153,10 @@ void CloudSyncEngine::schedule_drain() {
 }
 
 void CloudSyncEngine::drain() {
-    if (draining_ || paused_credits_ || !master_enabled())
+    // Signed out: every push would 401 and burn one of the row's limited retry
+    // attempts (kOutboxMaxAttempts dead-letters it). Leave the backlog untouched;
+    // the sign-in handler in initialize() re-schedules the drain.
+    if (draining_ || paused_credits_ || !master_enabled() || !can_enable())
         return;
     auto r = SyncOutbox::pending_all();
     if (r.is_err()) {

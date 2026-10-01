@@ -178,21 +178,23 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     BrokerHttpResponse result;
     result.rtt_ms = elapsed_ms;
 
+    // Timeout. The abort is client-side only: the broker may already have
+    // accepted the request, so this is "outcome unknown", not "did not
+    // happen". A blind retry of an order placement here creates a second
+    // live order — order payloads therefore carry a unique client order
+    // reference (BrokerClientOrderId.h) so the broker can reject the
+    // duplicate. Say so in the message rather than implying nothing ran.
+    const QString timeout_msg = QString("Request timed out after %1 ms — outcome unknown, the request may have "
+                                        "been accepted; verify before retrying")
+                                    .arg(timeout_ms_);
+
     if (timer.isActive()) {
         timer.stop();
     } else {
-        // Timeout. The abort is client-side only: the broker may already have
-        // accepted the request, so this is "outcome unknown", not "did not
-        // happen". A blind retry of an order placement here creates a second
-        // live order — order payloads therefore carry a unique client order
-        // reference (BrokerClientOrderId.h) so the broker can reject the
-        // duplicate. Say so in the message rather than implying nothing ran.
         reply->abort();
         reply->deleteLater();
         BrokerHttpResponse timeout_result;
-        timeout_result.error = QString("Request timed out after %1 ms — outcome unknown, the request may have "
-                                       "been accepted; verify before retrying")
-                                   .arg(timeout_ms_);
+        timeout_result.error = timeout_msg;
         timeout_result.rtt_ms = elapsed_ms;
         return timeout_result;
     }
@@ -202,7 +204,15 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     result.raw_body = QString::fromUtf8(reply->readAll());
 
     if (reply->error() != QNetworkReply::NoError && result.status_code == 0) {
-        result.error = reply->errorString();
+        // Qt's own per-request transfer timeout (setTransferTimeout above) is armed
+        // with the same budget as the QTimer and usually wins the race: it finishes
+        // the reply with TimeoutError / OperationCanceledError, which used to surface
+        // as a bare "Operation timed out" and lose the "outcome unknown" warning that
+        // guards against a blind order retry. Nothing else aborts this reply.
+        if (reply->error() == QNetworkReply::TimeoutError || reply->error() == QNetworkReply::OperationCanceledError)
+            result.error = timeout_msg;
+        else
+            result.error = reply->errorString();
         reply->deleteLater();
         return result;
     }
@@ -242,6 +252,16 @@ BrokerHttpResponse BrokerHttp::execute(const QString& method, const QString& url
     if (!result.success && result.error.isEmpty()) {
         result.error = result.json.value("message").toString(
             result.json.value("error").toString(QString("HTTP %1").arg(result.status_code)));
+    }
+
+    // A 429 with no usable message used to surface as a bare "HTTP 429". Name it as a rate limit and,
+    // when the broker gives a numeric Retry-After, say when to come back.
+    if (result.status_code == 429 && result.error == QLatin1String("HTTP 429")) {
+        bool numeric = false;
+        const int retry_after = QString::fromLatin1(reply->rawHeader("Retry-After")).trimmed().toInt(&numeric);
+        result.error = (numeric && retry_after > 0)
+                           ? QString("Rate limited by the broker (HTTP 429) — retry after %1 s").arg(retry_after)
+                           : QString("Rate limited by the broker (HTTP 429) — wait a moment and retry");
     }
 
     reply->deleteLater();

@@ -27,6 +27,12 @@ class EquityOrderBook : public QWidget {
     void set_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks, double spread,
                   double spread_pct, const QVector<int>& bid_orders, const QVector<int>& ask_orders);
 
+    // Drop the book (shows "No depth data"). The depth feed is not tagged with a symbol, so
+    // the owner calls this when the charted symbol/account changes — otherwise the previous
+    // symbol's ladder stays on screen, and a click on it would fill the new ticket's limit
+    // price with a level that belongs to the old symbol.
+    void clear();
+
   signals:
     void price_clicked(double price);
 

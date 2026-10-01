@@ -24,10 +24,13 @@ class HelpScreen : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    /// The page is built on first show, not in the constructor — see showEvent().
+    void showEvent(QShowEvent* event) override;
 
   private:
     QWidget* build_page();
     QScrollArea* scroll_ = nullptr;
+    bool page_built_ = false;
 };
 
 } // namespace fincept::screens

@@ -3,8 +3,15 @@
 #include "ui/charts/ChartFactory.h"
 #include "ui/theme/Theme.h"
 
+#include <QAbstractSeries>
+#include <QChart>
+#include <QChartView>
+#include <QDateTime>
+#include <QDateTimeAxis>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace fincept::screens::polymarket {
 
@@ -119,6 +126,31 @@ void PolymarketPriceChart::set_price_history(const PriceHistory& history) {
 
     // Accent-colored series ties the chart back to the active exchange.
     auto* chart_view = ChartFactory::line_chart(presentation_.chart_y_label, points, presentation_.accent.name());
+
+    // line_chart() builds default VALUE axes, so the X axis printed raw epoch-millisecond
+    // numbers ("1790836800000") under the curve. Swap it for a date-time axis.
+    if (auto* chart = chart_view->chart()) {
+        const auto x_axes = chart->axes(Qt::Horizontal);
+        const auto all_series = chart->series();
+        if (!x_axes.isEmpty() && !all_series.isEmpty()) {
+            const qint64 first_ms = static_cast<qint64>(points.first().x);
+            const qint64 last_ms = std::max(static_cast<qint64>(points.last().x), first_ms + 60'000);
+            const qint64 span_ms = last_ms - first_ms;
+            auto* date_axis = new QDateTimeAxis;
+            date_axis->setTickCount(5);
+            date_axis->setFormat(span_ms <= 2 * 86'400'000LL      ? QStringLiteral("HH:mm")
+                                 : span_ms <= 120 * 86'400'000LL ? QStringLiteral("MMM dd")
+                                                                  : QStringLiteral("MMM yy"));
+            date_axis->setRange(QDateTime::fromMSecsSinceEpoch(first_ms), QDateTime::fromMSecsSinceEpoch(last_ms));
+            QAbstractAxis* old_axis = x_axes.first();
+            chart->removeAxis(old_axis);
+            delete old_axis;
+            chart->addAxis(date_axis, Qt::AlignBottom);
+            for (auto* s : all_series)
+                s->attachAxis(date_axis);
+            ChartFactory::apply_theme(chart); // restyle the new axis like the one it replaced
+        }
+    }
     layout->addWidget(chart_view);
 }
 

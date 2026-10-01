@@ -3,6 +3,7 @@
 #include "screens/settings/DeveloperSection.h"
 
 #include "core/events/EventBus.h"
+#include "core/logging/Logger.h"
 #include "screens/devtools/DataHubInspector.h"
 #include "screens/settings/SettingsStyles.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -11,6 +12,7 @@
 #include <QCheckBox>
 #include <QFrame>
 #include <QLabel>
+#include <QSignalBlocker>
 #include <QString>
 #include <QVBoxLayout>
 #include <QVariantMap>
@@ -40,13 +42,19 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
 
     agentic_toggle_ = new QCheckBox(tr("Enable Agentic Mode"));
     agentic_toggle_->setStyleSheet(QString("color:%1;font-size:12px;padding:4px 0;").arg(ui::colors::TEXT_PRIMARY()));
-    {
-        auto r = SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
-        agentic_toggle_->setChecked(r.is_ok() && r.value() == QStringLiteral("true"));
-    }
-    connect(agentic_toggle_, &QCheckBox::toggled, this, [](bool checked) {
+    sync_agentic_toggle();
+    connect(agentic_toggle_, &QCheckBox::toggled, this, [this](bool checked) {
         const QString v = checked ? QStringLiteral("true") : QStringLiteral("false");
-        SettingsRepository::instance().set(QStringLiteral("agentic_mode_enabled"), v, QStringLiteral("features"));
+        const auto saved =
+            SettingsRepository::instance().set(QStringLiteral("agentic_mode_enabled"), v, QStringLiteral("features"));
+        if (saved.is_err()) {
+            // Don't announce (or show) a mode that was never stored.
+            LOG_ERROR("Settings", QString("Could not store agentic_mode_enabled: %1")
+                                      .arg(QString::fromStdString(saved.error())));
+            const QSignalBlocker revert(agentic_toggle_);
+            agentic_toggle_->setChecked(!checked);
+            return;
+        }
         QVariantMap payload;
         payload["enabled"] = checked;
         EventBus::instance().publish(QStringLiteral("settings.agentic_mode_changed"), payload);
@@ -72,6 +80,25 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
     vl->addWidget(inspector_desc_);
 
     vl->addWidget(new devtools::DataHubInspector(this), 1);
+}
+
+void DeveloperSection::sync_agentic_toggle() {
+    if (!agentic_toggle_)
+        return;
+    const auto r = SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
+    // A failed read is not "off": leave the checkbox as it is rather than showing
+    // a state the stored value may contradict.
+    if (r.is_err()) {
+        LOG_ERROR("Settings", QString("Could not read agentic_mode_enabled: %1").arg(QString::fromStdString(r.error())));
+        return;
+    }
+    const QSignalBlocker block(agentic_toggle_);
+    agentic_toggle_->setChecked(r.value() == QStringLiteral("true"));
+}
+
+void DeveloperSection::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    sync_agentic_toggle();
 }
 
 void DeveloperSection::changeEvent(QEvent* event) {

@@ -30,7 +30,8 @@ struct EndpointsResult {
 /// Result of a market-data query (data[] rows from the connector script).
 struct QueryResult {
     bool success = false;
-    QJsonArray rows; // normalized data array
+    QJsonArray rows;     // normalized data array
+    QStringList columns; // ordered column names from the source DataFrame (empty if the script didn't supply them)
     QString error;
 };
 

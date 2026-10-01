@@ -127,16 +127,13 @@ BuilderSubTab::BuilderSubTab(QWidget* parent) : QWidget(parent) {
     setup_ui();
     connect(toolbar_, &TemplateToolbar::template_chosen, this, &BuilderSubTab::on_template_chosen);
     connect(toolbar_, &TemplateToolbar::add_leg_requested, this, [this]() {
-        StrategyLeg blank;
-        blank.type = fincept::trading::InstrumentType::CE;
-        blank.lots = 1;
-        // lot_size stays 0 — a hand-added scratch row has no contract behind it.
-        // It used to default to 1, which made the row look tradable and would
-        // have dispatched a ONE UNIT order for "1 lot". The Builder's pre-flight
-        // check refuses to trade a basket containing it; the user has to add the
-        // leg from the Chain tab (or a template) to get a real contract.
-        blank.lot_size = 0;
-        legs_view_->leg_model()->append_leg(blank);
+        // A +1-lot call at the chain's ATM strike, resolved from the live chain. The
+        // row used to be a strike-0 scratch leg with no way to edit its strike, so it
+        // distorted the payoff and could never be completed. Strike and Type are now
+        // editable in the table. A lot size the chain can't supply stays 0 - never
+        // defaulted to 1, which would have dispatched ONE UNIT for "1 lot"; the
+        // pre-flight check in on_trade_clicked() refuses such a row.
+        legs_view_->leg_model()->append_blank_leg();
     });
     connect(legs_view_->leg_model(), &LegEditorModel::legs_changed, this, &BuilderSubTab::on_legs_changed);
     connect(save_btn_, &QPushButton::clicked, this, &BuilderSubTab::on_save_clicked);
@@ -407,6 +404,7 @@ void BuilderSubTab::refresh_analytics() {
     PayoffComputeOptions opts;
     opts.current_spot = last_chain_.spot;
     opts.days_to_target = days_to_target_spin_ ? days_to_target_spin_->value() : 0;
+    opts.risk_free_rate = OptionChainService::instance().risk_free_rate_for(last_chain_.broker_id);
     if (const double atm_iv = atm_iv_of(last_chain_); atm_iv > 0)
         opts.fallback_iv = atm_iv;
 
@@ -443,6 +441,38 @@ QString find_account_for_broker(const QString& broker_id) {
         if (acct.is_active)
             return acct.account_id;
     return accounts.isEmpty() ? QString{} : accounts[0].account_id;
+}
+
+// Contract identity for a PAPER order, mirroring ChainSubTab::on_order_requested so a
+// Builder basket and a right-click Buy/Sell on the same strike land on ONE position.
+// The paper layer keys positions by the BARE broker symbol (no "NSE:"/"NFO:" exchange
+// prefix, no -CE/-PE segment suffix): that is the key the live quote feed publishes
+// under, so a prefixed symbol never marks to market and never nets with the chain's
+// positions. Fyers chain legs carry the native "NSE:..." spelling, which is what
+// leg.symbol held here before.
+struct FnoBuilderPaperContract {
+    QString symbol;
+    QString exchange;
+};
+
+FnoBuilderPaperContract fno_builder_paper_contract(const QString& broker_id, const QString& leg_symbol) {
+    FnoBuilderPaperContract pc{leg_symbol, QStringLiteral("NFO")};
+    if (auto inst = fincept::trading::InstrumentService::instance().find(leg_symbol, QStringLiteral("NFO"), broker_id)) {
+        if (!inst->brsymbol.isEmpty())
+            pc.symbol = inst->brsymbol;
+        if (!inst->brexchange.isEmpty())
+            pc.exchange = inst->brexchange;
+    }
+    if (const int c = pc.symbol.indexOf(QLatin1Char(':')); c >= 0)
+        pc.symbol = pc.symbol.mid(c + 1);
+    for (const auto& suf :
+         {QStringLiteral("-CE"), QStringLiteral("-PE"), QStringLiteral("-FUT"), QStringLiteral("-EQ")}) {
+        if (pc.symbol.endsWith(suf)) {
+            pc.symbol.chop(int(suf.size()));
+            break;
+        }
+    }
+    return pc;
 }
 } // namespace
 
@@ -494,6 +524,7 @@ void BuilderSubTab::on_trade_clicked() {
 
     fincept::services::options::analytics::PayoffComputeOptions opts;
     opts.current_spot = last_chain_.spot;
+    opts.risk_free_rate = OptionChainService::instance().risk_free_rate_for(last_chain_.broker_id);
     if (const double atm_iv = atm_iv_of(last_chain_); atm_iv > 0)
         opts.fallback_iv = atm_iv;
     auto a = fincept::services::options::analytics::compute_all(s, last_chain_, opts);
@@ -563,8 +594,9 @@ void BuilderSubTab::on_trade_clicked() {
         if (!leg.is_active || leg.lots == 0)
             continue;
         UnifiedOrder order;
-        order.symbol = leg.symbol;
-        order.exchange = QStringLiteral("NFO");
+        const auto contract = fno_builder_paper_contract(broker, leg.symbol);
+        order.symbol = contract.symbol;
+        order.exchange = contract.exchange;
         order.side = leg.lots > 0 ? OrderSide::Buy : OrderSide::Sell;
         order.order_type = OrderType::Market; // paper: execute the strategy at current premiums
         order.quantity = std::abs(double(leg.lots) * double(leg.lot_size));
@@ -665,6 +697,32 @@ void BuilderSubTab::on_load_clicked() {
                 loaded_strategy_name_ = name_for_msg;
                 refresh_analytics();
                 LOG_INFO("FnoBuilder", QString("Loaded strategy '%1' (id=%2)").arg(name_for_msg).arg(id));
+
+                // Live LTP / Greeks / spot / payoff bounds come from the chain the Chain
+                // tab is showing, matched to legs by strike. A strategy saved for another
+                // underlying or expiry therefore renders confident-looking numbers that
+                // belong to a different instrument — say so instead of staying silent.
+                const QString saved_under = r.value().strategy.underlying;
+                QString saved_exp;
+                for (const auto& l : loaded_legs)
+                    if (!l.expiry.isEmpty()) {
+                        saved_exp = l.expiry;
+                        break;
+                    }
+                const bool under_differs =
+                    !saved_under.isEmpty() && !last_chain_.underlying.isEmpty() && saved_under != last_chain_.underlying;
+                const bool exp_differs =
+                    !saved_exp.isEmpty() && !last_chain_.expiry.isEmpty() && saved_exp != last_chain_.expiry;
+                if (under_differs || exp_differs) {
+                    QMessageBox::warning(
+                        this, tr("Strategy is for a different chain"),
+                        tr("'%1' was saved for %2 %3, but the Chain tab is showing %4 %5.\n\n"
+                           "Live premiums, Greeks, spot and the payoff range come from the chain on screen, so "
+                           "they will not match these legs. Open the matching underlying and expiry in the Chain "
+                           "tab to see correct figures.")
+                            .arg(name_for_msg, saved_under.isEmpty() ? tr("?") : saved_under,
+                                 saved_exp.isEmpty() ? tr("?") : saved_exp, last_chain_.underlying, last_chain_.expiry));
+                }
             });
         }
         menu->addSeparator();

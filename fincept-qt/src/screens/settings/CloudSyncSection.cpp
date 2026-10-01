@@ -5,6 +5,7 @@
 #include "services/cloud/CloudSyncEngine.h"
 #include "storage/sync/CloudSyncSettings.h"
 
+#include <QCoreApplication>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -60,15 +61,16 @@ void capture_row_labels(QWidget* row, QLabel** label_out, QLabel** desc_out = nu
 QString cloud_status_text(CloudSyncEngine::Status s, int pending, const QString& error) {
     switch (s) {
         case CloudSyncEngine::Status::Disabled:
-            return QStringLiteral("off");
+            return QCoreApplication::translate("CloudSyncSection", "off");
         case CloudSyncEngine::Status::Idle:
-            return pending > 0 ? QStringLiteral("%1 pending").arg(pending) : QStringLiteral("synced");
+            return pending > 0 ? QCoreApplication::translate("CloudSyncSection", "%1 pending").arg(pending)
+                               : QCoreApplication::translate("CloudSyncSection", "synced");
         case CloudSyncEngine::Status::Syncing:
-            return QStringLiteral("syncing…");
+            return QCoreApplication::translate("CloudSyncSection", "syncing…");
         case CloudSyncEngine::Status::Paused:
-            return QStringLiteral("paused — out of credits");
+            return QCoreApplication::translate("CloudSyncSection", "paused — out of credits");
         case CloudSyncEngine::Status::Error:
-            return QStringLiteral("error: %1").arg(error);
+            return QCoreApplication::translate("CloudSyncSection", "error: %1").arg(error);
     }
     return {};
 }
@@ -168,6 +170,7 @@ void CloudSyncSection::build_ui() {
             [this](QString entity, CloudSyncEngine::Status status, int pending, QString error) {
                 if (auto* lbl = domain_status_.value(entity, nullptr))
                     lbl->setText(cloud_status_text(status, pending, error));
+                update_credits_banner();
             });
     connect(&engine, &CloudSyncEngine::credits_exhausted, this, [this]() {
         if (credits_banner_)
@@ -181,10 +184,31 @@ void CloudSyncSection::build_ui() {
                                   "Use cloud replaces this device's copy with your cloud account "
                                   "— a local backup is saved first."));
         auto* upload = box.addButton(tr("Upload && merge"), QMessageBox::AcceptRole);
-        box.addButton(tr("Use cloud"), QMessageBox::DestructiveRole);
+        auto* use_cloud = box.addButton(tr("Use cloud"), QMessageBox::DestructiveRole);
+        // Closing the box without choosing (Esc / the window's X) must fall back to
+        // the safe option that keeps the local copy, not to the destructive one.
+        box.setDefaultButton(upload);
+        box.setEscapeButton(upload);
         box.exec();
-        CloudSyncEngine::instance().resolve_first_enable(entity, box.clickedButton() == upload);
+        CloudSyncEngine::instance().resolve_first_enable(entity, box.clickedButton() != use_cloud);
     });
+}
+
+void CloudSyncSection::update_credits_banner() {
+    if (!credits_banner_)
+        return;
+    // The banner used to be switched on by credits_exhausted() and never off again,
+    // so it kept telling the user to top up after sync had resumed. Derive it from
+    // the live per-domain status instead.
+    auto& engine = CloudSyncEngine::instance();
+    bool paused = false;
+    for (const DomainRow& d : cloud_domains()) {
+        if (engine.status(QString::fromLatin1(d.entity)) == CloudSyncEngine::Status::Paused) {
+            paused = true;
+            break;
+        }
+    }
+    credits_banner_->setVisible(paused);
 }
 
 void CloudSyncSection::update_enabled_state() {
@@ -210,6 +234,7 @@ void CloudSyncSection::reload() {
     for (auto it = domain_status_.constBegin(); it != domain_status_.constEnd(); ++it)
         it.value()->setText(cloud_status_text(engine.status(it.key()), engine.pending_count(it.key()), {}));
     update_enabled_state();
+    update_credits_banner();
 }
 
 void CloudSyncSection::changeEvent(QEvent* event) {

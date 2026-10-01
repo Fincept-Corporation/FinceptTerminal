@@ -293,6 +293,37 @@ void CrashRecoveryDialog::apply_styles() {
             color: %4;
         }
 
+        /* Snapshot row contents. Styled here by objectName rather than with a
+           setStyleSheet() per label per row, which re-parsed CSS ~5x for every
+           row on every rebuild (rename / delete / language change). */
+        QWidget#recoveryRow { background: transparent; }
+        QLabel#recoveryRowName {
+            color: %2;
+            font-size: 12px;
+            font-weight: 600;
+            background: transparent;
+        }
+        QLabel#recoveryRowKind {
+            color: %3;
+            background: %7;
+            padding: 1px 6px;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        QLabel#recoveryRowRel {
+            color: %8;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: transparent;
+        }
+        QLabel#recoveryRowAbs {
+            color: %4;
+            font-size: 10px;
+            background: transparent;
+        }
+
         /* Action bar */
         QWidget#recoveryActionBar {
             background: %5;
@@ -409,7 +440,7 @@ void CrashRecoveryDialog::populate_snapshots() {
 
         auto* row = new QWidget(list_);
         row->setAttribute(Qt::WA_TransparentForMouseEvents);
-        row->setStyleSheet("background: transparent;");
+        row->setObjectName(QStringLiteral("recoveryRow"));
 
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(12, 8, 12, 8);
@@ -421,12 +452,10 @@ void CrashRecoveryDialog::populate_snapshots() {
         left->setSpacing(3);
 
         auto* name_lbl = new QLabel(name, row);
-        name_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;").arg(kText));
+        name_lbl->setObjectName(QStringLiteral("recoveryRowName"));
 
         auto* kind_lbl = new QLabel(kind.toUpper().remove('[').remove(']'), row);
-        kind_lbl->setStyleSheet(QString("color:%1;background:%2;padding:1px 6px;font-size:8px;"
-                                        "font-weight:700;letter-spacing:1px;")
-                                    .arg(kTextDim, kBgRaised));
+        kind_lbl->setObjectName(QStringLiteral("recoveryRowKind"));
         kind_lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         kind_lbl->setMaximumWidth(80);
 
@@ -440,13 +469,11 @@ void CrashRecoveryDialog::populate_snapshots() {
         right->setSpacing(3);
 
         auto* rel_lbl = new QLabel(relative.toUpper(), row);
-        rel_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:0.5px;"
-                                       "background:transparent;")
-                                   .arg(kAmber));
+        rel_lbl->setObjectName(QStringLiteral("recoveryRowRel"));
         rel_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
         auto* abs_lbl = new QLabel(absolute, row);
-        abs_lbl->setStyleSheet(QString("color:%1;font-size:10px;background:transparent;").arg(kTextMuted));
+        abs_lbl->setObjectName(QStringLiteral("recoveryRowAbs"));
         abs_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
         right->addWidget(rel_lbl);

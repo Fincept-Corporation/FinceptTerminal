@@ -425,6 +425,9 @@ void ScannerPanel::on_scan() {
     status_label_->setStyleSheet(QString("color: #FFC400; font-size: %1px; %2 background: transparent; border: none;")
                                      .arg(fincept::ui::fonts::SMALL)
                                      .arg(kMonoFont()));
+    // One scan at a time: a second click used to start a parallel fetch whose results
+    // interleaved with (and could overwrite) the first scan's table.
+    scan_btn_->setEnabled(false);
 
     auto source = fincept::algo::data_source_from_string(data_source_combo_->currentData().toString());
 
@@ -451,13 +454,28 @@ void ScannerPanel::on_scan_result(const QJsonObject& payload) {
     results_table_->setSortingEnabled(false);
     results_table_->setRowCount(0);
 
+    scan_btn_->setEnabled(true);
+
     QJsonArray matches = payload.value("matches").toArray();
     int total_scanned = payload.value("total_scanned").toInt();
     int condition_count = payload.value("condition_count").toInt();
 
-    status_label_->setText(tr("Scan complete: %1 matches out of %2 symbols").arg(matches.size()).arg(total_scanned));
+    // The scanner reports per-symbol fetch / insufficient-data failures; they were ignored, so
+    // "0 matches out of 5 symbols" gave no hint that 45 of 50 never got evaluated.
+    const QJsonArray errs = payload.value("errors").toArray();
+    QString summary = tr("Scan complete: %1 matches out of %2 symbols").arg(matches.size()).arg(total_scanned);
+    QString tip;
+    if (!errs.isEmpty()) {
+        QStringList lines;
+        for (const auto& ev : errs)
+            lines << ev.toObject().value("error").toString();
+        summary += tr("  ·  %1 not evaluated (hover for details)").arg(errs.size());
+        tip = lines.join('\n');
+    }
+    status_label_->setText(summary);
+    status_label_->setToolTip(tip);
     status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")
-                                     .arg(fincept::ui::colors::POSITIVE())
+                                     .arg(errs.isEmpty() ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::WARNING())
                                      .arg(fincept::ui::fonts::SMALL)
                                      .arg(kMonoFont()));
 
@@ -469,10 +487,12 @@ void ScannerPanel::on_scan_result(const QJsonObject& payload) {
         // Infer signal direction from operator types
         int bullish_count = 0, bearish_count = 0;
         for (const auto& cv : matched_conds) {
+            // Operator ids are underscore-form ("crosses_above"); the spaced form only ever
+            // appears in display strings, so crossovers never counted and always read NEUTRAL.
             QString op = cv.toObject()["operator"].toString();
-            if (op == ">" || op == ">=" || op == "crosses above")
+            if (op == ">" || op == ">=" || op == "crosses_above" || op == "rising")
                 ++bullish_count;
-            else if (op == "<" || op == "<=" || op == "crosses below")
+            else if (op == "<" || op == "<=" || op == "crosses_below" || op == "falling")
                 ++bearish_count;
         }
         QString signal_text, signal_color;
@@ -491,9 +511,12 @@ void ScannerPanel::on_scan_result(const QJsonObject& payload) {
         QStringList cond_strs;
         for (const auto& cv : matched_conds) {
             QJsonObject c = cv.toObject();
-            cond_strs.append(QString("%1 %2 %3 %4")
-                                 .arg(c["indicator"].toString(), c["field"].toString(), c["operator"].toString(),
-                                      QString::number(c["value"].toDouble(), 'f', 2)));
+            QString text = QString("%1 %2 %3 %4")
+                               .arg(c["indicator"].toString(), c["field"].toString(), c["operator"].toString(),
+                                    QString::number(c["value"].toDouble(), 'f', 2));
+            if (c["computed"].isDouble()) // the live value the rule matched on (null when non-finite)
+                text += tr(" (now %1)").arg(c["computed"].toDouble(), 0, 'f', 2);
+            cond_strs.append(text);
         }
 
         int row = results_table_->rowCount();
@@ -534,6 +557,8 @@ void ScannerPanel::on_scan_result(const QJsonObject& payload) {
 }
 
 void ScannerPanel::on_error(const QString& context, const QString& msg) {
+    if (scan_btn_)
+        scan_btn_->setEnabled(true); // a failed scan must not leave SCAN MARKET disabled
     if (status_label_) {
         status_label_->setText(tr("Error [%1]: %2").arg(context, msg));
         status_label_->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: transparent; border: none;")

@@ -100,11 +100,18 @@ QMap<QString, QVector<NewsArticle>> NewsMonitorService::scan_monitors(const QVec
         if (!mon.enabled || mon.keywords.isEmpty())
             continue;
 
-        // Build regex from keywords
+        // Build regex from keywords. Look-arounds instead of \b so a keyword that
+        // ends in punctuation ("OPEC+", "U.S.") can match; and a blank keyword is
+        // skipped — it used to compile to \b\b, which matches EVERY article.
         QStringList escaped;
         for (const auto& kw : mon.keywords) {
-            escaped << ("\\b" + QRegularExpression::escape(kw.trimmed()) + "\\b");
+            const QString trimmed = kw.trimmed();
+            if (trimmed.isEmpty())
+                continue;
+            escaped << ("(?<!\\w)" + QRegularExpression::escape(trimmed) + "(?!\\w)");
         }
+        if (escaped.isEmpty())
+            continue;
         QRegularExpression re(escaped.join("|"), QRegularExpression::CaseInsensitiveOption);
         if (!re.isValid())
             continue;

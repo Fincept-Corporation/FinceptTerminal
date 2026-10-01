@@ -7,11 +7,34 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <sstream>
 
 namespace fincept::surface {
 
 using namespace fincept::ui;
+
+namespace {
+// Value range of a z grid for the heatmap scale. The loops this replaces were seeded
+// with +/-999, so any grid whose values all sit beyond that (futures prices) never
+// moved the seed and was coloured against a range that isn't in the data. Non-finite
+// cells are skipped; an empty / all-NaN grid keeps the caller's 0..1 default.
+void surface_table_minmax(const std::vector<std::vector<float>>& z, float& mn, float& mx) {
+    float lo = std::numeric_limits<float>::infinity();
+    float hi = -std::numeric_limits<float>::infinity();
+    for (const auto& row : z)
+        for (float v : row) {
+            if (!std::isfinite(v))
+                continue;
+            lo = std::min(lo, v);
+            hi = std::max(hi, v);
+        }
+    if (lo <= hi) {
+        mn = lo;
+        mx = hi;
+    }
+}
+} // namespace
 
 SurfaceTableWidget::SurfaceTableWidget(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
@@ -111,6 +134,9 @@ void SurfaceTableWidget::show_generic_matrix(const std::vector<std::string>& row
     int nr = (int)z.size();
     int nc = z.empty() ? 0 : (int)z[0].size();
 
+    // Drop the previous surface's cells first: a ragged row below only fills the columns
+    // it has, so the rest would otherwise keep showing the old surface's values.
+    table_->clearContents();
     table_->setRowCount(nr);
     table_->setColumnCount(nc);
 
@@ -140,12 +166,8 @@ void SurfaceTableWidget::show_generic_matrix(const std::vector<std::string>& row
 void SurfaceTableWidget::show_vol(const VolatilitySurfaceData& d) {
     if (d.z.empty())
         return;
-    float mn = 999, mx = -999;
-    for (const auto& row : d.z)
-        for (float v : row) {
-            mn = std::min(mn, v);
-            mx = std::max(mx, v);
-        }
+    float mn = 0.0f, mx = 1.0f;
+    surface_table_minmax(d.z, mn, mx);
 
     std::vector<std::string> r_labels, c_labels;
     for (int e : d.expirations)
@@ -161,12 +183,8 @@ void SurfaceTableWidget::show_vol(const VolatilitySurfaceData& d) {
 void SurfaceTableWidget::show_greeks(const GreeksSurfaceData& d) {
     if (d.z.empty())
         return;
-    float mn = 999, mx = -999;
-    for (const auto& row : d.z)
-        for (float v : row) {
-            mn = std::min(mn, v);
-            mx = std::max(mx, v);
-        }
+    float mn = 0.0f, mx = 1.0f;
+    surface_table_minmax(d.z, mn, mx);
     bool div = (d.greek_name == "Theta");
     std::vector<std::string> r_labels, c_labels;
     for (int e : d.expirations)
@@ -196,12 +214,8 @@ void SurfaceTableWidget::show_correlation(const CorrelationMatrixData& d) {
 void SurfaceTableWidget::show_yield(const YieldCurveData& d) {
     if (d.z.empty())
         return;
-    float mn = 999, mx = -999;
-    for (const auto& row : d.z)
-        for (float v : row) {
-            mn = std::min(mn, v);
-            mx = std::max(mx, v);
-        }
+    float mn = 0.0f, mx = 1.0f;
+    surface_table_minmax(d.z, mn, mx);
     std::vector<std::string> r_labels, c_labels;
     for (int t : d.time_points) {
         std::string s = "D";
@@ -219,12 +233,8 @@ void SurfaceTableWidget::show_yield(const YieldCurveData& d) {
 void SurfaceTableWidget::show_pca(const PCAData& d) {
     if (d.z.empty())
         return;
-    float mn = 999, mx = -999;
-    for (const auto& row : d.z)
-        for (float v : row) {
-            mn = std::min(mn, v);
-            mx = std::max(mx, v);
-        }
+    float mn = 0.0f, mx = 1.0f;
+    surface_table_minmax(d.z, mn, mx);
     show_generic_matrix(d.assets, d.factors, d.z, mn, mx, true);
 }
 

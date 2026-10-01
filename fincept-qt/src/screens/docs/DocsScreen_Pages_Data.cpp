@@ -366,6 +366,87 @@ QWidget* DocsScreen::page_data_mapping() {
         });
 }
 
+QWidget* DocsScreen::page_data_sources() {
+    return make_page(
+        tr("DATA SOURCES"), tr("Data connector command center"),
+        {
+            {tr("OVERVIEW"), tr("Data Sources is where you browse, configure and test the connectors that feed "
+                                "the terminal: market data providers, databases, cloud storage, files, APIs and "
+                                "alternative-data feeds.")},
+            {tr("KEY FEATURES"), tr("■  CONNECTORS — searchable catalogue grouped by category, with the fields each "
+                                    "connector needs\n"
+                                    "■  + ADD CONNECTION — configure a connector with your own credentials\n"
+                                    "■  TEST — verify a saved connection before relying on it\n"
+                                    "■  SAVED CONNECTIONS — edit, enable/disable or delete; ENABLE ALL / DISABLE ALL\n"
+                                    "■  IMPORT / EXPORT — move connection definitions between machines")},
+            {tr("CATEGORIES"), tr("■  Market data, alternative data, open banking\n"
+                                  "■  Relational, NoSQL, time-series databases and search / warehouse engines\n"
+                                  "■  Cloud storage and file sources\n"
+                                  "■  API streaming")},
+            {tr("TIPS"), tr("■  Keys for the built-in providers can also be managed in Settings → Credentials")},
+        });
+}
+
+QWidget* DocsScreen::page_asia_markets() {
+    return make_page(
+        tr("ASIA MARKETS"), tr("398+ stock endpoints for Chinese A/B shares, Hong Kong and US markets"),
+        {
+            {tr("OVERVIEW"), tr("The Asia Markets terminal is an explorer over the AKShare stock endpoints. Pick a "
+                                "category, choose an endpoint, enter a symbol if it needs one, and press EXECUTE.")},
+            {tr("CATEGORIES"), tr("■  Realtime and Historical quotes\n"
+                                  "■  Financial statements and Holdings\n"
+                                  "■  Fund Flow and Boards (sector / concept boards)\n"
+                                  "■  Margin / HSGT (Stock Connect)\n"
+                                  "■  Hot & News")},
+            {tr("USAGE"), tr("■  Use the endpoint search box to find a function by name\n"
+                             "■  Symbols are entered in the market's own format, e.g. 000001\n"
+                             "■  Results can be shown as a TABLE or as raw JSON; REFRESH re-runs the query\n"
+                             "■  Cached results are marked \"(cached)\"")},
+        });
+}
+
+QWidget* DocsScreen::page_trade_viz() {
+    return make_page(
+        tr("TRADE VIZ"), tr("Bilateral trade flows as a chord diagram"),
+        {
+            {tr("OVERVIEW"), tr("Trade Viz shows a country's annual merchandise trade with its partners as a chord "
+                                "diagram, next to a ranking table of the partners. Values are in USD millions.")},
+            {tr("DATA"), tr("The figures come from UN Comtrade through the Economics service. A small static US "
+                            "snapshot is shown only while the live data for your selection is unavailable.")},
+        });
+}
+
+QWidget* DocsScreen::page_relationship_map() {
+    return make_page(
+        tr("RELATIONSHIP MAP"), tr("Corporate intelligence graph for a company"),
+        {
+            {tr("OVERVIEW"), tr("Search for an asset (for example AAPL, Tesla or RELIANCE) and press ANALYZE to build "
+                                "a graph of the company and the entities around it.")},
+            {tr("KEY FEATURES"), tr("■  Peers, institutional holders, mutual funds, insiders, officers and analysts "
+                                    "as connected nodes\n"
+                                    "■  Select a node to see its details (market cap, P/E, ROE, margins, growth, …)\n"
+                                    "■  FILTERS and LEGEND panels to focus on the relationships you care about\n"
+                                    "■  Layouts — FORCE, LAYERED and RADIAL; FIT (or Home) zooms to the whole graph\n"
+                                    "■  A data-quality indicator shows how complete the result is")},
+        });
+}
+
+QWidget* DocsScreen::page_file_manager() {
+    return make_page(
+        tr("FILE MANAGER"), tr("Everything the terminal has saved for you, in one place"),
+        {
+            {tr("OVERVIEW"), tr("The File Manager lists the files the terminal tracks — exports, backtest results, "
+                                "notebooks, connector configurations and files you imported — with a quota bar "
+                                "showing how much storage they use.")},
+            {tr("KEY FEATURES"), tr("■  Filter chips by the tool that created a file, and sort by date\n"
+                                    "■  Click a file card for an inline preview\n"
+                                    "■  Import copies your own files into terminal storage; SAVE exports one back out\n"
+                                    "■  Select several files for bulk delete (you are asked to confirm)\n"
+                                    "■  Open a file in the screen that understands it — for example a notebook in "
+                                    "the Code Editor")},
+        });
+}
+
 // ============================================================================
 // Community
 // ============================================================================
@@ -383,12 +464,21 @@ QWidget* DocsScreen::page_settings() {
                                     "■  MCP Servers — Server management and configuration\n"
                                     "■  Notification preferences\n"
                                     "■  Keyboard shortcut customization")},
-            {tr("SECTIONS"), tr("■  General — Language, timezone, display density\n"
-                                "■  Trading — Default exchange, order confirmations, risk limits\n"
-                                "■  Data — API keys for market data providers\n"
-                                "■  AI — LLM provider, model selection, temperature\n"
-                                "■  MCP — Server endpoints and tool access\n"
-                                "■  Notifications — Alert channels and thresholds")},
+            {tr("SECTIONS"), tr("Shell:\n"
+                                "■  General — Language, currency, window behaviour\n"
+                                "■  Appearance — Theme, fonts, density, ticker and chat bubble\n"
+                                "■  Notifications — Alert channels (Telegram, Discord, Slack, email, …)\n"
+                                "■  Keybindings — Rebind every shortcut\n"
+                                "■  Voice — Speech-to-text and text-to-speech\n"
+                                "■  Logging and Developer — Log levels, DataHub inspector, experimental options\n\n"
+                                "Profile:\n"
+                                "■  Profiles — Separate profiles with isolated data\n"
+                                "■  Credentials — API keys for data providers and exchanges\n"
+                                "■  Security — PIN, auto-lock and audit log\n"
+                                "■  Data Sources, LLM Config, MCP Servers — Connectors, AI providers, tool servers\n"
+                                "■  Python Env — Analytics runtime and packages\n"
+                                "■  Storage & Cache — Disk usage and cleanup\n"
+                                "■  Cloud Sync — Backup and sync")},
             {tr("SKILL LEVELS"), tr("BEGINNER: Set your timezone and preferred market\n"
                                     "INTERMEDIATE: Configure API keys for data providers and LLM\n"
                                     "ADVANCED: Fine-tune LLM parameters, set up MCP servers\n"
@@ -402,11 +492,13 @@ QWidget* DocsScreen::page_profile() {
         {
             {tr("OVERVIEW"), tr("The Profile screen displays your account information, subscription status, "
                                 "usage statistics, and billing history.")},
-            {tr("KEY FEATURES"), tr("■  Account details — Name, email, registration date\n"
-                                    "■  Subscription status — Current plan, expiry, features\n"
-                                    "■  Usage statistics — API calls, data consumed, trades placed\n"
-                                    "■  Credit balance — Remaining AI/compute credits\n"
-                                    "■  Billing history — Past invoices and payments")},
+            {tr("KEY FEATURES"), tr("■  Overview — Account details, edit profile, credit balance and plan\n"
+                                    "■  Usage — 30-day summary, daily usage and your most-used endpoints\n"
+                                    "■  Security — API key (show / copy / regenerate), verification status, "
+                                    "login history\n"
+                                    "■  Billing — Current plan, credit balance and payment history\n"
+                                    "■  Support — Contact details; open tickets from the Support screen\n"
+                                    "■  Logout and delete account")},
             {tr("REAL-WORLD USAGE"), tr("■  Monitor your subscription and credit usage\n"
                                         "■  Upgrade or change your plan\n"
                                         "■  Track API usage to stay within limits\n"
@@ -415,6 +507,20 @@ QWidget* DocsScreen::page_profile() {
                                     "INTERMEDIATE: Monitor credit usage, plan API call budget\n"
                                     "ADVANCED: Optimize usage patterns for cost efficiency\n"
                                     "PRO: Enterprise account management, team usage tracking")},
+        });
+}
+
+QWidget* DocsScreen::page_forum() {
+    return make_page(
+        tr("FORUM"), tr("Community discussions"),
+        {
+            {tr("OVERVIEW"), tr("The Forum is the in-app community: browse discussions, read threads, reply, and "
+                                "start your own posts without leaving the terminal.")},
+            {tr("KEY FEATURES"), tr("■  Feed with trending posts and channels\n"
+                                    "■  Search discussions and open a thread to read and reply\n"
+                                    "■  + NEW POST — give it a title and content, then PUBLISH POST\n"
+                                    "■  Leaderboard and reputation (REP) for active contributors\n"
+                                    "■  User profiles — display name, bio, signature and avatar colour (EDIT MY PROFILE)")},
         });
 }
 

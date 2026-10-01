@@ -143,8 +143,15 @@ void ExchangeService::poll_prices() {
     QPointer<ExchangeService> self = this;
     QPointer<ExchangeSession> session_ptr = sess;
     (void)QtConcurrent::run([self, session_ptr, symbols, watched]() {
-        if (!self || !session_ptr)
+        if (!self)
             return;
+        if (!session_ptr) {
+            // The session was torn down between scheduling and running. Clear the
+            // in-flight latch — returning with it still set would make every later
+            // poll_prices() bail at its first line, silently ending the price feed.
+            self->poll_in_progress_ = false;
+            return;
+        }
         auto tickers = session_ptr->fetch_tickers(symbols);
         if (!self)
             return;
@@ -198,7 +205,14 @@ bool ExchangeService::is_ws_connected() const {
 }
 
 bool ExchangeService::is_ws_active() const {
-    return active_session()->is_ws_active();
+    // "A screen-managed stream is already warm". A stream the DataHub demand path
+    // started (dashboard ticker / trade tiles) is deliberately NOT counted: screens
+    // use this to skip start_ws_stream(), and that stream's primary pair and symbol
+    // list belong to the dashboard, not to the screen — attaching to it would leave
+    // the screen's own order book / trade feed empty. The screen's start_ws_stream()
+    // then takes the stream over (the hub's pairs are folded into its launch list).
+    auto* s = active_session();
+    return s->is_ws_active() && !s->is_ws_hub_owned();
 }
 
 void ExchangeService::set_ws_primary_symbol(const QString& symbol) {

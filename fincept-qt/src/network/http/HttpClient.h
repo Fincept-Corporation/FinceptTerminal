@@ -44,6 +44,12 @@ class HttpClient : public QObject {
     void del(const QString& url, const QJsonObject& body, JsonCallback callback, const QObject* context = nullptr,
              const Headers& extra_headers = {});
 
+    /// POST `fields` as an application/x-www-form-urlencoded body, for APIs that
+    /// do not accept JSON (Twilio's Messages API). The response is still parsed
+    /// as JSON like every other call.
+    void post_form(const QString& url, const QMap<QString, QString>& fields, JsonCallback callback,
+                   const QObject* context = nullptr, const Headers& extra_headers = {});
+
     /// Error strings produced by this client are `"HTTP_<status>"` or
     /// `"HTTP_<status>: <server message>"`. These two recover the halves —
     /// use them instead of re-implementing the parse at each call site.

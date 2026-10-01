@@ -144,6 +144,8 @@ QWidget* MAModulePanel::build_merger_panel() {
         params["cost_synergy_pct"] = double_inputs_["cost_synergy_pct"]->value() / 100.0;
         params["integration_cost"] = double_inputs_["integration_cost"]->value();
         params["discount_rate"] = double_inputs_["synergy_discount"]->value() / 100.0;
+        // The synergy percentages need a base to apply to: the target's revenue from the Accretion/Dilution tab.
+        params["target_revenue"] = double_inputs_["tgt_revenue"]->value();
         MAAnalyticsService::instance().value_synergies_dcf(params);
     });
     syn_vl->addWidget(syn_run);

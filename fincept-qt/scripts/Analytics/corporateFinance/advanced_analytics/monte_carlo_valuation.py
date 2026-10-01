@@ -267,11 +267,37 @@ class MonteCarloValuation:
             'potential_loss_pct': ((deal_value - var_value) / deal_value * 100) if deal_value > 0 else 0
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `monte_carlo_valuation.py run <flat-params-json>` (argv length 3). The native form
+# is `monte_carlo <json>` with slightly different key names, so a service-style call is translated here and then
+# falls through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("run",)
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    mapped = dict(p)
+    for src, dst in (("rev_growth_mean", "revenue_growth_mean"), ("rev_growth_std", "revenue_growth_std")):
+        if src in mapped and dst not in mapped:
+            mapped[dst] = mapped.pop(src)
+    return [argv[0], "monte_carlo", json.dumps(mapped)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

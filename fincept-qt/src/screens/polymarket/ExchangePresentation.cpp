@@ -6,6 +6,8 @@
 
 #include <QCoreApplication>
 
+#include <cmath>
+
 namespace fincept::screens::polymarket {
 
 namespace pred = fincept::services::prediction;
@@ -24,8 +26,15 @@ QString ExchangePresentation::format_price(double prob) const {
     // Kalshi cent-prices divided by 100 by the type map). The presentation
     // decides how to render it.
     switch (price_style) {
-        case PriceStyle::ProbabilityCents:
-            return QStringLiteral("%1\u00A2").arg(qRound(prob * 100.0)); // "52¢"
+        case PriceStyle::ProbabilityCents: {
+            // "52¢". Markets on a 0.001 tick quote half-cents (0.525); rounding those to
+            // a whole cent showed "53¢" for a price that was actually 52.5¢ - including in
+            // the order-confirmation text - so keep one decimal when it matters.
+            const double cents = prob * 100.0;
+            if (std::abs(cents - std::round(cents)) > 0.05)
+                return QStringLiteral("%1¢").arg(cents, 0, 'f', 1);
+            return QStringLiteral("%1¢").arg(qRound(cents));
+        }
         case PriceStyle::Dollars:
             return QStringLiteral("$%1").arg(prob, 0, 'f', 2); // "$0.52"
     }
@@ -33,10 +42,11 @@ QString ExchangePresentation::format_price(double prob) const {
 }
 
 QString ExchangePresentation::format_volume(double v) const {
-    const QString sym = currency_symbol.isEmpty() ? QStringLiteral("$") : currency_symbol;
     // Currency badges like "USDC" are shown separately (account chip + stats
     // label) so volume formatting always uses a dollar-sign prefix; injecting
-    // "USDC" into every cell would be noisy.
+    // "USDC" into every cell would be noisy. (The code used currency_symbol here
+    // despite saying so, which rendered "USDC1.2M" / "USD1.2M" with no space.)
+    const QString sym = QStringLiteral("$");
     if (v >= 1e9)
         return QStringLiteral("%1%2B").arg(sym).arg(v / 1e9, 0, 'f', 1);
     if (v >= 1e6)
@@ -166,6 +176,22 @@ ExchangePresentation ExchangePresentation::for_adapter(const pred::PredictionExc
 ExchangePresentation ExchangePresentation::for_id(const QString& exchange_id) {
     if (exchange_id == QStringLiteral("kalshi"))
         return for_kalshi();
+    if (exchange_id == QStringLiteral("fincept")) {
+        // The registry also offers "Fincept Internal" (demo markets). It used to fall
+        // through to Polymarket's profile, so the status bar read "POLYMARKET", the
+        // confirm dialog said "on Polymarket", and the Holders / Comments / Related /
+        // Leaderboard extras (which only exist on Polymarket) were shown empty.
+        ExchangePresentation p = for_polymarket();
+        p.exchange_id = QStringLiteral("fincept");
+        p.display_name = QStringLiteral("Fincept");
+        p.currency_symbol = QStringLiteral("FNCPT");
+        p.view_names = {QStringLiteral("MARKETS"), QStringLiteral("EVENTS")};
+        p.default_view = QStringLiteral("MARKETS");
+        p.has_open_interest = false;
+        p.has_polymarket_extras = false;
+        p.has_leaderboard = false;
+        return p;
+    }
     return for_polymarket();
 }
 

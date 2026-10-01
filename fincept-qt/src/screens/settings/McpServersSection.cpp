@@ -21,6 +21,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPointer>
+#include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QTimer>
@@ -48,6 +49,14 @@ McpServersSection::McpServersSection(QWidget* parent) : QWidget(parent) {
         setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
     });
     setStyleSheet(QString("background:%1;color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+
+    // Server state also changes outside this panel (auto-start finishing, the
+    // health check restarting a crashed server). The manager emits from worker
+    // threads, so the connection is queued onto this widget's thread.
+    connect(&McpManager::instance(), &McpManager::servers_changed, this, [this]() {
+        if (isVisible())
+            load_servers();
+    });
 }
 
 void McpServersSection::reload() {
@@ -378,7 +387,7 @@ void McpServersSection::on_add_server() {
     auto* name_edit = fe(tr("e.g. My Database Server"));
     auto* cmd_edit = fe(tr("e.g. npx, uvx, python"));
     auto* args_edit = fe(tr("e.g. -y @modelcontextprotocol/server-postgres"));
-    auto* env_edit = fe(tr("KEY=VALUE KEY2=VALUE2 (space-separated)"));
+    auto* env_edit = fe(tr("KEY=VALUE KEY2=\"VALUE WITH SPACES\" (space-separated)"));
     auto* cat_edit = fe(tr("e.g. data, tools, analytics"));
 
     form->addRow(fl(tr("Name")), name_edit);
@@ -401,6 +410,22 @@ void McpServersSection::on_add_server() {
     vl->addLayout(auto_start_row);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    // Validate while the dialog is still open, so a rejected entry does not throw
+    // away everything the user typed.
+    connect(btns, &QDialogButtonBox::accepted, dlg, [dlg, name_edit, cmd_edit, env_edit]() {
+        if (name_edit->text().trimmed().isEmpty() || cmd_edit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(dlg, tr("Add MCP Server"), tr("Name and Command are required."));
+            return;
+        }
+        for (const QString& pair : QProcess::splitCommand(env_edit->text().trimmed())) {
+            if (pair.indexOf('=') <= 0) {
+                QMessageBox::warning(dlg, tr("Add MCP Server"),
+                                     tr("Environment entries must look like KEY=VALUE (got \"%1\").").arg(pair));
+                return;
+            }
+        }
+        dlg->accept();
+    });
     btns->setStyleSheet("QPushButton{background:" + QString(ui::colors::BG_RAISED()) +
                         ";color:" + QString(ui::colors::TEXT_PRIMARY()) + ";border:1px solid " +
                         QString(ui::colors::BORDER_BRIGHT()) +
@@ -414,7 +439,6 @@ void McpServersSection::on_add_server() {
                         ";border:none;}"
                         "QPushButton[text='OK']:hover{background:" +
                         QString(ui::colors::AMBER_DIM()) + ";}");
-    connect(btns, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
     connect(btns, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
     vl->addWidget(btns);
 
@@ -425,22 +449,20 @@ void McpServersSection::on_add_server() {
 
     QString name = name_edit->text().trimmed();
     QString cmd = cmd_edit->text().trimmed();
-    if (name.isEmpty() || cmd.isEmpty()) {
-        show_status(tr("Name and Command are required"), true);
-        dlg->deleteLater();
-        return;
-    }
 
     McpServerConfig cfg;
     cfg.name = name;
     cfg.command = cmd;
-    cfg.args = args_edit->text().trimmed().split(' ', Qt::SkipEmptyParts);
+    // splitCommand honours "double quotes", so an argument or env value that
+    // contains spaces (e.g. a Windows path) survives; plain space-splitting
+    // tore it apart. Backslashes are left alone.
+    cfg.args = QProcess::splitCommand(args_edit->text().trimmed());
     cfg.category = cat_edit->text().trimmed();
     cfg.auto_start = as_cb->isChecked();
     cfg.enabled = true;
 
-    // Parse env pairs
-    for (const auto& pair : env_edit->text().trimmed().split(' ', Qt::SkipEmptyParts)) {
+    // Parse env pairs (shape already validated by the dialog's OK handler)
+    for (const auto& pair : QProcess::splitCommand(env_edit->text().trimmed())) {
         int eq = pair.indexOf('=');
         if (eq > 0)
             cfg.env[pair.left(eq)] = pair.mid(eq + 1);
@@ -463,6 +485,11 @@ void McpServersSection::on_add_server() {
 // ============================================================================
 
 void McpServersSection::load_servers() {
+    // Keep the user's selection across a reload. Without this every Start / Stop /
+    // status refresh jumped the detail pane back to the first server — so the
+    // "Server started" message was about a server no longer on screen.
+    const QString prior_selection = selected_server_id_;
+
     server_list_->blockSignals(true);
     server_list_->clear();
 
@@ -495,10 +522,19 @@ void McpServersSection::load_servers() {
     start_btn_->setEnabled(false);
     stop_btn_->setEnabled(false);
 
-    if (server_list_->count() > 0)
-        server_list_->setCurrentRow(0);
-    else
+    if (server_list_->count() > 0) {
+        int target_row = 0;
+        for (int i = 0; i < server_list_->count(); ++i) {
+            if (!prior_selection.isEmpty() && server_list_->item(i)->data(Qt::UserRole).toString() == prior_selection) {
+                target_row = i;
+                break;
+            }
+        }
+        server_list_->setCurrentRow(target_row);
+    } else {
+        selected_server_id_.clear();
         detail_lbl_->setText(tr("No external servers configured.\nClick '+ Add' to add one."));
+    }
 }
 
 void McpServersSection::load_tools() {
@@ -540,6 +576,8 @@ void McpServersSection::refresh_server_detail(const QString& server_id) {
             status_str = tr("Running");
         else if (cfg.status == ServerStatus::Error)
             status_str = tr("Error");
+        else if (cfg.status == ServerStatus::Starting)
+            status_str = tr("Starting...");
         else
             status_str = tr("Stopped");
 
@@ -565,7 +603,8 @@ void McpServersSection::refresh_server_detail(const QString& server_id) {
                                       cfg.auto_start ? tr("Yes") : tr("No")));
 
         bool running = (cfg.status == ServerStatus::Running);
-        start_btn_->setEnabled(!running);
+        // A server mid-start can be neither started again nor stopped yet.
+        start_btn_->setEnabled(!running && cfg.status != ServerStatus::Starting);
         stop_btn_->setEnabled(running);
         return;
     }
@@ -597,9 +636,31 @@ void McpServersSection::on_remove_server() {
     if (reply != QMessageBox::Yes)
         return;
 
-    McpManager::instance().remove_server(selected_server_id_);
+    // remove_server() stops the server first, and McpClient::stop() can block for
+    // several seconds — keep that off the UI thread (P1), like Start below.
+    const QString id = selected_server_id_;
     selected_server_id_.clear();
-    load_servers();
+    remove_btn_->setEnabled(false);
+    start_btn_->setEnabled(false);
+    stop_btn_->setEnabled(false);
+    show_status(tr("Removing server..."), false);
+
+    QPointer<McpServersSection> self = this;
+    (void)QtConcurrent::run([self, id]() {
+        const auto r = McpManager::instance().remove_server(id);
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, r]() {
+                if (!self)
+                    return;
+                if (r.is_err())
+                    self->show_status(tr("Remove failed: ") + QString::fromStdString(r.error()), true);
+                else
+                    self->show_status(tr("Server removed"), false);
+                self->load_servers();
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 void McpServersSection::on_start_server() {
@@ -614,7 +675,7 @@ void McpServersSection::on_start_server() {
         auto r = McpManager::instance().start_server(id);
         QMetaObject::invokeMethod(
             qApp,
-            [self, r, id]() {
+            [self, r]() {
                 if (!self)
                     return;
                 if (r.is_err())
@@ -630,9 +691,28 @@ void McpServersSection::on_start_server() {
 void McpServersSection::on_stop_server() {
     if (selected_server_id_.isEmpty())
         return;
-    McpManager::instance().stop_server(selected_server_id_);
-    show_status(tr("Server stopped"), false);
-    load_servers();
+    // McpClient::stop() blocks for up to ~5 s (terminate → wait → kill); run it off
+    // the UI thread instead of freezing the whole window on the Stop click (P1).
+    show_status(tr("Stopping server..."), false);
+    stop_btn_->setEnabled(false);
+
+    QPointer<McpServersSection> self = this;
+    const QString id = selected_server_id_;
+    (void)QtConcurrent::run([self, id]() {
+        const auto r = McpManager::instance().stop_server(id);
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, r]() {
+                if (!self)
+                    return;
+                if (r.is_err())
+                    self->show_status(tr("Stop failed: ") + QString::fromStdString(r.error()), true);
+                else
+                    self->show_status(tr("Server stopped"), false);
+                self->load_servers();
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 void McpServersSection::on_tab_changed(int idx) {

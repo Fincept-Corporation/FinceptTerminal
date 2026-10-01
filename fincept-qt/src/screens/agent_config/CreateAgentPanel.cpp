@@ -20,12 +20,21 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QScrollArea>
+#include <QSet>
 #include <QShowEvent>
 #include <QSplitter>
 #include <QUuid>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+
+namespace {
+// Status-line styling in one place (shared shape with CreateAgentPanel_DataOps.cpp).
+void set_form_status(QLabel* lbl, const QString& text, const QString& color) {
+    lbl->setText(text);
+    lbl->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(color));
+}
+} // namespace
 
 CreateAgentPanel::CreateAgentPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("CreateAgentPanel");
@@ -75,13 +84,11 @@ void CreateAgentPanel::setup_connections() {
 
     auto& svc = services::AgentService::instance();
     connect(&svc, &services::AgentService::config_saved, this, [this]() {
-        status_lbl_->setText(tr("Saved successfully"));
-        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::POSITIVE()));
+        set_form_status(status_lbl_, tr("Saved successfully"), ui::colors::POSITIVE());
         load_saved_agents();
     });
     connect(&svc, &services::AgentService::config_deleted, this, [this]() {
-        status_lbl_->setText(tr("Agent deleted"));
-        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::WARNING()));
+        set_form_status(status_lbl_, tr("Agent deleted"), ui::colors::WARNING());
         editing_id_.clear();
         load_saved_agents();
     });
@@ -98,7 +105,7 @@ void CreateAgentPanel::setup_connections() {
                 QTextCursor cursor = test_result_->textCursor();
                 cursor.movePosition(QTextCursor::End);
                 test_result_->setTextCursor(cursor);
-                test_result_->insertPlainText(token + " ");
+                test_result_->insertPlainText(token);
             });
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
         if (r.request_id != pending_request_id_)
@@ -138,7 +145,13 @@ void CreateAgentPanel::setup_connections() {
     });
     // A failure that never produces agent_result / agent_stream_done left
     // RUN TEST disabled and pending_request_id_ set for the rest of the session.
-    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString&, const QString& msg) {
+    connect(&svc, &services::AgentService::error_occurred, this, [this](const QString& ctx, const QString& msg) {
+        // A failed save/delete used to show only in the screen-level status bar;
+        // say it next to the form too, so "SAVE AGENT" never looks like it worked.
+        if (ctx == QLatin1String("save_config") || ctx == QLatin1String("delete_config")) {
+            set_form_status(status_lbl_, tr("Failed: %1").arg(msg), ui::colors::NEGATIVE());
+            return;
+        }
         if (pending_request_id_.isEmpty())
             return;
         pending_request_id_.clear();
@@ -260,11 +273,23 @@ void CreateAgentPanel::showEvent(QShowEvent* event) {
         data_loaded_ = true;
         load_saved_agents();
         services::AgentService::instance().list_tools();
-        auto servers = McpServerRepository::instance().list_all();
-        if (servers.is_ok()) {
-            mcp_servers_list_->clear();
-            for (const auto& s : servers.value())
-                mcp_servers_list_->addItem(s.name);
+    }
+    // Servers can be added/removed on the MCP SERVERS screen between visits, so
+    // re-read them on every show (cheap DB read) and keep the current selection.
+    // Each row carries the server id; build_config_json() saves ids, and
+    // AgentService expands them into full server definitions at run time.
+    auto servers = McpServerRepository::instance().list_all();
+    if (servers.is_ok()) {
+        QSet<QString> selected;
+        for (auto* it : mcp_servers_list_->selectedItems())
+            selected.insert(it->data(Qt::UserRole).toString());
+        mcp_servers_list_->clear();
+        for (const auto& srv : servers.value()) {
+            if (!srv.enabled)
+                continue;
+            auto* item = new QListWidgetItem(srv.name, mcp_servers_list_);
+            item->setData(Qt::UserRole, srv.id);
+            item->setSelected(selected.contains(srv.id));
         }
     }
 }

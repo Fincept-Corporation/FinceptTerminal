@@ -36,20 +36,27 @@ void GotifyProvider::send(const NotificationRequest& req, std::function<void(boo
     }();
 
     const QString base = server_url_.endsWith('/') ? server_url_.chopped(1) : server_url_;
-    const QString url = QString("%1/message?token=%2").arg(base, app_token_);
+    // The app token rides in X-Gotify-Key, not the query string, so it can never
+    // end up in a URL log line.
+    const QString url = QString("%1/message").arg(base);
 
     QJsonObject body;
     body["title"] = req.title;
     body["message"] = req.message;
     body["priority"] = priority;
 
-    HttpClient::instance().post(url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        cb(true, {});
-    });
+    HttpClient::Headers headers;
+    headers.insert("X-Gotify-Key", app_token_.toUtf8());
+    HttpClient::instance().post(
+        url, body,
+        [cb](Result<QJsonDocument> res) {
+            if (res.is_err()) {
+                cb(false, QString::fromStdString(res.error()));
+                return;
+            }
+            cb(true, {});
+        },
+        nullptr, headers);
 }
 
 } // namespace fincept::notifications

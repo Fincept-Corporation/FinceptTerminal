@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSet>
+#include <QSignalBlocker>
 #include <QString>
 #include <QVBoxLayout>
 #include <QVector>
@@ -34,6 +35,14 @@ QString ds_transport_badge(const QString& type) {
     if (type == "sql")
         return "SQL";
     return type.left(4).toUpper();
+}
+
+// Bulk actions used to ignore every per-row failure and report success in the log.
+void ds_warn_failures(QWidget* parent, int failed) {
+    if (failed > 0)
+        QMessageBox::warning(parent, DataSourcesSection::tr("Data Sources"),
+                             DataSourcesSection::tr("%1 connection(s) could not be updated — see the log.")
+                                 .arg(failed));
 }
 
 // Local copy — keeps StorageSection's helper private to that translation unit.
@@ -68,6 +77,12 @@ DataSourcesSection::DataSourcesSection(QWidget* parent) : QWidget(parent) {
     host_layout_ = new QVBoxLayout(this);
     host_layout_->setContentsMargins(0, 0, 0, 0);
     host_layout_->setSpacing(0);
+    // Content is built on first show (showEvent), not here: SettingsScreen
+    // constructs every section up front, and this one reads the data-source table.
+}
+
+void DataSourcesSection::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
     rebuild();
 }
 
@@ -81,7 +96,7 @@ void DataSourcesSection::rebuild() {
 }
 
 void DataSourcesSection::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange)
+    if (event->type() == QEvent::LanguageChange && content_)
         rebuild(); // re-runs every tr() lookup in build_content()
     QWidget::changeEvent(event);
 }
@@ -291,8 +306,16 @@ QWidget* DataSourcesSection::build_content() {
                 toggle->setFixedWidth(30);
                 toggle->setStyleSheet(check_ss());
                 QString source_id = ds.id;
-                connect(toggle, &QCheckBox::toggled, this, [source_id, name_lbl](bool checked) {
-                    DataSourceRepository::instance().set_enabled(source_id, checked);
+                connect(toggle, &QCheckBox::toggled, this, [source_id, name_lbl, toggle](bool checked) {
+                    const auto saved = DataSourceRepository::instance().set_enabled(source_id, checked);
+                    if (saved.is_err()) {
+                        // Don't leave the checkbox claiming a state that was not stored.
+                        LOG_ERROR("DataSources", "Could not update " + source_id + ": " +
+                                                     QString::fromStdString(saved.error()));
+                        const QSignalBlocker revert(toggle);
+                        toggle->setChecked(!checked);
+                        return;
+                    }
                     name_lbl->setStyleSheet(
                         QString("color:%1;background:transparent;")
                             .arg(checked ? ui::colors::TEXT_PRIMARY() : ui::colors::TEXT_TERTIARY()));
@@ -307,7 +330,7 @@ QWidget* DataSourcesSection::build_content() {
                     QString("QPushButton{background:transparent;color:%1;border:none;font-weight:700;}"
                             "QPushButton:hover{color:%2;}")
                         .arg(ui::colors::TEXT_DIM(), ui::colors::NEGATIVE()));
-                connect(del_btn, &QPushButton::clicked, this, [this, source_id, name, row]() {
+                connect(del_btn, &QPushButton::clicked, this, [this, source_id, name]() {
                     auto answer =
                         QMessageBox::warning(this, tr("Delete Connection"),
                                              tr("Delete connection \"%1\"?\n\nThis cannot be undone.").arg(name),
@@ -315,9 +338,20 @@ QWidget* DataSourcesSection::build_content() {
                     if (answer != QMessageBox::Yes)
                         return;
 
-                    DataSourceRepository::instance().remove(source_id);
-                    row->hide();
+                    const auto removed = DataSourceRepository::instance().remove(source_id);
+                    if (removed.is_err()) {
+                        // The row used to be hidden whether or not the delete worked.
+                        LOG_ERROR("DataSources", "Could not delete " + source_id + ": " +
+                                                     QString::fromStdString(removed.error()));
+                        QMessageBox::critical(this, tr("Delete Connection"),
+                                              tr("Could not delete \"%1\":\n%2")
+                                                  .arg(name, QString::fromStdString(removed.error())));
+                        return;
+                    }
                     LOG_INFO("DataSources", "Deleted: " + source_id);
+                    // Rebuild instead of hiding the row so the stat strip and the
+                    // per-category counts reflect the deletion too.
+                    rebuild();
                 });
                 rhl->addWidget(del_btn);
 
@@ -357,10 +391,14 @@ QWidget* DataSourcesSection::build_content() {
             auto r = DataSourceRepository::instance().list_all();
             if (!r.is_ok())
                 return;
-            for (const auto& ds : r.value())
-                DataSourceRepository::instance().set_enabled(ds.id, true);
+            int failed = 0;
+            for (const auto& ds : r.value()) {
+                if (DataSourceRepository::instance().set_enabled(ds.id, true).is_err())
+                    ++failed;
+            }
             LOG_INFO("DataSources", "All sources enabled");
             rebuild();
+            ds_warn_failures(this, failed);
         });
         brhl->addWidget(enable_all);
 
@@ -379,10 +417,14 @@ QWidget* DataSourcesSection::build_content() {
             auto r = DataSourceRepository::instance().list_all();
             if (!r.is_ok())
                 return;
-            for (const auto& ds : r.value())
-                DataSourceRepository::instance().set_enabled(ds.id, false);
+            int failed = 0;
+            for (const auto& ds : r.value()) {
+                if (DataSourceRepository::instance().set_enabled(ds.id, false).is_err())
+                    ++failed;
+            }
             LOG_INFO("DataSources", "All sources disabled");
             rebuild();
+            ds_warn_failures(this, failed);
         });
         brhl->addWidget(disable_all);
 
@@ -404,10 +446,14 @@ QWidget* DataSourcesSection::build_content() {
             auto r = DataSourceRepository::instance().list_all();
             if (!r.is_ok())
                 return;
-            for (const auto& ds : r.value())
-                DataSourceRepository::instance().remove(ds.id);
+            int failed = 0;
+            for (const auto& ds : r.value()) {
+                if (DataSourceRepository::instance().remove(ds.id).is_err())
+                    ++failed;
+            }
             LOG_INFO("DataSources", "All connections deleted");
             rebuild();
+            ds_warn_failures(this, failed);
         });
         brhl->addWidget(delete_all);
 

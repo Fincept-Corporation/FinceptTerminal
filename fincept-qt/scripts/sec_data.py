@@ -1014,6 +1014,22 @@ class SECDataWrapper:
             return {"error": SECError("filings_by_form_type", str(e)).to_dict()}
 
 
+def _json_safe(value):
+    """Replace NaN / +-Infinity with None, recursively.
+
+    pandas fills missing cells with NaN, and json.dumps would print it as the bare
+    literal `NaN` — not JSON — so a strict parser (PythonRunner, the MCP data tools)
+    rejected every filing list that had one empty column.
+    """
+    if isinstance(value, float):
+        return value if value == value and value not in (float("inf"), float("-inf")) else None
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def main():
     """Main function for CLI interface"""
     if len(sys.argv) < 2:
@@ -1121,7 +1137,7 @@ def main():
         else:
             result = {"error": SECError(command, f"Unknown command: {command}").to_dict()}
 
-        print(json.dumps(result, indent=2))
+        print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
     except Exception as e:
         print(json.dumps({"error": SECError(command, str(e)).to_dict()}, indent=2))

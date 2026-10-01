@@ -26,8 +26,12 @@ void PortfolioAnalyticsService::run_quantstats(const QStringList& symbols, const
     QJsonObject args;
     args["symbols"] = QJsonArray::fromStringList(symbols);
     args["weights"] = to_json_array(weights);
+    // quantstats_analysis.py takes its input on stdin ONLY. Handing it the JSON as
+    // argv (as this used to) left it blocked in sys.stdin.read() on a pipe nobody
+    // ever closed until the 5-minute watchdog killed it.
     run_script(QStringLiteral("quantstats_analysis"),
-               QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), std::move(cb));
+               QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), std::move(cb),
+               /*via_stdin=*/true);
 }
 
 void PortfolioAnalyticsService::run_monte_carlo(const QStringList& symbols, const QList<double>& weights,
@@ -37,7 +41,8 @@ void PortfolioAnalyticsService::run_monte_carlo(const QStringList& symbols, cons
     args["weights"] = to_json_array(weights);
     args["num_simulations"] = num_simulations;
     run_script(QStringLiteral("quantstats_monte_carlo"),
-               QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), std::move(cb));
+               QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), std::move(cb),
+               /*via_stdin=*/true); // stdin-only script, see run_quantstats()
 }
 
 void PortfolioAnalyticsService::optimize_weights(const QString& args_json, AnalyticsCallback cb) {
@@ -50,17 +55,18 @@ void PortfolioAnalyticsService::run_ffn(const QStringList& symbols, const QJsonO
     args["symbols"] = QJsonArray::fromStringList(symbols);
     args["weights"] = weights_by_symbol;
     run_script(QStringLiteral("ffn_analysis"), QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)),
-               std::move(cb));
+               std::move(cb), /*via_stdin=*/true); // stdin-only script, see run_quantstats()
 }
 
-void PortfolioAnalyticsService::run_script(const QString& script, const QString& args_json, AnalyticsCallback cb) {
+void PortfolioAnalyticsService::run_script(const QString& script, const QString& args_json, AnalyticsCallback cb,
+                                           bool via_stdin) {
     // PythonRunner::run() resolves scripts_dir/<name> verbatim — the name must
     // include the ".py" extension (as e.g. the yfinance_data.py daemon path
     // does). These analytics callers pass the bare stem, so normalise here;
     // otherwise the existence check fails with "Script not found".
     const QString script_file = script.endsWith(QLatin1String(".py")) ? script : script + ".py";
     fincept::python::PythonRunner::instance().run(
-        script_file, {args_json},
+        script_file, via_stdin ? QStringList{} : QStringList{args_json},
         [cb = std::move(cb), script = script_file](const fincept::python::PythonResult& result) {
             AnalyticsResult out;
             if (!result.success || result.output.trimmed().isEmpty()) {
@@ -92,7 +98,8 @@ void PortfolioAnalyticsService::run_script(const QString& script, const QString&
             out.data = root;
             if (cb)
                 cb(out);
-        });
+        },
+        /*on_line=*/{}, via_stdin ? args_json.toUtf8() : QByteArray());
 }
 
 } // namespace fincept::services

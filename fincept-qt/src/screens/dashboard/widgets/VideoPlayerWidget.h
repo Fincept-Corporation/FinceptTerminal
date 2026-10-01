@@ -3,6 +3,7 @@
 
 #include <QLabel>
 #include <QLineEdit>
+#include <QPointer>
 #include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
@@ -35,10 +36,17 @@ class VideoPlayerWidget : public BaseWidget {
   protected:
     void on_theme_changed() override;
     void retranslateUi() override;
+    /// Pause playback while the tile is hidden (tab switch) and resume on
+    /// show — otherwise a hidden dashboard keeps streaming audio and video.
+    void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
 
   private:
     void apply_styles();
     void build_channel_list();
+    /// Abort an in-flight yt-dlp URL resolution so its late result cannot
+    /// start playback after STOP or after another channel was picked.
+    void cancel_ytdlp();
     void build_player_view();
     void play_url(const QString& url, const QString& title);
     void resolve_youtube_and_play(const QString& youtube_url, const QString& title);
@@ -53,7 +61,8 @@ class VideoPlayerWidget : public BaseWidget {
     QLabel* now_playing_ = nullptr;
     QLabel* status_label_ = nullptr; // loading / error indicator
 
-    QString pending_title_; // title while yt-dlp is resolving
+    QPointer<QProcess> ytdlp_proc_; // the in-flight yt-dlp resolution, if any
+    QString pending_title_;         // title while yt-dlp is resolving
     QString current_url_;   // currently selected stream URL (original, may be YouTube)
     QString current_title_; // title of current stream for refresh
 
@@ -75,6 +84,7 @@ class VideoPlayerWidget : public BaseWidget {
     QMediaPlayer* player_ = nullptr;
     QVideoWidget* video_widget_ = nullptr;
     QAudioOutput* audio_output_ = nullptr;
+    bool resume_on_show_ = false; // paused by hideEvent, resume in showEvent
 #endif
 };
 

@@ -18,6 +18,8 @@ class CandleCanvas : public QWidget {
     explicit CandleCanvas(QWidget* parent = nullptr);
     void set_candles(const QVector<services::HistoryPoint>& candles);
     void clear();
+    /// Drop the cached pixmap so the next paint re-reads the theme tokens.
+    void refresh_theme();
 
   protected:
     void paintEvent(QPaintEvent*) override;
@@ -52,6 +54,7 @@ class DashboardCandleWidget : public BaseWidget {
 
   protected:
     QDialog* make_config_dialog(QWidget* parent) override;
+    void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     void retranslateUi() override;

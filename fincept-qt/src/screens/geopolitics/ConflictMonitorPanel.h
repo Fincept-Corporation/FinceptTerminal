@@ -22,7 +22,9 @@ class ConflictMonitorPanel : public QWidget {
     Q_OBJECT
   public:
     explicit ConflictMonitorPanel(QWidget* parent = nullptr);
-    void set_events(const QVector<fincept::services::geo::NewsEvent>& events);
+    /// `fit_map` re-frames the map around the new pins; pass false for background
+    /// refreshes so the user's pan/zoom survives.
+    void set_events(const QVector<fincept::services::geo::NewsEvent>& events, bool fit_map = true);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -41,7 +43,7 @@ class ConflictMonitorPanel : public QWidget {
 
     void update_stats(const QVector<fincept::services::geo::NewsEvent>& events);
     void update_hotspots(const QVector<fincept::services::geo::NewsEvent>& events);
-    void update_map(const QVector<fincept::services::geo::NewsEvent>& events);
+    void update_map(const QVector<fincept::services::geo::NewsEvent>& events, bool fit_map);
 
     // Map
     fincept::ui::WorldMapWidget* map_widget_ = nullptr;

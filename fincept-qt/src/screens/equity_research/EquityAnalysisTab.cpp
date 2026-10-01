@@ -199,8 +199,17 @@ EquityAnalysisTab::EquityAnalysisTab(QWidget* parent) : QWidget(parent) {
     // fetch left "LOADING ANALYSIS…" spinning over the tab forever.
     connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
             [this](const QString& ctx, const QString&) {
-                if (ctx == QLatin1String("Info") && loading_overlay_)
+                if (ctx != QLatin1String("Info"))
+                    return;
+                if (loading_overlay_)
                     loading_overlay_->hide_loading();
+                // No fundamentals arrived for this symbol: render the "no data" verdicts rather
+                // than leaving the previous symbol's ratings under the new symbol's name.
+                if (!info_loaded_ && !current_symbol_.isEmpty()) {
+                    services::equity::StockInfo none;
+                    none.symbol = current_symbol_;
+                    on_info_loaded(none);
+                }
             });
 }
 

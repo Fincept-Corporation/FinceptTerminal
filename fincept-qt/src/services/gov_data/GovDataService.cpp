@@ -9,8 +9,48 @@
 
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QRegularExpression>
 
 namespace fincept::services {
+
+namespace {
+
+/// Mask credentials a script (or the HTTP library under it) echoes back in an error message — e.g. a
+/// requests failure prints the full URL including "?api_key=...". Error text is shown in the panel,
+/// logged and published on the hub, so it must never carry a key.
+QString gov_svc_redact_secrets(QString text) {
+    static const QRegularExpression kQueryKey(
+        QStringLiteral("\\b(api[_-]?key|apikey|access[_-]?token|token|key|subscription-key|password|secret)=[^&\\s\"']+"),
+        QRegularExpression::CaseInsensitiveOption);
+    text.replace(kQueryKey, QStringLiteral("\\1=***"));
+    return text;
+}
+
+/// A connector script signals failure as {"success": false, "error": "..."} or a bare {"error": "..."};
+/// a good payload may still carry "error": null. Returns the failure message, or an empty string for a
+/// normal result. (The panels only ever looked at result.success, which was true for every script that
+/// exits 0 — so a rejected request was rendered as an empty table instead of an error.)
+QString gov_svc_script_error(const QJsonObject& obj) {
+    const QJsonValue err = obj.value(QStringLiteral("error"));
+    QString msg;
+    if (err.isString())
+        msg = err.toString();
+    else if (err.isObject())
+        msg = err.toObject().value(QStringLiteral("message")).toString();
+
+    const QJsonValue ok = obj.value(QStringLiteral("success"));
+    const bool explicit_success = ok.isBool() && ok.toBool();
+    const bool explicit_failure = ok.isBool() && !ok.toBool();
+
+    if (explicit_failure) {
+        if (msg.isEmpty())
+            msg = obj.value(QStringLiteral("message")).toString();
+        return msg.isEmpty() ? QStringLiteral("Request failed") : msg;
+    }
+    return explicit_success ? QString() : msg;
+}
+
+} // namespace
 
 // ── Static provider list ─────────────────────────────────────────────────────
 
@@ -113,38 +153,58 @@ void GovDataService::execute(const QString& script, const QString& command, cons
 
             GovDataResult result;
 
-            if (!py_result.success) {
+            // Every failure path must report to the caller AND clear the hub topic's in_flight flag
+            // (publish_error); otherwise a failed refresh leaves the topic "busy" until the scheduler's
+            // refresh timeout and retries are silently refused.
+            auto fail = [&](const QString& message) {
                 result.success = false;
-                result.error = py_result.error.isEmpty()
-                                   ? QString("Script exited with code %1").arg(py_result.exit_code)
-                                   : py_result.error;
-                LOG_ERROR("GovDataService", QString("Script failed: %1").arg(result.error));
+                result.error = gov_svc_redact_secrets(message);
+                LOG_ERROR("GovDataService", QString("%1 failed: %2").arg(script, result.error.left(300)));
                 emit self->result_ready(request_id, result);
-                return;
-            }
+                if (self->hub_registered_)
+                    fincept::datahub::DataHub::instance().publish_error(GovDataService::hub_topic(script, request_id),
+                                                                        result.error);
+            };
 
-            // Extract JSON from output
-            QString json_str = python::extract_json(py_result.output);
-            if (json_str.isEmpty()) {
-                result.success = false;
-                result.error = "No JSON output from script";
-                LOG_ERROR("GovDataService", "No JSON in script output");
-                emit self->result_ready(request_id, result);
-                return;
-            }
-
+            // Extract JSON from output (also on a non-zero exit: scripts print {"success": false,
+            // "error": "..."} before exiting 1, which is far more useful than "exited with code 1").
+            const QString json_str = python::extract_json(py_result.output);
             QJsonParseError parse_err;
-            QJsonDocument doc = QJsonDocument::fromJson(json_str.toUtf8(), &parse_err);
-            if (doc.isNull()) {
-                result.success = false;
-                result.error = QString("JSON parse error: %1").arg(parse_err.errorString());
-                LOG_ERROR("GovDataService", result.error);
-                emit self->result_ready(request_id, result);
+            const QJsonDocument doc = json_str.isEmpty() ? QJsonDocument() : QJsonDocument::fromJson(json_str.toUtf8(), &parse_err);
+
+            if (!py_result.success) {
+                QString msg;
+                if (doc.isObject())
+                    msg = gov_svc_script_error(doc.object());
+                if (msg.isEmpty())
+                    msg = py_result.error.isEmpty() ? QString("Script exited with code %1").arg(py_result.exit_code)
+                                                    : py_result.error;
+                fail(msg);
                 return;
             }
 
+            if (json_str.isEmpty()) {
+                fail(QStringLiteral("No JSON output from script"));
+                return;
+            }
+            if (doc.isNull()) {
+                fail(QString("JSON parse error: %1").arg(parse_err.errorString()));
+                return;
+            }
+
+            if (doc.isObject()) {
+                const QString script_error = gov_svc_script_error(doc.object());
+                if (!script_error.isEmpty()) {
+                    fail(script_error);
+                    return;
+                }
+                result.data = doc.object();
+            } else {
+                // A bare JSON array: expose it under "data" (the key the panels read) instead of
+                // collapsing it to an empty object.
+                result.data = QJsonObject{{QStringLiteral("success"), true}, {QStringLiteral("data"), doc.array()}};
+            }
             result.success = true;
-            result.data = doc.object();
 
             // Cache the result
             fincept::CacheManager::instance().put(

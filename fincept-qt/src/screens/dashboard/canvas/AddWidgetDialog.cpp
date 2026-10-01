@@ -55,6 +55,21 @@ QString AddWidgetDialog::icon_for_widget(const QString& type_id) {
         {"geopolitics_events", QString(QChar(0x2691))}, // ⚑
         {"maritime_vessels", QString(QChar(0x2693))},   // ⚓
         {"notes", QString(QChar(0x270E))},              // ✎
+        // Widgets added after the original set — they all fell back to the generic dot.
+        {"candle_chart", QString(QChar(0x25AE))},       // ▮
+        {"working_orders", QString(QChar(0x2630))},     // ☰
+        {"margin_usage", QString(QChar(0x25D0))},       // ◐
+        {"today_pnl", QString(QChar(0x00B1))},          // ±
+        {"holdings", QString(QChar(0x25A4))},           // ▤
+        {"recent_files", QString(QChar(0x25A1))},       // □
+        {"quote_strip", QString(QChar(0x2261))},        // ≡
+        {"crypto_ticker", QString(QChar(0x0E3F))},      // ฿
+        {"polymarket_prices", QString(QChar(0x25D1))},  // ◑
+        {"agent_errors", QString(QChar(0x2716))},       // ✖
+        {"sparklines", QString(QChar(0x223F))},         // ∿
+        {"trade_tape", QString(QChar(0x21C4))},         // ⇄
+        {"news_category", QString(QChar(0x25A6))},      // ▦
+        {"web_scraper", QString(QChar(0x2315))},        // ⌕
     };
     return icons.value(type_id, QString(QChar(0x25CF))); // ● default
 }

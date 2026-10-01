@@ -171,6 +171,10 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
     if (result.source_id != kWorldBankSourceId)
         return;
     if (!result.success) {
+        // A failed country list must stay retryable: activate() only loads it while
+        // countries_loaded_ is false, and an empty list makes the whole panel unusable.
+        if (request_id == "wb_countries")
+            countries_loaded_ = false;
         show_error(result.error);
         return;
     }

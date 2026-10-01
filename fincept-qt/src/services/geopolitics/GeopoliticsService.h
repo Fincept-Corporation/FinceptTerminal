@@ -47,6 +47,10 @@ class GeopoliticsService : public QObject, public fincept::datahub::Producer {
     // ── Trade Analysis (Python) ─────────────────────────────────────────────
     void analyze_trade_benefits(const QJsonObject& params);
     void analyze_trade_restrictions(const QJsonObject& params);
+    /// Trading-bloc integration (trade creation vs diversion) — script mode `trading_blocs`.
+    void analyze_trading_blocs(const QJsonObject& params);
+    /// Impact of removing trade barriers (FDI / employment / GDP) — script mode `barrier_removal`.
+    void analyze_barrier_removal(const QJsonObject& params);
 
     // ── Geolocation (Python) ────────────────────────────────────────────────
     void extract_geolocations(const QStringList& headlines);

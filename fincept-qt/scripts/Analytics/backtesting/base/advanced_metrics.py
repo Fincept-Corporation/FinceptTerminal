@@ -20,6 +20,7 @@ def calculate_all(
     benchmark_series: Optional[np.ndarray] = None,
     risk_free_rate: float = 0.0,
     dates: Optional[List[str]] = None,
+    periods_per_year: float = 252.0,
 ) -> Dict[str, Any]:
     """
     Calculate all advanced metrics from equity curve and optional benchmark.
@@ -29,6 +30,9 @@ def calculate_all(
         benchmark_series: Daily benchmark equity values (same length), or None
         risk_free_rate: Annual risk-free rate (default 0)
         dates: ISO date strings corresponding to equity_series
+        periods_per_year: bars per year of equity_series (252 daily equities, 365 24x7
+            daily, ~1764 for 1h US bars...). Annualisation basis for alpha / tracking
+            error / information ratio and the rolling Sharpe / volatility series.
 
     Returns:
         Dictionary with all advanced metrics (camelCase keys for JSON)
@@ -43,7 +47,8 @@ def calculate_all(
     if len(returns) < 2:
         return _empty_metrics()
 
-    daily_rf = risk_free_rate / 252.0
+    ppy = float(periods_per_year) if periods_per_year and periods_per_year > 0 else 252.0
+    daily_rf = risk_free_rate / ppy
 
     # --- Risk Metrics ---
     var95 = float(np.percentile(returns, 5))
@@ -94,8 +99,8 @@ def calculate_all(
     monthly_returns = _calculate_monthly_returns(equity_series, dates)
 
     # --- Rolling Metrics ---
-    rolling_sharpe = _rolling_sharpe(returns, window=60, rf=daily_rf, dates=dates)
-    rolling_volatility = _rolling_volatility(returns, window=20, dates=dates)
+    rolling_sharpe = _rolling_sharpe(returns, window=60, rf=daily_rf, dates=dates, ppy=ppy)
+    rolling_volatility = _rolling_volatility(returns, window=20, dates=dates, ppy=ppy)
     rolling_drawdown = _rolling_drawdown(equity_series, dates=dates)
 
     # --- Benchmark-relative metrics ---
@@ -118,16 +123,16 @@ def calculate_all(
             # Alpha (annualized Jensen's alpha)
             benchmark_alpha = float(
                 (np.mean(returns[:len(bench_returns)]) - daily_rf -
-                 benchmark_beta * (np.mean(bench_returns) - daily_rf)) * 252
+                 benchmark_beta * (np.mean(bench_returns) - daily_rf)) * ppy
             )
 
             # Tracking Error
             active_returns = returns[:len(bench_returns)] - bench_returns
-            tracking_error = float(np.std(active_returns, ddof=1) * np.sqrt(252))
+            tracking_error = float(np.std(active_returns, ddof=1) * np.sqrt(ppy))
 
             # Information Ratio
             if tracking_error > 1e-10:
-                information_ratio = float(np.mean(active_returns) * 252 / tracking_error)
+                information_ratio = float(np.mean(active_returns) * ppy / tracking_error)
 
             # R-squared
             correlation = np.corrcoef(returns[:len(bench_returns)], bench_returns)[0, 1]
@@ -227,7 +232,10 @@ def _calculate_monthly_returns(
                 monthly_data[py] = {}
             ret = (prev_equity - month_start_equity) / month_start_equity if month_start_equity > 0 else 0
             monthly_data[py][pm] = ret
-            month_start_equity = equity_series[i]
+            # The next month's base is THIS month's closing equity. It was the new month's
+            # first bar, which dropped every month's first-bar return and made the monthly
+            # figures fail to compound to the total return.
+            month_start_equity = prev_equity
 
         prev_month = current_key
         prev_equity = equity_series[i]
@@ -263,6 +271,7 @@ def _rolling_sharpe(
     window: int = 60,
     rf: float = 0.0,
     dates: Optional[List[str]] = None,
+    ppy: float = 252.0,
 ) -> List[Dict[str, Any]]:
     """Calculate rolling Sharpe ratio"""
     result = []
@@ -270,7 +279,7 @@ def _rolling_sharpe(
         window_returns = returns[i - window:i]
         excess = window_returns - rf
         std = np.std(excess, ddof=1)
-        sharpe = float(np.mean(excess) / std * np.sqrt(252)) if std > 1e-10 else 0.0
+        sharpe = float(np.mean(excess) / std * np.sqrt(ppy)) if std > 1e-10 else 0.0
         date = dates[i + 1] if dates and i + 1 < len(dates) else str(i)
         result.append({'date': str(date).split('T')[0], 'value': round(sharpe, 4)})
     return result
@@ -280,12 +289,13 @@ def _rolling_volatility(
     returns: np.ndarray,
     window: int = 20,
     dates: Optional[List[str]] = None,
+    ppy: float = 252.0,
 ) -> List[Dict[str, Any]]:
     """Calculate rolling annualized volatility"""
     result = []
     for i in range(window, len(returns)):
         window_returns = returns[i - window:i]
-        vol = float(np.std(window_returns, ddof=1) * np.sqrt(252))
+        vol = float(np.std(window_returns, ddof=1) * np.sqrt(ppy))
         date = dates[i + 1] if dates and i + 1 < len(dates) else str(i)
         result.append({'date': str(date).split('T')[0], 'value': round(vol, 6)})
     return result

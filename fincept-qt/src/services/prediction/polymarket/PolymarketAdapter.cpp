@@ -72,8 +72,12 @@ void PolymarketAdapter::list_markets(const QString& category, const QString& sor
     }
 }
 
-void PolymarketAdapter::list_events(const QString& /*category*/, const QString& sort_by, int limit, int offset) {
-    service_->fetch_events(sort_by, limit, offset, /*closed=*/false);
+void PolymarketAdapter::list_events(const QString& category, const QString& sort_by, int limit, int offset) {
+    if (category.isEmpty() || category == QStringLiteral("ALL")) {
+        service_->fetch_events(sort_by, limit, offset, /*closed=*/false);
+    } else {
+        service_->fetch_events_by_tag(category, sort_by, limit, offset); // the category was ignored here
+    }
 }
 
 void PolymarketAdapter::search(const QString& query, int limit) {
@@ -111,7 +115,6 @@ void PolymarketAdapter::fetch_order_book(const QString& asset_id) {
 }
 
 void PolymarketAdapter::fetch_price_history(const QString& asset_id, const QString& interval, int fidelity) {
-    last_history_asset_id_ = asset_id;
     service_->fetch_price_history(asset_id, interval, fidelity);
 }
 
@@ -495,7 +498,13 @@ void PolymarketAdapter::wire_service() {
     connect(service_, &pm::PolymarketService::market_detail_ready, this, &PolymarketAdapter::on_market_detail);
     connect(service_, &pm::PolymarketService::event_detail_ready, this, &PolymarketAdapter::on_event_detail);
     connect(service_, &pm::PolymarketService::order_book_ready, this, &PolymarketAdapter::on_order_book);
-    connect(service_, &pm::PolymarketService::price_history_ready, this, &PolymarketAdapter::on_price_history);
+    // The history rows carry no token id. A single "last requested asset" field mislabelled any
+    // reply that arrived after another request had been issued (outcome switch / new market),
+    // so use the token-tagged signal and label each reply with the token it was fetched for.
+    connect(service_, &pm::PolymarketService::price_history_for_token, this,
+            [this](const QString& token_id, const pm::PriceHistory& history) {
+                emit price_history_ready(pmap::to_prediction(history, token_id));
+            });
     connect(service_, &pm::PolymarketService::trades_ready, this, &PolymarketAdapter::on_trades);
     connect(service_, &pm::PolymarketService::request_error, this, &PolymarketAdapter::on_service_error);
 
@@ -574,10 +583,6 @@ void PolymarketAdapter::on_event_detail(const pm::Event& event) {
 
 void PolymarketAdapter::on_order_book(const pm::OrderBook& book) {
     emit order_book_ready(pmap::to_prediction(book));
-}
-
-void PolymarketAdapter::on_price_history(const pm::PriceHistory& history) {
-    emit price_history_ready(pmap::to_prediction(history, last_history_asset_id_));
 }
 
 void PolymarketAdapter::on_trades(const QVector<pm::Trade>& trades) {

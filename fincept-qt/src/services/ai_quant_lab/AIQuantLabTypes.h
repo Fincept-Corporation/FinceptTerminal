@@ -70,7 +70,7 @@ inline QVector<QuantModule> all_quant_modules() {
         {"rolling_retraining", "Rolling Retraining", "ROLL", "ADVANCED", QColor("#8BC34A"),
          "ai_quant_lab/qlib_rolling_retraining.py", "Automated model retraining with rolling windows"},
         {"advanced_models", "Advanced Models", "ADV", "ADVANCED", QColor("#03A9F4"),
-         "ai_quant_lab/qlib_advanced_models.py", "LSTM, GRU, Transformer, Localformer, HIST, GAT"},
+         "ai_quant_lab/qlib_advanced_models.py", "LSTM, GRU and Transformer sequence models (PyTorch)"},
 
         // QLIB SUITE
         {"feature_engineering", "Feature Engineering", "FEAT", "ADVANCED", QColor("#26C6DA"),

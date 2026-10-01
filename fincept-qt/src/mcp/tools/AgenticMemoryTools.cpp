@@ -27,15 +27,21 @@
 #include <QUuid>
 #include <QVariant>
 
+#include <algorithm>
+
 namespace fincept::mcp::tools {
 
 namespace {
 constexpr const char* TAG = "AgenticMemoryTools";
 
 QString db_path() {
-    // Mirrors archival_memory.py:_DEFAULT_DB → <scripts>/agents/agent_tasks.db
+    // Mirrors archival_memory.py:_DEFAULT_DB = Path(__file__).parent.parent.parent.parent /
+    // "agent_tasks.db". __file__ is <scripts>/agents/finagent_core/agentic/archival_memory.py,
+    // so four parents up is <scripts> itself: <scripts>/agent_tasks.db (task_state.py resolves
+    // to the same file). This used to say <scripts>/agents/agent_tasks.db — a different
+    // database, so saves made here were invisible to the Python agents and vice versa.
     const QString scripts = python::PythonRunner::instance().scripts_dir();
-    return QDir(scripts).filePath("agents/agent_tasks.db");
+    return QDir(scripts).filePath("agent_tasks.db");
 }
 
 QSqlDatabase open_conn() {
@@ -127,7 +133,10 @@ std::vector<ToolDef> get_agentic_memory_tools() {
         t.category = "agentic_memory";
         t.input_schema.properties = QJsonObject{
             {"query", QJsonObject{{"type", "string"}, {"description", "What to look for"}}},
-            {"k", QJsonObject{{"type", "integer"}, {"description", "Max results (default 5)"}}},
+            {"k", QJsonObject{{"type", "integer"},
+                              {"description", "Max results (default 5, max 50)"},
+                              {"minimum", 1},
+                              {"maximum", 50}}},
             {"user_id", QJsonObject{{"type", "string"}, {"description", "Filter to a specific owner (optional)"}}},
         };
         t.input_schema.required = {"query"};
@@ -135,7 +144,9 @@ std::vector<ToolDef> get_agentic_memory_tools() {
             const QString query = args["query"].toString().trimmed();
             if (query.isEmpty())
                 return ToolResult::fail("Missing 'query'");
-            const int k = args.value("k").toInt(5);
+            // `k` goes straight into SQL as LIMIT: a negative value means "no limit" to SQLite
+            // and a huge one is an unbounded dump of the archive into the model's context.
+            const int k = std::clamp(args.value("k").toInt(5), 1, 50);
             const QString user_id = args.value("user_id").toString();
 
             QSqlDatabase db = open_conn();

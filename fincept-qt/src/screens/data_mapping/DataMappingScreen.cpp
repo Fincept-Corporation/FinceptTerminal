@@ -8,8 +8,10 @@
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QSplitter>
@@ -132,6 +134,58 @@ static const QString kStyle =
         .arg(colors::CYAN())           // %13
         .arg(colors::NEGATIVE())       // %14
     ;
+} // namespace
+
+namespace {
+
+/// Header names that carry a credential (Authorization, X-API-Key, APCA-API-KEY-ID,
+/// Cookie, ...). Screen state is persisted verbatim, so values on these lines must
+/// not reach it.
+bool dm_header_is_sensitive(const QString& name) {
+    const QString n = name.toLower();
+    for (const char* needle : {"authorization", "key", "token", "secret", "cookie", "password", "passphrase",
+                               "signature", "credential"}) {
+        if (n.contains(QLatin1String(needle)))
+            return true;
+    }
+    return false;
+}
+
+/// "Name: value" lines with the value blanked on credential headers (the name stays
+/// so the user can see what to re-enter).
+QString dm_redact_header_lines(const QString& headers) {
+    QStringList out;
+    const QStringList lines = headers.split(QLatin1Char('\n'));
+    for (const QString& line : lines) {
+        const qsizetype colon = line.indexOf(QLatin1Char(':'));
+        if (colon > 0 && dm_header_is_sensitive(line.left(colon)))
+            out << line.left(colon + 1);
+        else
+            out << line;
+    }
+    return out.join(QLatin1Char('\n'));
+}
+
+/// Blank credential-looking query parameters of an endpoint ("?apikey=XXXX&symbol=AAPL").
+QString dm_redact_endpoint(const QString& endpoint) {
+    static const QRegularExpression kSecretParam(
+        QStringLiteral("([?&][^=&#]*(?:key|token|secret|pass|auth|sig|credential)[^=&#]*=)[^&#]*"),
+        QRegularExpression::CaseInsensitiveOption);
+    QString redacted = endpoint;
+    redacted.replace(kSecretParam, QStringLiteral("\\1"));
+    return redacted;
+}
+
+/// Blank credential-looking string values in a JSON request body.
+QString dm_redact_body(const QString& body) {
+    static const QRegularExpression kSecretField(
+        QStringLiteral("(\"[^\"]*(?:key|token|secret|pass|auth|credential)[^\"]*\"\\s*:\\s*)\"[^\"]*\""),
+        QRegularExpression::CaseInsensitiveOption);
+    QString redacted = body;
+    redacted.replace(kSecretField, QStringLiteral("\\1\"\""));
+    return redacted;
+}
+
 } // namespace
 
 namespace fincept::screens {
@@ -306,6 +360,8 @@ void DataMappingScreen::retranslateUi() {
         list_title_->setText(tr("SAVED MAPPINGS"));
     if (list_run_btn_)
         list_run_btn_->setText(tr("▶ RUN"));
+    if (list_edit_btn_)
+        list_edit_btn_->setText(tr("EDIT"));
     if (list_del_btn_)
         list_del_btn_->setText(tr("DELETE"));
     if (list_new_btn_)
@@ -383,20 +439,79 @@ void DataMappingScreen::populate_json_tree(const QJsonValue& val, QTreeWidgetIte
     }
 }
 
+void DataMappingScreen::use_tree_item_as_expression(QTreeWidgetItem* item) {
+    if (!item || !mapping_table_)
+        return;
+
+    // Rebuild the path from the ancestry; the top "root" item is "$" itself.
+    QStringList segments;
+    for (const QTreeWidgetItem* it = item; it && it->parent(); it = it->parent())
+        segments.prepend(it->text(0));
+    static const QRegularExpression kIdentifier(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
+    QString path = QStringLiteral("$");
+    for (const QString& seg : segments) {
+        if (seg.startsWith(QLatin1Char('[')) && seg.endsWith(QLatin1Char(']')))
+            path += seg; // array element "[0]"
+        else if (kIdentifier.match(seg).hasMatch())
+            path += QLatin1Char('.') + seg;
+        else
+            path += QStringLiteral("['") + seg + QStringLiteral("']"); // key with spaces, dots, ...
+    }
+
+    int row = mapping_table_->currentRow();
+    if (row < 0) {
+        for (int r = 0; r < mapping_table_->rowCount(); ++r) {
+            const auto* expr = mapping_table_->item(r, 1);
+            if (expr && expr->text().trimmed().isEmpty()) {
+                row = r;
+                break;
+            }
+        }
+    }
+    auto* cell = row >= 0 ? mapping_table_->item(row, 1) : nullptr;
+    if (!cell) {
+        status_step_->setText(tr("Select a mapping row first"));
+        return;
+    }
+    cell->setText(path);
+    mapping_table_->setCurrentCell(row, 1);
+}
+
 void DataMappingScreen::populate_mapping_list() {
     int schema_idx = schema_select_->currentIndex();
     if (schema_idx < 0 || schema_idx >= schemas().size())
         return;
 
+    // Entering step 3 rebuilds the rows from the schema. Carry over what is already
+    // in the table — a template's mappings, a loaded saved mapping, or the user's own
+    // edits — keyed by target field; this used to wipe all of it on every visit.
+    struct Entered {
+        QString expression;
+        QString transform;
+        QString default_val;
+    };
+    QHash<QString, Entered> previous;
+    for (int r = 0; r < mapping_table_->rowCount(); ++r) {
+        const auto* target = mapping_table_->item(r, 0);
+        if (!target)
+            continue;
+        auto cell = [this, r](int c) {
+            const auto* it = mapping_table_->item(r, c);
+            return it ? it->text() : QString();
+        };
+        previous.insert(target->text(), {cell(1), cell(2), cell(3)});
+    }
+
     const auto& fields = schemas()[schema_idx].fields;
     mapping_table_->setRowCount(fields.size());
     for (int i = 0; i < fields.size(); ++i) {
+        const Entered kept = previous.value(fields[i].name);
         auto* name_item = new QTableWidgetItem(fields[i].name);
         name_item->setFlags(name_item->flags() & ~Qt::ItemIsEditable);
         mapping_table_->setItem(i, 0, name_item);
-        mapping_table_->setItem(i, 1, new QTableWidgetItem("")); // expression
-        mapping_table_->setItem(i, 2, new QTableWidgetItem("")); // transform
-        mapping_table_->setItem(i, 3, new QTableWidgetItem("")); // default
+        mapping_table_->setItem(i, 1, new QTableWidgetItem(kept.expression));  // expression
+        mapping_table_->setItem(i, 2, new QTableWidgetItem(kept.transform));   // transform
+        mapping_table_->setItem(i, 3, new QTableWidgetItem(kept.default_val)); // default
     }
 }
 
@@ -468,15 +583,16 @@ QVariantMap DataMappingScreen::save_state() const {
         state["api_name"] = api_name_->text();
     if (api_base_url_)
         state["api_base_url"] = api_base_url_->text();
+    // SECURITY: screen state is persisted verbatim, so anything that carries a
+    // credential is blanked first. api_auth_value_ is not captured at all — the user
+    // re-enters it (or loads a saved mapping) after a restart — and the same goes for
+    // credential headers, ?apikey=/?token= query parameters, and secret JSON fields.
     if (api_endpoint_)
-        state["api_endpoint"] = api_endpoint_->text();
-    // SECURITY: api_auth_value_ holds a live bearer token / API key. Screen
-    // state is persisted verbatim, so it is deliberately NOT captured here —
-    // the user re-enters it (or loads a saved mapping) after a restart.
+        state["api_endpoint"] = dm_redact_endpoint(api_endpoint_->text());
     if (api_headers_)
-        state["api_headers"] = api_headers_->toPlainText();
+        state["api_headers"] = dm_redact_header_lines(api_headers_->toPlainText());
     if (api_body_)
-        state["api_body"] = api_body_->toPlainText();
+        state["api_body"] = dm_redact_body(api_body_->toPlainText());
     if (test_output_ && !test_output_->toPlainText().isEmpty()) {
         const QString out = test_output_->toPlainText();
         if (out.size() < 200000)

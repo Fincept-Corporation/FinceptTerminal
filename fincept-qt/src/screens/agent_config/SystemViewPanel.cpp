@@ -124,6 +124,11 @@ void SystemViewPanel::build_ui() {
                                            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED()));
     connect(header_refresh_btn_, &QPushButton::clicked, this, [this]() {
         data_loaded_ = false;
+        // list_tools / get_system_info / discover_agents are served from a 5-10 min
+        // cache, so without dropping it REFRESH re-displayed the same stale numbers.
+        auto& svc = services::AgentService::instance();
+        svc.clear_cache();
+        svc.discover_agents();
         refresh_data();
     });
     header_row->addWidget(header_refresh_btn_);

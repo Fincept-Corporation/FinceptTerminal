@@ -9,6 +9,7 @@ Commands:
 """
 import sys
 import json
+import inspect
 
 # Try importing translation library
 _translator = None
@@ -24,6 +25,24 @@ except ImportError:
         _translator_type = "googletrans"
     except ImportError:
         pass
+
+
+_loop = None
+
+
+def _resolve(value):
+    """googletrans >= 4.0 made Translator.translate() a coroutine; on that version
+    the old synchronous call returned an un-awaited coroutine and every
+    translation failed with "'coroutine' object has no attribute 'text'". Run it
+    to completion on one persistent loop (a single httpx client must not hop
+    between loops, which matters for the batch command)."""
+    global _loop
+    if inspect.isawaitable(value):
+        import asyncio
+        if _loop is None:
+            _loop = asyncio.new_event_loop()
+        return _loop.run_until_complete(value)
+    return value
 
 
 def detect_language(text):
@@ -64,6 +83,28 @@ def detect_language(text):
     return "en"
 
 
+def _gtx_translate(text, source, target):
+    """Translate through Google's public web endpoint using only the standard
+    library (no extra package, no API key) and return (translated, detected_lang).
+
+    This is the primary path now: deep-translator is not installed in the app's
+    venv, and the googletrans 4.x that is installed gets answered by Google with
+    the input echoed back unchanged (src="en", text identical), so every
+    non-English headline "translated" to itself."""
+    import urllib.parse
+    import urllib.request
+
+    url = "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&" + urllib.parse.urlencode(
+        {"sl": source or "auto", "tl": target})
+    body = urllib.parse.urlencode({"q": text}).encode("utf-8")  # POST: no URL length limit
+    req = urllib.request.Request(url, data=body, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    translated = "".join(seg[0] for seg in data[0] if seg and seg[0])
+    detected = data[2] if len(data) > 2 and isinstance(data[2], str) else "auto"
+    return translated, detected
+
+
 def translate_single(text, source="auto", target="en"):
     """Translate a single text string."""
     if not text or not text.strip():
@@ -71,26 +112,46 @@ def translate_single(text, source="auto", target="en"):
 
     detected = detect_language(text)
 
-    # If already in target language, skip
-    if detected == target and source in ("auto", target):
+    # Already in the target language: the caller said so explicitly...
+    if source == target:
+        return {"original": text, "translated": text, "detected_lang": detected}
+    # ...or the script says so. detect_language() only separates NON-Latin scripts;
+    # every Latin-script text (French, German, Spanish, Italian...) reads as "en",
+    # so for target "en" the script proves nothing and the translator has to
+    # decide. (This used to skip them all: "Bonjour le monde" came back untouched
+    # and the TRANSLATE button was a no-op for every Latin-script language.)
+    if detected == target and detected != "en":
         return {"original": text, "translated": text, "detected_lang": detected}
 
     try:
         if _translator_type == "deep_translator":
             src = source if source != "auto" else "auto"
             translated = GoogleTranslator(source=src, target=target).translate(text)
-            return {"original": text, "translated": translated or text, "detected_lang": detected}
-        elif _translator_type == "googletrans":
-            result = _translator.translate(text, src=source, dest=target)
+            translated = translated or text
+            lang = detected
+            if detected == "en":
+                # Latin script: unchanged output means it already was the target
+                # language; otherwise the source language is unknown to us.
+                lang = "en" if translated.strip() == text.strip() else "auto"
+            return {"original": text, "translated": translated, "detected_lang": lang}
+
+        # Stdlib path (see _gtx_translate); googletrans is only a last resort.
+        gtx_error = None
+        try:
+            translated, lang = _gtx_translate(text, source, target)
+            return {"original": text, "translated": translated or text, "detected_lang": lang or detected}
+        except Exception as e:  # network down, endpoint changed, bad JSON...
+            gtx_error = e
+
+        if _translator_type == "googletrans":
+            result = _resolve(_translator.translate(text, src=source, dest=target))
             return {
                 "original": text,
                 "translated": result.text,
                 "detected_lang": result.src if hasattr(result, 'src') else detected,
             }
-        else:
-            # No translator available — return original with detected language
-            return {"original": text, "translated": text, "detected_lang": detected,
-                    "note": "No translation library installed (pip install deep-translator)"}
+        return {"original": text, "translated": text, "detected_lang": detected,
+                "error": f"Translation request failed: {gtx_error}"}
     except Exception as e:
         return {"original": text, "translated": text, "detected_lang": detected,
                 "error": str(e)}
@@ -138,7 +199,12 @@ def main(args=None):
         result = translate_batch(args[1], source, target)
     elif command == "single":
         t = translate_single(args[1], source, target)
-        result = {"success": True, **t}
+        # A missing library or a failed request used to report success with the
+        # ORIGINAL text as the "translation"; flag it so the UI can say so.
+        failed = "error" in t or "note" in t
+        result = {"success": not failed, **t}
+        if failed and "error" not in t:
+            result["error"] = t["note"]
     elif command == "detect":
         lang = detect_language(args[1])
         result = {"success": True, "detected_lang": lang, "text": args[1][:100]}

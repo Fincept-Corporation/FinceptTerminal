@@ -61,6 +61,16 @@ PolymarketLeaderboard::PolymarketLeaderboard(QWidget* parent) : QWidget(parent) 
                               .arg(colors::BG_BASE(), colors::TEXT_PRIMARY(), colors::BORDER_DIM(), colors::BG_HOVER(),
                                    colors::BG_RAISED(), colors::TEXT_SECONDARY()));
     table_->setAccessibleName(tr("Trader leaderboard"));
+    table_->setToolTip(tr("Double-click a trader to open their Polymarket profile"));
+    // trader_clicked was declared but never emitted. The wallet address rides on the
+    // TRADER cell (Qt::UserRole) so it follows the row through column sorting.
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        if (auto* it = table_->item(row, 1)) {
+            const QString address = it->data(Qt::UserRole).toString();
+            if (!address.isEmpty())
+                emit trader_clicked(address);
+        }
+    });
     vl->addWidget(table_, 1);
 
     // The panel is shown whenever the adapter advertises has_leaderboard, but
@@ -94,11 +104,16 @@ void PolymarketLeaderboard::set_entries(const QVector<LeaderboardEntry>& entries
     for (int i = 0; i < entries.size(); ++i) {
         const auto& e = entries[i];
 
-        auto* rank_item = new QTableWidgetItem(QString::number(e.rank > 0 ? e.rank : i + 1));
+        // Numeric DisplayRole so the sort below orders 2 before 10 (a QString rank sorted
+        // lexicographically — and descending by default — scrambled the board).
+        auto* rank_item = new QTableWidgetItem;
+        rank_item->setData(Qt::DisplayRole, e.rank > 0 ? e.rank : i + 1);
         rank_item->setTextAlignment(Qt::AlignCenter);
         table_->setItem(i, 0, rank_item);
 
-        table_->setItem(i, 1, new QTableWidgetItem(e.display_name));
+        auto* name_item = new QTableWidgetItem(e.display_name);
+        name_item->setData(Qt::UserRole, e.address);
+        table_->setItem(i, 1, name_item);
 
         auto* pnl_item = new QTableWidgetItem(fmt_pnl(e.pnl));
         pnl_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -109,13 +124,22 @@ void PolymarketLeaderboard::set_entries(const QVector<LeaderboardEntry>& entries
         vol_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 3, vol_item);
 
-        auto* trades_item = new QTableWidgetItem(QString::number(e.num_trades));
+        // /v1/leaderboard has no trade count — show a dash, not a column of fake zeros.
+        auto* trades_item = new QTableWidgetItem(e.num_trades > 0 ? QString::number(e.num_trades) : QStringLiteral("—"));
         trades_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 4, trades_item);
     }
 
     table_->resizeColumnsToContents();
+    // setSortingEnabled(true) sorts by the header's current indicator, which defaults
+    // to column 0 *descending* — start on rank ascending so #1 is on top.
+    table_->horizontalHeader()->setSortIndicator(0, Qt::AscendingOrder);
     table_->setSortingEnabled(true);
+}
+
+void PolymarketLeaderboard::set_unavailable(const QString& reason) {
+    table_->clearSpans();
+    show_empty_state(reason.isEmpty() ? tr("Leaderboard unavailable") : tr("Leaderboard unavailable: %1").arg(reason));
 }
 
 void PolymarketLeaderboard::set_loading(bool loading) {

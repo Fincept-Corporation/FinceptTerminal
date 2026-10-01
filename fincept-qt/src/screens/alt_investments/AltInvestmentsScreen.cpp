@@ -504,8 +504,16 @@ void AltInvestmentsScreen::retranslateUi() {
     // Fixed chrome labels
     if (header_title_)
         header_title_->setText(tr("ALTERNATIVE INVESTMENTS"));
-    if (header_sub_)
-        header_sub_->setText(tr("27 ANALYZERS  \xB7  10 ASSET CLASSES  \xB7  MULTI-ASSET ANALYTICS"));
+    if (header_sub_) {
+        int analyzer_total = 0;
+        for (const auto& cat : categories_)
+            analyzer_total += static_cast<int>(cat.analyzers.size());
+        header_sub_->setText(tr("%1 ANALYZERS  \xB7  %2 ASSET CLASSES  \xB7  MULTI-ASSET ANALYTICS")
+                                 .arg(analyzer_total)
+                                 .arg(categories_.size()));
+    }
+    if (method_label_)
+        method_label_->setText(tr("METHOD"));
     if (header_badge_)
         header_badge_->setText(tr("PYTHON ANALYTICS ENGINE"));
     if (left_title_)

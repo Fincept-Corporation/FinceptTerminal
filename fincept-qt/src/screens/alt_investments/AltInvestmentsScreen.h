@@ -74,6 +74,9 @@ class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
     QWidget* create_right_panel();
     QWidget* create_status_bar();
     void rebuild_form(int cat, int ana);
+    /// Fill method_combo_ with the analysis methods of `analyzer_id` that the CLI can actually run
+    /// (hidden when there is only one).
+    void populate_methods(const QString& analyzer_id);
 
     // Data / execution
     void run_analysis(const QString& command, const QJsonObject& data);
@@ -98,6 +101,7 @@ class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
     QLabel* header_badge_ = nullptr;
     QLabel* left_title_ = nullptr;
     QLabel* combo_label_ = nullptr;
+    QLabel* method_label_ = nullptr;
     QLabel* form_title_ = nullptr;
     QLabel* right_title_ = nullptr;
     QLabel* status_left_ = nullptr;
@@ -109,6 +113,7 @@ class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
     QLabel* center_title_ = nullptr;
     QLabel* center_desc_ = nullptr;
     QComboBox* analyzer_combo_ = nullptr;
+    QComboBox* method_combo_ = nullptr; // cli.py --method for the selected analyzer
     QWidget* form_container_ = nullptr; // holds dynamic form rows
     QVBoxLayout* form_layout_ = nullptr;
     QPushButton* analyze_btn_ = nullptr;

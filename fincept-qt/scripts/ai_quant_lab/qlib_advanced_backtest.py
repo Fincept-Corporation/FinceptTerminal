@@ -716,7 +716,11 @@ def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
     # ── Simple momentum strategy signal ──────────────────────────────────────
     # Rank tickers by trailing 20-day return, hold top-K equally weighted
     returns       = close[strat_tickers].pct_change()
-    momentum_20d  = close[strat_tickers].pct_change(20)
+    # The signal is shifted one day: positions chosen from the trailing return AS OF
+    # yesterday's close earn today's return. Using today's trailing return (which
+    # contains today's move) to pick the names that earn today's move is look-ahead
+    # bias and inflated every strategy's Sharpe / return.
+    momentum_20d  = close[strat_tickers].pct_change(20).shift(1)
 
     portfolio_returns = []
     dates = returns.index[20:]  # skip warmup
@@ -744,7 +748,11 @@ def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
         portfolio_returns.append(float(day_ret) if not pd.isna(day_ret) else 0.0)
 
     # ── Benchmark returns ────────────────────────────────────────────────────
-    bm_col = benchmark_ticker if benchmark_ticker in close.columns else None
+    # yf.download keeps a column (all NaN) for a symbol it could not resolve, so
+    # "in close.columns" is not enough -- require real prices.
+    bm_col = (benchmark_ticker
+              if benchmark_ticker in close.columns and close[benchmark_ticker].notna().sum() > 1
+              else None)
     if bm_col:
         bm_returns = close[bm_col].pct_change().loc[dates].fillna(0.0).tolist()
     else:
@@ -797,10 +805,18 @@ def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
                            bm_cum.values[::step])
     ]
 
+    result_warning = None
+    if bm_col is None:
+        # A benchmark yfinance could not resolve (e.g. the old "SH000300" Qlib/CSI placeholder)
+        # used to become a silent flat line at initial capital.
+        result_warning = (f"Benchmark '{benchmark_ticker}' returned no price data, so the benchmark line "
+                          "is flat and carries no information. Use a Yahoo Finance symbol such as SPY.")
     return {
         "success": True,
         "strategy": strategy_type,
         "tickers": strat_tickers,
+        "benchmark": benchmark_ticker,
+        **({"warning": result_warning} if result_warning else {}),
         "start_date": start_date,
         "end_date": end_date,
         "metrics": {
@@ -826,6 +842,17 @@ def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
 def optimize_portfolio(params: Dict[str, Any]) -> Dict[str, Any]:
     """Placeholder for portfolio optimisation — returns not-yet-implemented."""
     return {"success": False, "error": "optimize_portfolio not yet implemented"}
+
+
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps (they are not valid JSON)."""
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
 
 
 def main():
@@ -859,7 +886,7 @@ def main():
             raw = sys.argv[2] if len(sys.argv) > 2 else "{}"
             params = json.loads(raw)
             result = run_backtest(params)
-            print(json.dumps(result))
+            print(json.dumps(_json_safe(result)))
 
         elif command == "optimize_portfolio":
             raw = sys.argv[2] if len(sys.argv) > 2 else "{}"

@@ -31,7 +31,16 @@ PARAMETERS:
 
 from decimal import Decimal
 from typing import Dict, List, Any, Tuple
-from .core import EconomicsBase, ValidationError
+try:
+    from .core import EconomicsBase, ValidationError
+except ImportError:
+    # Launched as a plain script (PythonRunner does this when a parent directory has no
+    # __init__.py, as with Analytics/) so there is no parent package for the relative
+    # import. The script's own directory is sys.path[0], so import core.py directly.
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from core import EconomicsBase, ValidationError
 
 
 class TradeAnalyzer(EconomicsBase):
@@ -860,20 +869,30 @@ if __name__ == "__main__":
         return obj
 
     analysis_type = sys.argv[1] if len(sys.argv) > 1 else "benefits_costs"
-    params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+    try:
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+    except ValueError as exc:
+        print(json.dumps({"error": f"Invalid JSON parameters: {exc}"}))
+        sys.exit(1)
+    if not isinstance(params, dict):
+        print(json.dumps({"error": "Parameters must be a JSON object"}))
+        sys.exit(1)
 
     analyzer = TradeAnalyzer()
 
     # Map analysis_type to correct method with correct data key
-    if analysis_type == "benefits_costs":
-        result = analyzer.analyze_trade_benefits_costs(params)
-    elif analysis_type == "restrictions":
-        result = analyzer.analyze_trade_restrictions(params)
-    elif analysis_type == "trading_blocs":
-        result = analyzer.analyze_trading_blocs(params)
-    elif analysis_type == "barrier_removal":
-        result = analyzer.assess_trade_barrier_removal(params)
-    else:
-        result = {"error": f"Unknown analysis type: {analysis_type}"}
+    try:
+        if analysis_type == "benefits_costs":
+            result = analyzer.analyze_trade_benefits_costs(params)
+        elif analysis_type == "restrictions":
+            result = analyzer.analyze_trade_restrictions(params)
+        elif analysis_type == "trading_blocs":
+            result = analyzer.analyze_trading_blocs(params)
+        elif analysis_type == "barrier_removal":
+            result = analyzer.assess_trade_barrier_removal(params)
+        else:
+            result = {"error": f"Unknown analysis type: {analysis_type}"}
+    except Exception as exc:  # bad numeric input etc. -> JSON error, not a traceback
+        result = {"error": str(exc)}
 
     print(json.dumps(to_serializable(result), indent=2))

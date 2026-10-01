@@ -47,6 +47,15 @@ class CryptoBottomPanel : public QWidget {
 
     // New widget forwarding
     void add_trade_entry(const TradeEntry& trade);
+    /// Symbol / exchange switch: drop the time & sales tape, the depth chart and the
+    /// MARKET-tab readouts so the previous pair's data isn't mixed with (or shown
+    /// as) the new pair's until its first updates arrive.
+    void reset_market_data();
+    /// Live positions / orders fetch failed (no API key, bad credentials, daemon
+    /// error, venue without positions): show the reason in the empty state instead
+    /// of a table that reads as "no positions" (or still shows paper rows).
+    void set_live_positions_unavailable(const QString& reason);
+    void set_live_orders_unavailable(const QString& reason);
     void set_depth_data(const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
                         double spread, double spread_pct);
 

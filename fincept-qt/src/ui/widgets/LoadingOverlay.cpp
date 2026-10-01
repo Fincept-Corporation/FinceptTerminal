@@ -3,17 +3,43 @@
 
 #include "ui/theme/ThemeManager.h"
 
+#include <QEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointer>
 
 #include <cmath>
 
 namespace fincept::ui {
 
+namespace {
+/// Keeps a visible overlay covering its host: show_loading() sizes the overlay
+/// once, so without this a window resize / dock split while loading left it
+/// covering only the old rectangle. Owned by (and destroyed with) the overlay.
+class LoadingOverlayResizeWatcher final : public QObject {
+  public:
+    LoadingOverlayResizeWatcher(QWidget* overlay, QObject* parent) : QObject(parent), overlay_(overlay) {}
+
+  protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::Resize && overlay_ && overlay_->isVisible()) {
+            if (auto* host = qobject_cast<QWidget*>(watched))
+                overlay_->setGeometry(host->rect());
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+  private:
+    QPointer<QWidget> overlay_;
+};
+} // namespace
+
 LoadingOverlay::LoadingOverlay(QWidget* parent) : QWidget(parent) {
     setAttribute(Qt::WA_TransparentForMouseEvents, false);
     setAttribute(Qt::WA_NoSystemBackground);
     hide();
+    if (parent)
+        parent->installEventFilter(new LoadingOverlayResizeWatcher(this, this));
 
     tokens_ = ThemeManager::instance().tokens();
 

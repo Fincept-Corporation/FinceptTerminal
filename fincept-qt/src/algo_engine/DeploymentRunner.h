@@ -122,6 +122,7 @@ class DeploymentRunner : public QObject {
     bool live_mode_ = false;         // timeframe == "live" → evaluate per tick
     int64_t last_emit_ms_ = 0;       // throttle for live_update emission
     double last_tick_price_ = 0;     // previous tick price → tick-to-tick crossovers
+    int64_t last_reject_ms_ = 0;     // when the last order was rejected (retry back-off)
 
     // Finalize the in-flight multi-leg basket once every leg has reported a
     // fill or rejection (called from on_leg_filled / on_leg_rejected).

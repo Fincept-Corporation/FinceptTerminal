@@ -6,6 +6,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -28,6 +29,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -68,6 +70,8 @@ void AgenticTasksPanel::build_ui() {
     filter_combo_->addItem(tr("Completed"), "completed");
     filter_combo_->addItem(tr("Failed"), "failed");
     filter_combo_->addItem(tr("Cancelled"), "cancelled");
+    filter_combo_->addItem(tr("Needs input"), "paused_for_input");
+    filter_combo_->addItem(tr("Budget stop"), "failed_budget");
     filter_combo_->setStyleSheet(
         QString("QComboBox { background:%1; color:%2; border:1px solid %3; padding:3px 8px; font-size:11px; }")
             .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
@@ -228,6 +232,9 @@ void AgenticTasksPanel::build_ui() {
     resume_btn_ = make_btn(tr("RESUME"), ui::colors::GREEN());
     cancel_btn_ = make_btn(tr("CANCEL"), ui::colors::RED());
     schedule_btn_ = make_btn(tr("SCHEDULE…"), ui::colors::AMBER());
+    schedules_btn_ = make_btn(tr("SCHEDULES…"), ui::colors::TEXT_SECONDARY());
+    schedules_btn_->setEnabled(true); // always enabled — lists/removes saved recurring tasks
+    schedules_btn_->setToolTip(tr("View, pause and delete recurring scheduled tasks"));
     libraries_btn_ = make_btn(tr("LIBRARIES…"), ui::colors::TEXT_SECONDARY());
     libraries_btn_->setEnabled(true); // always enabled — inspects global stores
     delete_btn_ = make_btn(tr("DELETE"), ui::colors::TEXT_SECONDARY());
@@ -235,6 +242,7 @@ void AgenticTasksPanel::build_ui() {
     btn_row->addWidget(resume_btn_);
     btn_row->addWidget(cancel_btn_);
     btn_row->addWidget(schedule_btn_);
+    btn_row->addWidget(schedules_btn_);
     btn_row->addWidget(libraries_btn_);
     btn_row->addStretch();
     btn_row->addWidget(delete_btn_);
@@ -257,6 +265,7 @@ void AgenticTasksPanel::build_ui() {
     connect(reply_btn_, &QPushButton::clicked, this, &AgenticTasksPanel::on_reply_clicked);
     connect(reply_edit_, &QLineEdit::returnPressed, this, &AgenticTasksPanel::on_reply_clicked);
     connect(schedule_btn_, &QPushButton::clicked, this, &AgenticTasksPanel::on_schedule_clicked);
+    connect(schedules_btn_, &QPushButton::clicked, this, &AgenticTasksPanel::on_schedules_clicked);
     connect(libraries_btn_, &QPushButton::clicked, this, &AgenticTasksPanel::on_libraries_clicked);
 }
 
@@ -294,6 +303,13 @@ void AgenticTasksPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     if (first_show_) {
         first_show_ = false;
+        stale_ = false;
+        refresh_list();
+        // Saved schedules only fire while the service's tick timer is armed, and
+        // that used to happen only in the session that created them. Listing arms it.
+        services::AgentService::instance().schedule_list();
+    } else if (stale_) {
+        stale_ = false;
         refresh_list();
     }
 }
@@ -310,7 +326,7 @@ void AgenticTasksPanel::retranslateUi() {
     // Filter bar.
     if (filter_title_)
         filter_title_->setText(tr("FILTER:"));
-    if (filter_combo_ && filter_combo_->count() >= 6) {
+    if (filter_combo_ && filter_combo_->count() >= 8) {
         // Re-apply display text by index; the data role (status code) is preserved.
         filter_combo_->setItemText(0, tr("All"));
         filter_combo_->setItemText(1, tr("Running"));
@@ -318,6 +334,8 @@ void AgenticTasksPanel::retranslateUi() {
         filter_combo_->setItemText(3, tr("Completed"));
         filter_combo_->setItemText(4, tr("Failed"));
         filter_combo_->setItemText(5, tr("Cancelled"));
+        filter_combo_->setItemText(6, tr("Needs input"));
+        filter_combo_->setItemText(7, tr("Budget stop"));
     }
     if (refresh_btn_)
         refresh_btn_->setText(tr("REFRESH"));
@@ -355,6 +373,10 @@ void AgenticTasksPanel::retranslateUi() {
         cancel_btn_->setText(tr("CANCEL"));
     if (schedule_btn_)
         schedule_btn_->setText(tr("SCHEDULE…"));
+    if (schedules_btn_) {
+        schedules_btn_->setText(tr("SCHEDULES…"));
+        schedules_btn_->setToolTip(tr("View, pause and delete recurring scheduled tasks"));
+    }
     if (libraries_btn_)
         libraries_btn_->setText(tr("LIBRARIES…"));
     if (delete_btn_)
@@ -364,6 +386,22 @@ void AgenticTasksPanel::retranslateUi() {
 void AgenticTasksPanel::refresh_list() {
     const QString status = filter_combo_->currentData().toString();
     services::AgentService::instance().list_tasks(status, 50);
+}
+
+void AgenticTasksPanel::request_refresh() {
+    if (!isVisible()) {
+        stale_ = true; // showEvent catches up
+        return;
+    }
+    if (!refresh_throttle_) {
+        refresh_throttle_ = new QTimer(this);
+        refresh_throttle_->setSingleShot(true);
+        refresh_throttle_->setInterval(1200);
+        connect(refresh_throttle_, &QTimer::timeout, this, &AgenticTasksPanel::refresh_list);
+    }
+    // Leading-edge throttle: the first event arms it, later ones in the window ride along.
+    if (!refresh_throttle_->isActive())
+        refresh_throttle_->start();
 }
 
 void AgenticTasksPanel::on_filter_changed(int) {
@@ -417,7 +455,9 @@ void AgenticTasksPanel::render_task_detail(const QJsonObject& task) {
     pause_btn_->setEnabled(active);
     resume_btn_->setEnabled(status == "failed" || status == "paused" || status == "pause_requested" ||
                             status == "cancelled" || status == "failed_budget");
-    cancel_btn_->setEnabled(active || status == "paused");
+    // A task parked on a clarifying question (paused_for_input) must be cancellable
+    // too — otherwise only DELETE could ever stop it.
+    cancel_btn_->setEnabled(active || status == "paused" || status == "paused_for_input");
     delete_btn_->setEnabled(!id.isEmpty());
     // Schedule action makes sense once a task has actually been run — the
     // user is saying "do THIS workflow again on a cadence." Enabling for
@@ -485,16 +525,11 @@ void AgenticTasksPanel::render_plan(const QJsonObject& plan) {
 }
 
 void AgenticTasksPanel::apply_task_event(const QString& task_id, const QJsonObject& event) {
-    // Update the row in the list regardless of selection.
-    for (int i = 0; i < task_list_->count(); ++i) {
-        auto* item = task_list_->item(i);
-        if (item->data(kTaskIdRole).toString() != task_id)
-            continue;
-        // Refresh row by re-listing — cheaper than incremental for Phase 1.
-        // (Coalesce avoidance: rely on DataHub policy coalesce_within_ms = 50.)
-        refresh_list();
-        break;
-    }
+    // Keep the list in step with the event stream. Re-listing is a Python spawn, so
+    // it goes through request_refresh() (rate-limited, deferred while hidden). A
+    // task id the list has never seen — started from chat or fired by a schedule —
+    // also triggers one; it used to stay invisible until a manual REFRESH.
+    request_refresh();
     if (task_id != selected_task_id_)
         return;
 
@@ -780,6 +815,92 @@ void AgenticTasksPanel::on_schedule_clicked() {
     // Wire through to AgentService; the schedule timer auto-arms.
     services::AgentService::instance().schedule_create_task(name, query, schedule_expr, {}, false);
     step_log_->appendPlainText(QString("[scheduled] '%1' on '%2'").arg(name, schedule_expr));
+}
+
+// ── Schedules dialog ─────────────────────────────────────────────────────────
+// Lists the persisted recurring tasks (AgentService::schedule_list) so they can be
+// disabled or deleted. SCHEDULE… could create them, but nothing could ever stop a
+// recurring (token-spending) task short of editing the SQLite file.
+namespace {
+void agent_tasks_fill_schedules(QTableWidget* t, const QJsonArray& rows) {
+    t->setRowCount(0);
+    auto when = [](const QString& iso) { return iso.left(19).replace(QLatin1Char('T'), QLatin1Char(' ')); };
+    for (const auto& v : rows) {
+        const QJsonObject r = v.toObject();
+        const int row = t->rowCount();
+        t->insertRow(row);
+        const bool enabled = r.value("enabled").toBool();
+        auto* name = new QTableWidgetItem(r.value("name").toString());
+        name->setData(Qt::UserRole, r.value("id").toString());
+        name->setData(Qt::UserRole + 1, enabled);
+        t->setItem(row, 0, name);
+        t->setItem(row, 1, new QTableWidgetItem(r.value("schedule_expr").toString()));
+        t->setItem(row, 2,
+                   new QTableWidgetItem(enabled ? QCoreApplication::translate("AgenticTasksPanel", "yes")
+                                                : QCoreApplication::translate("AgenticTasksPanel", "no")));
+        t->setItem(row, 3, new QTableWidgetItem(when(r.value("next_run_at").toString())));
+        t->setItem(row, 4, new QTableWidgetItem(when(r.value("last_run_at").toString())));
+        t->setItem(row, 5, new QTableWidgetItem(trunc(r.value("query").toString(), 100)));
+    }
+    t->resizeColumnToContents(0);
+    t->resizeColumnToContents(1);
+}
+} // namespace
+
+void AgenticTasksPanel::on_schedules_clicked() {
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Scheduled tasks"));
+    dlg.setMinimumSize(860, 360);
+
+    auto* table = make_table(&dlg, {tr("name"), tr("schedule"), tr("enabled"), tr("next run (UTC)"),
+                                    tr("last run (UTC)"), tr("query")});
+    auto* toggle_btn = new QPushButton(tr("Enable / disable selected"), &dlg);
+    auto* delete_btn = new QPushButton(tr("Delete selected"), &dlg);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto* actions = new QHBoxLayout;
+    actions->addWidget(toggle_btn);
+    actions->addWidget(delete_btn);
+    actions->addStretch(1);
+    auto* dv = new QVBoxLayout(&dlg);
+    dv->setContentsMargins(12, 12, 12, 12);
+    dv->addWidget(table, 1);
+    dv->addLayout(actions);
+    dv->addWidget(buttons);
+
+    auto& svc = services::AgentService::instance();
+    // `dlg` is the context object, so the connection dies with the dialog. Toggle and
+    // delete both end in a fresh schedules_listed from the service.
+    QObject::connect(&svc, &services::AgentService::schedules_listed, &dlg,
+                     [table](const QJsonArray& arr) { agent_tasks_fill_schedules(table, arr); });
+    svc.schedule_list();
+
+    QObject::connect(toggle_btn, &QPushButton::clicked, &dlg, [table, &svc]() {
+        const auto sel = table->selectedItems();
+        if (sel.isEmpty())
+            return;
+        const auto* head = table->item(sel.first()->row(), 0);
+        if (!head)
+            return;
+        svc.schedule_set_enabled(head->data(Qt::UserRole).toString(), !head->data(Qt::UserRole + 1).toBool());
+    });
+    QObject::connect(delete_btn, &QPushButton::clicked, &dlg, [this, &dlg, table, &svc]() {
+        const auto sel = table->selectedItems();
+        if (sel.isEmpty())
+            return;
+        const auto* head = table->item(sel.first()->row(), 0);
+        if (!head)
+            return;
+        if (QMessageBox::question(&dlg, tr("Delete schedule"),
+                                  tr("Delete the schedule \"%1\"?\n\nTasks it already started are not affected.")
+                                      .arg(head->text()),
+                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+            return;
+        svc.schedule_delete(head->data(Qt::UserRole).toString());
+    });
+
+    dlg.exec();
 }
 
 void AgenticTasksPanel::on_pause_clicked() {

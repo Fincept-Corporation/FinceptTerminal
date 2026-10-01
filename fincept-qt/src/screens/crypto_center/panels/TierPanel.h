@@ -45,8 +45,10 @@ class TierPanel : public QWidget {
     void on_wallet_disconnected();
     void on_tier_update(const QVariant& v);
 
+    /// `remaining_ui_str` is the veFNCPT weight still missing for the next tier
+    /// (threshold minus current weight), empty at Gold / when unknown.
     void render_state(fincept::wallet::TierStatus::Tier current, const QString& weight_ui_str,
-                      const QString& next_threshold_ui_str, bool is_mock);
+                      const QString& remaining_ui_str, bool is_mock);
 
     struct TierRow {
         QFrame* host = nullptr;

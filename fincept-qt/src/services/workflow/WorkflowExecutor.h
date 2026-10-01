@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QVector>
 
 namespace fincept::workflow {
@@ -23,7 +24,9 @@ class WorkflowExecutor : public QObject {
     /// Only executes the subgraph downstream of start_node_id.
     void execute_from(const WorkflowDef& workflow, const QString& start_node_id);
 
-    /// Stop a running execution.
+    /// Stop a running execution. In-flight nodes are allowed to finish; calling
+    /// stop() a second time while some are still running abandons them and
+    /// finishes immediately (escape hatch for a node that never reports back).
     void stop();
 
     bool is_running() const { return running_; }
@@ -35,8 +38,20 @@ class WorkflowExecutor : public QObject {
     void execution_finished(const WorkflowExecutionResult& result);
 
   private:
-    /// Build adjacency list from edges.
+    /// Build adjacency list from edges. Dangling edges (endpoint is not a node of
+    /// this workflow) are dropped, and disabled nodes are bridged out so their
+    /// inputs flow straight through to their consumers.
     void build_graph();
+
+    /// Finish before anything ran (cycle / nothing executable) — still emits
+    /// execution_started so the UI opens its results panel and shows `error`.
+    void finish_early(bool success, const QString& error);
+
+    /// Display name for a node in error messages ("name" or its type id).
+    QString node_label(const QString& node_id) const;
+
+    /// True when `node_id` feeds a control.error_handler node (so its failure is "caught").
+    bool feeds_error_handler(const QString& node_id) const;
 
     /// DFS cycle detection. Returns true if cycle found.
     bool has_cycle() const;
@@ -50,12 +65,21 @@ class WorkflowExecutor : public QObject {
     /// Launch a single node for execution.
     void launch_single_node(const QString& node_id);
 
+    /// Complete a node without running it (skipped branch, pass-through) and
+    /// release the nodes waiting on it.
+    void settle_without_running(const QString& node_id, const QJsonObject& output);
+
     /// Called when a node finishes execution.
     void on_node_done(const QString& node_id, bool success, const QJsonValue& output, const QString& error,
                       int duration_ms = 0);
 
     /// Collect input data for a node from its upstream nodes' outputs.
     QVector<QJsonValue> collect_inputs(const QString& node_id) const;
+
+    /// The node's parameters with {{ ... }} templates in its plain-text ("string")
+    /// parameters resolved against the upstream data. Parameters without a template
+    /// marker (all of them, in nearly every workflow) are passed through untouched.
+    QJsonObject resolved_parameters(const NodeDef& node, const NodeTypeDef& type, const QVector<QJsonValue>& inputs) const;
 
     /// Emit execution_finished with aggregated results.
     void finish_execution();
@@ -74,6 +98,13 @@ class WorkflowExecutor : public QObject {
     int pending_count_ = 0;         // nodes currently in-flight
     int completed_count_ = 0;       // total completed
     int total_count_ = 0;           // total nodes to execute
+
+    // Failure reporting: first node failure, and the reason the run was aborted
+    // (set only when a failing node — not the user — triggered the stop).
+    QString first_failure_;
+    QString abort_reason_;
+    QSet<QString> in_flight_; // ids of nodes launched but not yet reported back
+    QSet<QString> skipped_roots_; // disabled nodes with no inputs — complete as "skipped", never run
 
     // Node data
     QHash<QString, NodeExecutionResult> results_;

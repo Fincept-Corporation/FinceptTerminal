@@ -40,6 +40,8 @@ class AlgoTradingService : public QObject {
     explicit AlgoTradingService(QObject* parent = nullptr);
     void seed_library(); // idempotently seeds the curated C++ DSL library
     Q_DISABLE_COPY(AlgoTradingService)
+
+    int backtest_seq_ = 0; // latest run_backtest() request; older async results are dropped
 };
 
 } // namespace fincept::services::algo

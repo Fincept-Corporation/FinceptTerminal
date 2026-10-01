@@ -52,8 +52,10 @@ void BacktestingScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     if (first_show_) {
         first_show_ = false;
-        on_provider_changed(0);
-        on_command_changed(0);
+        // Use the provider/command restore_state() selected (it runs before the first
+        // show); hard-coded 0/0 here discarded the restored selection every launch.
+        on_provider_changed(active_provider_);
+        on_command_changed(active_command_);
     }
     auto config = BacktestingService::instance().take_pending_portfolio_config();
     if (!config.isEmpty())
@@ -299,10 +301,19 @@ QVariantMap BacktestingScreen::save_state() const {
 void BacktestingScreen::restore_state(const QVariantMap& state) {
     const int prov = state.value("provider", 0).toInt();
     const int cmd = state.value("command", 0).toInt();
-    if (prov != active_provider_)
-        on_provider_changed(prov);
-    if (cmd != active_command_)
-        on_command_changed(cmd);
+    if (first_show_) {
+        // Not shown yet: just record the selection — showEvent() applies it once, instead of
+        // firing a provider reload here and a second one at first show.
+        if (prov >= 0 && prov < providers_.size())
+            active_provider_ = prov;
+        if (cmd >= 0 && cmd < commands_.size())
+            active_command_ = cmd;
+    } else {
+        if (prov != active_provider_)
+            on_provider_changed(prov);
+        if (cmd != active_command_)
+            on_command_changed(cmd);
+    }
     if (symbols_edit_ && state.contains("symbols"))
         symbols_edit_->setText(state.value("symbols").toString());
     if (benchmark_edit_ && state.contains("benchmark"))

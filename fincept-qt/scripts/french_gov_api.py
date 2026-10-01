@@ -687,6 +687,24 @@ def get_resource_profile(resource_id: str) -> Dict[str, Any]:
         if not result["error"]:
             # Enhance profile data with translation
             profile_data = result.get("data", {})
+            # The Tabular API now answers {"profile": {"header": [...], "columns": {name: {...}},
+            # "total_lines": N, "encoding": ..., "separator": ...}, "dataset_id": ...}. Normalise it
+            # to the flat shape below (columns as a list of {name, type, format}); the legacy
+            # flat shape is still accepted.
+            inner = profile_data.get("profile") if isinstance(profile_data.get("profile"), dict) else None
+            if inner is not None:
+                columns_map = inner.get("columns") or {}
+                order = inner.get("header") or list(columns_map.keys())
+                profile_data = {
+                    "total_rows": inner.get("total_lines"),
+                    "encoding": inner.get("encoding"),
+                    "delimiter": inner.get("separator"),
+                    "has_header": True,
+                    "columns": [{"name": name,
+                                 "type": (columns_map.get(name) or {}).get("python_type"),
+                                 "format": (columns_map.get(name) or {}).get("format")}
+                                for name in order]
+                }
             original_name = profile_data.get("name", "")
             original_title = profile_data.get("title", "")
             original_desc = profile_data.get("description", "")
@@ -751,6 +769,55 @@ def get_resource_profile(resource_id: str) -> Dict[str, Any]:
             "metadata": {},
             "error": f"Error fetching resource profile: {str(e)}"
         }
+
+def get_dataset_schema(dataset_id: str) -> Dict[str, Any]:
+    """
+    Column schema for a data.gouv.fr *dataset* (the id the dataset search returns).
+
+    The Tabular API is keyed by resource id, not dataset id, so profiling a dataset id answered
+    HTTP 400 and the panel's schema view never worked. Resolve the dataset's tabular resources
+    (CSV/XLS...) and profile the first one that has a profile; if none does, list the dataset's
+    files instead so there is still something useful to show.
+
+    Args:
+        dataset_id: Dataset id (or a resource id, which is profiled directly)
+    """
+    # An id that already is a resource id works as-is
+    direct = get_resource_profile(dataset_id)
+    if not direct.get("error"):
+        return direct
+
+    dataset = _make_request(f"{CATALOG_BASE_URL}/datasets/{dataset_id}/", timeout=CATALOG_TIMEOUT)
+    if dataset.get("error"):
+        return dataset
+
+    resources = (dataset.get("data") or {}).get("resources", []) or []
+    tabular_formats = ("csv", "tsv", "xls", "xlsx", "ods", "parquet")
+    for resource in [r for r in resources if str(r.get("format", "")).lower() in tabular_formats][:3]:
+        profile = get_resource_profile(resource.get("id", ""))
+        if not profile.get("error"):
+            profile["metadata"]["resource_id"] = resource.get("id")
+            profile["metadata"]["resource_title"] = resource.get("title")
+            return profile
+
+    rows = [{
+        "name": r.get("title") or r.get("id") or "",
+        "format": str(r.get("format") or "").upper(),
+        "size": r.get("filesize") or 0,
+        "last_modified": r.get("last_modified") or "",
+        "url": r.get("url") or ""
+    } for r in resources]
+    return {
+        "data": rows,
+        "metadata": {
+            "source": "www.data.gouv.fr",
+            "last_updated": datetime.now().isoformat(),
+            "note": "No tabular profile available - listing the dataset's files",
+            "resource_count": len(rows)
+        },
+        "error": None if rows else "This dataset has no resources"
+    }
+
 
 def get_resource_lines(resource_id: str, page: int = 1,
                       page_size: int = 20) -> Dict[str, Any]:
@@ -1101,8 +1168,15 @@ def main():
 
         elif command == "datasets":
             query = _fr_search_query if _fr_search_query is not None else (sys.argv[2] if len(sys.argv) > 2 else None)
-            page = int(sys.argv[3]) if len(sys.argv) > 3 else 1
-            page_size = int(sys.argv[4]) if len(sys.argv) > 4 else 20
+            if len(sys.argv) == 4:
+                # `datasets <query> <limit>` - the form the C++ panel and the MCP tool send. The
+                # number used to be read as a page index (page 50 of the results!), returning the
+                # least relevant hits or nothing for a narrow query.
+                page = 1
+                page_size = int(sys.argv[3])
+            else:
+                page = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+                page_size = int(sys.argv[4]) if len(sys.argv) > 4 else 20
             result = search_datasets(query=query, page=page, page_size=page_size)
 
         # API Tabulaire Commands
@@ -1111,7 +1185,7 @@ def main():
             if not resource_id:
                 print(json.dumps({"error": "Usage: profile <resource_id>"}))
                 sys.exit(1)
-            result = get_resource_profile(resource_id)
+            result = get_dataset_schema(resource_id) if _fr_dataset_id else get_resource_profile(resource_id)
 
         elif command == "lines":
             if len(sys.argv) < 3:

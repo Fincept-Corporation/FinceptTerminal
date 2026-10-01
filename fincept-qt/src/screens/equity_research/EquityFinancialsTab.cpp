@@ -171,8 +171,15 @@ EquityFinancialsTab::EquityFinancialsTab(QWidget* parent) : QWidget(parent) {
     // Dismiss the "LOADING FINANCIALS…" overlay on failure — it's hidden only on success.
     connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
             [this](const QString& ctx, const QString&) {
-                if (ctx == "Financials" && loading_overlay_)
+                if (ctx != "Financials")
+                    return;
+                if (loading_overlay_)
                     loading_overlay_->hide_loading();
+                // Hiding the overlay alone left the PREVIOUS symbol's statements on screen
+                // under the new symbol's header. Nothing has loaded for this symbol, so
+                // return every card/table/chart to its blank state.
+                if (!loaded_)
+                    rebuild_views();
             });
 }
 
@@ -284,6 +291,8 @@ void EquityFinancialsTab::populate_table(QTableWidget* table, const QVector<QPai
             QString text = val == 0.0 ? "—" : fmt_large(val);
             auto* cell = new QTableWidgetItem(text);
             cell->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            if (val != 0.0)
+                cell->setData(Qt::UserRole, val); // raw figure, used by EXPORT CSV (the text is "391.04B")
             if (val < 0)
                 cell->setForeground(QColor(kRed));
             table->setItem(r, c + 1, cell);

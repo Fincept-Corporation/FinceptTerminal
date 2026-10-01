@@ -4,6 +4,7 @@
 #include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
+#include "trading/instruments/InstrumentService.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -38,6 +39,11 @@ IIFLBroker::KeyParts IIFLBroker::unpack_key(const QString& packed) {
 bool IIFLBroker::is_token_expired(const BrokerHttpResponse& resp) {
     if (resp.status_code == 401)
         return true;
+    // XTS reports a dead interactive/market-data token as {"type":"error","code":"e-session-NNNN",
+    // "description":...}, usually under a 4xx that is NOT 401 — which this check used to miss, leaving
+    // the account "connected" with every call failing.
+    if (resp.json.value("code").toString().startsWith(QLatin1String("e-session"), Qt::CaseInsensitive))
+        return true;
     if (!resp.success)
         return false;
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
@@ -50,15 +56,21 @@ bool IIFLBroker::is_token_expired(const BrokerHttpResponse& resp) {
 QString IIFLBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
     if (is_token_expired(resp))
         return "[TOKEN_EXPIRED] Session expired, please re-login";
-    if (!resp.success)
+    // XTS puts its reason in `description`; BrokerHttp's own fallback only reads `message`/`error`,
+    // so a rejected request used to surface as a bare "HTTP 400".
+    const QString description = resp.json.value("description").toString();
+    if (!resp.success) {
+        if (!description.isEmpty())
+            return description;
         return resp.error.isEmpty() ? fallback : resp.error;
+    }
     QJsonDocument doc = QJsonDocument::fromJson(resp.raw_body.toUtf8());
     if (doc.isObject()) {
         QString msg = doc.object().value("message").toString();
         if (!msg.isEmpty())
             return msg;
     }
-    return fallback;
+    return description.isEmpty() ? fallback : description;
 }
 
 QString IIFLBroker::iifl_exchange(const QString& exchange) {
@@ -229,11 +241,26 @@ TokenExchangeResponse IIFLBroker::refresh_session(const BrokerCredentials& creds
 OrderPlaceResponse IIFLBroker::place_order(const BrokerCredentials& creds, const UnifiedOrder& order) {
     TokenParts tok = unpack_token(creds.access_token);
 
+    // exchangeInstrumentID is the ONLY contract identifier in an XTS order. The equity ticket
+    // does not carry one (only the F&O chain fills UnifiedOrder::instrument_token), so resolve
+    // it from the instrument master; transmitting the old 0 could never match a contract.
+    qint64 instrument_id = order.instrument_token.toLongLong();
+    if (instrument_id <= 0) {
+        const auto tok = InstrumentService::instance().instrument_token(order.symbol, order.exchange,
+                                                                        QStringLiteral("iifl"));
+        if (tok.has_value() && tok.value() > 0)
+            instrument_id = tok.value();
+    }
+    if (instrument_id <= 0)
+        return {false, "",
+                "IIFL place_order: exchangeInstrumentID not found for " + order.exchange + ":" + order.symbol +
+                    " (instrument master not loaded yet?)"};
+
     QJsonObject body;
     body["exchangeSegment"] = iifl_exchange(order.exchange);
     // exchangeInstrumentID must be a JSON number per XTS spec; passing as string
     // works for some endpoints but is silently rejected for derivatives.
-    body["exchangeInstrumentID"] = order.instrument_token.toLongLong();
+    body["exchangeInstrumentID"] = instrument_id;
     body["productType"] = iifl_enum_map().product_or(order.product_type, "MIS");
     body["orderType"] = iifl_enum_map().order_type_or(order.order_type, "MARKET");
     body["orderSide"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
@@ -243,10 +270,9 @@ OrderPlaceResponse IIFLBroker::place_order(const BrokerCredentials& creds, const
     body["orderQuantity"] = static_cast<int>(order.quantity);
     body["limitPrice"] = order.price;
     body["stopPrice"] = order.stop_price;
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
-    body["orderUniqueIdentifier"] = make_client_order_ref(20);
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+    body["orderUniqueIdentifier"] = client_order_ref_for(order, 20);
 
     auto& http = BrokerHttp::instance();
     auto resp = http.post_json(
@@ -439,17 +465,24 @@ ApiResponse<QVector<BrokerPosition>> IIFLBroker::get_positions(const BrokerCrede
 
     for (const QJsonValue& v : arr) {
         QJsonObject o = v.toObject();
-        int qty = o.value("Quantity").toInt();
-        if (qty == 0)
+        // XTS returns position figures as numeric STRINGS ("Quantity":"-50", "BEP":"76.80");
+        // toInt()/toDouble() on a string read 0, which skipped the row as flat. Accept both.
+        auto num = [&o](const char* key) { return o.value(QLatin1String(key)).toVariant().toDouble(); };
+        const double qty = num("Quantity");
+        if (qty == 0.0)
             continue;
 
         BrokerPosition pos;
         pos.symbol = o.value("TradingSymbol").toString();
         pos.exchange = o.value("ExchangeSegment").toString();
         pos.quantity = qty;
-        pos.avg_price = o.value("AveragePrice").toDouble();
-        pos.ltp = o.value("LastPrice").toDouble();
-        pos.pnl = o.value("UnrealizedMTM").toDouble();
+        pos.avg_price = num("AveragePrice");
+        if (pos.avg_price <= 0.0) // XTS spells the entry price per side, plus a break-even field
+            pos.avg_price = qty > 0 ? num("BuyAveragePrice") : num("SellAveragePrice");
+        if (pos.avg_price <= 0.0)
+            pos.avg_price = num("BEP");
+        pos.ltp = num("LastPrice");
+        pos.pnl = num("UnrealizedMTM");
         pos.pnl_pct = (pos.avg_price > 0.0) ? ((pos.ltp - pos.avg_price) / pos.avg_price) * 100.0 : 0.0;
         pos.product_type = o.value("ProductType").toString();
         // Quantity carries the sign, but PortfolioReplicationService takes

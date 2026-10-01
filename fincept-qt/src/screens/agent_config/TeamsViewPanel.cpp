@@ -10,11 +10,13 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QShowEvent>
 #include <QSplitter>
+#include <QUuid>
 #include <QVBoxLayout>
 
 namespace {
@@ -24,6 +26,14 @@ static const QString kIn =
 } // namespace
 
 namespace fincept::screens {
+
+namespace {
+// Status-line styling in one place (was seven identical inline setStyleSheet pairs).
+void set_exec_status(QLabel* lbl, const QString& text, const QString& color) {
+    lbl->setText(text);
+    lbl->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(color));
+}
+} // namespace
 
 QString TeamsViewPanel::mode_description(const QString& mode) {
     if (mode == QLatin1String("coordinate"))
@@ -128,6 +138,28 @@ QWidget* TeamsViewPanel::build_team_panel() {
                                   .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_PRIMARY(),
                                        ui::colors::AMBER_DIM(), ui::colors::BG_HOVER()));
     vl->addWidget(team_list_, 1);
+
+    // SAVE / LOAD persist the team as an AgentConfig row with category "team" - the
+    // rows the TOOLS tab's "Team" assign target already lists (it was always empty,
+    // nothing ever created one).
+    auto* io_host = new QWidget(this);
+    io_host->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;padding:5px;"
+                                   "font-size:10px;font-weight:600;}QPushButton:hover{background:%3;}")
+                               .arg(ui::colors::CYAN(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
+    auto* io_row = new QHBoxLayout(io_host);
+    io_row->setContentsMargins(0, 0, 0, 0);
+    io_row->setSpacing(6);
+    team_save_btn_ = new QPushButton(tr("SAVE TEAM"));
+    team_save_btn_->setCursor(Qt::PointingHandCursor);
+    team_save_btn_->setToolTip(tr("Save this team (members, mode, leader) so it can be loaded later"));
+    team_load_btn_ = new QPushButton(tr("LOAD TEAM"));
+    team_load_btn_->setCursor(Qt::PointingHandCursor);
+    team_load_btn_->setToolTip(tr("Replace the current team with a saved one"));
+    io_row->addWidget(team_save_btn_);
+    io_row->addWidget(team_load_btn_);
+    connect(team_save_btn_, &QPushButton::clicked, this, &TeamsViewPanel::save_team);
+    connect(team_load_btn_, &QPushButton::clicked, this, &TeamsViewPanel::load_team);
+    vl->addWidget(io_host);
 
     team_remove_btn_ = new QPushButton(tr("REMOVE"));
     team_remove_btn_->setCursor(Qt::PointingHandCursor);
@@ -302,13 +334,11 @@ void TeamsViewPanel::setup_connections() {
         run_btn_->setText(tr("RUN TEAM"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
-            exec_status_->setText(tr("Completed in %1ms").arg(r.execution_time_ms));
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+            set_exec_status(exec_status_, tr("Completed in %1ms").arg(r.execution_time_ms), ui::colors::POSITIVE());
             log_display_->append(QString("[DONE] Team completed (%1ms)").arg(r.execution_time_ms));
         } else {
             result_display_->setPlainText(tr("Error: %1").arg(r.error));
-            exec_status_->setText(tr("FAILED"));
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+            set_exec_status(exec_status_, tr("FAILED"), ui::colors::NEGATIVE());
             log_display_->append("[ERROR] " + r.error);
         }
     });
@@ -328,7 +358,7 @@ void TeamsViewPanel::setup_connections() {
                 QTextCursor cursor = result_display_->textCursor();
                 cursor.movePosition(QTextCursor::End);
                 result_display_->setTextCursor(cursor);
-                result_display_->insertPlainText(token + " ");
+                result_display_->insertPlainText(token);
             });
 
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
@@ -340,14 +370,15 @@ void TeamsViewPanel::setup_connections() {
         run_btn_->setText(tr("RUN TEAM"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
-            exec_status_->setText(tr("Completed in %1ms").arg(r.execution_time_ms));
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+            set_exec_status(exec_status_, tr("Completed in %1ms").arg(r.execution_time_ms), ui::colors::POSITIVE());
             log_display_->append(QString("[DONE] Team completed (%1ms)").arg(r.execution_time_ms));
         } else {
-            result_display_->setPlainText(tr("Error: %1").arg(r.error));
-            exec_status_->setText(tr("FAILED"));
-            exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
-            log_display_->append("[ERROR] " + r.error);
+            // STOP pressed: keep whatever streamed in, just mark the run as stopped.
+            const bool stopped = r.error == QLatin1String(services::AgentService::kCancelledError);
+            if (!stopped)
+                result_display_->setPlainText(tr("Error: %1").arg(r.error));
+            set_exec_status(exec_status_, stopped ? tr("STOPPED") : tr("FAILED"), ui::colors::NEGATIVE());
+            log_display_->append((stopped ? QStringLiteral("[STOP] ") : QStringLiteral("[ERROR] ")) + r.error);
         }
     });
     // Profile combo for coordinator
@@ -365,8 +396,7 @@ void TeamsViewPanel::setup_connections() {
         pending_request_id_.clear();
         run_btn_->setEnabled(true);
         run_btn_->setText(tr("RUN TEAM"));
-        exec_status_->setText(tr("ERROR"));
-        exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+        set_exec_status(exec_status_, tr("ERROR"), ui::colors::NEGATIVE());
         log_display_->append("[ERROR] " + msg);
     });
 
@@ -492,15 +522,19 @@ void TeamsViewPanel::refresh_team_llm_label() {
 }
 
 void TeamsViewPanel::run_team() {
+    // While the team is running the button doubles as STOP.
+    if (executing_) {
+        services::AgentService::instance().cancel_run(pending_request_id_);
+        return;
+    }
     QString q = query_input_->toPlainText().trimmed();
-    if (q.isEmpty() || team_members_.isEmpty() || executing_)
+    if (q.isEmpty() || team_members_.isEmpty())
         return;
     executing_ = true;
     run_btn_->setEnabled(false);
     run_btn_->setText(tr("RUNNING..."));
     result_display_->clear();
-    exec_status_->setText(tr("Executing..."));
-    exec_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER()));
+    set_exec_status(exec_status_, tr("Executing..."), ui::colors::AMBER());
     log_display_->append(QString("[START] Running team (%1 members, mode: %2)")
                              .arg(team_members_.size())
                              .arg(mode_combo_->currentText()));
@@ -578,6 +612,115 @@ void TeamsViewPanel::run_team() {
     }
     tc["members"] = members;
     pending_request_id_ = services::AgentService::instance().run_team(q, tc);
+    // run_team streams, so it can be stopped — re-enable the button as STOP.
+    run_btn_->setEnabled(true);
+    run_btn_->setText(tr("STOP"));
+}
+
+void TeamsViewPanel::save_team() {
+    if (team_members_.isEmpty()) {
+        log_display_->append(tr("[!] Add at least one agent before saving the team"));
+        return;
+    }
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, tr("Save Team"), tr("Team name:"), QLineEdit::Normal,
+                                               saved_team_name_.isEmpty() ? tr("My Team") : saved_team_name_, &ok)
+                             .trimmed();
+    if (!ok || name.isEmpty())
+        return;
+
+    // Same name as the team that was loaded/saved last = overwrite it in place;
+    // anything else is a new team.
+    const bool overwrite = !saved_team_id_.isEmpty() && name == saved_team_name_;
+    const QString id = overwrite ? saved_team_id_ : QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    QJsonObject cfg;
+    if (overwrite) {
+        // Keep what other tabs wrote into the row (e.g. tools assigned from TOOLS).
+        const auto existing = AgentConfigRepository::instance().get(id);
+        if (existing.is_ok())
+            cfg = QJsonDocument::fromJson(existing.value().config_json.toUtf8()).object();
+    }
+    QJsonArray member_ids;
+    for (const auto& m : team_members_)
+        member_ids.append(m.id);
+    cfg["members"] = member_ids;
+    cfg["mode"] = mode_combo_->currentText();
+    cfg["leader_index"] = leader_combo_->currentIndex();
+    cfg["show_members_responses"] = show_responses_check_->isChecked();
+    cfg["coordinator_profile_id"] = team_profile_combo_->currentData().toString();
+
+    AgentConfig row;
+    row.id = id;
+    row.name = name;
+    row.description = QStringLiteral("%1 team, %2 member(s)").arg(mode_combo_->currentText()).arg(team_members_.size());
+    row.category = QStringLiteral("team");
+    row.config_json = QString::fromUtf8(QJsonDocument(cfg).toJson(QJsonDocument::Compact));
+    services::AgentService::instance().save_config(row);
+    saved_team_id_ = id;
+    saved_team_name_ = name;
+    log_display_->append(QString("[SAVE] Team \"%1\" (%2 members)").arg(name).arg(team_members_.size()));
+}
+
+void TeamsViewPanel::load_team() {
+    const auto teams = AgentConfigRepository::instance().list_by_category(QStringLiteral("team"));
+    if (teams.is_err() || teams.value().isEmpty()) {
+        log_display_->append(tr("[!] No saved teams yet - build a team and press SAVE TEAM"));
+        return;
+    }
+    QStringList names;
+    for (const auto& t : teams.value())
+        names << t.name;
+    bool ok = false;
+    const QString pick = QInputDialog::getItem(this, tr("Load Team"), tr("Saved teams:"), names, 0, false, &ok);
+    if (!ok)
+        return;
+    const int idx = static_cast<int>(names.indexOf(pick));
+    if (idx < 0)
+        return;
+    const AgentConfig row = teams.value()[idx];
+    const QJsonObject cfg = QJsonDocument::fromJson(row.config_json.toUtf8()).object();
+
+    // Replace the current team.
+    team_members_.clear();
+    team_list_->clear();
+    int missing = 0;
+    for (const auto& v : cfg.value("members").toArray()) {
+        const QString agent_id = v.toString();
+        bool found = false;
+        for (const auto& a : all_agents_) {
+            if (a.id == agent_id) {
+                add_to_team(a);
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            ++missing;
+    }
+    update_leader_combo(); // also covers the all-members-missing case (clears the combo)
+    team_count_->setText(QString::number(team_members_.size()));
+
+    const int mode_idx = mode_combo_->findText(cfg.value("mode").toString());
+    if (mode_idx >= 0)
+        mode_combo_->setCurrentIndex(mode_idx);
+    show_responses_check_->setChecked(cfg.value("show_members_responses").toBool());
+    if (!team_members_.isEmpty())
+        leader_combo_->setCurrentIndex(qBound(0, cfg.value("leader_index").toInt(), int(team_members_.size()) - 1));
+    const int prof_idx = team_profile_combo_->findData(cfg.value("coordinator_profile_id").toString());
+    team_profile_combo_->setCurrentIndex(prof_idx >= 0 ? prof_idx : 0);
+
+    // Team-level tools (assigned from the TOOLS tab) back members that have none.
+    QStringList tools;
+    for (const auto& t : cfg.value("tools").toArray())
+        tools << t.toString();
+    selected_tools_ = tools;
+
+    saved_team_id_ = row.id;
+    saved_team_name_ = row.name;
+    log_display_->append(QString("[LOAD] Team \"%1\" (%2 members)").arg(row.name).arg(team_members_.size()));
+    if (missing > 0)
+        log_display_->append(tr("[!] %1 saved member(s) no longer exist and were skipped").arg(missing));
 }
 
 void TeamsViewPanel::apply_tools_selection(const QStringList& tools) {
@@ -612,6 +755,14 @@ void TeamsViewPanel::retranslateUi() {
         show_responses_check_->setText(tr("Show member responses"));
     if (team_remove_btn_)
         team_remove_btn_->setText(tr("REMOVE"));
+    if (team_save_btn_) {
+        team_save_btn_->setText(tr("SAVE TEAM"));
+        team_save_btn_->setToolTip(tr("Save this team (members, mode, leader) so it can be loaded later"));
+    }
+    if (team_load_btn_) {
+        team_load_btn_->setText(tr("LOAD TEAM"));
+        team_load_btn_->setToolTip(tr("Replace the current team with a saved one"));
+    }
     // Mode description tracks the selected mode code (combo items stay as codes).
     if (mode_desc_label_ && mode_combo_)
         mode_desc_label_->setText(mode_description(mode_combo_->currentText()));

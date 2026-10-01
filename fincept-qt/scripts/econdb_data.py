@@ -12,6 +12,15 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 import aiohttp
 
+# Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
+# system DNS configuration on Windows and fails every request with
+# "Timeout while contacting DNS servers". Use the threaded getaddrinfo resolver
+# (same fix as scripts/exchange/ws_stream.py). Gated to Windows so Linux/macOS
+# keep the native resolver.
+if sys.platform == "win32":
+    import aiohttp.connector as _aiohttp_connector
+    _aiohttp_connector.DefaultResolver = aiohttp.ThreadedResolver
+
 # EconDB API Configuration
 ECONDB_BASE_URL = "https://www.econdb.com"
 ECONDB_API_BASE = f"{ECONDB_BASE_URL}/api/series"

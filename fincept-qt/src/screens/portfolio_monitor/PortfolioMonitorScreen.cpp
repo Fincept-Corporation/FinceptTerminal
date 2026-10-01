@@ -19,6 +19,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QHideEvent>
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -141,6 +142,14 @@ void PortfolioMonitorScreen::showEvent(QShowEvent* event) {
         rebuild_holdings();
         update_summary();
     }
+}
+
+void PortfolioMonitorScreen::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    // P3/D3: stop the service's summary timer and per-tick patching while nobody can
+    // see it. The account streams keep running (they're shared); the next showEvent's
+    // activate() re-seeds from their caches and refreshes.
+    UnifiedPortfolioService::instance().deactivate();
 }
 
 // ── UI construction ──────────────────────────────────────────────────────────

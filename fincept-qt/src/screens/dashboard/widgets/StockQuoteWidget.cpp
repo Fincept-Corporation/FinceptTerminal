@@ -50,6 +50,8 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     ticker_label_ = new QLabel(symbol_);
     prl->addWidget(ticker_label_);
+    link_symbol(ticker_label_, symbol_); // double-click the ticker → Equity Research
+    link_symbol(price_label_, symbol_);
 
     vl->addWidget(price_row);
 
@@ -178,6 +180,8 @@ void StockQuoteWidget::set_symbol(const QString& symbol) {
     symbol_ = normalize_symbol(symbol);
     set_title(tr("QUOTE: %1").arg(symbol_));
     ticker_label_->setText(symbol_);
+    link_symbol(ticker_label_, symbol_);
+    link_symbol(price_label_, symbol_);
 
     // Blank the previous symbol's numbers immediately — leaving AAPL's price
     // under an "MSFT" heading until the first delivery is actively misleading.
@@ -196,7 +200,10 @@ void StockQuoteWidget::set_symbol(const QString& symbol) {
 }
 
 void StockQuoteWidget::refresh_data() {
-    datahub::DataHub::instance().request(QStringLiteral("market:quote:") + symbol_);
+    // User-triggered refresh: force past the topic TTL / min_interval (the
+    // producer-side rate limit still applies). Without `force` the title-bar
+    // refresh button was a no-op whenever the cached quote was still fresh.
+    datahub::DataHub::instance().request(QStringLiteral("market:quote:") + symbol_, /*force=*/true);
 }
 
 void StockQuoteWidget::hub_resubscribe() {

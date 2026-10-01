@@ -10,6 +10,7 @@
 #include "python/PythonRunner.h"
 #include "services/portfolio/PortfolioService.h"
 #include "services/sectors/SectorResolver.h"
+#include "storage/repositories/CustomIndexRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountManager.h"
@@ -240,6 +241,7 @@ void PortfolioService::finalize_summary(const QString& portfolio_id, const QVect
     double total_cost = 0;
     double total_day = 0;
     double total_prev = 0; // previous-close value of PRICED holdings only (day% base)
+    int priced_count = 0;  // holdings that actually received a quote
 
     for (const auto& asset : assets) {
         portfolio::HoldingWithQuote h;
@@ -257,6 +259,7 @@ void PortfolioService::finalize_summary(const QString& portfolio_id, const QVect
             h.day_change = it->change;
             h.day_change_percent = it->change_pct;
             total_prev += (h.current_price - h.day_change) * h.quantity; // priced holdings only
+            ++priced_count;
         } else {
             // Fallback to avg buy price if no quote (broker missed the symbol,
             // or yfinance returned nothing).
@@ -296,6 +299,21 @@ void PortfolioService::finalize_summary(const QString& portfolio_id, const QVect
     summary.total_positions = assets.size();
     summary.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
+    // A refresh where NO holding got a quote (network down, provider outage)
+    // values every position at its cost basis. That is fine to display, but it
+    // must not be persisted: save_snapshot() is INSERT OR REPLACE keyed by day,
+    // so it would overwrite today's real NAV with a flat cost-basis value and
+    // feed a fake drop/zero-return into every vol/Sharpe/drawdown figure. Nor
+    // should it sit in the 5-minute summary cache and be served as if fresh.
+    if (!assets.isEmpty() && priced_count == 0) {
+        LOG_WARN("PortfolioSvc",
+                 QString("No quotes returned for %1 (%2 holdings) — showing cost basis, not caching or snapshotting")
+                     .arg(portfolio_id)
+                     .arg(assets.size()));
+        emit summary_loaded(summary);
+        return;
+    }
+
     // Cache the result (P11)
     {
         QMutexLocker lock(&cache_mutex_);
@@ -308,7 +326,92 @@ void PortfolioService::finalize_summary(const QString& portfolio_id, const QVect
                                                   summary.total_unrealized_pnl, summary.total_unrealized_pnl_percent,
                                                   today);
 
+    // Same cadence for any custom index built on this portfolio.
+    record_custom_index_values(summary);
+
     emit summary_loaded(summary);
+}
+
+// ── Custom indices ───────────────────────────────────────────────────────────
+
+double PortfolioService::compute_custom_index_value(const fincept::CustomIndex& idx,
+                                                    const portfolio::PortfolioSummary& summary) {
+    if (idx.constituents.isEmpty())
+        return idx.base_value;
+
+    // symbol → current price from live holdings
+    QHash<QString, double> price_map;
+    for (const auto& h : summary.holdings)
+        price_map[h.symbol] = h.current_price;
+
+    const int n = static_cast<int>(idx.constituents.size());
+    const QString& method = idx.method;
+
+    if (method == "Price Weighted") {
+        // Sum of current prices / sum of creation prices * base
+        double sum_cur = 0.0;
+        double sum_base = 0.0;
+        for (const auto& c : idx.constituents) {
+            sum_cur += price_map.value(c.symbol, c.price_at_create);
+            sum_base += c.price_at_create;
+        }
+        return sum_base > 0.0 ? (sum_cur / sum_base * idx.base_value) : idx.base_value;
+    }
+    if (method == "Equal Weighted") {
+        double ratio_sum = 0.0;
+        for (const auto& c : idx.constituents) {
+            if (c.price_at_create > 0.0)
+                ratio_sum += price_map.value(c.symbol, c.price_at_create) / c.price_at_create;
+        }
+        return (ratio_sum / n) * idx.base_value;
+    }
+    if (method == "Geometric Mean") {
+        double log_sum = 0.0;
+        int valid = 0;
+        for (const auto& c : idx.constituents) {
+            if (c.price_at_create > 0.0) {
+                const double cur = price_map.value(c.symbol, c.price_at_create);
+                if (cur > 0.0) {
+                    log_sum += std::log(cur / c.price_at_create);
+                    ++valid;
+                }
+            }
+        }
+        return valid > 0 ? (std::exp(log_sum / valid) * idx.base_value) : idx.base_value;
+    }
+
+    // Market Cap Weighted / Float Adjusted / Fundamental / Modified / Factor /
+    // Risk Parity / Capped all fall back to weight-based:
+    // sum(weight_i * price_ratio_i) / sum(weight_i) * base
+    double weighted_ratio = 0.0;
+    double total_weight = 0.0;
+    for (const auto& c : idx.constituents) {
+        if (c.price_at_create > 0.0 && c.weight > 0.0) {
+            weighted_ratio += c.weight * (price_map.value(c.symbol, c.price_at_create) / c.price_at_create);
+            total_weight += c.weight;
+        }
+    }
+    return total_weight > 0.0 ? (weighted_ratio / total_weight * idx.base_value) : idx.base_value;
+}
+
+void PortfolioService::record_custom_index_values(const portfolio::PortfolioSummary& summary) {
+    if (summary.holdings.isEmpty())
+        return;
+    auto indices = CustomIndexRepository::instance().list_all();
+    if (indices.is_err())
+        return;
+
+    // Prices in `summary` describe THIS portfolio only — an index built on a
+    // different one would be scored against the wrong prices.
+    const QString today = QDate::currentDate().toString(Qt::ISODate);
+    for (const auto& idx : indices.value()) {
+        if (idx.portfolio_id != summary.portfolio.id)
+            continue;
+        const double level = compute_custom_index_value(idx, summary);
+        if (!std::isfinite(level) || level <= 0.0)
+            continue;
+        CustomIndexRepository::instance().save_value(idx.id, today, level);
+    }
 }
 
 // ── Asset operations ─────────────────────────────────────────────────────────

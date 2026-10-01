@@ -152,6 +152,41 @@ struct EcdsaSig {
 #    pragma warning(disable : 4996)
 #endif
 
+// ECDSA public-key recovery for one candidate recovery id: rebuild R from r (x
+// coordinate) with the y parity selected by `recid`, then
+//     Q = r^-1 * (s*R - e*G) = u1*G + u2*R,   u1 = -e*r^-1,  u2 = s*r^-1   (mod n)
+// and compare Q with the signer's real public key. Only bit 0 of the Ethereum
+// recovery id (parity of R.y) is representable in v ∈ {27, 28}; bit 1 (r + n < p)
+// has probability ~2^-128 and is not part of the EVM ecrecover contract.
+bool hl_recid_matches(const EC_GROUP* group, const BIGNUM* order, const BIGNUM* r, const BIGNUM* s,
+                      const unsigned char* digest, int digest_len, int recid, const EC_POINT* expected, BN_CTX* ctx) {
+    bool matched = false;
+    EC_POINT* big_r = EC_POINT_new(group);
+    EC_POINT* q = EC_POINT_new(group);
+    BIGNUM* e = BN_bin2bn(digest, digest_len, nullptr);
+    BIGNUM* r_inv = BN_new();
+    BIGNUM* u1 = BN_new();
+    BIGNUM* u2 = BN_new();
+    BIGNUM* zero = BN_new();
+    if (big_r && q && e && r_inv && u1 && u2 && zero) {
+        BN_zero(zero);
+        if (EC_POINT_set_compressed_coordinates(group, big_r, r, recid & 1, ctx) == 1 &&
+            BN_mod(e, e, order, ctx) == 1 && BN_mod_inverse(r_inv, r, order, ctx) != nullptr &&
+            BN_mod_mul(u1, e, r_inv, order, ctx) == 1 && BN_mod_sub(u1, zero, u1, order, ctx) == 1 &&
+            BN_mod_mul(u2, s, r_inv, order, ctx) == 1 && EC_POINT_mul(group, q, u1, big_r, u2, ctx) == 1) {
+            matched = EC_POINT_cmp(group, q, expected, ctx) == 0;
+        }
+    }
+    BN_free(zero);
+    BN_free(u2);
+    BN_free(u1);
+    BN_free(r_inv);
+    BN_free(e);
+    EC_POINT_free(q);
+    EC_POINT_free(big_r);
+    return matched;
+}
+
 EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
     EcdsaSig out;
     EC_KEY* key = EC_KEY_new_by_curve_name(NID_secp256k1);
@@ -201,16 +236,37 @@ EcdsaSig ecdsa_sign(const QByteArray& digest, const QByteArray& priv_key_32) {
     BN_bn2bin(r_bn, reinterpret_cast<unsigned char*>(out.r.data()) + (32 - rlen));
     BN_bn2bin(s_normal, reinterpret_cast<unsigned char*>(out.s.data()) + (32 - slen));
 
-    // v (recovery id): MUST be 27 or 28 depending on the parity of the R point.
-    // Hardcoded to 27 here — this is correct only ~half the time and is NOT yet
-    // derived from the signature, so HL's ecrecover will resolve the WRONG signer
-    // whenever the true recovery id is 28. Harmless today only because the live
-    // order path is gated off (HyperliquidVenue::place_order returns
-    // "hl_live_path_not_yet_wired"). Before enabling live trading, derive the real
-    // recovery id (recover the pubkey for recid 0/1 and pick the one matching
-    // signer_address, or switch to libsecp256k1's recoverable-signature API) and
-    // cover it with the known vector from the HL docs.
-    out.v = 27; // TODO(hyperliquid): derive real recovery id — see note above
+    // v (recovery id): 27 or 28 depending on the parity of the R point. It used to be
+    // hardcoded to 27, which is right only ~half the time (measured 92/200 random
+    // signatures recovering to the true signer), so HL's ecrecover resolved a
+    // DIFFERENT address whenever the real recovery id was 28. Derive it instead:
+    // recover the public key for recid 0 and 1 from the FINAL (r, low-s) pair —
+    // low-s normalisation flips the parity, so it must be tried after it — and keep
+    // the one that matches the signer's key. If neither matches, fail closed (empty
+    // r/s => sign_action() reports "ecdsa_sign failed") rather than emit a signature
+    // that recovers to the wrong address.
+    //
+    // NOTE: this makes the ECDSA primitive correct; it does NOT make the live path
+    // ready. The action hashing is still canonical-JSON, not HL's msgpack scheme
+    // (see the header comment), so is_wired() deliberately stays false and
+    // HyperliquidVenue::place_order stays gated.
+    int recid = -1;
+    if (BN_CTX* ctx = BN_CTX_new()) {
+        for (int cand = 0; cand < 2 && recid < 0; ++cand) {
+            if (hl_recid_matches(EC_KEY_get0_group(key), order, r_bn, s_normal,
+                                 reinterpret_cast<const unsigned char*>(digest.constData()), digest.size(), cand, pub,
+                                 ctx))
+                recid = cand;
+        }
+        BN_CTX_free(ctx);
+    }
+    if (recid < 0) {
+        out.r.clear();
+        out.s.clear();
+        out.v = 0;
+    } else {
+        out.v = static_cast<uint8_t>(27 + recid);
+    }
 
     // Compute signer address = last 20 bytes of keccak256(uncompressed pubkey[1:]).
     unsigned char pubbuf[65];

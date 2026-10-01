@@ -3,6 +3,7 @@
 // in this TU so the main file stays smaller.
 
 #include "services/llm/LlmContentExtractors.h"
+#include "services/llm/LlmRequestPolicy.h"
 #include "services/llm/LlmService.h"
 
 #include <QCoreApplication>
@@ -59,14 +60,34 @@ QString parse_server_error_message(const QByteArray& body) {
     return server_msg;
 }
 
+// HTTP statuses that mean "the provider did not process this request": rate
+// limiting and transient upstream/overload errors (529 is Anthropic's
+// "overloaded"). A tool loop re-posts the whole transcript every round, so one
+// blip on round 7 used to throw away six rounds of tool work; one retry after a
+// short backoff recovers the common case without hiding a persistent failure.
+static bool llm_http_is_transient_status(int status) {
+    return status == 429 || status == 500 || status == 502 || status == 503 || status == 504 || status == 529;
+}
+
 // ── Blocking POST ──────────────────────────────────────────────────────────
 // Background-thread only. Delegates to eventloop_request which works for
 // Cloudflare-protected endpoints (the old waitForReadyRead() path failed
-// during TLS negotiation behind Cloudflare).
+// during TLS negotiation behind Cloudflare). Retries once on a transient
+// status (see above).
 LlmService::HttpResult LlmService::blocking_post(const QString& url, const QJsonObject& body,
                                                  const QMap<QString, QString>& headers, int timeout_ms) {
     QByteArray json_data = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    return eventloop_request("POST", url, json_data, headers, timeout_ms);
+    HttpResult r = eventloop_request("POST", url, json_data, headers, timeout_ms);
+    if (!r.success && !r.cancelled && llm_http_is_transient_status(r.status)) {
+        // Honour Retry-After when the provider sends one, within sane bounds.
+        const int backoff_ms = std::clamp(r.retry_after_s * 1000, 2000, 15000);
+        LOG_WARN("LlmService", QString("POST failed with HTTP %1 — retrying once in %2 ms").arg(r.status).arg(backoff_ms));
+        if (detail::cancellable_sleep(backoff_ms))
+            r = eventloop_request("POST", url, json_data, headers, timeout_ms);
+        else
+            r.cancelled = true;
+    }
+    return r;
 }
 
 // ── Blocking GET ───────────────────────────────────────────────────────────
@@ -107,7 +128,17 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
     timer.start(timeout_ms);
     QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    // A POST to a slow reasoning model can sit here for the full timeout; poll the
+    // cancel flag so a user's Stop takes effect within ~100 ms instead.
+    QTimer cancel_poll;
+    cancel_poll.setInterval(100);
+    QObject::connect(&cancel_poll, &QTimer::timeout, &loop, [&loop]() {
+        if (detail::cancel_requested())
+            loop.quit();
+    });
+    cancel_poll.start();
     loop.exec();
+    cancel_poll.stop();
 
     auto drain = [&]() {
         reply->deleteLater();
@@ -119,7 +150,8 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
 
     if (!reply->isFinished()) {
         reply->abort();
-        result.error = "Request timed out";
+        result.cancelled = detail::cancel_requested();
+        result.error = result.cancelled ? QStringLiteral("Request cancelled") : QStringLiteral("Request timed out");
         drain();
         return result;
     }
@@ -128,9 +160,17 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
     result.body = reply->readAll();
     result.success = (result.status >= 200 && result.status < 300);
     if (!result.success) {
+        bool ok = false;
+        const int retry_after = QString::fromLatin1(reply->rawHeader("Retry-After")).trimmed().toInt(&ok);
+        result.retry_after_s = ok && retry_after > 0 ? retry_after : 0;
         const QString server_msg = parse_server_error_message(result.body);
-        result.error = server_msg.isEmpty() ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
-                                            : QString("HTTP %1: %2").arg(result.status).arg(server_msg);
+        // status == 0 is a transport failure (DNS, refused, TLS) — "HTTP 0:" in
+        // front of Qt's message read as a server reply that never happened.
+        if (server_msg.isEmpty())
+            result.error = result.status > 0 ? QString("HTTP %1: %2").arg(result.status).arg(reply->errorString())
+                                             : reply->errorString();
+        else
+            result.error = QString("HTTP %1: %2").arg(result.status).arg(server_msg);
     }
     drain();
     return result;

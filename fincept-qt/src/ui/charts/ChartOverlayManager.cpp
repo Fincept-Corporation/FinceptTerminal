@@ -12,20 +12,22 @@ namespace fincept::ui {
 ChartOverlayManager::ChartOverlayManager(QObject* parent) : QObject(parent) {}
 
 ChartOverlayManager::~ChartOverlayManager() {
-    if (scene_ && chart_) {
+    if (has_live_chart()) {
         for (auto* layer : layers_)
             layer->detach(scene_, chart_);
     }
 }
 
 void ChartOverlayManager::set_chart(QGraphicsScene* scene, QChart* chart) {
-    if (scene_ && chart_) {
+    if (has_live_chart()) {
         for (auto* layer : layers_)
             layer->detach(scene_, chart_);
     }
     scene_ = scene;
     chart_ = chart;
-    if (scene_ && chart_) {
+    scene_guard_ = scene;
+    chart_guard_ = chart;
+    if (has_live_chart()) {
         for (auto* layer : layers_)
             layer->attach(scene_, chart_);
     }
@@ -38,13 +40,13 @@ void ChartOverlayManager::add_layer(OverlayLayer* layer) {
     layer->setParent(this);
     layers_.append(layer);
 
-    if (scene_ && chart_)
+    if (has_live_chart())
         layer->attach(scene_, chart_);
 
     if (!candles_.isEmpty())
         layer->compute(candles_);
 
-    if (scene_ && chart_)
+    if (has_live_chart())
         layer->reposition(chart_);
 
     emit layer_added(layer->id());
@@ -54,7 +56,7 @@ void ChartOverlayManager::remove_layer(const QString& id) {
     for (int i = 0; i < layers_.size(); ++i) {
         if (layers_[i]->id() == id) {
             auto* layer = layers_.takeAt(i);
-            if (scene_ && chart_)
+            if (has_live_chart())
                 layer->detach(scene_, chart_);
             layer->deleteLater();
             emit layer_removed(id);
@@ -93,13 +95,13 @@ void ChartOverlayManager::append_candle(const CandleData& candle) {
 void ChartOverlayManager::recompute_all() {
     for (auto* layer : layers_) {
         layer->compute(candles_);
-        if (chart_)
+        if (has_live_chart())
             layer->reposition(chart_);
     }
 }
 
 void ChartOverlayManager::reposition_all() {
-    if (!chart_)
+    if (!has_live_chart())
         return;
     for (auto* layer : layers_) {
         if (layer->visible())

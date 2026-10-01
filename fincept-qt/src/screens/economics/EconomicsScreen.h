@@ -60,6 +60,10 @@ class EconomicsScreen : public QWidget, public IStatefulScreen {
     };
     QList<SourceEntry> sources_;
     QString active_id_;
+    // Saved per-panel state ("<id>_panel") for panels that have not been built yet (panels are
+    // lazy). Applied when the panel is created, and written back by save_state() so a panel the
+    // user hasn't opened this session keeps the state it was saved with.
+    QVariantMap pending_panel_states_;
 
     EconPanelBase* get_or_create_panel(SourceEntry& entry);
 };

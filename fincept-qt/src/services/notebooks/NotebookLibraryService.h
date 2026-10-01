@@ -14,7 +14,18 @@
 #include <QString>
 #include <QVector>
 
+#include <functional>
+
 namespace fincept::services {
+
+/// Outcome of running one notebook cell (see NotebookLibraryService::run_cell).
+struct NotebookRunResult {
+    bool success = false;
+    QString output; // stdout
+    QString error;  // stderr, or a failure message when the process could not run
+    int exit_code = -1;
+};
+using NotebookRunCallback = std::function<void(const NotebookRunResult&)>;
 
 /// One prebuilt notebook described by the manifest.
 struct NotebookCatalogEntry {
@@ -52,6 +63,12 @@ class NotebookLibraryService : public QObject {
     /// return its absolute path (registering it with FileManagerService if new).
     /// Returns the bundled asset path as a last resort if storage is unavailable.
     QString working_copy_for(const NotebookCatalogEntry& entry);
+
+    /// Execute one cell's Python source asynchronously (queued behind the shared
+    /// PythonRunner concurrency limit). `cb` runs on the UI thread. Each call is
+    /// its own process — cells do not share interpreter state. Screens go through
+    /// here rather than calling PythonRunner themselves (D1).
+    void run_cell(const QString& code, NotebookRunCallback cb);
 
   private:
     explicit NotebookLibraryService(QObject* parent = nullptr);

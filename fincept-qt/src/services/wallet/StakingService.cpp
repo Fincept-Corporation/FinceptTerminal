@@ -193,15 +193,18 @@ void StakingService::refresh(const QStringList& topics) {
 void StakingService::refresh_locks_real(const QString& topic, const QString& /*pubkey*/,
                                         const QString& /*program_id*/) {
     auto& hub = fincept::datahub::DataHub::instance();
-    hub.publish_error(topic, QStringLiteral("real fetch not implemented yet — Anchor program "
-                                            "deployment + Borsh deserialiser pending"));
+    // Worded for the user: this text is shown verbatim in the panels' error
+    // strips. A program id is configured but positions cannot be decoded yet,
+    // so say that plainly rather than implying the wallet has no locks.
+    hub.publish_error(topic, QStringLiteral("Your on-chain locks can't be read in this build yet — "
+                                            "fincept_lock account decoding is not implemented."));
 }
 
 void StakingService::refresh_vefncpt_real(const QString& topic, const QString& /*pubkey*/,
                                           const QString& /*program_id*/) {
     auto& hub = fincept::datahub::DataHub::instance();
-    hub.publish_error(topic, QStringLiteral("real fetch not implemented yet — Anchor program "
-                                            "deployment + Borsh deserialiser pending"));
+    hub.publish_error(topic, QStringLiteral("Your veFNCPT weight can't be read in this build yet — "
+                                            "fincept_lock account decoding is not implemented."));
 }
 
 // ── Mock path ──────────────────────────────────────────────────────────────

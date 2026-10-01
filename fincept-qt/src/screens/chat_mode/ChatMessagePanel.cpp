@@ -330,7 +330,15 @@ QWidget* ChatMessagePanel::build_input_area() {
                                      "font-size:12px;padding:0 12px;font-family:%2;}"
                                      "QPushButton:hover{background:rgba(60,15,15,0.8);}")
                                  .arg(ui::colors::NEGATIVE(), FONT));
-    connect(stop_btn_, &QPushButton::clicked, this, []() { ChatModeService::instance().abort_stream(); });
+    connect(stop_btn_, &QPushButton::clicked, this, [this]() {
+        ChatModeService::instance().abort_stream();
+        // abort_stream() only emits the terminal signal when an SSE reply is actually in
+        // flight. Between Send and the stream opening (session still being created) there
+        // is none, and Stop did nothing — the panel stayed locked. If the abort did end the
+        // stream, on_stream_finish() has already cleared streaming_ and this is skipped.
+        if (streaming_)
+            on_stream_finish(0);
+    });
     bottom->addWidget(stop_btn_);
 
     send_btn_ = new QPushButton(tr("Send"));
@@ -506,6 +514,17 @@ QTextEdit* ChatMessagePanel::add_streaming_bubble() {
     return bubble;
 }
 
+void ChatMessagePanel::remove_streaming_bubble_row() {
+    if (!streaming_bubble_)
+        return;
+    // The bubble lives inside a row widget (role label + bubble) that sits in the layout.
+    QWidget* row = streaming_bubble_->parentWidget();
+    if (row && row != messages_container_) {
+        messages_layout_->removeWidget(row);
+        row->deleteLater();
+    }
+}
+
 void ChatMessagePanel::insert_collapsed_thinking_card(int before_index) {
     if (pending_thinking_.isEmpty() && pending_tools_.isEmpty())
         return;
@@ -630,6 +649,11 @@ void ChatMessagePanel::on_stream_finish(int total_tokens) {
         insert_collapsed_thinking_card(bubble_idx);
     }
 
+    // A turn that produced no text (Stop pressed before the first token, or a
+    // tool-only turn) leaves the placeholder bubble behind as an empty "Agent" box.
+    if (streaming_buffer_.isEmpty())
+        remove_streaming_bubble_row();
+
     streaming_ = false;
     streaming_bubble_ = nullptr;
     streaming_buffer_.clear();
@@ -646,6 +670,15 @@ void ChatMessagePanel::on_stream_finish(int total_tokens) {
 
 void ChatMessagePanel::on_stream_error(const QString& message) {
     render_timer_->stop();
+    // Keep whatever streamed before the failure (the last render tick may not have
+    // painted it yet); if nothing did, drop the empty placeholder bubble so the error
+    // doesn't sit under a blank "Agent" box.
+    if (streaming_bubble_ && !streaming_buffer_.isEmpty()) {
+        streaming_bubble_->setHtml(ui::MarkdownRenderer::render(streaming_buffer_));
+        resize_bubble(streaming_bubble_);
+    } else {
+        remove_streaming_bubble_row();
+    }
     streaming_ = false;
     streaming_bubble_ = nullptr;
     streaming_buffer_.clear();

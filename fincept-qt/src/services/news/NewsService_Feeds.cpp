@@ -38,7 +38,9 @@ QVector<RSSFeed> NewsService::default_feeds() {
         // Tier 1 — Wire Services & Regulators
         // Reuters discontinued public RSS in 2020 (feeds.reuters.com is dead).
         // We keep tier-1 coverage via AP, BBC, FT, WSJ and other majors instead.
-        {"ap-top", "AP Top News", "https://rsshub.app/apnews/topics/ap-top-news", "GEOPOLITICS", "GLOBAL", "AP", 1},
+        // (AP Top News via rsshub.app removed — the public RSSHub instance answers
+        //  every client with a 403 Cloudflare HTML page, so the feed never yielded
+        //  an article and only cost a request + a warning per refresh.)
         {"sec-press", "SEC Press Releases", "https://www.sec.gov/news/pressreleases.rss", "REGULATORY", "US", "SEC", 1},
         {"fed-press", "Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "REGULATORY", "US",
          "FEDERAL RESERVE", 1},
@@ -542,6 +544,7 @@ bool NewsService::set_feed_enabled(const QString& id, bool enabled) {
 
 void NewsService::reload_feeds() {
     fincept::CacheManager::instance().clear_category("news");
+    latest_articles_.clear(); // belonged to the old feed set
     emit feeds_changed();
 }
 

@@ -7,17 +7,23 @@
 #include "screens/settings/SettingsStyles.h"
 #include "services/notifications/NotificationService.h"
 #include "storage/repositories/SettingsRepository.h"
+#include "storage/secure/SecureStorage.h"
 #include "ui/theme/Theme.h"
 
+#include <QCoreApplication>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QString>
+#include <QStringList>
+#include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QVector>
 
@@ -130,6 +136,67 @@ const QVector<ProviderDef>& provider_defs() {
     return defs;
 }
 
+/// True for the credentials NotificationService's providers keep in SecureStorage
+/// (BaseProvider::get_secret / set_secret) rather than in the plaintext `settings`
+/// table: every password field plus the webhook endpoints, which are bearer URLs.
+/// Keep in step with the providers' `set_secret(...)` calls.
+bool notif_field_is_secret(const QString& provider_id, const FieldDef& fd) {
+    return fd.is_password || fd.key == QLatin1String("webhook_url") ||
+           (provider_id == QLatin1String("webhook") && fd.key == QLatin1String("url"));
+}
+
+/// SecureStorage handle for a secret setting key ("notif_<provider>.<field>").
+/// Must stay identical to BaseProvider::secret_handle().
+QString notif_secret_handle(const QString& setting_key) {
+    return QStringLiteral("notif:secret:") + setting_key;
+}
+
+/// Persist one secret field the way BaseProvider::set_secret does: the encrypted
+/// copy is authoritative and the plaintext column is blanked — but only once the
+/// encrypted store succeeded, so an unavailable keychain never loses the value.
+void notif_store_secret(SettingsRepository& repo, const QString& setting_key, const QString& value,
+                        const QString& category) {
+    const QString handle = notif_secret_handle(setting_key);
+    if (value.isEmpty()) {
+        const auto rm = SecureStorage::instance().remove(handle);
+        if (rm.is_err())
+            LOG_WARN("Settings", QString("Could not clear stored secret for '%1': %2")
+                                     .arg(setting_key, QString::fromStdString(rm.error())));
+        repo.set(setting_key, QString{}, category);
+        return;
+    }
+    const auto st = SecureStorage::instance().store(handle, value);
+    if (st.is_ok()) {
+        repo.set(setting_key, QString{}, category);
+    } else {
+        LOG_WARN("Settings", QString("SecureStorage unavailable for '%1' — keeping the value in settings: %2")
+                                 .arg(setting_key, QString::fromStdString(st.error())));
+        repo.set(setting_key, value, category);
+    }
+}
+
+/// Returns an error message when `value` is unusable for `field_key`; empty when OK
+/// (an empty value is always accepted — the provider simply stays unconfigured).
+QString notif_validate_field(const QString& field_key, const QString& value) {
+    if (value.isEmpty())
+        return {};
+    if (field_key == QLatin1String("smtp_port")) {
+        bool ok = false;
+        const int port = value.toInt(&ok);
+        if (!ok || port < 1 || port > 65535)
+            return QCoreApplication::translate("NotificationsSection", "must be a number between 1 and 65535");
+    }
+    if (field_key == QLatin1String("webhook_url") || field_key == QLatin1String("url") ||
+        field_key == QLatin1String("server_url")) {
+        const QUrl u(value, QUrl::StrictMode);
+        const QString scheme = u.scheme().toLower();
+        if (!u.isValid() || u.host().isEmpty() ||
+            (scheme != QLatin1String("http") && scheme != QLatin1String("https")))
+            return QCoreApplication::translate("NotificationsSection", "must be a full http:// or https:// URL");
+    }
+    return {};
+}
+
 } // namespace
 
 NotificationsSection::NotificationsSection(QWidget* parent) : QWidget(parent) {
@@ -228,6 +295,13 @@ void NotificationsSection::build_ui() {
                 field->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
                 field->setDragEnabled(false);
                 field->setAcceptDrops(false);
+            } else if (notif_field_is_secret(def.id, fd)) {
+                // Webhook endpoints are bearer URLs — anyone holding one can post
+                // as the user. Visible while being edited, masked otherwise.
+                field->setEchoMode(QLineEdit::PasswordEchoOnEdit);
+                field->setInputMethodHints(Qt::ImhSensitiveData | Qt::ImhNoPredictiveText);
+                field->setDragEnabled(false);
+                field->setAcceptDrops(false);
             }
             pw.fields[fd.key] = field;
             auto* field_row = make_row(tr(fd.label.toUtf8().constData()), field);
@@ -276,7 +350,14 @@ void NotificationsSection::build_ui() {
 
         // Test Send wiring
         connect(pw.test_btn, &QPushButton::clicked, this, [this, pid, pw]() mutable {
-            save_provider_fields(pid, pw);
+            // Invalid input (bad port / URL) must not be saved or sent — say why
+            // in the provider's own status line.
+            QString save_err;
+            if (!save_provider_fields(pid, pw, &save_err)) {
+                if (!save_err.isEmpty())
+                    pw.status_lbl->setText(save_err);
+                return;
+            }
             NotificationService::instance().reload_all_configs();
 
             pw.status_lbl->setText(tr("Sending..."));
@@ -287,15 +368,27 @@ void NotificationsSection::build_ui() {
             req.message = tr("This is a test notification from Fincept Terminal.");
             req.trigger = NotifTrigger::Manual;
 
+            // Transport errors can echo the request URL, which for Telegram embeds
+            // the bot token and for webhooks IS the secret. Scrub every masked
+            // field's value before the error reaches the screen.
+            QStringList secrets;
+            for (auto it = pw.fields.cbegin(); it != pw.fields.cend(); ++it) {
+                if (it.value() && it.value()->echoMode() != QLineEdit::Normal && !it.value()->text().trimmed().isEmpty())
+                    secrets << it.value()->text().trimmed();
+            }
+
             QPointer<QLabel> status_ptr = pw.status_lbl;
-            NotificationService::instance().send_to(pid, req, [status_ptr](bool ok, const QString& err) {
+            NotificationService::instance().send_to(pid, req, [status_ptr, secrets](bool ok, const QString& err) {
                 if (!status_ptr)
                     return;
                 if (ok) {
                     status_ptr->setText(tr("✓ Sent successfully"));
                     status_ptr->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
                 } else {
-                    status_ptr->setText("✗ " + err.left(60));
+                    QString shown = err;
+                    for (const QString& secret : secrets)
+                        shown.replace(secret, QStringLiteral("••••"));
+                    status_ptr->setText("✗ " + shown.left(60));
                     status_ptr->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::NEGATIVE()));
                 }
             });
@@ -406,10 +499,28 @@ void NotificationsSection::build_ui() {
             repo.set("notifications.news_flash", b(news_flash_->isChecked()), "notifications");
         }
 
-        for (const auto& def : provider_defs())
-            save_provider_fields(def.id, provider_widgets_.value(def.id));
+        QStringList errors;
+        for (const auto& def : provider_defs()) {
+            QString err;
+            if (!save_provider_fields(def.id, provider_widgets_.value(def.id), &err) && !err.isEmpty())
+                errors << err;
+        }
 
         NotificationService::instance().reload_all_configs();
+
+        if (!errors.isEmpty()) {
+            LOG_WARN("Settings", QString("Notification providers not saved (invalid input): %1").arg(errors.size()));
+            QMessageBox::warning(this, tr("Notification Settings"),
+                                 tr("These providers were not saved:\n\n%1").arg(errors.join(QLatin1Char('\n'))));
+            return;
+        }
+
+        // Saving previously gave no on-screen acknowledgement at all.
+        save_btn_->setText(tr("Saved ✓"));
+        QTimer::singleShot(2000, save_btn_, [this]() {
+            if (save_btn_)
+                save_btn_->setText(tr("Save All Providers"));
+        });
         LOG_INFO("Settings", "All notification providers saved");
     });
     vl->addWidget(save_btn_);
@@ -486,6 +597,17 @@ void NotificationsSection::reload() {
         for (const auto& fd : def.fields) {
             if (!pw.fields.contains(fd.key))
                 continue;
+            // Secrets live in SecureStorage (see notif_field_is_secret); the
+            // plaintext settings row is only a legacy fallback that the next
+            // save blanks. Without this the fields render empty once migrated.
+            if (notif_field_is_secret(def.id, fd)) {
+                const auto sr = SecureStorage::instance().retrieve(notif_secret_handle(cat + "." + fd.key));
+                if (sr.is_ok() && !sr.value().isEmpty()) {
+                    if (pw.fields[fd.key])
+                        pw.fields[fd.key]->setText(sr.value());
+                    continue;
+                }
+            }
             auto r = repo.get(cat + "." + fd.key);
             if (r.is_err()) {
                 // These fields are credentials — webhook URLs, bot tokens, SMTP
@@ -582,12 +704,37 @@ void NotificationsSection::retranslateUi() {
     }
 }
 
-void NotificationsSection::save_provider_fields(const QString& provider_id, const ProviderWidgets& pw) {
+bool NotificationsSection::save_provider_fields(const QString& provider_id, const ProviderWidgets& pw,
+                                                QString* error_out) {
     if (pw.body_frame && pw.body_frame->property(kNotifProviderReadFailedProp).toBool()) {
         LOG_WARN("Settings", QString("Skipping save for notification provider '%1' — its stored settings could not "
                                      "be read, so the fields on screen are not its real values")
                                  .arg(provider_id));
-        return;
+        return false;
+    }
+
+    const ProviderDef* def = nullptr;
+    for (const auto& d : provider_defs()) {
+        if (d.id == provider_id) {
+            def = &d;
+            break;
+        }
+    }
+    if (!def)
+        return false;
+
+    // Validate everything before writing anything, so a bad port or URL never
+    // leaves the provider half-saved.
+    for (const auto& fd : def->fields) {
+        QLineEdit* edit = pw.fields.value(fd.key, nullptr);
+        if (!edit)
+            continue;
+        const QString problem = notif_validate_field(fd.key, edit->text().trimmed());
+        if (!problem.isEmpty()) {
+            if (error_out)
+                *error_out = QString("%1 — %2: %3").arg(def->name, tr(fd.label.toUtf8().constData()), problem);
+            return false;
+        }
     }
 
     auto& repo = SettingsRepository::instance();
@@ -596,10 +743,18 @@ void NotificationsSection::save_provider_fields(const QString& provider_id, cons
     if (pw.enabled)
         repo.set(cat + ".enabled", pw.enabled->isChecked() ? "1" : "0", cat);
 
-    for (auto it = pw.fields.constBegin(); it != pw.fields.constEnd(); ++it) {
-        if (it.value())
-            repo.set(cat + "." + it.key(), it.value()->text().trimmed(), cat);
+    for (const auto& fd : def->fields) {
+        QLineEdit* edit = pw.fields.value(fd.key, nullptr);
+        if (!edit)
+            continue;
+        const QString value = edit->text().trimmed();
+        const QString setting_key = cat + "." + fd.key;
+        if (notif_field_is_secret(provider_id, fd))
+            notif_store_secret(repo, setting_key, value, cat);
+        else
+            repo.set(setting_key, value, cat);
     }
+    return true;
 }
 
 } // namespace fincept::screens

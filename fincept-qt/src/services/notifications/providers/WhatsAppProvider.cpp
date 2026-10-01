@@ -27,31 +27,34 @@ void WhatsAppProvider::send(const NotificationRequest& req, std::function<void(b
         return;
     }
 
-    // Twilio WhatsApp API endpoint
+    // Twilio WhatsApp API endpoint. The Messages API only accepts
+    // application/x-www-form-urlencoded (a JSON body is rejected) and authenticates
+    // with HTTP Basic, so send a form with an Authorization header — no credentials
+    // embedded in the URL.
     const QString url = QString("https://api.twilio.com/2010-04-01/Accounts/%1/Messages.json").arg(account_sid_);
 
     const QString msg = QString("[Fincept] %1\n%2").arg(req.title, req.message);
 
-    // Twilio accepts form-encoded POST â€” encode as JSON fields for our HttpClient
-    // Note: Twilio's API actually needs application/x-www-form-urlencoded;
-    // we send JSON and the server-side relay handles encoding, or use a proxy.
-    QJsonObject body;
-    body["To"] = to_number_.startsWith("whatsapp:") ? to_number_ : "whatsapp:" + to_number_;
-    body["From"] = from_number_.startsWith("whatsapp:") ? from_number_ : "whatsapp:" + from_number_;
-    body["Body"] = msg;
-    // Basic auth encoded into URL for Twilio
-    const QString auth_url = QString("https://%1:%2@api.twilio.com/2010-04-01/Accounts/%3/Messages.json")
-                                 .arg(account_sid_, auth_token_, account_sid_);
+    QMap<QString, QString> form;
+    form["To"] = to_number_.startsWith("whatsapp:") ? to_number_ : "whatsapp:" + to_number_;
+    form["From"] = from_number_.startsWith("whatsapp:") ? from_number_ : "whatsapp:" + from_number_;
+    form["Body"] = msg;
 
-    HttpClient::instance().post(auth_url, body, [cb](Result<QJsonDocument> res) {
-        if (res.is_err()) {
-            cb(false, QString::fromStdString(res.error()));
-            return;
-        }
-        const auto obj = res.value().object();
-        const bool ok = !obj.contains("code"); // Twilio errors have a "code" field
-        cb(ok, ok ? QString{} : obj.value("message").toString());
-    });
+    HttpClient::Headers headers;
+    headers.insert("Authorization", "Basic " + QString("%1:%2").arg(account_sid_, auth_token_).toUtf8().toBase64());
+
+    HttpClient::instance().post_form(
+        url, form,
+        [cb](Result<QJsonDocument> res) {
+            if (res.is_err()) {
+                cb(false, QString::fromStdString(res.error()));
+                return;
+            }
+            const auto obj = res.value().object();
+            const bool ok = !obj.contains("code"); // Twilio errors have a "code" field
+            cb(ok, ok ? QString{} : obj.value("message").toString());
+        },
+        nullptr, headers);
 }
 
 } // namespace fincept::notifications

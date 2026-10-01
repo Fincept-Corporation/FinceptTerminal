@@ -24,6 +24,15 @@ from urllib.parse import urlencode, quote
 import aiohttp
 import html
 
+# Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
+# system DNS configuration on Windows and fails every request with
+# "Timeout while contacting DNS servers". Use the threaded getaddrinfo resolver
+# (same fix as scripts/exchange/ws_stream.py). Gated to Windows so Linux/macOS
+# keep the native resolver.
+if sys.platform == "win32":
+    import aiohttp.connector as _aiohttp_connector
+    _aiohttp_connector.DefaultResolver = aiohttp.ThreadedResolver
+
 
 class BISError(Exception):
     """Custom exception for BIS API errors"""
@@ -909,6 +918,60 @@ class BISAPI:
 
 
 # CLI Interface
+def _bis_flatten_series(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Flatten a BIS SDMX-JSON response into [{date, value, series}] rows.
+
+    Every SDMX series keeps its own rows; `series` is the series key built from the
+    dimension values other than frequency and country (e.g. "N.B" for EER), or an
+    empty string when the response holds a single series.
+    """
+    import math
+    resp = raw.get("data", {})
+    sdmx_data = resp.get("data", resp)
+    structure = sdmx_data.get("structure", resp.get("structure", {}))
+    dims = structure.get("dimensions", {})
+    series_dims = dims.get("series", [])
+    obs_dims = dims.get("observation", [])
+    time_values = {}
+    if obs_dims:
+        time_values = {str(i): v.get("id", v.get("name", str(i)))
+                       for i, v in enumerate(obs_dims[0].get("values", []))}
+    skip_dims = {"FREQ", "REF_AREA", "BORROWERS_CTY"}
+
+    all_series = []
+    for ds in sdmx_data.get("dataSets", []):
+        for series_key, series_val in ds.get("series", {}).items():
+            idx = series_key.split(":")
+            parts = []
+            for pos, v_idx in enumerate(idx):
+                if pos >= len(series_dims) or series_dims[pos].get("id") in skip_dims:
+                    continue
+                try:
+                    vals = series_dims[pos].get("values", [])
+                    parts.append(str(vals[int(v_idx)].get("id", v_idx)))
+                except (ValueError, IndexError):
+                    parts.append(str(v_idx))
+            all_series.append((".".join(parts), series_val))
+
+    rows = []
+    multi = len(all_series) > 1
+    for label, series_val in all_series:
+        for obs_key, obs_val in series_val.get("observations", {}).items():
+            value = obs_val[0] if isinstance(obs_val, list) and obs_val else None
+            if value is None:
+                continue
+            try:
+                value = float(value)
+            except (ValueError, TypeError):
+                continue
+            if math.isnan(value) or math.isinf(value):
+                continue
+            rows.append({"date": str(time_values.get(obs_key, obs_key)), "value": value,
+                         "series": label if multi else ""})
+    rows.sort(key=lambda r: (r["series"], r["date"]))
+    return rows
+
+
 async def main():
     """CLI interface for BIS API"""
     args = sys.argv[1:]
@@ -918,6 +981,8 @@ async def main():
             "error": "Usage: python bis_data.py <command> [args...]",
             "available_commands": [
                 "get_data <flow> [key] [start_period] [end_period]",
+                "fetch <flow> <country> [start_period] [end_period]",
+                "fetch_series <flow> <country> [start_period] [end_period]",
                 "get_effective_exchange_rates [countries...] [start_period] [end_period]",
                 "get_central_bank_policy_rates [countries...] [start_period] [end_period]",
                 "get_long_term_interest_rates [countries...] [start_period] [end_period]",
@@ -938,12 +1003,16 @@ async def main():
 
     async with BISAPI() as bis:
         try:
-            if command == "fetch":
+            if command in ("fetch", "fetch_series"):
                 # Simplified fetch command for Fincept Terminal Economics tab
                 # Usage: fetch <dataflow> <country_code> [start_period] [end_period]
                 # Returns flattened [{date, value}] array for charting
+                #
+                # fetch_series takes the same arguments but keeps every SDMX series
+                # as its own rows ([{date, value, series}]) instead of averaging
+                # unrelated series (e.g. different units / sectors) together.
                 if len(args) < 3:
-                    raise ValueError("Usage: fetch <dataflow> <country_code> [start_period] [end_period]")
+                    raise ValueError("Usage: %s <dataflow> <country_code> [start_period] [end_period]" % command)
 
                 dataflow = args[1]
                 country_code = args[2]
@@ -1006,6 +1075,19 @@ async def main():
 
                 if not raw.get("success"):
                     result = raw
+                elif command == "fetch_series":
+                    try:
+                        result = {
+                            "success": True,
+                            "data": _bis_flatten_series(raw),
+                            "metadata": {
+                                "dataflow": dataflow,
+                                "country": country_code,
+                                "source": "BIS"
+                            }
+                        }
+                    except Exception as parse_err:
+                        result = {"success": False, "error": f"Failed to parse SDMX response: {str(parse_err)}"}
                 else:
                     # Flatten SDMX-JSON into simple [{date, value}] for charting
                     flat_data = []

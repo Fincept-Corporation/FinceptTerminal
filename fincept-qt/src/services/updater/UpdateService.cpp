@@ -1,5 +1,6 @@
 #include "services/updater/UpdateService.h"
 
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 #include "services/wallet/Ed25519Verifier.h"
 
@@ -149,6 +150,11 @@ bool UpdateService::is_newer(const QString& local, const QString& remote) {
 void UpdateService::check_for_updates(bool silent) {
     if (in_progress_) {
         LOG_INFO("UpdateService", "Check already in progress — ignoring duplicate call");
+        // A user-initiated check that lands on top of the silent startup check
+        // must still report its outcome: promote the running check so the result
+        // dialogs show, otherwise "Check for Updates" completes with no feedback.
+        if (!silent && silent_)
+            silent_ = false;
         return;
     }
     if (silent && silent_check_done_) {
@@ -173,7 +179,7 @@ void UpdateService::check_for_updates(bool silent) {
         LOG_INFO("UpdateService",
                  QString("Skipping update check — running version '%1' is not a release build").arg(local_version));
         if (!silent_)
-            show_error(QStringLiteral("This is a development build (%1). Auto-update is disabled.").arg(local_version));
+            show_error(tr("This is a development build (%1). Auto-update is disabled.").arg(local_version));
         emit check_finished(false);
         return;
     }
@@ -183,7 +189,7 @@ void UpdateService::check_for_updates(bool silent) {
         LOG_WARN("UpdateService", QString("Unsupported platform/arch: %1 / %2")
                                       .arg(QSysInfo::kernelType(), QSysInfo::currentCpuArchitecture()));
         if (!silent_)
-            show_error(QStringLiteral("Auto-update is not supported on this platform."));
+            show_error(tr("Auto-update is not supported on this platform."));
         emit check_finished(false);
         return;
     }
@@ -197,8 +203,8 @@ void UpdateService::check_for_updates(bool silent) {
                                    "Set UpdateService::UPDATE_SIGNING_PUBLIC_KEY_HEX and sign updates.json (see the "
                                    "runbook in UpdateService.cpp) before shipping auto-update.");
         if (!silent_) {
-            show_error(QStringLiteral("Auto-update is disabled in this build because no update-signing key is "
-                                      "configured.\n\nPlease download updates from the releases page."));
+            show_error(tr("Auto-update is disabled in this build because no update-signing key is "
+                          "configured.\n\nPlease download updates from the releases page."));
         }
         emit check_finished(false);
         return;
@@ -275,7 +281,7 @@ void UpdateService::on_manifest_reply_finished() {
         LOG_WARN("UpdateService",
                  QString("Manifest fetch failed: %1 (%2)").arg(reply->errorString()).arg(reply->error()));
         if (!silent_)
-            show_error(QStringLiteral("Could not reach the update server.\n\n%1").arg(reply->errorString()));
+            show_error(tr("Could not reach the update server.\n\n%1").arg(reply->errorString()));
         finish_check(false);
         return;
     }
@@ -311,8 +317,8 @@ void UpdateService::on_signature_reply_finished() {
                                            "an unverified update")
                                        .arg(reply->errorString()));
         if (!silent_)
-            show_error(QStringLiteral("This update could not be authenticated (its signature is missing). "
-                                      "Nothing has been downloaded."));
+            show_error(tr("This update could not be authenticated (its signature is missing). "
+                          "Nothing has been downloaded."));
         finish_check(false);
         return;
     }
@@ -322,8 +328,8 @@ void UpdateService::on_signature_reply_finished() {
         LOG_ERROR("UpdateService", "Update manifest FAILED signature verification — refusing to apply. The manifest "
                                    "was not produced by the holder of the pinned signing key.");
         if (!silent_)
-            show_error(QStringLiteral("This update failed authenticity verification and has been rejected. "
-                                      "Nothing has been downloaded."));
+            show_error(tr("This update failed authenticity verification and has been rejected. "
+                          "Nothing has been downloaded."));
         finish_check(false);
         return;
     }
@@ -338,7 +344,7 @@ void UpdateService::process_verified_manifest(const QByteArray& body) {
     if (parse_err.error != QJsonParseError::NoError || !doc.isObject()) {
         LOG_WARN("UpdateService", QString("Manifest JSON parse failed: %1").arg(parse_err.errorString()));
         if (!silent_)
-            show_error(QStringLiteral("The update manifest is malformed."));
+            show_error(tr("The update manifest is malformed."));
         finish_check(false);
         return;
     }
@@ -356,7 +362,7 @@ void UpdateService::process_verified_manifest(const QByteArray& body) {
     const QString remote_version = entry.value(QStringLiteral("latest-version")).toString();
     const QString download_url = entry.value(QStringLiteral("download-url")).toString();
     const QString sha256 = entry.value(QStringLiteral("sha256")).toString().trimmed().toLower();
-    const QString open_url = entry.value(QStringLiteral("open-url")).toString();
+    QString open_url = entry.value(QStringLiteral("open-url")).toString();
     const QString changelog = entry.value(QStringLiteral("changelog")).toString();
 
     latest_version_ = remote_version;
@@ -369,13 +375,33 @@ void UpdateService::process_verified_manifest(const QByteArray& body) {
         return;
     }
 
+    // Defence in depth on top of the manifest signature: the installer is
+    // auto-launched, so it must come over TLS, and open-url is handed to the OS
+    // URL handler (QDesktopServices) — keep that to plain https as well.
+    auto is_https = [](const QString& u) {
+        const QUrl parsed(u); // tolerant: release asset names may carry raw spaces
+        return parsed.isValid() && parsed.scheme().compare(QLatin1String("https"), Qt::CaseInsensitive) == 0 &&
+               !parsed.host().isEmpty();
+    };
+    if (!is_https(download_url)) {
+        LOG_ERROR("UpdateService", QString("Manifest download-url for '%1' is not an https URL — rejecting").arg(key));
+        if (!silent_)
+            show_error(tr("The update manifest points to an insecure download address and has been rejected."));
+        finish_check(false);
+        return;
+    }
+    if (!open_url.isEmpty() && !is_https(open_url)) {
+        LOG_WARN("UpdateService", "Manifest open-url is not an https URL — ignoring it");
+        open_url.clear();
+    }
+
     const QString local_version = QApplication::applicationVersion();
     if (!is_newer(local_version, remote_version)) {
         LOG_INFO("UpdateService",
                  QString("Already up to date — local=%1, remote=%2").arg(local_version, remote_version));
         if (!silent_) {
             QMessageBox::information(dialog_parent(), QStringLiteral("Fincept Terminal"),
-                                     QStringLiteral("You're running the latest version (%1).").arg(local_version));
+                                     tr("You're running the latest version (%1).").arg(local_version));
         }
         finish_check(false);
         return;
@@ -386,30 +412,39 @@ void UpdateService::process_verified_manifest(const QByteArray& body) {
 
     // Prompt the user. Include changelog if present. Always offer a "view release
     // notes" escape hatch via open-url so users can read more before installing.
-    QString prompt = QStringLiteral("A new version of Fincept Terminal is available.\n\n"
-                                    "Current version: %1\nLatest version:  %2\n\n")
+    QString prompt = tr("A new version of Fincept Terminal is available.\n\n"
+                        "Current version: %1\nLatest version:  %2\n\n")
                          .arg(local_version, remote_version);
     if (!changelog.isEmpty()) {
         QString snippet = changelog;
         if (snippet.size() > 500)
             snippet = snippet.left(500) + QStringLiteral("\n…");
-        prompt += QStringLiteral("What's new:\n%1\n\n").arg(snippet);
+        prompt += tr("What's new:\n%1\n\n").arg(snippet);
     }
-    prompt += QStringLiteral("Download the installer now?");
+    prompt += tr("Download the installer now?");
 
     QMessageBox box(dialog_parent());
-    box.setWindowTitle(QStringLiteral("Update Available"));
+    box.setWindowTitle(tr("Update Available"));
     box.setIcon(QMessageBox::Information);
     box.setText(prompt);
-    QPushButton* install_btn = box.addButton(QStringLiteral("Download && Install"), QMessageBox::AcceptRole);
+    QPushButton* install_btn = box.addButton(tr("Download && Install"), QMessageBox::AcceptRole);
     QPushButton* release_btn =
-        open_url.isEmpty() ? nullptr : box.addButton(QStringLiteral("View Release Notes"), QMessageBox::HelpRole);
+        open_url.isEmpty() ? nullptr : box.addButton(tr("View Release Notes"), QMessageBox::HelpRole);
     box.addButton(QMessageBox::Cancel);
     box.setDefaultButton(install_btn);
     box.exec();
 
     QAbstractButton* clicked = box.clickedButton();
     if (clicked == install_btn) {
+        // Refuse up front when the installer could not be verified afterwards —
+        // otherwise the whole file is downloaded only to be thrown away.
+        static const QRegularExpression sha256_re(QStringLiteral("^[0-9a-f]{64}$"));
+        if (!sha256_re.match(sha256).hasMatch()) {
+            LOG_ERROR("UpdateService", "Manifest sha256 is missing or malformed — refusing to download the installer");
+            show_error(tr("This update cannot be verified (missing or malformed checksum). Aborting."));
+            finish_check(true);
+            return;
+        }
         pending_expected_sha256_ = sha256;
         start_download(download_url, sha256);
     } else if (release_btn && clicked == release_btn) {
@@ -426,10 +461,19 @@ void UpdateService::process_verified_manifest(const QByteArray& body) {
 void UpdateService::start_download(const QString& url, const QString& expected_sha256) {
     pending_download_url_ = url;
 
-    // Build a stable local path in the system temp dir, preserving the
-    // installer's basename so the user recognises it.
+    // Build a stable local path, preserving the installer's basename so the user
+    // recognises it. The folder is the per-user app cache, NOT the system temp
+    // dir: /tmp is world-writable on Linux, so a predictable file name there lets
+    // another local user pre-plant a symlink (or swap the file between the
+    // checksum check and the launch) and get their content executed.
     const QString file_name = QFileInfo(QUrl(url).path()).fileName();
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const QString dir = QDir(AppPaths::cache()).filePath(QStringLiteral("updates"));
+    if (!QDir().mkpath(dir)) {
+        LOG_ERROR("UpdateService", QString("Cannot create update download folder %1").arg(dir));
+        show_error(tr("Cannot save the installer to disk:\n%1").arg(QDir::toNativeSeparators(dir)));
+        finish_check(true);
+        return;
+    }
     pending_local_path_ =
         QDir(dir).filePath(file_name.isEmpty() ? QStringLiteral("FinceptTerminal-update.tmp") : file_name);
 
@@ -454,6 +498,8 @@ void UpdateService::on_download_progress(qint64 received, qint64 total) {
     // Log every ~5 MiB to avoid spamming. No GUI progress for v1 — keep the
     // surface area small. A proper progress dialog can be layered on later.
     static qint64 last_logged = 0;
+    if (received < last_logged)
+        last_logged = 0; // a new download started — the counter restarted
     if (received - last_logged >= 5 * 1024 * 1024 || received == total) {
         last_logged = received;
         LOG_DEBUG("UpdateService", QString("Download progress: %1 / %2 bytes").arg(received).arg(total));
@@ -468,7 +514,7 @@ void UpdateService::on_download_reply_finished() {
 
     if (reply->error() != QNetworkReply::NoError) {
         LOG_ERROR("UpdateService", QString("Installer download failed: %1").arg(reply->errorString()));
-        show_error(QStringLiteral("The installer could not be downloaded.\n\n%1").arg(reply->errorString()));
+        show_error(tr("The installer could not be downloaded.\n\n%1").arg(reply->errorString()));
         QFile::remove(pending_local_path_);
         finish_check(true);
         return;
@@ -478,13 +524,23 @@ void UpdateService::on_download_reply_finished() {
     QFile f(pending_local_path_);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         LOG_ERROR("UpdateService", QString("Cannot open %1 for writing: %2").arg(pending_local_path_, f.errorString()));
-        show_error(QStringLiteral("Cannot save the installer to disk:\n%1").arg(f.errorString()));
+        show_error(tr("Cannot save the installer to disk:\n%1").arg(f.errorString()));
         finish_check(true);
         return;
     }
     const QByteArray body = reply->readAll();
-    f.write(body);
+    // An unchecked write (disk full, quota) left a truncated file that then
+    // failed the checksum with a misleading "tampered with" message.
+    const bool wrote_all = f.write(body) == body.size() && f.flush();
     f.close();
+    if (!wrote_all) {
+        LOG_ERROR("UpdateService",
+                  QString("Short write saving installer to %1: %2").arg(pending_local_path_, f.errorString()));
+        show_error(tr("Cannot save the installer to disk:\n%1").arg(f.errorString()));
+        QFile::remove(pending_local_path_);
+        finish_check(true);
+        return;
+    }
 
     // Verify sha256 if the manifest provided one. Missing sha256 logs a
     // warning but does not abort — the server may be a pre-sha256 deployment.
@@ -492,7 +548,7 @@ void UpdateService::on_download_reply_finished() {
         QFile vf(pending_local_path_);
         if (!vf.open(QIODevice::ReadOnly)) {
             LOG_ERROR("UpdateService", QString("Cannot reopen %1 for hashing").arg(pending_local_path_));
-            show_error(QStringLiteral("Could not verify the downloaded installer."));
+            show_error(tr("Could not verify the downloaded installer."));
             QFile::remove(pending_local_path_);
             finish_check(true);
             return;
@@ -501,7 +557,7 @@ void UpdateService::on_download_reply_finished() {
         if (!hasher.addData(&vf)) {
             vf.close();
             LOG_ERROR("UpdateService", "Sha256 hashing failed");
-            show_error(QStringLiteral("Could not verify the downloaded installer."));
+            show_error(tr("Could not verify the downloaded installer."));
             QFile::remove(pending_local_path_);
             finish_check(true);
             return;
@@ -511,8 +567,8 @@ void UpdateService::on_download_reply_finished() {
         if (actual != pending_expected_sha256_) {
             LOG_ERROR("UpdateService",
                       QString("Sha256 mismatch — expected=%1, actual=%2").arg(pending_expected_sha256_, actual));
-            show_error(QStringLiteral("The downloaded installer failed integrity verification. "
-                                      "It may be corrupt or tampered with."));
+            show_error(tr("The downloaded installer failed integrity verification. "
+                          "It may be corrupt or tampered with."));
             QFile::remove(pending_local_path_);
             finish_check(true);
             return;
@@ -520,7 +576,7 @@ void UpdateService::on_download_reply_finished() {
         LOG_INFO("UpdateService", QString("Sha256 verified: %1").arg(actual));
     } else {
         LOG_ERROR("UpdateService", "Manifest missing sha256 — refusing to launch installer");
-        show_error(QStringLiteral("This update cannot be verified (missing checksum). Aborting."));
+        show_error(tr("This update cannot be verified (missing checksum). Aborting."));
         QFile::remove(pending_local_path_);
         finish_check(true);
         return;
@@ -576,9 +632,9 @@ void UpdateService::launch_installer(const QString& path) {
     if (!started) {
         LOG_WARN("UpdateService", "startDetached failed — falling back to reveal-in-file-manager");
         reveal_in_file_manager(path);
-        QMessageBox::information(dialog_parent(), QStringLiteral("Update Downloaded"),
-                                 QStringLiteral("The installer has been downloaded to:\n%1\n\n"
-                                                "Please run it manually to complete the update.")
+        QMessageBox::information(dialog_parent(), tr("Update Downloaded"),
+                                 tr("The installer has been downloaded to:\n%1\n\n"
+                                    "Please run it manually to complete the update.")
                                      .arg(QDir::toNativeSeparators(path)));
     }
 }

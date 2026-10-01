@@ -26,6 +26,8 @@ QString timeframe_to_resolution(const QString& tf) {
         return QStringLiteral("3");
     if (tf == "5m")
         return QStringLiteral("5");
+    if (tf == "10m") // only reached for brokers in hds_broker_has_native_10m()
+        return QStringLiteral("10");
     if (tf == "15m")
         return QStringLiteral("15");
     if (tf == "30m")
@@ -37,6 +39,22 @@ QString timeframe_to_resolution(const QString& tf) {
     if (tf == "1d")
         return QStringLiteral("D");
     return tf; // already a broker resolution ("60"/"D"/…) or unknown — pass through
+}
+
+// 10-minute bars: brokers do NOT agree on this resolution. These map "10" to a real
+// 10-minute interval (checked in each broker's get_history). The others either
+// reject it (Dhan, Tradier, ICICI, Tradejini, Motilal) or — worse — silently fall
+// back to another resolution (Alpaca → daily bars, AliceBlue / Paytm → 1-minute
+// bars), so for those the request is refused rather than answered with the wrong
+// timeframe; callers build 10m from 5m instead.
+bool hds_broker_has_native_10m(const QString& broker_id) {
+    static const QSet<QString> s = {
+        QStringLiteral("zerodha"),   QStringLiteral("angelone"), QStringLiteral("upstox"),
+        QStringLiteral("fyers"),     QStringLiteral("groww"),    QStringLiteral("fivepaisa"),
+        QStringLiteral("flattrade"), QStringLiteral("shoonya"),  QStringLiteral("samco"),
+        QStringLiteral("saxobank"),
+    };
+    return s.contains(broker_id);
 }
 
 // ── Broker symbol resolution (moved here from CandleDataFetcher) ─────────────
@@ -111,6 +129,11 @@ void HistoricalDataService::fetch(const QString& symbol, const QString& timefram
                                   const QString& broker_id, const QString& account_id, Callback callback) {
     const QString key = broker_id + "|" + symbol + "|" + timeframe + "|" + QString::number(lookback_days);
 
+    if (timeframe == QLatin1String("10m") && !hds_broker_has_native_10m(broker_id)) {
+        callback(false, {}, QStringLiteral("%1 has no native 10-minute bars — build them from 5m").arg(broker_id));
+        return;
+    }
+
     // Serve from cache when fresh (main thread).
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (auto it = cache_.constFind(key); it != cache_.constEnd()) {
@@ -174,8 +197,20 @@ void HistoricalDataService::fetch(const QString& symbol, const QString& timefram
         QMetaObject::invokeMethod(
             self ? self.data() : nullptr,
             [self, key, ok, candles, err, callback]() {
-                if (self && ok)
-                    self->cache_.insert(key, CacheEntry{QDateTime::currentMSecsSinceEpoch(), candles});
+                if (self && ok) {
+                    const qint64 stamp = QDateTime::currentMSecsSinceEpoch();
+                    // The TTL only gated REUSE — entries were never evicted, so every
+                    // distinct broker|symbol|timeframe|lookback ever charted stayed
+                    // resident with its whole candle series for the life of the
+                    // process. Drop expired entries on each insert.
+                    for (auto it = self->cache_.begin(); it != self->cache_.end();) {
+                        if (stamp - it->fetched_ms >= HDS_CACHE_TTL_MS)
+                            it = self->cache_.erase(it);
+                        else
+                            ++it;
+                    }
+                    self->cache_.insert(key, CacheEntry{stamp, candles});
+                }
                 callback(ok, ok ? candles : QVector<BrokerCandle>{}, err);
             },
             Qt::QueuedConnection);

@@ -1,8 +1,7 @@
 // src/app/WindowFrame_Setup.cpp
 //
-// Initial setup helpers — auth stack, docking mode, dock screens, and the
-// (currently-stub) app/navigation hooks. Called from the WindowFrame
-// constructor in WindowFrame.cpp.
+// Initial setup helpers — auth stack, docking mode and dock-screen
+// registration. Called from the WindowFrame constructor in WindowFrame.cpp.
 //
 // Part of the partial-class split of WindowFrame.cpp.
 
@@ -293,13 +292,13 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("trade_viz", []() { return new screens::TradeVizScreen; });
     dock_router_->register_factory("docs", []() { return new screens::DocsScreen; });
 
-    // Info/legal pages. Static content, but "static" is not "free": setup_auth_screens()
-    // above already builds one of each for info_stack_, so register_screen() here made
-    // a SECOND instance of all five per window, none of them visible at startup.
-    // HelpScreen::build_page() alone is ~110-130 widgets each carrying an inline
-    // setStyleSheet — roughly 1,100 widgets and 1,100 CSS parses per window, paid on
-    // the cold-start path. Factories make the dock copies cost nothing until the user
-    // actually opens the panel; the auth-stack copies stay the only eager instances.
+    // Info/legal pages. setup_auth_screens() above already builds one of each for
+    // info_stack_, so an eager register_screen() here would create a SECOND instance
+    // of all five per window, none of them visible at startup. The info screens now
+    // build their page content on first show (e.g. HelpScreen::showEvent), so an
+    // unshown copy is only a shell — but it is still a pointless one per window.
+    // Factories construct the dock copy only when the user actually opens the panel;
+    // the auth-stack copies stay the only eager instances.
     dock_router_->register_factory("contact", []() { return new screens::ContactScreen; });
     dock_router_->register_factory("terms", []() { return new screens::TermsScreen; });
     dock_router_->register_factory("privacy", []() { return new screens::PrivacyScreen; });

@@ -95,7 +95,8 @@ static const CatalogEntry kCatalog[] = {
     {"rolling_retraining", "preview", "quant_rolling_preview", "Preview the retrain tasks a schedule would generate."},
     {"rolling_retraining", "delete", "quant_rolling_delete", "Delete a rolling-retraining schedule."},
     {"advanced_models", "create_model", "quant_adv_create_model",
-     "Create an advanced model (LSTM/GRU/Transformer/Localformer/HIST/GAT)."},
+     "Create an advanced model (lstm/gru/transformer/lstm_attention). Trains on synthetic data; "
+     "results carry a 'warning' and are illustrative only."},
     {"advanced_models", "train_model", "quant_adv_train_model", "Train an advanced model."},
     {"feature_engineering", "evaluate_expression", "quant_feature_eval_expr", "Evaluate a Qlib feature expression."},
     {"feature_engineering", "select_features_by_ic", "quant_feature_select_ic",

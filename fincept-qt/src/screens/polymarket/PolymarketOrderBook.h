@@ -42,6 +42,7 @@ class PolymarketOrderBook : public QWidget {
     QVector<fincept::services::prediction::OrderLevel> bids_;
     QVector<fincept::services::prediction::OrderLevel> asks_;
     double spread_ = 0.0;
+    int price_decimals_ = 2; // follows the book's tick size (0.001-tick markets need 3 dp)
     QMutex mutex_;
     QPixmap cache_;
     bool cache_dirty_ = true;

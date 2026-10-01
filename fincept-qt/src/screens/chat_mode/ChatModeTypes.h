@@ -43,6 +43,7 @@ struct ChatMessage {
     int response_time_ms = 0;
     QString provider;
     QString model;
+    QString session_uuid; // owning session — present on /chat/search hits
 
     static ChatMessage from_json(const QJsonObject& o) {
         ChatMessage m;

@@ -423,10 +423,21 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
         watchdog->setSingleShot(true);
         watchdog->moveToThread(qApp->thread());
         *watchdog_slot = watchdog;
-        QObject::connect(watchdog, &QTimer::timeout, watchdog, [resolve, cancelled, name]() {
+        QObject::connect(watchdog, &QTimer::timeout, watchdog, [watchdog, resolve, resolved, cancelled, name]() {
+            // A handler that finishes through AsyncDispatch (or the cancellation
+            // watch) wins the shared `resolved` flag directly and never reaches the
+            // teardown inside `resolve`, so this timer is still armed when the budget
+            // expires. Nothing timed out: say nothing and release the timer — the old
+            // path logged a false "timed out" WARN for every completed async call and
+            // leaked the QTimer, because `resolve` bails out before its deleteLater.
+            if (resolved->load()) {
+                watchdog->deleteLater();
+                return;
+            }
             cancelled->store(true);
             LOG_WARN(TAG, QString("Tool '%1' timed out").arg(name));
             resolve(ToolResult::fail("Tool '" + name + "' timed out"));
+            watchdog->deleteLater(); // single-shot, spent; covers losing the CAS race inside resolve()
         });
         QMetaObject::invokeMethod(
             watchdog, [watchdog, ms = ctx.timeout_ms]() { watchdog->start(ms); }, Qt::QueuedConnection);

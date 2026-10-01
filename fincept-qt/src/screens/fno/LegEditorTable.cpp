@@ -145,7 +145,11 @@ QVariant LegEditorModel::data(const QModelIndex& index, int role) const {
             case ColType:
                 return type_str(leg.type);
             case ColStrike:
-                return QString::number(leg.strike, 'f', leg.strike < 100 ? 2 : 0);
+                // The edit text must carry the exact strike: a rounded label here would
+                // turn an Enter with no change into a different (1272.5 -> 1273) strike.
+                if (role == Qt::EditRole)
+                    return QString::number(leg.strike, 'g', 10);
+                return fincept::services::options::format_strike(leg.strike);
             case ColLots:
                 return leg.lots;
             case ColEntry:
@@ -207,6 +211,26 @@ bool LegEditorModel::setData(const QModelIndex& index, const QVariant& value, in
                 leg.entry_price = v;
                 mutated = true;
             }
+        } else if (col == ColStrike) {
+            bool ok = false;
+            const double v = value.toString().trimmed().remove(QLatin1Char(',')).toDouble(&ok);
+            if (ok && std::isfinite(v) && v > 0 && std::abs(v - leg.strike) > 1e-6) {
+                leg.strike = v;
+                resolve_leg_from_chain(leg);
+                mutated = true;
+            }
+        } else if (col == ColType) {
+            const QString t = value.toString().trimmed().toUpper();
+            InstrumentType nt = leg.type;
+            if (t == QLatin1String("CE") || t == QLatin1String("C"))
+                nt = InstrumentType::CE;
+            else if (t == QLatin1String("PE") || t == QLatin1String("P"))
+                nt = InstrumentType::PE;
+            if (nt != leg.type && leg.type != InstrumentType::FUT) {
+                leg.type = nt;
+                resolve_leg_from_chain(leg);
+                mutated = true;
+            }
         }
     }
     if (mutated) {
@@ -225,7 +249,10 @@ Qt::ItemFlags LegEditorModel::flags(const QModelIndex& index) const {
     const int col = index.column();
     if (col == ColActive)
         f |= Qt::ItemIsUserCheckable;
-    if (col == ColLots || col == ColEntry)
+    if (col == ColLots || col == ColEntry || col == ColStrike)
+        f |= Qt::ItemIsEditable;
+    // Type is only switchable between CE and PE; a futures leg has no call/put side.
+    if (col == ColType && legs_.at(index.row()).type != InstrumentType::FUT)
         f |= Qt::ItemIsEditable;
     return f;
 }
@@ -241,8 +268,9 @@ QVariant LegEditorModel::headerData(int section, Qt::Orientation orient, int rol
         const QString tips[ColCount] = {
             tr("Include this leg in analytics and in the order basket."),
             tr("Buy when Lots is positive, Sell when negative."),
-            tr("CE = call, PE = put."),
-            tr("Strike price."),
+            tr("CE = call, PE = put. Double-click to switch side."),
+            tr("Strike price. Double-click to change - the contract, lot size, premium and IV are re-read "
+               "from the live chain (a strike the chain doesn't carry stays a what-if row that can't be traded)."),
             tr("Signed lots: positive = buy, negative = sell. Quantity = lots × lot size."),
             tr("Entry premium per share (not per lot)."),
             tr("Implied volatility captured when the leg was added."),
@@ -273,6 +301,49 @@ void LegEditorModel::append_leg(const StrategyLeg& leg) {
     legs_.append(leg);
     endInsertRows();
     emit legs_changed();
+}
+
+void LegEditorModel::resolve_leg_from_chain(StrategyLeg& leg) const {
+    const auto* row = find_row_in_chain(chain_, leg.strike);
+    if (!row || (leg.type != InstrumentType::CE && leg.type != InstrumentType::PE)) {
+        // Not a strike the chain carries: keep it as a what-if row, but drop the old
+        // contract identity so it can never be sent as the previous strike's order.
+        leg.instrument_token = 0;
+        leg.symbol.clear();
+        return;
+    }
+    const bool call = (leg.type == InstrumentType::CE);
+    leg.instrument_token = call ? row->ce_token : row->pe_token;
+    leg.symbol = call ? row->ce_symbol : row->pe_symbol;
+    leg.expiry = chain_.expiry;
+    leg.iv_at_entry = call ? row->ce_iv : row->pe_iv;
+    const double ltp = call ? row->ce_quote.ltp : row->pe_quote.ltp;
+    if (ltp > 0)
+        leg.entry_price = ltp; // the old premium belonged to a different contract
+    // Never invent a lot size (an order quantity multiplier): take the chain row's,
+    // else a sibling leg's - every contract on one underlying/expiry shares it. 0
+    // stays 0 and Trade All refuses the leg.
+    if (row->lot_size > 0) {
+        leg.lot_size = row->lot_size;
+    } else if (leg.lot_size <= 0) {
+        for (const auto& other : legs_)
+            if (other.lot_size > 0) {
+                leg.lot_size = other.lot_size;
+                break;
+            }
+    }
+}
+
+void LegEditorModel::append_blank_leg() {
+    StrategyLeg leg;
+    leg.type = InstrumentType::CE;
+    leg.lots = 1;
+    leg.lot_size = 0;
+    if (chain_.atm_strike > 0) {
+        leg.strike = chain_.atm_strike;
+        resolve_leg_from_chain(leg);
+    }
+    append_leg(leg);
 }
 
 void LegEditorModel::remove_row(int row) {

@@ -1,6 +1,7 @@
 #include "services/workflow/WorkflowService.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/McpService.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "storage/repositories/WorkflowRepository.h"
 
@@ -8,6 +9,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
+#include <QUuid>
 
 namespace fincept::workflow {
 
@@ -99,10 +102,18 @@ Result<WorkflowDef> WorkflowService::import_from_json(const QString& path) {
     wf.name = obj.value("name").toString("Imported Workflow");
     wf.description = obj.value("description").toString();
 
+    // The canvas keys nodes and edges by id: a missing or repeated id would make
+    // two nodes collapse into one, so repair them on the way in.
+    QSet<QString> seen_node_ids;
+    QSet<QString> seen_edge_ids;
+
     for (const auto& nv : obj.value("nodes").toArray()) {
         QJsonObject no = nv.toObject();
         NodeDef nd;
         nd.id = no.value("id").toString();
+        if (nd.id.isEmpty() || seen_node_ids.contains(nd.id))
+            nd.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        seen_node_ids.insert(nd.id);
         nd.type = no.value("type").toString();
         nd.name = no.value("name").toString();
         nd.type_version = no.value("typeVersion").toInt(1);
@@ -120,6 +131,9 @@ Result<WorkflowDef> WorkflowService::import_from_json(const QString& path) {
         QJsonObject eo = ev.toObject();
         EdgeDef ed;
         ed.id = eo.value("id").toString();
+        if (ed.id.isEmpty() || seen_edge_ids.contains(ed.id))
+            ed.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        seen_edge_ids.insert(ed.id);
         ed.source_node = eo.value("source").toString();
         ed.target_node = eo.value("target").toString();
         ed.source_port = eo.value("sourceHandle").toString();
@@ -169,55 +183,164 @@ Result<void> WorkflowService::export_to_json(const WorkflowDef& wf, const QStrin
     if (!file.open(QIODevice::WriteOnly))
         return Result<void>::err("Failed to write file: " + path.toStdString());
 
-    file.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
+    const QByteArray bytes = QJsonDocument(obj).toJson(QJsonDocument::Indented);
+    if (file.write(bytes) != bytes.size())
+        return Result<void>::err("Failed to write file (disk full?): " + path.toStdString());
     LOG_INFO("WorkflowService", QString("Exported workflow to: %1").arg(path));
     return Result<void>::ok();
 }
 
 // ── Execution ──────────────────────────────────────────────────────────
 
-void WorkflowService::execute_workflow(const WorkflowDef& wf) {
+namespace {
+
+// Node types that place, modify or cancel orders and carry a `mode` select
+// (paper | live). The executors treat ANY mode other than the exact string
+// "paper" as live — this list is deliberately matched the same way.
+const QSet<QString>& wf_moded_order_types() {
+    static const QSet<QString> k = {
+        QStringLiteral("trading.place_order"),   QStringLiteral("trading.cancel_order"),
+        QStringLiteral("trading.modify_order"),  QStringLiteral("trading.close_position"),
+        QStringLiteral("trading.bracket_order"), QStringLiteral("trading.trailing_stop"),
+        QStringLiteral("trading.scale_in"),
+    };
+    return k;
+}
+
+// Order nodes that have no paper mode at all: they always act on the broker.
+const QSet<QString>& wf_live_only_order_types() {
+    static const QSet<QString> k = {
+        QStringLiteral("trading.smart_order"),
+        QStringLiteral("trading.cancel_all"),
+        QStringLiteral("trading.close_all"),
+    };
+    return k;
+}
+
+QString wf_variant_text(const QJsonValue& v) {
+    return v.toVariant().toString();
+}
+
+// True when the MCP tool named by an mcp.tool_call node is a declared-destructive
+// internal tool (anything that mutates state: orders, transfers, writes).
+bool wf_mcp_tool_is_destructive(const QString& tool) {
+    if (tool.isEmpty() || tool.contains(QLatin1String("__")))
+        return false; // external tools carry no destructiveness metadata
+    for (const auto& t : mcp::McpService::instance().get_all_tools()) {
+        if (t.is_internal && t.name == tool)
+            return t.is_destructive;
+    }
+    return false;
+}
+
+void wf_collect_live_rows(const WorkflowDef& wf, const QString& via, int depth, QSet<QString>& visited,
+                          QStringList& rows) {
+    for (const auto& nd : wf.nodes) {
+        if (nd.disabled)
+            continue;
+
+        const QString label = nd.name.isEmpty() ? nd.type : nd.name;
+        QString detail;
+
+        if (wf_moded_order_types().contains(nd.type) || wf_live_only_order_types().contains(nd.type)) {
+            // Same rule as the executors: only the exact string "paper" is paper
+            // ("Paper", "" or any other value is routed to the real broker).
+            const QString mode = nd.parameters.value(QStringLiteral("mode")).toString(QStringLiteral("paper"));
+            if (wf_moded_order_types().contains(nd.type) && mode == QLatin1String("paper"))
+                continue;
+
+            const QString symbol = nd.parameters.value(QStringLiteral("symbol")).toString();
+            const QString side = nd.parameters.value(QStringLiteral("side")).toString();
+            QString qty = wf_variant_text(nd.parameters.value(QStringLiteral("quantity")));
+            if (qty.isEmpty())
+                qty = wf_variant_text(nd.parameters.value(QStringLiteral("total_quantity")));
+            if (qty.isEmpty())
+                qty = wf_variant_text(nd.parameters.value(QStringLiteral("position_size")));
+            const QString broker = nd.parameters.value(QStringLiteral("broker")).toString();
+
+            if (!symbol.isEmpty())
+                detail += QStringLiteral("  %1").arg(symbol);
+            if (!side.isEmpty())
+                detail += QStringLiteral("  %1").arg(side.toUpper());
+            if (!qty.isEmpty())
+                detail += QStringLiteral(" x%1").arg(qty);
+            if (!broker.isEmpty())
+                detail += QStringLiteral("  → %1").arg(broker);
+        } else if (nd.type == QLatin1String("mcp.tool_call")) {
+            const QString tool = nd.parameters.value(QStringLiteral("tool")).toString().trimmed();
+            if (!wf_mcp_tool_is_destructive(tool))
+                continue;
+            detail = QStringLiteral("  %1").arg(WorkflowService::tr("destructive MCP tool: %1").arg(tool));
+        } else if (nd.type == QLatin1String("control.execute_workflow")) {
+            const QString sub_id = nd.parameters.value(QStringLiteral("workflow_id")).toString().trimmed();
+            if (sub_id.isEmpty() || depth >= 5 || visited.contains(sub_id))
+                continue;
+            visited.insert(sub_id);
+            auto loaded = WorkflowRepository::instance().load(sub_id);
+            if (loaded.is_ok()) {
+                const WorkflowDef& sub = loaded.value();
+                const QString sub_via = via.isEmpty() ? sub.name : via + QStringLiteral(" › ") + sub.name;
+                wf_collect_live_rows(sub, sub_via, depth + 1, visited, rows);
+            }
+            continue;
+        } else {
+            continue;
+        }
+
+        QString row = QStringLiteral("  • %1  [%2]").arg(label, nd.type) + detail;
+        if (!via.isEmpty())
+            row += QStringLiteral("   ") + WorkflowService::tr("(in sub-workflow: %1)").arg(via);
+        rows << row;
+    }
+}
+
+} // namespace
+
+QStringList WorkflowService::live_order_rows(const WorkflowDef& wf) {
+    QStringList rows;
+    QSet<QString> visited;
+    if (!wf.id.isEmpty())
+        visited.insert(wf.id); // a workflow calling itself is reported once, not recursed
+    wf_collect_live_rows(wf, {}, 0, visited, rows);
+    return rows;
+}
+
+WorkflowExecutor* WorkflowService::make_executor() {
     if (executor_) {
+        if (executor_->is_running()) {
+            // Replacing a live executor orphans its in-flight nodes (orders included)
+            // and strands the editor in "running" — refuse; the caller can Stop first.
+            LOG_WARN("WorkflowService", "Execution already in progress — ignoring new run request");
+            return nullptr;
+        }
         executor_->deleteLater();
         executor_ = nullptr;
     }
 
-    executor_ = new WorkflowExecutor(this);
+    auto* ex = new WorkflowExecutor(this);
+    executor_ = ex;
 
-    connect(executor_, &WorkflowExecutor::execution_started, this, &WorkflowService::execution_started);
-    connect(executor_, &WorkflowExecutor::node_started, this, &WorkflowService::node_execution_started);
-    connect(executor_, &WorkflowExecutor::node_completed, this, &WorkflowService::node_execution_completed);
-    connect(executor_, &WorkflowExecutor::execution_finished, this, [this](const WorkflowExecutionResult& result) {
+    connect(ex, &WorkflowExecutor::execution_started, this, &WorkflowService::execution_started);
+    connect(ex, &WorkflowExecutor::node_started, this, &WorkflowService::node_execution_started);
+    connect(ex, &WorkflowExecutor::node_completed, this, &WorkflowService::node_execution_completed);
+    connect(ex, &WorkflowExecutor::execution_finished, this, [this, ex](const WorkflowExecutionResult& result) {
         emit execution_finished(result);
-        if (executor_) {
-            executor_->deleteLater();
+        // Retire only THIS run's executor — a newer one may already be current.
+        ex->deleteLater();
+        if (executor_ == ex)
             executor_ = nullptr;
-        }
     });
+    return ex;
+}
 
-    executor_->execute(wf);
+void WorkflowService::execute_workflow(const WorkflowDef& wf) {
+    if (auto* ex = make_executor())
+        ex->execute(wf);
 }
 
 void WorkflowService::execute_from_node(const WorkflowDef& wf, const QString& start_node_id) {
-    if (executor_) {
-        executor_->deleteLater();
-        executor_ = nullptr;
-    }
-
-    executor_ = new WorkflowExecutor(this);
-
-    connect(executor_, &WorkflowExecutor::execution_started, this, &WorkflowService::execution_started);
-    connect(executor_, &WorkflowExecutor::node_started, this, &WorkflowService::node_execution_started);
-    connect(executor_, &WorkflowExecutor::node_completed, this, &WorkflowService::node_execution_completed);
-    connect(executor_, &WorkflowExecutor::execution_finished, this, [this](const WorkflowExecutionResult& result) {
-        emit execution_finished(result);
-        if (executor_) {
-            executor_->deleteLater();
-            executor_ = nullptr;
-        }
-    });
-
-    executor_->execute_from(wf, start_node_id);
+    if (auto* ex = make_executor())
+        ex->execute_from(wf, start_node_id);
 }
 
 void WorkflowService::stop_execution() {

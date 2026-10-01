@@ -75,11 +75,15 @@ void DatabentoService::set_api_key(const QString& key) {
 }
 
 QString DatabentoService::api_key() const {
-    auto r = SecureStorage::instance().retrieve(SECURE_KEY);
-    if (r.is_ok() && !r.value().isEmpty())
-        return r.value();
+    // The canonical slot first: it is the one Settings > Credentials writes, and the one
+    // PythonRunner injects into the script's environment. The legacy slot is only
+    // written by set_api_key() (which mirrors to both), so after the user rotates the
+    // key in Settings it is the stale one — preferring it kept sending the old key.
     auto r2 = SecureStorage::instance().retrieve(DATABENTO_ENV_KEY);
-    return r2.is_ok() ? r2.value() : QString{};
+    if (r2.is_ok() && !r2.value().isEmpty())
+        return r2.value();
+    auto r = SecureStorage::instance().retrieve(SECURE_KEY);
+    return r.is_ok() ? r.value() : QString{};
 }
 
 void DatabentoService::clear_api_key() {
@@ -105,9 +109,18 @@ void DatabentoService::run_script(const QStringList& args, std::function<void(bo
 
     QString command = args[0];
 
-    // Build JSON args object — always includes api_key
+    // SECURITY: the key reaches the script through the DATABENTO_API_KEY environment
+    // variable that PythonRunner injects from SecureStorage on every spawn — NOT as an
+    // "api_key" entry in argv, where any local process can read it from the process
+    // list (and where it sat for the lifetime of every request). A key that exists only
+    // in the legacy slot is copied to the canonical one first so the injection finds it.
+    {
+        const auto canonical = SecureStorage::instance().retrieve(DATABENTO_ENV_KEY);
+        if (!canonical.is_ok() || canonical.value().isEmpty())
+            SecureStorage::instance().store(DATABENTO_ENV_KEY, key);
+    }
+
     QJsonObject json_args;
-    json_args["api_key"] = key;
 
     // Pack remaining args as key=value pairs into the JSON object
     for (int i = 1; i < args.size(); i += 2) {
@@ -128,13 +141,34 @@ void DatabentoService::run_script(const QStringList& args, std::function<void(bo
         // "View raw response" modal has something useful to show.
         emit self->raw_response(cmd_label, result.output);
         if (!result.success) {
-            LOG_ERROR("Databento", "Script error: " + result.error);
-            cb(false, {{"error", result.error}});
+            // The script reports its own failures (no API key, `databento` package
+            // missing, bad key) as {"error": true, "message": "..."} on STDOUT and then
+            // exits 1, so result.error (stderr) is usually empty or a bare traceback.
+            // Prefer the script's message; fall back to stderr, then to the exit code.
+            QString reason = result.error.trimmed();
+            const QJsonDocument fail_doc = QJsonDocument::fromJson(result.output.toUtf8());
+            if (fail_doc.isObject()) {
+                const QString message = fail_doc.object().value("message").toString().trimmed();
+                if (!message.isEmpty())
+                    reason = message;
+            }
+            if (reason.isEmpty())
+                reason = QStringLiteral("Databento script failed (exit code %1)").arg(result.exit_code);
+            LOG_ERROR("Databento", "Script error: " + reason.left(300));
+            cb(false, {{"error", reason}});
             return;
         }
-        QString json_str = extract_json_from_output(result.output);
+        // Whole stdout first: a clean JSON document needs no scanning, and the brace
+        // matcher in extract_json_from_output() miscounts a '{' or '}' inside a string
+        // value (Python exception text routinely contains them), turning a readable
+        // error message into "JSON parse error". Only fall back to it when the output
+        // carries warning/log lines around the document.
         QJsonParseError err;
-        auto doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+        auto doc = QJsonDocument::fromJson(result.output.toUtf8(), &err);
+        if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+            const QString json_str = extract_json_from_output(result.output);
+            doc = QJsonDocument::fromJson(json_str.toUtf8(), &err);
+        }
         if (err.error != QJsonParseError::NoError || !doc.isObject()) {
             LOG_ERROR("Databento", "JSON parse error: " + err.errorString());
             cb(false, {{"error", "JSON parse error: " + err.errorString()}});
@@ -824,6 +858,17 @@ void DatabentoService::get_dataset_range(const QString& dataset, std::function<v
 
 // ── Metadata: cost estimate ────────────────────────────────────────────────
 void DatabentoService::get_cost(const DbCostQuery& q, std::function<void(DbCostResult)> cb) {
+    // Don't spend a Python process (and an API round-trip) on a request that cannot
+    // be valid: the script substitutes SPY / XNAS.ITCH / 30 days for blank arguments,
+    // so an empty selection would come back as a confident estimate for the wrong query.
+    if (q.dataset.trimmed().isEmpty() || q.schema.trimmed().isEmpty() || q.symbols.join(QString()).trimmed().isEmpty() ||
+        !q.start.isValid() || !q.end.isValid() || q.end < q.start) {
+        DbCostResult invalid;
+        invalid.success = false;
+        invalid.error = tr("Choose a dataset, schema, symbol and a valid date range first.");
+        cb(invalid);
+        return;
+    }
     QStringList args = {"get_cost_estimate",
                         "dataset",
                         q.dataset,
@@ -852,6 +897,10 @@ void DatabentoService::get_cost(const DbCostQuery& q, std::function<void(DbCostR
 // ── Metadata: symbol search ────────────────────────────────────────────────
 void DatabentoService::search_symbols(const QString& query, const QString& dataset,
                                       std::function<void(QStringList)> cb) {
+    if (query.trimmed().isEmpty()) { // nothing to search for — don't spawn Python
+        cb({});
+        return;
+    }
     QStringList args = {"symbol_search", "query", query};
     if (!dataset.isEmpty()) {
         args << "dataset" << dataset;

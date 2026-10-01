@@ -725,6 +725,10 @@ void StrategyBuilderPanel::on_backtest() {
     if (symbol.isEmpty())
         symbol = QStringLiteral("RELIANCE");
 
+    // Gate the button while a run is in flight: every extra click spawned another fetch + run,
+    // and the reports raced each other for the single results panel. Re-enabled by the
+    // result / error slots below.
+    backtest_btn_->setEnabled(false);
     services::algo::AlgoTradingService::instance().run_backtest(
         strat, symbol, bt_start_date_->date().toString(QStringLiteral("yyyy-MM-dd")),
         bt_end_date_->date().toString(QStringLiteral("yyyy-MM-dd")), bt_capital_->value());
@@ -952,12 +956,14 @@ QString StrategyBuilderPanel::validate() const {
 }
 
 void StrategyBuilderPanel::on_backtest_result(const QJsonObject& payload) {
+    backtest_btn_->setEnabled(true);
     status_label_->setText(tr("Backtest complete."));
     display_backtest_result(payload);
     LOG_INFO("AlgoTrading", "Backtest result displayed");
 }
 
 void StrategyBuilderPanel::on_error(const QString& context, const QString& msg) {
+    backtest_btn_->setEnabled(true); // a failed run must not leave RUN BACKTEST disabled
     status_label_->setText(QStringLiteral("[%1] %2").arg(context, msg));
 }
 
@@ -986,6 +992,13 @@ QVariantMap StrategyBuilderPanel::save_draft() const {
     draft["quantity"] = risk_panel_->quantity();
     draft["max_order_value"] = risk_panel_->max_order_value();
     draft["capital_pct"] = risk_panel_->capital_pct();
+    // F&O draft: without these a restart restored the rules but dropped the instrument type
+    // and the leg rules, silently turning an options strategy back into an equity one.
+    if (instrument_type_combo_)
+        draft["instrument_type"] = instrument_type_combo_->currentData().toString();
+    if (leg_editor_)
+        draft["legs"] =
+            QJsonDocument(fincept::algo::fno::fno_legs_to_json(leg_editor_->legs())).toJson(QJsonDocument::Compact);
     return draft;
 }
 
@@ -1005,6 +1018,17 @@ void StrategyBuilderPanel::restore_draft(const QVariantMap& draft) {
                             draft.value("trailing_stop", 0.0).toDouble(), draft.value("quantity", 1.0).toDouble(),
                             draft.value("max_order_value", 0.0).toDouble(),
                             draft.value("capital_pct", 100.0).toDouble());
+
+    // Mirror load_strategy(): instrument type + F&O leg rules (absent in drafts saved earlier).
+    if (instrument_type_combo_) {
+        const int idx = instrument_type_combo_->findData(draft.value("instrument_type", "equity").toString());
+        QSignalBlocker blocker(instrument_type_combo_);
+        instrument_type_combo_->setCurrentIndex(idx >= 0 ? idx : 0);
+    }
+    if (leg_editor_)
+        leg_editor_->set_legs(fincept::algo::fno::fno_legs_from_json(
+            QJsonDocument::fromJson(draft.value("legs").toByteArray()).array()));
+    on_instrument_type_changed();
 }
 
 // ── Live language switch ──────────────────────────────────────────────────────

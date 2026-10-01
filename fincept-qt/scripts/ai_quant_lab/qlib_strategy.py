@@ -251,9 +251,11 @@ class StrategyService:
             # Risk parity optimization
             weights = self._calculate_risk_parity_weights(cov_matrix)
 
-            # Scale to target risk
-            portfolio_vol = np.sqrt(weights @ cov_matrix @ weights)
-            scale = target_risk / portfolio_vol
+            # Scale to target risk. target_risk is an ANNUAL volatility (docstring) but
+            # the covariance of periodic returns is per-period: annualise it (daily
+            # data, 252 periods) or the scale -- and the leverage -- is ~16x too high.
+            portfolio_vol = np.sqrt(weights @ cov_matrix.values @ weights) * np.sqrt(252)
+            scale = target_risk / portfolio_vol if portfolio_vol > 0 else 1.0
             scaled_weights = weights * scale
 
             strategy_id = f"risk_parity_{int(target_risk*100)}"
@@ -263,6 +265,8 @@ class StrategyService:
                 "strategy_id": strategy_id,
                 "strategy_type": "Risk Parity",
                 "weights": dict(zip(returns.columns, scaled_weights)),
+                "unscaled_weights": dict(zip(returns.columns, weights)),
+                "gross_exposure": float(np.sum(scaled_weights)),
                 "target_risk": target_risk,
                 "rebalance_frequency": rebalance_frequency,
                 "description": "Equal risk contribution from each asset",
@@ -366,16 +370,19 @@ class StrategyService:
     def _calculate_risk_parity_weights(self, cov_matrix: pd.DataFrame) -> np.ndarray:
         """Calculate risk parity weights using optimization"""
         n_assets = cov_matrix.shape[0]
+        cov = np.asarray(cov_matrix, dtype=float)
 
         def risk_budget_objective(weights):
-            # Risk parity: minimize difference in risk contributions
-            portfolio_vol = np.sqrt(weights @ cov_matrix @ weights)
-            marginal_contrib = cov_matrix @ weights
-            risk_contrib = weights * marginal_contrib / portfolio_vol
-
-            # Objective: minimize variance of risk contributions
-            target_risk_contrib = 1.0 / n_assets
-            return np.sum((risk_contrib - target_risk_contrib)**2)
+            # Risk parity: every asset contributes an equal SHARE of portfolio risk.
+            # The shares must be normalised to sum to 1 before comparing with 1/n.
+            # The old code compared absolute contributions (which sum to the portfolio
+            # volatility, ~0.01) against 1/n, so the optimiser raised volatility
+            # instead -- it put ~99% of the weight in the most volatile asset.
+            variance = weights @ cov @ weights
+            if variance <= 0:
+                return 1e6
+            risk_share = weights * (cov @ weights) / variance
+            return np.sum((risk_share - 1.0 / n_assets) ** 2)
 
         # Constraints
         cons = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
@@ -500,6 +507,21 @@ class StrategyService:
         }
 
 
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def main():
     """CLI interface for Strategy service"""
     if len(sys.argv) < 2:
@@ -518,7 +540,8 @@ def main():
                 "qlib_available": QLIB_AVAILABLE,
                 "pandas_available": pd is not None,
                 "numpy_available": np is not None,
-                "scipy_available": 'optimize' in dir()
+                # dir() inside main() lists main's locals, so this was always False
+                "scipy_available": 'optimize' in globals() and optimize is not None
             }
 
         elif command == "create_topk_dropout":
@@ -553,8 +576,15 @@ def main():
             result = service.list_strategies()
 
         elif command == "create_risk_parity":
+            rp_returns = pd.DataFrame(params.get("returns", []))
+            if rp_returns.shape[0] < 2 or rp_returns.shape[1] < 2:
+                raise ValueError("Risk parity needs a returns matrix with at least 2 periods (rows) "
+                                 "and 2 assets (columns)")
+            names = params.get("assets")
+            rp_returns.columns = (list(names) if names and len(names) == rp_returns.shape[1]
+                                  else [f"Asset {i + 1}" for i in range(rp_returns.shape[1])])
             result = service.create_risk_parity_strategy(
-                returns=pd.DataFrame(params.get("returns", [])),
+                returns=rp_returns,
                 target_risk=params.get("target_risk", 0.10),
                 rebalance_frequency=params.get("rebalance_frequency", "monthly")
             )
@@ -583,7 +613,7 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(result))
+        print(json.dumps(_json_safe(result)))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

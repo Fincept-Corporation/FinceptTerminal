@@ -88,7 +88,12 @@ class AuthManager : public QObject {
     // SecureStorage, then purge the cleartext copies (CR-08). Idempotent.
     void migrate_legacy_plaintext_credentials();
     void validate_saved_session();
-    void fetch_user_profile(std::function<void()> on_done = {});
+    /// `on_rejected` (optional) is called with a user-facing message when the
+    /// server answers 401/403 — the login/OTP/MFA flow that triggered the fetch
+    /// uses it to emit its own *_failed signal. Startup validation and refreshes
+    /// pass none and keep relying on auth_state_changed.
+    void fetch_user_profile(std::function<void()> on_done = {},
+                            std::function<void(const QString&)> on_rejected = {});
     void fetch_user_subscription(std::function<void()> on_done = {});
     void complete_auth_flow(std::function<void()> on_done);
     /// Inject a redeemed desktop-handoff session (api_key + session_token) and

@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QSaveFile>
 
 namespace fincept {
 
@@ -164,7 +165,10 @@ ProfileId ProfileManager::create_profile(const QString& name) {
     return minted;
 }
 
-void ProfileManager::delete_profile(const QString& name) {
+void ProfileManager::delete_profile(const QString& raw_name) {
+    // Same normalisation as create_profile()/profile_id_for(): the manifest only
+    // ever holds sanitised names, so an unsanitised argument matched nothing.
+    const QString name = sanitise_name(raw_name);
     if (name == "default")
         return; // cannot delete the default profile
 
@@ -262,10 +266,14 @@ void ProfileManager::save_manifest(const QStringList& profiles) const {
     obj["profiles"] = arr;
     obj["schema_version"] = 2; // v1 = bare strings; v2 = {name, id} objects.
 
-    QFile f(manifest_path());
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    // Atomic replace: a manifest truncated by a crash mid-write would make
+    // load_id_cache_locked() mint brand-new profile UUIDs on the next start,
+    // orphaning everything keyed by the old ones.
+    QSaveFile f(manifest_path());
+    if (f.open(QIODevice::WriteOnly)) {
         f.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
-        f.close();
+        if (!f.commit())
+            LOG_ERROR("ProfileManager", "Failed to commit profiles manifest: " + manifest_path());
     } else {
         LOG_ERROR("ProfileManager", "Failed to write profiles manifest: " + manifest_path());
     }

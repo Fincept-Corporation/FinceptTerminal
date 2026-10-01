@@ -494,6 +494,11 @@ void PolymarketDetailPanel::on_book_price_clicked(double price) {
         return; // trading disabled — nothing to fill
     if (price <= 0.0 || price >= 1.0)
         return;
+    // The book always shows the FIRST outcome's token; a price taken from it is only
+    // meaningful for that outcome, so point the ticket at it too (it used to keep
+    // whichever outcome was selected, e.g. NO, with a YES-book price).
+    if (ticket_outcome_cb_ && ticket_outcome_cb_->count() > 0)
+        ticket_outcome_cb_->setCurrentIndex(0);
     ticket_price_edit_->setText(QString::number(price, 'f', 4));
     set_active_tab(kTabTrade);
     ticket_price_edit_->setFocus();
@@ -523,6 +528,13 @@ void PolymarketDetailPanel::on_submit_clicked() {
     }
     if (!size_ok || size <= 0.0) {
         reject(tr("Invalid size — must be > 0"));
+        return;
+    }
+    // Kalshi trades whole contracts and KalshiAdapter::place_order sends int(size), so
+    // a fractional size was silently truncated: the confirm dialog read "5.90 shares"
+    // while 5 were ordered.
+    if (presentation_.exchange_id == QStringLiteral("kalshi") && std::abs(size - std::round(size)) > 1e-9) {
+        reject(tr("Kalshi contracts are whole numbers — enter an integer size"));
         return;
     }
     if (book_min_size_ > 0.0 && size < book_min_size_) {
@@ -570,6 +582,9 @@ void PolymarketDetailPanel::on_submit_clicked() {
     lines << tr("%1  %2  ×  %3 shares  @  %4")
                  .arg(ticket_side_, outcome.name, QString::number(size, 'f', 2),
                       presentation_.format_price(price));
+    // The cents rendering above can round (and Kalshi's dollars view shows 2 dp) — state
+    // the exact price that will be sent so the confirmation can't disagree with it.
+    lines << tr("Exact price: %1").arg(QString::number(price, 'f', 4));
     lines << QString();
     lines << tr("Market: %1").arg(last_market_.question.left(120));
     lines << tr("Order type: %1").arg(ticket_type_cb_->currentText());
@@ -679,6 +694,21 @@ void PolymarketDetailPanel::set_trading_enabled(bool enabled) {
     if (!ticket_stack_)
         return;
     ticket_stack_->setCurrentIndex(enabled ? 1 : 0);
+}
+
+void PolymarketDetailPanel::set_order_types(const QStringList& types) {
+    if (!ticket_type_cb_ || types.isEmpty())
+        return;
+    QStringList current;
+    for (int i = 0; i < ticket_type_cb_->count(); ++i)
+        current << ticket_type_cb_->itemText(i);
+    if (current == types)
+        return;
+    const QString prev = ticket_type_cb_->currentText();
+    ticket_type_cb_->clear();
+    ticket_type_cb_->addItems(types);
+    const int idx = ticket_type_cb_->findText(prev);
+    ticket_type_cb_->setCurrentIndex(idx >= 0 ? idx : 0);
 }
 
 QWidget* PolymarketDetailPanel::create_holders_page() {
@@ -960,7 +990,9 @@ void PolymarketDetailPanel::set_top_holders(const QVector<pmx::TopHolder>& holde
     holders_table_->setRowCount(holders.size());
     for (int i = 0; i < holders.size(); ++i) {
         const pmx::TopHolder& h = holders[i];
-        auto* rank = new QTableWidgetItem(QString::number(h.rank > 0 ? h.rank : i + 1));
+        // Numeric DisplayRole (a QString rank sorts "9" after "20").
+        auto* rank = new QTableWidgetItem;
+        rank->setData(Qt::DisplayRole, h.rank > 0 ? h.rank : i + 1);
         rank->setTextAlignment(Qt::AlignCenter);
         holders_table_->setItem(i, 0, rank);
         holders_table_->setItem(i, 1, new QTableWidgetItem(h.display_name));
@@ -978,6 +1010,9 @@ void PolymarketDetailPanel::set_top_holders(const QVector<pmx::TopHolder>& holde
         }
     }
     holders_table_->resizeColumnsToContents();
+    // Re-enabling sorting sorts by the header's indicator, which defaults to column 0
+    // *descending* — start on rank ascending.
+    holders_table_->horizontalHeader()->setSortIndicator(0, Qt::AscendingOrder);
     holders_table_->setSortingEnabled(true);
 }
 

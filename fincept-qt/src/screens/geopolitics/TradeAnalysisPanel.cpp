@@ -58,35 +58,17 @@ static QString spin_style() {
         .arg(ui::colors::WARNING());
 }
 
-// ── Backend-routing honesty notice ───────────────────────────────────────────
-//
-// The "Trading Blocs" and "Barrier Removal" tabs collect their own parameters
-// but the service only exposes analyze_trade_benefits / analyze_trade_restrictions
-// today, so both are routed to the benefits/costs mode and their inputs are
-// dropped. That was documented only in a code comment; the user saw plausible
-// numbers that did not respond to what they typed. Say so on-screen.
-QString TradeAnalysisPanel::kBlocsNotice() {
-    return tr("Note: results come from the benefits/costs model. The dedicated trading-blocs mode is not exposed by "
-              "the service yet, so the integration type, trade-creation and trade-diversion inputs below are not sent "
-              "to the backend — read the output as a general welfare estimate, not a bloc-specific one.");
+void TradeAnalysisPanel::begin_analysis() {
+    status_label_->setText(tr("Analyzing..."));
+    for (auto* btn : run_buttons_)
+        if (btn)
+            btn->setEnabled(false);
 }
 
-QString TradeAnalysisPanel::kBarrierNotice() {
-    return tr("Note: results come from the benefits/costs model. The dedicated barrier-removal mode is not exposed by "
-              "the service yet, so the liberalization scope, tariff-reduction and GDP inputs below are not sent to "
-              "the backend — read the output as a general welfare estimate, not a liberalization-specific one.");
-}
-
-QLabel* TradeAnalysisPanel::make_routing_notice(QWidget* parent) {
-    auto* lbl = new QLabel(parent);
-    lbl->setWordWrap(true);
-    lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 8px;"
-                               "background:rgba(%4,0.10); border:1px solid %1;")
-                           .arg(ui::colors::WARNING())
-                           .arg(ui::fonts::TINY)
-                           .arg(ui::fonts::DATA_FAMILY())
-                           .arg(warn_rgb()));
-    return lbl;
+void TradeAnalysisPanel::end_analysis() {
+    for (auto* btn : run_buttons_)
+        if (btn)
+            btn->setEnabled(true);
 }
 
 static QWidget* make_field(const QString& label_text, QWidget* input, QWidget* parent, const QString& hint = {}) {
@@ -235,7 +217,7 @@ void TradeAnalysisPanel::build_ui() {
             .arg(w.darker(120).name());
     }());
     connect(run0, &QPushButton::clicked, this, [this, vol_spin, price_spin, cons_spin]() {
-        status_label_->setText(tr("Analyzing..."));
+        begin_analysis();
         QJsonObject p;
         p["trade_volume_gdp"] = vol_spin->value();
         p["price_reduction_percent"] = price_spin->value();
@@ -318,7 +300,7 @@ void TradeAnalysisPanel::build_ui() {
     }());
     connect(run1, &QPushButton::clicked, this,
             [this, tariff_spin, quota_spin, subsidy_spin, dev_combo, maturity_combo]() {
-                status_label_->setText(tr("Analyzing..."));
+                begin_analysis();
                 QJsonObject p;
                 p["tariff_rate"] = tariff_spin->value();
                 p["quota_volume"] = quota_spin->value();
@@ -348,9 +330,6 @@ void TradeAnalysisPanel::build_ui() {
         {hint2, QStringLiteral(
                     "Analyzes trade creation vs. diversion effects for regional trade blocs and economic unions.")});
     p2l->addWidget(hint2);
-    blocs_notice_ = make_routing_notice(p2);
-    blocs_notice_->setText(kBlocsNotice());
-    p2l->addWidget(blocs_notice_);
 
     auto* bloc_combo = new QComboBox;
     bloc_combo->setStyleSheet(combo_style());
@@ -392,15 +371,13 @@ void TradeAnalysisPanel::build_ui() {
             .arg(w.darker(120).name());
     }());
     connect(run2, &QPushButton::clicked, this, [this, bloc_combo, tc_spin, td_spin]() {
-        status_label_->setText(tr("Analyzing..."));
+        begin_analysis();
         QJsonObject p;
         p["integration_type"] = bloc_combo->currentData().toString();
         p["trade_creation"] = tc_spin->value();
         p["trade_diversion"] = td_spin->value();
-        // Trading-bloc integration maps to the benefits/costs mode (trade creation vs.
-        // diversion are welfare effects). A dedicated `trading_blocs` backend mode exists
-        // in trade_geopolitics.py but is not yet exposed by GeopoliticsService.
-        GeopoliticsService::instance().analyze_trade_benefits(p);
+        // Dedicated trading_blocs mode: reads trade_creation / trade_diversion.
+        GeopoliticsService::instance().analyze_trading_blocs(p);
     });
     p2l->addWidget(run2);
     run_buttons_.append(run2);
@@ -421,9 +398,6 @@ void TradeAnalysisPanel::build_ui() {
     i18n_labels_.append(
         {hint3, QStringLiteral("Assesses FDI, employment, wage, and GDP impact of removing trade barriers.")});
     p3l->addWidget(hint3);
-    barrier_notice_ = make_routing_notice(p3);
-    barrier_notice_->setText(kBarrierNotice());
-    p3l->addWidget(barrier_notice_);
 
     auto* lib_combo = new QComboBox;
     lib_combo->setStyleSheet(combo_style());
@@ -463,17 +437,18 @@ void TradeAnalysisPanel::build_ui() {
             .arg(w.darker(120).name());
     }());
     connect(run3, &QPushButton::clicked, this, [this, lib_combo, tariff_cut_spin, gdp_spin]() {
-        status_label_->setText(tr("Analyzing..."));
+        begin_analysis();
         QJsonObject p;
-        p["liberalization_type"] = lib_combo->currentData().toString();
+        const QString type = lib_combo->currentData().toString();
+        p["liberalization_type"] = type;
         p["tariff_reduction"] = tariff_cut_spin->value();
         p["gdp_size"] = gdp_spin->value();
-        // Barrier *removal* is trade liberalization — its economic impact maps to the
-        // benefits/costs analysis, NOT the trade-restrictions analysis (which models
-        // *imposing* tariffs/quotas, the opposite direction). Route to the benefits mode.
-        // A dedicated `barrier_removal` backend mode exists in trade_geopolitics.py but is
-        // not yet exposed by GeopoliticsService.
-        GeopoliticsService::instance().analyze_trade_benefits(p);
+        // The backend's FDI estimate is keyed on a limited / moderate / comprehensive
+        // scope: the more parties to the agreement, the broader the scope.
+        p["liberalization_scope"] = type == QLatin1String("unilateral")      ? QStringLiteral("limited")
+                                    : type == QLatin1String("multilateral") ? QStringLiteral("comprehensive")
+                                                                            : QStringLiteral("moderate");
+        GeopoliticsService::instance().analyze_barrier_removal(p);
     });
     p3l->addWidget(run3);
     run_buttons_.append(run3);
@@ -574,14 +549,22 @@ void TradeAnalysisPanel::display_result(const QJsonObject& payload) {
     status_label_->setText(tr("%1 fields").arg(rows.size()));
 }
 
+static bool is_trade_context(const QString& context) {
+    return context == QLatin1String("trade_benefits") || context == QLatin1String("trade_restrictions") ||
+           context == QLatin1String("trade_blocs") || context == QLatin1String("trade_barrier");
+}
+
 void TradeAnalysisPanel::on_trade_result(const QString& context, const QJsonObject& payload) {
-    if (context == "trade_benefits" || context == "trade_restrictions")
-        display_result(payload);
+    if (!is_trade_context(context))
+        return;
+    end_analysis();
+    display_result(payload);
 }
 
 void TradeAnalysisPanel::on_error(const QString& context, const QString& message) {
-    if (context != "trade_benefits" && context != "trade_restrictions")
+    if (!is_trade_context(context))
         return;
+    end_analysis();
     status_label_->setText(tr("Error"));
     while (results_layout_->count() > 0) {
         auto* item = results_layout_->takeAt(0);
@@ -629,12 +612,6 @@ void TradeAnalysisPanel::retranslateUi() {
         tabs_->setTabText(2, tr("Trading Blocs"));
         tabs_->setTabText(3, tr("Barrier Removal"));
     }
-
-    // Backend-routing notices.
-    if (blocs_notice_)
-        blocs_notice_->setText(kBlocsNotice());
-    if (barrier_notice_)
-        barrier_notice_->setText(kBarrierNotice());
 
     // Run buttons
     for (auto* btn : run_buttons_)

@@ -23,6 +23,24 @@
 
 namespace fincept::screens {
 
+namespace {
+/// Relaunch the terminal under `profile` and quit this process — but only when the
+/// new process really started. The startDetached() result used to be ignored, so a
+/// failed launch (exe moved/locked, blocked by security software) still quit the app
+/// and left the user with no terminal at all.
+void profiles_relaunch_and_quit(QWidget* parent, const QString& profile) {
+    const QString exe = QCoreApplication::applicationFilePath();
+    if (!QProcess::startDetached(exe, {"--profile", profile})) {
+        QMessageBox::critical(parent, ProfilesSection::tr("Switch Profile"),
+                              ProfilesSection::tr("Could not launch Fincept Terminal for profile \"%1\". "
+                                                  "The current session stays open.")
+                                  .arg(profile));
+        return;
+    }
+    QCoreApplication::quit();
+}
+} // namespace
+
 ProfilesSection::ProfilesSection(QWidget* parent) : QWidget(parent) {
     build_ui();
 }
@@ -121,9 +139,7 @@ QWidget* ProfilesSection::build_content() {
                     QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
                 if (reply != QMessageBox::Yes)
                     return;
-                const QString exe = QCoreApplication::applicationFilePath();
-                QProcess::startDetached(exe, {"--profile", name});
-                QCoreApplication::quit();
+                profiles_relaunch_and_quit(this, name);
             });
             hl->addWidget(switch_btn);
         }
@@ -178,9 +194,7 @@ QWidget* ProfilesSection::build_content() {
             return;
 
         ProfileManager::instance().create_profile(name);
-        const QString exe = QCoreApplication::applicationFilePath();
-        QProcess::startDetached(exe, {"--profile", name});
-        QCoreApplication::quit();
+        profiles_relaunch_and_quit(this, name);
     });
     new_hl->addWidget(create_btn);
     vl->addWidget(new_row);

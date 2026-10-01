@@ -29,8 +29,13 @@
 #    include <xlsxformat.h>
 #endif
 
+#include <QFutureWatcher>
 #include <QPointer>
 #include <QSet>
+#include <QTimer>
+#include <QtConcurrent/QtConcurrent>
+
+#include <utility>
 
 namespace fincept::screens {
 
@@ -40,12 +45,52 @@ static QString kAccent() {
     return QString("#ea580c");
 } // Orange accent
 
+// A workbook parsed on a worker thread and handed back to the UI thread. Plain
+// values only — no widgets are created or touched off-thread.
+struct ExcelImportedSheet {
+    QString name;
+    QVector<QVector<QString>> cells;
+};
+struct ExcelImportResult {
+    QVector<ExcelImportedSheet> sheets;
+    bool truncated = false;
+};
+
+// Live screen + parked path for ExcelScreen::open_when_ready() (File Manager
+// "EXCEL" button, which can fire before this lazily-built screen exists).
+static QPointer<ExcelScreen> g_excel_live_screen;
+static QString g_excel_pending_path;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor
 // ─────────────────────────────────────────────────────────────────────────────
 
 ExcelScreen::ExcelScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
+    g_excel_live_screen = this;
+}
+
+void ExcelScreen::open_when_ready(const QString& path) {
+    if (path.isEmpty())
+        return;
+    if (g_excel_live_screen) {
+        g_excel_live_screen->open_file_path(path);
+        return;
+    }
+    g_excel_pending_path = path;
+}
+
+bool ExcelScreen::open_file_path(const QString& path) {
+    if (busy_)
+        return false;
+    if (!QFileInfo(path).isFile()) {
+        QMessageBox::warning(this, tr("Open failed"), tr("The file no longer exists:\n%1").arg(path));
+        return false;
+    }
+    if (!confirm_discard(tr("Opening another file")))
+        return false;
+    import_path(path);
+    return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,6 +100,12 @@ ExcelScreen::ExcelScreen(QWidget* parent) : QWidget(parent) {
 void ExcelScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     LOG_INFO("ExcelScreen", "Screen shown");
+
+    // A file handed over by the File Manager before this screen existed.
+    if (!g_excel_pending_path.isEmpty()) {
+        const QString pending = std::exchange(g_excel_pending_path, QString());
+        QTimer::singleShot(0, this, [this, pending]() { open_file_path(pending); });
+    }
 }
 
 void ExcelScreen::hideEvent(QHideEvent* event) {
@@ -250,7 +301,13 @@ bool ExcelScreen::import_csv(const QString& path) {
     // and freeze the UI thread.
     constexpr int kMaxRows = 20000;
     while (!in.atEnd() && cells.size() < kMaxRows) {
-        const QStringList fields = split_csv_line(in.readLine());
+        // A quoted field may contain line breaks (RFC 4180). readLine() cuts there, which used to split one
+        // record into several broken rows: keep appending lines until the quotes balance ("" escapes count as
+        // two quote characters, so parity is unaffected).
+        QString record = in.readLine();
+        while (record.count(QLatin1Char('"')) % 2 == 1 && !in.atEnd())
+            record += QLatin1Char('\n') + in.readLine();
+        const QStringList fields = split_csv_line(record);
         QVector<QString> row;
         row.reserve(fields.size());
         for (const auto& v : fields)
@@ -288,6 +345,8 @@ bool ExcelScreen::import_csv(const QString& path) {
 }
 
 void ExcelScreen::on_import() {
+    if (busy_)
+        return;
     if (!confirm_discard(tr("Import a different file")))
         return;
 
@@ -295,7 +354,10 @@ void ExcelScreen::on_import() {
                                                 tr("Spreadsheet Files (*.xlsx *.xls *.csv);;All Files (*)"));
     if (path.isEmpty())
         return;
+    import_path(path);
+}
 
+void ExcelScreen::import_path(const QString& path) {
     // CSV is advertised in the file filter (and in the no-QXlsx message) but was
     // never actually handled — QXlsx::Document on a .csv just reported "no
     // sheets" to the log and the screen silently did nothing.
@@ -303,11 +365,82 @@ void ExcelScreen::on_import() {
         import_csv(path);
         return;
     }
+    import_xlsx(path);
+}
+
+// The import window bounds BOTH the xlsx.read() calls and the grid we build
+// from them, so it has to stay something a grid can plausibly show. The old
+// 20 000 × 512 window was 10.2M cells — a cap that itself caused the hang it
+// was meant to prevent. 64 columns is already past "BL" in Excel lettering;
+// anything wider is a data dump, not a spreadsheet.
+[[maybe_unused]] static constexpr int kExcelMaxImportRows = 20000;
+[[maybe_unused]] static constexpr int kExcelMaxImportCols = 64;
 
 #ifdef FINCEPT_HAS_QXLSX
+// Runs on a worker thread: QXlsx::Document is created, used and destroyed
+// entirely inside this call and the result is plain values.
+static ExcelImportResult read_xlsx_workbook(const QString& path) {
+    ExcelImportResult result;
     QXlsx::Document xlsx(path);
-    QStringList sheet_names = xlsx.sheetNames();
-    if (sheet_names.isEmpty()) {
+    const QStringList sheet_names = xlsx.sheetNames();
+
+    for (const auto& name : sheet_names) {
+        xlsx.selectSheet(name);
+
+        // Read the sheet's USED range only. Padding out to a minimum 100 × 26
+        // grid here meant every read loop did at least 2 600 xlsx.read() calls
+        // for cells the file doesn't have; SpreadsheetWidget pads the visible
+        // grid to that minimum itself, without touching the file.
+        const auto dim = xlsx.dimension();
+        const int data_rows = std::clamp(dim.lastRow(), 0, kExcelMaxImportRows);
+        const int data_cols = std::clamp(dim.lastColumn(), 0, kExcelMaxImportCols);
+        if (dim.lastRow() > kExcelMaxImportRows || dim.lastColumn() > kExcelMaxImportCols)
+            result.truncated = true;
+
+        ExcelImportedSheet sheet;
+        sheet.name = name;
+        sheet.cells.resize(data_rows);
+        for (int r = 0; r < data_rows; ++r) {
+            sheet.cells[r].resize(data_cols);
+            for (int c = 0; c < data_cols; ++c) {
+                const auto cell = xlsx.read(r + 1, c + 1); // QXlsx is 1-based
+                sheet.cells[r][c] = cell.isValid() ? cell.toString() : QString();
+            }
+        }
+        result.sheets.append(std::move(sheet));
+    }
+    return result;
+}
+#endif // FINCEPT_HAS_QXLSX
+
+void ExcelScreen::import_xlsx(const QString& path) {
+#ifdef FINCEPT_HAS_QXLSX
+    if (busy_)
+        return;
+    // A big workbook is up to 20 000 × 64 xlsx.read() calls — seconds of work that
+    // froze the whole terminal when run on the UI thread (P1). Read on a worker,
+    // lock the screen meanwhile, and build the widgets back here.
+    set_busy(true, tr("Importing %1...").arg(QFileInfo(path).fileName()));
+    auto* watcher = new QFutureWatcher<ExcelImportResult>(this);
+    connect(watcher, &QFutureWatcher<ExcelImportResult>::finished, this, [this, watcher, path]() {
+        const ExcelImportResult result = watcher->result();
+        watcher->deleteLater();
+        finish_xlsx_import(path, result);
+    });
+    watcher->setFuture(QtConcurrent::run([path]() { return read_xlsx_workbook(path); }));
+#else
+    Q_UNUSED(path);
+    QMessageBox::information(this, tr("Excel Import"),
+                             tr("Excel (.xlsx) import requires Qt6 private headers.\n"
+                                "This build was compiled without QXlsx support.\n\n"
+                                "CSV files can still be imported via the toolbar."));
+#endif
+}
+
+void ExcelScreen::finish_xlsx_import(const QString& path, const ExcelImportResult& result) {
+    set_busy(false);
+
+    if (result.sheets.isEmpty()) {
         LOG_ERROR("ExcelScreen", "No sheets found in file");
         QMessageBox::warning(this, tr("Import failed"),
                              tr("No sheets could be read from:\n%1\n\nThe file may be corrupt or "
@@ -323,43 +456,13 @@ void ExcelScreen::on_import() {
         w->deleteLater();
     }
 
-    // The import window bounds BOTH the xlsx.read() calls and the grid we build
-    // from them, so it has to stay something a grid can plausibly show. The old
-    // 20 000 × 512 window was 10.2M cells — a cap that itself caused the hang it
-    // was meant to prevent. 64 columns is already past "BL" in Excel lettering;
-    // anything wider is a data dump, not a spreadsheet.
-    constexpr int kMaxImportRows = 20000;
-    constexpr int kMaxImportCols = 64;
-    bool truncated = false;
-
-    for (const auto& name : sheet_names) {
-        xlsx.selectSheet(name);
-
-        // Read the sheet's USED range only. Padding out to a minimum 100 × 26
-        // grid here meant every read loop did at least 2 600 xlsx.read() calls
-        // for cells the file doesn't have; SpreadsheetWidget pads the visible
-        // grid to that minimum itself, without touching the file.
-        const auto dim = xlsx.dimension();
-        int data_rows = std::clamp(dim.lastRow(), 0, kMaxImportRows);
-        int data_cols = std::clamp(dim.lastColumn(), 0, kMaxImportCols);
-        if (dim.lastRow() > kMaxImportRows || dim.lastColumn() > kMaxImportCols)
-            truncated = true;
-
-        auto* sheet =
-            new SpreadsheetWidget(name, std::max(data_rows, 100), std::max(data_cols, 26), sheet_tabs_);
-
-        // Load data
-        QVector<QVector<QString>> cells(data_rows);
-        for (int r = 0; r < data_rows; ++r) {
-            cells[r].resize(data_cols);
-            for (int c = 0; c < data_cols; ++c) {
-                auto cell = xlsx.read(r + 1, c + 1); // QXlsx is 1-based
-                cells[r][c] = cell.isValid() ? cell.toString() : "";
-            }
-        }
-        sheet->set_data(cells);
-        sheet_tabs_->addTab(sheet, name);
-        connect(sheet, &SpreadsheetWidget::data_changed, this, &ExcelScreen::mark_dirty);
+    for (const ExcelImportedSheet& imported : result.sheets) {
+        const int rows = static_cast<int>(imported.cells.size());
+        const int cols = rows > 0 ? static_cast<int>(imported.cells.first().size()) : 0;
+        auto* sheet = new SpreadsheetWidget(imported.name, std::max(rows, 100), std::max(cols, 26), sheet_tabs_);
+        sheet->set_data(imported.cells);
+        sheet_tabs_->addTab(sheet, imported.name);
+        watch_sheet(sheet);
     }
 
     // Update file info
@@ -371,23 +474,31 @@ void ExcelScreen::on_import() {
 
     dirty_ = false;
     update_status();
-    LOG_INFO("ExcelScreen", QString("Imported %1 sheets from %2").arg(sheet_names.size()).arg(file_name_));
+    LOG_INFO("ExcelScreen", QString("Imported %1 sheets from %2").arg(result.sheets.size()).arg(file_name_));
 
     // Register with File Manager so it appears in the Files tab
     services::FileManagerService::instance().import_file(path, "excel");
 
-    if (truncated)
+    if (result.truncated)
         QMessageBox::information(this, tr("Import truncated"),
                                  tr("This workbook is larger than the %1 × %2 import window; "
                                     "only that region was loaded.")
-                                     .arg(kMaxImportRows)
-                                     .arg(kMaxImportCols));
-#else
-    QMessageBox::information(this, tr("Excel Import"),
-                             tr("Excel (.xlsx) import requires Qt6 private headers.\n"
-                                "This build was compiled without QXlsx support.\n\n"
-                                "CSV files can still be imported via the toolbar."));
-#endif
+                                     .arg(kExcelMaxImportRows)
+                                     .arg(kExcelMaxImportCols));
+}
+
+void ExcelScreen::set_busy(bool busy, const QString& message) {
+    busy_ = busy;
+    for (QPushButton* btn : {import_btn_, export_btn_, export_csv_btn_, add_sheet_btn_, rename_btn_, delete_btn_}) {
+        if (btn)
+            btn->setEnabled(!busy);
+    }
+    if (sheet_tabs_)
+        sheet_tabs_->setEnabled(!busy);
+    if (busy && status_label_)
+        status_label_->setText(message);
+    else
+        update_status();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -611,6 +722,8 @@ static bool write_snapshots_to_xlsx(QXlsx::Document& xlsx, const QVector<ExcelSh
 
 void ExcelScreen::on_export() {
 #ifdef FINCEPT_HAS_QXLSX
+    if (busy_)
+        return; // Ctrl+S while a read/write is still running on the worker
     // ── Snapshot BEFORE the file dialog ───────────────────────────────────
     // getSaveFileName runs a nested event loop. Anything queued on the UI
     // thread runs inside it — including MCP tool bodies, which can call
@@ -644,13 +757,33 @@ void ExcelScreen::on_export() {
     if (!path.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive))
         path += QLatin1String(".xlsx");
 
-    QXlsx::Document xlsx;
-    if (!write_snapshots_to_xlsx(xlsx, snapshots)) {
-        QMessageBox::warning(this, tr("Export failed"), tr("Could not build the workbook contents."));
-        return;
-    }
+    // Building and zipping a large workbook is seconds of work — do it on a worker
+    // from the snapshot taken above (P1). The screen is locked until it returns.
+    set_busy(true, tr("Exporting %1...").arg(QFileInfo(path).fileName()));
+    auto* watcher = new QFutureWatcher<int>(this);
+    connect(watcher, &QFutureWatcher<int>::finished, this, [this, watcher, path]() {
+        const int outcome = watcher->result();
+        watcher->deleteLater();
+        finish_xlsx_export(path, outcome);
+    });
+    watcher->setFuture(QtConcurrent::run([snapshots, path]() -> int {
+        QXlsx::Document xlsx;
+        if (!write_snapshots_to_xlsx(xlsx, snapshots))
+            return 1;
+        return xlsx.saveAs(path) ? 0 : 2;
+    }));
+#else
+    QMessageBox::information(this, tr("Excel Export"),
+                             tr("Excel (.xlsx) export requires Qt6 private headers.\n"
+                                "This build was compiled without QXlsx support.\n\n"
+                                "CSV export is still available via the toolbar."));
+#endif
+}
 
-    if (xlsx.saveAs(path)) {
+void ExcelScreen::finish_xlsx_export(const QString& path, int outcome) {
+    set_busy(false);
+
+    if (outcome == 0) {
         file_name_ = QFileInfo(path).fileName();
         file_path_ = path;
         auto* fname = findChild<QLabel*>("excelFileName");
@@ -662,6 +795,8 @@ void ExcelScreen::on_export() {
 
         // Register with File Manager so it appears in the Files tab
         services::FileManagerService::instance().import_file(path, "excel");
+    } else if (outcome == 1) {
+        QMessageBox::warning(this, tr("Export failed"), tr("Could not build the workbook contents."));
     } else {
         LOG_ERROR("ExcelScreen", "Failed to save XLSX file");
         // Silently logging a failed save is the worst possible outcome — the
@@ -671,12 +806,6 @@ void ExcelScreen::on_export() {
                                 "open in another application and that you have write permission.")
                                  .arg(path));
     }
-#else
-    QMessageBox::information(this, tr("Excel Export"),
-                             tr("Excel (.xlsx) export requires Qt6 private headers.\n"
-                                "This build was compiled without QXlsx support.\n\n"
-                                "CSV export is still available via the toolbar."));
-#endif
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -684,6 +813,8 @@ void ExcelScreen::on_export() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void ExcelScreen::on_export_csv() {
+    if (busy_)
+        return;
     auto* sheet = current_sheet();
     if (!sheet)
         return;

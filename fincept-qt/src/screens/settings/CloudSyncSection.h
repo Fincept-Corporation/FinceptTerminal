@@ -29,6 +29,7 @@ class CloudSyncSection : public QWidget {
   private:
     void build_ui();
     void update_enabled_state();
+    void update_credits_banner();
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.

@@ -30,6 +30,23 @@
 
 namespace fincept {
 
+namespace {
+/// Show/hide the AI chat bubble according to "appearance.show_chat_bubble"
+/// (default: shown). Used when the lock screen releases a window — locking hides
+/// the bubble, and nothing else would bring it back until the next navigation.
+void wf_auth_apply_chat_bubble_setting(AiChatBubble* bubble) {
+    if (!bubble)
+        return;
+    auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
+    const bool show = !r.is_ok() || r.value() != "false";
+    bubble->setVisible(show);
+    if (show) {
+        bubble->reposition();
+        bubble->raise();
+    }
+}
+} // namespace
+
 void WindowFrame::on_auth_state_changed() {
     auto& auth = auth::AuthManager::instance();
 
@@ -289,7 +306,14 @@ void WindowFrame::apply_lock_state(bool locked) {
     if (dock_status_bar_)
         dock_status_bar_->setEnabled(true);
     set_shell_visible(true);
-    stack_->setCurrentIndex(1);
+    // Return to chat mode if the lock caught this window in it (chat_mode_ is not
+    // reset by locking); showing the dock stack under chat-mode chrome left the
+    // window in a mixed state that needed two F9 presses to straighten out.
+    stack_->setCurrentIndex(chat_mode_ ? 2 : 1);
+    // apply_lock_state(true) hid the bubble; the originating window restores it in
+    // on_terminal_unlocked(), siblings must do the same here.
+    if (!chat_mode_)
+        wf_auth_apply_chat_bubble_setting(chat_bubble_);
 }
 
 void WindowFrame::on_terminal_unlocked() {
@@ -353,17 +377,10 @@ void WindowFrame::on_terminal_unlocked() {
 
     if (auth.session().has_paid_plan()) {
         set_shell_visible(true);
-        stack_->setCurrentIndex(1);
-        // Restore chat bubble based on setting
-        if (chat_bubble_) {
-            auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
-            bool show = !r.is_ok() || r.value() != "false";
-            chat_bubble_->setVisible(show);
-            if (show) {
-                chat_bubble_->reposition();
-                chat_bubble_->raise();
-            }
-        }
+        stack_->setCurrentIndex(chat_mode_ ? 2 : 1); // locked from chat mode → back to chat mode
+        // Restore chat bubble based on setting (chat mode keeps it hidden)
+        if (!chat_mode_)
+            wf_auth_apply_chat_bubble_setting(chat_bubble_);
         // Cold-boot restore via the new system (frame layouts, panels, dock
         // state, monitor variants).
         layout::WorkspaceShell::load_last_or_default();

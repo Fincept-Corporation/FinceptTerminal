@@ -1,7 +1,8 @@
 // src/screens/portfolio/views/EconomicsView.cpp
 #include "screens/portfolio/views/EconomicsView.h"
 
-#include "python/PythonRunner.h"
+#include "core/logging/Logger.h"
+#include "services/economics/EconomicsService.h"
 #include "storage/secure/SecureStorage.h"
 #include "ui/theme/Theme.h"
 
@@ -25,8 +26,50 @@
 
 namespace fincept::screens {
 
+// Correlates our EconomicsService::execute() call with its result_ready signal.
+static const QString kEconViewMacroRequestId = QStringLiteral("portfolio_macro");
+
 EconomicsView::EconomicsView(QWidget* parent) : QWidget(parent) {
     build_ui();
+
+    // Macro levels arrive through EconomicsService (the gateway for fred_data.py:
+    // it caches and paces the Python spawn). The view used to call PythonRunner
+    // itself, which D1 forbids for screens.
+    connect(&services::EconomicsService::instance(), &services::EconomicsService::result_ready, this,
+            [this](const QString& request_id, const services::EconomicsResult& res) {
+                if (request_id != kEconViewMacroRequestId)
+                    return;
+                macro_loading_ = false;
+                macro_loaded_ = true;
+                macro_values_.clear();
+                macro_dates_.clear();
+
+                if (res.success) {
+                    for (const auto v : res.data.value("data").toArray()) {
+                        const auto o = v.toObject();
+                        if (o.contains("error"))
+                            continue;
+                        const QString id = o.value("series_id").toString();
+                        const auto obs = o.value("observations").toArray();
+                        if (obs.isEmpty())
+                            continue;
+                        const auto last = obs.last().toObject();
+                        macro_values_[id] = last.value("value").toDouble();
+                        macro_dates_[id] = last.value("date").toString();
+                    }
+                } else {
+                    LOG_WARN("EconomicsView", "FRED macro fetch failed: " + res.error.left(200));
+                }
+
+                // No usable series at all (no key configured, rate limit, offline)
+                // reads as a table of dashes; say why and offer the key button.
+                if (macro_values_.isEmpty())
+                    macro_status_ = tr("Could not load live macro data. Add a free FRED API key in "
+                                       "Settings → API Credentials.");
+                else
+                    macro_status_.clear();
+                update_macro_table();
+            });
 }
 
 void EconomicsView::build_ui() {
@@ -215,42 +258,14 @@ void EconomicsView::fetch_macro() {
 
     // Fetch the last ~120 days so we get a recent observation cheaply.
     QStringList args;
-    args << "multiple";
     for (const auto& m : kMacroSeries)
         args << m.id;
     args << QDate::currentDate().addDays(-120).toString("yyyy-MM-dd");
 
-    QPointer<EconomicsView> self = this;
-    fincept::python::PythonRunner::instance().run("fred_data.py", args, [self](const fincept::python::PythonResult& r) {
-        if (!self)
-            return;
-        self->macro_loading_ = false;
-        self->macro_loaded_ = true;
-        self->macro_values_.clear();
-        self->macro_dates_.clear();
-
-        const auto doc = QJsonDocument::fromJson(r.output.trimmed().toUtf8());
-        if (!r.success || !doc.isArray()) {
-            self->macro_status_ =
-                tr("Could not load live macro data. Add a free FRED API key in Settings → API Credentials.");
-            self->update_macro_table();
-            return;
-        }
-        for (const auto v : doc.array()) {
-            const auto o = v.toObject();
-            if (o.contains("error"))
-                continue;
-            const QString id = o.value("series_id").toString();
-            const auto obs = o.value("observations").toArray();
-            if (obs.isEmpty())
-                continue;
-            const auto last = obs.last().toObject();
-            self->macro_values_[id] = last.value("value").toDouble();
-            self->macro_dates_[id] = last.value("date").toString();
-        }
-        self->macro_status_.clear();
-        self->update_macro_table();
-    });
+    // fred_data.py multiple <series...> <start>; the result lands in the
+    // result_ready handler connected in the constructor.
+    services::EconomicsService::instance().execute(QStringLiteral("fred"), QStringLiteral("fred_data.py"),
+                                                   QStringLiteral("multiple"), args, kEconViewMacroRequestId);
 }
 
 void EconomicsView::update_macro_table() {
@@ -549,7 +564,7 @@ void EconomicsView::update_indicators() {
         set(4, QString("%1 %2").arg(currency_).arg(QString::number(h.market_value, 'f', 2)), ui::colors::WARNING);
         set(5,
             QString("%1%2 %3")
-                .arg(h.unrealized_pnl >= 0 ? "+" : "")
+                .arg(h.unrealized_pnl >= 0 ? "+" : "-") // abs() below drops the sign, so say it here
                 .arg(currency_)
                 .arg(QString::number(std::abs(h.unrealized_pnl), 'f', 2)),
             pnl_color);
@@ -678,7 +693,7 @@ void EconomicsView::update_sensitivity() {
         set(2, f.direction, color);
         set(3,
             QString("%1%2 %3")
-                .arg(impact >= 0 ? "+" : "")
+                .arg(impact >= 0 ? "+" : "-") // abs() below drops the sign, so say it here
                 .arg(currency_)
                 .arg(QString::number(std::abs(impact), 'f', 0)),
             color);

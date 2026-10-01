@@ -321,8 +321,9 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
         results_layout_->addWidget(gs_card_row(top, this));
 
         if (!sel.isEmpty()) {
-            auto* table = new QTableWidget(sel.size(), 2, this);
-            table->setHorizontalHeaderLabels({tr("Rank"), tr("Feature")});
+            const auto ic_scores = payload.value("ic_scores").toObject(); // signed IC per selected feature
+            auto* table = new QTableWidget(sel.size(), 3, this);
+            table->setHorizontalHeaderLabels({tr("Rank"), tr("Feature"), tr("IC")});
             table->verticalHeader()->setVisible(false);
             table->setEditTriggers(QAbstractItemView::NoEditTriggers);
             table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -331,6 +332,13 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
             for (int i = 0; i < sel.size(); ++i) {
                 table->setItem(i, 0, new QTableWidgetItem(QString::number(i + 1)));
                 table->setItem(i, 1, new QTableWidgetItem(sel[i].toString()));
+                if (ic_scores.contains(sel[i].toString())) {
+                    const double ic = ic_scores.value(sel[i].toString()).toDouble();
+                    auto* ic_item = new QTableWidgetItem(QString::number(ic, 'f', 4));
+                    ic_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                    ic_item->setForeground(QColor(gs_pos_neg_color(ic)));
+                    table->setItem(i, 2, ic_item);
+                }
                 table->setRowHeight(i, 24);
             }
             results_layout_->addWidget(table);

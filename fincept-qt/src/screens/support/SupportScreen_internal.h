@@ -10,7 +10,9 @@
 
 #include <QFrame>
 #include <QLabel>
+#include <QLayout>
 #include <QString>
+#include <QVBoxLayout>
 
 namespace fincept::screens::support_internal {
 
@@ -87,6 +89,22 @@ inline QLabel* lbl(const QString& text, const QString& color, int px = 12, bool 
                          .arg(MF)
                          .arg(bold ? "font-weight:600;" : ""));
     return l;
+}
+
+/// Remove every item of `lay` except the trailing stretch. The old
+/// `delete lay->takeAt(0)->widget()` freed the widget but leaked the
+/// QLayoutItem, and deleted widgets synchronously from inside slots (P13).
+inline void clear_layout_keep_stretch(QVBoxLayout* lay) {
+    if (!lay)
+        return;
+    while (lay->count() > 1) {
+        QLayoutItem* item = lay->takeAt(0);
+        if (QWidget* w = item->widget()) {
+            w->hide();
+            w->deleteLater();
+        }
+        delete item;
+    }
 }
 
 inline QFrame* hsep() {

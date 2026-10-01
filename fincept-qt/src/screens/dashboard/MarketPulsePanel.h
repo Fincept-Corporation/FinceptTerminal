@@ -35,6 +35,8 @@ class MarketPulsePanel : public QWidget {
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     void changeEvent(QEvent* event) override;
+    /// Double-click on a mover / snapshot row opens its symbol in Equity Research.
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
   public slots:
     /// Public so the Dashboard REFRESH button can drive it directly. The

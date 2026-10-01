@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/excel/ExcelScreen.h"
 #include "ui/theme/Theme.h"
 
 #include <QButtonGroup>
@@ -10,6 +11,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -308,9 +310,12 @@ void FileManagerScreen::build_filter_bar(QVBoxLayout* root) {
                               "QPushButton:hover:!checked{border-color:%4;}")
                           .arg(colors::TEXT_SECONDARY(), colors::BORDER_DIM(), MF, colors::AMBER());
 
-    static const QStringList screens = {"All",          "portfolio",    "backtesting", "news",        "equity_research",
-                                        "algo_trading", "ai_quant_lab", "notes",       "code_editor", "report_builder",
-                                        "data_sources", "excel"};
+    // Every sourceScreen tag a producer actually registers must have a chip, or
+    // those files are reachable only under "All": workflow_node (node-editor file
+    // parameters) and file_manager (manual uploads, tagged in upload_files()) had none.
+    static const QStringList screens = {"All",          "portfolio",    "backtesting",  "news",         "equity_research",
+                                        "algo_trading", "ai_quant_lab", "notes",        "code_editor",  "report_builder",
+                                        "data_sources", "excel",        "workflow_node", "file_manager"};
     for (const QString& s : screens) {
         const QString filter_val = (s == "All") ? QString() : s;
         QString label = (s == "All") ? tr("All") : QString(s).replace('_', ' ').toUpper();
@@ -461,8 +466,20 @@ void FileManagerScreen::upload_files() {
     QStringList paths = QFileDialog::getOpenFileNames(this, tr("Select Files to Upload"));
     if (paths.isEmpty())
         return;
-    for (const QString& path : paths)
-        FileManagerService::instance().import_file(path);
+    QStringList failed;
+    for (const QString& path : paths) {
+        // Tagged so manual uploads are filterable (they used to carry an empty
+        // source and showed under a blank group heading).
+        if (FileManagerService::instance().import_file(path, QStringLiteral("file_manager")).isEmpty())
+            failed << QFileInfo(path).fileName();
+    }
+    if (!failed.isEmpty()) {
+        // import_file() returns an empty id on failure; this used to be swallowed.
+        LOG_WARN("FileManager", QString("Upload failed for %1 file(s)").arg(failed.size()));
+        QMessageBox::warning(this, tr("Upload Files"),
+                             tr("%n file(s) could not be copied into storage:\n%1", "", static_cast<int>(failed.size()))
+                                 .arg(failed.join('\n')));
+    }
 }
 
 void FileManagerScreen::download_file(const QString& file_id) {
@@ -577,7 +594,13 @@ void FileManagerScreen::open_with(const QString& file_id) {
     QString route = route_for_mime(f.mime_type);
     if (route.isEmpty())
         return;
-    emit open_file_in_screen(route, FileManagerService::instance().full_path(f.name));
+    const QString path = FileManagerService::instance().full_path(f.name);
+    emit open_file_in_screen(route, path);
+    // The shell's open_file_in_screen handler only forwards the path for the
+    // notebook editor, so "EXCEL" used to land on a blank workbook. Hand the file
+    // to the spreadsheet screen directly (it parks the path if it is not built yet).
+    if (route == QLatin1String("excel") && !path.isEmpty())
+        ExcelScreen::open_when_ready(path);
 }
 
 void FileManagerScreen::show_preview(const QString& file_id) {
@@ -915,7 +938,9 @@ void FileManagerScreen::render_files() {
         QString source = file["sourceScreen"].toString();
         if (active_screen_filter_.isEmpty() && source != current_group) {
             current_group = source;
-            auto* grp_lbl = new QLabel(source.toUpper().replace('_', ' '));
+            // Legacy manual uploads carry no source tag — give them a heading
+            // instead of an empty label.
+            auto* grp_lbl = new QLabel(source.isEmpty() ? tr("UPLOADED") : source.toUpper().replace('_', ' '));
             grp_lbl->setObjectName("FMGroupLabel");
             file_layout_->addWidget(grp_lbl);
         }

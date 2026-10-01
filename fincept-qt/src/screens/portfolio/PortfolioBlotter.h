@@ -5,9 +5,12 @@
 
 #include <QComboBox>
 #include <QHash>
+#include <QHideEvent>
 #include <QLabel>
 #include <QPointer>
 #include <QPushButton>
+#include <QShowEvent>
+#include <QStringList>
 #include <QTableWidget>
 #include <QWidget>
 
@@ -27,13 +30,21 @@ class PortfolioBlotter : public QWidget {
     /// Show only rows whose symbol is in @p symbols. Empty list = show all.
     void set_sector_filter(const QStringList& symbols);
     void refresh_theme();
+    /// Tell the blotter which broker account (if any) backs the portfolio so it
+    /// can overlay live broker ticks. Safe to call repeatedly and with an empty
+    /// id (= unlinked portfolio); the id is remembered across re-subscriptions.
     void hub_resubscribe_broker_quotes(const QString& broker_account_id);
 
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   signals:
     void symbol_selected(QString symbol);
+    /// "Open <symbol> in <screen_id>" (double-click / context menu). The owner
+    /// publishes it on the EventBus (nav.open_symbol).
+    void open_symbol_requested(QString screen_id, QString symbol);
     void sort_changed(portfolio::SortColumn col, portfolio::SortDirection dir);
     void edit_transaction_requested(QString symbol);
     void delete_position_requested(QString symbol);
@@ -84,11 +95,14 @@ class PortfolioBlotter : public QWidget {
 
     void fetch_sparklines();
 
-    void hub_resubscribe_sparklines();
+    void hub_resubscribe_sparklines(bool force_refresh);
+    void subscribe_broker_quotes();
     void hub_unsubscribe_all();
     void repaint_sparkline_cells();
     void update_row_price(const QString& symbol, double ltp, double change_pct);
     bool hub_active_ = false;
+    QStringList sub_symbols_;   // sorted symbol set the hub subscriptions were built for
+    QString broker_account_id_; // backing broker account of the current portfolio ("" = none)
 
     QVector<portfolio::HoldingWithQuote> holdings_;
     QVector<portfolio::HoldingWithQuote> sorted_;

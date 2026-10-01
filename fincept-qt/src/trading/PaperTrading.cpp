@@ -15,6 +15,7 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QTime>
+#include <QTimeZone>
 #include <QUuid>
 
 #include <cmath>
@@ -399,13 +400,25 @@ void pt_cancel_order(const QString& order_id) {
     // fill mutex so a concurrent fill can't double-release the same block.
     QMutexLocker lock(&s_fill_mutex);
 
+    // Only a resting order can be cancelled. repo().cancel_order() is an
+    // unconditional "SET status='cancelled'", so without this gate cancelling an
+    // already-FILLED order (stale blotter row, double click, MCP tool, workflow
+    // node) silently rewrote its history to "cancelled" while the position and the
+    // trade it produced stayed on the books. An unknown id stays a silent no-op,
+    // exactly as before.
+    auto ord = repo().get_order(order_id);
+    if (ord.is_err())
+        return;
+    if (ord.value().status != "pending" && ord.value().status != "partial") {
+        LOG_DEBUG("PaperTrading", QString("pt_cancel_order: order %1 is %2 — nothing to cancel")
+                                      .arg(order_id, ord.value().status));
+        return;
+    }
+
     double blocked = repo().get_margin_block(order_id);
     if (blocked > 0.0) {
-        auto ord = repo().get_order(order_id);
-        if (ord.is_ok()) {
-            auto portfolio = pt_get_portfolio(ord.value().portfolio_id);
-            repo().update_balance(portfolio.id, portfolio.balance + blocked);
-        }
+        auto portfolio = pt_get_portfolio(ord.value().portfolio_id);
+        repo().update_balance(portfolio.id, portfolio.balance + blocked);
         repo().delete_margin_block(order_id);
     }
 
@@ -449,14 +462,38 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
     double qty = fill_qty.value_or(order.quantity - order.filled_qty);
     if (qty <= 0.0)
         throw std::runtime_error("Nothing left to fill");
-    double fee = qty * fill_price * portfolio.fee_rate;
-    QString now = fill_time.isEmpty() ? now_rfc3339() : fill_time;
 
     QString position_side = (order.side == "buy") ? "long" : "short";
     QString opposite_side = (order.side == "buy") ? "short" : "long";
+
+    // Reduce-only: the order may only shrink an existing opposite position — it
+    // must never open or flip one. pt_place_order skips the margin check for
+    // reduce-only orders, so letting the closing leg's surplus fall through to the
+    // opening leg below would open an UNCHECKED opposite position (e.g. a
+    // reduce-only sell of 10 against a long of 1 closed the 1 and opened a 9-lot
+    // short, charging margin that was never validated). Cap the fill at the
+    // position size and treat the order as complete (exchanges cancel the
+    // surplus); with nothing to reduce, cancel the order and refuse the fill.
+    bool reduce_capped = false;
+    if (order.reduce_only) {
+        const auto reducible_pos = repo().find_position(order.portfolio_id, order.symbol, opposite_side);
+        const double reducible = reducible_pos ? reducible_pos->quantity : 0.0;
+        if (reducible <= 0.0) {
+            repo().cancel_order(order_id);
+            throw std::runtime_error("Reduce-only order has no position to reduce");
+        }
+        if (qty > reducible) {
+            qty = reducible;
+            reduce_capped = true;
+        }
+    }
+
+    double fee = qty * fill_price * portfolio.fee_rate;
+    QString now = fill_time.isEmpty() ? now_rfc3339() : fill_time;
+
     double pnl = 0.0;
     double new_filled = order.filled_qty + qty;
-    bool fully_filled = (new_filled >= order.quantity);
+    bool fully_filled = (new_filled >= order.quantity) || reduce_capped;
 
     // ── Begin DB transaction for atomicity ──────────────────────────────
     auto& db = Database::instance();
@@ -536,6 +573,12 @@ PtTrade pt_fill_order(const QString& order_id, double fill_price, std::optional<
         // ── Settle the order's margin block ──
         if (order_blocked > 0.0) {
             if (fully_filled) {
+                // A fill that only closed existing exposure (open_qty == 0) never
+                // reached the opening leg, so none of this order's pre-blocked margin
+                // was converted or handed back — dropping the row here without
+                // crediting it leaked the whole block out of cash for good.
+                if (open_qty <= 0.0)
+                    balance_delta += order_blocked;
                 repo().delete_margin_block(order_id);
             } else {
                 double remaining = std::max(0.0, order_blocked - block_consumed);

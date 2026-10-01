@@ -19,6 +19,11 @@ namespace {
 inline void publish_to_hub(const QString& topic, const QVariant& value) {
     fincept::datahub::DataHub::instance().publish(topic, value);
 }
+// A hub-driven refresh that fails must say so: the hub marks the topic in-flight and
+// otherwise waits out refresh_timeout_ms before it can retry.
+inline void maritime_svc_publish_error(const QString& topic, const QString& message) {
+    fincept::datahub::DataHub::instance().publish_error(topic, message.left(200));
+}
 } // namespace
 
 static QString marine_base() {
@@ -35,22 +40,52 @@ MaritimeService& MaritimeService::instance() {
 
 MaritimeService::MaritimeService(QObject* parent) : QObject(parent) {}
 
+// The API reports numeric fields as strings ("last_pos_latitude": "51.92"). A real JSON
+// number made toString() return "" and the vessel silently landed on 0,0 (and got
+// skipped by the map), so accept both.
+static double maritime_svc_json_num(const QJsonValue& v) {
+    return v.isDouble() ? v.toDouble() : v.toString().toDouble();
+}
+
+// Serialise a vessel back into the API's own field names for the CacheManager. One
+// writer for every cached page: the multi-vessel and history writers each used to keep
+// their own subset, so a cached replay lost draught / route dates / progress.
+static QJsonObject maritime_svc_vessel_to_json(const VesselData& v) {
+    QJsonObject o;
+    o["id"] = v.id;
+    o["imo"] = v.imo;
+    o["name"] = v.name;
+    o["last_pos_latitude"] = QString::number(v.latitude, 'f', 8);
+    o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
+    o["last_pos_speed"] = QString::number(v.speed);
+    o["last_pos_angle"] = QString::number(v.angle);
+    o["route_from_port_name"] = v.from_port;
+    o["route_to_port_name"] = v.to_port;
+    o["route_from_date"] = v.from_date;
+    o["route_to_date"] = v.to_date;
+    o["route_progress"] = QString::number(v.route_progress);
+    o["current_draught"] = QString::number(v.draught);
+    o["last_pos_updated_at"] = v.last_updated;
+    o["fetched_at"] = v.fetched_at;
+    return o;
+}
+
 // ── Parse vessel from JSON ───────────────────────────────────────────────────
 VesselData MaritimeService::parse_vessel(const QJsonObject& obj) const {
     VesselData v;
     v.id = obj["id"].toInt();
     v.imo = obj["imo"].toString();
     v.name = obj["name"].toString();
-    v.latitude = obj["last_pos_latitude"].toString().toDouble();
-    v.longitude = obj["last_pos_longitude"].toString().toDouble();
-    v.speed = obj["last_pos_speed"].toString().toDouble();
-    v.angle = obj["last_pos_angle"].toString().toDouble();
+    v.latitude = maritime_svc_json_num(obj["last_pos_latitude"]);
+    v.longitude = maritime_svc_json_num(obj["last_pos_longitude"]);
+    v.speed = maritime_svc_json_num(obj["last_pos_speed"]);
+    v.angle = maritime_svc_json_num(obj["last_pos_angle"]);
     v.from_port = obj["route_from_port_name"].toString();
     v.to_port = obj["route_to_port_name"].toString();
     v.from_date = obj["route_from_date"].toString();
     v.to_date = obj["route_to_date"].toString();
-    v.route_progress = obj["route_progress"].toString().toDouble();
-    v.draught = obj["current_draught"].toString().toDouble();
+    v.route_progress = maritime_svc_json_num(obj["route_progress"]);
+    v.draught = maritime_svc_json_num(obj["current_draught"]);
     v.last_updated = obj["last_pos_updated_at"].toString();
     v.fetched_at = obj["fetched_at"].toString();
     return v;
@@ -142,25 +177,8 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
 
             // Cache the (already-sorted) vessels + envelope.
             QJsonArray cached_arr;
-            for (const auto& v : page.vessels) {
-                QJsonObject o;
-                o["id"] = v.id;
-                o["imo"] = v.imo;
-                o["name"] = v.name;
-                o["last_pos_latitude"] = QString::number(v.latitude, 'f', 8);
-                o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
-                o["last_pos_speed"] = QString::number(v.speed);
-                o["last_pos_angle"] = QString::number(v.angle);
-                o["route_from_port_name"] = v.from_port;
-                o["route_to_port_name"] = v.to_port;
-                o["route_from_date"] = v.from_date;
-                o["route_to_date"] = v.to_date;
-                o["route_progress"] = QString::number(v.route_progress);
-                o["current_draught"] = QString::number(v.draught);
-                o["last_pos_updated_at"] = v.last_updated;
-                o["fetched_at"] = v.fetched_at;
-                cached_arr.append(o);
-            }
+            for (const auto& v : page.vessels)
+                cached_arr.append(maritime_svc_vessel_to_json(v));
             QJsonObject cached_root;
             cached_root["vessels"] = cached_arr;
             cached_root["total_count"] = page.total_count;
@@ -191,6 +209,10 @@ void MaritimeService::get_vessel_position(const QString& imo) {
     if (!cached.isNull()) {
         auto vessel = parse_vessel(QJsonDocument::fromJson(cached.toString().toUtf8()).object());
         emit vessel_found(vessel);
+        // A hub-driven refresh (dashboard widget) can land on a cache hit; without this
+        // the topic stayed empty until the cache entry expired.
+        if (hub_registered_)
+            publish_to_hub(QStringLiteral("maritime:vessel:") + imo.trimmed(), QVariant::fromValue(vessel));
         return;
     }
 
@@ -206,6 +228,9 @@ void MaritimeService::get_vessel_position(const QString& imo) {
             if (!result.is_ok()) {
                 LOG_ERROR("Maritime", "Vessel position failed: " + QString::fromStdString(result.error()));
                 emit self->error_occurred("vessel_position", QString::fromStdString(result.error()));
+                if (self->hub_registered_)
+                    maritime_svc_publish_error(QStringLiteral("maritime:vessel:") + imo_trimmed,
+                                               QString::fromStdString(result.error()));
                 return;
             }
             auto data = unwrap(result.value().object());
@@ -216,6 +241,9 @@ void MaritimeService::get_vessel_position(const QString& imo) {
             if (!data.value(QStringLiteral("vessel")).isObject()) {
                 LOG_ERROR("Maritime", "Vessel position: no vessel in response for IMO " + imo_trimmed);
                 emit self->error_occurred("vessel_position", QStringLiteral("No vessel data returned"));
+                if (self->hub_registered_)
+                    maritime_svc_publish_error(QStringLiteral("maritime:vessel:") + imo_trimmed,
+                                               QStringLiteral("No vessel data returned"));
                 return;
             }
             auto vessel_obj = data["vessel"].toObject();
@@ -288,21 +316,8 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
 
         // Cache the full envelope so cached replays carry not_found etc.
         QJsonArray cached_arr;
-        for (const auto& v : page.vessels) {
-            QJsonObject o;
-            o["id"] = v.id;
-            o["imo"] = v.imo;
-            o["name"] = v.name;
-            o["last_pos_latitude"] = QString::number(v.latitude, 'f', 8);
-            o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
-            o["last_pos_speed"] = QString::number(v.speed);
-            o["last_pos_angle"] = QString::number(v.angle);
-            o["route_from_port_name"] = v.from_port;
-            o["route_to_port_name"] = v.to_port;
-            o["route_progress"] = QString::number(v.route_progress);
-            o["last_pos_updated_at"] = v.last_updated;
-            cached_arr.append(o);
-        }
+        for (const auto& v : page.vessels)
+            cached_arr.append(maritime_svc_vessel_to_json(v));
         QJsonObject cached_root;
         cached_root["vessels"] = cached_arr;
         cached_root["found_count"] = page.found_count;
@@ -341,6 +356,8 @@ void MaritimeService::get_vessel_history(const QString& imo) {
         page.credits_used = root["credits_used"].toDouble(0.0);
         page.remaining_credits = root["remaining_credits"].toInt(-1);
         emit vessel_history_loaded(page);
+        if (hub_registered_)
+            publish_to_hub(QStringLiteral("maritime:history:") + imo_trimmed, QVariant::fromValue(page));
         return;
     }
 
@@ -354,6 +371,9 @@ void MaritimeService::get_vessel_history(const QString& imo) {
                 return;
             if (!result.is_ok()) {
                 emit self->error_occurred("vessel_history", QString::fromStdString(result.error()));
+                if (self->hub_registered_)
+                    maritime_svc_publish_error(QStringLiteral("maritime:history:") + imo_trimmed,
+                                               QString::fromStdString(result.error()));
                 return;
             }
             const auto data = unwrap(result.value().object());
@@ -376,20 +396,8 @@ void MaritimeService::get_vessel_history(const QString& imo) {
             page.remaining_credits = data["remaining_credits"].toInt(-1);
 
             QJsonArray cached_arr;
-            for (const auto& v : page.history) {
-                QJsonObject o;
-                o["id"] = v.id;
-                o["imo"] = v.imo;
-                o["name"] = v.name;
-                o["last_pos_latitude"] = QString::number(v.latitude, 'f', 8);
-                o["last_pos_longitude"] = QString::number(v.longitude, 'f', 8);
-                o["last_pos_speed"] = QString::number(v.speed);
-                o["last_pos_angle"] = QString::number(v.angle);
-                o["route_from_port_name"] = v.from_port;
-                o["route_to_port_name"] = v.to_port;
-                o["last_pos_updated_at"] = v.last_updated;
-                cached_arr.append(o);
-            }
+            for (const auto& v : page.history)
+                cached_arr.append(maritime_svc_vessel_to_json(v));
             QJsonObject cached_root;
             cached_root["imo"] = page.imo;
             cached_root["history"] = cached_arr;
@@ -420,6 +428,8 @@ void MaritimeService::check_health() {
             return;
         if (!result.is_ok()) {
             emit self->error_occurred("health", QString::fromStdString(result.error()));
+            if (self->hub_registered_)
+                maritime_svc_publish_error(QStringLiteral("maritime:health"), QString::fromStdString(result.error()));
             return;
         }
         const auto obj = result.value().object();

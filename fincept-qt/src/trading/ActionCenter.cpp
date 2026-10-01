@@ -11,9 +11,13 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMetaObject>
+#include <QPointer>
 #include <QSqlQuery>
 #include <QStringList>
+#include <QThreadPool>
 #include <QUuid>
+#include <QtConcurrent/QtConcurrent>
 
 #include <cmath>
 
@@ -21,6 +25,21 @@ namespace fincept::trading {
 
 namespace {
 constexpr const char* kLog = "ActionCenter";
+
+// Dedicated single-thread pool for approval execution. One thread keeps approvals
+// strictly FIFO — approve_all_pending() must send the queue in the order it was
+// read, and two orders for the same symbol must never race each other to the
+// broker — while taking the blocking broker round-trip off the GUI thread (P1).
+// Deliberately leaked: the pool must outlive every singleton it calls into, and a
+// static QThreadPool would block process exit on an in-flight broker call.
+QThreadPool& action_center_exec_pool() {
+    static QThreadPool* const pool = []() {
+        auto* p = new QThreadPool();
+        p->setMaxThreadCount(1);
+        return p;
+    }();
+    return *pool;
+}
 
 QString iso(const QDateTime& dt) {
     return dt.isValid() ? dt.toString(Qt::ISODate) : QString();
@@ -550,6 +569,54 @@ void ActionCenter::approve_order(const QString& pending_id) {
         return;
     }
     po.status = QStringLiteral("approving");
+
+    // placeorder / smartorder (UnifiedTrading::place_order) and placegttorder
+    // (broker->gtt_place) are blocking broker round-trips, up to ~8 s each. They used
+    // to run right here on the GUI thread, freezing the terminal for the whole
+    // exchange and — in approve_all_pending — for every order in the queue (P1).
+    // They now run on the dedicated FIFO worker and hand the real result back to the
+    // GUI thread, where the row is finalized and the same signals fire. The order
+    // contents (`po`) are passed through untouched; only WHERE the call runs moves.
+    // Basket / split already hand off to their own worker and finalize from their
+    // result callback, so they stay as they were.
+    const bool blocking_type = po.order_type == QLatin1String("placeorder") ||
+                               po.order_type == QLatin1String("smartorder") ||
+                               po.order_type == QLatin1String("placegttorder");
+    if (blocking_type) {
+        QPointer<ActionCenter> self(this);
+        (void)QtConcurrent::run(&action_center_exec_pool(), [self, po]() {
+            if (!self)
+                return;
+            bool w_ok = false;
+            bool w_async = false;
+            QString w_err;
+            QString w_broker_order_id;
+            try {
+                w_broker_order_id = self->execute_pending(po, w_ok, w_err, w_async);
+            } catch (const std::exception& e) {
+                // An exception that escapes a QtConcurrent task terminates the process,
+                // and swallowing it would strand the row in 'approving' forever. The
+                // order MAY already be at the broker, so say so rather than "rejected".
+                w_ok = false;
+                w_broker_order_id.clear();
+                w_err = QStringLiteral("unexpected error (%1) — check the broker order book before re-placing")
+                            .arg(QString::fromUtf8(e.what()));
+            } catch (...) {
+                w_ok = false;
+                w_broker_order_id.clear();
+                w_err = QStringLiteral("unexpected error — check the broker order book before re-placing");
+            }
+            QMetaObject::invokeMethod(
+                self,
+                [self, po, w_ok, w_err, w_broker_order_id]() {
+                    if (!self)
+                        return;
+                    self->finalize_approval(po, w_ok, w_err, w_broker_order_id);
+                },
+                Qt::QueuedConnection);
+        });
+        return;
+    }
 
     bool ok = false;
     bool async = false;

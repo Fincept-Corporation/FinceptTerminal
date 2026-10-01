@@ -30,6 +30,15 @@ from datetime import datetime
 from typing import Dict, List, Optional, Union, Literal
 import urllib.parse
 
+# Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
+# system DNS configuration on Windows and fails every request with
+# "Timeout while contacting DNS servers". Use the threaded getaddrinfo resolver
+# (same fix as scripts/exchange/ws_stream.py). Gated to Windows so Linux/macOS
+# keep the native resolver.
+if sys.platform == "win32":
+    import aiohttp.connector as _aiohttp_connector
+    _aiohttp_connector.DefaultResolver = aiohttp.ThreadedResolver
+
 class WTOError(Exception):
     """Custom exception for WTO data errors"""
     pass
@@ -687,6 +696,12 @@ def main():
         if len(potential_key) == 32 and not potential_key.startswith('--'):  # API key format check
             api_key = potential_key
             sys.argv = sys.argv[:-1]  # Remove API key from args
+
+    # The desktop panel never appends a key to the command line (its notice says "Requires
+    # WTO_API_KEY"), so the environment variable was the only route — and it was never read.
+    if not api_key:
+        import os as _os
+        api_key = _os.environ.get("WTO_API_KEY") or None
 
     wrapper = WTODataWrapper(subscription_key=api_key)
 

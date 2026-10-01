@@ -8,10 +8,12 @@
 #include <QDoubleSpinBox>
 #include <QEvent>
 #include <QHash>
+#include <QHideEvent>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QTextEdit>
@@ -29,6 +31,9 @@ class QuantModulePanel : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    // The loading spinner is a UI animation timer: run it only while the panel is on screen.
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private slots:
     void on_result(const QString& module_id, const QString& command, const QJsonObject& data);

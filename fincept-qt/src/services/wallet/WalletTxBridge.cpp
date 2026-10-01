@@ -289,6 +289,32 @@ void WalletTxBridge::handle_request(QTcpSocket* socket, const QByteArray& body, 
         socket->disconnectFromHost();
         return;
     }
+    // Browser-side diagnostics from swap.html (logToTerminal). They carry the
+    // token but no request id, so this has to sit before the req check below —
+    // which answered every one of them with 400 "missing req" and dropped it,
+    // leaving "tx fetch failed" / "connect threw" / "sign failed" invisible in
+    // the application log. Token already validated above.
+    if (method == "POST" && tx_path_starts_with(path, "/log")) {
+        QJsonParseError log_pe;
+        const auto log_doc = QJsonDocument::fromJson(body, &log_pe);
+        if (log_pe.error == QJsonParseError::NoError && log_doc.isObject()) {
+            const auto log_obj = log_doc.object();
+            const auto level = log_obj.value(QStringLiteral("level")).toString();
+            // Capped: the page is ours, but a runaway message must not flood the log.
+            const auto msg = log_obj.value(QStringLiteral("msg")).toString().left(400);
+            if (level == QStringLiteral("error")) {
+                LOG_ERROR("WalletPage", msg);
+            } else if (level == QStringLiteral("warn")) {
+                LOG_WARN("WalletPage", msg);
+            } else {
+                LOG_INFO("WalletPage", msg);
+            }
+        }
+        write_response(socket, 200, "application/json", QByteArrayLiteral("{\"ok\":true}"));
+        socket->disconnectFromHost();
+        return;
+    }
+
     const auto req_id = QString::fromLatin1(tx_query_param(path, "req"));
     if (req_id.isEmpty()) {
         write_response(socket, 400, "text/plain", "missing req");
@@ -351,11 +377,15 @@ void WalletTxBridge::handle_request(QTcpSocket* socket, const QByteArray& body, 
 QByteArray WalletTxBridge::render_swap_page() const {
     auto html = load_swap_html();
     if (html.isEmpty()) {
-        // Defensive: until Stage 2.2 ships swap.html, return a clear stub.
-        // Won't be reached in normal builds — CMakeLists copies the page.
+        // Defensive: swap.html ships in resources/wallet and CMakeLists copies it
+        // beside the executable, so this is only reached by a damaged or
+        // partial install. Say so plainly — the old text blamed unfinished
+        // development work, which sent users hunting for a fix that isn't theirs.
         return QByteArrayLiteral("<!doctype html><meta charset='utf-8'><title>Sign</title>"
                                  "<body style='background:#0a0a0a;color:#d97706;font-family:monospace;"
-                                 "padding:20px'>swap.html missing — Stage 2.2 work-in-progress</body>");
+                                 "padding:20px'>The wallet signing page (resources/wallet/swap.html) was not "
+                                 "found next to the application. Reinstall Fincept Terminal, then retry the "
+                                 "transaction. Nothing was signed or sent.</body>");
     }
     return html;
 }

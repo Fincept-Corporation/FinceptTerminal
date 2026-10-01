@@ -332,11 +332,53 @@ class CollarMechanism:
             'structures': structures
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `collar_mechanisms.py analyze <flat-params-json>` (argv length 3). The native form
+# is `collar <json>` with different key names, so a service-style call is translated here and then falls through to
+# the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("analyze",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    floor_price = _svc_num(p, "floor_price", "collar_low", default=None)
+    cap_price = _svc_num(p, "cap_price", "collar_high", default=None)
+    announcement = _svc_num(p, "announcement_price", "acquirer_price", default=None)
+    if announcement is None:
+        announcement = (floor_price + cap_price) / 2.0 if (floor_price and cap_price) else 50.0
+    mapped = {
+        "announcement_price": announcement,
+        "target_shares": _svc_num(p, "target_shares", default=1000000.0),
+        "base_exchange_ratio": _svc_num(p, "base_ratio", "base_exchange_ratio", "exchange_ratio", default=1.0),
+        "floor_price": floor_price if floor_price is not None else announcement * 0.85,
+        "cap_price": cap_price if cap_price is not None else announcement * 1.15,
+    }
+    return [argv[0], "collar", json.dumps(mapped)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

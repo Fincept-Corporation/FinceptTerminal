@@ -90,6 +90,12 @@ class ReportBuilderScreen : public QWidget, public IStatefulScreen {
     // LLM that shift indices. -1 / 0 = nothing selected.
     int selected_id_ = 0;
 
+    // True while a change that ORIGINATED in the properties panel (a keystroke in one of
+    // its editors) is being pushed through the service. on_component_updated() then skips
+    // rebuilding that panel: rebuilding destroyed the very editor being typed in on every
+    // keystroke, so focus and the caret were lost after each character.
+    bool props_editing_ = false;
+
     // ── Side-panel collapse state ───────────────────────────────────────
     QPushButton* left_toggle_btn_ = nullptr;
     QPushButton* right_toggle_btn_ = nullptr;

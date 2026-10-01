@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <utility>
 
 namespace fincept::services {
 
@@ -62,9 +63,20 @@ PortfolioService::PortfolioService() : QObject(nullptr) {
                     }
                     if (touched) {
                         invalidate_cache(p.id);
-                        // Refresh the active portfolio view so sectors appear
-                        // without the user having to hit refresh manually.
-                        load_summary(p.id);
+                        // Refresh the portfolio view so sectors appear without
+                        // the user having to hit refresh manually. Debounced: a
+                        // fresh import resolves one sector per holding, and a
+                        // full rebuild (quote fetch + metrics + snapshot) per
+                        // symbol is a request storm.
+                        const bool first = sector_refresh_pending_.isEmpty();
+                        sector_refresh_pending_.insert(p.id);
+                        if (first) {
+                            QTimer::singleShot(400, this, [this]() {
+                                const QSet<QString> pending = std::exchange(sector_refresh_pending_, QSet<QString>{});
+                                for (const QString& pid : pending)
+                                    load_summary(pid);
+                            });
+                        }
                     }
                 }
             });

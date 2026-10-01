@@ -101,12 +101,18 @@ bool env_key_is_secret(const QString& key) {
     return k.contains(QLatin1String("KEY")) || k.contains(QLatin1String("TOKEN")) ||
            k.contains(QLatin1String("SECRET")) || k.contains(QLatin1String("PASSWORD")) ||
            k.contains(QLatin1String("CREDENTIAL")) || k.contains(QLatin1String("AUTH")) ||
-           k.contains(QLatin1String("DSN")) || k.contains(QLatin1String("CONNECTION_STRING"));
+           k.contains(QLatin1String("DSN")) || k.contains(QLatin1String("CONNECTION_STRING")) ||
+           // Connection URIs/URLs embed the password (postgresql://user:password@host/db) —
+           // DATABASE_URI from the marketplace entry used to be shown in the clear.
+           k.contains(QLatin1String("URI")) || k.endsWith(QLatin1String("_URL")) ||
+           k.contains(QLatin1String("DATABASE"));
 }
 
 } // namespace
 
 void McpServersScreen::on_view_changed(int view) {
+    if (view < 0 || view > 2)
+        view = 0; // restore_state() passes whatever was persisted; names[view] below would be out of range
     active_view_ = view;
     view_stack_->setCurrentIndex(view);
     ScreenStateManager::instance().notify_changed(this);
@@ -162,9 +168,12 @@ void McpServersScreen::on_install_server(int index) {
             const bool secret = env_key_is_secret(key);
             if (secret) {
                 // These are almost always API keys; don't render them in the
-                // clear over the user's shoulder. Toggle reveals on demand.
+                // clear over the user's shoulder. Toggle reveals on demand. The
+                // sample shows the expected shape as a placeholder (never as a value
+                // that could be saved unedited).
                 field->setEchoMode(QLineEdit::Password);
-                field->setPlaceholderText(tr("Enter %1").arg(key));
+                field->setPlaceholderText(ki < e.env_placeholders.size() ? e.env_placeholders[ki]
+                                                                         : tr("Enter %1").arg(key));
             } else if (ki < e.env_placeholders.size()) {
                 // Pre-fill with sample so user edits in-place rather than typing blind
                 field->setText(e.env_placeholders[ki]);
@@ -212,7 +221,30 @@ void McpServersScreen::on_install_server(int index) {
     form->addRow("", autostart_check);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(btns, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
+    // Validate while the dialog is still open — rejecting after it closed threw the
+    // typed values away (and a catalog server saved without the variable it declares
+    // as required can only fail at launch; there is no way to edit env afterwards).
+    connect(btns, &QDialogButtonBox::accepted, dlg, [dlg, name_edit, cmd_edit, env_fields]() {
+        if (name_edit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(dlg, tr("Add Server"), tr("A name is required."));
+            name_edit->setFocus();
+            return;
+        }
+        if (cmd_edit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(dlg, tr("Add Server"), tr("A command is required — this is the program to run."));
+            cmd_edit->setFocus();
+            return;
+        }
+        for (const auto& [key, field] : env_fields) {
+            if (field->text().trimmed().isEmpty()) {
+                QMessageBox::warning(dlg, tr("Add Server"),
+                                     tr("%1 is required — this server cannot start without it.").arg(key));
+                field->setFocus();
+                return;
+            }
+        }
+        dlg->accept();
+    });
     connect(btns, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
     form->addRow(btns);
 
@@ -357,7 +389,30 @@ void McpServersScreen::on_add_server() {
     form->addRow(warn);
 
     auto* btns = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(btns, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
+    // Validate while the dialog is open (see on_install_server) — an empty name used to
+    // close the dialog and silently discard everything typed.
+    connect(btns, &QDialogButtonBox::accepted, dlg, [dlg, name_edit, cmd_edit, env_edit]() {
+        if (name_edit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(dlg, tr("Add Server"), tr("A name is required."));
+            name_edit->setFocus();
+            return;
+        }
+        if (cmd_edit->text().trimmed().isEmpty()) {
+            QMessageBox::warning(dlg, tr("Add Server"), tr("A command is required — this is the program to run."));
+            cmd_edit->setFocus();
+            return;
+        }
+        // Not echoed back: the value is usually an API key.
+        for (const auto& pair : split_args(env_edit->text().trimmed())) {
+            if (pair.indexOf('=') <= 0) {
+                QMessageBox::warning(dlg, tr("Add Server"),
+                                     tr("Env Vars must be KEY=value pairs — one entry is missing its \"=\"."));
+                env_edit->setFocus();
+                return;
+            }
+        }
+        dlg->accept();
+    });
     connect(btns, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
     form->addRow(btns);
 
@@ -527,6 +582,11 @@ void McpServersScreen::refresh_tools() {
         tr("%1 tools  (%2 internal · %3 external)").arg(total).arg(internal_tools.size()).arg(external_tools.size()));
 
     connect(tools_table_, &QTableWidget::cellChanged, this, &McpServersScreen::on_tool_enabled_changed);
+
+    // The rebuild above un-hides every row; re-apply the search box (a server
+    // starting/stopping while a filter was typed made the filter silently vanish).
+    if (search_input_ && !search_input_->text().trimmed().isEmpty())
+        on_search_changed(search_input_->text());
 }
 
 void McpServersScreen::update_status_bar() {

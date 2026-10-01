@@ -470,7 +470,14 @@ bool AgentChatPanel::eventFilter(QObject* obj, QEvent* event) {
 // ── Connections ───────────────────────────────────────────────────────────────
 
 void AgentChatPanel::setup_connections() {
-    connect(send_btn_, &QPushButton::clicked, this, &AgentChatPanel::send_message);
+    // While a reply is streaming the button is STOP (see set_executing); Enter in
+    // the composer still only sends.
+    connect(send_btn_, &QPushButton::clicked, this, [this]() {
+        if (executing_)
+            services::AgentService::instance().cancel_run(pending_request_id_);
+        else
+            send_message();
+    });
     connect(clear_btn_, &QPushButton::clicked, this, &AgentChatPanel::clear_chat);
 
     connect(route_toggle_, &QPushButton::toggled, this, [this](bool on) {
@@ -567,8 +574,14 @@ void AgentChatPanel::setup_connections() {
         show_typing(false);
         set_executing(false);
 
+        const bool stopped = !r.success && r.error == QLatin1String(services::AgentService::kCancelledError);
         if (streaming_bubble_widget_) {
-            if (!r.success) {
+            if (stopped) {
+                // STOP pressed: keep the partial answer, mark where it was cut off.
+                const QString partial = streaming_text_.trimmed();
+                streaming_bubble_widget_->setPlainText(partial.isEmpty() ? tr("[stopped]")
+                                                                         : partial + "\n\n" + tr("[stopped]"));
+            } else if (!r.success) {
                 streaming_bubble_widget_->setPlainText(tr("Error: %1").arg(r.error));
             } else {
                 // Replace streamed plain-text tokens with fully rendered markdown HTML.
@@ -586,7 +599,7 @@ void AgentChatPanel::setup_connections() {
         } else if (r.success && !r.response.isEmpty()) {
             add_assistant_bubble(r.response);
         } else if (!r.success) {
-            add_system_bubble(tr("Error: %1").arg(r.error));
+            add_system_bubble(stopped ? tr("Stopped.") : tr("Error: %1").arg(r.error));
         }
 
         streaming_text_.clear();
@@ -595,8 +608,8 @@ void AgentChatPanel::setup_connections() {
             hdr_status_lbl_->setText(tr("Ready"));
             hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::POSITIVE()));
         } else {
-            status_label_->setText(tr("Agent execution failed"));
-            hdr_status_lbl_->setText(tr("Error"));
+            status_label_->setText(stopped ? tr("Stopped by user") : tr("Agent execution failed"));
+            hdr_status_lbl_->setText(stopped ? tr("Stopped") : tr("Error"));
             hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::NEGATIVE()));
         }
         scroll_to_bottom();
@@ -632,7 +645,13 @@ void AgentChatPanel::setup_connections() {
             add_system_bubble(tr("Routed to: %1 (intent: %2, confidence: %3%)")
                                   .arg(r.agent_id, r.intent)
                                   .arg(static_cast<int>(r.confidence * 100)));
-            pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, r.config);
+            // route_query's `config` carries only tools/reasoning hints — not the
+            // routed agent's id — so without it the run used a generic assistant
+            // instead of the agent the bubble above just announced.
+            QJsonObject run_cfg = r.config;
+            if (!r.agent_id.isEmpty() && !run_cfg.contains("agent_id"))
+                run_cfg["agent_id"] = r.agent_id;
+            pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, run_cfg);
         } else {
             add_system_bubble(tr("Auto-routing failed — using default agent."));
             pending_request_id_ = services::AgentService::instance().run_agent_streaming(last_query_, {});
@@ -1040,8 +1059,8 @@ void AgentChatPanel::scroll_to_bottom() {
 
 void AgentChatPanel::set_executing(bool on) {
     executing_ = on;
-    send_btn_->setEnabled(!on);
-    send_btn_->setText(on ? tr("...") : tr("Send"));
+    // Stays enabled while a run is in flight: it becomes the STOP button.
+    send_btn_->setText(on ? tr("Stop") : tr("Send"));
     if (on) {
         hdr_status_lbl_->setText(tr("Streaming"));
         hdr_status_lbl_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;").arg(col::AMBER()));
@@ -1168,7 +1187,7 @@ void AgentChatPanel::retranslateUi() {
         welcome_subtitle_->setText(tr("Ask about markets, portfolios, or any financial topic.\n"
                                       "Select an agent above, or use Auto-Route to let the system decide."));
 
-    // Input bar (send_btn_ flips to "..." while executing — leave that state).
+    // Input bar (send_btn_ flips to "Stop" while executing — leave that state).
     if (input_edit_)
         input_edit_->setPlaceholderText(tr("Message agent... (Shift+Enter for new line, Enter to send)"));
     if (send_btn_ && !executing_)

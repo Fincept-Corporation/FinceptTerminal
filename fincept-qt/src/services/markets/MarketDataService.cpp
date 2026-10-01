@@ -603,7 +603,10 @@ void MarketDataService::fetch_info(const QString& symbol, InfoCallback cb) {
                                              shared->info.pe_ratio = o["peRatio"].toDouble();
                                              shared->info.forward_pe = o["forwardPE"].toDouble();
                                              shared->info.price_to_book = o["priceToBook"].toDouble();
-                                             shared->info.dividend_yield = o["dividendYield"].toDouble();
+                                             // yfinance (pinned 0.2.66) reports dividendYield in percent
+                                             // (0.33 = 0.33%). InfoData holds it as a fraction like the
+                                             // other ratios below, which is what consumers' ×100 expects.
+                                             shared->info.dividend_yield = o["dividendYield"].toDouble() / 100.0;
                                              shared->info.roe = o["returnOnEquity"].toDouble();
                                              shared->info.profit_margin = o["profitMargin"].toDouble();
                                              shared->info.debt_to_equity = o["debtToEquity"].toDouble();

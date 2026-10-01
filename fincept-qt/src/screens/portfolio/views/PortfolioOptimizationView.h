@@ -4,6 +4,7 @@
 
 #include <QChartView>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QJsonObject>
 #include <QLabel>
 #include <QPushButton>
@@ -20,13 +21,21 @@ namespace fincept::screens {
 /// ALLOCATION: current holdings donut + table
 /// STRATEGIES: comparison of 5 methods — populated after optimization
 /// COMPARE: side-by-side weights table for all 5 methods
-/// BACKTEST / RISK / STRESS / B-L MODEL: informational stubs
+/// BACKTEST: buy-and-hold run of current / optimal weights (or hand-off to the Backtesting screen)
+/// RISK: per-asset risk contribution from the optimizer's covariance matrix
+/// STRESS: crisis shocks applied to the current asset-class mix (no optimization needed)
+/// B-L MODEL: market-implied equilibrium returns + Black-Litterman weights
 class PortfolioOptimizationView : public QWidget {
     Q_OBJECT
   public:
     explicit PortfolioOptimizationView(QWidget* parent = nullptr);
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
+
+    /// "Optimize for this return" hand-off from the Planning view: switch to the
+    /// Target Return method at @p annual_return (fraction, e.g. 0.08) and run it.
+    /// Ignored for non-positive targets (the plan is already funded).
+    void set_target_return(double annual_return);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -47,6 +56,11 @@ class PortfolioOptimizationView : public QWidget {
     QWidget* build_black_litterman_tab();
 
     void run_optimization();
+    /// Fill the OPTIMIZE table + status line + every dependent tab from one
+    /// optimizer result (live or served from cache).
+    void show_result(const QJsonObject& root, bool from_cache);
+    /// Drop results that belong to a previously shown portfolio.
+    void reset_results();
     void update_allocation();
     void update_frontier(const QJsonArray& frontier_pts);
     void update_strategies(const QJsonObject& comparison);
@@ -76,8 +90,10 @@ class PortfolioOptimizationView : public QWidget {
     QLabel* method_field_label_ = nullptr;
     QLabel* returns_field_label_ = nullptr;
     QLabel* risk_model_field_label_ = nullptr;
+    QLabel* target_ret_label_ = nullptr;      // shown only for the "Target Return" method
+    QDoubleSpinBox* target_ret_spin_ = nullptr; // annual target, in percent
 
-    // Section titles + placeholders for stub tabs
+    // Section titles + empty-state placeholders (shown until a run fills the tab)
     QLabel* frontier_title_ = nullptr;
     QLabel* frontier_placeholder_ = nullptr;
     QLabel* strategies_title_ = nullptr;
@@ -125,6 +141,7 @@ class PortfolioOptimizationView : public QWidget {
     QString currency_;
     bool running_ = false;
     bool has_data_ = false;
+    bool backtest_pending_ = false; // an inline backtest started HERE is awaiting its result
 };
 
 } // namespace fincept::screens

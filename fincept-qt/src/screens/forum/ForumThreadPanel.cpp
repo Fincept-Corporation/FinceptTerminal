@@ -11,6 +11,8 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
+#include <QUrl>
 
 namespace fincept::screens {
 
@@ -61,7 +63,14 @@ void ForumThreadPanel::build_ui() {
 
     // ── Page 0: Loading ───────────────────────────────────────────────────────
     auto* load_page = new QWidget(this);
-    load_page->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    // Also styles the load-error "Back to Feed" button (object name below).
+    load_page->setStyleSheet(QString("QWidget{background:%1;}"
+                                     "QPushButton#forumLoadBack{background:rgba(255,255,255,0.03);"
+                                     "color:%2;border:1px solid %3;font-size:11px;font-weight:600;"
+                                     "padding:0 14px;border-radius:4px;%4}"
+                                     "QPushButton#forumLoadBack:hover{color:%5;border-color:%6;}")
+                                 .arg(ui::colors::BG_BASE(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                                      M(11), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()));
     {
         auto* vl = new QVBoxLayout(load_page);
         vl->setAlignment(Qt::AlignCenter);
@@ -77,9 +86,17 @@ void ForumThreadPanel::build_ui() {
         loading_text_->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(11)));
 
+        load_back_btn_ = new QPushButton(tr("←  Back to Feed"));
+        load_back_btn_->setCursor(Qt::PointingHandCursor);
+        load_back_btn_->setObjectName("forumLoadBack");
+        load_back_btn_->setFixedHeight(28);
+        load_back_btn_->hide();
+        connect(load_back_btn_, &QPushButton::clicked, this, [this]() { emit back_requested(); });
+
         vl->addStretch();
         vl->addWidget(spin_lbl_);
         vl->addWidget(loading_text_);
+        vl->addWidget(load_back_btn_, 0, Qt::AlignHCenter);
         vl->addStretch();
     }
     stack_->addWidget(load_page); // 0
@@ -126,6 +143,7 @@ void ForumThreadPanel::build_ui() {
 
     // ── Scrollable content ────────────────────────────────────────────────────
     auto* scroll = new QScrollArea;
+    scroll_ = scroll;
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setStyleSheet(QString("QScrollArea{border:none;background:%1;}"
@@ -164,7 +182,10 @@ void ForumThreadPanel::build_ui() {
     chip_hl->setContentsMargins(0, 0, 0, 0);
     chip_hl->setSpacing(12);
 
+    // Forum text is user-authored: pin every label that carries it to PlainText
+    // so markup in a title / name / category can't be rendered as rich text.
     t_cat_chip_ = new QLabel;
+    t_cat_chip_->setTextFormat(Qt::PlainText);
     t_cat_chip_->setFixedHeight(20);
     t_cat_chip_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;"
                                        "background:transparent;border:1px solid %1;"
@@ -182,6 +203,7 @@ void ForumThreadPanel::build_ui() {
 
     // Title — hero size
     t_title_lbl_ = new QLabel;
+    t_title_lbl_->setTextFormat(Qt::PlainText);
     t_title_lbl_->setWordWrap(true);
     t_title_lbl_->setStyleSheet(QString("color:%1;font-size:22px;font-weight:700;line-height:1.3;"
                                         "background:transparent;%2")
@@ -197,9 +219,10 @@ void ForumThreadPanel::build_ui() {
         QString("color:%1;font-size:12px;background:transparent;%2").arg(ui::colors::TEXT_TERTIARY(), M(12)));
     connect(t_author_lbl_, &QLabel::linkActivated, this, [this](const QString& link) {
         // Only ever act on our own scheme — never hand an arbitrary href from
-        // forum content to the shell.
+        // forum content to the shell. The username is percent-encoded in the
+        // markup and decoded here.
         if (link.startsWith(QLatin1String("author:")))
-            emit author_clicked(link.mid(7));
+            emit author_clicked(QUrl::fromPercentEncoding(link.mid(7).toUtf8()));
     });
     hdr_vl->addWidget(t_author_lbl_);
 
@@ -401,7 +424,7 @@ void ForumThreadPanel::build_ui() {
 
     auto submit = [this]() {
         QString txt = t_reply_input_->text().trimmed();
-        if (txt.isEmpty() || current_.post.post_uuid.isEmpty())
+        if (reply_busy_ || txt.isEmpty() || current_.post.post_uuid.isEmpty())
             return;
         // Don't clear optimistically — ForumScreen calls clear_reply_input()
         // only after the comment actually posts, so a network/auth failure keeps
@@ -426,13 +449,57 @@ void ForumThreadPanel::build_ui() {
 }
 
 void ForumThreadPanel::set_loading(bool on) {
+    spinning_ = on;
     if (on) {
+        // Undo a previous load-error state.
+        spin_lbl_->setText(QStringLiteral("⣾"));
+        loading_text_->setText(tr("Loading thread..."));
+        load_back_btn_->hide();
         spin_frame_ = 0;
-        spin_timer_->start();
+        if (isVisible())
+            spin_timer_->start();
         stack_->setCurrentIndex(0);
     } else {
         spin_timer_->stop();
     }
+}
+
+void ForumThreadPanel::show_load_error() {
+    spinning_ = false;
+    spin_timer_->stop();
+    spin_lbl_->setText(QStringLiteral("!"));
+    loading_text_->setText(tr("Could not load this thread. Check your connection and try again."));
+    load_back_btn_->show();
+    stack_->setCurrentIndex(0);
+}
+
+void ForumThreadPanel::set_reply_busy(bool busy) {
+    reply_busy_ = busy;
+    if (send_btn_) {
+        send_btn_->setEnabled(!busy);
+        send_btn_->setText(busy ? tr("...") : tr("Reply"));
+    }
+    if (t_reply_input_)
+        t_reply_input_->setReadOnly(busy); // keeps focus, unlike setEnabled(false)
+}
+
+void ForumThreadPanel::scroll_to_end() {
+    QScrollBar* sbar = scroll_ ? scroll_->verticalScrollBar() : nullptr;
+    if (sbar)
+        QTimer::singleShot(0, sbar, [sbar]() { sbar->setValue(sbar->maximum()); });
+}
+
+// P3: the 90 ms spinner must not keep ticking behind a hidden screen.
+void ForumThreadPanel::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    if (spinning_ && spin_timer_)
+        spin_timer_->start();
+}
+
+void ForumThreadPanel::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    if (spin_timer_)
+        spin_timer_->stop();
 }
 
 void ForumThreadPanel::clear_reply_input() {
@@ -441,16 +508,24 @@ void ForumThreadPanel::clear_reply_input() {
 }
 
 void ForumThreadPanel::clear() {
+    spinning_ = false;
     spin_timer_->stop();
     current_ = {};
 }
 
 void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
+    // Re-showing the SAME thread (after a vote / reply) keeps the reading
+    // position; the scroll value used to be left wherever the rebuild put it.
+    // Must be read BEFORE current_ is replaced below.
+    QScrollBar* sbar = scroll_ ? scroll_->verticalScrollBar() : nullptr;
+    const bool same_thread = !current_.post.post_uuid.isEmpty() && current_.post.post_uuid == detail.post.post_uuid;
+    const int keep_scroll = (same_thread && sbar) ? sbar->value() : 0;
+
+    spinning_ = false;
     spin_timer_->stop();
     current_ = detail;
 
-    QString cc =
-        detail.post.category_color.isEmpty() ? det_color(detail.post.category_name) : detail.post.category_color;
+    QString cc = services::forum_safe_color(detail.post.category_color, det_color(detail.post.category_name));
 
     t_cat_chip_->setText(detail.post.category_name.toUpper());
     t_cat_chip_->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;letter-spacing:1px;"
@@ -474,8 +549,8 @@ void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
                                    "<a href='author:%4' style='color:%5;text-decoration:none;"
                                    "font-family:Consolas;font-size:12px;font-weight:600;'>%6</a>")
                                .arg(avc, ui::colors::BG_BASE(), ini.toHtmlEscaped(),
-                                    QString(detail.post.author_name).toHtmlEscaped(), ui::colors::TEXT_SECONDARY(),
-                                    detail.post.author_display_name.toHtmlEscaped()));
+                                    QString::fromLatin1(QUrl::toPercentEncoding(detail.post.author_name)),
+                                    ui::colors::TEXT_SECONDARY(), detail.post.author_display_name.toHtmlEscaped()));
 
     t_body_lbl_->setText(detail.post.content);
 
@@ -493,6 +568,8 @@ void ForumThreadPanel::show_post(const services::ForumPostDetail& detail) {
 
     rebuild_comments();
     stack_->setCurrentIndex(1);
+    if (sbar)
+        QTimer::singleShot(0, sbar, [sbar, keep_scroll]() { sbar->setValue(keep_scroll); });
 }
 
 void ForumThreadPanel::rebuild_comments() {
@@ -559,6 +636,7 @@ void ForumThreadPanel::rebuild_comments() {
 
         // Circular avatar
         auto* cav = new QLabel(c.author_display_name.left(2).toUpper());
+        cav->setTextFormat(Qt::PlainText);
         cav->setFixedSize(24, 24);
         cav->setAlignment(Qt::AlignCenter);
         cav->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;background:%2;"
@@ -567,6 +645,7 @@ void ForumThreadPanel::rebuild_comments() {
 
         // Author name
         auto* cname = new QLabel(c.author_display_name);
+        cname->setTextFormat(Qt::PlainText);
         cname->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;"
                                      "background:transparent;%2")
                                  .arg(ui::colors::TEXT_PRIMARY(), M(12)));
@@ -623,7 +702,13 @@ void ForumThreadPanel::rebuild_comments() {
                                          "QPushButton:hover{color:%3;}")
                                      .arg(ui::colors::TEXT_DIM(), M(10), col));
             auto uuid = c.comment_uuid;
-            connect(b, &QPushButton::clicked, this, [this, uuid, vt]() { emit vote_comment(uuid, vt); });
+            connect(b, &QPushButton::clicked, this, [this, uuid, vt, b]() {
+                // One vote per click; the thread reloads (rebuilding the button)
+                // when the vote lands, and the timer re-arms it if it fails.
+                b->setEnabled(false);
+                QTimer::singleShot(4000, b, [b]() { b->setEnabled(true); });
+                emit vote_comment(uuid, vt);
+            });
             return b;
         };
         arh->addWidget(mk_act(tr("▲ upvote"), ui::colors::AMBER(), "up"));

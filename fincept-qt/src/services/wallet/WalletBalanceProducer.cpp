@@ -42,11 +42,96 @@ quint64 parse_uint64(const QJsonValue& v) {
     return 0;
 }
 
+/// Turn the raw token-account list into display holdings: one entry per mint,
+/// metadata merged in, FNCPT first, then verified, then by amount. Shared by the
+/// poll path and the stream seed so both modes show the same holdings (the stream
+/// seed used to fetch FNCPT only, so switching to STREAM hid every other token).
+QVector<TokenHolding> wallet_balance_build_holdings(const std::vector<SplTokenBalance>& balances) {
+    auto& meta = TokenMetadataService::instance();
+    QVector<TokenHolding> out;
+    // A wallet can own several token accounts for one mint (anything beyond the
+    // associated token account). Fold them into a single holding: otherwise
+    // fncpt_holding() sees only the first account (under-reporting FNCPT for the
+    // fee-discount threshold) and the sort comparator below is not a strict weak
+    // ordering when two entries are both FNCPT (undefined behaviour in std::sort).
+    QHash<QString, int> index_by_mint;
+    for (const auto& b : balances) {
+        if (b.amount_raw.isEmpty() || b.amount_raw == QStringLiteral("0")) {
+            continue;
+        }
+        if (const auto dup = index_by_mint.constFind(b.mint); dup != index_by_mint.constEnd()) {
+            auto& existing = out[dup.value()];
+            bool ok_a = false;
+            bool ok_b = false;
+            const quint64 sum_a = existing.amount_raw.toULongLong(&ok_a);
+            const quint64 sum_b = b.amount_raw.toULongLong(&ok_b);
+            if (ok_a && ok_b) {
+                existing.amount_raw = QString::number(sum_a + sum_b);
+            }
+            continue;
+        }
+        index_by_mint.insert(b.mint, static_cast<int>(out.size()));
+        TokenHolding h;
+        h.mint = b.mint;
+        h.amount_raw = b.amount_raw;
+        h.decimals = b.decimals;
+        if (auto m = meta.lookup(b.mint)) {
+            h.symbol = m->symbol;
+            h.name = m->name;
+            h.icon_url = m->icon_url;
+            h.verified = m->verified;
+        } else {
+            // Fallback: truncated mint as the symbol so the row is still
+            // readable. Verified flag stays false.
+            if (b.mint.size() >= 12) {
+                h.symbol = b.mint.left(4) + QStringLiteral("…") + b.mint.right(4);
+            } else {
+                h.symbol = b.mint;
+            }
+            h.verified = false;
+        }
+        out.append(std::move(h));
+    }
+
+    // Sort: verified first, then by raw atomic amount as a rough proxy until
+    // TokenPriceProducer's cache lets us re-sort by USD value upstream. FNCPT
+    // always pinned to position 0 so legacy fncpt_holding() consumers find it
+    // cheaply.
+    const auto fncpt = QString::fromLatin1(kFncptMint);
+    std::sort(out.begin(), out.end(), [&fncpt](const TokenHolding& a, const TokenHolding& b) {
+        if (a.mint == fncpt)
+            return b.mint != fncpt;
+        if (b.mint == fncpt)
+            return false;
+        if (a.verified != b.verified)
+            return a.verified;
+        return a.ui_amount() > b.ui_amount();
+    });
+    return out;
+}
+
 } // namespace
 
 WalletBalanceProducer::WalletBalanceProducer(QObject* parent) : QObject(parent) {
     rpc_ = new SolanaRpcClient(this);
     reload_mode();
+
+    // Stream sessions own a WebSocket plus a 30 s REST heartbeat. Nothing else
+    // stops them, so without this they kept polling forever after the last
+    // consumer left (Crypto Center hidden / wallet disconnected). The hub
+    // pauses refresh-driven producers when a topic goes idle; stream sessions
+    // are self-driven, so tear them down on the same signal. A returning
+    // subscriber triggers refresh(), which re-creates the session.
+    connect(&fincept::datahub::DataHub::instance(), &fincept::datahub::DataHub::topic_idle, this,
+            [this](const QString& topic) {
+                if (mode_ != BalanceMode::Stream || !topic.startsWith(QLatin1String(kTopicPrefix)))
+                    return;
+                const QString pubkey = pubkey_from_topic(topic);
+                if (!pubkey.isEmpty() && streams_.contains(pubkey)) {
+                    LOG_INFO("WalletBalanceProducer", "no subscribers left — closing stream for " + pubkey);
+                    stop_stream_for(pubkey);
+                }
+            });
 }
 
 WalletBalanceProducer::~WalletBalanceProducer() {
@@ -117,9 +202,17 @@ void WalletBalanceProducer::set_mode(BalanceMode mode) {
              QStringLiteral("mode switch: %1").arg(mode == BalanceMode::Stream ? "stream" : "poll"));
     mode_ = mode;
 
+    // STREAM on an endpoint that cannot serve accountSubscribe (notably the
+    // default public RPC) falls back to polling. The hub policy has to follow:
+    // a push-only policy means the scheduler never calls refresh() again, so the
+    // "falling back to poll" path used to poll exactly once and then leave the
+    // balance frozen until the user pressed REFRESH.
+    rpc_->reload_endpoint();
+    const bool stream_usable = (mode_ == BalanceMode::Stream) && endpoint_supports_streaming();
+
     auto& hub = fincept::datahub::DataHub::instance();
     fincept::datahub::TopicPolicy policy;
-    if (mode_ == BalanceMode::Stream) {
+    if (stream_usable) {
         policy.push_only = true;
         policy.coalesce_within_ms = 250;
         policy.refresh_timeout_ms = 30 * 1000;
@@ -131,10 +224,11 @@ void WalletBalanceProducer::set_mode(BalanceMode mode) {
     }
     hub.set_policy_pattern(QStringLiteral("wallet:balance:*"), policy);
 
-    if (mode_ == BalanceMode::Poll) {
+    if (!stream_usable) {
         // Tear down any active streams; the hub scheduler will resume polling.
         stop_all_streams();
     }
+    stream_unavailable_notified_.clear();
 }
 
 // ── Hub entry point ────────────────────────────────────────────────────────
@@ -146,6 +240,14 @@ void WalletBalanceProducer::refresh(const QStringList& topics) {
         } else {
             const auto pubkey = pubkey_from_topic(topic);
             if (pubkey.isEmpty()) {
+                continue;
+            }
+            rpc_->reload_endpoint();
+            if (!endpoint_supports_streaming()) {
+                // set_mode() switched the hub policy to poll cadence for this
+                // case, so this runs every TTL — keep the balance moving.
+                notify_stream_unavailable(pubkey);
+                refresh_one_poll(topic);
                 continue;
             }
             // Stream mode is push-only; the hub still calls refresh() once
@@ -161,6 +263,15 @@ void WalletBalanceProducer::refresh(const QStringList& topics) {
             }
         }
     }
+}
+
+void WalletBalanceProducer::notify_stream_unavailable(const QString& pubkey) {
+    if (stream_unavailable_notified_.contains(pubkey))
+        return;
+    stream_unavailable_notified_.insert(pubkey);
+    fincept::datahub::DataHub::instance().publish_error(
+        topic_for_pubkey(pubkey), QStringLiteral("STREAM unavailable on this RPC — using poll. "
+                                                 "Add a Helius API key in Settings for live updates."));
 }
 
 // ── Polling path ───────────────────────────────────────────────────────────
@@ -189,9 +300,13 @@ void WalletBalanceProducer::refresh_one_poll(const QString& topic) {
         }
         auto& hub = fincept::datahub::DataHub::instance();
         if (*fail) {
-            // partial success: publish what we have anyway so the UI shows
-            // last-known-good. publish_error already emitted in the failing
-            // branch, so the topic_error signal fires in parallel.
+            // publish_error already fired in the failing branch. Do NOT publish
+            // the half-built snapshot: a failed getBalance leaves sol_lamports
+            // at 0 and a failed token fetch leaves `tokens` empty, so
+            // publishing it would show "0 SOL / no holdings" on a transient RPC
+            // error (and flip the fee-discount chip off). The hub keeps the
+            // last-known-good value for subscribers.
+            return;
         }
         hub.publish(topic, QVariant::fromValue(*state));
     };
@@ -225,48 +340,7 @@ void WalletBalanceProducer::refresh_one_poll(const QString& topic) {
                 try_publish();
                 return;
             }
-            auto& meta = fincept::wallet::TokenMetadataService::instance();
-            for (const auto& b : r.value()) {
-                if (b.amount_raw.isEmpty() || b.amount_raw == QStringLiteral("0")) {
-                    continue;
-                }
-                fincept::wallet::TokenHolding h;
-                h.mint = b.mint;
-                h.amount_raw = b.amount_raw;
-                h.decimals = b.decimals;
-                if (auto m = meta.lookup(b.mint)) {
-                    h.symbol = m->symbol;
-                    h.name = m->name;
-                    h.icon_url = m->icon_url;
-                    h.verified = m->verified;
-                } else {
-                    // Fallback: truncated mint as the symbol so the row is
-                    // still readable. Verified flag stays false.
-                    if (b.mint.size() >= 12) {
-                        h.symbol = b.mint.left(4) + QStringLiteral("…") + b.mint.right(4);
-                    } else {
-                        h.symbol = b.mint;
-                    }
-                    h.verified = false;
-                }
-                state->tokens.append(std::move(h));
-            }
-
-            // Sort: verified first, then by raw atomic amount as a rough
-            // proxy until TokenPriceProducer's cache lets us re-sort by
-            // USD value upstream. FNCPT always pinned to position 0 so
-            // legacy fncpt_holding() consumers find it cheaply.
-            std::sort(state->tokens.begin(), state->tokens.end(),
-                      [](const fincept::wallet::TokenHolding& a, const fincept::wallet::TokenHolding& b) {
-                          const auto fncpt = QString::fromLatin1(fincept::wallet::kFncptMint);
-                          if (a.mint == fncpt)
-                              return true;
-                          if (b.mint == fncpt)
-                              return false;
-                          if (a.verified != b.verified)
-                              return a.verified;
-                          return a.ui_amount() > b.ui_amount();
-                      });
+            state->tokens = wallet_balance_build_holdings(r.value());
 
             try_publish();
         });
@@ -319,9 +393,16 @@ void WalletBalanceProducer::seed_stream_state(const QString& pubkey) {
             return;
         }
         auto* s = it.value();
-        if (r.is_ok()) {
-            s->latest.sol_lamports = r.value();
+        if (r.is_err()) {
+            // Leave the cached lamports (and their timestamp) untouched: stamping
+            // a failed fetch with a fresh ts_ms would show stale data as "just
+            // updated" and the staleness pill would never trip.
+            LOG_WARN("WalletBalanceProducer", "SOL seed failed: " + QString::fromStdString(r.error()));
+            fincept::datahub::DataHub::instance().publish_error(self->topic_for_pubkey(pubkey),
+                                                                QString::fromStdString(r.error()));
+            return;
         }
+        s->latest.sol_lamports = r.value();
         s->latest.pubkey_b58 = pubkey;
         s->latest.ts_ms = QDateTime::currentMSecsSinceEpoch();
         if (s->seeded) {
@@ -330,64 +411,33 @@ void WalletBalanceProducer::seed_stream_state(const QString& pubkey) {
         }
     });
 
-    // Step 2: locate the FNCPT token account address + amount.
-    rpc_->get_token_balance(pubkey, QString::fromLatin1(kFncptMint),
-                            [self, pubkey](Result<std::vector<SplTokenBalance>> r) {
-                                if (!self) {
-                                    return;
-                                }
-                                auto it = self->streams_.find(pubkey);
-                                if (it == self->streams_.end()) {
-                                    return;
-                                }
-                                auto* s = it.value();
-                                quint64 total = 0;
-                                int decimals = 0;
-                                for (const auto& b : r.is_ok() ? r.value() : std::vector<SplTokenBalance>{}) {
-                                    bool ok = false;
-                                    const auto v = b.amount_raw.toULongLong(&ok);
-                                    if (ok) {
-                                        total += v;
-                                    }
-                                    decimals = b.decimals;
-                                }
-                                // Stage 2A.5: WalletBalance.tokens carries every holding. The
-                                // streaming path still only refreshes FNCPT; replace the FNCPT
-                                // entry in `tokens` (or append it) instead of writing the old
-                                // dedicated fields.
-                                const auto fncpt_mint = QString::fromLatin1(fincept::wallet::kFncptMint);
-                                bool replaced = false;
-                                for (auto& t : s->latest.tokens) {
-                                    if (t.mint == fncpt_mint) {
-                                        t.amount_raw = QString::number(total);
-                                        if (decimals > 0)
-                                            t.decimals = decimals;
-                                        replaced = true;
-                                        break;
-                                    }
-                                }
-                                if (!replaced) {
-                                    fincept::wallet::TokenHolding t;
-                                    t.mint = fncpt_mint;
-                                    t.symbol = QStringLiteral("$FNCPT");
-                                    t.name = QStringLiteral("FinceptTerminal");
-                                    t.amount_raw = QString::number(total);
-                                    t.decimals = decimals > 0 ? decimals : 6;
-                                    s->latest.tokens.append(std::move(t));
-                                }
-                                s->seeded = true;
+    // Step 2: every SPL holding (same call and merge as the poll path).
+    rpc_->get_all_token_balances(pubkey, [self, pubkey](Result<std::vector<SplTokenBalance>> r) {
+        if (!self) {
+            return;
+        }
+        auto it = self->streams_.find(pubkey);
+        if (it == self->streams_.end()) {
+            return;
+        }
+        auto* s = it.value();
+        if (r.is_err()) {
+            // A failed lookup is not "zero tokens": keep the cached holdings
+            // rather than zeroing them (and flipping the fee-discount
+            // eligibility off) on a transient RPC error.
+            LOG_WARN("WalletBalanceProducer", "token seed failed: " + QString::fromStdString(r.error()));
+            fincept::datahub::DataHub::instance().publish_error(self->topic_for_pubkey(pubkey),
+                                                                QString::fromStdString(r.error()));
+            return;
+        }
+        // WalletBalance.tokens carries every holding. Only SOL is pushed over
+        // the WebSocket (accountSubscribe on the wallet pubkey); token balances
+        // are refreshed by this REST seed on connect and by the 30 s heartbeat.
+        s->latest.tokens = wallet_balance_build_holdings(r.value());
+        s->seeded = true;
 
-                                // We need the on-chain token-account address to subscribe by
-                                // account — but our `get_token_balance` doesn't return it.
-                                // For Phase 1 streaming, we subscribe to the wallet pubkey for
-                                // SOL only; FNCPT updates fall back to a per-30s poll inside
-                                // the same producer (driven from the WS heartbeat below). A
-                                // future enhancement is to surface the token account address
-                                // via SolanaRpcClient and `accountSubscribe` on it.
-
-                                fincept::datahub::DataHub::instance().publish(self->topic_for_pubkey(pubkey),
-                                                                              QVariant::fromValue(s->latest));
-                            });
+        fincept::datahub::DataHub::instance().publish(self->topic_for_pubkey(pubkey), QVariant::fromValue(s->latest));
+    });
 }
 
 void WalletBalanceProducer::start_stream_for(const QString& pubkey) {
@@ -402,9 +452,7 @@ void WalletBalanceProducer::start_stream_for(const QString& pubkey) {
     if (!endpoint_supports_streaming()) {
         LOG_WARN("WalletBalanceProducer",
                  "stream mode unavailable on current RPC — falling back to poll for " + pubkey);
-        fincept::datahub::DataHub::instance().publish_error(
-            topic_for_pubkey(pubkey), QStringLiteral("STREAM unavailable on this RPC — using poll. "
-                                                     "Add a Helius API key in Settings for live updates."));
+        notify_stream_unavailable(pubkey);
         refresh_one_poll(topic_for_pubkey(pubkey));
         return;
     }

@@ -8,6 +8,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QUrl>
 
 namespace fincept::screens {
 
@@ -58,6 +59,11 @@ EquitySentimentTab::EquitySentimentTab(QWidget* parent) : QWidget(parent) {
 
 void EquitySentimentTab::set_symbol(const QString& symbol) {
     if (symbol.isEmpty())
+        return;
+    // The screen calls this on every visit to the tab. Each call fetched news, ran the
+    // NLP scorer and recomputed technicals (three background processes) even for the
+    // symbol already on screen — so a revisit is a no-op; REFRESH below forces a reload.
+    if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
     snapshot_loaded_ = false;
@@ -111,8 +117,11 @@ void EquitySentimentTab::build_ui() {
                 "QPushButton:hover { border-color:%3; color:%3; }")
             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
     connect(refresh_btn_, &QPushButton::clicked, this, [this]() {
-        if (!current_symbol_.isEmpty())
-            set_symbol(current_symbol_);
+        if (current_symbol_.isEmpty())
+            return;
+        const QString symbol = current_symbol_;
+        current_symbol_.clear(); // defeat the same-symbol short-circuit in set_symbol()
+        set_symbol(symbol);
     });
     header_layout->addWidget(refresh_btn_);
     root->addWidget(header);
@@ -318,6 +327,20 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
         headline->setWordWrap(true);
         headline->setStyleSheet(
             QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_PRIMARY()));
+        // Every scored headline carries its article URL, but the rows were dead text. Make the
+        // title open the article in the browser (http/https only — never hand a feed-supplied
+        // file:/custom scheme to the OS).
+        const QUrl article_url(article.url);
+        if (article_url.isValid() && (article_url.scheme() == QLatin1String("http") ||
+                                      article_url.scheme() == QLatin1String("https"))) {
+            headline->setTextFormat(Qt::RichText);
+            headline->setText(QStringLiteral("<a href=\"%1\" style=\"color:%2; text-decoration:none;\">%3</a>")
+                                  .arg(QString::fromUtf8(article_url.toEncoded()).toHtmlEscaped(),
+                                       QString(ui::colors::TEXT_PRIMARY()), article.title.toHtmlEscaped()));
+            headline->setOpenExternalLinks(true);
+            headline->setCursor(Qt::PointingHandCursor);
+            headline->setToolTip(article.url);
+        }
         text_col->addWidget(headline);
 
         QString meta = article.publisher;

@@ -10,6 +10,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QComboBox>
 #include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -80,8 +81,7 @@ void ForumScreen::build_ui() {
 
     connect(sidebar_, &ForumSidebarPanel::search_requested, this, &ForumScreen::on_search);
 
-    connect(sidebar_, &ForumSidebarPanel::new_post_requested, this,
-            [this](int cat_id) { show_new_post_dialog(cat_id); });
+    connect(sidebar_, &ForumSidebarPanel::new_post_requested, this, [this](int) { on_new_post_requested(); });
 
     // ── Wire feed signals ─────────────────────────────────────────────────────
     connect(feed_, &ForumFeedPanel::post_selected, this, &ForumScreen::on_post_selected);
@@ -94,35 +94,38 @@ void ForumScreen::build_ui() {
     // guard, or a reply that lands after the screen closes dereferences a dead
     // `this`. (Several of these previously captured a raw [this].)
     connect(feed_, &ForumFeedPanel::load_more_requested, this, [this](int page) {
-        if (active_category_id_ <= 0)
-            return;
         feed_->set_loading(true);
-        QPointer<ForumScreen> self = this;
-        services::ForumService::instance().fetch_posts(active_category_id_, page, "latest",
-                                                       [self](bool ok, services::ForumPostsPage p) {
-                                                           if (!self)
-                                                               return;
-                                                           if (ok)
-                                                               self->feed_->set_posts(p, self->active_category_color_);
-                                                           else
-                                                               self->feed_->set_loading(false);
-                                                       });
+        fetch_feed(page);
+    });
+
+    connect(feed_, &ForumFeedPanel::retry_requested, this, [this]() {
+        if (categories_.isEmpty()) { // the forum itself never loaded — start over
+            load_initial_data();
+            return;
+        }
+        feed_->set_loading(true);
+        fetch_feed(feed_page_);
     });
 
     connect(feed_, &ForumFeedPanel::new_post_clicked, this, [this]() { on_new_post_requested(); });
 
     connect(feed_, &ForumFeedPanel::vote_post_requested, this, [this](const QString& uuid, const QString& vtype) {
+        if (votes_in_flight_.contains(uuid))
+            return; // a vote for this post is already on its way
+        votes_in_flight_.insert(uuid);
         QPointer<ForumScreen> self = this;
-        services::ForumService::instance().vote_post(uuid, vtype, [self](bool ok, const QString&) {
-            if (!self || !ok || self->active_category_id_ <= 0)
+        services::ForumService::instance().vote_post(uuid, vtype, [self, uuid](bool ok, const QString& msg) {
+            if (!self)
                 return;
-            // Refresh current feed to show updated vote
-            services::ForumService::instance().fetch_posts(self->active_category_id_, 1, "latest",
-                                                           [self](bool ok2, services::ForumPostsPage p) {
-                                                               if (self && ok2)
-                                                                   self->feed_->set_posts(p,
-                                                                                          self->active_category_color_);
-                                                           });
+            self->votes_in_flight_.remove(uuid);
+            if (!ok) {
+                LOG_WARN("ForumScreen", "Vote failed: " + msg);
+                QMessageBox::information(self, ForumScreen::tr("Vote not recorded"),
+                                         msg.isEmpty() ? ForumScreen::tr("Your vote could not be recorded.") : msg);
+                return;
+            }
+            // Reload the list the user is looking at (same view, same page).
+            self->fetch_feed(self->feed_page_, /*show_error=*/false);
         });
     });
 
@@ -130,21 +133,21 @@ void ForumScreen::build_ui() {
     connect(thread_, &ForumThreadPanel::back_requested, this, &ForumScreen::navigate_back_to_feed);
 
     connect(thread_, &ForumThreadPanel::comment_submitted, this, [this](const QString& uuid, const QString& content) {
+        if (comment_in_flight_)
+            return; // double-click / double-Enter would post the reply twice
+        comment_in_flight_ = true;
+        thread_->set_reply_busy(true);
         QPointer<ForumScreen> self = this;
         services::ForumService::instance().create_comment(uuid, content, [self, uuid](bool ok, const QString& msg) {
             if (!self)
                 return;
+            self->comment_in_flight_ = false;
+            self->thread_->set_reply_busy(false);
             if (ok) {
                 self->thread_->clear_reply_input(); // only clear once it actually posted
-                self->thread_->set_loading(true);
-                services::ForumService::instance().fetch_post(uuid, [self](bool ok2, services::ForumPostDetail d) {
-                    if (!self)
-                        return;
-                    if (ok2)
-                        self->thread_->show_post(d);
-                    else
-                        self->thread_->set_loading(false);
-                });
+                // Reload in place (no loading page, so the thread keeps its
+                // position) and then jump to the new reply.
+                self->fetch_detail(uuid, /*initial=*/false, /*to_end=*/true);
             } else {
                 LOG_WARN("ForumScreen", "Create comment failed: " + msg);
                 QMessageBox::warning(self, ForumScreen::tr("Reply Failed"),
@@ -155,31 +158,41 @@ void ForumScreen::build_ui() {
     });
 
     connect(thread_, &ForumThreadPanel::vote_post, this, [this](const QString& uuid, const QString& vtype) {
+        if (votes_in_flight_.contains(uuid))
+            return;
+        votes_in_flight_.insert(uuid);
         QPointer<ForumScreen> self = this;
         services::ForumService::instance().vote_post(uuid, vtype, [self, uuid](bool ok, const QString& msg) {
             if (!self)
                 return;
+            self->votes_in_flight_.remove(uuid);
             if (!ok) {
                 LOG_WARN("ForumScreen", "Vote failed: " + msg);
+                QMessageBox::information(self, ForumScreen::tr("Vote not recorded"),
+                                         msg.isEmpty() ? ForumScreen::tr("Your vote could not be recorded.") : msg);
                 return;
             }
-            services::ForumService::instance().fetch_post(uuid, [self](bool ok2, services::ForumPostDetail d) {
-                if (self && ok2)
-                    self->thread_->show_post(d);
-            });
+            self->fetch_detail(uuid, /*initial=*/false);
         });
     });
 
     connect(thread_, &ForumThreadPanel::vote_comment, this, [this](const QString& uuid, const QString& vtype) {
+        if (votes_in_flight_.contains(uuid))
+            return;
+        votes_in_flight_.insert(uuid);
         QPointer<ForumScreen> self = this;
-        services::ForumService::instance().vote_comment(uuid, vtype, [self](bool, const QString&) {
-            if (!self || self->current_detail_uuid_.isEmpty())
+        services::ForumService::instance().vote_comment(uuid, vtype, [self, uuid](bool ok, const QString& msg) {
+            if (!self)
                 return;
-            services::ForumService::instance().fetch_post(self->current_detail_uuid_,
-                                                          [self](bool ok, services::ForumPostDetail d) {
-                                                              if (self && ok)
-                                                                  self->thread_->show_post(d);
-                                                          });
+            self->votes_in_flight_.remove(uuid);
+            if (!ok) {
+                LOG_WARN("ForumScreen", "Comment vote failed: " + msg);
+                QMessageBox::information(self, ForumScreen::tr("Vote not recorded"),
+                                         msg.isEmpty() ? ForumScreen::tr("Your vote could not be recorded.") : msg);
+            }
+            if (self->current_detail_uuid_.isEmpty())
+                return;
+            self->fetch_detail(self->current_detail_uuid_, /*initial=*/false);
         });
     });
 
@@ -205,7 +218,7 @@ void ForumScreen::build_ui() {
             // Profile header with gradient accent
             auto* hdr = new QWidget(self);
             hdr->setFixedHeight(4);
-            QString avc = profile.avatar_color.isEmpty() ? ui::colors::AMBER() : profile.avatar_color;
+            QString avc = services::forum_safe_color(profile.avatar_color, ui::colors::AMBER());
             hdr->setStyleSheet(QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
                                        "stop:0 %1,stop:0.5 %2,stop:1 transparent);")
                                    .arg(avc, ui::colors::AMBER()));
@@ -218,7 +231,9 @@ void ForumScreen::build_ui() {
             th->setContentsMargins(0, 0, 0, 0);
             th->setSpacing(14);
 
+            // Profile text is user-authored: PlainText so markup can't be rendered.
             auto* av = new QLabel(profile.display_name.left(2).toUpper());
+            av->setTextFormat(Qt::PlainText);
             av->setFixedSize(48, 48);
             av->setAlignment(Qt::AlignCenter);
             av->setStyleSheet(QString("color:%1;font-size:16px;font-weight:700;"
@@ -228,8 +243,10 @@ void ForumScreen::build_ui() {
             auto* info = new QVBoxLayout;
             info->setSpacing(2);
             auto* nm = new QLabel(profile.display_name.toUpper());
+            nm->setTextFormat(Qt::PlainText);
             nm->setStyleSheet(QString("color:%1;font-size:16px;font-weight:700;%2").arg(avc, M(16)));
             auto* un = new QLabel("@" + profile.username);
+            un->setTextFormat(Qt::PlainText);
             un->setStyleSheet(QString("color:%1;font-size:11px;%2").arg(ui::colors::TEXT_SECONDARY(), M(11)));
             info->addWidget(nm);
             info->addWidget(un);
@@ -239,6 +256,7 @@ void ForumScreen::build_ui() {
 
             if (!profile.bio.isEmpty()) {
                 auto* bio = new QLabel(profile.bio);
+                bio->setTextFormat(Qt::PlainText);
                 bio->setWordWrap(true);
                 bio->setStyleSheet(
                     QString("color:%1;font-size:12px;font-style:italic;%2").arg(ui::colors::TEXT_TERTIARY(), M(12)));
@@ -304,8 +322,12 @@ void ForumScreen::build_ui() {
             } else {
                 vl->addStretch();
             }
+            // The dialog is a child of the screen: if the screen is torn down while
+            // it is open, exec() returns with `dlg` already destroyed.
+            QPointer<QDialog> dlg_guard(dlg);
             dlg->exec();
-            dlg->deleteLater(); // exec() returns on accept/reject; free the dialog
+            if (dlg_guard)
+                dlg_guard->deleteLater(); // exec() returns on accept/reject; free the dialog
         });
     });
 }
@@ -353,39 +375,47 @@ void ForumScreen::load_initial_data() {
                 return;
             if (!ok || cats.isEmpty()) {
                 // The feed sat on an animated skeleton forever when the forum
-                // API was unreachable. Stop it and show the empty state.
-                self3->feed_->set_loading(false);
-                self3->feed_->set_posts({}, ui::colors::TEXT_TERTIARY());
+                // API was unreachable. Stop it and say what happened (with a
+                // Retry) rather than the misleading "no discussions yet".
+                self3->feed_->set_error(ForumScreen::tr("Could not load the forum. Check your connection and try again."));
+                self3->initial_load_done_ = false; // let the next show / Retry start over
                 return;
             }
             self3->categories_ = cats;
             self3->sidebar_->set_categories(cats);
 
-            // Auto-select first category with posts
-            int sel_idx = 0;
+            // Keep a category restored from saved state (restore_state() may have
+            // run before this reply arrived); otherwise auto-select the first
+            // category with posts. The restored selection used to be overwritten
+            // here.
+            int sel_idx = -1;
             for (int i = 0; i < cats.size(); ++i) {
-                if (cats[i].post_count > 0) {
+                if (cats[i].id == self3->active_category_id_) {
                     sel_idx = i;
                     break;
                 }
             }
-            const auto& first = cats[sel_idx];
-            self3->active_category_id_ = first.id;
-            self3->active_category_name_ = first.name;
-            self3->active_category_color_ = first.color;
-            self3->sidebar_->set_active_category(first.id);
-            self3->feed_->set_header(first.name);
-            self3->feed_->set_categories(cats, first.id);
+            if (sel_idx < 0) {
+                sel_idx = 0;
+                for (int i = 0; i < cats.size(); ++i) {
+                    if (cats[i].post_count > 0) {
+                        sel_idx = i;
+                        break;
+                    }
+                }
+            }
+            const auto& sel = cats[sel_idx];
+            self3->active_category_id_ = sel.id;
+            self3->active_category_name_ = sel.name;
+            self3->active_category_color_ = sel.color;
+            self3->feed_kind_ = FeedKind::Category;
+            self3->sidebar_->set_active_category(sel.id);
+            self3->feed_->set_header(sel.name);
+            self3->feed_->set_categories(cats, sel.id);
 
-            services::ForumService::instance().fetch_posts(first.id, 1, "latest",
-                                                           [self3, first](bool ok2, services::ForumPostsPage p) {
-                                                               if (!self3)
-                                                                   return;
-                                                               if (ok2)
-                                                                   self3->feed_->set_posts(p, first.color);
-                                                               else
-                                                                   self3->feed_->set_loading(false);
-                                                           });
+            // Always (re)fetch: it supersedes a restore-time request that may have
+            // finished before the skeleton above was shown.
+            self3->fetch_feed(1);
         });
 }
 
@@ -397,6 +427,7 @@ void ForumScreen::navigate_back_to_feed() {
 }
 
 void ForumScreen::on_category_selected(int id, const QString& name, const QString& color) {
+    feed_kind_ = FeedKind::Category;
     active_category_id_ = id;
     active_category_name_ = name;
     active_category_color_ = color;
@@ -408,16 +439,7 @@ void ForumScreen::on_category_selected(int id, const QString& name, const QStrin
     feed_->set_categories(categories_, id);
     sidebar_->set_active_category(id);
     main_stack_->setCurrentIndex(0);
-
-    QPointer<ForumScreen> self = this;
-    services::ForumService::instance().fetch_posts(id, 1, "latest", [self, color](bool ok, services::ForumPostsPage p) {
-        if (!self)
-            return;
-        if (ok)
-            self->feed_->set_posts(p, color);
-        else
-            self->feed_->set_loading(false);
-    });
+    fetch_feed(1);
 }
 
 void ForumScreen::on_post_selected(const services::ForumPost& post) {
@@ -426,60 +448,114 @@ void ForumScreen::on_post_selected(const services::ForumPost& post) {
     feed_->set_active_post(post.post_uuid);
     thread_->set_loading(true);
     main_stack_->setCurrentIndex(1);
-
-    QPointer<ForumScreen> self = this;
-    services::ForumService::instance().fetch_post(post.post_uuid, [self](bool ok, services::ForumPostDetail d) {
-        if (!self)
-            return;
-        if (ok)
-            self->thread_->show_post(d);
-        else
-            self->thread_->set_loading(false);
-    });
+    fetch_detail(post.post_uuid, /*initial=*/true);
 }
 
 void ForumScreen::on_search(const QString& query) {
-    if (query.isEmpty())
+    const QString q = query.trimmed();
+    if (q.isEmpty()) {
+        // Enter on an emptied search box: leave search mode, back to the category.
+        if (feed_kind_ == FeedKind::Search && active_category_id_ > 0)
+            on_category_selected(active_category_id_, active_category_name_, active_category_color_);
         return;
-    active_category_id_ = 0;
-    active_category_color_ = ui::colors::CYAN();
-    feed_->set_header(tr("SEARCH: %1").arg(query));
+    }
+    // The category selection is kept (so "new post" and saved state still point
+    // at it); only the list being shown changes.
+    feed_kind_ = FeedKind::Search;
+    feed_query_ = q;
+    sidebar_->set_active_category(0);
+    feed_->set_header(tr("SEARCH: %1").arg(q));
     feed_->set_loading(true);
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
-
-    QPointer<ForumScreen> self = this;
-    services::ForumService::instance().search(query, 1, [self](bool ok, services::ForumPostsPage p) {
-        if (!self)
-            return;
-        if (ok)
-            self->feed_->set_posts(p, ui::colors::CYAN());
-        else
-            self->feed_->set_loading(false);
-    });
+    fetch_feed(1);
 }
 
 void ForumScreen::on_trending() {
-    active_category_id_ = 0;
-    active_category_color_ = ui::colors::AMBER();
+    feed_kind_ = FeedKind::Trending;
+    sidebar_->set_active_category(0);
     feed_->set_header(tr("TRENDING"));
     feed_->set_loading(true);
     feed_->clear_active();
     main_stack_->setCurrentIndex(0);
-
-    QPointer<ForumScreen> self = this;
-    services::ForumService::instance().fetch_trending([self](bool ok, services::ForumPostsPage p) {
-        if (!self)
-            return;
-        if (ok)
-            self->feed_->set_posts(p, ui::colors::AMBER());
-        else
-            self->feed_->set_loading(false);
-    });
+    fetch_feed(1);
 }
 
 void ForumScreen::on_new_post_requested() {
-    show_new_post_dialog(active_category_id_ > 0 ? active_category_id_ : 1);
+    // Trending / search have no category of their own: default to the last
+    // selected one, else the first (the dialog lets the user change it). It used
+    // to post into a hard-coded category id 1.
+    int cat = active_category_id_;
+    if (cat <= 0 && !categories_.isEmpty())
+        cat = categories_.first().id;
+    if (cat <= 0) { // categories not loaded yet (or the forum is unreachable)
+        QMessageBox::information(this, tr("Forum not ready"),
+                                 tr("The forum categories have not loaded yet. Try again in a moment."));
+        return;
+    }
+    show_new_post_dialog(cat);
+}
+
+void ForumScreen::fetch_feed(int page, bool show_error) {
+    const int seq = ++feed_seq_;
+    feed_page_ = page;
+    QString color;
+    switch (feed_kind_) {
+        case FeedKind::Category:
+            color = active_category_color_;
+            break;
+        case FeedKind::Trending:
+            color = ui::colors::AMBER();
+            break;
+        case FeedKind::Search:
+            color = ui::colors::CYAN();
+            break;
+    }
+    QPointer<ForumScreen> self = this;
+    auto apply = [self, seq, color, show_error](bool ok, services::ForumPostsPage p) {
+        if (!self || seq != self->feed_seq_)
+            return; // superseded by a newer request
+        if (ok) {
+            self->feed_->set_posts(p, color);
+        } else if (show_error) {
+            self->feed_->set_error(ForumScreen::tr("Could not load posts. Check your connection and try again."));
+        } else {
+            self->feed_->set_loading(false);
+        }
+    };
+    auto& svc = services::ForumService::instance();
+    switch (feed_kind_) {
+        case FeedKind::Category:
+            if (active_category_id_ <= 0) {
+                feed_->set_loading(false);
+                return;
+            }
+            svc.fetch_posts(active_category_id_, page, "latest", apply);
+            break;
+        case FeedKind::Trending:
+            svc.fetch_trending(apply);
+            break;
+        case FeedKind::Search:
+            svc.search(feed_query_, page, apply);
+            break;
+    }
+}
+
+void ForumScreen::fetch_detail(const QString& uuid, bool initial, bool to_end) {
+    const int seq = ++detail_seq_;
+    QPointer<ForumScreen> self = this;
+    services::ForumService::instance().fetch_post(
+        uuid, [self, seq, initial, to_end](bool ok, services::ForumPostDetail d) {
+            if (!self || seq != self->detail_seq_)
+                return; // the user has opened a different thread since
+            if (ok) {
+                self->thread_->show_post(d);
+                if (to_end)
+                    self->thread_->scroll_to_end();
+            } else if (initial) {
+                self->thread_->show_load_error();
+            }
+        });
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -492,12 +568,15 @@ void ForumScreen::show_new_post_dialog(int category_id) {
     dlg->setStyleSheet(QString("QDialog{background:%1;border:1px solid %2;}"
                                "QLabel{color:%3;font-size:11px;background:transparent;"
                                "font-family:'Consolas','Courier New',monospace;}"
-                               "QLineEdit,QTextEdit{background:%4;color:%5;"
+                               "QLineEdit,QTextEdit,QComboBox{background:%4;color:%5;"
                                "border:1px solid %2;font-size:13px;"
                                "font-family:'Consolas','Courier New',monospace;padding:8px 12px;}"
-                               "QLineEdit:focus,QTextEdit:focus{border-color:%6;}")
+                               "QLineEdit:focus,QTextEdit:focus,QComboBox:focus{border-color:%6;}"
+                               "QLabel#forumPostFieldLabel{color:%7;font-size:10px;font-weight:700;"
+                               "letter-spacing:1px;}")
                            .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY(),
-                                ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_BRIGHT()));
+                                ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_BRIGHT(),
+                                ui::colors::TEXT_TERTIARY()));
     auto* vl = new QVBoxLayout(dlg);
     vl->setContentsMargins(24, 20, 24, 18);
     vl->setSpacing(12);
@@ -520,6 +599,25 @@ void ForumScreen::show_new_post_dialog(int category_id) {
     vl->addWidget(sub);
 
     vl->addSpacing(4);
+
+    // Category picker — posting used to go to whichever category happened to be
+    // active (or a hard-coded id 1 from the trending / search views).
+    QComboBox* cat_combo = nullptr;
+    if (!categories_.isEmpty()) {
+        auto* cat_lbl = new QLabel(tr("CATEGORY"));
+        cat_lbl->setObjectName("forumPostFieldLabel"); // styled by the dialog's sheet
+        cat_combo = new QComboBox;
+        int sel = 0;
+        for (int i = 0; i < categories_.size(); ++i) {
+            cat_combo->addItem(categories_[i].name, categories_[i].id);
+            if (categories_[i].id == category_id)
+                sel = i;
+        }
+        cat_combo->setCurrentIndex(sel);
+        cat_combo->setAccessibleName(tr("Post category"));
+        vl->addWidget(cat_lbl);
+        vl->addWidget(cat_combo);
+    }
 
     auto* title_lbl = new QLabel(tr("TITLE"));
     title_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;letter-spacing:1px;%2")
@@ -566,7 +664,7 @@ void ForumScreen::show_new_post_dialog(int category_id) {
                                   "border-color:rgba(217,119,6,0.6);"
                                   "background:rgba(217,119,6,0.2);}")
                               .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
-    connect(submit, &QPushButton::clicked, this, [this, dlg, title_edit, body_edit, submit, category_id]() {
+    connect(submit, &QPushButton::clicked, this, [this, dlg, title_edit, body_edit, submit, category_id, cat_combo]() {
         QString title = title_edit->text().trimmed();
         QString content = body_edit->toPlainText().trimmed();
         // Silently doing nothing made PUBLISH look broken; say what's missing.
@@ -586,17 +684,27 @@ void ForumScreen::show_new_post_dialog(int category_id) {
         // the text) BEFORE the call and merely LOG_WARN'd on failure.
         submit->setEnabled(false);
         submit->setText(tr("PUBLISHING…"));
+        const int target_id = cat_combo ? cat_combo->currentData().toInt() : category_id;
         QPointer<ForumScreen> self = this;
         QPointer<QDialog> dlg_guard(dlg);
         QPointer<QPushButton> submit_guard(submit);
         services::ForumService::instance().create_post(
-            category_id, title, content, [self, dlg_guard, submit_guard](bool ok, const QString& msg) {
+            target_id, title, content, [self, dlg_guard, submit_guard, target_id](bool ok, const QString& msg) {
                 if (ok) {
                     if (dlg_guard)
                         dlg_guard->accept();
-                    if (self)
-                        self->on_category_selected(self->active_category_id_, self->active_category_name_,
-                                                   self->active_category_color_);
+                    if (!self)
+                        return;
+                    // Show the category the post went to (it may differ from the
+                    // one that was open).
+                    for (const auto& c : std::as_const(self->categories_)) {
+                        if (c.id == target_id) {
+                            self->on_category_selected(c.id, c.name, c.color);
+                            return;
+                        }
+                    }
+                    self->on_category_selected(self->active_category_id_, self->active_category_name_,
+                                               self->active_category_color_);
                     return;
                 }
                 LOG_WARN("ForumScreen", "Create post failed: " + msg);
@@ -623,8 +731,10 @@ void ForumScreen::show_new_post_dialog(int category_id) {
     dlg->setTabOrder(submit, cancel);
     title_edit->setFocus();
 
+    QPointer<QDialog> dlg_guard(dlg); // see the profile dialog: the screen may be gone after exec()
     dlg->exec();
-    dlg->deleteLater(); // otherwise one QDialog leaks per new-post attempt
+    if (dlg_guard)
+        dlg_guard->deleteLater(); // otherwise one QDialog leaks per new-post attempt
 }
 
 void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile) {
@@ -700,6 +810,19 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
                               "background:rgba(217,119,6,0.2);}")
                           .arg(ui::colors::TEXT_SECONDARY(), M(11), ui::colors::AMBER()));
     connect(sc, &QPushButton::clicked, this, [this, dlg, name_e, bio_e, sig_e, col_e]() {
+        // Validate before closing, so a typo doesn't lose the other fields.
+        if (name_e->text().trimmed().isEmpty()) {
+            QMessageBox::information(dlg, tr("Display name required"), tr("Enter a display name."));
+            name_e->setFocus();
+            return;
+        }
+        const QString color_text = col_e->text().trimmed();
+        if (!color_text.isEmpty() && services::forum_safe_color(color_text, QString()).isEmpty()) {
+            QMessageBox::information(dlg, tr("Invalid color"),
+                                     tr("The avatar color must be a hex value such as #d97706."));
+            col_e->setFocus();
+            return;
+        }
         dlg->accept();
         QPointer<ForumScreen> self = this;
         services::ForumService::instance().update_profile(
@@ -729,8 +852,10 @@ void ForumScreen::show_edit_profile_dialog(const services::ForumProfile& profile
     bh->addWidget(sc);
     vl->addStretch();
     vl->addWidget(btn_row);
+    QPointer<QDialog> dlg_guard(dlg); // the screen may be gone after exec()
     dlg->exec();
-    dlg->deleteLater(); // otherwise one QDialog leaks per profile edit
+    if (dlg_guard)
+        dlg_guard->deleteLater(); // otherwise one QDialog leaks per profile edit
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

@@ -112,6 +112,11 @@ void AgentService::discover_agents() {
         auto db_agents = AgentConfigRepository::instance().list_all();
         if (db_agents.is_ok()) {
             for (const auto& dba : db_agents.value()) {
+                // Saved TEAMS (category "team", written by the TEAMS tab) share the
+                // agent_configs table but are not agents — listing them here put them
+                // in the AGENTS list / chat selector, where running one is meaningless.
+                if (dba.category == QLatin1String("team"))
+                    continue;
                 // Skip if already discovered by Python
                 bool found = false;
                 for (const auto& a : agents) {
@@ -134,6 +139,14 @@ void AgentService::discover_agents() {
                 QJsonDocument doc = QJsonDocument::fromJson(dba.config_json.toUtf8());
                 if (!doc.isNull())
                     info.config = doc.object();
+                // Older saves embedded the resolved profile's API key in `model`.
+                // AgentInfo.config is cached (CacheManager) and handed to every
+                // listener / MCP list tool — never carry a credential along.
+                QJsonObject saved_model = info.config.value("model").toObject();
+                if (saved_model.contains("api_key")) {
+                    saved_model.remove("api_key");
+                    info.config["model"] = saved_model;
+                }
 
                 agents.append(info);
                 cat_counts[info.category]++;
@@ -230,7 +243,7 @@ void AgentService::list_tools() {
             const QJsonObject r = QJsonDocument::fromJson(cv.toString().toUtf8()).object();
             AgentToolsInfo info;
             info.tools = r["tools"].toObject();
-            info.total_count = r["total_count"].toInt();
+            info.total_count = r.contains("total_count") ? r["total_count"].toInt() : r["total"].toInt();
             for (const auto& c : r["categories"].toArray())
                 info.categories.append(c.toString());
             emit tools_loaded(info);
@@ -249,7 +262,9 @@ void AgentService::list_tools() {
 
         AgentToolsInfo info;
         info.tools = result["tools"].toObject();
-        info.total_count = result["total_count"].toInt();
+        // finagent_core emitted this as `total` until `total_count` was added —
+        // read either so the SYSTEM tab never shows 0 tools.
+        info.total_count = result.contains("total_count") ? result["total_count"].toInt() : result["total"].toInt();
         for (const auto& c : result["categories"].toArray())
             info.categories.append(c.toString());
 
@@ -299,7 +314,21 @@ void AgentService::list_models() {
 
 // ── Config CRUD ──────────────────────────────────────────────────────────────
 
-void AgentService::save_config(const AgentConfig& config) {
+void AgentService::save_config(const AgentConfig& config_in) {
+    // The editors snapshot the resolved LLM profile into `model` — including its
+    // API key, which LlmProfileRepository keeps encrypted in SecureStorage. The
+    // agent_configs table is plain SQLite and is pushed to the cloud by the
+    // agent_config sync adapter, so the key must not ride along. Runs re-resolve
+    // the model from the agent's profile assignment (agent_svc_expand_config).
+    AgentConfig config = config_in;
+    QJsonParseError perr{};
+    QJsonObject cfg_obj = QJsonDocument::fromJson(config.config_json.toUtf8(), &perr).object();
+    QJsonObject model = cfg_obj.value("model").toObject();
+    if (perr.error == QJsonParseError::NoError && model.contains("api_key")) {
+        model.remove("api_key");
+        cfg_obj["model"] = model;
+        config.config_json = QString::fromUtf8(QJsonDocument(cfg_obj).toJson(QJsonDocument::Compact));
+    }
     auto result = AgentConfigRepository::instance().save(config);
     if (result.is_ok()) {
         LOG_INFO("AgentService", QString("Saved agent config: %1").arg(config.name));

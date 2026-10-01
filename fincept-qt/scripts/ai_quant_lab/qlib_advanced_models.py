@@ -38,8 +38,10 @@ except ImportError:
     pass
 
 
-# Define simple PyTorch models for when Qlib is not available
-if TORCH_AVAILABLE and not QLIB_AVAILABLE:
+# Simple PyTorch models. These are defined whenever torch imports: create_model()
+# instantiates them directly, so gating on "qlib is absent" turned every call into
+# a NameError on machines that have both installed.
+if TORCH_AVAILABLE:
     class SimpleLSTM(nn.Module):
         def __init__(self, input_size=10, hidden_size=64, num_layers=2, output_size=1, dropout=0.2):
             super(SimpleLSTM, self).__init__()
@@ -205,6 +207,8 @@ class AdvancedModelsManager:
             return {'success': False, 'error': 'PyTorch not available'}
 
         try:
+            # The UI sends display names ("LSTM", "Transformer"); the registry is lowercase.
+            model_type = str(model_type).strip().lower().replace(' ', '_')
             model_id = model_id or f"{model_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             config = config or {}
 
@@ -226,7 +230,9 @@ class AdvancedModelsManager:
                 # Use LSTM as base (simplified)
                 model = SimpleLSTM(input_size, hidden_size, num_layers, 1, dropout)
             else:
-                return {'success': False, 'error': f'Unknown model type: {model_type}'}
+                return {'success': False,
+                        'error': f"Model type '{model_type}' is not implemented. "
+                                 "Available: lstm, gru, transformer, lstm_attention"}
 
             # Store model info
             self.models[model_id] = {
@@ -282,7 +288,15 @@ class AdvancedModelsManager:
 
         try:
             model_info = self.models[model_id]
+            if 'model' not in model_info:
+                # State loaded from disk keeps metadata only (weights are never
+                # pickled) -- rebuild a fresh network from the stored config.
+                rebuilt = self.create_model(model_info['type'], model_id, model_info.get('config'))
+                if not rebuilt.get('success'):
+                    return rebuilt
+                model_info = self.models[model_id]
             model = model_info['model']
+            synthetic = X_train is None
 
             # Generate synthetic data if not provided
             if X_train is None:
@@ -343,7 +357,7 @@ class AdvancedModelsManager:
             # Save state
             self._save_state()
 
-            return {
+            result = {
                 'success': True,
                 'model_id': model_id,
                 'epochs_trained': epochs,
@@ -352,6 +366,13 @@ class AdvancedModelsManager:
                 'loss_history': [float(l) for l in losses],
                 'message': f'Training completed in {epochs} epochs'
             }
+            if synthetic:
+                # No market data is wired into this module yet: the network was fit
+                # to Gaussian noise, so the loss says nothing about any market.
+                result['synthetic_data'] = True
+                result['warning'] = ('Trained on randomly generated data, not market data -- '
+                                     'the loss and predictions carry no financial meaning.')
+            return result
 
         except Exception as e:
             return {'success': False, 'error': str(e)}
@@ -440,6 +461,21 @@ class AdvancedModelsManager:
         }
 
 
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def main():
     """Main CLI interface"""
     if len(sys.argv) < 2:
@@ -455,12 +491,38 @@ def main():
     if command == 'list_available':
         result = manager.get_available_models()
 
-    elif command == 'create':
+    elif command in ('create', 'create_model'):
+        # 'create_model' is the name the C++ service / MCP tools use; 'create' is the
+        # original CLI spelling. Both accept config under "config" or "model_config".
         params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
         model_type = params.get('model_type', 'lstm')
         model_id = params.get('model_id', None)
-        config = params.get('config', {})
+        config = params.get('config') or params.get('model_config') or {}
         result = manager.create_model(model_type, model_id, config)
+
+    elif command == 'train_model':
+        # One-shot "create + train" for the C++ panel and MCP tools: every call is a
+        # separate process and torch weights are never persisted, so a model must be
+        # trained in the same process that builds it.
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+        config = dict(params.get('config') or params.get('model_config') or {})
+        epochs = int(config.pop('epochs', params.get('epochs', 10)))
+        batch_size = int(config.pop('batch_size', params.get('batch_size', 32)))
+        learning_rate = float(config.pop('learning_rate', params.get('learning_rate', 0.001)))
+        model_id = params.get('model_id')
+        if model_id and model_id in manager.models:
+            result = manager.train_model(model_id, epochs=epochs, batch_size=batch_size,
+                                         learning_rate=learning_rate)
+        else:
+            created = manager.create_model(params.get('model_type', 'lstm'), model_id, config)
+            if created.get('success'):
+                result = manager.train_model(created['model_id'], epochs=epochs,
+                                             batch_size=batch_size, learning_rate=learning_rate)
+                if result.get('success'):
+                    result['model_type'] = created['model_type']
+                    result['config'] = created['config']
+            else:
+                result = created
 
     elif command == 'train':
         model_id = sys.argv[2]
@@ -484,7 +546,7 @@ def main():
     else:
         result = {'success': False, 'error': f'Unknown command: {command}'}
 
-    print(json.dumps(result, indent=2))
+    print(json.dumps(_json_safe(result), indent=2))
 
 
 if __name__ == '__main__':

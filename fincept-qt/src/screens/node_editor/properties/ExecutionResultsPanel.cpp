@@ -42,8 +42,10 @@ static QString value_to_string(const QJsonValue& v) {
 }
 
 // Build a result card widget for a single node execution
-static QWidget* make_result_card(const NodeExecutionResult& result) {
+static QWidget* make_result_card(const NodeExecutionResult& result, const QString& node_label) {
     bool ok = result.success;
+    // The executor marks a node that never ran (branch not taken / gate not passed) with _skipped.
+    const bool skipped = ok && result.output.isObject() && result.output.toObject().value("_skipped").toBool(false);
 
     auto* card = new QWidget(nullptr);
     card->setObjectName("resultCard");
@@ -75,10 +77,14 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
                              .arg(ok ? ui::colors::POSITIVE.get() : ui::colors::NEGATIVE.get()));
     hl->addWidget(badge);
 
-    // Node ID (truncated)
-    auto* id_lbl = new QLabel(result.node_id.left(8) + "…");
+    // Node name (falls back to a truncated id) — a bare UUID prefix told the user
+    // nothing about WHICH node failed. The full id stays in the tooltip.
+    auto* id_lbl = new QLabel(node_label.isEmpty() ? result.node_id.left(8) + "…" : node_label);
     id_lbl->setStyleSheet(
-        QString("color: %1; font-family: Consolas; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY()));
+        node_label.isEmpty()
+            ? QString("color: %1; font-family: Consolas; font-size: 9px;").arg(ui::colors::TEXT_TERTIARY())
+            : QString("color: %1; font-family: Consolas; font-size: 11px; font-weight: bold;")
+                  .arg(ui::colors::TEXT_PRIMARY()));
     id_lbl->setToolTip(result.node_id);
     hl->addWidget(id_lbl);
 
@@ -104,7 +110,7 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
                                    " background: transparent; padding: 2px 0;")
                                .arg(ui::colors::NEGATIVE()));
         vl->addWidget(err);
-    } else if (result.output.isObject()) {
+    } else if (result.output.isObject() && !skipped) {
         auto obj = result.output.toObject();
 
         // LLM / Agent response
@@ -171,9 +177,17 @@ static QWidget* make_result_card(const NodeExecutionResult& result) {
             }
             vl->addWidget(grid);
         }
-    } else if (!result.output.isNull() && !result.output.isUndefined()) {
-        // Scalar output
-        auto* val = new QLabel(value_to_string(result.output));
+    } else if (skipped || (!result.output.isNull() && !result.output.isUndefined())) {
+        // Scalar output (or the "did not run" note for a skipped node)
+        // A node may say why it stopped the flow (a Price Alert whose condition is not met).
+        const QString skip_reason = skipped ? result.output.toObject().value("reason").toString() : QString();
+        auto* val = new QLabel(skipped ? (skip_reason.isEmpty()
+                                              ? QCoreApplication::translate(
+                                                    "ExecutionResultsPanel",
+                                                    "Skipped — an upstream branch or gate did not let data through")
+                                              : QCoreApplication::translate("ExecutionResultsPanel", "Not triggered — %1")
+                                                    .arg(skip_reason))
+                                       : value_to_string(result.output));
         val->setWordWrap(true);
         val->setTextInteractionFlags(Qt::TextSelectableByMouse);
         val->setStyleSheet(
@@ -347,7 +361,7 @@ void ExecutionResultsPanel::set_started(const QString& workflow_id) {
                                      .arg(ui::colors::AMBER()));
 }
 
-void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
+void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result, const QString& node_label) {
     ++node_count_;
     if (!result.success)
         ++error_count_;
@@ -358,7 +372,7 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
     // Append plain-text representation to copy buffer
     copy_buffer_ += QString("[%1] %2  %3\n")
                         .arg(result.success ? "OK" : "ERR")
-                        .arg(result.node_id.left(8))
+                        .arg(node_label.isEmpty() ? result.node_id.left(8) : node_label)
                         .arg(format_duration(result.duration_ms));
     if (!result.success) {
         copy_buffer_ += result.error + "\n";
@@ -376,7 +390,7 @@ void ExecutionResultsPanel::add_node_result(const NodeExecutionResult& result) {
     }
     copy_buffer_ += "\n";
 
-    auto* card = make_result_card(result);
+    auto* card = make_result_card(result, node_label);
     int pos = results_layout_->count() - 1; // before trailing stretch
     results_layout_->insertWidget(pos, card);
 

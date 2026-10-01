@@ -8,10 +8,15 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -113,10 +118,30 @@ QWidget* MAModulePanel::build_advanced_panel() {
     double_inputs_["reg_subj_growth"] = subj_growth;
     reg_vl->addWidget(build_input_row(tr("Subject Growth"), subj_growth, reg));
 
+    // The regression needs a comparable set. It used to be fed nothing (the script then had no data at all);
+    // paste one here, or leave this empty to use the deals already in the local deal database.
+    auto* reg_comps = new QTextEdit(reg);
+    reg_comps->setPlaceholderText(tr("Comparable companies (optional) - JSON array: [{\"name\":\"A\",\"ev\":5e9,"
+                                     "\"revenue\":1e9,\"ebitda\":2e8,\"growth\":0.1}, ...] (at least 3). "
+                                     "Leave empty to use the local deal database."));
+    reg_comps->setMaximumHeight(110);
+    reg_vl->addWidget(reg_comps);
+
     auto* reg_run = make_run_button(tr("RUN REGRESSION"), reg);
-    connect(reg_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Running Regression..."));
+    connect(reg_run, &QPushButton::clicked, this, [this, reg_comps]() {
         QJsonObject params;
+        const QString comps_text = reg_comps->toPlainText().trimmed();
+        if (!comps_text.isEmpty()) {
+            QJsonParseError perr{};
+            const QJsonDocument comps_doc = QJsonDocument::fromJson(comps_text.toUtf8(), &perr);
+            if (perr.error != QJsonParseError::NoError || !comps_doc.isArray()) {
+                status_label_->setText(tr("Invalid JSON"));
+                display_error(tr("Comparable companies must be a valid JSON array (%1).").arg(perr.errorString()));
+                return;
+            }
+            params["comp_data"] = comps_doc.array();
+        }
+        status_label_->setText(tr("Running Regression..."));
         params["type"] = combo_inputs_["reg_type"]->currentText().toLower();
         QJsonObject subject;
         subject["revenue"] = double_inputs_["reg_subj_revenue"]->value();

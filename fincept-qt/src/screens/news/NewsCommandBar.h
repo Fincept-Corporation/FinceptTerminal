@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QPair>
 #include <QPushButton>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QVector>
 #include <QWidget>
@@ -29,6 +30,15 @@ class NewsCommandBar : public QWidget {
     void set_active_view(const QString& view);
     /// Re-highlight the time-range pills ("1H".."30D").
     void set_active_time_range(const QString& range);
+    /// Select the FULL/FINANCE/CRYPTO/MACRO variant combo without emitting
+    /// variant_changed (restores persisted state).
+    void set_active_variant(const QString& variant);
+    /// Select the language-filter combo ("ALL", "EN", ...) without emitting.
+    void set_active_language(const QString& lang);
+    /// Show `text` in the search box without emitting search_changed — used when
+    /// the filter is applied from elsewhere (symbol link / drop) so the active
+    /// filter is visible and can be cleared with the box's clear button.
+    void set_search_text(const QString& text);
     void set_loading(bool loading);
     void set_loading_progress(int done, int total);
     void set_article_count(int count);
@@ -84,6 +94,7 @@ class NewsCommandBar : public QWidget {
 
     // Row 1 — command bar
     QLineEdit* search_input_ = nullptr;
+    QTimer* search_debounce_ = nullptr; // coalesces keystrokes into one filter pass
     QVector<QPushButton*> category_btns_;
     QVector<QPushButton*> time_btns_;
     QPushButton* sort_relevance_ = nullptr;

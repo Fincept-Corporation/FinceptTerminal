@@ -132,13 +132,15 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     int visible_article_count_ = 50;
     static constexpr int PAGE_SIZE = 50;
 
-    // Deviation baseline
+    // Deviation baseline. One sample per category per HOUR (see
+    // compute_deviations()), not one per UI refresh.
     struct CategoryBaseline {
         double mean_count = 0;
         double stddev = 0;
         QVector<int> hourly_counts;
     };
     QMap<QString, CategoryBaseline> baselines_;
+    int64_t last_baseline_sample_ts_ = 0;
 
     // Notification dedup
     QSet<QString> notified_breaking_;

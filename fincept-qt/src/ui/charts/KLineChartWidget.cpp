@@ -167,6 +167,12 @@ void KLineChartWidget::on_load_finished(bool ok) {
 void KLineChartWidget::run_js(const QString& js) {
 #ifdef HAS_QT_WEBENGINE
     if (!page_ready_) {
+        // The page may never become ready (load failed / runtime missing) while
+        // callers keep pushing candles; bound the backlog instead of growing
+        // forever. Dropping the oldest keeps the most recent chart state.
+        constexpr qsizetype kKlinePendingJsCap = 512;
+        while (pending_js_.size() >= kKlinePendingJsCap)
+            pending_js_.dequeue();
         pending_js_.enqueue(js);
         return;
     }
@@ -331,10 +337,18 @@ void KLineChartWidget::install_chart_event_filter() {
     // process is up. Retry until it exists, then filter it for right-clicks.
     QWidget* proxy = web_view_->focusProxy();
     if (!proxy) {
+        // showEvent() and on_load_finished() both call in here; without this flag
+        // every call started ANOTHER self-rescheduling 50 ms chain, and all of
+        // them kept spinning if the render widget never appeared.
+        if (proxy_retry_pending_)
+            return;
+        proxy_retry_pending_ = true;
         QPointer<KLineChartWidget> self = this;
         QTimer::singleShot(50, this, [self] {
-            if (self)
-                self->install_chart_event_filter();
+            if (!self)
+                return;
+            self->proxy_retry_pending_ = false;
+            self->install_chart_event_filter();
         });
         return;
     }

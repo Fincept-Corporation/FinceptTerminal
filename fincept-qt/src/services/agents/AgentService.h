@@ -4,8 +4,12 @@
 #include "services/agents/AgentTypes.h"
 #include "storage/repositories/AgentConfigRepository.h"
 
+#include <QHash>
 #include <QJsonObject>
 #include <QObject>
+#include <QPointer>
+
+#include <memory>
 
 namespace fincept::services {
 
@@ -38,6 +42,15 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     QString run_agent_structured(const QString& query, const QJsonObject& config, const QString& output_model);
     QString route_query(const QString& query);
     void execute_routed_query(const QString& query, const QJsonObject& config = {}, const QString& session_id = {});
+
+    /// Stop a streaming run (run_agent_streaming / run_team) by the request id it
+    /// returned. Kills the Python subprocess and emits agent_stream_done with
+    /// `error == kCancelledError`. Returns false when the id is not an in-flight
+    /// streaming run (already finished, or a non-streaming action — those run to
+    /// completion).
+    bool cancel_run(const QString& request_id);
+    /// `AgentExecutionResult::error` of a run stopped by cancel_run().
+    static constexpr const char* kCancelledError = "Cancelled by user";
 
     // ── Multi-query & parallel ───────────────────────────────────────────────
     void execute_multi_query(const QString& query, bool aggregate = true, const QJsonObject& config = {});
@@ -193,6 +206,20 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     QJsonObject build_api_keys() const;
     QJsonObject build_payload(const QString& action, const QJsonObject& params = {},
                               const QJsonObject& config = {}) const;
+    /// `model` block for a saved LLM profile id; when `profile_id` is empty (or
+    /// unknown) the assignment-chain default for `context_type` is used. Empty
+    /// object when no provider resolves — callers then fall back to the global
+    /// active LLM (build_payload's `active_llm`).
+    QJsonObject model_config_for_profile(const QString& profile_id, const QString& context_type) const;
+
+    /// In-flight streaming runs, so cancel_run() can reach the subprocess.
+    /// `done` is the runner's own done-emitted flag — cancel_run() sets it so the
+    /// process-exit handlers do not report a second, bogus result.
+    struct ActiveRun {
+        QPointer<QObject> proc;
+        std::shared_ptr<bool> done;
+    };
+    QHash<QString, ActiveRun> active_runs_;
 
     // ── Cache TTLs — delegated to CacheManager ───────────────────────────────
     static constexpr int kAgentCacheTtlSec = 5 * 60;

@@ -162,6 +162,20 @@ def op_risk_metrics(data):
     dl = risk.drawdown_length(ret)
     mrp = risk.max_recovery_period(ret)
 
+    def _when(stamp):
+        """Drawdown markers as dates when the caller supplied dates, otherwise as
+        observation numbers. Without dates the series is indexed on a synthetic
+        business-day calendar starting 2020-01-01, and reporting those invented
+        dates ("peak 2020-01-01") reads as real history."""
+        if stamp is None:
+            return None
+        if dates:
+            return str(stamp)
+        try:
+            return f"obs {int(ret.index.get_loc(stamp))}"
+        except Exception:
+            return None
+
     return {
         "n_observations": len(ret),
         "volatility_annualized": _safe_float(vol),
@@ -170,9 +184,9 @@ def op_risk_metrics(data):
         "downside_risk": _safe_float(dside),
         "max_drawdown": _safe_float(dd.get("max_drawdown")),
         "max_drawdown_pct": _safe_float(dd.get("max_drawdown_pct")),
-        "peak_date": str(dd.get("peak_date")) if dd.get("peak_date") is not None else None,
-        "trough_date": str(dd.get("trough_date")) if dd.get("trough_date") is not None else None,
-        "recovery_date": str(dd.get("recovery_date")) if dd.get("recovery_date") is not None else None,
+        "peak_date": _when(dd.get("peak_date")),
+        "trough_date": _when(dd.get("trough_date")),
+        "recovery_date": _when(dd.get("recovery_date")),
         "max_drawdown_length": _safe_int(dl.max() if hasattr(dl, "max") else dl),
         "max_recovery_period": _safe_int(mrp),
         "sharpe_ratio": _safe_float(sharpe),

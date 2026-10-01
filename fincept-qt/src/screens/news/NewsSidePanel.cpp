@@ -198,9 +198,12 @@ void NewsSidePanel::build_monitors_section(QVBoxLayout* parent) {
             keywords = kw_str.split(',', Qt::SkipEmptyParts);
             for (auto& kw : keywords)
                 kw = kw.trimmed();
+            keywords.removeAll(QString()); // "a, ,b" leaves a blank entry after trimming
         } else {
             keywords = {label};
         }
+        if (label.isEmpty() || keywords.isEmpty())
+            return; // nothing usable typed (e.g. "label: , ,")
         emit monitor_added(label, keywords);
         monitor_input_->clear();
     });
@@ -258,7 +261,9 @@ void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top
         btn->setCursor(Qt::PointingHandCursor);
 
         QString pcolor = services::priority_color(article.priority);
-        QString label = QString("%1. %2").arg(i + 1).arg(article.headline.left(50));
+        // '&' in a button label is a mnemonic marker ("AT&T" would render "ATT"
+        // with an underlined T) — double it.
+        QString label = QString("%1. %2").arg(i + 1).arg(article.headline.left(50).replace('&', "&&"));
         btn->setText(label);
         btn->setToolTip(article.headline);
 
@@ -318,6 +323,7 @@ void NewsSidePanel::update_monitors(const QVector<services::NewsMonitor>& monito
         int match_count = matches.contains(monitor.id) ? matches[monitor.id].size() : 0;
         auto* label = new QLabel(QString("%1 (%2)").arg(monitor.label).arg(match_count), this);
         label->setObjectName("newsMonitorLabel");
+        label->setTextFormat(Qt::PlainText); // labels can come from MCP/LLM tools
         hl->addWidget(label, 1);
 
         // Toggle button
@@ -550,7 +556,7 @@ void NewsSidePanel::update_saved(const QVector<services::NewsArticle>& saved) {
 
     for (int i = 0; i < std::min(10, static_cast<int>(saved.size())); ++i) {
         const auto& a = saved[i];
-        QString title = a.headline.left(40) + (a.headline.size() > 40 ? "..." : "");
+        QString title = a.headline.left(40).replace('&', "&&") + (a.headline.size() > 40 ? "..." : "");
         auto* btn = new QPushButton(title, this);
         btn->setObjectName("newsTopStoryBtn");
         btn->setToolTip(a.headline + "\n" + a.source);

@@ -12,6 +12,7 @@ Commands:
 import sys
 import json
 import math
+import re
 import time
 from collections import Counter, defaultdict
 
@@ -48,6 +49,15 @@ CATEGORY_KEYWORDS = {
     "regulatory": ["sanction", "tariff", "ban", "regulation", "antitrust",
                    "investigation", "fine", "penalty", "embargo", "restriction"],
 }
+
+
+# Whole-word (plus simple inflection) matchers, compiled once. A bare substring
+# test counted "ban" inside "bank"/"urban", "war" inside "toward"/"software" and
+# "fine" inside "refinery" — enough to trip keyword_spike on ordinary finance news.
+_KEYWORD_MATCHERS = [
+    (_kw, re.compile(r'(?<![a-z0-9])' + re.escape(_kw) + r'(?:s|es|ed|ing)?(?![a-z0-9])'))
+    for _kws in CATEGORY_KEYWORDS.values() for _kw in _kws
+]
 
 
 def detect_signals(articles_json, market_json=None):
@@ -90,10 +100,9 @@ def detect_signals(articles_json, market_json=None):
             location_events[region].append(a)
 
         # Keyword counting
-        for cat_name, keywords in CATEGORY_KEYWORDS.items():
-            for kw in keywords:
-                if kw in headline:
-                    keyword_counts[kw] += 1
+        for kw, kw_re in _KEYWORD_MATCHERS:
+            if kw_re.search(headline):
+                keyword_counts[kw] += 1
 
     # Signal 1: velocity_spike — category has 3x+ recent vs older volume
     for cat in recent_counts:
@@ -389,28 +398,31 @@ def main(args=None):
 
     command = args[0]
 
-    if command == "detect_signals":
-        market = resolve_arg(args[2]) if len(args) > 2 else None
-        result = detect_signals(resolve_arg(args[1]), market)
-    elif command == "compute_instability":
-        if len(args) < 3:
-            result = {"success": False, "error": "Usage: compute_instability <country_code> <json_signals>"}
+    try:
+        if command == "detect_signals":
+            market = resolve_arg(args[2]) if len(args) > 2 else None
+            result = detect_signals(resolve_arg(args[1]), market)
+        elif command == "compute_instability":
+            if len(args) < 3:
+                result = {"success": False, "error": "Usage: compute_instability <country_code> <json_signals>"}
+            else:
+                result = compute_instability(args[1], resolve_arg(args[2]))
+        elif command == "baseline_update":
+            if len(args) < 3:
+                result = {"success": False, "error": "Usage: baseline_update <current> <existing>"}
+            else:
+                result = baseline_update(resolve_arg(args[1]), resolve_arg(args[2]))
+        elif command == "detect_deviations":
+            if len(args) < 3:
+                result = {"success": False, "error": "Usage: detect_deviations <current> <baseline>"}
+            else:
+                result = detect_deviations(resolve_arg(args[1]), resolve_arg(args[2]))
+        elif command == "focal_points":
+            result = focal_points(resolve_arg(args[1]))
         else:
-            result = compute_instability(args[1], resolve_arg(args[2]))
-    elif command == "baseline_update":
-        if len(args) < 3:
-            result = {"success": False, "error": "Usage: baseline_update <current> <existing>"}
-        else:
-            result = baseline_update(resolve_arg(args[1]), resolve_arg(args[2]))
-    elif command == "detect_deviations":
-        if len(args) < 3:
-            result = {"success": False, "error": "Usage: detect_deviations <current> <baseline>"}
-        else:
-            result = detect_deviations(resolve_arg(args[1]), resolve_arg(args[2]))
-    elif command == "focal_points":
-        result = focal_points(resolve_arg(args[1]))
-    else:
-        result = {"success": False, "error": f"Unknown command: {command}"}
+            result = {"success": False, "error": f"Unknown command: {command}"}
+    except Exception as exc:  # malformed payload (e.g. not an array) — report, don't traceback
+        result = {"success": False, "error": f"{type(exc).__name__}: {exc}"}
 
     print(json.dumps(result))
 

@@ -1,5 +1,6 @@
 #include "services/workflow/nodes/DataFormatNodes.h"
 
+#include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
 
 #include <QJsonArray>
@@ -12,16 +13,17 @@ namespace fincept::workflow {
 
 namespace {
 
-// Resolve a dot-notation path (e.g. "data.price") through a QJsonObject.
-QJsonValue resolve_dot_path(const QJsonObject& root, const QString& path) {
-    QStringList parts = path.split('.', Qt::SkipEmptyParts);
-    QJsonValue current = root;
-    for (const QString& part : parts) {
-        if (!current.isObject())
-            return QJsonValue{};
-        current = current.toObject().value(part);
-    }
-    return current;
+// CSV cells that look numeric but are identifiers ("02134", "007") must stay text:
+// parsing them as numbers silently drops the leading zeros.
+bool fmt_csv_is_number(const QString& cell, double* out) {
+    bool ok = false;
+    const double d = cell.toDouble(&ok);
+    if (!ok)
+        return false;
+    if (cell.size() > 1 && cell[0] == QLatin1Char('0') && cell[1].isDigit())
+        return false;
+    *out = d;
+    return true;
 }
 
 // ── XML ⇄ JSON helpers (format.xml) ─────────────────────────────────────────
@@ -170,22 +172,25 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 }
 
                 if (op == "query") {
-                    // Dot-notation path extraction.
-                    QString path = params.value("query").toString();
-                    // Strip leading "$." or "$" sentinel.
-                    if (path.startsWith("$."))
-                        path = path.mid(2);
-                    else if (path == "$") {
+                    // Path extraction: data.price, items[0].price, $.items[-1].price. (The old
+                    // dot-only walker could not step into arrays at all.)
+                    QString path = params.value("query").toString().trimmed();
+                    if (path.isEmpty() || path == "$") {
                         cb(true, input, {});
                         return;
                     }
+                    if (path.startsWith("$."))
+                        path = path.mid(2);
+                    else if (path.startsWith("$["))
+                        path = path.mid(1);
 
-                    if (!input.isObject()) {
-                        cb(false, {}, "format.json query: input must be an object");
+                    if (!input.isObject() && !input.isArray()) {
+                        cb(false, {}, "format.json query: input must be an object or array");
                         return;
                     }
+                    const QJsonValue found = ExpressionEngine::resolve_path(input, path);
                     QJsonObject out;
-                    out["result"] = resolve_dot_path(input.toObject(), path);
+                    out["result"] = found.isUndefined() ? QJsonValue(QJsonValue::Null) : found;
                     cb(true, out, {});
                     return;
                 }
@@ -363,12 +368,15 @@ void register_data_format_nodes(NodeRegistry& registry) {
                     }
                 }
 
-                // The node has three output ports; pack all results into one object
-                // so the WorkflowExecutor can fan them out to the correct ports.
+                // The node has three output ports; pack all results into one object and tag
+                // each port's share under "_ports" — WorkflowExecutor::collect_inputs hands
+                // every edge only the value of the port it leaves from. (Without the tag all
+                // three ports delivered the same whole object.)
                 QJsonObject out;
                 out["added"] = added;
                 out["removed"] = removed;
                 out["changed"] = changed;
+                out["_ports"] = QJsonObject{{"output_added", added}, {"output_removed", removed}, {"output_changed", changed}};
                 cb(true, out, {});
             },
     });
@@ -461,9 +469,8 @@ void register_data_format_nodes(NodeRegistry& registry) {
                         for (int col = 0; col < headers.size(); ++col) {
                             QString val = (col < cols.size()) ? cols[col] : QString{};
                             // Try to parse as number; fall back to string.
-                            bool ok = false;
-                            double num = val.toDouble(&ok);
-                            if (ok)
+                            double num = 0;
+                            if (fmt_csv_is_number(val, &num))
                                 obj.insert(headers[col], num);
                             else
                                 obj.insert(headers[col], val);
@@ -476,9 +483,8 @@ void register_data_format_nodes(NodeRegistry& registry) {
                         QStringList cols = split_csv_line(line);
                         QJsonArray row_arr;
                         for (const QString& col : cols) {
-                            bool ok = false;
-                            double num = col.toDouble(&ok);
-                            if (ok)
+                            double num = 0;
+                            if (fmt_csv_is_number(col, &num))
                                 row_arr.append(num);
                             else
                                 row_arr.append(col);

@@ -141,6 +141,7 @@ void MaritimeVesselsWidget::build_rows() {
     for (const auto& imo : imos_) {
         auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
+        link_screen(row, QStringLiteral("maritime"), tr("Double-click to open the Maritime screen"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
@@ -304,7 +305,14 @@ void MaritimeVesselsWidget::apply_styles() {
 void MaritimeVesselsWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("MARITIME VESSELS"));
-    build_rows(); // re-renders header + row labels in the new language
+    const QStringList headers = {tr("VESSEL"), tr("ROUTE"), tr("KN"), tr("PROG")};
+    for (int i = 0; i < header_labels_.size() && i < headers.size(); ++i)
+        header_labels_[i]->setText(headers[i]);
+    // Only the "no vessels configured" placeholder carries translatable text.
+    // Rebuilding populated rows (as this used to) blanked every vessel back to
+    // "—" until its next hub publish.
+    if (imos_.isEmpty())
+        build_rows();
 }
 
 } // namespace fincept::screens::widgets

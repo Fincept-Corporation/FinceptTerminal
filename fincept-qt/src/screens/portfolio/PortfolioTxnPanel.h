@@ -31,6 +31,8 @@ class PortfolioTxnPanel : public QWidget {
     /// `collapsed=true` → caller should shrink the panel to header height;
     /// `collapsed=false` → restore to its full size.
     void collapse_toggled(bool collapsed);
+    /// Double-click on a transaction row: the owner opens that ticker elsewhere.
+    void symbol_activated(QString symbol);
 
   private:
     void build_ui();

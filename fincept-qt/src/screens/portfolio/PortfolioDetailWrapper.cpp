@@ -174,6 +174,12 @@ void PortfolioDetailWrapper::update_correlation(const QHash<QString, double>& ma
         v->set_correlation(matrix);
 }
 
+void PortfolioDetailWrapper::set_optimization_target(double annual_return) {
+    auto* widget = get_or_create_view(portfolio::DetailView::Optimization);
+    if (auto* opt = qobject_cast<PortfolioOptimizationView*>(widget))
+        opt->set_target_return(annual_return);
+}
+
 QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) {
     int key = static_cast<int>(view);
     auto it = views_.find(key);

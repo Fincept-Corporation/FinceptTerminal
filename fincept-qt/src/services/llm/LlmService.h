@@ -70,6 +70,13 @@ struct LlmResponse {
     /// Failure looks transient (upstream/model error, not a malformed request),
     /// so the caller may resubmit the identical prompt once.
     bool retryable = false;
+    /// The request was stopped by cancel_active_request(). `content` then holds
+    /// whatever had streamed so far (possibly empty).
+    bool cancelled = false;
+    /// chat_session_id the request was issued with (chat_streaming only). The
+    /// finished_streaming() signal is global, so each consumer uses this to tell
+    /// its own response from another consumer's (tab vs. floating Quick Chat).
+    QString origin_session_id = {};
 };
 
 /// (chunk_text, is_done) — invoked on a background thread.
@@ -98,6 +105,15 @@ class LlmService : public QObject {
     /// Back-compat: false→None, true→All. Prefer the enum overload.
     void chat_streaming(const QString& user_message, const std::vector<ConversationMessage>& history,
                         StreamCallback on_chunk, bool use_tools);
+
+    /// Stop the request currently executing on the worker thread (streaming read,
+    /// tool loop, blocking POST). Safe from any thread; a no-op when idle. The
+    /// request finishes promptly with LlmResponse::cancelled = true. When
+    /// `chat_session_id` is non-empty only a request issued with that id is
+    /// cancelled, so the AI Chat tab's Stop never kills the Quick Chat bubble's
+    /// request (which carries no id). Work already handed to a tool keeps
+    /// running until the tool returns.
+    void cancel_active_request(const QString& chat_session_id = {});
 
     /// Call after the user changes LLM settings.
     void reload_config();
@@ -145,6 +161,12 @@ class LlmService : public QObject {
     // (deferred): thread a per-request config context through do_*_request instead
     // of reading shared members.
     QMutex request_serialize_mutex_;
+
+    // chat_session_id of the request currently holding request_serialize_mutex_
+    // (empty for callers that pass none) and whether one is running at all.
+    // Guarded by mutex_; read by cancel_active_request().
+    QString active_chat_session_;
+    bool request_active_ = false;
 
     // Lazily reloaded; mutable so const accessors can call ensure_config().
     mutable QString provider_;
@@ -245,6 +267,8 @@ class LlmService : public QObject {
         int status = 0;
         QByteArray body;
         QString error;
+        bool cancelled = false; // aborted by cancel_active_request()
+        int retry_after_s = 0;  // Retry-After header (seconds), 0 when absent
     };
     static HttpResult blocking_post(const QString& url, const QJsonObject& body, const QMap<QString, QString>& headers,
                                     int timeout_ms = 120000);

@@ -545,6 +545,18 @@ std::vector<ToolDef> get_excel_tools() {
                     resolve(ToolResult::fail(kAddressingError));
                     return;
                 }
+                // get_excel_cell range-checks; this path did not. An out-of-range index went
+                // straight to QTableWidget::setItem (an invalid-index warning, and a leaked
+                // item) and the call still answered "Cell updated" for a write that never
+                // happened. A fixed-size sheet needs add_excel_sheet(rows, cols) to grow.
+                if (r >= s->row_count() || c >= s->col_count()) {
+                    resolve(ToolResult::fail(QString("Cell out of range: the sheet is %1 rows x %2 cols (zero-based "
+                                                     "row/col). Use set_excel_sheet_data to extend it, or "
+                                                     "add_excel_sheet with larger rows/cols.")
+                                                 .arg(s->row_count())
+                                                 .arg(s->col_count())));
+                    return;
+                }
                 s->set_cell(r, c, args["text"].toString());
                 resolve(ToolResult::ok("Cell updated"));
             });
@@ -582,6 +594,10 @@ std::vector<ToolDef> get_excel_tools() {
                 int r = -1, c = -1;
                 if (!resolve_row_col(args, r, c)) {
                     resolve(ToolResult::fail(kAddressingError));
+                    return;
+                }
+                if (r >= s->row_count() || c >= s->col_count()) {
+                    resolve(ToolResult::fail("Cell out of range"));
                     return;
                 }
                 s->set_cell(r, c, QString());
@@ -658,11 +674,37 @@ std::vector<ToolDef> get_excel_tools() {
                     resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
+                // This runs on the UI thread and builds a table item per non-empty cell, so an
+                // unbounded array from the model could freeze the terminal for minutes. A
+                // generous but finite ceiling, reported rather than silently truncated.
+                constexpr int kMaxSheetRows = 20000;
+                constexpr int kMaxSheetCols = 256;
+                const QJsonArray rows_in = args["rows"].toArray();
+                if (rows_in.size() > kMaxSheetRows) {
+                    resolve(ToolResult::fail(QString("Too many rows (%1) — at most %2 per call").arg(rows_in.size()).arg(kMaxSheetRows)));
+                    return;
+                }
                 QVector<QVector<QString>> data;
-                for (const auto& row_v : args["rows"].toArray()) {
+                for (const auto& row_v : rows_in) {
+                    const QJsonArray cells_in = row_v.toArray();
+                    if (cells_in.size() > kMaxSheetCols) {
+                        resolve(ToolResult::fail(QString("A row has %1 cells — at most %2 columns").arg(cells_in.size()).arg(kMaxSheetCols)));
+                        return;
+                    }
                     QVector<QString> row;
-                    for (const auto& cell : row_v.toArray())
-                        row.append(cell.toString());
+                    for (const auto& cell : cells_in) {
+                        // QJsonValue::toString() is "" for a number or bool, so a model that sent
+                        // [[1, 2.5, true]] — the natural thing for a numeric table — wrote a row of
+                        // blank cells and was told the data was replaced.
+                        if (cell.isString())
+                            row.append(cell.toString());
+                        else if (cell.isDouble())
+                            row.append(QString::number(cell.toDouble(), 'g', 15));
+                        else if (cell.isBool())
+                            row.append(cell.toBool() ? QStringLiteral("TRUE") : QStringLiteral("FALSE"));
+                        else
+                            row.append(QString());
+                    }
                     data.append(row);
                 }
                 s->set_data(data);

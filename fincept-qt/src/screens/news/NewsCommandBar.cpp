@@ -143,7 +143,21 @@ void NewsCommandBar::build_command_row(QVBoxLayout* root) {
     search_input_->setClearButtonEnabled(true);
     hl->addWidget(search_input_);
 
-    connect(search_input_, &QLineEdit::textChanged, this, [this](const QString& text) { emit search_changed(text); });
+    // Every keystroke used to start a full filter + cluster pass over the whole
+    // article list (and a DB search on the 7D/30D ranges). Coalesce typing; an
+    // emptied box (clear button / backspace-to-empty) still applies immediately.
+    search_debounce_ = new QTimer(this);
+    search_debounce_->setSingleShot(true);
+    search_debounce_->setInterval(200);
+    connect(search_debounce_, &QTimer::timeout, this, [this]() { emit search_changed(search_input_->text()); });
+    connect(search_input_, &QLineEdit::textChanged, this, [this](const QString& text) {
+        if (text.isEmpty()) {
+            search_debounce_->stop();
+            emit search_changed(text);
+            return;
+        }
+        search_debounce_->start();
+    });
 
     hl->addSpacing(4);
 
@@ -494,6 +508,35 @@ void NewsCommandBar::set_active_time_range(const QString& range) {
     update_pill_group(time_btns_, active_time_);
 }
 
+void NewsCommandBar::set_active_variant(const QString& variant) {
+    if (!variant_combo_)
+        return;
+    const int idx = variant_combo_->findText(variant);
+    if (idx < 0)
+        return;
+    QSignalBlocker block(variant_combo_);
+    variant_combo_->setCurrentIndex(idx);
+}
+
+void NewsCommandBar::set_active_language(const QString& lang) {
+    if (!lang_filter_combo_)
+        return;
+    const int idx = lang_filter_combo_->findText(lang, Qt::MatchFixedString); // case-insensitive
+    if (idx < 0)
+        return;
+    QSignalBlocker block(lang_filter_combo_);
+    lang_filter_combo_->setCurrentIndex(idx);
+}
+
+void NewsCommandBar::set_search_text(const QString& text) {
+    if (!search_input_ || search_input_->text() == text)
+        return;
+    if (search_debounce_)
+        search_debounce_->stop();
+    QSignalBlocker block(search_input_);
+    search_input_->setText(text);
+}
+
 void NewsCommandBar::set_loading(bool loading) {
     refresh_btn_->setEnabled(!loading);
     refresh_btn_->setText(loading ? tr("...") : tr("REFRESH"));
@@ -573,7 +616,7 @@ void NewsCommandBar::update_sentiment(int bullish, int bearish, int neutral) {
 
     int bull_w = std::max(1, bullish * 100 / total);
     int bear_w = std::max(1, bearish * 100 / total);
-    int neut_w = 100 - bull_w - bear_w;
+    int neut_w = std::max(0, 100 - bull_w - bear_w); // the 1-minimums can overshoot 100
 
     auto* bar_layout = sentiment_bull_->parentWidget()->layout();
     if (auto* hl = qobject_cast<QHBoxLayout*>(bar_layout)) {

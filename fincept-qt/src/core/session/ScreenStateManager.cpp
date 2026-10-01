@@ -5,12 +5,41 @@
 #include "storage/cache/TabSessionStore.h"
 
 #include <QJsonObject>
+#include <QPointer>
 #include <QTimer>
 #include <QtConcurrent/QtConcurrent>
 
 #include <tuple>
 
 namespace fincept {
+
+namespace {
+
+// pending_saves_ / pending_uuid_saves_ hold raw IStatefulScreen*, which is not a
+// QObject and so cannot be wrapped in a QPointer directly. A screen that is
+// destroyed inside the 500 ms debounce window (window closed, panel torn off or
+// moved to another frame) would otherwise be dereferenced by flush_pending().
+// notify_changed*() therefore records a QPointer to the screen's QObject side
+// here (header-neutral: this header is included by ~75 files), and
+// flush_pending() skips any screen whose guard has gone null. Screens that are
+// not QObjects have no entry and are treated as live, as before.
+QHash<const screens::IStatefulScreen*, QPointer<QObject>>& ssm_pending_guards() {
+    static QHash<const screens::IStatefulScreen*, QPointer<QObject>> guards;
+    return guards;
+}
+
+void ssm_guard_pending(screens::IStatefulScreen* screen) {
+    if (auto* obj = dynamic_cast<QObject*>(screen))
+        ssm_pending_guards().insert(screen, QPointer<QObject>(obj));
+}
+
+bool ssm_pending_screen_alive(const screens::IStatefulScreen* screen) {
+    const auto& guards = ssm_pending_guards();
+    const auto it = guards.constFind(screen);
+    return it == guards.constEnd() || !it.value().isNull();
+}
+
+} // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
@@ -90,6 +119,7 @@ void ScreenStateManager::notify_changed(screens::IStatefulScreen* screen) {
     if (!screen)
         return;
     pending_saves_.insert(screen->state_key(), screen);
+    ssm_guard_pending(screen);
     debounce_timer_->start(); // restart — resets the 500 ms window
 }
 
@@ -128,8 +158,8 @@ void ScreenStateManager::flush_pending() {
 
     for (auto it = snapshot.constBegin(); it != snapshot.constEnd(); ++it) {
         screens::IStatefulScreen* screen = it.value();
-        if (!screen)
-            continue;
+        if (!screen || !ssm_pending_screen_alive(screen))
+            continue; // destroyed inside the debounce window
 
         const QString key = screen->state_key();
         const QVariantMap state = screen->save_state();
@@ -141,8 +171,8 @@ void ScreenStateManager::flush_pending() {
 
     for (auto it = uuid_snapshot.constBegin(); it != uuid_snapshot.constEnd(); ++it) {
         screens::IStatefulScreen* screen = it.value();
-        if (!screen)
-            continue;
+        if (!screen || !ssm_pending_screen_alive(screen))
+            continue; // destroyed inside the debounce window
 
         const QString instance_uuid = it.key();
         const QString screen_key = screen->state_key();
@@ -152,6 +182,7 @@ void ScreenStateManager::flush_pending() {
 
         write_async_by_uuid(instance_uuid, screen_key, state, version, sid);
     }
+    ssm_pending_guards().clear(); // every queued screen has been handled or skipped
 
     LOG_DEBUG(
         "ScreenState",
@@ -292,6 +323,7 @@ void ScreenStateManager::notify_changed_by_uuid(screens::IStatefulScreen* screen
     if (!screen || instance_uuid.isEmpty())
         return;
     pending_uuid_saves_.insert(instance_uuid, screen);
+    ssm_guard_pending(screen);
     debounce_timer_->start();
 }
 

@@ -49,6 +49,130 @@ def _safe_float(x, default: float = 0.0) -> float:
         return default
 
 
+def _day_str(ts) -> str:
+    """'YYYY-MM-DD' from the runner's 'YYYY-MM-DD HH:MM:SS' bar time."""
+    return str(ts).split(' ')[0].split('T')[0]
+
+
+def _normalize_equity(equity_curve: List[Dict[str, Any]], initial_capital: float) -> List[Dict[str, Any]]:
+    """Runner equity points are {time, equity}; the frontend's chart reads
+    {date, equity, returns, drawdown} (drawdown a NEGATIVE fraction, like every other
+    provider). With the old shape the chart found no `date` and stayed blank."""
+    out: List[Dict[str, Any]] = []
+    peak = initial_capital if initial_capital > 0 else 0.0
+    for pt in equity_curve or []:
+        if not isinstance(pt, dict):
+            continue
+        v = _safe_float(pt.get('equity'), float('nan'))
+        if math.isnan(v):
+            continue
+        peak = max(peak, v)
+        out.append({
+            'date': _day_str(pt.get('time', pt.get('date', ''))),
+            'equity': v,
+            'returns': ((v - initial_capital) / initial_capital) if initial_capital > 0 else 0.0,
+            'drawdown': ((v - peak) / peak) if peak > 0 else 0.0,
+        })
+    return out
+
+
+def _build_round_trips(fills: List[Dict[str, Any]],
+                       open_positions: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Turn the runner's raw FILLS ({time, symbol, quantity(signed), price, type}) into
+    closed round-trip trades with realised P&L (average-cost method).
+
+    The runner reports each order, with no pnl; `total_trades` therefore counted buys AND
+    sells separately, win rate / profit factor / expectancy were all 0, and the DETAILS table
+    was full of dashes. A reducing fill realises P&L against the position's average cost; a
+    fill through zero closes the old position and opens the remainder the other way. A position
+    still open at the end (`open_positions`) is reported as an open trade marked at its last
+    price, so a buy-and-hold run is not shown as "zero trades".
+    """
+    positions: Dict[str, List[Any]] = {}  # symbol -> [signed qty, avg cost, open time]
+    rows: List[Dict[str, Any]] = []
+    for f in fills or []:
+        if not isinstance(f, dict):
+            continue
+        sym = str(f.get('symbol', ''))
+        q = _safe_float(f.get('quantity'))
+        px = _safe_float(f.get('price'))
+        t = f.get('time')
+        if q == 0 or px <= 0:
+            continue
+        pos = positions.setdefault(sym, [0.0, 0.0, None])
+        qty, avg, opened = pos
+        if qty == 0 or (qty > 0) == (q > 0):  # open / add
+            new_qty = qty + q
+            avg = (abs(qty) * avg + abs(q) * px) / abs(new_qty)
+            pos[:] = [new_qty, avg, opened if qty != 0 else t]
+            continue
+        closing = min(abs(q), abs(qty))
+        direction = 1 if qty > 0 else -1
+        pnl = (px - avg) * closing * direction
+        try:
+            from datetime import datetime as _dt
+            holding = (_dt.strptime(str(t)[:19], '%Y-%m-%d %H:%M:%S') -
+                       _dt.strptime(str(opened)[:19], '%Y-%m-%d %H:%M:%S')).days
+        except Exception:
+            holding = None
+        rows.append({
+            'id': f'trade_{len(rows)}',
+            'symbol': sym,
+            'entry_date': _day_str(opened),
+            'exit_date': _day_str(t),
+            'side': 'long' if direction > 0 else 'short',
+            'quantity': closing,
+            'entry_price': avg,
+            'exit_price': px,
+            'pnl': pnl,
+            'pnl_percent': ((px / avg - 1.0) * direction) if avg > 0 else 0.0,
+            'holding_period': holding,
+            'exit_reason': 'signal',
+            'commission': 0.0,
+            'slippage': 0.0,
+        })
+        new_qty = qty + q
+        if new_qty == 0:
+            pos[:] = [0.0, 0.0, None]
+        elif (new_qty > 0) != (qty > 0):  # flipped: the remainder opens the other way at px
+            pos[:] = [new_qty, px, t]
+        else:  # partial reduce keeps the original cost basis
+            pos[:] = [new_qty, avg, opened]
+
+    for op in open_positions or []:
+        sym = str(op.get('symbol', ''))
+        qty = _safe_float(op.get('quantity'))
+        mkt = _safe_float(op.get('market_price'))
+        if qty == 0 or mkt <= 0 or sym not in positions:
+            continue
+        _, avg, opened = positions[sym]
+        direction = 1 if qty > 0 else -1
+        last_t = op.get('time')
+        try:
+            from datetime import datetime as _dt
+            holding = (_dt.strptime(str(last_t)[:19], '%Y-%m-%d %H:%M:%S') -
+                       _dt.strptime(str(opened)[:19], '%Y-%m-%d %H:%M:%S')).days
+        except Exception:
+            holding = None
+        rows.append({
+            'id': f'trade_{len(rows)}',
+            'symbol': sym,
+            'entry_date': _day_str(opened),
+            'exit_date': _day_str(last_t),
+            'side': 'long' if direction > 0 else 'short',
+            'quantity': abs(qty),
+            'entry_price': avg,
+            'exit_price': mkt,
+            'pnl': (mkt - avg) * abs(qty) * direction,
+            'pnl_percent': ((mkt / avg - 1.0) * direction) if avg > 0 else 0.0,
+            'holding_period': holding,
+            'exit_reason': 'open_at_end',
+            'commission': 0.0,
+            'slippage': 0.0,
+        })
+    return rows
+
+
 # Frontend's display_result() reads these performance keys (all in fraction
 # form, e.g. 0.12 = 12%). Other providers all emit them via _enrich_metrics.
 def _enrich_metrics_from_equity(
@@ -103,28 +227,31 @@ def _enrich_metrics_from_equity(
             sharpe = (mean_r * 252) / (std * ann_factor)
         volatility = std * ann_factor
 
-        downside = [r for r in daily_returns if r < 0]
-        if downside:
-            d_var = sum(r ** 2 for r in downside) / len(downside)
-            d_std = math.sqrt(d_var)
-            if d_std > 1e-12:
-                sortino = (mean_r * 252) / (d_std * ann_factor)
+        # Standard downside deviation: sqrt(mean(min(r, 0)^2)) over ALL bars. (It was the RMS
+        # of the negative bars only — divided by the number of losing bars — which overstates
+        # downside risk and understates Sortino whenever losses are the minority.)
+        d_var = sum(min(r, 0.0) ** 2 for r in daily_returns) / n
+        d_std = math.sqrt(d_var)
+        if d_std > 1e-12:
+            sortino = (mean_r * 252) / (d_std * ann_factor)
 
-    # Total return / annualised return.
-    total_return = _safe_float(runner_perf.get('total_return'))
-    if total_return == 0.0 and eq_values:
-        first = eq_values[0]
-        last = eq_values[-1]
-        if first > 0:
-            total_return = (last - first) / first
+    # Total return / annualised return — from the equity curve, as a FRACTION. The runner's
+    # own `total_return` is already in PERCENT, and used here as a fraction it showed a +12.5%
+    # run as "1250%" and blew the annualised figure up with it.
+    total_return = 0.0
+    if initial_capital > 0 and eq_values:
+        total_return = (eq_values[-1] - initial_capital) / initial_capital
     days = max(1, len(eq_values))
     years = days / 252.0
-    annualized_return = ((1 + total_return) ** (1 / years) - 1) if years > 0 else total_return
+    if years > 0 and (1 + total_return) > 0:
+        annualized_return = (1 + total_return) ** (1 / years) - 1
+    else:
+        annualized_return = -1.0 if (1 + total_return) <= 0 else total_return
 
     calmar = (annualized_return / max_dd) if max_dd > 1e-12 else 0.0
 
-    # Trade-level stats.
-    total_trades = int(runner_perf.get('total_trades', len(trades) if trades else 0))
+    # Trade-level stats (closed round trips; see _build_round_trips).
+    total_trades = len(trades) if trades else 0
     pnls: List[float] = []
     for t in trades or []:
         # Runner emits trades with quantity/price/type — no direct pnl.
@@ -143,7 +270,11 @@ def _enrich_metrics_from_equity(
     largest_loss = min(losses) if losses else 0.0
     gross_profit = sum(wins) if wins else 0.0
     gross_loss = abs(sum(losses)) if losses else 0.0
-    profit_factor = (gross_profit / gross_loss) if gross_loss > 1e-12 else 0.0
+    # Winners and no losing trade is +inf (the JSON layer emits null -> the UI shows "∞").
+    if gross_loss > 1e-12:
+        profit_factor = gross_profit / gross_loss
+    else:
+        profit_factor = float('inf') if gross_profit > 0 else 0.0
 
     return {
         'total_return': total_return,
@@ -165,6 +296,7 @@ def _enrich_metrics_from_equity(
         'largest_loss': largest_loss,
         'average_trade_return': (sum(pnls) / len(pnls)) if pnls else 0.0,
         'expectancy': win_rate * average_win + loss_rate * average_loss,
+        'total_orders': int(runner_perf.get('total_trades', 0)),  # raw fills (buys + sells)
         # Strategy metadata kept on the perf dict for parity with the
         # original (lighter) shape.
         'strategy_id': runner_perf.get('strategy_id'),
@@ -272,10 +404,14 @@ class FinceptProvider:
         # Flatten — return just the inner data block plus computed metrics.
         inner = result.get('data') or {}
         runner_perf = inner.get('performance') or {}
-        trades = inner.get('trades') or []
-        equity = inner.get('equity') or []
+        fills = inner.get('trades') or []
+        raw_equity = inner.get('equity') or []
 
-        performance = _enrich_metrics_from_equity(runner_perf, equity, trades, initial_capital)
+        # Frontend-shaped equity curve + realised round-trip trades (the runner emits raw
+        # time/fill records the screen cannot render).
+        equity = _normalize_equity(raw_equity, initial_capital)
+        trades = _build_round_trips(fills, inner.get('open_positions'))
+        performance = _enrich_metrics_from_equity(runner_perf, raw_equity, trades, initial_capital)
 
         # Build statistics block matching the dataclass other providers use.
         statistics = {
@@ -302,6 +438,7 @@ class FinceptProvider:
                 'status': 'completed',
                 'performance': performance,
                 'trades': trades,
+                'fills': fills,
                 'equity': equity,
                 'statistics': statistics,
                 'logs': [
@@ -465,6 +602,27 @@ class FinceptProvider:
                 'iterations': len(combos),
                 'all_results': all_results[:100],
             }
+            # The screen's OPTIMIZE view reads these keys at the TOP level (every other
+            # provider emits them there); they only existed nested under `optimization`, so
+            # the summary cards, best-parameter cards and results table all rendered empty.
+            data['iterations'] = len(combos)
+            data['total_combinations'] = len(combos)
+            data['method'] = method
+            data['objective'] = objective
+            data['best_objective_value'] = float(best_score) if best_score != -math.inf else 0.0
+            data['best_parameters'] = best_combo
+            data['best_performance'] = data.get('performance', {})
+            data['all_results'] = [
+                {
+                    'parameters': r.get('parameters', {}),
+                    'objective_value': r.get('score'),
+                    'performance': {
+                        'total_return': r.get('total_return'),
+                        'sharpe_ratio': r.get('sharpe_ratio'),
+                    },
+                }
+                for r in all_results[:100] if r.get('score') is not None
+            ]
             return {'success': True, 'message': 'Optimization completed', 'data': data}
 
         except Exception as e:
@@ -552,6 +710,27 @@ class FinceptProvider:
 
             data = last_result['data']
             ok_folds = [f for f in folds if 'error' not in f]
+            # Top-level keys the WALK-FORWARD view reads (same names the other providers use).
+            oos_returns = [f['testReturn'] for f in ok_folds]
+            oos_sharpes = [f['testSharpe'] for f in ok_folds]
+            n_ok = len(ok_folds)
+            mean_ret = (sum(oos_returns) / n_ok) if n_ok else 0.0
+            data['n_windows'] = n_ok
+            data['avg_oos_return'] = mean_ret
+            data['avg_oos_sharpe'] = (sum(oos_sharpes) / n_ok) if n_ok else 0.0
+            data['oos_return_std'] = (
+                math.sqrt(sum((r - mean_ret) ** 2 for r in oos_returns) / (n_ok - 1)) if n_ok > 1 else 0.0)
+            data['robustness_score'] = (sum(1 for r in oos_returns if r > 0) / n_ok) if n_ok else 0.0
+            data['windows'] = [
+                {
+                    'window': f['fold'] + 1,
+                    'train_start': f['trainStart'], 'train_end': f['trainEnd'],
+                    'test_start': f['testStart'], 'test_end': f['testEnd'],
+                    'out_of_sample_return': f['testReturn'],
+                    'out_of_sample_sharpe': f['testSharpe'],
+                }
+                for f in ok_folds
+            ]
             data['walk_forward'] = {
                 'n_splits': n_splits,
                 'train_ratio': train_ratio,

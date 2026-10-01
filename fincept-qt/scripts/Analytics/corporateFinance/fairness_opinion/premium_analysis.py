@@ -263,11 +263,52 @@ class PremiumAnalysis:
             'within_analyst_range': min_target <= self.offer_price_per_share <= max_target
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `premium_analysis.py analyze <flat-params-json>` (argv length 3) with the offer
+# price and a handful of reference prices. The native `premium <daily_prices_json> <offer> [date]` form needs a daily
+# price series, so a service-style call is handled here by running the same PremiumAnalysis on the supplied
+# reference prices. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("analyze",)
+# panel key -> label used in the result
+_SVC_PRICE_KEYS = (("price_1d", "1_day"), ("price_1w", "1_week"), ("price_4w", "4_week"), ("price_13w", "13_week"),
+                   ("price_26w", "26_week"), ("price_52w", "52_week_high"), ("unaffected_price", "unaffected"))
+
+
+def _service_dispatch(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return False
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return False
+    if not isinstance(p, dict):
+        return False
+    try:
+        offer = p.get("offer_price")
+        if not isinstance(offer, (int, float)) or isinstance(offer, bool) or offer <= 0:
+            raise ValueError("A positive offer price is required")
+        prices = {label: float(p[key]) for key, label in _SVC_PRICE_KEYS
+                  if isinstance(p.get(key), (int, float)) and not isinstance(p.get(key), bool)}
+        if not prices:
+            raise ValueError("At least one reference price (e.g. price_1d) is required")
+        shares = p.get("shares_outstanding", 50_000_000)
+        analysis = PremiumAnalysis(offer_price_per_share=float(offer), shares_outstanding=float(shares))
+        print(json.dumps({"success": True, "data": analysis.calculate_premiums(prices)}, default=str))
+    except Exception as e:
+        print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
+        sys.exit(1)
+    return True
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    if _service_dispatch(sys.argv):
+        return
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

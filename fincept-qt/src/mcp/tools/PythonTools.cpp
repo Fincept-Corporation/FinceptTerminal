@@ -13,6 +13,7 @@
 #include <QPromise>
 #include <QRegularExpression>
 
+#include <algorithm>
 #include <memory>
 
 namespace fincept::mcp::tools {
@@ -99,16 +100,31 @@ std::vector<ToolDef> get_python_tools() {
             QStringList script_args;
             if (args_obj.contains("args") && args_obj["args"].isArray()) {
                 for (const auto& a : args_obj["args"].toArray()) {
+                    // The schema says "array of strings" but items are not type-checked,
+                    // and models pass numbers/booleans all the time. Numbers and bools
+                    // used to fall into the object branch, where `toObject()` of a scalar
+                    // is an empty object — the script silently received "{}" instead of
+                    // the value. Convert each JSON type to the argv text it stands for.
                     if (a.isString())
                         script_args.append(a.toString());
-                    else
-                        script_args.append(QJsonDocument(QJsonValue(a).toObject()).toJson());
+                    else if (a.isBool())
+                        script_args.append(a.toBool() ? QStringLiteral("true") : QStringLiteral("false"));
+                    else if (a.isDouble())
+                        script_args.append(QString::number(a.toDouble(), 'g', 15));
+                    else if (a.isObject())
+                        script_args.append(QString::fromUtf8(QJsonDocument(a.toObject()).toJson(QJsonDocument::Compact)));
+                    else if (a.isArray())
+                        script_args.append(QString::fromUtf8(QJsonDocument(a.toArray()).toJson(QJsonDocument::Compact)));
+                    // null / undefined: no argv text to pass
                 }
             }
 
             if (!python::PythonRunner::instance().is_available()) {
-                promise->addResult(ToolResult::fail("Python is not available — run setup first"));
-                promise->finish();
+                // Resolve through the shared single-winner guard (ctx.resolve_guard), not a
+                // bare addResult(): the provider's watchdog races the same flag.
+                AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [](auto resolve) {
+                    resolve(ToolResult::fail("Python is not available — run setup first"));
+                });
                 return;
             }
 
@@ -154,22 +170,54 @@ std::vector<ToolDef> get_python_tools() {
     {
         ToolDef t;
         t.name = "list_python_scripts";
-        t.description = "List all available Python analytics scripts in the scripts/ directory.";
+        t.description = "List the runnable Python analytics scripts in the scripts/ directory (there are hundreds — "
+                        "pass `query` to filter by name; results are capped by `limit`).";
         t.category = "analytics";
-        t.handler = [](const QJsonObject&) -> ToolResult {
+        t.input_schema = ToolSchemaBuilder()
+                             .string("query", "Case-insensitive substring to filter script names (e.g. 'yfinance')")
+                             .default_str("")
+                             .length(0, 64)
+                             .integer("limit", "Max scripts to return")
+                             .default_int(100)
+                             .between(1, 500)
+                             .build();
+        t.handler = [](const QJsonObject& args) -> ToolResult {
             QString scripts_dir = python::PythonRunner::instance().scripts_dir();
             QDir dir(scripts_dir);
 
             if (!dir.exists())
                 return ToolResult::fail("Scripts directory not found: " + scripts_dir);
 
+            const QString needle = args["query"].toString().trimmed().toLower();
+            const int limit = std::clamp(args["limit"].toInt(100), 1, 500);
+
+            // Only offer names run_python_script will accept (its `script` pattern), so
+            // the model is never handed a script the validator then refuses.
+            static const QRegularExpression runnable(QStringLiteral("^[a-zA-Z0-9_-]+$"));
+
             QStringList py_files = dir.entryList({"*.py"}, QDir::Files, QDir::Name);
             QJsonArray result;
+            int matched = 0;
             for (const auto& f : py_files) {
                 QString name = f;
                 name.chop(3); // remove .py
-                result.append(QJsonObject{{"name", name}, {"filename", f}});
+                if (!runnable.match(name).hasMatch())
+                    continue;
+                if (!needle.isEmpty() && !name.toLower().contains(needle))
+                    continue;
+                ++matched;
+                if (result.size() < limit)
+                    result.append(QJsonObject{{"name", name}, {"filename", f}});
             }
+            // The unfiltered list is ~365 names — far over the result budget, and the
+            // overflow shaper keeps the alphabetically-first ones. Say so, and tell the
+            // model how to see the rest, rather than letting a clipped list read as complete.
+            if (matched > result.size())
+                return ToolResult::ok(QStringLiteral("Showing %1 of %2 matching scripts — pass `query` to narrow the "
+                                                     "list or raise `limit` (max 500).")
+                                          .arg(result.size())
+                                          .arg(matched),
+                                      result);
             return ToolResult::ok_data(result);
         };
         tools.push_back(std::move(t));

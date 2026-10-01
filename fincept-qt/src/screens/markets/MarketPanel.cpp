@@ -4,6 +4,7 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "services/backtesting/BacktestingService.h"
+#include "storage/repositories/WatchlistRepository.h"
 #include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -113,6 +114,15 @@ void MarketPanel::build_ui() {
 
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(table_, &QTableWidget::customContextMenuRequested, this, &MarketPanel::show_row_context_menu);
+    // Double-click a row → research that instrument. Column 0 holds the display name; the raw
+    // ticker rides on the cell (Qt::UserRole), as the context menu already relies on.
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        auto* sym_item = table_->item(row, 0);
+        const QString t = sym_item ? sym_item->data(Qt::UserRole).toString() : QString();
+        if (!t.isEmpty())
+            fincept::EventBus::instance().publish(
+                "nav.open_symbol", {{"screen_id", QString("equity_research")}, {"symbol", t}});
+    });
 
     table_->setVisible(false); // hidden until first data arrives
     bl->addWidget(table_);
@@ -525,16 +535,30 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
                 table_->setItem(row, ci, mk(disp, ui::colors::TEXT_DIM(), Qt::AlignLeft | Qt::AlignVCenter));
             else if (col == "TICKER")
                 table_->setItem(row, ci, mk(q.symbol, ui::colors::TEXT_DIM(), Qt::AlignLeft | Qt::AlignVCenter));
+            // 0 is how a missing figure arrives (the feed's JSON null → 0): a symbol with no
+            // price, or a session with no high/low, shows "--" instead of "0.0000" / "0.00".
             else if (col == "LAST")
-                table_->setItem(row, ci, mk(cur + QString::number(q.price, 'f', prec), ui::colors::AMBER()));
+                table_->setItem(row, ci,
+                                q.price > 0.0 ? mk(cur + QString::number(q.price, 'f', prec), ui::colors::AMBER())
+                                              : mk("--", ui::colors::TEXT_DIM()));
             else if (col == "CHG")
-                table_->setItem(row, ci, mk(QString("%1 %2").arg(arr).arg(std::abs(q.change), 0, 'f', 2), cc));
+                table_->setItem(row, ci,
+                                q.price > 0.0
+                                    ? mk(QString("%1 %2").arg(arr).arg(std::abs(q.change), 0, 'f', 2), cc)
+                                    : mk("--", ui::colors::TEXT_DIM()));
             else if (col == "CHG%")
-                table_->setItem(row, ci, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
+                table_->setItem(row, ci,
+                                q.price > 0.0
+                                    ? mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc)
+                                    : mk("--", ui::colors::TEXT_DIM()));
             else if (col == "HIGH")
-                table_->setItem(row, ci, mk(cur + QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
+                table_->setItem(row, ci,
+                                q.high > 0.0 ? mk(cur + QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY())
+                                             : mk("--", ui::colors::TEXT_DIM()));
             else if (col == "LOW")
-                table_->setItem(row, ci, mk(cur + QString::number(q.low, 'f', 2), ui::colors::TEXT_SECONDARY()));
+                table_->setItem(row, ci,
+                                q.low > 0.0 ? mk(cur + QString::number(q.low, 'f', 2), ui::colors::TEXT_SECONDARY())
+                                            : mk("--", ui::colors::TEXT_DIM()));
             else if (col == "VOL")
                 table_->setItem(row, ci,
                                 mk(fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)),
@@ -683,7 +707,44 @@ void MarketPanel::show_row_context_menu(const QPoint& pos) {
         return t.isEmpty() ? sym_item->text() : t;
     };
 
+    const QString ticker = ticker_at(it->row());
+
     QMenu menu(this);
+    // Rows showing a ticker should lead somewhere: hand it to the screens that can use it
+    // (nav.open_symbol navigates first, then delivers the symbol — it is not lost when the
+    // target hasn't been opened yet).
+    if (!ticker.isEmpty()) {
+        auto open_in = [ticker](const QString& screen_id) {
+            fincept::EventBus::instance().publish("nav.open_symbol",
+                                                  {{"screen_id", screen_id}, {"symbol", ticker}});
+        };
+        connect(menu.addAction(tr("Open in Equity Research")), &QAction::triggered, this,
+                [open_in]() { open_in(QStringLiteral("equity_research")); });
+        // Indices (^GSPC), futures/FX (GC=F, EURUSD=X) and crypto pairs (BTC-USD) are not
+        // broker-tradable equities — don't offer to route them to the equity order screen.
+        if (!ticker.startsWith(QLatin1Char('^')) && !ticker.contains(QLatin1Char('=')) &&
+            !ticker.endsWith(QLatin1String("-USD")))
+            connect(menu.addAction(tr("Open in Equity Trading")), &QAction::triggered, this,
+                    [open_in]() { open_in(QStringLiteral("equity_trading")); });
+        connect(menu.addAction(tr("Open in News")), &QAction::triggered, this,
+                [open_in]() { open_in(QStringLiteral("news")); });
+
+        const auto lists = fincept::WatchlistRepository::instance().list_all();
+        if (lists.is_ok() && !lists.value().isEmpty()) {
+            QMenu* wl_menu = menu.addMenu(tr("Add to Watchlist"));
+            const QString display = names_.value(ticker);
+            for (const auto& wl : lists.value()) {
+                connect(wl_menu->addAction(wl.name), &QAction::triggered, this,
+                        [ticker, display, list_id = wl.id]() {
+                            const auto r = fincept::WatchlistRepository::instance().add_stock(list_id, ticker, display);
+                            if (r.is_ok()) // let an open Watchlist panel pick the change up
+                                fincept::EventBus::instance().publish(
+                                    "watchlist.updated", {{"action", QStringLiteral("add")}, {"symbol", ticker}});
+                        });
+            }
+        }
+        menu.addSeparator();
+    }
     QAction* copy_act = menu.addAction(tr("Copy Symbol"));
     connect(copy_act, &QAction::triggered, this, [it, ticker_at]() {
         const QString t = ticker_at(it->row());

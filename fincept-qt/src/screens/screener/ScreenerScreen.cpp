@@ -1,20 +1,30 @@
 #include "screens/screener/ScreenerScreen.h"
 
+#include "core/events/EventBus.h"
+#include "core/symbol/SymbolContext.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "storage/repositories/WatchlistRepository.h"
+#include "ui/formatting/NumberFormat.h"
 #include "ui/theme/Theme.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QComboBox>
+#include <QCursor>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTimer>
+#include <QToolTip>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -30,16 +40,6 @@ const QStringList kBasket = {
     "AXP",  "PYPL", "WMT",   "COST",  "TGT",  "HD",   "LOW",  "NKE",  "MCD",  "SBUX", "AMGN", "PFE",  "JNJ",
     "MRK",  "ABBV", "LLY",   "UNH",   "XOM",  "CVX",  "SLB",  "COP",  "NEE",  "DUK",  "SO",   "CAT",  "GE",
     "HON",  "RTX",  "BA",    "DE",    "PLTR", "COIN", "SOFI", "SNAP", "UBER", "ABNB", "SHOP", "SQ"};
-
-QString fmt_volume(double v) {
-    if (v >= 1e9)
-        return QString("%1B").arg(v / 1e9, 0, 'f', 1);
-    if (v >= 1e6)
-        return QString("%1M").arg(v / 1e6, 0, 'f', 1);
-    if (v >= 1e3)
-        return QString("%1K").arg(v / 1e3, 0, 'f', 0);
-    return QString::number(static_cast<long long>(v));
-}
 } // namespace
 
 ScreenerScreen::ScreenerScreen(QWidget* parent) : QWidget(parent) {
@@ -107,7 +107,31 @@ void ScreenerScreen::build_ui() {
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+
+    // Results were a dead end: no way to act on a row. Double-click researches the symbol,
+    // right-click offers the other places a ticker can go (nav.open_symbol / watchlist).
+    // A user pick of a row becomes the linked group's symbol. render_rows() blocks the table's
+    // signals while it re-selects the row after a refresh, so quote ticks don't re-publish.
+    connect(table_, &QTableWidget::itemSelectionChanged, this, [this]() {
+        if (link_group_ == SymbolGroup::None)
+            return;
+        const SymbolRef ref = current_symbol();
+        if (ref.is_valid())
+            SymbolContext::instance().set_group_symbol(link_group_, ref, this);
+    });
+    table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table_, &QWidget::customContextMenuRequested, this, &ScreenerScreen::show_row_menu);
+    connect(table_, &QTableWidget::cellDoubleClicked, this,
+            [this](int row, int) { open_symbol_in(QStringLiteral("equity_research"), symbol_at_row(row)); });
     root->addWidget(table_, 1);
+
+    // Stands in for the table while there is nothing to list: still loading, every quote
+    // failed, or the search matched nothing (previously an unexplained blank grid).
+    empty_lbl_ = new QLabel(this);
+    empty_lbl_->setObjectName("screenerEmpty");
+    empty_lbl_->setAlignment(Qt::AlignCenter);
+    empty_lbl_->setWordWrap(true);
+    root->addWidget(empty_lbl_, 1);
 }
 
 void ScreenerScreen::apply_styles() {
@@ -116,6 +140,7 @@ void ScreenerScreen::apply_styles() {
         QString("#screenerTitle { color: %1; font-size: 16px; font-weight: 700; }").arg(ui::colors::TEXT_PRIMARY()) +
         QString("#screenerSubtitle { color: %1; font-size: 11px; }").arg(ui::colors::TEXT_TERTIARY()) +
         QString("#screenerCount { color: %1; font-size: 11px; }").arg(ui::colors::TEXT_TERTIARY()) +
+        QString("#screenerEmpty { color: %1; font-size: 13px; padding: 24px; }").arg(ui::colors::TEXT_TERTIARY()) +
         QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; border-radius: 3px; padding: 4px 8px; }")
             .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED()) +
         QString("QComboBox { background: %1; color: %2; border: 1px solid %3; border-radius: 3px; padding: 4px 8px; }"
@@ -142,7 +167,8 @@ void ScreenerScreen::apply_styles() {
 
 void ScreenerScreen::retranslate() {
     title_lbl_->setText(tr("STOCK SCREENER"));
-    subtitle_lbl_->setText(tr("Filter a broad large-cap basket by change, volume, or price"));
+    subtitle_lbl_->setText(
+        tr("Filter a broad large-cap basket by change, volume, or price — double-click a row to research it"));
     search_->setPlaceholderText(tr("Search symbol or name…"));
     refresh_btn_->setText(tr("REFRESH"));
 
@@ -204,16 +230,42 @@ void ScreenerScreen::changeEvent(QEvent* e) {
 
 void ScreenerScreen::hub_subscribe_all() {
     auto& hub = datahub::DataHub::instance();
+    failed_.clear();
     for (const auto& sym : kBasket) {
         const QString topic = QStringLiteral("market:quote:") + sym;
         hub.subscribe(this, topic, [this, sym](const QVariant& v) {
             if (!v.canConvert<services::QuoteData>())
                 return;
+            failed_.remove(sym);
             row_cache_.insert(sym, v.value<services::QuoteData>());
+            schedule_rebuild();
+        });
+        // A failed refresh used to be invisible: with nothing cached the grid just stayed
+        // blank. Track it so the empty state can say the quotes are unavailable.
+        hub.subscribe_errors(this, topic, [this, sym](const QString&) {
+            failed_.insert(sym);
             schedule_rebuild();
         });
     }
     hub_active_ = true;
+
+    // Real company names for the NAME column and the search box (cached on disk by the
+    // service — the lookup runs once per symbol, ever). The first callback is synchronous
+    // with whatever is already cached; the second lands when the lookup finishes.
+    QPointer<ScreenerScreen> self = this;
+    services::MarketDataService::instance().resolve_names(kBasket, [self](const QHash<QString, QString>& m) {
+        if (!self || m.isEmpty())
+            return;
+        bool changed = false;
+        for (auto it = m.constBegin(); it != m.constEnd(); ++it) {
+            if (self->names_.value(it.key()) != it.value()) {
+                self->names_.insert(it.key(), it.value());
+                changed = true;
+            }
+        }
+        if (changed && self->hub_active_) // hidden: the next show re-renders from names_
+            self->schedule_rebuild();
+    });
 }
 
 void ScreenerScreen::schedule_rebuild() {
@@ -252,8 +304,13 @@ void ScreenerScreen::rebuild_from_cache() {
     all_quotes_.reserve(row_cache_.size());
     for (const auto& sym : kBasket) {
         auto it = row_cache_.constFind(sym);
-        if (it != row_cache_.constEnd())
-            all_quotes_.append(it.value());
+        if (it == row_cache_.constEnd())
+            continue;
+        services::QuoteData q = it.value();
+        const QString real_name = names_.value(sym);
+        if (!real_name.isEmpty())
+            q.name = real_name; // the feed's "name" is just the ticker
+        all_quotes_.append(q);
     }
     apply_filter();
 }
@@ -272,25 +329,49 @@ void ScreenerScreen::apply_filter() {
         rows = filtered;
     }
 
+    // A quote with no price carries no usable data (it renders as dashes). Rank only the
+    // real ones and park the rest at the bottom — otherwise "top losers" / "price ↑" put the
+    // empty rows first (their change and price are 0).
+    const auto mid = std::stable_partition(rows.begin(), rows.end(),
+                                           [](const services::QuoteData& q) { return q.price > 0.0; });
+
     const int idx = sort_combo_ ? sort_combo_->currentIndex() : 0;
     switch (idx) {
         case 0: // % change desc (top gainers first)
-            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
+            std::sort(rows.begin(), mid, [](const auto& a, const auto& b) { return a.change_pct > b.change_pct; });
             break;
         case 1: // % change asc (top losers first)
-            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.change_pct < b.change_pct; });
+            std::sort(rows.begin(), mid, [](const auto& a, const auto& b) { return a.change_pct < b.change_pct; });
             break;
         case 2: // volume desc
-            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.volume > b.volume; });
+            std::sort(rows.begin(), mid, [](const auto& a, const auto& b) { return a.volume > b.volume; });
             break;
         case 3: // price desc
-            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.price > b.price; });
+            std::sort(rows.begin(), mid, [](const auto& a, const auto& b) { return a.price > b.price; });
             break;
         case 4: // price asc
-            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.price < b.price; });
+            std::sort(rows.begin(), mid, [](const auto& a, const auto& b) { return a.price < b.price; });
             break;
         default:
             break;
+    }
+
+    // Empty states: say why instead of showing a blank grid.
+    if (empty_lbl_ && table_) {
+        QString message;
+        if (rows.isEmpty()) {
+            if (all_quotes_.isEmpty())
+                message = failed_.size() >= kBasket.size()
+                              ? tr("Quotes are unavailable right now. Press REFRESH to try again.")
+                              : tr("Loading quotes…");
+            else if (!needle.isEmpty())
+                message = tr("No symbols match \"%1\".").arg(needle);
+            else
+                message = tr("No symbols to show.");
+        }
+        empty_lbl_->setText(message);
+        empty_lbl_->setVisible(!message.isEmpty());
+        table_->setVisible(message.isEmpty());
     }
 
     render_rows(rows);
@@ -308,6 +389,9 @@ void ScreenerScreen::render_rows(const QVector<services::QuoteData>& rows) {
             ? table_->item(table_->currentRow(), 0)->text()
             : QString();
 
+    // The rebuild clears and re-applies the selection on every quote tick; none of that is a
+    // user pick, so keep it from being published to the symbol group.
+    QSignalBlocker block_selection_signals(table_);
     table_->setRowCount(rows.size());
     for (int r = 0; r < rows.size(); ++r) {
         const auto& q = rows[r];
@@ -321,19 +405,25 @@ void ScreenerScreen::render_rows(const QVector<services::QuoteData>& rows) {
 
         table_->setItem(r, 1, new QTableWidgetItem(q.name));
 
-        auto* price = new QTableWidgetItem(QString("$%1").arg(q.price, 0, 'f', 2));
+        // A quote with no price is "no data" (0 arrives for a missing figure): show dashes, not
+        // "$0.00" / "+0.00%".
+        const bool has_price = q.price > 0.0;
+        const QString dash = QStringLiteral("—");
+
+        auto* price = new QTableWidgetItem(has_price ? QString("$%1").arg(q.price, 0, 'f', 2) : dash);
         price->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(r, 2, price);
 
         auto* chg = new QTableWidgetItem(
-            QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
+            has_price ? QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2) : dash);
         chg->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        chg->setForeground(QColor(q.change_pct > 0   ? ui::colors::POSITIVE()
+        chg->setForeground(QColor(!has_price          ? ui::colors::TEXT_TERTIARY()
+                                  : q.change_pct > 0 ? ui::colors::POSITIVE()
                                   : q.change_pct < 0 ? ui::colors::NEGATIVE()
                                                      : ui::colors::TEXT_PRIMARY()));
         table_->setItem(r, 3, chg);
 
-        auto* vol = new QTableWidgetItem(fmt_volume(q.volume));
+        auto* vol = new QTableWidgetItem(ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)));
         vol->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         vol->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
         table_->setItem(r, 4, vol);
@@ -349,6 +439,95 @@ void ScreenerScreen::render_rows(const QVector<services::QuoteData>& rows) {
     }
     if (table_->verticalScrollBar())
         table_->verticalScrollBar()->setValue(scroll_pos);
+}
+
+QString ScreenerScreen::symbol_at_row(int row) const {
+    if (!table_ || row < 0 || row >= table_->rowCount())
+        return {};
+    auto* item = table_->item(row, 0);
+    return item ? item->text() : QString();
+}
+
+SymbolRef ScreenerScreen::current_symbol() const {
+    const QString sym = table_ ? symbol_at_row(table_->currentRow()) : QString();
+    return sym.isEmpty() ? SymbolRef{} : SymbolRef::equity(sym);
+}
+
+void ScreenerScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    if (!table_ || !ref.is_valid())
+        return;
+    // Highlight the symbol if it is in the current (filtered) results; no-op otherwise.
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        if (symbol_at_row(r).compare(ref.symbol, Qt::CaseInsensitive) == 0) {
+            QSignalBlocker block(table_); // a follower must not re-publish
+            table_->selectRow(r);
+            table_->scrollToItem(table_->item(r, 0), QAbstractItemView::PositionAtCenter);
+            return;
+        }
+    }
+}
+
+void ScreenerScreen::open_symbol_in(const QString& screen_id, const QString& symbol) {
+    if (symbol.isEmpty())
+        return;
+    // Navigates first (constructing the target when needed), then delivers the ticker through
+    // IGroupLinked — nav.switch_screen + a screen-specific load event drops it for a screen
+    // that has not been opened yet.
+    EventBus::instance().publish("nav.open_symbol", {{"screen_id", screen_id}, {"symbol", symbol}});
+}
+
+void ScreenerScreen::show_row_menu(const QPoint& pos) {
+    auto* item = table_->itemAt(pos);
+    if (!item)
+        return;
+    table_->selectRow(item->row());
+    const QString symbol = symbol_at_row(item->row());
+    if (symbol.isEmpty())
+        return;
+    const QString name = names_.value(symbol);
+
+    QMenu menu(this);
+    connect(menu.addAction(tr("Open in Equity Research")), &QAction::triggered, this,
+            [this, symbol]() { open_symbol_in(QStringLiteral("equity_research"), symbol); });
+    connect(menu.addAction(tr("Open in Equity Trading")), &QAction::triggered, this,
+            [this, symbol]() { open_symbol_in(QStringLiteral("equity_trading"), symbol); });
+    connect(menu.addAction(tr("Open in News")), &QAction::triggered, this,
+            [this, symbol]() { open_symbol_in(QStringLiteral("news"), symbol); });
+
+    // One entry per watchlist (the screener had no way to keep a promising result).
+    const auto lists = fincept::WatchlistRepository::instance().list_all();
+    if (lists.is_ok() && !lists.value().isEmpty()) {
+        QMenu* wl_menu = menu.addMenu(tr("Add to Watchlist"));
+        for (const auto& wl : lists.value()) {
+            connect(wl_menu->addAction(wl.name), &QAction::triggered, this,
+                    [this, symbol, name, list_id = wl.id, list_name = wl.name]() {
+                        auto& repo = fincept::WatchlistRepository::instance();
+                        const auto stocks = repo.get_stocks(list_id);
+                        if (stocks.is_ok()) {
+                            for (const auto& s : stocks.value()) {
+                                if (s.symbol.compare(symbol, Qt::CaseInsensitive) == 0) {
+                                    QToolTip::showText(QCursor::pos(),
+                                                       tr("%1 is already in %2").arg(symbol, list_name), table_);
+                                    return;
+                                }
+                            }
+                        }
+                        const auto r = repo.add_stock(list_id, symbol, name);
+                        QToolTip::showText(QCursor::pos(),
+                                           r.is_ok() ? tr("Added %1 to %2").arg(symbol, list_name)
+                                                     : tr("Could not add %1 to %2").arg(symbol, list_name),
+                                           table_);
+                        if (r.is_ok()) // let an open Watchlist panel pick the change up
+                            EventBus::instance().publish("watchlist.updated",
+                                                         {{"action", QStringLiteral("add")}, {"symbol", symbol}});
+                    });
+        }
+    }
+
+    menu.addSeparator();
+    connect(menu.addAction(tr("Copy Symbol")), &QAction::triggered, this,
+            [symbol]() { QApplication::clipboard()->setText(symbol); });
+    menu.exec(table_->viewport()->mapToGlobal(pos));
 }
 
 } // namespace fincept::screens

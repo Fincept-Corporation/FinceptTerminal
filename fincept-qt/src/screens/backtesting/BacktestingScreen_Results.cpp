@@ -34,6 +34,11 @@ using fincept::screens::backtesting_internal::fmt_metric;
 // ── Result display ───────────────────────────────────────────────────────────
 
 void BacktestingScreen::clear_results() {
+    // The two hint labels live in the layouts torn down below and are deleted with them.
+    // retranslateUi() still dereferences these cached pointers on a language switch, so a
+    // run followed by a language change touched freed widgets — drop them here.
+    summary_hint_ = nullptr;
+    equity_hint_ = nullptr;
     clear_layout(summary_layout_);
     metrics_table_->setRowCount(0);
     trades_table_->setRowCount(0);
@@ -95,7 +100,10 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             if (!obj.contains(key))
                 continue;
             const auto& val = obj[key];
-            if (val.isObject() || val.isArray() || val.isNull())
+            // An explicit null profit factor means "no losing trades" (see fmt_metric) — keep it.
+            const bool null_pf = val.isNull() && (key == QLatin1String("profitFactor") ||
+                                                  key == QLatin1String("profit_factor"));
+            if (val.isObject() || val.isArray() || (val.isNull() && !null_pf))
                 continue;
             auto canon = key;
             canon.replace(QRegularExpression("([a-z])([A-Z])"), "\\1_\\2");
@@ -136,9 +144,12 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
     auto fill_kv_table = [&](const QJsonObject& obj) {
         QStringList keys;
-        for (auto it = obj.begin(); it != obj.end(); ++it)
-            if (!it.value().isObject() && !it.value().isArray() && !it.value().isNull())
+        for (auto it = obj.begin(); it != obj.end(); ++it) {
+            const bool null_pf = it.value().isNull() && (it.key() == QLatin1String("profitFactor") ||
+                                                         it.key() == QLatin1String("profit_factor"));
+            if (!it.value().isObject() && !it.value().isArray() && (!it.value().isNull() || null_pf))
                 keys.append(it.key());
+        }
         metrics_table_->setRowCount(keys.size());
         for (int r = 0; r < keys.size(); ++r) {
             auto* name = new QTableWidgetItem(humanize(keys[r]));
@@ -221,24 +232,62 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         {
             const double comm = commission_spin_ ? commission_spin_->value() : 0.0;
             const double slip = slippage_spin_ ? slippage_spin_->value() : 0.0;
-            const bool costless = (comm <= 0.0 && slip <= 0.0);
+            const double sl_pct = stop_loss_spin_ ? stop_loss_spin_->value() : 0.0;
+            const double tp_pct = take_profit_spin_ ? take_profit_spin_->value() : 0.0;
+
+            // What each Python provider actually consumes (verified against the scripts):
+            // vectorbt applies commission + slippage + SL/TP; zipline commission + slippage;
+            // backtesting.py, BT and FastTrade commission only; the Fincept engine applies none
+            // of them. Claiming "Costs applied" for a setting the provider drops would
+            // overstate how conservative the run is.
+            const QString slug = running_provider_.isEmpty() ? providers_[active_provider_].slug : running_provider_;
+            QString pname = slug;
+            for (const auto& pr : providers_)
+                if (pr.slug == slug)
+                    pname = pr.display_name;
+            const bool sup_comm = (slug == QLatin1String("vectorbt") || slug == QLatin1String("zipline") ||
+                                   slug == QLatin1String("backtestingpy") || slug == QLatin1String("bt") ||
+                                   slug == QLatin1String("fasttrade"));
+            const bool sup_slip = (slug == QLatin1String("vectorbt") || slug == QLatin1String("zipline"));
+            const bool sup_stops = (slug == QLatin1String("vectorbt"));
+
+            const bool applied_comm = sup_comm && comm > 0.0;
+            const bool applied_slip = sup_slip && slip > 0.0;
+            const bool costless = !applied_comm && !applied_slip;
+
+            QStringList ignored;
+            if (!sup_comm && comm > 0.0)
+                ignored << tr("commission");
+            if (!sup_slip && slip > 0.0)
+                ignored << tr("slippage");
+            if (!sup_stops && (sl_pct > 0.0 || tp_pct > 0.0))
+                ignored << tr("stop-loss/take-profit");
+            const QString ignored_note = ignored.isEmpty()
+                                             ? QString()
+                                             : tr(" %1 does not apply your %2 setting.").arg(pname, ignored.join(", "));
+
             QString cost_text;
             QString cost_fg;
             QString cost_bg;
             QString cost_border;
             if (costless) {
-                cost_text = tr("NO COSTS MODELLED — commission and slippage are both 0%. "
-                               "These returns are gross and are not achievable.");
+                cost_text = tr("NO COSTS MODELLED — no commission or slippage reached the engine. "
+                               "These returns are gross and are not achievable.") +
+                            ignored_note;
                 cost_fg = ui::colors::WARNING();
                 cost_bg = QStringLiteral("rgba(245,158,11,0.10)");
                 cost_border = ui::colors::WARNING();
             } else {
-                cost_text = tr("Costs applied: commission %1% per trade, slippage %2% per fill.")
-                                .arg(comm, 0, 'f', 3)
-                                .arg(slip, 0, 'f', 4);
-                cost_fg = ui::colors::TEXT_TERTIARY();
-                cost_bg = ui::colors::BG_RAISED();
-                cost_border = ui::colors::BORDER_DIM();
+                QStringList parts;
+                if (applied_comm)
+                    parts << tr("commission %1% per trade").arg(comm, 0, 'f', 3);
+                if (applied_slip)
+                    parts << tr("slippage %1% per fill").arg(slip, 0, 'f', 4);
+                cost_text = tr("Costs applied: %1.").arg(parts.join(tr(", "))) + ignored_note;
+                const bool has_ignored = !ignored.isEmpty();
+                cost_fg = has_ignored ? ui::colors::WARNING() : ui::colors::TEXT_TERTIARY();
+                cost_bg = has_ignored ? QStringLiteral("rgba(245,158,11,0.10)") : ui::colors::BG_RAISED();
+                cost_border = has_ignored ? ui::colors::WARNING() : ui::colors::BORDER_DIM();
             }
             auto* costs = new QLabel(cost_text, summary_container_);
             costs->setWordWrap(true);
@@ -315,7 +364,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             auto params = o.value("parameters").toObject();
             for (auto it = params.begin(); it != params.end(); ++it)
                 row[it.key()] = it.value();
-            row["objective"] = o.value("objective_value");
+            // Providers emit camelCase keys (json_response); only the legacy shape is snake_case.
+            row["objective"] = o.contains("objectiveValue") ? o.value("objectiveValue") : o.value("objective_value");
             auto perf = o.value("performance").toObject();
             for (const auto& k : QStringList{"totalReturn", "sharpeRatio", "maxDrawdown", "winRate"}) {
                 if (perf.contains(k))
@@ -618,6 +668,13 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             auto dt = QDateTime::fromString(date_str, "yyyy-MM-dd");
             if (!dt.isValid())
                 dt = QDateTime::fromString(date_str, Qt::ISODate);
+            // Intraday intervals emit "yyyy-MM-dd HH:mm:ss" (space separator, maybe a tz
+            // suffix) — neither format above accepts that, so every point was dropped and the
+            // equity chart stayed blank for 1h/5m runs.
+            if (!dt.isValid())
+                dt = QDateTime::fromString(date_str.left(19), "yyyy-MM-dd HH:mm:ss");
+            if (!dt.isValid())
+                dt = QDateTime::fromString(date_str.left(10), "yyyy-MM-dd");
             if (!dt.isValid())
                 continue;
             qint64 ms = dt.toMSecsSinceEpoch();
@@ -638,7 +695,9 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             chart->setPlotAreaBackgroundVisible(true);
 
             auto* x_axis = new QDateTimeAxis;
-            x_axis->setFormat("MMM yyyy");
+            // A "MMM yyyy" label is useless on an intraday run (every tick reads the same).
+            const qint64 span_ms = static_cast<qint64>(eq_series->at(eq_series->count() - 1).x() - eq_series->at(0).x());
+            x_axis->setFormat(span_ms < 30LL * 86400000LL ? "dd MMM HH:mm" : "MMM yyyy");
             x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
             x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
             chart->addAxis(x_axis, Qt::AlignBottom);
@@ -753,7 +812,13 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
         return;
     }
 
-    // Regular command result — update run state and display
+    // Regular command result. The service is a shared singleton, so this also sees other
+    // screens' runs (e.g. Portfolio's "backtest current weights" on vectorbt/backtest).
+    // Only the run THIS screen started may touch run state or replace the results pane.
+    if (!is_running_ || provider != running_provider_ || command != running_command_) {
+        LOG_DEBUG("Backtesting", QString("Ignoring foreign/stale result %1/%2").arg(provider, command));
+        return;
+    }
     is_running_ = false;
     stop_run_ticker();
     run_button_->setEnabled(true);
@@ -797,6 +862,24 @@ void BacktestingScreen::on_command_options_loaded(const QString& provider, const
 }
 
 void BacktestingScreen::on_error(const QString& context, const QString& message) {
+    // Context is "<provider>/<command>" for a run and "load_strategies/<provider>",
+    // "list_strategies" or "<provider>/get_*" for the background catalogue loads.
+    const bool catalogue_ctx = context.startsWith(QLatin1String("load_strategies/")) ||
+                               context == QLatin1String("list_strategies") ||
+                               context.endsWith(QLatin1String("/get_indicators")) ||
+                               context.endsWith(QLatin1String("/get_strategies")) ||
+                               context.endsWith(QLatin1String("/get_command_options"));
+    if (catalogue_ctx && is_running_) {
+        // A catalogue load failing mid-run must not reset the run state (it re-enabled RUN
+        // and let a second backtest start on top of the first) or wipe its eventual result.
+        LOG_WARN("Backtesting", QString("[%1] background load failed during a run: %2").arg(context, message));
+        return;
+    }
+    if (!catalogue_ctx && (!is_running_ || context != running_provider_ + QLatin1Char('/') + running_command_)) {
+        // Another screen's run (or one we already gave up on) — not ours to display.
+        LOG_DEBUG("Backtesting", QString("Ignoring foreign/stale error [%1]").arg(context));
+        return;
+    }
     is_running_ = false;
     stop_run_ticker();
     run_button_->setEnabled(true);

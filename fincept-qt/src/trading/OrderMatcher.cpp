@@ -35,7 +35,19 @@ void OrderMatcher::add_order(const PtOrder& order) {
 
     QMutexLocker lock(&mutex_);
     auto key = scoped_key(order.portfolio_id, order.symbol);
-    pending_orders_[key].append(order);
+    auto& bucket = pending_orders_[key];
+    // Idempotent per order id. Callers re-register a portfolio's pending orders every
+    // time it is focused (EquityTradingScreen on each account switch), and the
+    // startup resume below does the same — without this a re-add queued the order
+    // twice, so one touch produced two fill attempts and the second logged an
+    // "Order not fillable" error.
+    for (auto& existing : bucket) {
+        if (existing.id == order.id) {
+            existing = order;
+            return;
+        }
+    }
+    bucket.append(order);
     LOG_INFO("OrderMatcher", "Added " + order.order_type + " " + order.side + " order for " + order.symbol);
 }
 
@@ -82,11 +94,17 @@ QVector<PtOrder> OrderMatcher::get_pending_orders(const QString& symbol, const Q
 }
 
 void OrderMatcher::load_orders(const QVector<PtOrder>& orders) {
+    // Resting orders only. A persisted pending MARKET order has no price condition,
+    // so registering it would fire it at the first tick after launch — an order the
+    // user was already told had failed. (Same filter the Equity screen applies.)
+    int loaded = 0;
     for (const auto& order : orders) {
-        if (order.status == "pending")
+        if (order.status == "pending" && order.order_type != "market") {
             add_order(order);
+            ++loaded;
+        }
     }
-    LOG_INFO("OrderMatcher", QString("Loaded %1 pending orders").arg(orders.size()));
+    LOG_INFO("OrderMatcher", QString("Loaded %1 pending orders").arg(loaded));
 }
 
 void OrderMatcher::clear_portfolio_orders(const QString& portfolio_id) {

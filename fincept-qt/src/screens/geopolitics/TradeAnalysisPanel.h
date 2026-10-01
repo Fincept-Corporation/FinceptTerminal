@@ -34,14 +34,10 @@ class TradeAnalysisPanel : public QWidget {
     void connect_service();
     void display_result(const QJsonObject& data);
     void retranslateUi();
-
-    /// Amber "this tab's inputs are not sent to the backend" banner. The
-    /// Trading Blocs / Barrier Removal tabs both route to the benefits/costs
-    /// service mode, so their own parameters are dropped — say so on screen
-    /// rather than only in a code comment.
-    static QLabel* make_routing_notice(QWidget* parent);
-    static QString kBlocsNotice();
-    static QString kBarrierNotice();
+    /// "Analyzing..." state: lock every RUN button until a result / error lands so a
+    /// double-click can't queue two Python runs whose replies overwrite each other.
+    void begin_analysis();
+    void end_analysis();
 
     QTabWidget* tabs_ = nullptr;
     QVBoxLayout* results_layout_ = nullptr;
@@ -51,8 +47,6 @@ class TradeAnalysisPanel : public QWidget {
     // Static text widgets (cached for retranslateUi).
     QLabel* title_lbl_ = nullptr;
     QComboBox* type_combo_ = nullptr;
-    QLabel* blocs_notice_ = nullptr;
-    QLabel* barrier_notice_ = nullptr;
     QList<QPushButton*> run_buttons_;
     // Page-level hint labels paired with their English source string so
     // retranslateUi can re-apply them. (Per-field captions built via make_field

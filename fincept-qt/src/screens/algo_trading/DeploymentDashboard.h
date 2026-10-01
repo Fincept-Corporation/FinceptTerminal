@@ -51,6 +51,9 @@ class DeploymentDashboard : public QWidget {
         QLabel* pnl = nullptr;
         QLabel* position = nullptr;
         QLabel* trades = nullptr;
+        QLabel* win_rate = nullptr;
+        QLabel* max_dd = nullptr;
+        QProgressBar* win_bar = nullptr;
         QVBoxLayout* conditions = nullptr; // condition-status rows (rebuilt per update)
         QLabel* activity = nullptr;
         QString broker_id;

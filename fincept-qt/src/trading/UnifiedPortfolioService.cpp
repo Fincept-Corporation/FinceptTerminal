@@ -43,6 +43,23 @@ UnifiedPortfolioService::UnifiedPortfolioService(QObject* parent) : QObject(pare
         recompute_summary();
         emit summary_changed();
     });
+
+    // A token refresh swaps the account's stream for a new object; re-wire so a
+    // visible monitor keeps receiving updates. Only accounts that are currently
+    // wired (i.e. between activate() and deactivate()) are touched.
+    connect(&DataStreamManager::instance(), &DataStreamManager::stream_restarted, this,
+            [this](const QString& account_id) {
+                auto it = accts_.find(account_id);
+                if (it == accts_.end() || !it->wired)
+                    return;
+                connect_stream(account_id);
+                if (auto* stream = DataStreamManager::instance().stream_for(account_id)) {
+                    it->positions = stream->cached_positions();
+                    it->holdings = stream->cached_holdings();
+                }
+                if (mode_ == Mode::Live) // paper rows come from the local engine, not the broker
+                    DataStreamManager::instance().refresh_portfolio(account_id);
+            });
 }
 
 // ── Account enumeration & wiring ─────────────────────────────────────────────
@@ -130,14 +147,32 @@ void UnifiedPortfolioService::emit_all_changed() {
     emit holdings_changed();
 }
 
+void UnifiedPortfolioService::deactivate() {
+    summary_debounce_->stop();
+    auto& dsm = DataStreamManager::instance();
+    for (auto it = accts_.begin(); it != accts_.end(); ++it) {
+        if (!it->wired)
+            continue;
+        if (auto* stream = dsm.stream_for(it.key()))
+            QObject::disconnect(stream, nullptr, this, nullptr);
+        it->wired = false;
+        it->wired_stream.clear();
+    }
+}
+
 void UnifiedPortfolioService::connect_stream(const QString& account_id) {
     Acct& a = accts_[account_id];
-    if (a.wired)
-        return;
     auto* stream = DataStreamManager::instance().stream_for(account_id);
     if (!stream)
         return;
+    // Already wired to THIS stream object? A restarted stream (token refresh) is a
+    // different object — its predecessor's connections died with it, so fall through
+    // and wire the new one. (test_register_account() marks wired with no stream at
+    // all, which the !stream early-out above already covers.)
+    if (a.wired && a.wired_stream == stream)
+        return;
     a.wired = true;
+    a.wired_stream = stream;
 
     connect(stream, &AccountDataStream::positions_updated, this, &UnifiedPortfolioService::ingest_positions);
     connect(stream, &AccountDataStream::holdings_updated, this, &UnifiedPortfolioService::ingest_holdings);

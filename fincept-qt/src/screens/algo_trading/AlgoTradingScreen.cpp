@@ -58,7 +58,9 @@ void AlgoTradingScreen::showEvent(QShowEvent* e) {
     poll_timer_->start();
     if (first_show_) {
         first_show_ = false;
-        on_tab_changed(0);
+        // Apply the tab restore_state() chose — it runs before the first show, and a
+        // hard-coded 0 here threw the restored tab away.
+        on_tab_changed(active_tab_);
     }
 }
 
@@ -183,6 +185,9 @@ void AlgoTradingScreen::update_deploy_badge() {
                                         .arg(live_deployments_)
                                         .arg(active_deployments_ - live_deployments_));
     deploy_count_label_->setAccessibleName(deploy_count_label_->toolTip());
+    // Bottom status chip used to say IDLE forever; mirror the engine state instead.
+    if (status_label_)
+        status_label_->setText(active_deployments_ > 0 ? tr("%1 RUNNING").arg(active_deployments_) : tr("IDLE"));
     deploy_count_label_->setStyleSheet(
         QString("color:%1; font-size:9px; font-weight:700; font-family:%2;"
                 "padding:3px 8px; background:rgba(%3,0.08);"
@@ -265,9 +270,7 @@ void AlgoTradingScreen::retranslateUi() {
         title_label_->setText(tr("ALGO TRADING"));
     if (engine_caption_)
         engine_caption_->setText(tr("ENGINE:"));
-    if (status_label_)
-        status_label_->setText(tr("IDLE"));
-    update_deploy_badge();
+    update_deploy_badge(); // also refreshes the status chip text
 
     // Tab button labels — fixed order matches build_top_bar().
     if (tab_buttons_.size() == 6) {

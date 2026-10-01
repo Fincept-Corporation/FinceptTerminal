@@ -1077,6 +1077,279 @@ class OECDWrapper:
 
 # ===== CLI INTERFACE =====
 
+
+# ===== CURRENT SDMX DATAFLOWS ("panel layer") =====
+# The OpenBB-era wrapper methods above query dataflow keys the OECD has since retired or reshaped
+# (the quarterly national accounts flow is now 13 dimensions, CPI moved to DF_PRICES_ALL, the
+# interest-rate / trade / outlook flows were replaced), so each of them ends in HTTP 400/404 today.
+# The fetchers below use the current flows (checked against sdmx.oecd.org, 2026-10) and serve the
+# six commands the desktop Economics panel issues:
+#     <command> <country> <freq A|Q|M>        e.g.  cpi US M
+# The legacy argument orders (country names, "quarter"/"monthly", trailing YYYY-MM-DD dates) are
+# still understood. Output keeps the established shape: {success, endpoint, data:[{date,value,...}]}.
+# Note the OECD allows only ~60 data queries per hour per IP; a 429 is reported as such.
+
+_PANEL_COMMANDS = ("gdp_real", "cpi", "gdp_forecast", "unemployment", "interest_rates", "trade_balance")
+
+_PANEL_FLOWS = {
+    "qna": "OECD.SDD.NAD,DSD_NAMAIN1@DF_QNA,1.1",
+    "prices": "OECD.SDD.TPS,DSD_PRICES@DF_PRICES_ALL,1.0",
+    "lfs": "OECD.SDD.TPS,DSD_LFS@DF_IALFS_UNE_M,1.0",
+    "kei": "OECD.SDD.STES,DSD_KEI@DF_KEI,4.0",
+    "outlook": "OECD.ECO.MAD,DSD_EO@DF_EO,",
+}
+
+_PANEL_DEFAULT_FREQ = {
+    "gdp_real": "Q", "cpi": "M", "gdp_forecast": "A",
+    "unemployment": "Q", "interest_rates": "M", "trade_balance": "Q",
+}
+
+_PANEL_FREQ_WORDS = {
+    "A": "A", "ANNUAL": "A", "YEAR": "A", "YEARLY": "A",
+    "Q": "Q", "QUARTER": "Q", "QUARTERLY": "Q",
+    "M": "M", "MONTH": "M", "MONTHLY": "M",
+}
+
+_PANEL_ISO2_TO_ISO3 = {
+    "US": "USA", "DE": "DEU", "JP": "JPN", "FR": "FRA", "GB": "GBR", "UK": "GBR", "CA": "CAN",
+    "AU": "AUS", "KR": "KOR", "IT": "ITA", "ES": "ESP", "CN": "CHN", "IN": "IND", "BR": "BRA",
+    "MX": "MEX", "RU": "RUS", "ZA": "ZAF", "TR": "TUR", "ID": "IDN", "AR": "ARG", "SA": "SAU",
+    "CH": "CHE", "NL": "NLD", "SE": "SWE", "NO": "NOR", "DK": "DNK", "FI": "FIN", "PL": "POL",
+    "AT": "AUT", "BE": "BEL", "IE": "IRL", "PT": "PRT", "GR": "GRC", "NZ": "NZL", "CZ": "CZE",
+    "HU": "HUN", "IL": "ISR", "CL": "CHL", "CO": "COL", "CR": "CRI", "LT": "LTU", "LV": "LVA",
+    "EE": "EST", "SI": "SVN", "SK": "SVK", "LU": "LUX", "IS": "ISL",
+}
+
+_PANEL_AGGREGATES = {"G-7": "G7", "G7": "G7", "OECD": "OECD", "EU": "EU27_2020", "EU27": "EU27_2020",
+                     "EA": "EA20", "EA19": "EA19", "EA20": "EA20", "G-20": "G20", "G20": "G20"}
+
+
+class _PanelError(Exception):
+    """A failure that should reach the user as a plain message."""
+
+
+def _panel_area(countries: str) -> str:
+    """Panel/legacy country token(s) -> SDMX REF_AREA expression ("USA", "USA+DEU", "G7", ...)."""
+    out = []
+    for token in (countries or "united_states").split(","):
+        token = token.strip()
+        if not token:
+            continue
+        upper = token.upper()
+        if upper in _PANEL_AGGREGATES:
+            out.append(_PANEL_AGGREGATES[upper])
+        elif upper in _PANEL_ISO2_TO_ISO3:
+            out.append(_PANEL_ISO2_TO_ISO3[upper])
+        elif token.lower() in COUNTRY_TO_CODE_GDP:
+            out.append(COUNTRY_TO_CODE_GDP[token.lower()])
+        elif re.fullmatch(r"[A-Za-z0-9_]{3,9}", token):
+            out.append(upper)
+        else:
+            raise _PanelError(f"Unknown country: {token}")
+    if not out:
+        raise _PanelError("No country given")
+    return "+".join(out)
+
+
+def _panel_period_to_date(period: Any) -> str:
+    """SDMX period (2026-Q2 / 2026-08 / 2026) -> ISO date of the period start."""
+    p = str(period)
+    if "-Q" in p:
+        year, quarter = p.split("-Q")
+        return f"{year}-{(int(quarter) - 1) * 3 + 1:02d}-01"
+    if len(p) == 4:
+        return f"{p}-01-01"
+    if len(p) == 7:
+        return f"{p}-01"
+    return p[:10]
+
+
+def _panel_sdmx_period(iso_date: str, freq: str) -> str:
+    d = datetime.strptime(iso_date[:10], "%Y-%m-%d")
+    if freq == "A":
+        return f"{d.year}"
+    if freq == "Q":
+        return f"{d.year}-Q{(d.month - 1) // 3 + 1}"
+    return f"{d.year}-{d.month:02d}"
+
+
+def _panel_default_start(freq: str) -> str:
+    years = {"A": 40, "Q": 30, "M": 15}[freq]
+    return f"{date.today().year - years}-01-01"
+
+
+def _panel_fetch(flow: str, key: str, freq: str, start: Optional[str], end: Optional[str]) -> pd.DataFrame:
+    params = {"dimensionAtObservation": "AllDimensions"}
+    params["startPeriod"] = _panel_sdmx_period(start or _panel_default_start(freq), freq)
+    if end:
+        params["endPeriod"] = _panel_sdmx_period(end, freq)
+    headers = {
+        "Accept": "application/vnd.sdmx.data+csv; charset=utf-8",
+        "Accept-Language": "en",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FinceptTerminal/4",
+    }
+    try:
+        response = requests.get(f"{BASE_URL}data/{flow}/{key}", params=params, headers=headers, timeout=60)
+    except requests.exceptions.Timeout:
+        raise _PanelError("OECD request timed out")
+    except requests.exceptions.RequestException as e:
+        raise _PanelError(f"Could not reach the OECD API: {e}")
+    if response.status_code == 429:
+        raise _PanelError("OECD rate limit reached (about 60 data queries per hour) - try again later")
+    if response.status_code == 404:
+        raise _PanelError("OECD has no data for this country / frequency")
+    if response.status_code == 400:
+        raise _PanelError(f"OECD rejected the query: {response.text.strip()[:200]}")
+    if response.status_code != 200:
+        raise _PanelError(f"OECD API error: HTTP {response.status_code}")
+    df = pd.read_csv(StringIO(response.text))
+    if df.empty or "OBS_VALUE" not in df.columns:
+        raise _PanelError("OECD has no data for this country / frequency")
+    return df
+
+
+def _panel_prefer_adjusted(df: pd.DataFrame) -> pd.DataFrame:
+    """Per country keep the seasonally/calendar adjusted series when there is one (never mix the two)."""
+    if "ADJUSTMENT" not in df.columns:
+        return df
+    keep = []
+    for _, grp in df.groupby("REF_AREA", sort=False):
+        adjusted = grp[grp["ADJUSTMENT"] == "Y"]
+        keep.append(adjusted if not adjusted.empty else grp)
+    return pd.concat(keep) if keep else df
+
+
+def _panel_country_name(code: str) -> str:
+    name = CODE_TO_COUNTRY_GDP.get(code, code).replace("_", " ").title()
+    return name.replace("Oecd", "OECD")
+
+
+def _panel_scaled(df: pd.DataFrame, divisor: float) -> pd.Series:
+    """OBS_VALUE in absolute units (UNIT_MULT applied) divided by `divisor`."""
+    mult = pd.to_numeric(df["UNIT_MULT"], errors="coerce").fillna(0) if "UNIT_MULT" in df.columns else 0
+    return pd.to_numeric(df["OBS_VALUE"], errors="coerce") * (10.0 ** mult) / divisor
+
+
+_PANEL_EXTRA_COLS = ("long_term_yield", "exports", "imports")
+
+
+def _panel_rows(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    df = df.copy()
+    df["date"] = df["TIME_PERIOD"].apply(_panel_period_to_date)
+    df["country"] = df["REF_AREA"].apply(_panel_country_name)
+    df = df.sort_values(by=["country", "date"], ascending=[True, True])
+    for numeric in ("value",) + _PANEL_EXTRA_COLS:
+        if numeric in df.columns:
+            df[numeric] = pd.to_numeric(df[numeric], errors="coerce").round(4)
+    cols = ["date", "value", "country"] + [c for c in df.columns if c not in ("date", "value", "country")
+                                          and c in _PANEL_EXTRA_COLS]
+    df = df[[c for c in cols if c in df.columns]]
+    return df.replace({np.nan: None}).to_dict(orient="records")
+
+
+
+def _panel_dispatch(command: str, area: str, freq: str, start: Optional[str], end: Optional[str]):
+    """Returns (dataframe with `REF_AREA`, `TIME_PERIOD`, `value` [+ extras], unit text)."""
+    if command == "gdp_real":
+        df = _panel_fetch(_PANEL_FLOWS["qna"], f"{freq}..{area}.S1.S1.B1GQ._Z._Z._Z.XDC.L.N.T0102", freq, start, end)
+        df = _panel_prefer_adjusted(df)
+        df["value"] = _panel_scaled(df, 1e9)
+        ref = df["REF_YEAR_PRICE"].dropna().astype(int).max() if "REF_YEAR_PRICE" in df.columns and df["REF_YEAR_PRICE"].notna().any() else None
+        unit = "Billions of national currency, chain-linked volume" + (f" (reference year {ref})" if ref else "")
+        return df, unit
+
+    if command == "cpi":
+        df = _panel_fetch(_PANEL_FLOWS["prices"], f"{area}.{freq}.N.CPI.PA._T.N.GY", freq, start, end)
+        df["value"] = pd.to_numeric(df["OBS_VALUE"], errors="coerce")
+        return df, "Consumer prices, all items - % change on a year earlier"
+
+    if command == "unemployment":
+        df = _panel_fetch(_PANEL_FLOWS["lfs"], f"{area}.UNE_LF_M.PT_LF_SUB._Z.._T.Y_GE15._Z.{freq}", freq, start, end)
+        df = _panel_prefer_adjusted(df)
+        df["value"] = pd.to_numeric(df["OBS_VALUE"], errors="coerce")
+        return df, "Unemployment rate - % of labour force, age 15+"
+
+    if command == "gdp_forecast":
+        df = _panel_fetch(_PANEL_FLOWS["outlook"], f"{area}.GDPV_ANNPCT.A", "A", start, end)
+        df["value"] = pd.to_numeric(df["OBS_VALUE"], errors="coerce")
+        return df, "OECD Economic Outlook - real GDP growth, % per year (includes projections)"
+
+    if command == "interest_rates":
+        raw = _panel_fetch(_PANEL_FLOWS["kei"], f"{area}.{freq}.IR3TIB+IRSTCI+IRLT.PA._Z._Z._Z", freq, start, end)
+        wide = raw.pivot_table(index=["REF_AREA", "TIME_PERIOD"], columns="MEASURE", values="OBS_VALUE",
+                               aggfunc="first").reset_index()
+        short = wide["IR3TIB"] if "IR3TIB" in wide.columns else None
+        if "IRSTCI" in wide.columns:
+            short = wide["IRSTCI"] if short is None else short.fillna(wide["IRSTCI"])
+        if short is None:
+            short = pd.Series([np.nan] * len(wide))
+        wide["value"] = pd.to_numeric(short, errors="coerce")
+        wide["long_term_yield"] = pd.to_numeric(wide["IRLT"], errors="coerce") if "IRLT" in wide.columns else np.nan
+        wide = wide[wide["value"].notna() | wide["long_term_yield"].notna()]
+        if wide.empty:
+            raise _PanelError("OECD has no interest-rate data for this country / frequency")
+        return wide, "Short-term (3-month interbank) interest rate, % per annum; long_term_yield = government bond yield"
+
+    if command == "trade_balance":
+        raw = _panel_fetch(_PANEL_FLOWS["kei"], f"{area}.{freq}.EX+IM.USD._T.._Z", freq, start, end)
+        raw = _panel_prefer_adjusted(raw)
+        raw = raw.copy()
+        raw["amount"] = _panel_scaled(raw, 1e9)
+        wide = raw.pivot_table(index=["REF_AREA", "TIME_PERIOD"], columns="MEASURE", values="amount",
+                               aggfunc="first").reset_index()
+        if "EX" not in wide.columns or "IM" not in wide.columns:
+            raise _PanelError("OECD has no trade data for this country / frequency")
+        wide["exports"] = wide["EX"]
+        wide["imports"] = wide["IM"]
+        wide["value"] = wide["EX"] - wide["IM"]
+        wide = wide[wide["value"].notna()]
+        return wide, "Goods trade balance (exports - imports), USD billions"
+
+    raise _PanelError(f"Unsupported command: {command}")
+
+
+def _panel_parse(command: str, rest: List[str]):
+    """Accepts both `<country> <A|Q|M> [start end]` (panel) and the legacy per-command orders."""
+    countries = rest[0] if rest and rest[0] else "united_states"
+    freq = None
+    dates: List[str] = []
+    for token in rest[1:]:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", token or ""):
+            dates.append(token)
+        elif freq is None and (token or "").upper() in _PANEL_FREQ_WORDS:
+            freq = _PANEL_FREQ_WORDS[token.upper()]
+    freq = freq or _PANEL_DEFAULT_FREQ[command]
+    if command == "gdp_forecast":
+        freq = "A"
+    start = dates[0] if dates else None
+    end = dates[1] if len(dates) > 1 else None
+    return countries, freq, start, end
+
+
+def run_panel_command(command: str, rest: List[str]) -> Dict[str, Any]:
+    try:
+        countries, freq, start, end = _panel_parse(command, rest)
+        area = _panel_area(countries)
+        df, unit = _panel_dispatch(command, area, freq, start, end)
+        rows = _panel_rows(df)
+        if not rows:
+            raise _PanelError("OECD has no data for this country / frequency")
+        return {
+            "success": True,
+            "endpoint": command,
+            "parameters": {"countries": countries, "frequency": freq, "start_date": start, "end_date": end},
+            "unit": unit,
+            "total_records": len(rows),
+            "data": rows,
+            "source": "OECD SDMX API (sdmx.oecd.org)",
+            "timestamp": int(datetime.now().timestamp()),
+        }
+    except _PanelError as e:
+        return OECDError(command, str(e)).to_dict()
+    except Exception as e:
+        return OECDError(command, f"Failed to process OECD data: {e}").to_dict()
+
+
 def main(args=None):
     
     if args is None:
@@ -1112,6 +1385,13 @@ def main(args=None):
         sys.exit(1)
 
     command = args[0]
+
+    # Panel commands go through the current-dataflow fetchers above (the wrapper methods below
+    # query retired dataflows); everything else keeps using the wrapper.
+    if command in _PANEL_COMMANDS:
+        print(json.dumps(run_panel_command(command, args[1:]), indent=2))
+        return
+
     wrapper = OECDWrapper()
 
     try:

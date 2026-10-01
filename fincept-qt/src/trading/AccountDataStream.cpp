@@ -144,6 +144,49 @@ void AccountDataStream::refresh_portfolio_now() {
     async_fetch_funds();
 }
 
+void AccountDataStream::refresh_channel(const QString& channel) {
+    if (!running_)
+        return;
+    if (channel == QLatin1String("positions")) {
+        async_fetch_positions();
+    } else if (channel == QLatin1String("holdings")) {
+        async_fetch_holdings();
+    } else if (channel == QLatin1String("orders")) {
+        async_fetch_orders();
+    } else if (channel == QLatin1String("balance")) {
+        async_fetch_funds();
+    } else if (channel == QLatin1String("quote")) {
+        if (ws_active())
+            return; // the socket is already pushing live ticks
+        async_fetch_quote();
+        async_fetch_watchlist_quotes();
+    }
+}
+
+void AccountDataStream::adopt_subscriptions(const AccountDataStream& previous) {
+    consumer_symbols_ = previous.consumer_symbols_;
+    active_feed_symbols_ = previous.active_feed_symbols_;
+    selected_symbol_ = previous.selected_symbol_;
+    selected_exchange_ = previous.selected_exchange_;
+    if (!running_)
+        return;
+
+    // A socket that is already up resubscribes in place; a socket still
+    // connecting picks the symbols up from its own connected handler.
+    if (ws_connected())
+        ws_resubscribe();
+
+    if (!active_feed_symbol_union().isEmpty() && !active_feed_timer_->isActive())
+        active_feed_timer_->start();
+
+    // Poll-only brokers refresh these on 5-minute timers; without a nudge the
+    // restored symbols would show nothing for minutes after a token refresh.
+    if (!ws_active()) {
+        async_fetch_quote();
+        async_fetch_watchlist_quotes();
+    }
+}
+
 // ── Symbol management ───────────────────────────────────────────────────────
 
 void AccountDataStream::subscribe_symbols(const QString& consumer_id, const QStringList& symbols) {
@@ -655,10 +698,11 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
             const double spread_pct = b > 0 ? (spread / b) * 100.0 : 0.0;
             QMetaObject::invokeMethod(
                 self,
-                [self, acct_id, bids, asks, spread, spread_pct]() {
+                [self, acct_id, symbol, bids, asks, spread, spread_pct]() {
                     if (!self)
                         return;
                     emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct, {}, {});
+                    emit self->orderbook_for_symbol(acct_id, symbol, bids, asks, spread, spread_pct, {}, {});
                 },
                 Qt::QueuedConnection);
             return;
@@ -705,10 +749,12 @@ void AccountDataStream::fetch_orderbook(const QString& symbol) {
         const double spread_pct = best_bid > 0 ? (spread / best_bid) * 100.0 : 0.0;
         QMetaObject::invokeMethod(
             self,
-            [self, acct_id, bids, asks, spread, spread_pct, bid_orders, ask_orders]() {
+            [self, acct_id, symbol, bids, asks, spread, spread_pct, bid_orders, ask_orders]() {
                 if (!self)
                     return;
                 emit self->orderbook_fetched(acct_id, bids, asks, spread, spread_pct, bid_orders, ask_orders);
+                emit self->orderbook_for_symbol(acct_id, symbol, bids, asks, spread, spread_pct, bid_orders,
+                                                ask_orders);
             },
             Qt::QueuedConnection);
     });
@@ -733,10 +779,11 @@ void AccountDataStream::fetch_time_sales(const QString& symbol) {
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, acct_id, data = *result.data]() {
+            [self, acct_id, symbol, data = *result.data]() {
                 if (!self)
                     return;
                 emit self->time_sales_fetched(acct_id, data);
+                emit self->time_sales_for_symbol(acct_id, symbol, data);
             },
             Qt::QueuedConnection);
     });
@@ -760,10 +807,11 @@ void AccountDataStream::fetch_latest_trade(const QString& symbol) {
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, acct_id, data = *result.data]() {
+            [self, acct_id, symbol, data = *result.data]() {
                 if (!self)
                     return;
                 emit self->latest_trade_fetched(acct_id, data);
+                emit self->latest_trade_for_symbol(acct_id, symbol, data);
             },
             Qt::QueuedConnection);
     });
@@ -821,6 +869,77 @@ void AccountDataStream::fetch_clock() {
     });
 }
 
+void AccountDataStream::fetch_auctions(const QString& symbol) {
+    if (symbol.isEmpty())
+        return;
+    const QString acct_id = account_id_;
+    const QString bid = broker_id_;
+    QPointer<AccountDataStream> self = this;
+
+    auto creds = AccountManager::instance().load_credentials(acct_id);
+    if (creds.api_key.isEmpty())
+        return;
+
+    (void)QtConcurrent::run([self, acct_id, bid, symbol, creds]() {
+        auto* broker = BrokerRegistry::instance().get(bid);
+        if (!broker)
+            return;
+        // Last ~week of sessions: enough for the AUCTIONS tab, one small request.
+        const QString start = QDate::currentDate().addDays(-7).toString("yyyy-MM-dd");
+        auto result = broker->get_historical_auctions_single(creds, symbol, start, QString());
+        // Brokers without auction data answer "Not supported" — stay silent so the
+        // AUCTIONS tab simply never appears for them.
+        if (!result.success || !result.data || result.data->isEmpty())
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, symbol, data = *result.data]() {
+                if (!self)
+                    return;
+                emit self->auctions_fetched(acct_id, symbol, data);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void AccountDataStream::fetch_condition_codes() {
+    const QString acct_id = account_id_;
+    const QString bid = broker_id_;
+    QPointer<AccountDataStream> self = this;
+
+    auto creds = AccountManager::instance().load_credentials(acct_id);
+    if (creds.api_key.isEmpty())
+        return;
+
+    (void)QtConcurrent::run([self, acct_id, bid, creds]() {
+        auto* broker = BrokerRegistry::instance().get(bid);
+        if (!broker)
+            return;
+        // Trade conditions are published per tape (A = NYSE, B = NYSE American/regional,
+        // C = Nasdaq); the codes overlap across tapes with the same meaning, so a flat
+        // code → description map is sufficient for rendering the time & sales table.
+        QMap<QString, QString> codes;
+        for (const char* tape : {"A", "B", "C"}) {
+            auto result = broker->get_condition_codes(creds, QStringLiteral("trade"), QString::fromLatin1(tape));
+            if (!result.success || !result.data)
+                continue;
+            for (const auto& e : *result.data)
+                if (!e.code.isEmpty() && !codes.contains(e.code))
+                    codes.insert(e.code, e.description);
+        }
+        if (codes.isEmpty())
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, acct_id, codes]() {
+                if (!self)
+                    return;
+                emit self->condition_codes_fetched(acct_id, codes);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
 // ── WebSocket ───────────────────────────────────────────────────────────────
 
 void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
@@ -857,6 +976,8 @@ void AccountDataStream::wire_base_ws(BrokerWebSocketBase* ws) {
         const double spread = (best_bid > 0 && best_ask > 0) ? best_ask - best_bid : 0;
         const double spread_pct = best_bid > 0 ? spread / best_bid * 100.0 : 0;
         emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, {}, {});
+        emit orderbook_for_symbol(account_id_, d.symbol.isEmpty() ? selected_symbol_ : d.symbol, bids, asks, spread,
+                                  spread_pct, {}, {});
     });
     connect(ws, &BrokerWebSocketBase::connected, this,
             [this]() { emit connection_state_changed(account_id_, ConnectionState::Connected); });
@@ -943,6 +1064,7 @@ void AccountDataStream::ws_init() {
                         spread_pct = (spread / best_bid) * 100.0;
                     }
                     emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, {}, {});
+                    emit orderbook_for_symbol(account_id_, symbol, bids, asks, spread, spread_pct, {}, {});
                 });
 
         connect(fws, &FyersWebSocket::connected, this, [this]() {
@@ -1134,6 +1256,8 @@ void AccountDataStream::ws_init() {
                                       .arg(asks.size())
                                       .arg(q.symbol));
                 emit orderbook_fetched(account_id_, bids, asks, spread, spread_pct, bid_orders, ask_orders);
+                emit orderbook_for_symbol(account_id_, q.symbol, bids, asks, spread, spread_pct, bid_orders,
+                                          ask_orders);
             }
         });
         connect(zws, &ZerodhaWebSocket::connected, this, [this]() {

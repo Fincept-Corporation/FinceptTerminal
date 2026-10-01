@@ -110,6 +110,11 @@ class TradingEnvironment(gym.Env if gym else object):
         self.initial_cash = initial_cash
         self.commission = commission
         self.action_space_type = action_space_type
+        # Observation prices are expressed relative to the first close. They used to
+        # be divided by a hard-coded 100, which hands the network raw values in the
+        # thousands for anything priced above ~$100 (BTC, NVDA, indices, ...).
+        first_close = float(market_data['close'].iloc[0]) if len(market_data) else 100.0
+        self.price_scale = first_close if first_close > 0 else 100.0
 
         # State space: [cash, holdings, price, volume, technical indicators]
         self.observation_space = gym.spaces.Box(
@@ -157,19 +162,19 @@ class TradingEnvironment(gym.Env if gym else object):
         obs = np.array([
             self.cash / self.initial_cash,
             self.holdings,
-            row.get('close', 0) / 100,  # Normalized price
+            row.get('close', 0) / self.price_scale,  # Normalized price
             row.get('volume', 0) / 1e6,  # Normalized volume
-            row.get('open', 0) / 100,
-            row.get('high', 0) / 100,
-            row.get('low', 0) / 100,
-            row.get('vwap', 0) / 100,
+            row.get('open', 0) / self.price_scale,
+            row.get('high', 0) / self.price_scale,
+            row.get('low', 0) / self.price_scale,
+            row.get('vwap', 0) / self.price_scale,
             row.get('returns', 0),
             row.get('volatility', 0),
             row.get('rsi', 50) / 100,
             row.get('macd', 0),
             row.get('signal', 0),
-            row.get('bb_upper', 0) / 100,
-            row.get('bb_lower', 0) / 100,
+            row.get('bb_upper', 0) / self.price_scale,
+            row.get('bb_lower', 0) / self.price_scale,
             row.get('atr', 0),
             row.get('adx', 0) / 100,
             row.get('obv', 0) / 1e9,
@@ -188,20 +193,26 @@ class TradingEnvironment(gym.Env if gym else object):
 
         # Execute action
         if self.action_space_type == 'continuous':
-            # action is target position size (-1 to +1)
-            target_position = float(action[0])
-            position_change = target_position - self.holdings
+            # The action is the TARGET FRACTION of portfolio value held in the asset
+            # (long-only: <= 0 means flat). The old code compared that fraction with
+            # self.holdings -- a SHARE COUNT -- so after the first buy the "change" was
+            # always negative and the agent could only ever sell.
+            raw_action = float(np.asarray(action, dtype=float).reshape(-1)[0])
+            target_exposure = min(max(raw_action, 0.0), 1.0)
+            portfolio_now = self.cash + self.holdings * current_price
+            exposure = (self.holdings * current_price / portfolio_now) if portfolio_now > 0 else 0.0
+            delta_value = (target_exposure - exposure) * portfolio_now
 
-            if position_change > 0:  # Buy
-                shares_to_buy = (self.cash * abs(position_change)) / current_price
-                cost = shares_to_buy * current_price * (1 + self.commission)
-                if cost <= self.cash:
+            if delta_value > 0 and current_price > 0:  # Buy
+                spend = min(delta_value, self.cash / (1 + self.commission))
+                shares_to_buy = spend / current_price
+                if shares_to_buy > 0:
                     self.holdings += shares_to_buy
-                    self.cash -= cost
+                    self.cash -= spend * (1 + self.commission)
                     self.trades.append({'step': self.current_step, 'action': 'buy', 'shares': shares_to_buy, 'price': current_price})
 
-            elif position_change < 0:  # Sell
-                shares_to_sell = self.holdings * abs(position_change)
+            elif delta_value < 0 and current_price > 0:  # Sell
+                shares_to_sell = min(-delta_value / current_price, self.holdings)
                 if shares_to_sell > 0:
                     revenue = shares_to_sell * current_price * (1 - self.commission)
                     self.holdings -= shares_to_sell
@@ -233,13 +244,6 @@ class TradingEnvironment(gym.Env if gym else object):
         # Reward: portfolio return
         reward = (self.portfolio_value - prev_portfolio_value) / prev_portfolio_value
 
-        # Add Sharpe ratio component
-        if len(self.trades) > 10:
-            returns = [t.get('price', 0) for t in self.trades[-10:]]
-            if len(returns) > 1:
-                sharpe = np.mean(returns) / (np.std(returns) + 1e-6)
-                reward += sharpe * 0.1
-
         done = self.current_step >= len(self.market_data) - 1
         truncated = False
 
@@ -268,6 +272,10 @@ class RLTradingAgent:
         self.qlib_initialized = False
         self.model = None
         self.env = None
+        self.eval_env = None
+        self.ticker = None
+        self.buy_hold_return_pct = None
+        self.data_info = {}
         self.training_history = []
 
     def initialize_qlib(self,
@@ -288,49 +296,92 @@ class RLTradingAgent:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
+    @staticmethod
+    def _download_market_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """Daily OHLCV from Yahoo Finance plus the indicator columns the env observes."""
+        import yfinance as yf
+
+        raw = yf.download(ticker, start=start_date, end=end_date, auto_adjust=True, progress=False)
+        if raw is None or raw.empty:
+            raise ValueError(f"No price data returned for '{ticker}' between {start_date} and {end_date}")
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        df = raw.rename(columns=str.lower)[['open', 'high', 'low', 'close', 'volume']].astype(float)
+        df = df.dropna()
+
+        close = df['close']
+        df['vwap'] = (df['high'] + df['low'] + close) / 3.0
+        df['returns'] = close.pct_change()
+        df['volatility'] = df['returns'].rolling(20).std()
+        delta = close.diff()
+        gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+        loss = (-delta.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+        df['rsi'] = 100 - 100 / (1 + gain / (loss + 1e-10))
+        macd = close.ewm(span=12, adjust=False).mean() - close.ewm(span=26, adjust=False).mean()
+        df['macd'] = macd / close                      # relative to price so it is scale-free
+        df['signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+        df = df.dropna()
+        if len(df) < 60:
+            raise ValueError(f"Only {len(df)} usable daily bars for '{ticker}'; need at least 60 -- "
+                             "widen the date range")
+        return df
+
     def create_trading_env(self,
                           tickers: List[str],
                           start_date: str,
                           end_date: str,
                           initial_cash: float = 1000000.0,
                           commission: float = 0.001,
-                          action_space_type: str = 'continuous') -> Dict[str, Any]:
-        """Create trading environment with market data"""
+                          action_space_type: str = 'continuous',
+                          train_fraction: float = 0.8) -> Dict[str, Any]:
+        """Create trading environments from real daily bars.
+
+        The first ``train_fraction`` of the history trains the agent; the remainder is
+        held out (``self.eval_env``) so evaluation is out-of-sample. This used to
+        ignore the ticker and train on cumulative random noise.
+        """
         if not STABLE_BASELINES_AVAILABLE:
             return {'success': False, 'error': 'Stable-Baselines3 not installed'}
 
         try:
-            # Fetch market data from Qlib
-            instruments = tickers if isinstance(tickers, list) else [tickers]
+            ticker = tickers[0] if isinstance(tickers, (list, tuple)) else str(tickers).split(',')[0].strip()
+            market_data = self._download_market_data(ticker, start_date, end_date)
 
-            # For demo, generate synthetic data
-            dates = pd.date_range(start=start_date, end=end_date, freq='D')
-            data = {
-                'close': np.random.randn(len(dates)).cumsum() + 100,
-                'open': np.random.randn(len(dates)).cumsum() + 100,
-                'high': np.random.randn(len(dates)).cumsum() + 102,
-                'low': np.random.randn(len(dates)).cumsum() + 98,
-                'volume': np.random.randint(1e6, 1e8, len(dates)),
-                'returns': np.random.randn(len(dates)) * 0.02,
-                'volatility': np.abs(np.random.randn(len(dates)) * 0.01),
-                'rsi': np.random.uniform(30, 70, len(dates)),
-                'macd': np.random.randn(len(dates)) * 0.5,
-                'signal': np.random.randn(len(dates)) * 0.5,
-            }
-            market_data = pd.DataFrame(data, index=dates)
+            split = int(len(market_data) * train_fraction)
+            if split < 40 or len(market_data) - split < 20:
+                return {'success': False,
+                        'error': f"Not enough history for a train/test split ({len(market_data)} bars)"}
+            train_data = market_data.iloc[:split]
+            test_data = market_data.iloc[split:]
 
-            # Create environment
             self.env = TradingEnvironment(
-                market_data=market_data,
+                market_data=train_data,
                 initial_cash=initial_cash,
                 commission=commission,
                 action_space_type=action_space_type
             )
+            self.eval_env = TradingEnvironment(
+                market_data=test_data,
+                initial_cash=initial_cash,
+                commission=commission,
+                action_space_type=action_space_type
+            )
+            self.ticker = ticker
+            close_test = test_data['close']
+            self.buy_hold_return_pct = float((close_test.iloc[-1] / close_test.iloc[0] - 1) * 100)
+            self.data_info = {
+                'ticker': ticker,
+                'bars': int(len(market_data)),
+                'train_bars': int(len(train_data)),
+                'test_bars': int(len(test_data)),
+                'train_period': [str(train_data.index[0].date()), str(train_data.index[-1].date())],
+                'test_period': [str(test_data.index[0].date()), str(test_data.index[-1].date())],
+            }
 
             return {
                 'success': True,
                 'message': 'Trading environment created',
-                'data_points': len(market_data),
+                'data_points': int(len(market_data)),
                 'action_space': action_space_type,
                 'initial_cash': initial_cash
             }
@@ -410,16 +461,18 @@ class RLTradingAgent:
             episode_rewards = []
             episode_lengths = []
             final_portfolios = []
+            # Held-out segment when the env was built by create_trading_env().
+            env = self.eval_env if self.eval_env is not None else self.env
 
             for episode in range(n_episodes):
-                obs, _ = self.env.reset()
+                obs, _ = env.reset()
                 done = False
                 episode_reward = 0
                 steps = 0
 
                 while not done:
                     action, _ = self.model.predict(obs, deterministic=True)
-                    obs, reward, done, truncated, info = self.env.step(action)
+                    obs, reward, done, truncated, info = env.step(action)
                     episode_reward += reward
                     steps += 1
 
@@ -437,7 +490,7 @@ class RLTradingAgent:
                 'std_reward': float(np.std(episode_rewards)),
                 'mean_length': float(np.mean(episode_lengths)),
                 'mean_portfolio_value': float(np.mean(final_portfolios)),
-                'portfolio_return': float((np.mean(final_portfolios) / self.env.initial_cash - 1) * 100),
+                'portfolio_return': float((np.mean(final_portfolios) / env.initial_cash - 1) * 100),
                 'all_rewards': [float(r) for r in episode_rewards]
             }
         except Exception as e:
@@ -486,6 +539,21 @@ class RLTradingAgent:
         }
 
 
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def main():
     """Main CLI interface"""
     if len(sys.argv) < 2:
@@ -517,22 +585,47 @@ def main():
             params['tickers'] = params.pop('ticker')
         if 'initial_capital' in params:
             params['initial_cash'] = params.pop('initial_capital')
-        # episodes → total_timesteps (episodes * ~365 steps per episode)
-        if 'episodes' in params:
-            episodes = params.pop('episodes')
-            params.setdefault('total_timesteps', episodes * 365)
+        episodes = params.pop('episodes', None)
         # Auto-create env from same params before training
         env_params = {k: params.pop(k) for k in ['tickers', 'initial_cash', 'start_date', 'end_date']
                       if k in params}
         env_params.setdefault('tickers', 'AAPL')
         env_params.setdefault('initial_cash', 100000)
-        env_params.setdefault('start_date', '2022-01-01')
-        env_params.setdefault('end_date', '2024-01-01')
+        # Default window: the last two years of daily bars (it was a fixed 2022-2024).
+        from datetime import date, timedelta
+        env_params.setdefault('end_date', date.today().isoformat())
+        env_params.setdefault('start_date', (date.today() - timedelta(days=730)).isoformat())
+        # DQN only supports a discrete action space; the continuous env made
+        # DQN('MlpPolicy', env) fail its action-space assertion on every run.
+        algorithm = params.get('algorithm', 'PPO')
+        env_params.setdefault('action_space_type', 'discrete' if algorithm == 'DQN' else 'continuous')
         env_result = agent.create_trading_env(**env_params)
         if not env_result.get('success'):
             result = env_result
         else:
+            # One "episode" is one pass over the training bars (it was a flat 365 steps,
+            # unrelated to how much data was actually loaded).
+            if episodes is not None:
+                params.setdefault('total_timesteps', int(episodes) * len(agent.env.market_data))
             result = agent.train_agent(**params)
+            if result.get('success'):
+                # Out-of-sample evaluation + persistence, in the same process: nothing
+                # survives the process otherwise, so "evaluate" could never find a model.
+                evaluation = agent.evaluate_agent(5)
+                if evaluation.get('success'):
+                    evaluation['buy_hold_return_pct'] = agent.buy_hold_return_pct
+                    result['evaluation'] = evaluation
+                result['data'] = agent.data_info
+                try:
+                    from pathlib import Path
+                    models_dir = Path.home() / '.fincept' / 'rl_models'
+                    models_dir.mkdir(parents=True, exist_ok=True)
+                    model_path = models_dir / (f"{algorithm}_{agent.ticker}_"
+                                               f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip")
+                    agent.model.save(str(model_path))
+                    result['model_path'] = str(model_path)
+                except Exception as e:
+                    result['model_save_error'] = str(e)
 
     elif command == 'evaluate':
         n_episodes = int(sys.argv[2]) if len(sys.argv) > 2 else 10
@@ -555,7 +648,7 @@ def main():
     # ProgressCallback during training.
     payload = {"event": "result"}
     payload.update(result)
-    print(json.dumps(payload), flush=True)
+    print(json.dumps(_json_safe(payload)), flush=True)
 
 
 if __name__ == '__main__':

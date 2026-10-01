@@ -74,6 +74,12 @@ QString NodeEditorToolbar::workflow_name() const {
     return name_edit_->text();
 }
 
+void NodeEditorToolbar::set_status_text(const QString& text) {
+    status_override_ = text;
+    if (status_badge_)
+        status_badge_->setText(status_override_.isEmpty() ? tr("DRAFT") : status_override_);
+}
+
 void NodeEditorToolbar::set_can_undo(bool can) {
     undo_btn_->setEnabled(can);
 }
@@ -103,7 +109,7 @@ void NodeEditorToolbar::changeEvent(QEvent* event) {
 void NodeEditorToolbar::retranslateUi() {
     if (name_edit_)
         name_edit_->setPlaceholderText(tr("Untitled Workflow"));
-    if (status_badge_)
+    if (status_badge_ && status_override_.isEmpty())
         status_badge_->setText(tr("DRAFT"));
     if (undo_btn_) {
         undo_btn_->setText(tr("UNDO"));

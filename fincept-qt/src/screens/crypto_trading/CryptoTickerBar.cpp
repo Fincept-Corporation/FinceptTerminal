@@ -71,6 +71,29 @@ CryptoTickerBar::CryptoTickerBar(QWidget* parent) : QWidget(parent) {
 }
 
 void CryptoTickerBar::set_symbol(const QString& symbol) {
+    if (symbol_label_->text() != symbol) {
+        // New pair — blank the readouts so the previous pair's price / bid / ask
+        // aren't shown under the new name until its first tick (update_data
+        // ignores a non-positive price, so nothing else would clear them).
+        price_label_->setText(QStringLiteral("--"));
+        change_label_->setText(QStringLiteral("--"));
+        bid_label_->setText(QStringLiteral("B:--"));
+        ask_label_->setText(QStringLiteral("A:--"));
+        spread_label_->setText(QStringLiteral("S:--"));
+        high_label_->setText(QStringLiteral("H:--"));
+        low_label_->setText(QStringLiteral("L:--"));
+        volume_label_->setText(QStringLiteral("Vol:--"));
+        mark_price_label_->setVisible(false);
+        index_price_label_->setVisible(false);
+        last_price_text_.clear();
+        last_change_text_.clear();
+        last_high_text_.clear();
+        last_low_text_.clear();
+        last_volume_text_.clear();
+        last_bid_text_.clear();
+        last_ask_text_.clear();
+        last_spread_text_.clear();
+    }
     symbol_label_->setText(symbol);
 }
 

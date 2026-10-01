@@ -57,6 +57,21 @@ QString shorten_sig(const QString& sig) {
     return sig.left(8) + QStringLiteral("…") + sig.right(4);
 }
 
+/// Solscan needs `?cluster=` for non-mainnet transactions; without it a devnet
+/// / testnet signature opens a "transaction not found" page. Derived from the
+/// same `solana.rpc_url` override the rest of the Crypto Center reads.
+QString activity_explorer_cluster_suffix() {
+    auto r = SecureStorage::instance().retrieve(QStringLiteral("solana.rpc_url"));
+    if (!r.is_ok())
+        return {};
+    const QString url = r.value().toLower();
+    if (url.contains(QStringLiteral("devnet")))
+        return QStringLiteral("?cluster=devnet");
+    if (url.contains(QStringLiteral("testnet")))
+        return QStringLiteral("?cluster=testnet");
+    return {};
+}
+
 } // namespace
 
 ActivityTab::ActivityTab(QWidget* parent) : QWidget(parent) {
@@ -243,7 +258,8 @@ void ActivityTab::on_row_clicked(int row, int /*column*/) {
     const auto sig = it->data(Qt::UserRole).toString();
     if (sig.isEmpty())
         return;
-    QDesktopServices::openUrl(QUrl(QStringLiteral("https://solscan.io/tx/%1").arg(sig)));
+    QDesktopServices::openUrl(
+        QUrl(QStringLiteral("https://solscan.io/tx/%1%2").arg(sig, activity_explorer_cluster_suffix())));
 }
 
 void ActivityTab::rebuild_table() {
@@ -276,7 +292,14 @@ void ActivityTab::rebuild_table() {
         ts->setData(Qt::UserRole, a.signature);
         table_->setItem(i, 0, ts);
 
-        table_->setItem(i, 1, new QTableWidgetItem(kind_label(a.kind)));
+        auto* event_item = new QTableWidgetItem(kind_label(a.kind));
+        // The parsed counterparty was collected by the producer but never shown.
+        // Full address in the tooltip so a transfer can be checked against the
+        // wallet / explorer without leaving the row.
+        if (!a.counterparty.isEmpty()) {
+            event_item->setToolTip((a.kind == Kind::Send ? tr("To: %1") : tr("From: %1")).arg(a.counterparty));
+        }
+        table_->setItem(i, 1, event_item);
         table_->setItem(i, 2, new QTableWidgetItem(a.asset.isEmpty() ? QStringLiteral("—") : a.asset));
         table_->setItem(i, 3, new QTableWidgetItem(a.amount_ui.isEmpty() ? QStringLiteral("—") : a.amount_ui));
         auto* status = new QTableWidgetItem(a.status.isEmpty() ? QStringLiteral("—") : a.status);

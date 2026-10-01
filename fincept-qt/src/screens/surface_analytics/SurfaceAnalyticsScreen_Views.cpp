@@ -34,6 +34,9 @@
 #include <QVBoxLayout>
 #include <QVariant>
 
+#include <cmath>
+#include <limits>
+
 namespace fincept::surface {
 
 using namespace fincept::ui;
@@ -121,13 +124,23 @@ void SurfaceAnalyticsScreen::load_demo_data() {
 // ── Chart routing ─────────────────────────────────────────────────────────────
 void SurfaceAnalyticsScreen::update_chart() {
     auto minmax = [](const std::vector<std::vector<float>>& z, float& mn, float& mx) {
-        mn = 9999;
-        mx = -9999;
+        // Seeded with +/-infinity, not +/-9999: a grid whose values all sit above 9999
+        // (index-futures prices, NQ ~20,000) never lowered a 9999 minimum, so the
+        // surface was scaled from a floor that isn't in the data. Non-finite cells are
+        // skipped; an empty / all-NaN grid falls back to a unit range.
+        mn = std::numeric_limits<float>::infinity();
+        mx = -std::numeric_limits<float>::infinity();
         for (const auto& row : z)
             for (float v : row) {
+                if (!std::isfinite(v))
+                    continue;
                 mn = std::min(mn, v);
                 mx = std::max(mx, v);
             }
+        if (mn > mx) {
+            mn = 0.0f;
+            mx = 1.0f;
+        }
     };
 
     auto fmt_strikes = [](const std::vector<float>& s) {
@@ -611,7 +624,10 @@ void SurfaceAnalyticsScreen::update_metrics() {
         control_panel_->update_metrics({});
     // The panel's "Spot:" readout had no writer at all — it always showed a
     // dash. Fill it from the same resolver the fetch path uses.
-    control_panel_->set_spot(double(spot_for(current_symbol_or_default())));
+    // Show only a REAL quote - the 100.0 placeholder is not a price, and this label
+    // sits next to the FETCH button as the "spot" a fetch will use.
+    const QString sym = current_symbol_or_default();
+    control_panel_->set_spot(has_live_spot(sym) ? double(spot_for(sym)) : 0.0);
 }
 
 const std::vector<std::vector<float>>* SurfaceAnalyticsScreen::active_z_grid() const {

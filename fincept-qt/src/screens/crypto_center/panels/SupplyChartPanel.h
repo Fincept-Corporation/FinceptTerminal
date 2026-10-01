@@ -68,6 +68,11 @@ class SupplyChartPanel : public QWidget {
     // Error strip
     QWidget* error_strip_ = nullptr;
     QLabel* error_text_ = nullptr;
+
+    /// Whether the series currently plotted came from the producer's built-in
+    /// demo data. Carried on the points themselves (SupplyHistoryPoint::is_mock)
+    /// so the pill can never disagree with the data it sits above.
+    bool series_is_mock_ = false;
 };
 
 } // namespace fincept::screens::panels

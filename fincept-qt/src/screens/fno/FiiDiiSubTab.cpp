@@ -104,7 +104,8 @@ void FiiDiiSubTab::setup_ui() {
     table_ = new QTableWidget(split);
     table_->setColumnCount(7);
     table_->setHorizontalHeaderLabels(
-        {tr("Date"), tr("FII Buy"), tr("FII Sell"), tr("FII Net"), tr("DII Buy"), tr("DII Sell"), tr("DII Net")});
+        {tr("Date"), tr("FII Buy"), tr("FII Sell"), tr("FII Net (₹ Cr)"), tr("DII Buy"), tr("DII Sell"),
+         tr("DII Net (₹ Cr)")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -173,8 +174,8 @@ void FiiDiiSubTab::retranslateUi() {
     if (refresh_btn_)
         refresh_btn_->setText(tr("REFRESH"));
     if (table_)
-        table_->setHorizontalHeaderLabels(
-            {tr("Date"), tr("FII Buy"), tr("FII Sell"), tr("FII Net"), tr("DII Buy"), tr("DII Sell"), tr("DII Net")});
+        table_->setHorizontalHeaderLabels({tr("Date"), tr("FII Buy"), tr("FII Sell"), tr("FII Net (₹ Cr)"),
+                                           tr("DII Buy"), tr("DII Sell"), tr("DII Net (₹ Cr)")});
 }
 
 void FiiDiiSubTab::on_data_arrived(const QVariant& v) {
@@ -185,6 +186,18 @@ void FiiDiiSubTab::on_data_arrived(const QVariant& v) {
 
 void FiiDiiSubTab::apply_data(const QVector<FiiDiiDay>& rows) {
     chart_->set_data(rows);
+
+    // The upstream feed publishes only the NET figure per day, so the Buy / Sell columns
+    // were a wall of dashes. Show them only when some row actually carries a value.
+    bool any_gross = false;
+    for (const FiiDiiDay& d : rows) {
+        if (d.fii_buy != 0 || d.fii_sell != 0 || d.dii_buy != 0 || d.dii_sell != 0) {
+            any_gross = true;
+            break;
+        }
+    }
+    for (int col : {1, 2, 4, 5})
+        table_->setColumnHidden(col, !any_gross);
 
     table_->setRowCount(rows.size());
     auto put = [&](int r, int c, const QString& txt, const QColor& fg = QColor()) {

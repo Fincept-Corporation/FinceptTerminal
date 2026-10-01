@@ -28,6 +28,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonObject>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -370,17 +371,47 @@ void CryptoBottomPanel::setup_positions_tab() {
                 "QPushButton:hover{background:rgba(220,38,38,0.25);}")
             .arg(colors::NEGATIVE(), colors::NEGATIVE_DIM()));
     connect(close_all_btn_, &QPushButton::clicked, this, [this]() {
-        if (account_id_.isEmpty())
-            return;
-        auto answer = QMessageBox::warning(this, tr("Square Off All Positions"),
-                                           tr("This will close ALL open positions.\n\nAre you sure?"),
-                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        // No account_id_ gate: nothing ever called set_account_id(), so the old
+        // `if (account_id_.isEmpty()) return;` made this button (and CANCEL ALL
+        // below) a silent no-op. The screen's handler resolves the paper
+        // portfolio / live exchange itself and ignores the argument.
+        auto answer = QMessageBox::warning(
+            this, tr("Square Off All Positions"),
+            is_paper_ ? tr("This will close ALL open paper positions at market.\n\nAre you sure?")
+                      : tr("This will close ALL open LIVE positions with real market orders on the exchange.\n\n"
+                           "Are you sure?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
         emit close_all_positions_requested(account_id_);
     });
     bar_layout->addWidget(close_all_btn_);
     vlay->addWidget(action_bar);
+
+    // Per-position close: close_position_requested had a receiver in the screen
+    // but nothing ever emitted it. A right-click menu on the row is the obvious
+    // place; closing is a market order, so confirm it (mode-aware).
+    positions_table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    positions_table_->setToolTip(tr("Right-click a position to close it"));
+    connect(positions_table_, &QTableWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        const int row = positions_table_->rowAt(pos.y());
+        auto* sym_item = row >= 0 ? positions_table_->item(row, 0) : nullptr;
+        if (!sym_item || sym_item->text().isEmpty())
+            return;
+        const QString symbol = sym_item->text();
+        QMenu menu(this);
+        QAction* close_act = menu.addAction(tr("Close position (%1) at market").arg(symbol));
+        if (menu.exec(positions_table_->viewport()->mapToGlobal(pos)) != close_act)
+            return;
+        const auto answer = QMessageBox::warning(
+            this, tr("Close Position"),
+            (is_paper_ ? tr("Close your paper position in %1 at market?")
+                       : tr("Close your LIVE position in %1 with a real reduce-only market order?"))
+                .arg(symbol),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer == QMessageBox::Yes)
+            emit close_position_requested(symbol);
+    });
 
     auto* stack_host = wrap_with_empty_state(positions_table_, positions_stack_, tr("No open positions."));
     if (positions_stack_ && positions_stack_->widget(1))
@@ -425,11 +456,11 @@ void CryptoBottomPanel::setup_orders_tab() {
                 "QPushButton:hover{background:rgba(217,119,6,0.25);}")
             .arg(colors::AMBER(), colors::AMBER_DIM()));
     connect(cancel_all_btn_, &QPushButton::clicked, this, [this]() {
-        if (account_id_.isEmpty())
-            return;
-        auto answer = QMessageBox::warning(this, tr("Cancel All Orders"),
-                                           tr("This will cancel ALL pending orders.\n\nAre you sure?"),
-                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        auto answer = QMessageBox::warning(
+            this, tr("Cancel All Orders"),
+            is_paper_ ? tr("This will cancel ALL pending paper orders.\n\nAre you sure?")
+                      : tr("This will cancel ALL open LIVE orders on the exchange.\n\nAre you sure?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
         emit cancel_all_orders_requested(account_id_);
@@ -618,6 +649,37 @@ void CryptoBottomPanel::add_trade_entry(const TradeEntry& trade) {
     time_sales_->add_trade(trade);
 }
 
+void CryptoBottomPanel::reset_market_data() {
+    if (time_sales_)
+        time_sales_->set_trades({});
+    if (depth_chart_)
+        depth_chart_->set_data({}, {}, 0.0, 0.0);
+    for (QLabel* l : {funding_label_, mark_label_, index_label_, oi_label_, fees_label_, next_funding_label_}) {
+        if (l)
+            l->setText(QStringLiteral("--"));
+    }
+}
+
+void CryptoBottomPanel::set_live_positions_unavailable(const QString& reason) {
+    // In LIVE mode the table may still hold paper rows from before the toggle;
+    // clear them and put the reason in the empty-state placeholder.
+    if (positions_table_)
+        positions_table_->setRowCount(0);
+    update_empty_state(positions_table_, positions_stack_, 0);
+    if (positions_empty_label_)
+        positions_empty_label_->setText(reason.isEmpty() ? tr("Live positions unavailable")
+                                                          : tr("Live positions unavailable: %1").arg(reason));
+}
+
+void CryptoBottomPanel::set_live_orders_unavailable(const QString& reason) {
+    if (orders_table_)
+        orders_table_->setRowCount(0);
+    update_empty_state(orders_table_, orders_stack_, 0);
+    if (orders_empty_label_)
+        orders_empty_label_->setText(reason.isEmpty() ? tr("Live orders unavailable")
+                                                       : tr("Live orders unavailable: %1").arg(reason));
+}
+
 void CryptoBottomPanel::set_depth_data(const QVector<QPair<double, double>>& bids,
                                        const QVector<QPair<double, double>>& asks, double spread, double spread_pct) {
     depth_chart_->set_data(bids, asks, spread, spread_pct);
@@ -665,6 +727,8 @@ void CryptoBottomPanel::set_positions(const QVector<trading::PtPosition>& positi
         ensure_item(positions_table_, i, 3)->setData(kExactValueRole, pos.entry_price);
     }
     positions_table_->setUpdatesEnabled(true);
+    if (n == 0 && positions_empty_label_)
+        positions_empty_label_->setText(tr("No open positions.")); // undo a set_live_positions_unavailable() message
     update_empty_state(positions_table_, positions_stack_, n);
 }
 
@@ -765,6 +829,8 @@ void CryptoBottomPanel::set_orders(const QVector<trading::PtOrder>& orders) {
         }
     }
     orders_table_->setUpdatesEnabled(true);
+    if (n == 0 && orders_empty_label_)
+        orders_empty_label_->setText(tr("No active orders.")); // undo a set_live_orders_unavailable() message
     update_empty_state(orders_table_, orders_stack_, n);
 }
 
@@ -829,14 +895,24 @@ void CryptoBottomPanel::set_stats(const trading::PtStats& stats) {
 void CryptoBottomPanel::set_market_info(const MarketInfoData& info) {
     if (!info.has_data)
         return;
-    funding_label_->setText(QString("%1%").arg(info.funding_rate * 100.0, 0, 'f', 4));
-    mark_label_->setText(format_price_usd(info.mark_price));
-    index_label_->setText(format_price_usd(info.index_price));
-    oi_label_->setText(QString("$%1M").arg(info.open_interest_value / 1e6, 0, 'f', 2));
-    fees_label_->setText(
-        QString("%1% / %2%").arg(info.maker_fee * 100, 0, 'f', 3).arg(info.taker_fee * 100, 0, 'f', 3));
+    // The funding and open-interest fetches land separately and either may be
+    // unsupported for the pair (spot, or a venue without the endpoint) — a zero
+    // is "no data", not a real 0.00 % / $0 reading, so show "--" for it.
+    const bool have_funding = info.mark_price > 0.0 || info.funding_rate != 0.0;
+    funding_label_->setText(have_funding ? QString("%1%").arg(info.funding_rate * 100.0, 0, 'f', 4)
+                                         : QStringLiteral("--"));
+    mark_label_->setText(info.mark_price > 0.0 ? format_price_usd(info.mark_price) : QStringLiteral("--"));
+    index_label_->setText(info.index_price > 0.0 ? format_price_usd(info.index_price) : QStringLiteral("--"));
+    oi_label_->setText(info.open_interest_value > 0.0
+                           ? QString("$%1M").arg(info.open_interest_value / 1e6, 0, 'f', 2)
+                           : QStringLiteral("--"));
+    if (info.maker_fee > 0.0 || info.taker_fee > 0.0)
+        fees_label_->setText(
+            QString("%1% / %2%").arg(info.maker_fee * 100, 0, 'f', 3).arg(info.taker_fee * 100, 0, 'f', 3));
+    // next_funding_time is the exchange's ms-epoch (ccxt nextFundingTimestamp);
+    // reading it as seconds produced a garbage time-of-day.
     if (info.next_funding_time > 0)
-        next_funding_label_->setText(QDateTime::fromSecsSinceEpoch(info.next_funding_time).toString("HH:mm:ss"));
+        next_funding_label_->setText(QDateTime::fromMSecsSinceEpoch(info.next_funding_time).toString("HH:mm:ss"));
 }
 
 void CryptoBottomPanel::set_mode(bool is_paper) {
@@ -884,6 +960,8 @@ void CryptoBottomPanel::set_live_positions(const QJsonArray& positions) {
         ensure_item(positions_table_, i, 3)->setData(kExactValueRole, entry_px);
     }
     positions_table_->setUpdatesEnabled(true);
+    if (n == 0 && positions_empty_label_)
+        positions_empty_label_->setText(tr("No open positions."));
     update_empty_state(positions_table_, positions_stack_, n);
 }
 
@@ -931,6 +1009,8 @@ void CryptoBottomPanel::set_live_orders(const QJsonArray& orders) {
         }
     }
     orders_table_->setUpdatesEnabled(true);
+    if (n == 0 && orders_empty_label_)
+        orders_empty_label_->setText(tr("No active orders."));
     update_empty_state(orders_table_, orders_stack_, n);
 }
 
@@ -994,6 +1074,11 @@ void CryptoBottomPanel::update_fees(const QJsonObject& json) {
         write_row(0, kRowEven(), json.value("symbol").toString(), json.value("maker").toDouble(),
                   json.value("taker").toDouble());
         fees_table_->setUpdatesEnabled(true);
+        // Feed the MARKET tab's MAKER / TAKER card too — nothing else ever set it
+        // (set_market_info's fee fields are never filled by the screen).
+        fees_label_->setText(QString("%1% / %2%")
+                                 .arg(json.value("maker").toDouble() * 100.0, 0, 'f', 3)
+                                 .arg(json.value("taker").toDouble() * 100.0, 0, 'f', 3));
         update_empty_state(fees_table_, fees_stack_, 1);
         return;
     }

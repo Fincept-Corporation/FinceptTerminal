@@ -78,8 +78,20 @@ void NodeRegistry::register_builtin_nodes() {
         .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
         .parameters = {},
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&, std::function<void(bool, QJsonValue, QString)> cb) {
-                cb(true, QJsonObject{{"triggered", true}}, {});
+            [](const QJsonObject&, const QVector<QJsonValue>& inputs, std::function<void(bool, QJsonValue, QString)> cb) {
+                QJsonObject out{{"triggered", true}};
+                // Started by a parent workflow (control.execute_workflow)? The executor hands
+                // its payload to entry nodes — pass it on instead of discarding it.
+                if (!inputs.isEmpty() && !inputs[0].isNull() && !inputs[0].isUndefined()) {
+                    if (inputs[0].isObject()) {
+                        const QJsonObject in = inputs[0].toObject();
+                        for (auto it = in.constBegin(); it != in.constEnd(); ++it)
+                            out.insert(it.key(), it.value());
+                    } else {
+                        out["input"] = inputs[0];
+                    }
+                }
+                cb(true, out, {});
             },
     });
 
@@ -152,8 +164,30 @@ void NodeRegistry::register_builtin_nodes() {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
+                const QString key = params.value("key").toString().trimmed();
+                if (key.isEmpty()) {
+                    cb(false, {}, "Set Variable needs a Key"); // an empty key silently wrote a junk "" field
+                    return;
+                }
                 QJsonObject out = inputs.isEmpty() ? QJsonObject{} : inputs[0].toObject();
-                out[params.value("key").toString()] = params.value("value");
+
+                // The Value field is plain text, but gates and analytics read numbers: a text "10"
+                // is 0 to every toDouble() downstream (Risk Check then fails closed on quantity 0).
+                // A value that is exactly a plain number or true/false is stored as that type;
+                // anything else, and numbers with leading zeros (IDs, zip codes), stay text.
+                QJsonValue value = params.value("value");
+                if (value.isString()) {
+                    const QString text = value.toString().trimmed();
+                    bool is_number = false;
+                    const double d = text.toDouble(&is_number);
+                    const bool leading_zero = text.size() > 1 && text[0] == QLatin1Char('0') && text[1].isDigit();
+                    if (text == QLatin1String("true") || text == QLatin1String("false"))
+                        value = (text == QLatin1String("true"));
+                    else if (is_number && !leading_zero && !text.isEmpty() &&
+                             (text[0].isDigit() || text[0] == QLatin1Char('-') || text[0] == QLatin1Char('.')))
+                        value = d;
+                }
+                out[key] = value;
                 cb(true, out, {});
             },
     });
@@ -196,57 +230,13 @@ void NodeRegistry::register_builtin_nodes() {
                     else if (data.isObject() || data.isArray())
                         result = true;
                 } else {
-                    // Strip ={{ }} wrapper if present
-                    QString expr = cond_str;
-                    if (expr.startsWith("={{") && expr.endsWith("}}"))
-                        expr = expr.mid(3, expr.length() - 5).trimmed();
-
-                    // Build context from input data
-                    QJsonObject context;
-                    if (data.isObject())
-                        context = data.toObject();
-                    else
-                        context["value"] = data;
-
-                    // Parse simple comparisons: field op value
-                    // Supported: >, <, >=, <=, ==, !=
-                    static QRegularExpression cmp_re(R"(^\s*(\$?[\w.]+)\s*(>=|<=|!=|==|>|<)\s*(.+)\s*$)");
-                    auto match = cmp_re.match(expr);
-
-                    if (match.hasMatch()) {
-                        QString lhs_path = match.captured(1).trimmed();
-                        QString op = match.captured(2);
-                        QString rhs_str = match.captured(3).trimmed();
-
-                        // Resolve LHS from context
-                        QJsonValue lhs_val = ExpressionEngine::evaluate(QJsonValue("={{" + lhs_path + "}}"), context);
-                        double lhs = lhs_val.toDouble(0);
-                        double rhs = rhs_str.toDouble();
-
-                        if (op == ">")
-                            result = lhs > rhs;
-                        else if (op == "<")
-                            result = lhs < rhs;
-                        else if (op == ">=")
-                            result = lhs >= rhs;
-                        else if (op == "<=")
-                            result = lhs <= rhs;
-                        else if (op == "==")
-                            result = lhs == rhs;
-                        else if (op == "!=")
-                            result = lhs != rhs;
-                    } else {
-                        // Single value expression — resolve and check truthiness
-                        QJsonValue val = ExpressionEngine::evaluate(QJsonValue("={{" + expr + "}}"), context);
-                        if (val.isBool())
-                            result = val.toBool();
-                        else if (val.isDouble())
-                            result = val.toDouble() != 0.0;
-                        else if (val.isString())
-                            result = !val.toString().isEmpty() && val.toString() != "false";
-                        else
-                            result = !val.isNull() && !val.isUndefined();
-                    }
+                    // The shared evaluator handles comparisons (numeric when both sides are
+                    // numbers, exact text otherwise), contains / startsWith / endsWith,
+                    // && / ||, paths with [n] and helper calls, and bare-path truthiness.
+                    // The old inline parser compared every right-hand side with
+                    // QString::toDouble(), so `status == active` read as `0 == 0` and was
+                    // TRUE for any string — an If/Else on text always took the true branch.
+                    result = ExpressionEngine::evaluate_condition(cond_str, data);
                 }
 
                 // Annotate the output with the branch taken

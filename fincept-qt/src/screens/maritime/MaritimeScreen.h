@@ -77,8 +77,19 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     void populate_routes_table();
     void update_intelligence(int region_total, int loaded);
     void update_credits(int remaining);
-    void update_map(const QVector<services::maritime::VesselData>& vessels);
+    /// `fit_camera` re-frames the map around the new pins; false keeps the user's pan/zoom.
+    void update_map(const QVector<services::maritime::VesselData>& vessels, bool fit_camera);
     void apply_theme();
+    /// Fill the right-panel vessel card (name, IMO, fix + its age, speed, route) from a
+    /// record and copy its IMO into the search box so VOYAGE HISTORY is one click away.
+    void show_vessel_card(const services::maritime::VesselData& v);
+    /// Table row -> vessel card (and fly the map there when `fly`). No-op for rows that
+    /// aren't part of the currently rendered fleet (e.g. voyage-history rows).
+    void on_vessel_row_picked(int row, bool fly);
+    /// Read + validate the IMO box. Strips an "IMO" prefix; IMO numbers are exactly 7
+    /// digits, so anything else is reported instead of burning an API call on it.
+    /// Returns false (silently for an empty box) when there is nothing valid to look up.
+    bool read_imo(QString* imo_out);
     /// Re-issue the most recent load (bbox if one is set, else global sample).
     /// Shared by the manual refresh button and the auto-refresh timer.
     void do_refresh();
@@ -146,6 +157,11 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QTableWidget* place_table_ = nullptr;
     QLabel* place_status_ = nullptr;
     QVector<services::maritime::GeoPlace> place_results_;
+    // The geocoder / port-search request each typeahead is currently waiting on. Replies
+    // can arrive out of order (a slow answer for "rot" after one for "rotterdam"), so
+    // anything that isn't the latest request's context is dropped.
+    QString place_req_ctx_;
+    QString ports_req_ctx_;
     // Live typeahead: debounced geocoder search feeds a completer popup.
     QCompleter* place_completer_ = nullptr;
     QStringListModel* place_completer_model_ = nullptr;
@@ -194,6 +210,9 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// Set by on_shapes_changed(); consumed by on_vessels_loaded so the next
     /// batch is filtered to vessels lying inside the user's drawn shapes.
     bool filter_to_shapes_ = false;
+    /// True while the in-flight load was started by the auto-refresh timer: the map
+    /// camera is left alone so a background refresh doesn't undo the user's zoom.
+    bool auto_refresh_pending_ = false;
 
     // ── Static-text widgets cached for retranslateUi ─────────────────────────
     // Left panel buttons + section titles + stat captions.

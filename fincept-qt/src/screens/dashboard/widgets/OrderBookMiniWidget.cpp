@@ -48,6 +48,20 @@ OrderBookMiniWidget::OrderBookMiniWidget(const QJsonObject& cfg, QWidget* parent
     table_->setColumnWidth(5, 52);
     vl->addWidget(table_, 1);
 
+    // Title-bar refresh = "retry". It used to be wired to nothing, so the 20 s
+    // "No data yet - click refresh to retry" prompt pointed at a dead button.
+    // The account stream polls on its own cadence, so the only thing a retry can
+    // do is (re)start that stream, show the loading state again, and ask the hub.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (broker_id_.isEmpty() || account_id_.isEmpty())
+            return;
+        ensure_stream_running();
+        if (table_->rowCount() == 0)
+            set_loading(true);
+        datahub::DataHub::instance().request(
+            trading::broker_topic(broker_id_, account_id_, QStringLiteral("orders")), /*force=*/true);
+    });
+
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
@@ -103,6 +117,8 @@ void OrderBookMiniWidget::hub_resubscribe() {
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
     const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("orders"));
+    if (table_->rowCount() == 0)
+        set_loading(true); // see OpenPositionsWidget::hub_resubscribe
     hub.subscribe(this, topic, [this](const QVariant& v) {
         if (!v.canConvert<QVector<trading::BrokerOrderInfo>>())
             return;

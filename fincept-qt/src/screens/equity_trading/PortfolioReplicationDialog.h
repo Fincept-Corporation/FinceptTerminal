@@ -30,6 +30,9 @@ class PortfolioReplicationDialog : public QDialog {
 
   private:
     void populate_accounts();
+    // Second stage of reload_plan(): runs once both brokers' instrument masters are in
+    // memory. `gen` is the plan generation it was started for — see plan_gen_.
+    void fetch_source(const QString& src_id, quint64 gen);
     void apply_items(const QVector<trading::replication::SourceItem>& items, const QString& error);
     void fill_table();
     trading::replication::ReplicationOptions current_options() const;
@@ -47,7 +50,10 @@ class PortfolioReplicationDialog : public QDialog {
 
     QVector<trading::replication::SourceItem> source_items_;
     trading::replication::ReplicationPlan plan_;
-    bool loading_ = false;
+    // Bumped on every reload_plan(). An instrument-load or broker-fetch callback that comes
+    // back for an older generation (the user changed a picker meanwhile) is discarded, so a
+    // slow response can never fill the table for a selection that is no longer current.
+    quint64 plan_gen_ = 0;
 };
 
 } // namespace fincept::screens

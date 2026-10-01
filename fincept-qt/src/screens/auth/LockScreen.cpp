@@ -705,6 +705,12 @@ void LockScreen::update_lockout_display() {
     unlock_lockout_label_->show();
     unlock_btn_->setEnabled(false);
     unlock_pin_input_->setEnabled(false);
+
+    // showEvent only starts the countdown when the screen is shown while already
+    // locked out. If show_unlock()/activate() runs on a visible screen (no new
+    // showEvent) nothing would tick, leaving the PIN field disabled past expiry.
+    if (isVisible() && lockout_timer_ && !lockout_timer_->isActive())
+        lockout_timer_->start();
 }
 
 } // namespace fincept::screens

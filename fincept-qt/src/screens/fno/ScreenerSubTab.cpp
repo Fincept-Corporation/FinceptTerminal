@@ -113,7 +113,7 @@ QVariant ScreenedChainModel::data(const QModelIndex& index, int role) const {
 
     switch (col) {
         case ColStrike:
-            return QString::number(r.strike, 'f', r.strike < 100 ? 2 : 0);
+            return fincept::services::options::format_strike(r.strike);
         case ColCeIv:
             return fmt_pct(r.ce_iv * 100.0);
         case ColCeOi:
@@ -289,13 +289,9 @@ void ScreenerSubTab::setup_ui() {
     count_label_->setObjectName("fnoScreenerCount");
     root->addWidget(count_label_);
 
-    connect(&fincept::services::options::OptionChainService::instance(),
-            &fincept::services::options::OptionChainService::chain_published, this,
-            [this](const fincept::services::options::OptionChain& chain) {
-                on_chain_published(QVariant::fromValue(chain));
-            });
-    subscribed_ = true;
-
+    // No chain_published connection: it fired for every chain assembly for the
+    // widget's lifetime (hidden or not) and double-handled each publish once the
+    // hub subscription in showEvent() was armed.
     const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
     if (!cached.rows.isEmpty())
         on_chain_published(QVariant::fromValue(cached));
@@ -336,6 +332,10 @@ void ScreenerSubTab::showEvent(QShowEvent* e) {
                                                                 self->on_chain_published(v);
                                                             });
     subscribed_ = true;
+    // Catch up on a snapshot published while this tab was hidden.
+    const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
+    if (!cached.rows.isEmpty() && cached.timestamp_ms != last_chain_.timestamp_ms)
+        on_chain_published(QVariant::fromValue(cached));
 }
 
 void ScreenerSubTab::hideEvent(QHideEvent* e) {

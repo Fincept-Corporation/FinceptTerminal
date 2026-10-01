@@ -184,6 +184,7 @@ double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
 
     risk_.daily_pnl += pnl;
     update_drawdown();
+    latch_daily_loss_if_breached();
 
     position_.side = PositionSide::None;
     position_.quantity = 0;
@@ -192,6 +193,17 @@ double PositionManager::record_exit(double qty, double price, int64_t time_ms) {
     position_.unrealized_pnl = 0;
 
     return pnl;
+}
+
+// The daily-loss halt used to be raised only from check_risk() while a position was
+// open. A realized loss that breaches the limit closes the position, so check_risk()
+// then returns early (no position) and never sees the breach — the runner stayed
+// un-latched, took one MORE entry, and only halted when that fresh position's next
+// tick tripped the check (an extra round trip beyond the configured loss limit).
+// Latching on the realizing exit itself closes that hole. Caller holds mutex_.
+void PositionManager::latch_daily_loss_if_breached() {
+    if (max_daily_loss_ > 0 && risk_.daily_pnl <= -std::abs(max_daily_loss_))
+        risk_.paused_by_loss_limit = true;
 }
 
 void PositionManager::restore_state(PositionSide side, double qty, double entry_price, double total_pnl,
@@ -348,6 +360,7 @@ double PositionManager::record_exit_legs(int64_t time_ms) {
 
     risk_.daily_pnl += pnl;
     update_drawdown();
+    latch_daily_loss_if_breached();
 
     legs_.clear();
     multi_leg_ = false;

@@ -126,6 +126,65 @@ KNOWN_PERSONS = {
 }
 
 
+def _boundary_regex(term):
+    """Whole-word matcher for a lowercase term (applied to lowercased text).
+
+    Uses look-arounds instead of ``\\b`` so terms that end in punctuation
+    ("u.s.", "opec+") still match. Bare substring tests used to hit inside other
+    words — "un" in "fund", "sec" in "second", "boe" in "boeing", "xi" in "taxi".
+    """
+    return re.compile(r'(?<![a-z0-9])' + re.escape(term) + r'(?![a-z0-9])')
+
+
+def _proper_noun_regex(term):
+    """Matcher for short/ambiguous terms: only the Capitalised or UPPER form in
+    the original-case text counts ("UN", "SEC", "WHO", "Xi" — not "who", "sec")."""
+    return re.compile(r'(?<![A-Za-z0-9])(?:' + re.escape(term.capitalize()) + '|' +
+                      re.escape(term.upper()) + r')(?![A-Za-z0-9])')
+
+
+# Canonical display name per country code = the first alias listed for it.
+_COUNTRY_CANON = {}
+for _p, _c in COUNTRIES.items():
+    _COUNTRY_CANON.setdefault(_c, _p)
+
+# (regex, uses_original_case, canonical name) — compiled once per process.
+_COUNTRY_MATCHERS = [(_boundary_regex(p) if " " not in p else None, p, c) for p, c in COUNTRIES.items()]
+_ORG_MATCHERS = [((_proper_noun_regex(p), True) if len(p) <= 3 else (_boundary_regex(p), False), n)
+                 for p, n in ORGANIZATIONS.items()]
+_PERSON_MATCHERS = [((_proper_noun_regex(p), True) if len(p) <= 4 else (_boundary_regex(p), False), n)
+                    for p, n in KNOWN_PERSONS.items()]
+
+# Words / news acronyms that look like tickers but are not. Kept in step with
+# NewsService::enrich_article() on the C++ side.
+_TICKER_STOPWORDS = {
+    "THE", "FOR", "AND", "BUT", "NOT", "FROM", "WITH", "THIS", "THAT", "HAVE", "WILL", "BEEN",
+    "THEY", "WERE", "SAID", "HAS", "ITS", "NEW", "ARE", "WAS", "WHO", "HOW", "WHY", "ALL", "CAN",
+    "MAY", "NOW", "OUT", "ONE", "TWO", "OUR", "YOU", "HER", "HIS", "SAYS", "SAY", "GET", "GOT",
+    "LET", "TOP", "BIG", "NEXT", "OVER", "INTO", "AFTER", "WHAT", "WHEN", "ABOUT", "AM", "PM",
+    "TV", "PC", "OK", "VS", "NO", "OR", "IN", "IS", "OF", "ON", "TO", "AT", "BY", "AS", "AN",
+    "IF", "SO", "UP", "DO", "GO", "BE", "WE", "HE", "ME", "MY", "US", "UK", "EU", "UN", "UAE",
+    "USA", "AI", "CEO", "CFO", "COO", "CTO", "IPO", "ETF", "GDP", "CPI", "PPI", "PMI", "FED",
+    "FOMC", "ECB", "BOE", "BOJ", "PBOC", "IMF", "WTO", "NATO", "OPEC", "SEC", "FDA", "DOJ", "FBI",
+    "CIA", "NSA", "IRS", "FTC", "FCC", "EPA", "NYSE", "DOW", "USD", "EUR", "GBP", "JPY", "CNY",
+    "INR", "AUD", "CAD", "CHF", "GOP", "ESG", "COVID", "UPDATE", "LIVE", "VIDEO", "WATCH",
+    "EXCLUSIVE", "ALERT", "BREAKING", "URGENT", "NEWS", "TIMES", "POST",
+}
+_CASHTAG_RE = re.compile(r'\$([A-Z]{1,5})\b')
+_TICKER_RE = re.compile(r'\b[A-Z]{2,5}\b')
+
+
+def _extract_tickers(text_orig):
+    """Ordered ticker candidates: cashtags first, then bare uppercase words.
+    Skips bare words entirely when the text is shouted in capitals."""
+    found = [m.group(1) for m in _CASHTAG_RE.finditer(text_orig)]
+    letters = sum(1 for ch in text_orig if ch.isalpha())
+    upper = sum(1 for ch in text_orig if ch.isalpha() and ch.isupper())
+    if not (letters >= 24 and upper * 10 >= letters * 6):
+        found.extend(t for t in _TICKER_RE.findall(text_orig) if t not in _TICKER_STOPWORDS)
+    return found
+
+
 def extract_entities(headlines_json):
     """Extract countries, organizations, people, and tickers from headlines."""
     try:
@@ -150,31 +209,24 @@ def extract_entities(headlines_json):
         people = []
         tickers = []
 
-        # Country extraction — use word-boundary matching to avoid substring hits
-        # (e.g. "rome" inside "jerome", "uk" inside "truck", "thai" inside "thailand")
-        for pattern, code in COUNTRIES.items():
-            if len(pattern) <= 4 or " " not in pattern:
-                # Short or single-word patterns: require word boundaries
-                if re.search(r'\b' + re.escape(pattern) + r'\b', text):
-                    countries.append({"name": pattern.title(), "code": code})
-                    all_countries[code] += 1
-            else:
-                # Multi-word patterns: simple substring is fine
-                if pattern in text:
-                    countries.append({"name": pattern.title(), "code": code})
-                    all_countries[code] += 1
+        # Country extraction — whole-word matching for single-word patterns to
+        # avoid substring hits (e.g. "rome" inside "jerome", "uk" inside "truck",
+        # "thai" inside "thailand"); multi-word patterns are specific enough for
+        # a plain substring test.
+        for regex, pattern, code in _COUNTRY_MATCHERS:
+            hit = regex.search(text) if regex is not None else (pattern in text)
+            if hit:
+                countries.append({"name": _COUNTRY_CANON.get(code, pattern).title(), "code": code})
 
         # Organization extraction
-        for pattern, name in ORGANIZATIONS.items():
-            if pattern in text:
+        for (regex, orig_case), name in _ORG_MATCHERS:
+            if regex.search(text_orig if orig_case else text):
                 orgs.append(name)
-                all_orgs[name] += 1
 
         # Person extraction — known persons
-        for pattern, name in KNOWN_PERSONS.items():
-            if pattern in text:
+        for (regex, orig_case), name in _PERSON_MATCHERS:
+            if regex.search(text_orig if orig_case else text):
                 people.append(name)
-                all_people[name] += 1
 
         # Person extraction — title patterns
         for pat in PERSON_TITLES:
@@ -182,24 +234,28 @@ def extract_entities(headlines_json):
                 name = match.group(2).strip()
                 if len(name) > 3 and name not in people:
                     people.append(name)
-                    all_people[name] += 1
 
-        # Ticker extraction (uppercase 2-5 chars, filter common words)
-        common = {"THE", "FOR", "AND", "BUT", "NOT", "FROM", "WITH", "THIS", "THAT",
-                  "HAVE", "WILL", "BEEN", "THEY", "WERE", "SAID", "HAS", "ITS", "NEW",
-                  "ARE", "WAS", "WHO", "HOW", "WHY", "ALL", "CAN", "MAY", "NOW", "SEC",
-                  "GDP", "CEO", "CFO", "IPO", "ETF", "GDP", "CPI", "PMI"}
-        for m in re.finditer(r'\b[A-Z]{2,5}\b', text_orig):
-            t = m.group()
-            if t not in common:
-                tickers.append(t)
-                all_tickers[t] += 1
+        # Ticker extraction (cashtags + uppercase 2-5 chars, minus common words)
+        tickers = _extract_tickers(text_orig)
 
-        # Deduplicate
-        countries = list({c["code"]: c for c in countries}.values())[:5]
+        # Deduplicate (first match wins, so a country keeps its canonical name —
+        # "China", not the last alias in the table such as "Shanghai") and count
+        # each entity once per article.
+        by_code = {}
+        for c in countries:
+            by_code.setdefault(c["code"], c)
+        countries = list(by_code.values())[:5]
         orgs = list(dict.fromkeys(orgs))[:5]
         people = list(dict.fromkeys(people))[:5]
         tickers = list(dict.fromkeys(tickers))[:5]
+        for c in countries:
+            all_countries[c["code"]] += 1
+        for o in orgs:
+            all_orgs[o] += 1
+        for p in people:
+            all_people[p] += 1
+        for t in tickers:
+            all_tickers[t] += 1
 
         per_article.append({
             "id": article.get("id", ""),
@@ -501,14 +557,17 @@ def main(args=None):
     command = args[0]
     data = resolve_arg(args[1])
 
-    if command == "extract_entities":
-        result = extract_entities(data)
-    elif command == "cluster_semantic":
-        result = cluster_semantic(data)
-    elif command == "analyze_sentiment_batch":
-        result = analyze_sentiment_batch(data)
-    else:
-        result = {"success": False, "error": f"Unknown command: {command}"}
+    try:
+        if command == "extract_entities":
+            result = extract_entities(data)
+        elif command == "cluster_semantic":
+            result = cluster_semantic(data)
+        elif command == "analyze_sentiment_batch":
+            result = analyze_sentiment_batch(data)
+        else:
+            result = {"success": False, "error": f"Unknown command: {command}"}
+    except Exception as exc:  # malformed payload (e.g. not an array) — report, don't traceback
+        result = {"success": False, "error": f"{type(exc).__name__}: {exc}"}
 
     print(json.dumps(result))
 

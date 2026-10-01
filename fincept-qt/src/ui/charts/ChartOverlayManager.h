@@ -4,6 +4,7 @@
 #include "ui/charts/OverlayLayer.h"
 
 #include <QObject>
+#include <QPointer>
 #include <QVector>
 
 class QChart;
@@ -42,10 +43,18 @@ class ChartOverlayManager : public QObject {
     void layer_removed(const QString& id);
 
   private:
+    // True while both the scene and the chart passed to set_chart() are still alive.
+    bool has_live_chart() const { return scene_guard_ && chart_guard_; }
+
     QVector<OverlayLayer*> layers_;
     QVector<CandleData> candles_;
     QGraphicsScene* scene_ = nullptr;
     QChart* chart_ = nullptr;
+    // Guards for the raw pointers above. This manager is a child of the chart
+    // widget and can outlive the QChartView/scene it was given (child deletion
+    // order); detach()/reposition() must never run against a destroyed chart.
+    QPointer<QObject> scene_guard_;
+    QPointer<QObject> chart_guard_;
 };
 
 } // namespace fincept::ui

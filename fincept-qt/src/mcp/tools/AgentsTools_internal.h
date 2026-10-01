@@ -15,11 +15,16 @@
 #include "storage/repositories/AgentConfigRepository.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QObject>
 #include <QPromise>
+#include <QSet>
 #include <QString>
 
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -89,13 +94,62 @@ inline QJsonObject plan_to_json(const services::ExecutionPlan& p) {
     };
 }
 
+// Agent configs used to snapshot the resolved LLM profile into `model` — api_key included
+// (AgentService::save_config now strips it on the way in, but rows saved before that still
+// carry it). config_json is handed to the model verbatim by list_/get_agent_config, so a
+// plain read tool was a credential read. Remove credential-named keys at any depth; the shape
+// stays a JSON string so existing consumers keep parsing it.
+inline void agent_config_strip_secrets(QJsonObject& obj) {
+    static const QStringList kSecretKeys = {"api_key",       "apikey",        "api-key",   "access_token",
+                                            "refresh_token", "secret",        "secret_key", "client_secret",
+                                            "password",      "bearer_token",  "auth_token"};
+    const QStringList keys = obj.keys();
+    for (const QString& k : keys) {
+        bool secret = false;
+        for (const auto& sk : kSecretKeys)
+            secret = secret || k.compare(sk, Qt::CaseInsensitive) == 0;
+        if (secret) {
+            obj.remove(k);
+            continue;
+        }
+        QJsonValue v = obj.value(k);
+        if (v.isObject()) {
+            QJsonObject child = v.toObject();
+            agent_config_strip_secrets(child);
+            obj[k] = child;
+        } else if (v.isArray()) {
+            QJsonArray arr = v.toArray();
+            for (int i = 0; i < arr.size(); ++i) {
+                if (arr[i].isObject()) {
+                    QJsonObject child = arr[i].toObject();
+                    agent_config_strip_secrets(child);
+                    arr[i] = child;
+                }
+            }
+            obj[k] = arr;
+        }
+    }
+}
+
+inline QString agent_config_json_redacted(const QString& raw) {
+    if (raw.trimmed().isEmpty())
+        return raw;
+    QJsonParseError perr{};
+    const QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8(), &perr);
+    if (perr.error != QJsonParseError::NoError || !doc.isObject()) // cannot tell which bytes are secret
+        return QStringLiteral("<unparseable config, %1 bytes>").arg(raw.size());
+    QJsonObject o = doc.object();
+    agent_config_strip_secrets(o);
+    return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+
 inline QJsonObject config_to_json(const AgentConfig& c) {
     return QJsonObject{
         {"id", c.id},
         {"name", c.name},
         {"description", c.description},
         {"category", c.category},
-        {"config_json", c.config_json},
+        {"config_json", agent_config_json_redacted(c.config_json)},
         {"is_default", c.is_default},
         {"is_active", c.is_active},
         {"created_at", c.created_at},
@@ -103,8 +157,45 @@ inline QJsonObject config_to_json(const AgentConfig& c) {
     };
 }
 
+// Request ids of the agent runs this tool layer launched and resolves BY ID. A few service
+// entry points (the financial workflows, execute_routed_query) are void: they emit
+// agent_result without telling the caller which request it belongs to, so their bridges
+// have to take "the next agent_result". Those bridges consult this set so they never claim
+// the result of a run that some other tool is waiting for by id.
+inline QMutex& mcp_agent_reqid_mutex() {
+    static QMutex m;
+    return m;
+}
+inline QSet<QString>& mcp_agent_reqids() {
+    static QSet<QString> ids;
+    return ids;
+}
+inline bool mcp_agent_reqid_known(const QString& id) {
+    QMutexLocker lock(&mcp_agent_reqid_mutex());
+    return mcp_agent_reqids().contains(id);
+}
+
+// One financial-workflow / routed-query run at a time (see bridge_workflow_no_reqid). A single
+// shared claim — NOT a static inside the generic bridge lambda, which would be one per kick type.
+inline std::atomic<qint64>& mcp_agent_workflow_busy_until_ms() {
+    static std::atomic<qint64> v{0};
+    return v;
+}
+
+// The agent result payload is returned ONCE, in `data` — repeating the response text in
+// `message` as well billed every large answer twice on every later tool round (§M3).
+inline ToolResult agent_run_ok(const services::AgentExecutionResult& r) {
+    return ToolResult::ok(QStringLiteral("Agent run finished in %1 ms").arg(r.execution_time_ms),
+                          result_to_json(r));
+}
+
 // Generic kicker: invoke a member fn that returns request_id, bridge
 // agent_result(req_id) signal back to the promise.
+//
+// There is deliberately NO error_occurred connection: that signal's first argument is a
+// category ("discover_agents", "schedule_list", ...), not a request id, and a run reports
+// its own failure through agent_result(success=false). Listening to it failed an in-flight
+// five-minute run whenever ANY unrelated agent call anywhere in the app errored.
 template <typename KickFn>
 inline void dispatch_agent_run(KickFn&& kick, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
     auto* svc = &services::AgentService::instance();
@@ -115,21 +206,23 @@ inline void dispatch_agent_run(KickFn&& kick, ToolContext ctx, std::shared_ptr<Q
                 resolve(ToolResult::fail("Failed to start agent run"));
                 return;
             }
+            {
+                QMutexLocker lock(&mcp_agent_reqid_mutex());
+                mcp_agent_reqids().insert(req_id);
+            }
             auto* holder = new QObject(svc);
             QObject::connect(svc, &services::AgentService::agent_result, holder,
                              [req_id, resolve, holder](services::AgentExecutionResult r) {
                                  if (r.request_id != req_id)
                                      return;
+                                 {
+                                     QMutexLocker lock(&mcp_agent_reqid_mutex());
+                                     mcp_agent_reqids().remove(req_id);
+                                 }
                                  if (r.success)
-                                     resolve(
-                                         ToolResult::ok(r.response.isEmpty() ? "OK" : r.response, result_to_json(r)));
+                                     resolve(agent_run_ok(r));
                                  else
                                      resolve(ToolResult::fail(r.error.isEmpty() ? "Agent run failed" : r.error));
-                                 holder->deleteLater();
-                             });
-            QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                             [resolve, holder](QString, QString msg) {
-                                 resolve(ToolResult::fail(msg));
                                  holder->deleteLater();
                              });
         });

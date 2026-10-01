@@ -3,6 +3,7 @@
 #include "auth/AuthManager.h"
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
+#include "services/llm/LlmContentExtractors.h"
 #include "services/llm/LlmService.h"
 #include "services/llm/ProviderCatalog.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -237,10 +238,19 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
                 if (error.isEmpty())
                     error = QString("HTTP %1").arg(status);
             }
+            // Logged before the provider's message is folded in: that text is for the
+            // user (it can echo a masked key fragment), not for the log file.
             LOG_WARN(TAG, QString("fetch_models %1 failed: %2 (status=%3 qt_error=%4)")
                               .arg(p, error)
                               .arg(status)
                               .arg(static_cast<int>(reply->error())));
+            // Qt's "server replied: Unauthorized" says nothing about WHY — the provider's
+            // JSON body usually does ("API key not valid", "model access denied", …).
+            if (reply->error() != QNetworkReply::OperationCanceledError) {
+                const QString server_msg = parse_server_error_message(reply->readAll());
+                if (!server_msg.isEmpty())
+                    error = status > 0 ? QString("HTTP %1: %2").arg(status).arg(server_msg) : server_msg;
+            }
         } else {
             models = parse_models_response(p, reply->readAll());
             if (models.isEmpty())

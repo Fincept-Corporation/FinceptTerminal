@@ -38,7 +38,31 @@ OpenPositionsWidget::OpenPositionsWidget(const QJsonObject& cfg, QWidget* parent
     table_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     table_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    table_->setToolTip(tr("Double-click a position to open it in Equity Trading"));
     vl->addWidget(table_, 1);
+
+    // Row → symbol link. The exchange rides on the SYMBOL cell; the "No open
+    // positions" placeholder row carries none and is ignored.
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int /*col*/) {
+        auto* it = table_->item(row, 0);
+        if (it && it->data(Qt::UserRole).isValid())
+            open_symbol(it->text(), QStringLiteral("equity_trading"), QStringLiteral("equity"),
+                        it->data(Qt::UserRole).toString());
+    });
+
+    // Title-bar refresh = "retry". It used to be wired to nothing, so the 20 s
+    // "No data yet - click refresh to retry" prompt pointed at a dead button.
+    // The account stream polls on its own cadence, so the only thing a retry can
+    // do is (re)start that stream, show the loading state again, and ask the hub.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (broker_id_.isEmpty() || account_id_.isEmpty())
+            return;
+        ensure_stream_running();
+        if (table_->rowCount() == 0)
+            set_loading(true);
+        datahub::DataHub::instance().request(
+            trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions")), /*force=*/true);
+    });
 
     set_configurable(true);
     apply_styles();
@@ -90,6 +114,10 @@ void OpenPositionsWidget::hub_resubscribe() {
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
     const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions"));
+    // Nothing on screen yet → show the loading state, so a disconnected account
+    // ends in "No data yet" (BaseWidget watchdog) instead of a silent blank grid.
+    if (table_->rowCount() == 0)
+        set_loading(true);
     hub.subscribe(this, topic, [this](const QVariant& v) {
         if (!v.canConvert<QVector<trading::BrokerPosition>>())
             return;
@@ -137,6 +165,7 @@ void OpenPositionsWidget::populate(const QVector<trading::BrokerPosition>& rows)
     for (int i = 0; i < rows.size(); ++i) {
         const auto& p = rows[i];
         auto* sym = new QTableWidgetItem(p.symbol);
+        sym->setData(Qt::UserRole, p.exchange);
         auto* qty = new QTableWidgetItem(QString::number(p.quantity, 'f', 0));
         auto* avg = new QTableWidgetItem(QString::number(p.avg_price, 'f', 2));
         auto* ltp = new QTableWidgetItem(QString::number(p.ltp, 'f', 2));

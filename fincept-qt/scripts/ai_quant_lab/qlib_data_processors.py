@@ -11,6 +11,7 @@ Features:
 
 import json
 import sys
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Union, Callable
 import warnings
 warnings.filterwarnings('ignore')
@@ -413,6 +414,30 @@ class DataProcessingService:
             'winsorize': WinsorizeProcessor
         }
 
+    PIPELINES_FILE = Path.home() / '.fincept' / 'data_processors' / 'pipelines.json'
+
+    def _load_all_pipeline_configs(self) -> Dict[str, Any]:
+        try:
+            with open(self.PIPELINES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _load_pipeline_config(self, pipeline_id: str) -> Optional[List[Dict[str, Any]]]:
+        return self._load_all_pipeline_configs().get(pipeline_id)
+
+    def _save_pipeline_config(self, pipeline_id: str, processor_configs: List[Dict[str, Any]]) -> None:
+        """Best-effort: a read-only home directory must not fail an otherwise valid create."""
+        try:
+            data = self._load_all_pipeline_configs()
+            data[pipeline_id] = processor_configs
+            self.PIPELINES_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.PIPELINES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Warning: could not persist pipeline '{pipeline_id}': {e}", file=sys.stderr)
+
     def create_pipeline(self,
                        pipeline_id: str,
                        processor_configs: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -427,6 +452,11 @@ class DataProcessingService:
             Pipeline creation result
         """
         try:
+            if not pipeline_id or not isinstance(pipeline_id, str):
+                return {"success": False, "error": "pipeline_id is required"}
+            if not processor_configs:
+                return {"success": False, "error": "At least one processor is required"}
+
             processors = []
             for config in processor_configs:
                 proc_type = config.get('type')
@@ -443,6 +473,9 @@ class DataProcessingService:
 
             pipeline = DataProcessorPipeline(processors)
             self.pipelines[pipeline_id] = pipeline
+            # Every CLI call is a fresh process, so an in-memory dict never survives
+            # until PROCESS DATA; keep the processor configs on disk and rebuild.
+            self._save_pipeline_config(pipeline_id, processor_configs)
 
             return {
                 "success": True,
@@ -473,9 +506,15 @@ class DataProcessingService:
             Processing result
         """
         if pipeline_id not in self.pipelines:
+            stored = self._load_pipeline_config(pipeline_id)
+            if stored is not None:
+                rebuilt = self.create_pipeline(pipeline_id, stored)
+                if not rebuilt.get("success"):
+                    return rebuilt
+        if pipeline_id not in self.pipelines:
             return {
                 "success": False,
-                "error": f"Pipeline {pipeline_id} not found"
+                "error": f"Pipeline {pipeline_id} not found -- create it first in the Create Pipeline tab"
             }
 
         try:
@@ -531,6 +570,21 @@ class DataProcessingService:
         }
 
 
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
@@ -573,7 +627,7 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(result))
+        print(json.dumps(_json_safe(result)))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

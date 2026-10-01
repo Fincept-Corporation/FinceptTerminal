@@ -21,6 +21,26 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from databento_provider import DatabentoProvider, DATABENTO_AVAILABLE, DATABENTO_ERROR
 
 
+def _fail(message: str, **extra: Any) -> Dict[str, Any]:
+    """Failure envelope.
+
+    `error` carries the human-readable message as a STRING. PythonRunner treats any
+    non-empty `error` value as a failed run and surfaces that value as the error text,
+    so a boolean `true` there reached the UI as the literal word "true". `message` is
+    kept alongside for older readers of this payload.
+    """
+    out: Dict[str, Any] = {"error": message, "message": message,
+                           "timestamp": int(datetime.now().timestamp())}
+    out.update(extra)
+    return out
+
+
+def _provider_failure(res: Dict[str, Any]) -> Dict[str, Any]:
+    """Re-shape a DatabentoProvider error dict (error=True + message) into _fail()."""
+    return _fail(str(res.get("message") or res.get("error") or "Databento request failed"),
+                 **{k: v for k, v in res.items() if k not in ("error", "message", "timestamp")})
+
+
 def _parse_expiration(exp_str: str) -> Optional[datetime]:
     """Parse Databento expiration field (nanosecond epoch, ISO, or date string)."""
     s = str(exp_str).strip()
@@ -46,7 +66,7 @@ def list_expiries(args: Dict[str, Any]) -> Dict[str, Any]:
         provider = DatabentoProvider(api_key)
         defs = provider.get_options_definitions(symbol, date)
         if defs.get("error"):
-            return defs
+            return _provider_failure(defs)
 
         today = datetime.now()
         seen = set()
@@ -65,7 +85,6 @@ def list_expiries(args: Dict[str, Any]) -> Dict[str, Any]:
 
         expiries.sort()
         return {
-            "error": False,
             "symbol": symbol,
             "expiries": expiries,
             "count": len(expiries),
@@ -73,12 +92,7 @@ def list_expiries(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        return {
-            "error": True,
-            "message": f"Failed to list expiries: {e}",
-            "symbol": symbol,
-            "timestamp": int(datetime.now().timestamp()),
-        }
+        return _fail(f"Failed to list expiries: {e}", symbol=symbol)
 
 
 def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -89,8 +103,7 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
     strike_window_pct = int(args.get("strike_window_pct", "30"))
 
     if not expiry:
-        return {"error": True, "message": "expiry is required",
-                "timestamp": int(datetime.now().timestamp())}
+        return _fail("expiry is required")
 
     try:
         provider = DatabentoProvider(api_key)
@@ -98,7 +111,7 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
         # Step 1: Fetch definitions (cached 24h on disk)
         defs = provider.get_options_definitions(symbol, date)
         if defs.get("error"):
-            return defs
+            return _provider_failure(defs)
 
         target_expiry = datetime.strptime(expiry, "%Y-%m-%d")
 
@@ -119,9 +132,7 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
             filtered.append(d)
 
         if not filtered:
-            return {"error": True,
-                    "message": f"No options found for {symbol} expiry {expiry}",
-                    "timestamp": int(datetime.now().timestamp())}
+            return _fail(f"No options found for {symbol} expiry {expiry}")
 
         # Step 2: Fetch underlying spot price
         spot = _fetch_spot(provider, symbol, date)
@@ -192,12 +203,9 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
                 rows.append(row)
 
         if not rows:
-            return {"error": True,
-                    "message": f"No priced options for {symbol} expiry {expiry}",
-                    "timestamp": int(datetime.now().timestamp())}
+            return _fail(f"No priced options for {symbol} expiry {expiry}")
 
         return {
-            "error": False,
             "symbol": symbol,
             "expiry": expiry,
             "spot": spot,
@@ -207,13 +215,7 @@ def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        return {
-            "error": True,
-            "message": f"Failed to fetch chain: {e}",
-            "symbol": symbol,
-            "expiry": expiry,
-            "timestamp": int(datetime.now().timestamp()),
-        }
+        return _fail(f"Failed to fetch chain: {e}", symbol=symbol, expiry=expiry)
 
 
 def _fetch_spot(provider: DatabentoProvider, symbol: str, date: str = None) -> float:
@@ -306,21 +308,15 @@ def _fetch_option_quotes(
 
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps({
-            "error": True,
-            "message": "Usage: databento_fno_chain.py <command> <json_args>",
-            "commands": ["list_expiries", "get_chain"],
-            "databento_available": DATABENTO_AVAILABLE,
-        }), flush=True)
+        print(json.dumps(_fail("Usage: databento_fno_chain.py <command> <json_args>",
+                               commands=["list_expiries", "get_chain"],
+                               databento_available=DATABENTO_AVAILABLE)), flush=True)
         sys.exit(1)
 
     command = sys.argv[1]
 
     if not DATABENTO_AVAILABLE:
-        print(json.dumps({
-            "error": True,
-            "message": f"databento package not installed: {DATABENTO_ERROR}",
-        }), flush=True)
+        print(json.dumps(_fail(f"databento package not installed: {DATABENTO_ERROR}")), flush=True)
         sys.exit(1)
 
     args = {}
@@ -328,10 +324,7 @@ def main():
         try:
             args = json.loads(sys.argv[2])
         except json.JSONDecodeError as e:
-            print(json.dumps({
-                "error": True,
-                "message": f"Invalid JSON args: {e}",
-            }), flush=True)
+            print(json.dumps(_fail(f"Invalid JSON args: {e}")), flush=True)
             sys.exit(1)
 
     if command == "list_expiries":
@@ -339,10 +332,7 @@ def main():
     elif command == "get_chain":
         result = get_chain(args)
     else:
-        result = {
-            "error": True,
-            "message": f"Unknown command: {command}",
-        }
+        result = _fail(f"Unknown command: {command}")
 
     print(json.dumps(result, default=str), flush=True)
 

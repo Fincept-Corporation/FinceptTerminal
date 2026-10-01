@@ -889,8 +889,11 @@ void AccountManagementDialog::on_connect_account() {
                         self->form_status_->setText(self->tr("Error: %1").arg(result.error));
                         self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
                         self->connect_btn_->setEnabled(true);
-                        if (self->selected_account_id_ == account_id)
-                            self->refresh_account_list();
+                        // No refresh_account_list() here (or in the other connect handlers): it
+                        // clear()s the list, which drops the selection and flips the right pane to
+                        // the empty page — hiding the very error/"Connected" text set above. The
+                        // row's dot + colour are already updated in place by the
+                        // connection_state_changed handler set_connection_state() just triggered.
                     }
                     return;
                 }
@@ -926,8 +929,6 @@ void AccountManagementDialog::on_connect_account() {
                             .arg(creds.user_id.isEmpty() ? creds.api_key.left(8) + "..." : creds.user_id));
                     self->form_status_->setStyleSheet(QString("color: %1;").arg(colors::POSITIVE()));
                     self->connect_btn_->setEnabled(true);
-                    if (self->selected_account_id_ == account_id)
-                        self->refresh_account_list();
                 }
             },
             Qt::QueuedConnection);
@@ -1251,7 +1252,6 @@ void AccountManagementDialog::on_connect_zerodha_totp() {
                     self->z_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
                 }
                 self->z_connect_btn_->setEnabled(true);
-                self->refresh_account_list();
             },
             Qt::QueuedConnection);
     });
@@ -1413,7 +1413,6 @@ void AccountManagementDialog::exchange_and_store_token_async(const QString& api_
                 self->z_connect_btn_->setEnabled(true);
                 self->z_browser_btn_->setEnabled(true);
                 self->z_manual_connect_btn_->setEnabled(true);
-                self->refresh_account_list();
             },
             Qt::QueuedConnection);
     });
@@ -1714,7 +1713,6 @@ void AccountManagementDialog::fyers_exchange_and_store_token_async(const QString
                 }
                 self->f_browser_btn_->setEnabled(true);
                 self->f_manual_connect_btn_->setEnabled(true);
-                self->refresh_account_list();
             },
             Qt::QueuedConnection);
     });
@@ -1930,7 +1928,6 @@ void AccountManagementDialog::mt4_provision_async(const QString& meta_token, con
                     self->mt4_status_->setStyleSheet(QString("color:%1;").arg(colors::NEGATIVE()));
                 }
                 self->mt4_connect_btn_->setEnabled(true);
-                self->refresh_account_list();
             },
             Qt::QueuedConnection);
     });

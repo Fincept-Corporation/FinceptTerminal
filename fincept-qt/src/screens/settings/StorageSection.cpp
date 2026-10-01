@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QSqlError>
@@ -409,8 +410,10 @@ void StorageSection::build_ui() {
         thl->addWidget(file_hdr_action_);
         bvl->addWidget(th);
 
+        // The action returns the StorageManager result so a failed clear is reported
+        // instead of being logged as if it had worked.
         auto add_file_row = [&](const QString& name, QLabel* size_lbl, const QString& confirm_title,
-                                const QString& confirm_msg, std::function<void()> action, bool alt,
+                                const QString& confirm_msg, std::function<Result<void>()> action, bool alt,
                                 QLabel** label_out) {
             auto* btn = new QPushButton(tr("CLR"));
             connect(btn, &QPushButton::clicked, this, [this, confirm_title, confirm_msg, action]() {
@@ -418,7 +421,12 @@ void StorageSection::build_ui() {
                                                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
                 if (answer != QMessageBox::Yes)
                     return;
-                action();
+                const auto result = action();
+                if (result.is_err()) {
+                    LOG_ERROR("Settings", confirm_title + " failed: " + QString::fromStdString(result.error()));
+                    QMessageBox::critical(this, tr("Error"),
+                                          tr("%1 failed:\n%2").arg(confirm_title, QString::fromStdString(result.error())));
+                }
                 refresh_storage_stats();
             });
             bvl->addWidget(make_file_action_row(name, size_lbl, btn, alt, label_out));
@@ -432,8 +440,10 @@ void StorageSection::build_ui() {
             tr("Log Files"), log_sz, tr("Clear Logs"),
             tr("Clear all application log files?\nCurrent log data will be lost."),
             []() {
-                StorageManager::instance().clear_log_files();
-                LOG_INFO("Settings", "Logs cleared");
+                auto r = StorageManager::instance().clear_log_files();
+                if (r.is_ok())
+                    LOG_INFO("Settings", "Logs cleared");
+                return r;
             },
             false, &file_row_logs_lbl_);
 
@@ -441,8 +451,10 @@ void StorageSection::build_ui() {
             tr("Workspace Files (.fwsp)"), ws_sz, tr("Delete Workspaces"),
             tr("Delete all saved workspace files?\nThis cannot be undone."),
             []() {
-                StorageManager::instance().clear_workspace_files();
-                LOG_INFO("Settings", "Workspaces deleted");
+                auto r = StorageManager::instance().clear_workspace_files();
+                if (r.is_ok())
+                    LOG_INFO("Settings", "Workspaces deleted");
+                return r;
             },
             true, &file_row_ws_lbl_);
 
@@ -450,8 +462,10 @@ void StorageSection::build_ui() {
             tr("Window & UI State"), qs_lbl, tr("Reset UI State"),
             tr("Reset all window positions, dock layouts, and perspectives?\nTakes effect on next restart."),
             []() {
-                StorageManager::instance().clear_qsettings();
-                LOG_INFO("Settings", "QSettings cleared");
+                auto r = StorageManager::instance().clear_qsettings();
+                if (r.is_ok())
+                    LOG_INFO("Settings", "QSettings cleared");
+                return r;
             },
             false, &file_row_ui_lbl_);
 
@@ -622,9 +636,17 @@ void StorageSection::build_ui() {
 
             bool use_cache = (sql_db_selector_->currentData().toString() == "cache");
 
+            // Anything not plainly read-only needs the confirmation. The previous
+            // allow-list of write verbs missed REPLACE, VACUUM, ATTACH, a
+            // write-PRAGMA and "WITH ... DELETE", which all ran unprompted.
             QString upper = sql.toUpper().trimmed();
-            bool is_write = upper.startsWith("INSERT") || upper.startsWith("UPDATE") || upper.startsWith("DELETE") ||
-                            upper.startsWith("DROP") || upper.startsWith("ALTER") || upper.startsWith("CREATE");
+            static const QRegularExpression kReadOnlyPragma(
+                QStringLiteral("^PRAGMA\\s+(TABLE_INFO|TABLE_XINFO|TABLE_LIST|INDEX_LIST|INDEX_INFO|INDEX_XINFO|"
+                               "FOREIGN_KEY_LIST|FOREIGN_KEY_CHECK|DATABASE_LIST|INTEGRITY_CHECK|QUICK_CHECK|"
+                               "PAGE_COUNT|PAGE_SIZE|FREELIST_COUNT)\\b"));
+            const bool read_only = upper.startsWith("SELECT") || upper.startsWith("EXPLAIN") ||
+                                   kReadOnlyPragma.match(upper).hasMatch();
+            bool is_write = !read_only;
 
             if (is_write) {
                 auto answer = QMessageBox::warning(this, tr("Execute Write Query"),
@@ -651,12 +673,20 @@ void StorageSection::build_ui() {
             }
 
             if (is_write) {
-                int affected = query.numRowsAffected();
-                sql_status_->setText(tr("OK — %1 row(s) affected").arg(affected));
-                sql_status_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
                 refresh_storage_stats();
-                LOG_INFO("SQL Console", QString("Write query: %1 rows affected").arg(affected));
-                return;
+                // A "write" that returns rows (WITH ... SELECT, INSERT ... RETURNING)
+                // falls through to the result grid below instead of being swallowed.
+                if (!query.isSelect()) {
+                    const int affected = query.numRowsAffected();
+                    // numRowsAffected() is -1 for statements with no row count
+                    // (VACUUM, PRAGMA, CREATE ...).
+                    sql_status_->setText(affected >= 0 ? tr("OK — %1 row(s) affected").arg(affected)
+                                                       : tr("OK — statement executed"));
+                    sql_status_->setStyleSheet(
+                        QString("color:%1;background:transparent;").arg(ui::colors::POSITIVE()));
+                    LOG_INFO("SQL Console", QString("Write query: %1 rows affected").arg(affected));
+                    return;
+                }
             }
 
             auto rec = query.record();
@@ -834,13 +864,33 @@ void StorageSection::build_ui() {
                 return;
 
             auto& sm = StorageManager::instance();
+            QStringList failures;
+            auto note = [&failures](const QString& what, const Result<void>& r) {
+                if (r.is_err()) {
+                    LOG_ERROR("Settings", "Clear all: " + what + " failed: " + QString::fromStdString(r.error()));
+                    failures << what;
+                }
+            };
             for (const auto& info : sm.all_stats())
-                sm.clear_category(info.id);
-            sm.clear_log_files();
-            sm.clear_workspace_files();
-            sm.clear_qsettings();
+                note(info.label, sm.clear_category(info.id));
+            note(tr("Log files"), sm.clear_log_files());
+            note(tr("Workspace files"), sm.clear_workspace_files());
+            note(tr("Window & UI state"), sm.clear_qsettings());
             refresh_storage_stats();
-            LOG_INFO("Settings", "ALL user data cleared");
+            LOG_INFO("Settings", QString("ALL user data cleared (%1 item(s) failed)").arg(failures.size()));
+
+            // The screens that are open still hold what they loaded, and nothing
+            // told the user the wipe had finished (or only partly worked).
+            if (failures.isEmpty()) {
+                QMessageBox::information(this, tr("Clear ALL User Data"),
+                                         tr("All user data was deleted. Restart Fincept Terminal so every screen "
+                                            "starts from a clean state."));
+            } else {
+                QMessageBox::warning(this, tr("Clear ALL User Data"),
+                                     tr("Some items could not be deleted:\n\n%1\n\nRestart Fincept Terminal and "
+                                        "try again.")
+                                         .arg(failures.join(QStringLiteral("\n"))));
+            }
         });
         nr_hl->addWidget(nuke_btn_);
         bvl->addWidget(nuke_row);

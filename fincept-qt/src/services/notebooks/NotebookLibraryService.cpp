@@ -4,6 +4,7 @@
 
 #include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
+#include "python/PythonRunner.h"
 #include "services/file_manager/FileManagerService.h"
 
 #include <QCoreApplication>
@@ -197,6 +198,21 @@ QString NotebookLibraryService::working_copy_for(const NotebookCatalogEntry& ent
 
     // Last resort: open the read-only bundled asset directly.
     return src;
+}
+
+// ── Cell execution ────────────────────────────────────────────────────────────
+
+void NotebookLibraryService::run_cell(const QString& code, NotebookRunCallback cb) {
+    python::PythonRunner::instance().run_code(code, [cb = std::move(cb)](python::PythonResult r) {
+        if (!cb)
+            return;
+        NotebookRunResult out;
+        out.success = r.success;
+        out.output = std::move(r.output);
+        out.error = std::move(r.error);
+        out.exit_code = r.exit_code;
+        cb(out);
+    });
 }
 
 } // namespace fincept::services

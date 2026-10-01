@@ -170,7 +170,9 @@ class DatabentoProvider:
             return {
                 "error": False,
                 "message": f"API key valid — {len(datasets)} datasets available",
-                "key_prefix": self.api_key[:8] + "..." if len(self.api_key) > 8 else "***",
+                # Only the "db-" family marker — this JSON is shown verbatim in the
+                # "View raw response" modal, so don't print more of the secret than that.
+                "key_prefix": self.api_key[:3] + "..." if len(self.api_key) > 8 else "***",
                 "datasets": [str(d) for d in datasets[:10]],
                 "timestamp": int(datetime.now().timestamp())
             }

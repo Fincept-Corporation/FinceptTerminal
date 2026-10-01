@@ -4,8 +4,10 @@
 
 #include <QEvent>
 #include <QLabel>
+#include <QMetaMethod>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -48,8 +50,16 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
     scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }");
-    scroll_->setWidget(build_page());
     root->addWidget(scroll_, 1);
+    // Page is built on first show — see showEvent().
+}
+
+void TrademarksScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (!page_built_) {
+        page_built_ = true;
+        scroll_->setWidget(build_page());
+    }
 }
 
 // ── Re-translation ────────────────────────────────────────────────────────────
@@ -57,7 +67,7 @@ TrademarksScreen::TrademarksScreen(QWidget* parent) : QWidget(parent) {
 // every label as a member. QScrollArea::setWidget() deletes the old content.
 
 void TrademarksScreen::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange && scroll_) {
+    if (event->type() == QEvent::LanguageChange && scroll_ && page_built_) {
         scroll_->setWidget(build_page());
     }
     QWidget::changeEvent(event);
@@ -72,14 +82,17 @@ QWidget* TrademarksScreen::build_page() {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(6);
 
-    // Back
-    auto* back_btn = new QPushButton(tr("< BACK"));
-    back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                    "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
-                                .arg(colors::TEXT_SECONDARY(), MF, colors::TEXT_PRIMARY()));
-    connect(back_btn, &QPushButton::clicked, this, &TrademarksScreen::navigate_back);
-    vl->addWidget(back_btn, 0, Qt::AlignLeft);
+    // Back: the pre-login info stack connects navigate_back; a docked copy has no
+    // listener, so omit the (dead) button there.
+    if (isSignalConnected(QMetaMethod::fromSignal(&TrademarksScreen::navigate_back))) {
+        auto* back_btn = new QPushButton(tr("< BACK"));
+        back_btn->setCursor(Qt::PointingHandCursor);
+        back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
+                                        "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
+                                    .arg(colors::TEXT_SECONDARY(), MF, colors::TEXT_PRIMARY()));
+        connect(back_btn, &QPushButton::clicked, this, &TrademarksScreen::navigate_back);
+        vl->addWidget(back_btn, 0, Qt::AlignLeft);
+    }
 
     auto* title = new QLabel(tr("TRADEMARKS"));
     title->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; letter-spacing: 1px; "

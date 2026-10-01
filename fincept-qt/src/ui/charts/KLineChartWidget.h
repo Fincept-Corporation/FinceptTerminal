@@ -66,6 +66,9 @@ class KLineChartWidget : public QWidget {
     bool initialized_ = false;
     bool trading_menu_ = false;
     bool menu_open_ = false;           // re-entrancy guard (avoid double menus)
+    // One install_chart_event_filter() retry chain at a time (only read in the
+    // HAS_QT_WEBENGINE build — [[maybe_unused]] keeps -Wunused-private-field quiet).
+    [[maybe_unused]] bool proxy_retry_pending_ = false;
     QPointer<QWidget> filtered_proxy_; // the render widget we've filtered
     QQueue<QString> pending_js_;
 };

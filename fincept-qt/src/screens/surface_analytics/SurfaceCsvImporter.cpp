@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 #include <stdexcept>
+#include <string>
 
 namespace fincept::surface {
 
@@ -19,8 +20,10 @@ std::vector<std::vector<std::string>> parse_csv_file(const QString& path, std::s
     std::vector<std::vector<std::string>> rows;
     QTextStream in(&file);
     bool first = true;
+    int line_no = 0;
     while (!in.atEnd()) {
         QString line = in.readLine().trimmed();
+        ++line_no;
         if (line.isEmpty())
             continue;
         if (first) {
@@ -28,6 +31,15 @@ std::vector<std::vector<std::string>> parse_csv_file(const QString& path, std::s
             continue;
         } // skip header
         QStringList parts = line.split(',');
+        // Every per-surface loader below reads columns 0..2 of EVERY row but only
+        // checks the width of the first, so one short line further down read past the
+        // end of its vector (a crash on a malformed or truncated file). Reject it here
+        // with the offending line number instead.
+        if (parts.size() < 3) {
+            out_error = "line " + std::to_string(line_no) + " has " + std::to_string(parts.size()) +
+                        " column(s); every row needs at least 3 comma-separated values";
+            return {};
+        }
         std::vector<std::string> row;
         for (const QString& p : parts)
             row.push_back(p.trimmed().toStdString());

@@ -174,13 +174,23 @@ std::vector<ToolDef> get_meta_tools() {
             // O(1) snapshot lookup — previously linear-scanned the full
             // catalog while re-serialising every input_schema (~3 ms p95).
             if (auto tool = McpProvider::instance().find_tool(name)) {
-                return ToolResult::ok_data(QJsonObject{
+                QJsonObject out{
                     {"name", tool->name},
                     {"category", tool->category},
                     {"description", tool->description},
                     {"input_schema", tool->input_schema},
                     {"server_id", tool->server_id},
-                });
+                };
+                // tool_list already flags these; tool_describe is the call a model makes right
+                // before using the tool, and a refused destructive call costs it a whole round.
+                // Tell it up front that this one needs the user's "destructive tools" grant.
+                if (tool->is_destructive) {
+                    out["destructive"] = true;
+                    out["note"] = QStringLiteral("State-changing tool: it only runs when the user has enabled "
+                                                 "destructive AI tools in Settings > Security; otherwise the call is "
+                                                 "refused. Tell the user what you intend to do before calling it.");
+                }
+                return ToolResult::ok_data(out);
             }
             telemetry::g_tool_describe_misses.fetch_add(1);
             return ToolResult::fail("Tool not found: " + name);

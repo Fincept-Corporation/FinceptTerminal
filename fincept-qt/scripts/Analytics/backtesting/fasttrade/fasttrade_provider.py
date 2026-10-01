@@ -254,6 +254,14 @@ class FastTradeProvider(BacktestingProviderBase):
             ft_config = self._build_fasttrade_config(
                 strategy_def, parameters, initial_capital, None, start_date, end_date
             )
+            # The screen's COMMISSION field (a fraction: 0.001 = 0.1%) was never forwarded —
+            # every run used the strategy builders' hard-coded 0.1% whatever the user entered.
+            try:
+                req_commission = request.get('commission')
+                if req_commission is not None:
+                    ft_config['comission'] = float(req_commission)  # (sic) fast-trade's key
+            except (TypeError, ValueError):
+                pass
 
             # Validate configuration
             validation = ft_validate(ft_config)

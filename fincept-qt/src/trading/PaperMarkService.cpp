@@ -9,7 +9,10 @@
 #include "trading/PaperTrading.h"
 #include "trading/websocket/FyersTickTypes.h"
 
+#include <QDate>
+#include <QDateTime>
 #include <QStringList>
+#include <QTimeZone>
 #include <QTimer>
 
 namespace fincept::trading {
@@ -23,6 +26,22 @@ constexpr int kResyncMs = 4000;
 // Persist marked prices to SQLite at most once per this window per burst of
 // ticks — one UPDATE per symbol per window instead of one per tick.
 constexpr int kFlushMs = 1000;
+
+// DAY-order semantics for Indian-equity (INR) portfolios: an order from an earlier
+// IST session has expired — pt_settle_intraday() cancels those — so it must not be
+// resurrected into the matcher at launch. Other currencies (crypto / US) are
+// good-till-cancelled and always resume.
+bool pm_is_expired_day_order(const PtPortfolio& pf, const PtOrder& o) {
+    if (pf.currency.compare(QLatin1String("INR"), Qt::CaseInsensitive) != 0)
+        return false;
+    QDateTime created = QDateTime::fromString(o.created_at, Qt::ISODate);
+    if (!created.isValid())
+        return false;
+    created.setTimeZone(QTimeZone::UTC); // timestamps are stored as UTC
+    const QDate created_ist = created.addSecs(330 * 60).date();
+    const QDate today_ist = QDateTime::currentDateTimeUtc().addSecs(330 * 60).date();
+    return created_ist < today_ist;
+}
 } // namespace
 
 PaperMarkService& PaperMarkService::instance() {
@@ -51,6 +70,20 @@ void PaperMarkService::start() {
             Qt::QueuedConnection);
     });
 
+    // Resume matching of resting limit / stop orders that were persisted before this
+    // launch. Nothing ever re-registered them with the matcher after a restart
+    // (load_orders() had no caller; only the Equity screen re-added its own focused
+    // account's), so they sat "pending" in the DB — holding margin — and never
+    // filled. Idempotent: OrderMatcher::add_order() dedupes by order id.
+    for (const auto& pf : pt_list_portfolios()) {
+        QVector<PtOrder> resting;
+        for (const auto& o : pt_get_orders(pf.id, QStringLiteral("pending"))) {
+            if (!pm_is_expired_day_order(pf, o))
+                resting.push_back(o);
+        }
+        OrderMatcher::instance().load_orders(resting);
+    }
+
     resync_timer_ = new QTimer(this);
     resync_timer_->setInterval(kResyncMs);
     connect(resync_timer_, &QTimer::timeout, this, &PaperMarkService::resync);
@@ -78,6 +111,17 @@ void PaperMarkService::resync() {
             const auto leg = fyers_parse_option(p.symbol);
             if (leg.valid)
                 legs.push_back({leg.underlying, leg.is_call, p.symbol});
+        }
+        // Resting limit / stop orders need ticks too: without their symbols on the
+        // stream they could only ever fill while a screen happened to feed the
+        // matcher. (Market orders fill immediately and never rest.)
+        for (const auto& o : pt_get_orders(acct.paper_portfolio_id, QStringLiteral("pending"))) {
+            if (o.order_type == QLatin1String("market") || o.symbol.isEmpty())
+                continue;
+            syms << o.symbol;
+            const auto leg = fyers_parse_option(o.symbol);
+            if (leg.valid)
+                legs.push_back({leg.underlying, leg.is_call, o.symbol});
         }
         if (syms.isEmpty())
             continue; // nothing to mark — don't force a stream up for an idle portfolio

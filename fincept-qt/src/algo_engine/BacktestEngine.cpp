@@ -35,6 +35,8 @@ double bars_per_year(const QString& tf) {
         return 252.0 * 130.0;
     if (tf == "5m")
         return 252.0 * 78.0;
+    if (tf == "10m")
+        return 252.0 * 39.0;
     if (tf == "15m")
         return 252.0 * 26.0;
     if (tf == "30m")
@@ -156,9 +158,11 @@ QJsonObject BacktestEngine::run(const QVector<OhlcvCandle>& candles, const QJson
             }
             const double tp_price = take_profit_pct > 0 ? entry_price * (1.0 + take_profit_pct / 100.0) : 0.0;
 
-            // Stop checked first (conservative when both touched in one bar).
+            // Stop checked first (conservative when both touched in one bar). A bar that
+            // GAPS below the stop opens through it — a resting stop order fills at the
+            // open there, not at the (better) stop price, so cap the fill at bar.open.
             if (have_stop && bar.low <= stop_price) {
-                close_trade(stop_price, "stop_loss", i);
+                close_trade(std::min(stop_price, bar.open), "stop_loss", i);
             } else if (take_profit_pct > 0 && bar.high >= tp_price) {
                 close_trade(tp_price, "take_profit", i);
             }

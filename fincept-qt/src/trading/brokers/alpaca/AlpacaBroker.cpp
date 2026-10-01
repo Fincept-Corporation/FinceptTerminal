@@ -72,11 +72,28 @@ QString alpaca_qty(double quantity) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 QString AlpacaBroker::trading_url(const BrokerCredentials& creds) {
+    // A PK* key is a paper key and cannot authenticate on the live host — never send one
+    // there, even if additional_data was stored as "live".
+    if (creds.api_key.startsWith("PK", Qt::CaseInsensitive))
+        return "https://paper-api.alpaca.markets";
     // additional_data stores "live"/"paper" set during exchange_token.
     // Fallback: detect from key prefix (AK=live, PK=paper) for stale/missing additional_data.
     bool is_live = (creds.additional_data == "live") ||
                    (creds.additional_data.isEmpty() && creds.api_key.startsWith("AK", Qt::CaseInsensitive));
     return is_live ? "https://api.alpaca.markets" : "https://paper-api.alpaca.markets";
+}
+
+// A PAPER-mode order may reach Alpaca only for credentials positively identified as paper: a
+// PK* key not marked live, or a set that authenticated against paper-api (additional_data ==
+// "paper") and is not an AK* live key. Live, contradictory (a PK key stored as "live", an AK
+// key stored as "paper") and unidentifiable credentials are NOT paper. Every credential set
+// that returns true here resolves to paper-api in trading_url().
+bool AlpacaBroker::is_paper_environment(const BrokerCredentials& creds) const {
+    if (creds.api_key.isEmpty() || creds.additional_data == "live")
+        return false;
+    if (creds.api_key.startsWith("AK", Qt::CaseInsensitive))
+        return false;
+    return creds.api_key.startsWith("PK", Qt::CaseInsensitive) || creds.additional_data == "paper";
 }
 
 QMap<QString, QString> AlpacaBroker::auth_headers(const BrokerCredentials& creds) const {

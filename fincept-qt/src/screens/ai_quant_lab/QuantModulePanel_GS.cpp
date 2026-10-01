@@ -640,11 +640,16 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
         };
         results_layout_->addWidget(gs_card_row(amounts, this));
 
-        // VaR as % of position
+        // VaR as % of position. The parametric figure comes back positive but the historical /
+        // Monte Carlo ones negative (a loss), so the cards disagreed in sign for the same
+        // quantity; show every VaR as a positive loss percentage, like CVaR already did.
         QList<QWidget*> pcts = {
-            gs_make_card(tr("PARAMETRIC %"), gs_fmt_num(parm.value("var_percentage").toDouble(), 2) + "%", this),
-            gs_make_card(tr("HISTORICAL %"), gs_fmt_num(hist.value("var_percentage").toDouble(), 2) + "%", this),
-            gs_make_card(tr("MONTE CARLO %"), gs_fmt_num(mc.value("var_percentage").toDouble(), 2) + "%", this),
+            gs_make_card(tr("PARAMETRIC %"), gs_fmt_num(std::abs(parm.value("var_percentage").toDouble()), 2) + "%",
+                         this),
+            gs_make_card(tr("HISTORICAL %"), gs_fmt_num(std::abs(hist.value("var_percentage").toDouble()), 2) + "%",
+                         this),
+            gs_make_card(tr("MONTE CARLO %"), gs_fmt_num(std::abs(mc.value("var_percentage").toDouble()), 2) + "%",
+                         this),
             gs_make_card(tr("CVaR %"), gs_fmt_num(std::abs(cv.value("var_percentage").toDouble()), 2) + "%", this,
                          ui::colors::NEGATIVE()),
         };
@@ -674,7 +679,7 @@ void QuantModulePanel::display_gs_result(const QString& command, const QJsonObje
             amt_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, 1, amt_item);
             auto* pct_item =
-                new QTableWidgetItem(QString::number(obj.value("var_percentage").toDouble(), 'f', 3) + "%");
+                new QTableWidgetItem(QString::number(std::abs(obj.value("var_percentage").toDouble()), 'f', 3) + "%");
             pct_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, 2, pct_item);
             table->setItem(r, 3, new QTableWidgetItem(obj.value("method").toString()));

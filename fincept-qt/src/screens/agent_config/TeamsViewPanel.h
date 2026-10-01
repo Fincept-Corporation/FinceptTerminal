@@ -49,6 +49,8 @@ class TeamsViewPanel : public QWidget {
     void add_to_team(const services::AgentInfo& agent);
     void remove_from_team(int row);
     void run_team();
+    void save_team();
+    void load_team();
     void update_leader_combo();
     void load_team_profile_combo();
     void refresh_team_llm_label();
@@ -62,6 +64,8 @@ class TeamsViewPanel : public QWidget {
     QComboBox* leader_combo_ = nullptr;
     QCheckBox* show_responses_check_ = nullptr;
     QPushButton* team_remove_btn_ = nullptr;
+    QPushButton* team_save_btn_ = nullptr;
+    QPushButton* team_load_btn_ = nullptr;
     QLabel* team_count_ = nullptr;
     QLabel* mode_desc_label_ = nullptr;
 
@@ -87,7 +91,9 @@ class TeamsViewPanel : public QWidget {
     // State
     QVector<services::AgentInfo> all_agents_;
     QVector<services::AgentInfo> team_members_;
-    QStringList selected_tools_; // synced from TOOLS tab
+    QStringList selected_tools_; // synced from TOOLS tab (or a loaded team's tools)
+    QString saved_team_id_;      // AgentConfig row of the team last saved/loaded ("" = unsaved)
+    QString saved_team_name_;
     bool executing_ = false;
     QString pending_request_id_;
 };

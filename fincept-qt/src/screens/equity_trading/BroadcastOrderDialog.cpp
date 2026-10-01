@@ -1,6 +1,7 @@
 // BroadcastOrderDialog.cpp — multi-account order broadcast
 #include "screens/equity_trading/BroadcastOrderDialog.h"
 
+#include "screens/equity_trading/EquityTypes.h"
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
@@ -49,7 +50,7 @@ void BroadcastOrderDialog::setup_ui() {
     const QString type_str = order_type_str(order_.order_type);
     auto* info = new QLabel(QString("%1  %2  x%3  %4  @ %5")
                                 .arg(side_str, order_.symbol)
-                                .arg(order_.quantity)
+                                .arg(format_quantity(order_.quantity))
                                 .arg(type_str)
                                 .arg(order_.price > 0 ? QString::number(order_.price, 'f', 2) : "MKT"));
     info->setObjectName("orderInfo");
@@ -172,19 +173,41 @@ void BroadcastOrderDialog::on_place_order() {
     // broadcast only the Auto accounts immediately.
     QStringList immediate;
     int queued = 0;
+    int queue_failed = 0;
     for (const QString& acct : selected) {
         if (ActionCenter::instance().should_queue(acct, "placeorder")) {
             const QString pid =
                 ActionCenter::instance().queue_order(acct, "placeorder", ActionCenter::serialize_unified_order(order_));
             if (!pid.isEmpty())
                 ++queued;
+            else
+                ++queue_failed;
         } else {
             immediate.append(acct);
         }
     }
     if (immediate.isEmpty()) {
-        status_label_->setText(tr("%1 order(s) queued for approval").arg(queued));
-        status_label_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
+        // queued == 0: every queue attempt failed — nothing was sent or queued. Say so and
+        // leave the dialog live so the user can retry instead of believing the order is pending.
+        const bool none_queued = (queued == 0);
+        status_label_->setText(none_queued ? tr("Could not queue the order for approval — nothing was sent")
+                               : queue_failed > 0
+                                   ? tr("%1 order(s) queued for approval; %2 could not be queued")
+                                         .arg(queued)
+                                         .arg(queue_failed)
+                                   : tr("%1 order(s) queued for approval").arg(queued));
+        status_label_->setStyleSheet(QString("color: %1;").arg(none_queued ? colors::NEGATIVE() : colors::AMBER()));
+        if (none_queued)
+            return;
+        // Lock the dialog: a second PLACE would queue the same order AGAIN (each queued
+        // copy executes on approval). Switch the button to DONE like the broadcast path.
+        select_all_cb_->setEnabled(false);
+        for (auto* cb : account_cbs_)
+            cb->setEnabled(false);
+        results_shown_ = true;
+        place_btn_->setText(tr("DONE"));
+        disconnect(place_btn_, &QPushButton::clicked, this, &BroadcastOrderDialog::on_place_order);
+        connect(place_btn_, &QPushButton::clicked, this, &QDialog::accept);
         return;
     }
 
@@ -194,22 +217,32 @@ void BroadcastOrderDialog::on_place_order() {
     for (auto* cb : account_cbs_)
         cb->setEnabled(false);
 
-    status_label_->setText(queued > 0
-                               ? tr("Placing %1 order(s); %2 queued for approval...").arg(immediate.size()).arg(queued)
-                               : tr("Placing order across %1 account(s)...").arg(immediate.size()));
+    QString placing = queued > 0
+                          ? tr("Placing %1 order(s); %2 queued for approval...").arg(immediate.size()).arg(queued)
+                          : tr("Placing order across %1 account(s)...").arg(immediate.size());
+    if (queue_failed > 0)
+        placing += tr(" (%1 could not be queued)").arg(queue_failed);
+    status_label_->setText(placing);
     status_label_->setStyleSheet(QString("color: %1;").arg(colors::AMBER()));
 
     // Run broadcast on background thread (P1: never block UI)
     QPointer<BroadcastOrderDialog> self = this;
     auto order_copy = order_;
-    (void)QtConcurrent::run([self, immediate, order_copy]() {
+    (void)QtConcurrent::run([self, immediate, order_copy, queued]() {
         auto results = UnifiedTrading::instance().broadcast_order(immediate, order_copy);
+        if (!self)
+            return; // QMetaObject::invokeMethod asserts on a null receiver (dialog closed mid-flight)
         QMetaObject::invokeMethod(
             self,
-            [self, results]() {
+            [self, results, queued]() {
                 if (!self)
                     return;
                 self->show_results(results);
+                // show_results() summarises only the immediate placements; keep the
+                // Semi-Auto accounts' queued orders visible in the final status line.
+                if (queued > 0)
+                    self->status_label_->setText(
+                        self->status_label_->text() + self->tr("  ·  %1 queued for approval").arg(queued));
                 emit self->broadcast_completed(results);
             },
             Qt::QueuedConnection);

@@ -50,6 +50,21 @@ UniverseScannerPanel::UniverseScannerPanel(QWidget* parent) : QWidget(parent) {
             &UniverseScannerPanel::on_strategies_loaded);
     connect(&fincept::algo::ScanMonitor::instance(), &fincept::algo::ScanMonitor::realtime_match, this,
             &UniverseScannerPanel::on_match);
+    // ScanMonitor reports "error" when the universe resolves to nothing (instrument master not
+    // loaded for this broker). Nothing was listening, so the panel stayed on STOP SCAN /
+    // "Scanning live…" for a scan that never started.
+    connect(&fincept::algo::ScanMonitor::instance(), &fincept::algo::ScanMonitor::watch_status_changed, this,
+            [this](const QString& id, const QString& status) {
+                if (!running_ || watch_id_.isEmpty() || id != watch_id_ || status != QLatin1String("error"))
+                    return;
+                fincept::ScanWatchRepository::instance().remove(watch_id_);
+                watch_id_.clear();
+                running_ = false;
+                start_btn_->setText(tr("START SCAN"));
+                set_status(tr("Could not start the scan: the selected universe is empty. Load this broker's instrument "
+                              "list (connect the broker in Equity Trading) or pick another universe."),
+                           fincept::ui::colors::NEGATIVE());
+            });
 
     // Purge orphaned realtime watches left over from a prior session. ScanMonitor
     // intentionally skips mode=='realtime' watches at launch (they are started on
@@ -320,11 +335,13 @@ void UniverseScannerPanel::on_start_stop() {
     }
     watch_id_ = r.value().id;
     matches_table_->setRowCount(0);
-    fincept::algo::ScanMonitor::instance().reload(watch_id_);
 
+    // Flip the UI state BEFORE starting the monitor: it can report "error" synchronously
+    // (empty universe) and the status handler above only acts on a running scan.
     running_ = true;
     start_btn_->setText(tr("STOP SCAN"));
     set_status(tr("Scanning live — warming history, matches will appear below."), "#A78BFA");
+    fincept::algo::ScanMonitor::instance().reload(watch_id_);
 }
 
 void UniverseScannerPanel::on_match(const QString& watch_id, const QString& symbol, double price,

@@ -32,6 +32,25 @@
 
 namespace fincept::services {
 
+namespace {
+// A plan step's `result` is whatever the step produced: usually text, but a tool
+// or parallel step yields a dict/list. toString() on those returned "" and the
+// planner showed an empty result for a step that actually succeeded.
+QString agent_wf_value_text(const QJsonValue& v) {
+    if (v.isString())
+        return v.toString();
+    if (v.isObject())
+        return QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Indented));
+    if (v.isArray())
+        return QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Indented));
+    if (v.isBool())
+        return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    if (v.isDouble())
+        return QString::number(v.toDouble(), 'g', 12);
+    return {};
+}
+} // namespace
+
 QString AgentService::run_workflow(const QString& workflow_type, const QJsonObject& params) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     LOG_INFO("AgentService", QString("Running workflow [%1]: %2").arg(req_id.left(8), workflow_type));
@@ -39,8 +58,21 @@ QString AgentService::run_workflow(const QString& workflow_type, const QJsonObje
     QJsonObject p = params;
     p["workflow_type"] = workflow_type;
 
+    // The WORKFLOWS tab sends `llm_profile_id` (empty = "inherit"), but nothing
+    // downstream ever read it — the profile picker was a dead control and every
+    // workflow ran on the global active LLM. Resolve it into the `model` block
+    // build_payload() forwards as active_llm. Callers that do not send the key
+    // keep the previous behaviour.
+    QJsonObject wf_config;
+    if (p.contains(QStringLiteral("llm_profile_id"))) {
+        const QJsonObject model =
+            model_config_for_profile(p.value(QStringLiteral("llm_profile_id")).toString(), QStringLiteral("workflow"));
+        if (!model.isEmpty())
+            wf_config.insert(QStringLiteral("model"), model);
+    }
+
     QPointer<AgentService> self = this;
-    run_python_stdin(workflow_type, p, {}, [self, req_id](bool ok, QJsonObject result) {
+    run_python_stdin(workflow_type, p, wf_config, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         AgentExecutionResult r;
@@ -68,12 +100,26 @@ QString AgentService::create_plan(const QString& query, const QJsonObject& confi
         for (auto it = config.begin(); it != config.end(); ++it)
             params[it.key()] = it.value();
 
+    // `llm_profile_id` (PLANNER tab picker) was forwarded as an inert param —
+    // plan generation always used the global LLM. Resolve an explicit choice
+    // into the `model` block that build_payload() ships as active_llm.
+    QJsonObject plan_config;
+    const QJsonObject plan_model = model_config_for_profile(config.value("llm_profile_id").toString(), {});
+    if (!plan_model.isEmpty())
+        plan_config.insert(QStringLiteral("model"), plan_model);
+
     QPointer<AgentService> self = this;
-    run_python_stdin("generate_dynamic_plan", params, {}, [self, req_id](bool ok, QJsonObject result) {
+    run_python_stdin("generate_dynamic_plan", params, plan_config, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         if (!ok) {
             emit self->error_occurred("create_plan", result["error"].toString());
+            return;
+        }
+        // {"success": false, "error": ...} (e.g. missing query) is a clean failure
+        // exit 0 — without this the UI got an empty "READY" plan.
+        if (result.contains("success") && !result["success"].toBool()) {
+            emit self->error_occurred("create_plan", result["error"].toString("Plan generation failed"));
             return;
         }
 
@@ -118,18 +164,34 @@ QString AgentService::execute_plan(const QJsonObject& plan, const QJsonObject& c
         for (auto it = config.begin(); it != config.end(); ++it)
             params[it.key()] = it.value();
 
+    // Same as create_plan: an explicit `llm_profile_id` becomes the model the
+    // plan's agent steps run on (finagent_core.execute_plan applies config.model).
+    QJsonObject plan_config;
+    const QJsonObject plan_model = model_config_for_profile(config.value("llm_profile_id").toString(), {});
+    if (!plan_model.isEmpty())
+        plan_config.insert(QStringLiteral("model"), plan_model);
+
     QPointer<AgentService> self = this;
-    run_python_stdin("execute_plan", params, {}, [self, req_id](bool ok, QJsonObject result) {
+    run_python_stdin("execute_plan", params, plan_config, [self, req_id](bool ok, QJsonObject result) {
         if (!self)
             return;
         if (!ok) {
             emit self->error_occurred("execute_plan", result["error"].toString());
             return;
         }
+        // A rejected plan (e.g. a step with an invalid type) comes back as
+        // {"success": false, "error": ...} with exit 0. Without this check it was
+        // parsed as an empty plan and the UI reported COMPLETED.
+        if (result.contains("success") && !result["success"].toBool()) {
+            emit self->error_occurred("execute_plan", result["error"].toString("Plan execution failed"));
+            return;
+        }
 
         ExecutionPlan plan;
         plan.request_id = req_id;
         plan.id = result["id"].toString();
+        plan.name = result["name"].toString();
+        plan.description = result["description"].toString();
         plan.status = result["status"].toString();
         plan.is_complete = result["is_complete"].toBool();
         plan.has_failed = result["has_failed"].toBool();
@@ -140,8 +202,15 @@ QString AgentService::execute_plan(const QJsonObject& plan, const QJsonObject& c
             PlanStep step;
             step.id = so["id"].toString();
             step.name = so["name"].toString();
+            // The panel adopts this plan as its current plan; dropping step_type /
+            // config / dependencies here made a second EXECUTE send blank step
+            // types, which finagent_core rejects.
+            step.step_type = so["step_type"].toString();
+            step.config = so["config"].toObject();
+            for (const auto& d : so["dependencies"].toArray())
+                step.dependencies.append(d.toString());
             step.status = so["status"].toString();
-            step.result = so["result"].toString();
+            step.result = agent_wf_value_text(so["result"]);
             step.error = so["error"].toString();
             plan.steps.append(step);
         }
@@ -284,12 +353,20 @@ QString AgentService::create_stock_analysis_plan(const QString& symbol, const QJ
             emit self->error_occurred("create_stock_plan", result["error"].toString());
             return;
         }
+        if (result.contains("success") && !result["success"].toBool()) {
+            emit self->error_occurred("create_stock_plan", result["error"].toString("Plan creation failed"));
+            return;
+        }
+        // finagent_core wraps the plan: {"success": true, "plan": {...}} — read
+        // the nested object (the flat read produced an empty plan).
+        const QJsonObject planObj = result.contains("plan") ? result["plan"].toObject() : result;
         ExecutionPlan plan;
         plan.request_id = req_id;
-        plan.id = result["id"].toString();
-        plan.name = result["name"].toString();
-        plan.status = result["status"].toString("pending");
-        QJsonArray steps = result["steps"].toArray();
+        plan.id = planObj["id"].toString();
+        plan.name = planObj["name"].toString();
+        plan.description = planObj["description"].toString();
+        plan.status = planObj["status"].toString("pending");
+        QJsonArray steps = planObj["steps"].toArray();
         for (const auto& sv : steps) {
             QJsonObject so = sv.toObject();
             PlanStep step;
@@ -297,6 +374,8 @@ QString AgentService::create_stock_analysis_plan(const QString& symbol, const QJ
             step.name = so["name"].toString();
             step.step_type = so["step_type"].toString();
             step.config = so["config"].toObject();
+            for (const auto& d : so["dependencies"].toArray())
+                step.dependencies.append(d.toString());
             step.status = "pending";
             plan.steps.append(step);
         }
@@ -320,12 +399,20 @@ QString AgentService::create_portfolio_plan(const QJsonObject& goals, const QJso
             emit self->error_occurred("create_portfolio_plan", result["error"].toString());
             return;
         }
+        if (result.contains("success") && !result["success"].toBool()) {
+            emit self->error_occurred("create_portfolio_plan", result["error"].toString("Plan creation failed"));
+            return;
+        }
+        // finagent_core wraps the plan: {"success": true, "plan": {...}} — read
+        // the nested object (the flat read produced an empty plan).
+        const QJsonObject planObj = result.contains("plan") ? result["plan"].toObject() : result;
         ExecutionPlan plan;
         plan.request_id = req_id;
-        plan.id = result["id"].toString();
-        plan.name = result["name"].toString();
-        plan.status = result["status"].toString("pending");
-        QJsonArray steps = result["steps"].toArray();
+        plan.id = planObj["id"].toString();
+        plan.name = planObj["name"].toString();
+        plan.description = planObj["description"].toString();
+        plan.status = planObj["status"].toString("pending");
+        QJsonArray steps = planObj["steps"].toArray();
         for (const auto& sv : steps) {
             QJsonObject so = sv.toObject();
             PlanStep step;
@@ -333,6 +420,8 @@ QString AgentService::create_portfolio_plan(const QJsonObject& goals, const QJso
             step.name = so["name"].toString();
             step.step_type = so["step_type"].toString();
             step.config = so["config"].toObject();
+            for (const auto& d : so["dependencies"].toArray())
+                step.dependencies.append(d.toString());
             step.status = "pending";
             plan.steps.append(step);
         }

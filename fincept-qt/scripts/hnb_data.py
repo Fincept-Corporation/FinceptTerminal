@@ -41,6 +41,7 @@ import sys
 import json
 import requests
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date, timedelta, timezone
 
@@ -151,6 +152,44 @@ class HNBWrapper:
             })
         return sorted(rows, key=lambda r: r["date"])
 
+    def _recent_bulletins(self, count: int, currency: Optional[str] = None) -> List[Dict]:
+        """
+        Raw items of the last `count` published bulletins (oldest first).
+
+        api.hnb.hr/tecajn-eur/v3 only honours a single `datum-primjene=YYYY-MM-DD` filter - the
+        bulletin-number and date-range parameters are silently ignored and always return just
+        the latest bulletin. So walk back over business days and fetch each one (in parallel).
+        """
+        candidates: List[date] = []
+        day = date.today()
+        while len(candidates) < count + 12:  # headroom for public holidays
+            if day.weekday() < 5:
+                candidates.append(day)
+            day -= timedelta(days=1)
+
+        def fetch(d: date) -> List[Dict]:
+            params: Dict[str, Any] = {"datum-primjene": d.isoformat()}
+            if currency:
+                params["valuta"] = currency
+            try:
+                return self._get("tecajn-eur/v3", params)
+            except Exception:
+                return []
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            per_day = list(pool.map(fetch, candidates))
+
+        items: List[Dict] = []
+        taken = 0
+        for day_items in per_day:  # newest first
+            if not day_items:
+                continue
+            items.extend(day_items)
+            taken += 1
+            if taken >= count:
+                break
+        return items
+
     # ------------------------------------------------------------------
     # Public methods
     # ------------------------------------------------------------------
@@ -197,14 +236,15 @@ class HNBWrapper:
         """
         currency = currency.upper()
         try:
-            params: Dict[str, Any] = {"valuta": currency}
             if start_bulletin and end_bulletin:
-                params["broj_tecajnice_od"] = start_bulletin
-                params["broj_tecajnice_do"] = end_bulletin
-            elif start_bulletin:
-                params["broj_tecajnice"] = start_bulletin
-            # date_from not natively supported — fetch all and filter
-            items = self._get("tecajn-eur/v3", params)
+                # bulletin numbers restart every year: serve the requested span of the current year
+                items = [i for i in self._recent_bulletins(max(end_bulletin, 30) + 30, currency)
+                         if start_bulletin <= int(i.get("broj_tecajnice") or 0) <= end_bulletin]
+            else:
+                # no usable range given (or only a count, as usd/gbp pass): last N bulletins
+                # (this used to return only today's single bulletin)
+                count = end_bulletin or start_bulletin or 20
+                items = self._recent_bulletins(count, currency)
             rows  = self._normalise_single(items)
             if date_from:
                 rows = [r for r in rows if r["date"] >= date_from]
@@ -230,11 +270,8 @@ class HNBWrapper:
         Each bulletin covers one business day.
         """
         try:
-            params = {
-                "broj_tecajnice_od": from_num,
-                "broj_tecajnice_do": to_num,
-            }
-            items = self._get("tecajn-eur/v3", params)
+            items = [i for i in self._recent_bulletins(max(to_num, 30) + 30)
+                     if from_num <= int(i.get("broj_tecajnice") or 0) <= to_num]
             rows  = self._normalise(items)
             return {
                 "success":    True,
@@ -284,7 +321,7 @@ class HNBWrapper:
 COMMANDS = {
     "today":    "                               — Latest bulletin (all currencies vs EUR)",
     "currency": "<CCY> [from_bulletin] [to_bul] [date_from] — Single currency history",
-    "range":    "<from_bulletin> <to_bulletin>  — Bulletin range (wide format)",
+    "range":    "[from_bulletin] [to_bulletin]  — Bulletin range (wide format); default last 20",
     "usd":      "[bulletins=20]                 — USD/EUR last N bulletins",
     "gbp":      "[bulletins=20]                 — GBP/EUR last N bulletins",
     "overview": "                               — Today's rates snapshot",
@@ -320,7 +357,13 @@ def main() -> None:
                 result = wrapper.get_currency(sys.argv[2], from_b, to_b, _a(5))
         elif cmd == "range":
             if len(sys.argv) < 4:
-                result = {"error": "range requires <from_bulletin> <to_bulletin>"}
+                # no bulletin numbers given: last 20 bulletins, all currencies
+                items = wrapper._recent_bulletins(20)
+                rows = wrapper._normalise(items)
+                result = {"success": True, "data": rows, "count": len(rows),
+                          "note": "EUR per 1 unit of foreign currency (last 20 bulletins)",
+                          "source": "Hrvatska Narodna Banka",
+                          "timestamp": int(datetime.now(timezone.utc).timestamp())}
             else:
                 result = wrapper.get_bulletin_range(int(sys.argv[2]), int(sys.argv[3]))
         elif cmd == "usd":

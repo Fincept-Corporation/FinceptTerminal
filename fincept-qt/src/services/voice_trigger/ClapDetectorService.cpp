@@ -127,6 +127,7 @@ void ClapDetectorService::start() {
     });
 
     stdout_buffer_.clear();
+    script_error_emitted_ = false;
     LOG_INFO(CLAP_TAG, QString("Launching '%1' '%2'").arg(python_exe, script));
     process_->start(python_exe, {script});
 
@@ -210,10 +211,12 @@ void ClapDetectorService::parse_line(const QByteArray& line) {
     } else if (obj.contains("error")) {
         const QString msg = obj["error"].toString();
         LOG_WARN(CLAP_TAG, QString("script error: %1").arg(msg));
+        script_error_emitted_ = true;
         emit error_occurred(msg);
     } else if (obj.contains("fatal")) {
         const QString msg = obj["fatal"].toString();
         LOG_ERROR(CLAP_TAG, QString("script fatal: %1").arg(msg));
+        script_error_emitted_ = true;
         emit error_occurred(msg);
     }
 }
@@ -236,8 +239,13 @@ void ClapDetectorService::on_process_finished(int exit_code, QProcess::ExitStatu
     stdout_buffer_.clear();
 
     const bool was_active = active_.exchange(false, std::memory_order_acq_rel);
-    if (was_active)
+    if (was_active) {
         emit listening_changed(false);
+        // A detector that dies without saying why (interpreter crash, broken venv)
+        // used to just stop listening — "clap to start" went dead with no signal.
+        if ((status == QProcess::CrashExit || exit_code != 0) && !script_error_emitted_)
+            emit error_occurred(QStringLiteral("Clap detector stopped unexpectedly (exit code %1)").arg(exit_code));
+    }
 }
 
 } // namespace fincept::services

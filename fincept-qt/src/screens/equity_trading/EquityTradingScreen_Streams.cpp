@@ -62,16 +62,18 @@ void EquityTradingScreen::hub_subscribe_streaming() {
 
     const QString aid = focused_account_id_;
 
-    // Paper accounts must NOT show live broker positions/holdings/orders/balance —
-    // that data comes from the paper engine (pt_* / OrderMatcher). Only live mode
-    // subscribes to the live broker portfolio topics. Quotes flow in both modes.
+    // Local paper accounts must NOT show live broker positions/holdings/orders/balance —
+    // that data comes from the paper engine (pt_* / OrderMatcher). Live mode, and PAPER
+    // mode on a broker's own paper venue (focused_native_paper_), subscribe to the broker
+    // portfolio topics instead. Quotes flow in every mode.
     //
     // Cache the trading mode + paper portfolio id once here. This runs on every
     // focus / symbol / mode change, so the cache stays fresh, and it keeps the
     // per-tick quote handler off AccountManager::get_account() — which locks a
     // mutex and copies the whole BrokerAccount struct on every single tick.
     const auto focused_account = AccountManager::instance().get_account(aid);
-    const bool is_paper = focused_account.trading_mode == QLatin1String("paper");
+    // "is_paper" below means the LOCAL simulator.
+    const bool is_paper = focused_account.trading_mode == QLatin1String("paper") && !focused_native_paper_;
     focused_is_paper_ = is_paper;
     focused_paper_portfolio_id_ = is_paper ? focused_account.paper_portfolio_id : QString();
     // Drop any prices buffered for a previous account/portfolio. An in-flight flush
@@ -303,7 +305,8 @@ void EquityTradingScreen::update_chart_position() {
     if (!chart_)
         return;
     const auto account = AccountManager::instance().get_account(focused_account_id_);
-    const bool is_paper = account.trading_mode == QLatin1String("paper");
+    // Local simulator only: a broker paper venue's positions are the cached broker rows below.
+    const bool is_paper = account.trading_mode == QLatin1String("paper") && !focused_native_paper_;
 
     if (is_paper) {
         if (account.paper_portfolio_id.isEmpty()) {

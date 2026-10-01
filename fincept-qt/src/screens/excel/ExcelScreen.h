@@ -17,11 +17,22 @@
 namespace fincept::screens {
 
 class SpreadsheetWidget;
+struct ExcelImportResult; // defined in ExcelScreen.cpp (worker-thread XLSX read result)
 
 class ExcelScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit ExcelScreen(QWidget* parent = nullptr);
+
+    /// Load a .xlsx/.csv from disk, replacing the workbook (asks before
+    /// discarding unsaved edits). Returns false if nothing was opened.
+    bool open_file_path(const QString& path);
+
+    /// For callers that may run before the screen has been constructed (the
+    /// File Manager "EXCEL" button navigates here lazily): opens the file now when
+    /// a live ExcelScreen exists, otherwise parks the path so the next
+    /// ExcelScreen to be shown picks it up.
+    static void open_when_ready(const QString& path);
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
@@ -52,6 +63,17 @@ class ExcelScreen : public QWidget, public IStatefulScreen {
 
     /// Load a .csv into a single new sheet, replacing the current workbook.
     bool import_csv(const QString& path);
+    /// Route a path to the CSV or XLSX importer (no discard prompt — callers ask first).
+    void import_path(const QString& path);
+    /// XLSX is read on a worker thread (a large workbook is up to 1.3M cells of
+    /// xlsx.read() calls); finish_xlsx_import() builds the sheets back on the UI thread.
+    void import_xlsx(const QString& path);
+    void finish_xlsx_import(const QString& path, const ExcelImportResult& result);
+    /// Same for export: the workbook is written on a worker from a data snapshot.
+    /// outcome: 0 = ok, 1 = could not build workbook, 2 = could not write file.
+    void finish_xlsx_export(const QString& path, int outcome);
+    /// Lock/unlock the toolbar and grid while a worker is reading/writing.
+    void set_busy(bool busy, const QString& message = {});
     /// Track edits so we can warn before discarding them.
     void mark_dirty();
     /// Returns true if it is safe to proceed (nothing unsaved, or the user
@@ -65,6 +87,7 @@ class ExcelScreen : public QWidget, public IStatefulScreen {
     QString file_name_ = "Untitled.xlsx";
     QString file_path_;
     bool dirty_ = false;
+    bool busy_ = false; // an XLSX read/write is running on a worker thread
 
     // Toolbar text widgets (cached for retranslateUi)
     QLabel* toolbar_title_ = nullptr;

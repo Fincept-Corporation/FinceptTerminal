@@ -105,17 +105,30 @@ def _make_request(action: str, params: Optional[Dict[str, Any]] = None) -> Dict[
         }
 
     except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else None
+        # open.africa sits behind a Cloudflare managed challenge ("Just a moment...") that only a real
+        # browser can pass — say so instead of an opaque "403 Client Error: Forbidden".
+        challenged = (
+            e.response is not None
+            and (e.response.headers.get("cf-mitigated", "").lower() == "challenge"
+                 or "Just a moment" in (e.response.text or "")[:400])
+        )
+        message = (
+            "openAFRICA is blocking automated access (Cloudflare bot challenge, HTTP "
+            f"{status}). The portal cannot be queried from the terminal at the moment."
+            if challenged else f"HTTP Error {status if status is not None else 'Unknown'}: {str(e)}"
+        )
         return {
             "data": [],
             "metadata": {
                 "source": "openAFRICA",
                 "action": action,
                 "parameters": params,
-                "http_status": e.response.status_code if e.response else None,
+                "http_status": status,
                 "url": url if 'url' in locals() else f"{BASE_URL}/{action}",
                 "last_updated": datetime.now().isoformat()
             },
-            "error": f"HTTP Error {e.response.status_code if e.response else 'Unknown'}: {str(e)}"
+            "error": message
         }
 
     except requests.exceptions.Timeout:
@@ -750,6 +763,13 @@ def main():
 
     command = sys.argv[1]
 
+    # The desktop Gov Data panel speaks one vocabulary to every CKAN connector
+    # (publishers / datasets <org> / resources <dataset> / search); map it onto this script's commands.
+    resources_view = command == "resources"
+    if resources_view:
+        command = "dataset-details"
+    command = {"publishers": "organizations", "datasets": "org-datasets"}.get(command, command)
+
     try:
         if command == "organizations":
             result = get_organizations()
@@ -828,6 +848,10 @@ def main():
                 ]
             }))
             sys.exit(1)
+
+        # `resources <dataset>`: the panel wants just the resource list, not the whole dataset record
+        if resources_view and isinstance(result, dict) and isinstance(result.get("data"), dict):
+            result["data"] = result["data"].get("resources", [])
 
         # Add execution timestamp
         if isinstance(result, dict):

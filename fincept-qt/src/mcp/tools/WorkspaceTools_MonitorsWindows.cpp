@@ -176,6 +176,14 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
                 const int monitor_idx = args["monitor_index"].toInt(-1);
+                // Check the monitor BEFORE building a window: an out-of-range index used to be
+                // ignored after the fact, so the window opened on the default monitor while the
+                // tool reported success for the monitor that was asked for.
+                if (monitor_idx >= 0 && !screen_by_index(monitor_idx)) {
+                    resolve(ToolResult::fail("Monitor not found: " + QString::number(monitor_idx) +
+                                             " (use list_monitors for the valid indexes)"));
+                    return;
+                }
                 auto* frame = new WindowFrame(WindowFrame::next_window_id(), nullptr);
                 // Every other creation site sets this (WindowFrame.cpp,
                 // WindowCycler.cpp, StressLoad.cpp). WindowFrame unregisters
@@ -275,14 +283,16 @@ void workspace_internal::register_monitor_window_tools(std::vector<ToolDef>& too
                              .min(0)
                              .integer("x", "X coordinate")
                              .required()
+                             .between(-32768, 32768)
                              .integer("y", "Y coordinate")
                              .required()
-                             .integer("width", "Width in pixels")
+                             .between(-32768, 32768)
+                             .integer("width", "Width in pixels (1-16384)")
                              .required()
-                             .min(1)
-                             .integer("height", "Height in pixels")
+                             .between(1, 16384)
+                             .integer("height", "Height in pixels (1-16384)")
                              .required()
-                             .min(1)
+                             .between(1, 16384)
                              .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {

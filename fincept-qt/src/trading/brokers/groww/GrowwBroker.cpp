@@ -21,6 +21,17 @@ static int64_t now_ts() {
     return QDateTime::currentSecsSinceEpoch();
 }
 
+// Groww reports the plain exchange (NSE/BSE) on orders and positions of the FNO segment.
+// Map it to the terminal's derivative exchange code (NFO/BFO), which groww_exchange() /
+// groww_segment() turn back into {NSE|BSE, FNO} when an order is sent.
+static QString groww_derivative_exchange(const QString& exchange) {
+    if (exchange == QLatin1String("NSE"))
+        return QStringLiteral("NFO");
+    if (exchange == QLatin1String("BSE"))
+        return QStringLiteral("BFO");
+    return exchange;
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -35,7 +46,7 @@ bool GrowwBroker::is_token_expired(const BrokerHttpResponse& resp) {
     return false;
 }
 
-QString GrowwBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
+static QString groww_error_text(const BrokerHttpResponse& resp, const QString& fallback) {
     if (!resp.json.isEmpty()) {
         // Preferred Groww shape: { status: "FAILURE", error: { code: "GA00x", message: "..." } }
         QJsonValue err_v = resp.json["error"];
@@ -63,6 +74,16 @@ QString GrowwBroker::checked_error(const BrokerHttpResponse& resp, const QString
     if (!resp.raw_body.isEmpty())
         return resp.raw_body.left(200);
     return fallback;
+}
+
+// Every caller tests `!resp.success` BEFORE `is_token_expired()`, and BrokerHttp reports
+// HTTP 401/403 as !success — so the "[TOKEN_EXPIRED]" literal those callers return after
+// the check was only reachable for a 2xx GA005 and a real 401 surfaced as plain text.
+// The marker is what IBroker::validate_session / AccountDataStream classify on (silent
+// re-mint of the daily token, "session expired" prompt), so tag it here.
+QString GrowwBroker::checked_error(const BrokerHttpResponse& resp, const QString& fallback) {
+    const QString msg = groww_error_text(resp, fallback);
+    return is_token_expired(resp) ? QStringLiteral("[TOKEN_EXPIRED] ") + msg : msg;
 }
 
 QString GrowwBroker::error_code(const BrokerHttpResponse& resp) {
@@ -224,12 +245,13 @@ TokenExchangeResponse GrowwBroker::exchange_token(const QString& api_key, const 
 
     auto resp = BrokerHttp::instance().post_json("https://api.groww.in/v1/token/api/access", body, headers);
 
+    // Login errors are bad credentials, not an expired session — no [TOKEN_EXPIRED] tag.
     if (!resp.success)
-        return {.success = false, .error = checked_error(resp, "Network error")};
+        return {.success = false, .error = groww_error_text(resp, "Network error")};
 
     QString token = resp.json["token"].toString();
     if (token.isEmpty())
-        return {.success = false, .error = checked_error(resp, "No token in response")};
+        return {.success = false, .error = groww_error_text(resp, "No token in response")};
 
     // Groww daily access tokens are minted purely from the api_key + api_secret
     // (checksum flow) — both are stored, so the session can be silently
@@ -261,10 +283,10 @@ OrderPlaceResponse GrowwBroker::place_order(const BrokerCredentials& creds, cons
     body["product"] = groww_enum_map().product_or(order.product_type, "CNC");
     body["order_type"] = groww_enum_map().order_type_or(order.order_type, "MARKET");
     body["transaction_type"] = (order.side == OrderSide::Buy) ? "BUY" : "SELL";
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Groww requires 8-20 alphanumeric chars.
-    body["order_reference_id"] = make_client_order_ref(20);
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference and Groww can reject it as a
+    // duplicate (see BrokerClientOrderId.h). Groww requires 8-20 alphanumeric chars.
+    body["order_reference_id"] = client_order_ref_for(order, 20);
 
     if (order.order_type != OrderType::Market)
         body["price"] = order.price;
@@ -390,7 +412,7 @@ ApiResponse<QVector<BrokerOrderInfo>> GrowwBroker::get_orders(const BrokerCreden
         return "open";
     };
 
-    auto fetch_segment = [&](const QString& segment) -> bool {
+    auto fetch_segment = [&](const QString& segment, QString* error_out) -> bool {
         constexpr int PAGE_SIZE = 25; // Groww API max per page
         int page = 0;
         while (true) {
@@ -399,10 +421,11 @@ ApiResponse<QVector<BrokerOrderInfo>> GrowwBroker::get_orders(const BrokerCreden
                               .arg(page)
                               .arg(PAGE_SIZE);
             auto resp = BrokerHttp::instance().get(url, hdrs);
-            if (!resp.success)
+            if (!resp.success || is_token_expired(resp)) {
+                if (error_out)
+                    *error_out = checked_error(resp, "Network error");
                 return false;
-            if (is_token_expired(resp))
-                return false;
+            }
 
             QJsonObject payload = resp.json["payload"].toObject();
             QJsonArray list = payload["order_list"].toArray();
@@ -414,10 +437,17 @@ ApiResponse<QVector<BrokerOrderInfo>> GrowwBroker::get_orders(const BrokerCreden
                 if (info.order_id.isEmpty())
                     info.order_id = o["order_id"].toString();
                 info.symbol = o["trading_symbol"].toString();
+                // The response reports the plain exchange (NSE/BSE) for both segments. The
+                // terminal's convention — and what place_order / modify_order derive the
+                // segment from — is NFO/BFO for derivatives, so a modify hydrated from this
+                // row would otherwise be sent to the CASH segment.
                 info.exchange = o["exchange"].toString();
+                if (segment == QLatin1String("FNO"))
+                    info.exchange = groww_derivative_exchange(info.exchange);
                 info.quantity = o["quantity"].toInt();
                 info.filled_qty = o["filled_quantity"].toInt();
                 info.price = o["price"].toDouble();
+                info.avg_price = o["average_fill_price"].toDouble();
                 info.trigger_price = o["trigger_price"].toDouble();
                 // Doc-canonical status field is `order_status`; older endpoints used `status`.
                 QString raw_status = o["order_status"].toString();
@@ -440,8 +470,13 @@ ApiResponse<QVector<BrokerOrderInfo>> GrowwBroker::get_orders(const BrokerCreden
         return true;
     };
 
-    fetch_segment("CASH");
-    fetch_segment("FNO");
+    // CASH is the primary book: a failure there (expired token, network) must surface instead
+    // of masquerading as "no orders" — an unreadable book also made cancel_all_orders report
+    // success with nothing cancelled. FNO is best-effort: accounts without F&O enabled reject it.
+    QString cash_error;
+    if (!fetch_segment("CASH", &cash_error))
+        return {false, std::nullopt, cash_error, ts};
+    fetch_segment("FNO", nullptr);
 
     return {true, orders, "", ts};
 }
@@ -470,7 +505,10 @@ ApiResponse<QJsonObject> GrowwBroker::get_trade_book(const BrokerCredentials& cr
             QJsonArray orders = list_resp.json["payload"].toObject()["order_list"].toArray();
             for (const auto& it : orders) {
                 QJsonObject o = it.toObject();
-                QString status = o["status"].toString();
+                // Doc-canonical field is `order_status` (see get_orders); `status` is the legacy spelling.
+                QString status = o["order_status"].toString();
+                if (status.isEmpty())
+                    status = o["status"].toString();
                 if (o["filled_quantity"].toInt() == 0 && status != "COMPLETED" && status != "EXECUTED")
                     continue;
 
@@ -547,7 +585,11 @@ ApiResponse<QVector<BrokerPosition>> GrowwBroker::get_positions(const BrokerCred
 
             BrokerPosition pos;
             pos.symbol = p["trading_symbol"].toString();
+            // NSE/BSE on both segments; derivatives are NFO/BFO app-wide (see get_orders). Without
+            // it a "close position" order for an F&O row is sent on the CASH segment.
             pos.exchange = p["exchange"].toString();
+            if (segment == QLatin1String("FNO"))
+                pos.exchange = groww_derivative_exchange(pos.exchange);
             pos.quantity = qty;
             pos.avg_price = avg;
             pos.ltp = 0.0; // Not returned by positions endpoint — hydrated below via /live-data/ltp.
@@ -845,9 +887,11 @@ ApiResponse<QVector<BrokerQuote>> GrowwBroker::get_quotes(const BrokerCredential
     if (symbols.size() == 1) {
         auto hdrs = auth_headers(creds);
         const auto ref = split_symbol(symbols.first());
+        // trading_symbol is percent-encoded: "M&M" / "M&MFIN" would otherwise end the parameter at '&'.
         QString url = QString("https://api.groww.in/v1/live-data/quote"
                               "?exchange=%1&segment=%2&trading_symbol=%3")
-                          .arg(groww_exchange(ref.exchange), ref.segment, ref.trading_symbol);
+                          .arg(groww_exchange(ref.exchange), ref.segment,
+                               QString::fromUtf8(QUrl::toPercentEncoding(ref.trading_symbol)));
         auto resp = BrokerHttp::instance().get(url, hdrs);
         if (!resp.success)
             return {false, std::nullopt, checked_error(resp, "Network error"), ts};
@@ -1093,7 +1137,8 @@ ApiResponse<MarketDepth> GrowwBroker::get_market_depth(const BrokerCredentials& 
 
     QString url = QString("https://api.groww.in/v1/live-data/quote"
                           "?exchange=%1&segment=%2&trading_symbol=%3")
-                      .arg(groww_exchange(exch), groww_segment(exch), trading_symbol);
+                      .arg(groww_exchange(exch), groww_segment(exch),
+                           QString::fromUtf8(QUrl::toPercentEncoding(trading_symbol)));
     auto resp = BrokerHttp::instance().get(url, hdrs);
 
     if (!resp.success)

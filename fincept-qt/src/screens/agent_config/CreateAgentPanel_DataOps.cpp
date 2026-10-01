@@ -32,6 +32,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QShowEvent>
 #include <QSpinBox>
 #include <QSplitter>
@@ -39,6 +40,14 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+
+namespace {
+// Status-line styling in one place (was ten identical inline setStyleSheet pairs).
+void set_form_status(QLabel* lbl, const QString& text, const QString& color) {
+    lbl->setText(text);
+    lbl->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(color));
+}
+} // namespace
 
 void CreateAgentPanel::load_saved_agents() {
     saved_list_->clear();
@@ -161,8 +170,14 @@ void CreateAgentPanel::load_agent_into_form(const AgentConfig& cfg) {
     terminal_name_exclude_edit_->setText(exc_pats.isEmpty() ? QString() : exc_pats.first().toString());
     terminal_max_tools_spin_->setValue(tf["max_tools"].toInt(0));
 
-    status_lbl_->setText(tr("Loaded: %1").arg(cfg.name));
-    status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::CYAN()));
+    // MCP servers selected for this agent (ids; rows carry the id in UserRole).
+    QSet<QString> mcp_ids;
+    for (const auto& v : c["mcp_server_ids"].toArray())
+        mcp_ids.insert(v.toString());
+    for (int i = 0; i < mcp_servers_list_->count(); ++i)
+        mcp_servers_list_->item(i)->setSelected(mcp_ids.contains(mcp_servers_list_->item(i)->data(Qt::UserRole).toString()));
+
+    set_form_status(status_lbl_, tr("Loaded: %1").arg(cfg.name), ui::colors::CYAN());
 }
 
 void CreateAgentPanel::clear_form() {
@@ -198,10 +213,10 @@ void CreateAgentPanel::clear_form() {
     terminal_name_include_edit_->clear();
     terminal_name_exclude_edit_->clear();
     terminal_max_tools_spin_->setValue(0);
+    mcp_servers_list_->clearSelection();
     test_result_->clear();
     test_status_lbl_->clear();
-    status_lbl_->setText(tr("Form cleared"));
-    status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::TEXT_TERTIARY()));
+    set_form_status(status_lbl_, tr("Form cleared"), ui::colors::TEXT_TERTIARY());
 }
 
 QJsonObject CreateAgentPanel::build_config_json() const {
@@ -322,14 +337,22 @@ QJsonObject CreateAgentPanel::build_config_json() const {
     if (!tf.isEmpty())
         config["tool_filter"] = tf;
 
+    // MCP SERVERS selection. Ids only: AgentService::build_payload expands them to
+    // {command, args, env} for core_agent._connect_mcp_servers at run time, so server
+    // env secrets are never written into the saved agent config.
+    QJsonArray mcp_ids;
+    for (auto* it : mcp_servers_list_->selectedItems())
+        mcp_ids.append(it->data(Qt::UserRole).toString());
+    if (!mcp_ids.isEmpty())
+        config["mcp_server_ids"] = mcp_ids;
+
     return config;
 }
 
 void CreateAgentPanel::save_agent() {
     const QString name = name_edit_->text().trimmed();
     if (name.isEmpty()) {
-        status_lbl_->setText(tr("Agent name is required"));
-        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
+        set_form_status(status_lbl_, tr("Agent name is required"), ui::colors::NEGATIVE());
         return;
     }
     AgentConfig db;
@@ -384,19 +407,23 @@ void CreateAgentPanel::export_json() {
     out["name"] = name_edit_->text();
     out["description"] = desc_edit_->toPlainText();
     out["category"] = category_combo_->currentText();
-    out["config"] = build_config_json();
+    // The exported file is meant to be shared — strip the API key build_config_json()
+    // snapshots into `model` (an importer resolves the model from its own profiles).
+    QJsonObject export_cfg = build_config_json();
+    QJsonObject export_model = export_cfg["model"].toObject();
+    export_model.remove("api_key");
+    export_cfg["model"] = export_model;
+    out["config"] = export_cfg;
     QFile file(path);
     // Previously the status said "Exported" even when open() failed and nothing
     // was written — a silent data-loss report.
     if (!file.open(QIODevice::WriteOnly)) {
-        status_lbl_->setText(tr("Export failed: cannot write %1").arg(path));
-        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
+        set_form_status(status_lbl_, tr("Export failed: cannot write %1").arg(path), ui::colors::NEGATIVE());
         return;
     }
     file.write(QJsonDocument(out).toJson(QJsonDocument::Indented));
     file.close();
-    status_lbl_->setText(tr("Exported: %1").arg(path));
-    status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::POSITIVE()));
+    set_form_status(status_lbl_, tr("Exported: %1").arg(path), ui::colors::POSITIVE());
 }
 
 void CreateAgentPanel::import_json() {
@@ -405,8 +432,7 @@ void CreateAgentPanel::import_json() {
         return;
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
-        status_lbl_->setText(tr("Import failed: cannot read %1").arg(path));
-        status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::NEGATIVE()));
+        set_form_status(status_lbl_, tr("Import failed: cannot read %1").arg(path), ui::colors::NEGATIVE());
         return;
     }
     // A malformed file used to load as an empty object, silently wiping the form.
@@ -428,8 +454,7 @@ void CreateAgentPanel::import_json() {
     cfg.category = obj["category"].toString("custom");
     cfg.config_json = QString::fromUtf8(QJsonDocument(obj["config"].toObject()).toJson(QJsonDocument::Compact));
     load_agent_into_form(cfg);
-    status_lbl_->setText(tr("Imported from file"));
-    status_lbl_->setStyleSheet(QString("color:%1;font-size:10px;padding:3px 0;").arg(ui::colors::CYAN()));
+    set_form_status(status_lbl_, tr("Imported from file"), ui::colors::CYAN());
 }
 
 // ── Draft persistence (called by parent AgentConfigScreen::save_state) ───────

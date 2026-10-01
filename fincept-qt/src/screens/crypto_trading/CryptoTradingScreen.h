@@ -163,6 +163,7 @@ class CryptoTradingScreen : public QWidget, public IStatefulScreen, public IGrou
     std::atomic<bool> candles_fetching_{false};
     std::atomic<int> live_inflight_{0}; // counts async_fetch_live_* tasks still running
     std::atomic<bool> paper_bookkeeping_in_flight_{false};
+    int leverage_seq_ = 0; // debounce token for the leverage spin box (UI thread only)
 
     // Startup gate — ensures daemon-dependent fetches fire exactly once,
     // either via daemon_ready signal or via the 8s safety fallback timeout.

@@ -65,6 +65,16 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     nav_filter_->setStyleSheet(input_ss());
     nav_filter_->setAccessibleName(tr("Search settings"));
     connect(nav_filter_, &QLineEdit::textChanged, this, &SettingsScreen::apply_nav_filter);
+    // Enter jumps to the first section that survived the filter — otherwise the
+    // search box narrows the list but still needs a mouse click to act on it.
+    connect(nav_filter_, &QLineEdit::returnPressed, this, [this]() {
+        for (const auto& nb : nav_buttons_) {
+            if (nb.btn && !nb.btn->isHidden()) {
+                nb.btn->click();
+                return;
+            }
+        }
+    });
     nvl->addWidget(nav_filter_);
     nvl->addSpacing(6);
 
@@ -90,9 +100,12 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     section_factories_[14] = [] { return new GeneralSection; };
     section_factories_[15] = [] { return new CloudSyncSection; };
 
+    // Empty placeholders; the real section replaces its placeholder on first
+    // visit (ensure_section_built).
     sections_ = new QStackedWidget;
-    for (const auto& factory : section_factories_)
-        sections_->addWidget(factory());
+    section_built_.fill(false, section_factories_.size());
+    for (int i = 0; i < section_factories_.size(); ++i)
+        sections_->addWidget(new QWidget);
 
     auto make_btn = [&](const QString& source_key, int idx, const QString& keywords = {}) {
         auto* btn = new QPushButton;
@@ -106,6 +119,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
                     sibling->setChecked(false);
             }
             btn->setChecked(true);
+            ensure_section_built(idx);
             sections_->setCurrentIndex(idx);
             ScreenStateManager::instance().notify_changed(this);
         });
@@ -158,6 +172,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     make_btn(QStringLiteral("Cloud Sync"), 15, QStringLiteral("backup sync account devices domains credits"));
 
     first->setChecked(true);
+    ensure_section_built(14);
     sections_->setCurrentIndex(14);
 
     nvl->addStretch();
@@ -165,7 +180,6 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     root->addWidget(sections_, 1);
 
     retranslateUi();
-    wire_section_signals();
 
     connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
             [this](const ui::ThemeTokens&) { refresh_theme(); });
@@ -221,35 +235,59 @@ void SettingsScreen::rebuild_sections_for_language_change() {
     if (!sections_)
         return;
     const int current = sections_->currentIndex();
-    // Replace each widget in-place. We insert at the same index first, then
-    // remove the old widget — preserves index ordering for nav buttons.
+    // Replace each already-built widget in-place. We insert at the same index
+    // first, then remove the old widget — preserves index ordering for nav
+    // buttons. Only the visible section is rebuilt right away; the others go
+    // back to placeholders and are built (in the new language) the next time
+    // they are visited, instead of rebuilding up to 16 sections on a language
+    // switch.
     for (int i = 0; i < section_factories_.size(); ++i) {
-        if (!section_factories_[i])
+        if (!section_factories_[i] || !section_built_.value(i))
             continue;
+        const bool visible_now = (i == current);
         QWidget* old = sections_->widget(i);
-        QWidget* fresh = section_factories_[i]();
+        QWidget* fresh = visible_now ? section_factories_[i]() : new QWidget;
         sections_->insertWidget(i, fresh);
         sections_->removeWidget(old);
         if (old)
             old->deleteLater();
+        if (visible_now)
+            wire_section_signals(i); // signals must be re-wired against the fresh instance
+        else
+            section_built_[i] = false;
     }
     sections_->setCurrentIndex(current);
-    // External signals must be re-wired against the fresh section instances.
-    wire_section_signals();
 }
 
-void SettingsScreen::wire_section_signals() {
+void SettingsScreen::ensure_section_built(int idx) {
+    if (!sections_ || idx < 0 || idx >= section_factories_.size() || section_built_.value(idx) ||
+        !section_factories_[idx])
+        return;
+    QWidget* placeholder = sections_->widget(idx);
+    const bool was_current = (sections_->currentWidget() == placeholder);
+    QWidget* fresh = section_factories_[idx]();
+    sections_->insertWidget(idx, fresh);
+    sections_->removeWidget(placeholder);
+    if (placeholder)
+        placeholder->deleteLater();
+    if (was_current)
+        sections_->setCurrentWidget(fresh);
+    section_built_[idx] = true;
+    wire_section_signals(idx);
+}
+
+void SettingsScreen::wire_section_signals(int idx) {
     if (!sections_)
         return;
     // LLM config changes → reload AI chat service.
-    if (auto* llm = qobject_cast<LlmConfigSection*>(sections_->widget(5))) {
+    if (auto* llm = qobject_cast<LlmConfigSection*>(idx == 5 ? sections_->widget(idx) : nullptr)) {
         connect(llm, &LlmConfigSection::config_changed, this,
                 []() { ai_chat::LlmService::instance().reload_config(); });
     }
     // Voice config changes → reload BOTH STT and TTS services and restart
     // the clap detector so the user's new provider / key / voice / wake-trigger
     // picks take effect on the next session.
-    if (auto* voice = qobject_cast<VoiceConfigSection*>(sections_->widget(13))) {
+    if (auto* voice = qobject_cast<VoiceConfigSection*>(idx == 13 ? sections_->widget(idx) : nullptr)) {
         connect(voice, &VoiceConfigSection::config_changed, this, []() {
             fincept::services::SpeechService::instance().reload_config();
             fincept::services::TtsService::instance().reload_config();
@@ -365,6 +403,7 @@ void SettingsScreen::restore_state(const QVariantMap& state) {
     const int idx = state.value("section", 14).toInt();
     if (idx < 0 || idx >= sections_->count())
         return;
+    ensure_section_built(idx);
     sections_->setCurrentIndex(idx);
 
     if (!nav_)

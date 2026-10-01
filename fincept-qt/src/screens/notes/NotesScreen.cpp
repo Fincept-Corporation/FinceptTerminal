@@ -107,6 +107,9 @@ static const QVector<Category> kCategories = {
     {"RESEARCH", "RESEARCH"},   {"MARKET_ANALYSIS", "MARKET ANALYSIS"},
     {"EARNINGS", "EARNINGS"},   {"ECONOMIC", "ECONOMIC"},
     {"PORTFOLIO", "PORTFOLIO"}, {"GENERAL", "GENERAL"},
+    // Pseudo-category (not stored on notes, not offered in the editor combo): the
+    // only way to see — and un-archive — notes the ARCHIVE button has hidden.
+    {"ARCHIVED", "ARCHIVED"},
 };
 
 static const QStringList kPriorities = {"HIGH", "MEDIUM", "LOW"};
@@ -132,6 +135,8 @@ static QString category_display_label(const QString& id) {
         return QCoreApplication::translate("NotesScreen", "PORTFOLIO");
     if (id == "GENERAL")
         return QCoreApplication::translate("NotesScreen", "GENERAL");
+    if (id == "ARCHIVED")
+        return QCoreApplication::translate("NotesScreen", "ARCHIVED");
     return id;
 }
 
@@ -457,8 +462,11 @@ QWidget* NotesScreen::build_editor_panel() {
     // Category combo — display text applied in retranslateUi (ids stay as data).
     edit_category_ = new QComboBox;
     edit_category_->setStyleSheet(kCombo());
-    for (int i = 1; i < kCategories.size(); ++i) // skip "ALL"
+    for (int i = 1; i < kCategories.size(); ++i) { // skip "ALL"
+        if (kCategories[i].id == QLatin1String("ARCHIVED"))
+            continue; // a view filter, not something a note can be filed under
         edit_category_->addItem(QString(), kCategories[i].id);
+    }
     meta_row->addWidget(edit_category_);
 
     lbl_pri_ = make_label(tr("PRI:"));
@@ -517,7 +525,9 @@ QWidget* NotesScreen::build_editor_panel() {
 // ── Data Loading ─────────────────────────────────────────────────────────────
 
 void NotesScreen::load_notes() {
-    auto r = fincept::NotesRepository::instance().list_all();
+    // include_archived: archived notes are filtered per view in update_notes_list()
+    // (hidden from every category, listed under ARCHIVED) instead of vanishing.
+    auto r = fincept::NotesRepository::instance().list_all(true);
     if (r.is_ok()) {
         notes_ = r.value();
     } else {
@@ -531,9 +541,13 @@ void NotesScreen::update_notes_list() {
     filtered_notes_.clear();
     QString search = search_input_ ? search_input_->text().toLower() : "";
 
+    const bool archived_view = (current_category_ == QLatin1String("ARCHIVED"));
     for (const auto& n : notes_) {
+        // Archived notes appear only under ARCHIVED; every other view hides them.
+        if (n.is_archived != archived_view)
+            continue;
         // Category filter
-        if (current_category_ != "ALL" && n.category != current_category_)
+        if (!archived_view && current_category_ != "ALL" && n.category != current_category_)
             continue;
         // Search filter
         if (!search.isEmpty()) {
@@ -559,17 +573,32 @@ void NotesScreen::update_notes_list() {
             item->setText("* " + display);
         notes_list_->addItem(item);
     }
+    // Rebuilding the list dropped the highlight (search keystrokes, favourite
+    // toggles, MCP/cloud reloads); put it back on the open note, if it is still
+    // listed. Signals are blocked, so this does not re-enter on_note_selected().
+    if (selected_note_id_ > 0) {
+        for (int i = 0; i < filtered_notes_.size(); ++i) {
+            if (filtered_notes_[i].id == selected_note_id_) {
+                notes_list_->setCurrentRow(i);
+                break;
+            }
+        }
+    }
     notes_list_->blockSignals(false);
 
     count_label_->setText(tr("%1 notes").arg(filtered_notes_.size()));
 
-    // Update stats
+    // Update stats (archived notes are out of the working set)
+    int active_count = 0;
     int fav_count = 0;
     for (const auto& n : notes_) {
+        if (n.is_archived)
+            continue;
+        ++active_count;
         if (n.is_favorite)
             ++fav_count;
     }
-    stats_label_->setText(tr("Total: %1  |  Fav: %2").arg(notes_.size()).arg(fav_count));
+    stats_label_->setText(tr("Total: %1  |  Fav: %2").arg(active_count).arg(fav_count));
 }
 
 // ── Slots ────────────────────────────────────────────────────────────────────
@@ -628,10 +657,13 @@ void NotesScreen::on_category_selected(int row) {
         return;
     }
     current_category_ = kCategories[row].id;
+    // Clear the open note BEFORE rebuilding the list: update_notes_list() re-selects
+    // the open note's row, which left a highlighted entry beside an empty pane
+    // (and a click on it did nothing, as the row did not change).
+    selected_note_id_ = -1;
+    is_editing_ = false;
     update_notes_list();
     right_stack_->setCurrentIndex(0);
-    is_editing_ = false;
-    selected_note_id_ = -1;
     ScreenStateManager::instance().notify_changed(this);
 }
 
@@ -749,7 +781,14 @@ void NotesScreen::on_delete_note() {
     if (reply != QMessageBox::Yes)
         return;
 
-    fincept::NotesRepository::instance().remove(selected_note_id_);
+    auto removed = fincept::NotesRepository::instance().remove(selected_note_id_);
+    if (removed.is_err()) {
+        // The result used to be ignored: the note stayed in the DB but the pane
+        // closed as if it had been deleted, and it came back on the next reload.
+        LOG_ERROR("Notes", "Failed to delete note");
+        QMessageBox::warning(this, tr("Delete failed"), tr("The note could not be deleted."));
+        return;
+    }
     selected_note_id_ = -1;
     right_stack_->setCurrentIndex(0);
     load_notes();
@@ -839,6 +878,9 @@ void NotesScreen::show_note(const fincept::FinancialNote& note) {
 
     view_meta_->setText(meta_parts.join("  |  "));
     view_content_->setText(note.content);
+    // The same button restores a note that is already archived.
+    if (view_archive_btn_)
+        view_archive_btn_->setText(note.is_archived ? tr("UNARCHIVE") : tr("ARCHIVE"));
 }
 
 void NotesScreen::clear_editor() {
@@ -964,11 +1006,16 @@ void NotesScreen::retranslateUi() {
     if (count_label_)
         count_label_->setText(tr("%1 notes").arg(filtered_notes_.size()));
     if (stats_label_) {
+        int active_count = 0;
         int fav_count = 0;
-        for (const auto& n : notes_)
+        for (const auto& n : notes_) {
+            if (n.is_archived)
+                continue;
+            ++active_count;
             if (n.is_favorite)
                 ++fav_count;
-        stats_label_->setText(tr("Total: %1  |  Fav: %2").arg(notes_.size()).arg(fav_count));
+        }
+        stats_label_->setText(tr("Total: %1  |  Fav: %2").arg(active_count).arg(fav_count));
     }
 
     // Re-render the currently-displayed note metadata (PRI:/SENT:/… prefixes).
@@ -1010,19 +1057,22 @@ void NotesScreen::restore_state(const QVariantMap& state) {
     const QString cat = state.value("category", "ALL").toString();
     const int note_id = state.value("note_id", -1).toInt();
 
-    // Select the matching category row
+    // Select the matching category row. Drive the sidebar itself (its
+    // currentRowChanged signal runs on_category_selected) — calling the slot
+    // directly filtered the list but left the sidebar highlighting "ALL NOTES".
     for (int i = 0; i < kCategories.size(); ++i) {
         if (kCategories[i].id == cat) {
-            on_category_selected(i);
+            if (category_list_ && category_list_->currentRow() != i)
+                category_list_->setCurrentRow(i);
             break;
         }
     }
 
-    // Select the matching note
+    // Select the matching note (via the list widget so its highlight follows)
     if (note_id >= 0) {
         for (int i = 0; i < filtered_notes_.size(); ++i) {
             if (filtered_notes_[i].id == note_id) {
-                on_note_selected(i);
+                notes_list_->setCurrentRow(i);
                 break;
             }
         }
@@ -1030,10 +1080,15 @@ void NotesScreen::restore_state(const QVariantMap& state) {
 
     // Restore draft editor state
     if (state.value("editing", false).toBool()) {
-        if (note_id >= 0)
+        if (note_id >= 0) {
             enter_edit_mode();
-        else if (right_stack_)
+        } else if (right_stack_) {
+            // A not-yet-saved note: start from a blank editor and baseline it, so
+            // an empty draft does not trigger an "unsaved changes" prompt.
+            clear_editor();
             right_stack_->setCurrentIndex(2);
+            editor_baseline_ = editor_fingerprint();
+        }
 
         if (edit_title_)
             edit_title_->setText(state.value("draft_title").toString());

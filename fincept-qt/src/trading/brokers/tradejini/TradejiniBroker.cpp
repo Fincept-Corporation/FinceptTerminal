@@ -538,8 +538,10 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
     if (!to.isValid())
         to = QDate::currentDate();
 
-    int64_t from_epoch = QDateTime(from, QTime(9, 15, 0)).toSecsSinceEpoch();
-    int64_t to_epoch = QDateTime(to, QTime(23, 59, 59)).toSecsSinceEpoch();
+    // Session bounds are IST wall-clock (the daily roll-up below is IST too): anchor them in IST,
+    // not the machine's zone, or the requested window slides by the zone offset on a non-IST PC.
+    int64_t from_epoch = QDateTime(from, QTime(9, 15, 0), ist_zone()).toSecsSinceEpoch();
+    int64_t to_epoch = QDateTime(to, QTime(23, 59, 59), ist_zone()).toSecsSinceEpoch();
 
     // Native intervals are integer minutes. Daily ("D"/"1D"/"DAY") has no native
     // endpoint, so fetch 1-minute bars and aggregate to daily after collection.
@@ -660,13 +662,13 @@ ApiResponse<QVector<BrokerCandle>> TradejiniBroker::get_history(const BrokerCred
         while (cursor < to_epoch && iterations < kMaxIterations) {
             ++iterations;
 
-            QDate win_from_date = QDateTime::fromSecsSinceEpoch(cursor).date();
-            int64_t win_from = QDateTime(win_from_date, QTime(9, 15, 0)).toSecsSinceEpoch();
+            QDate win_from_date = QDateTime::fromSecsSinceEpoch(cursor, ist_zone()).date();
+            int64_t win_from = QDateTime(win_from_date, QTime(9, 15, 0), ist_zone()).toSecsSinceEpoch();
 
             int64_t tentative_to = cursor + kMaxWindowSecs;
             int64_t win_end = qMin(tentative_to, to_epoch);
-            QDate win_to_date = QDateTime::fromSecsSinceEpoch(win_end).date();
-            int64_t win_to = QDateTime(win_to_date, QTime(15, 30, 0)).toSecsSinceEpoch();
+            QDate win_to_date = QDateTime::fromSecsSinceEpoch(win_end, ist_zone()).date();
+            int64_t win_to = QDateTime(win_to_date, QTime(15, 30, 0), ist_zone()).toSecsSinceEpoch();
             if (win_to > to_epoch)
                 win_to = to_epoch;
 

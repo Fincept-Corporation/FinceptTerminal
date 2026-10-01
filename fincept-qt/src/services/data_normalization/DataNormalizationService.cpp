@@ -10,9 +10,13 @@
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QTimeZone>
 #include <QUrl>
 #include <QUuid>
+#include <QVector>
+
+#include <cmath>
 
 namespace fincept::services {
 
@@ -30,6 +34,278 @@ static const QHash<QString, QStringList> kRequiredFields = {
     {"INSTRUMENT", {"symbol", "name", "exchange"}},
 };
 
+// ── JSONPath-subset engine + transforms ────────────────────────────────────
+// Free functions with a file-unique `dns_` prefix (unity builds concatenate
+// sibling translation units) so the behaviour can be exercised without the
+// service. QtCore only — keep it that way.
+// BEGIN_DNS_ENGINE
+namespace {
+
+struct DnsPathToken {
+    enum class Kind { Key, Index, Wildcard, Keys };
+    Kind kind = Kind::Key;
+    QString key;
+    int index = 0;
+};
+
+// Tokenise a JSONPath-style expression. Returns false for syntax this engine
+// does not implement (recursive descent "..", filters "[?()]", slices "[a:b]")
+// so callers can say "unsupported" instead of silently selecting a wrong node.
+bool dns_tokenize_path(const QString& path, QVector<DnsPathToken>& out) {
+    const QString p = path.trimmed();
+    const qsizetype n = p.size();
+    qsizetype i = 0;
+    if (i < n && p[i] == QLatin1Char('$'))
+        ++i;
+
+    auto push_key = [&out](const QString& k) {
+        DnsPathToken t;
+        if (k == QLatin1String("*")) {
+            t.kind = DnsPathToken::Kind::Wildcard;
+        } else {
+            t.kind = DnsPathToken::Kind::Key;
+            t.key = k;
+        }
+        out.push_back(t);
+    };
+
+    while (i < n) {
+        const QChar c = p[i];
+        if (c == QLatin1Char('.')) {
+            ++i;
+            if (i >= n || p[i] == QLatin1Char('.'))
+                return false; // trailing dot, or ".." recursive descent
+            if (p[i] == QLatin1Char('[') || p[i] == QLatin1Char('~'))
+                continue; // ".['key']" / ".~" — handled by the next iteration
+            qsizetype j = i;
+            while (j < n && p[j] != QLatin1Char('.') && p[j] != QLatin1Char('[') && p[j] != QLatin1Char('~'))
+                ++j;
+            if (j == i)
+                return false;
+            push_key(p.mid(i, j - i).trimmed());
+            i = j;
+        } else if (c == QLatin1Char('[')) {
+            ++i;
+            if (i >= n)
+                return false;
+            if (p[i] == QLatin1Char('\'') || p[i] == QLatin1Char('"')) {
+                const QChar quote = p[i];
+                ++i;
+                const qsizetype j = p.indexOf(quote, i);
+                if (j < 0 || j + 1 >= n || p[j + 1] != QLatin1Char(']'))
+                    return false;
+                DnsPathToken t;
+                t.kind = DnsPathToken::Kind::Key;
+                t.key = p.mid(i, j - i);
+                out.push_back(t);
+                i = j + 2;
+            } else {
+                const qsizetype j = p.indexOf(QLatin1Char(']'), i);
+                if (j < 0)
+                    return false;
+                const QString inner = p.mid(i, j - i).trimmed();
+                i = j + 1;
+                DnsPathToken t;
+                if (inner == QLatin1String("*")) {
+                    t.kind = DnsPathToken::Kind::Wildcard;
+                } else {
+                    bool ok = false;
+                    const int idx = inner.toInt(&ok);
+                    if (!ok)
+                        return false;
+                    t.kind = DnsPathToken::Kind::Index;
+                    t.index = idx;
+                }
+                out.push_back(t);
+            }
+        } else if (c == QLatin1Char('~')) {
+            DnsPathToken t;
+            t.kind = DnsPathToken::Kind::Keys;
+            out.push_back(t);
+            ++i;
+        } else {
+            // Bare key with no "$." prefix ("price", "a.b[0]").
+            qsizetype j = i;
+            while (j < n && p[j] != QLatin1Char('.') && p[j] != QLatin1Char('[') && p[j] != QLatin1Char('~'))
+                ++j;
+            if (j == i)
+                return false;
+            push_key(p.mid(i, j - i).trimmed());
+            i = j;
+        }
+    }
+    return true;
+}
+
+QJsonArray dns_property_names(const QJsonValue& cur) {
+    QJsonArray names;
+    if (cur.isObject()) {
+        const QStringList keys = cur.toObject().keys();
+        for (const QString& k : keys)
+            names.append(k);
+    } else if (cur.isArray()) {
+        const qsizetype count = cur.toArray().size();
+        for (qsizetype i = 0; i < count; ++i)
+            names.append(static_cast<int>(i));
+    }
+    return names;
+}
+
+QJsonValue dns_eval_path(const QJsonValue& cur, const QVector<DnsPathToken>& toks, qsizetype pos) {
+    if (pos >= toks.size())
+        return cur;
+    const DnsPathToken& t = toks[pos];
+    switch (t.kind) {
+        case DnsPathToken::Kind::Key: {
+            if (cur.isObject()) {
+                const QJsonObject o = cur.toObject();
+                if (!o.contains(t.key))
+                    return QJsonValue(QJsonValue::Undefined);
+                return dns_eval_path(o.value(t.key), toks, pos + 1);
+            }
+            if (cur.isArray()) { // lenient: "$.data.0" indexes an array
+                bool ok = false;
+                const int idx = t.key.toInt(&ok);
+                const QJsonArray a = cur.toArray();
+                if (ok && idx >= 0 && idx < a.size())
+                    return dns_eval_path(a.at(idx), toks, pos + 1);
+            }
+            return QJsonValue(QJsonValue::Undefined);
+        }
+        case DnsPathToken::Kind::Index: {
+            if (!cur.isArray())
+                return QJsonValue(QJsonValue::Undefined);
+            const QJsonArray a = cur.toArray();
+            const qsizetype idx = t.index < 0 ? a.size() + t.index : t.index;
+            if (idx < 0 || idx >= a.size())
+                return QJsonValue(QJsonValue::Undefined);
+            return dns_eval_path(a.at(idx), toks, pos + 1);
+        }
+        case DnsPathToken::Kind::Wildcard: {
+            // ".*~" — the property names of the node itself.
+            if (pos + 1 < toks.size() && toks[pos + 1].kind == DnsPathToken::Kind::Keys) {
+                if (!cur.isObject() && !cur.isArray())
+                    return QJsonValue(QJsonValue::Undefined);
+                return QJsonValue(dns_property_names(cur));
+            }
+            QJsonArray projected;
+            if (cur.isArray()) {
+                const QJsonArray a = cur.toArray();
+                for (const QJsonValue& v : a) {
+                    const QJsonValue r = dns_eval_path(v, toks, pos + 1);
+                    if (!r.isUndefined())
+                        projected.append(r);
+                }
+            } else if (cur.isObject()) {
+                const QJsonObject o = cur.toObject();
+                for (auto it = o.begin(); it != o.end(); ++it) {
+                    const QJsonValue r = dns_eval_path(it.value(), toks, pos + 1);
+                    if (!r.isUndefined())
+                        projected.append(r);
+                }
+            } else {
+                return QJsonValue(QJsonValue::Undefined);
+            }
+            return QJsonValue(projected);
+        }
+        case DnsPathToken::Kind::Keys:
+            if (!cur.isObject() && !cur.isArray())
+                return QJsonValue(QJsonValue::Undefined);
+            return QJsonValue(dns_property_names(cur));
+    }
+    return QJsonValue(QJsonValue::Undefined);
+}
+
+QString dns_json_to_text(const QJsonValue& v) {
+    switch (v.type()) {
+        case QJsonValue::Null:
+        case QJsonValue::Undefined:
+            return QString();
+        case QJsonValue::Bool:
+            return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        case QJsonValue::Double:
+            return QString::number(v.toDouble(), 'g', 15);
+        case QJsonValue::String:
+            return v.toString();
+        case QJsonValue::Array:
+            return QString::fromUtf8(QJsonDocument(v.toArray()).toJson(QJsonDocument::Compact));
+        case QJsonValue::Object:
+            return QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
+    }
+    return QString();
+}
+
+double dns_json_to_number(const QJsonValue& v, bool* ok) {
+    if (v.isDouble()) {
+        *ok = true;
+        return v.toDouble();
+    }
+    if (v.isBool()) {
+        *ok = true;
+        return v.toBool() ? 1.0 : 0.0;
+    }
+    return v.toString().trimmed().toDouble(ok);
+}
+
+bool dns_is_known_transform(const QString& t) {
+    static const QStringList kKnown = {QStringLiteral("to_number"),      QStringLiteral("to_string"),
+                                       QStringLiteral("unix_ms_to_iso"), QStringLiteral("unix_s_to_iso"),
+                                       QStringLiteral("unix_to_iso"),    QStringLiteral("upper"),
+                                       QStringLiteral("lower"),          QStringLiteral("abs_value")};
+    return kKnown.contains(t);
+}
+
+QJsonValue dns_apply_transform(const QJsonValue& val, const QString& transform) {
+    if (val.isArray()) { // projection results: transform every element
+        QJsonArray out;
+        const QJsonArray in = val.toArray();
+        for (const QJsonValue& e : in)
+            out.append(e.isNull() ? e : dns_apply_transform(e, transform));
+        return QJsonValue(out);
+    }
+
+    if (transform == QLatin1String("to_number")) {
+        bool ok = false;
+        const double d = dns_json_to_number(val, &ok);
+        return ok ? QJsonValue(d) : QJsonValue(0.0);
+    }
+    if (transform == QLatin1String("to_string"))
+        return QJsonValue(dns_json_to_text(val));
+
+    if (transform == QLatin1String("unix_ms_to_iso") || transform == QLatin1String("unix_s_to_iso") ||
+        transform == QLatin1String("unix_to_iso")) {
+        bool ok = false;
+        const double raw = dns_json_to_number(val, &ok);
+        if (!ok || !std::isfinite(raw) || std::abs(raw) > 9.0e15)
+            return val; // not a timestamp — leave it for validation to flag
+        bool millis = transform == QLatin1String("unix_ms_to_iso");
+        // "unix_to_iso" accepts either unit: 1e11 seconds is year 5138, 1e11 ms is 1973.
+        if (transform == QLatin1String("unix_to_iso"))
+            millis = std::abs(raw) >= 1e11;
+        const qint64 whole = static_cast<qint64>(raw);
+        const QDateTime dt = millis ? QDateTime::fromMSecsSinceEpoch(whole, QTimeZone::UTC)
+                                    : QDateTime::fromSecsSinceEpoch(whole, QTimeZone::UTC);
+        if (!dt.isValid())
+            return val;
+        return QJsonValue(dt.toString(Qt::ISODate));
+    }
+
+    if (transform == QLatin1String("upper"))
+        return QJsonValue(dns_json_to_text(val).toUpper());
+    if (transform == QLatin1String("lower"))
+        return QJsonValue(dns_json_to_text(val).toLower());
+    if (transform == QLatin1String("abs_value")) {
+        bool ok = false;
+        const double d = dns_json_to_number(val, &ok);
+        return ok ? QJsonValue(std::abs(d)) : val;
+    }
+
+    return val; // unknown transform — pass through unchanged
+}
+
+} // namespace
+// END_DNS_ENGINE
+
 // ── Singleton ─────────────────────────────────────────────────────────────
 
 DataNormalizationService& DataNormalizationService::instance() {
@@ -41,8 +317,37 @@ DataNormalizationService::DataNormalizationService() = default;
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
-void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, NormalizeCallback cb) {
-    apply_auth(mapping);
+void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, NormalizeCallback cb,
+                                                   bool force_refresh) {
+    // The mapping's CACHE settings were saved but never read. Serve the newest
+    // stored record while it is younger than the TTL instead of re-spending an
+    // API quota (free tiers are as small as 25 calls/day).
+    if (!force_refresh && mapping.cache_enabled && mapping.cache_ttl > 0) {
+        if (const auto cached = latest_for_mapping(mapping.id)) {
+            // extracted_at is SQLite's datetime('now'): "yyyy-MM-dd HH:mm:ss", UTC.
+            const QString kSqliteTime = QStringLiteral("yyyy-MM-dd HH:mm:ss");
+            QDateTime stored = QDateTime::fromString(cached->extracted_at, kSqliteTime);
+            stored.setTimeZone(QTimeZone::UTC);
+            const qint64 age_s = stored.isValid() ? stored.secsTo(QDateTime::currentDateTimeUtc()) : -1;
+            // A mapping edited (re-saved under the same id) after the record was stored
+            // would otherwise keep serving data extracted with its OLD field mappings.
+            QDateTime edited = QDateTime::fromString(mapping.updated_at, kSqliteTime);
+            edited.setTimeZone(QTimeZone::UTC);
+            const bool edited_since = edited.isValid() && stored.isValid() && stored <= edited;
+            // Only a clean record is worth replaying; one that failed validation should be
+            // re-fetched (the upstream data, or the user's fix, may differ now).
+            if (age_s >= 0 && age_s < mapping.cache_ttl && !edited_since && cached->errors.isEmpty()) {
+                NormalizedRecord rec = *cached;
+                rec.from_cache = true;
+                LOG_INFO(TAG, QString("Mapping '%1' served from cache (%2 s old, TTL %3 s)")
+                                  .arg(mapping.name)
+                                  .arg(age_s)
+                                  .arg(mapping.cache_ttl));
+                cb(rec.errors.isEmpty(), rec);
+                return;
+            }
+        }
+    }
 
     const QString url = build_url(mapping);
     // Log the URL WITHOUT its query string: the shipped mapping templates put
@@ -50,6 +355,21 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
     // the raw URL would write a live third-party credential into fincept.log.
     LOG_INFO(TAG, QString("Fetching mapping '%1' from %2")
                       .arg(mapping.name, QUrl(url).adjusted(QUrl::RemoveQuery).toString()));
+
+    // HttpClient resolves anything that is not http(s) against the Fincept API
+    // base URL — and attaches the user's Fincept session headers to it. A
+    // mapping with a bare host ("api.example.com") must never reach it.
+    if (!is_http_url(url)) {
+        NormalizedRecord failed;
+        failed.mapping_id = mapping.id;
+        failed.schema_name = mapping.schema_name;
+        failed.errors << tr("Base URL must start with http:// or https:// (got \"%1\")")
+                             .arg(QUrl(url).adjusted(QUrl::RemoveQuery).toString());
+        LOG_WARN(TAG, QString("Mapping '%1' rejected: URL is not absolute http(s)").arg(mapping.name));
+        emit normalization_failed(mapping.id, failed.errors.join(QStringLiteral("; ")));
+        cb(false, failed);
+        return;
+    }
 
     QPointer<DataNormalizationService> self = this;
 
@@ -61,7 +381,11 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
             const QString err = QString::fromStdString(result.error());
             LOG_ERROR(TAG, QString("Fetch failed for mapping '%1': %2").arg(mapping.name, err));
             emit self->normalization_failed(mapping.id, err);
-            cb(false, {});
+            NormalizedRecord failed;
+            failed.mapping_id = mapping.id;
+            failed.schema_name = mapping.schema_name;
+            failed.errors << err; // the screen shows these — never hand it an empty reason
+            cb(false, failed);
             return;
         }
 
@@ -72,15 +396,98 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
         cb(record.errors.isEmpty(), record);
     };
 
-    if (mapping.method == "POST") {
-        QJsonObject body;
-        if (!mapping.body.isEmpty()) {
-            body = QJsonDocument::fromJson(mapping.body.toUtf8()).object();
-        }
-        HttpClient::instance().post(url, body, on_reply);
-    } else {
-        HttpClient::instance().get(url, on_reply);
+    // Auth + the HEADERS box ride on this request only. (They used to be applied
+    // by mutating the shared HttpClient singleton, which leaked the third-party
+    // token into Fincept API calls — see the git history of apply_auth().)
+    const auto headers = build_request_headers(mapping.headers, mapping.auth_type, mapping.auth_token);
+
+    QJsonObject body;
+    if (!mapping.body.trimmed().isEmpty())
+        body = QJsonDocument::fromJson(mapping.body.toUtf8()).object();
+
+    auto& http = HttpClient::instance();
+    const QString method = mapping.method.trimmed().toUpper();
+    if (method == QLatin1String("POST"))
+        http.post(url, body, on_reply, this, headers);
+    else if (method == QLatin1String("PUT") || method == QLatin1String("PATCH")) // PATCH rides PUT, as in TEST API
+        http.put(url, body, on_reply, this, headers);
+    else if (method == QLatin1String("DELETE"))
+        http.del(url, body, on_reply, this, headers);
+    else
+        http.get(url, on_reply, this, headers);
+}
+
+// ── Request helpers ────────────────────────────────────────────────────────
+
+QMap<QByteArray, QByteArray> DataNormalizationService::build_request_headers(const QString& headers_text,
+                                                                              const QString& auth_type,
+                                                                              const QString& auth_token) {
+    QMap<QByteArray, QByteArray> headers;
+
+    const QString token = auth_token.trimmed();
+    if (!token.isEmpty()) {
+        if (auth_type == QLatin1String("Bearer Token") || auth_type == QLatin1String("OAuth2"))
+            headers.insert("Authorization", "Bearer " + token.toUtf8());
+        else if (auth_type == QLatin1String("API Key"))
+            headers.insert("X-API-Key", token.toUtf8());
+        else if (auth_type == QLatin1String("Basic Auth")) // AUTH VALUE is "user:password"
+            headers.insert("Authorization", "Basic " + token.toUtf8().toBase64());
     }
+
+    // RFC 7230 token characters — anything else is not a header name.
+    static const QRegularExpression kHeaderName(QStringLiteral("^[A-Za-z0-9!#$%&'*+.^_`|~-]+$"));
+    const QStringList lines = headers_text.split(QLatin1Char('\n'));
+    for (const QString& raw_line : lines) {
+        const QString line = raw_line.trimmed();
+        const qsizetype colon = line.indexOf(QLatin1Char(':'));
+        if (colon <= 0)
+            continue;
+        const QString name = line.left(colon).trimmed();
+        const QString value = line.mid(colon + 1).trimmed();
+        if (!kHeaderName.match(name).hasMatch())
+            continue;
+        if (value.contains(QLatin1Char('\r')) || value.contains(QChar(0))) // header injection
+            continue;
+        headers.insert(name.toLatin1(), value.toUtf8()); // explicit lines win over the AUTH VALUE
+    }
+    return headers;
+}
+
+QString DataNormalizationService::join_url(const QString& base, const QString& endpoint) {
+    const QString b = base.trimmed();
+    const QString e = endpoint.trimmed();
+    if (is_http_url(e))
+        return e;
+    if (b.isEmpty())
+        return e;
+    if (e.isEmpty())
+        return b;
+    const bool base_slash = b.endsWith(QLatin1Char('/'));
+    const bool end_slash = e.startsWith(QLatin1Char('/'));
+    if (base_slash && end_slash)
+        return b + e.mid(1);
+    if (!base_slash && !end_slash)
+        return b + QLatin1Char('/') + e;
+    return b + e;
+}
+
+bool DataNormalizationService::is_http_url(const QString& url) {
+    const QUrl u(url.trimmed());
+    const QString scheme = u.scheme().toLower();
+    return u.isValid() && !u.host().isEmpty() && (scheme == QLatin1String("http") || scheme == QLatin1String("https"));
+}
+
+bool DataNormalizationService::expression_supported(const QString& expression) {
+    const QString p = expression.trimmed();
+    if (p.isEmpty() || p == QLatin1String("$"))
+        return true;
+    QVector<DnsPathToken> toks;
+    return dns_tokenize_path(p, toks);
+}
+
+bool DataNormalizationService::transform_supported(const QString& transform) {
+    const QString t = transform.trimmed();
+    return t.isEmpty() || dns_is_known_transform(t);
 }
 
 NormalizedRecord DataNormalizationService::normalize_raw(const DataMapping& mapping, const QJsonDocument& raw) {
@@ -89,7 +496,9 @@ NormalizedRecord DataNormalizationService::normalize_raw(const DataMapping& mapp
     record.mapping_id = mapping.id;
     record.source_id = mapping.source_id;
     record.schema_name = mapping.schema_name;
-    record.raw = raw.object();
+    // An array response used to be stored as an empty object (raw.object() of an
+    // array is {}), which made the audit copy useless for candle/position endpoints.
+    record.raw = raw.isArray() ? QJsonObject{{QStringLiteral("data"), raw.array()}} : raw.object();
     record.extracted_at = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 
     // Parse field_mappings_json
@@ -103,7 +512,9 @@ NormalizedRecord DataNormalizationService::normalize_raw(const DataMapping& mapp
         const QString target = fm["target"].toString();
         const QString expression = fm["expression"].toString();
         const QString transform = fm["transform"].toString();
-        const QString default_v = fm["default_val"].toString();
+        // "default_val" is the persisted key; accept "default" too (the TEST preview
+        // used to emit that spelling).
+        const QString default_v = fm.contains("default_val") ? fm["default_val"].toString() : fm["default"].toString();
 
         if (target.isEmpty())
             continue;
@@ -196,105 +607,27 @@ QVector<NormalizedRecord> DataNormalizationService::records_for_schema(const QSt
 }
 
 // ── JSONPath extraction ────────────────────────────────────────────────────
-// Supports: $.key  $.a.b.c  $[0]  $[*][2]  $[*].key (returns array of values)
+// Engine lives in the dns_ helpers above. Supports $.key  $.a.b.c  $[0]  [-1]
+// ['quoted key']  [*] / .* projection (array of the remaining path per element)
+// and a trailing ~ (property names). Unsupported syntax yields Undefined.
 
 QJsonValue DataNormalizationService::extract_jsonpath(const QJsonValue& root, const QString& path) {
-    if (path.isEmpty() || path == "$")
+    const QString p = path.trimmed();
+    if (p.isEmpty() || p == QLatin1String("$"))
         return root;
 
-    // Strip leading "$" and split on "." and "[]"
-    QString p = path;
-    if (p.startsWith("$"))
-        p = p.mid(1);
-
-    // Tokenise: split on '.' but also parse [N] and [*] inline
-    QStringList tokens;
-    for (const QString& part : p.split('.', Qt::SkipEmptyParts)) {
-        if (part.contains('[')) {
-            // e.g. "key[0]" or "[*][2]" — split on '['
-            QStringList sub = part.split('[', Qt::SkipEmptyParts);
-            for (const QString& s : sub) {
-                if (s.endsWith(']')) {
-                    tokens << "[" + s.chopped(1) + "]";
-                } else {
-                    tokens << s;
-                }
-            }
-        } else {
-            tokens << part;
-        }
+    QVector<DnsPathToken> toks;
+    if (!dns_tokenize_path(p, toks)) {
+        LOG_WARN(TAG, QString("Unsupported path expression: %1").arg(p));
+        return QJsonValue(QJsonValue::Undefined);
     }
-
-    QJsonValue current = root;
-    for (const QString& token : tokens) {
-        if (token.startsWith('[') && token.endsWith(']')) {
-            const QString inner = token.mid(1, token.size() - 2);
-            if (inner == "*") {
-                // Wildcard — return array of child values
-                if (!current.isArray())
-                    return QJsonValue::Undefined;
-                return current; // caller handles the array
-            }
-            bool ok = false;
-            int idx = inner.toInt(&ok);
-            if (!ok)
-                return QJsonValue::Undefined;
-            if (!current.isArray())
-                return QJsonValue::Undefined;
-            const QJsonArray arr = current.toArray();
-            if (idx < 0 || idx >= arr.size())
-                return QJsonValue::Undefined;
-            current = arr[idx];
-        } else {
-            if (!current.isObject())
-                return QJsonValue::Undefined;
-            current = current.toObject().value(token);
-        }
-    }
-    return current;
+    return dns_eval_path(root, toks, 0);
 }
 
 // ── Transform functions ────────────────────────────────────────────────────
 
 QJsonValue DataNormalizationService::apply_transform(const QJsonValue& val, const QString& transform) {
-    if (transform == "to_number") {
-        if (val.isDouble())
-            return val;
-        bool ok = false;
-        double d = val.toString().toDouble(&ok);
-        return ok ? QJsonValue(d) : QJsonValue(0.0);
-    }
-
-    if (transform == "to_string") {
-        if (val.isString())
-            return val;
-        return QJsonValue(QString::fromUtf8(QJsonDocument(val.toObject()).toJson(QJsonDocument::Compact)));
-    }
-
-    if (transform == "unix_ms_to_iso") {
-        qint64 ms = val.isDouble() ? static_cast<qint64>(val.toDouble()) : val.toString().toLongLong();
-        return QJsonValue(QDateTime::fromMSecsSinceEpoch(ms, QTimeZone::UTC).toString(Qt::ISODate));
-    }
-
-    if (transform == "unix_s_to_iso") {
-        qint64 s = val.isDouble() ? static_cast<qint64>(val.toDouble()) : val.toString().toLongLong();
-        return QJsonValue(QDateTime::fromSecsSinceEpoch(s, QTimeZone::UTC).toString(Qt::ISODate));
-    }
-
-    if (transform == "upper") {
-        return QJsonValue(val.toString().toUpper());
-    }
-
-    if (transform == "lower") {
-        return QJsonValue(val.toString().toLower());
-    }
-
-    if (transform == "abs_value") {
-        double d = val.isDouble() ? val.toDouble() : val.toString().toDouble();
-        return QJsonValue(d < 0 ? -d : d);
-    }
-
-    return val; // unknown transform — pass through unchanged
+    return dns_apply_transform(val, transform.trimmed());
 }
 
 // ── Schema validation ──────────────────────────────────────────────────────
@@ -335,44 +668,26 @@ void DataNormalizationService::persist(const DataMapping& mapping, const Normali
 
     if (r.is_err()) {
         LOG_ERROR(TAG, QString("Failed to persist normalized record: %1").arg(QString::fromStdString(r.error())));
+        return;
+    }
+
+    // Every RUN used to append a row holding the full raw API response and nothing
+    // ever removed one. Keep the newest few per mapping (the cache + history only
+    // ever read the latest; records_for_schema() caps its read at 500).
+    constexpr int kDnsKeepPerMapping = 50;
+    auto pruned = Database::instance().execute(
+        "DELETE FROM normalized_data WHERE mapping_id = ? AND id NOT IN ("
+        "  SELECT id FROM normalized_data WHERE mapping_id = ? ORDER BY extracted_at DESC, rowid DESC LIMIT ?)",
+        {mapping.id, mapping.id, kDnsKeepPerMapping});
+    if (pruned.is_err()) {
+        LOG_WARN(TAG, QString("Could not prune old normalized records: %1").arg(QString::fromStdString(pruned.error())));
     }
 }
 
 // ── HTTP helpers ───────────────────────────────────────────────────────────
 
 QString DataNormalizationService::build_url(const DataMapping& mapping) {
-    QString url = mapping.base_url;
-    if (!url.endsWith('/') && !mapping.endpoint.startsWith('/'))
-        url += '/';
-    url += mapping.endpoint;
-    return url;
-}
-
-void DataNormalizationService::apply_auth(const DataMapping& mapping) {
-    // ── SECURITY: do NOT mutate the shared HttpClient singleton here ─────────
-    // This used to call set_auth_header() / set_session_token() with the saved
-    // mapping's third-party token and never restore the previous values. Two
-    // consequences, both bad:
-    //
-    //   1. It never worked. build_request() only attaches X-API-Key /
-    //      X-Session-Token when the request host matches base_url_ (the Fincept
-    //      API), so a third-party mapping host never received the token anyway.
-    //   2. It leaked. Every subsequent Fincept API call then transmitted the
-    //      user's third-party credential to api.fincept.in, and the user's own
-    //      session auth stayed broken until AuthManager happened to rewrite it.
-    //
-    // Applying mapping auth correctly needs per-request headers on HttpClient
-    // (or a scoped guard that restores api_key_ / session_token_). Until that
-    // API exists, mapping auth is inert — which is what it already was — but it
-    // no longer corrupts global auth state.
-    if (mapping.auth_type == "API Key" || mapping.auth_type == "Bearer Token") {
-        if (!mapping.auth_token.isEmpty()) {
-            LOG_WARN(TAG, QString("Mapping '%1' declares %2 auth, but per-request auth headers are not "
-                                  "supported yet — the request is being sent unauthenticated")
-                              .arg(mapping.name, mapping.auth_type));
-        }
-    }
-    // Basic Auth and None require no setup on HttpClient
+    return join_url(mapping.base_url, mapping.endpoint);
 }
 
 } // namespace fincept::services

@@ -10,13 +10,38 @@
 #include <QCoreApplication>
 #include <QDate>
 #include <QJsonArray>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
+#include <QWidget>
 
 #include <cmath>
 
 namespace fincept::screens::quant_common {
+
+// Enable / disable every "run" button of a panel. make_run_button() tags them all with the
+// objectName "quantRunButton". Used to keep a second click from launching a duplicate Python
+// process (a second multi-minute training run, a second RD-Agent task) while one is in flight.
+inline void set_run_buttons_enabled(QWidget* panel, bool enabled) {
+    const bool retrain_busy = panel->property("rrBusy").toBool();
+    for (auto* b : panel->findChildren<QPushButton*>(QStringLiteral("quantRunButton"))) {
+        // A rolling retrain in flight keeps its own launch buttons disabled (see set_retrain_busy).
+        if (enabled && retrain_busy && b->property("rrRetrain").toBool())
+            continue;
+        b->setEnabled(enabled);
+    }
+}
+
+// Rolling retrain has several launch buttons (the Execute tab and one "Run Now" per schedule card)
+// that share one in-flight state, kept as a property on the panel so cards rebuilt mid-run come
+// up disabled too. Buttons opt in by carrying the "rrRetrain" property.
+inline void set_retrain_busy(QWidget* panel, bool busy) {
+    panel->setProperty("rrBusy", busy);
+    for (auto* b : panel->findChildren<QPushButton*>())
+        if (b->property("rrRetrain").toBool())
+            b->setEnabled(!busy);
+}
 
 // Parse a CSV / whitespace / newline string into a JSON array of doubles.
 // Returns false on any non-numeric token (sets bad_token to the offender).

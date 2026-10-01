@@ -3,9 +3,12 @@
 #include "services/forum/ForumModels.h"
 
 #include <QEvent>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QShowEvent>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -20,6 +23,15 @@ class ForumThreadPanel : public QWidget {
 
     void show_post(const services::ForumPostDetail& detail);
     void set_loading(bool on);
+    /// Replace the loading spinner with a "could not load this thread" state and
+    /// a way back to the feed. set_loading(false) alone only stopped the spinner
+    /// and left the user on a frozen "Loading thread..." page with no back button.
+    void show_load_error();
+    /// Disable the Reply button/composer while a reply is being posted so a
+    /// double-click or double-Enter can't submit the same comment twice.
+    void set_reply_busy(bool busy);
+    /// Scroll the open thread to its last reply (after posting one).
+    void scroll_to_end();
     /// Clear the reply composer. Called by ForumScreen only after a reply has
     /// actually posted, so a failed submit keeps the user's text.
     void clear_reply_input();
@@ -36,6 +48,8 @@ class ForumThreadPanel : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private:
     void build_ui();
@@ -51,6 +65,10 @@ class ForumThreadPanel : public QWidget {
 
     QStackedWidget* stack_ = nullptr; // 0=loading, 1=thread
     QWidget* thread_page_ = nullptr;
+    QScrollArea* scroll_ = nullptr;
+    QPushButton* load_back_btn_ = nullptr; // visible only in the load-error state
+    bool reply_busy_ = false;
+    bool spinning_ = false; // a load is in progress (spinner wanted while visible)
 
     // Thread header
     QLabel* t_cat_chip_ = nullptr;

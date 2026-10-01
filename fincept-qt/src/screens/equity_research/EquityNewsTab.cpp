@@ -19,10 +19,19 @@ EquityNewsTab::EquityNewsTab(QWidget* parent) : QWidget(parent) {
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::news_loaded, this, &EquityNewsTab::on_news_loaded);
     // Dismiss the "LOADING NEWS…" overlay on failure — it's hidden only on success.
+    // The overlay hides on failure, but the "Loading news…" status used to stay put —
+    // a blank tab claiming to still load. Say what happened and how to retry.
     connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
             [this](const QString& ctx, const QString&) {
-                if (ctx == "News" && loading_overlay_)
+                if (ctx != "News" || news_loaded_)
+                    return;
+                if (loading_overlay_)
                     loading_overlay_->hide_loading();
+                if (status_label_) {
+                    status_label_->setText(tr("Could not load news for %1. Press REFRESH to try again.")
+                                               .arg(current_symbol_));
+                    status_label_->show();
+                }
             });
 }
 
@@ -38,17 +47,18 @@ void EquityNewsTab::set_symbol(const QString& symbol) {
 
 // (Re)fetch the current symbol's news using the selected provider. Sole owner of
 // the news fetch — the screen no longer triggers it, so the dropdown is authoritative.
-void EquityNewsTab::start_fetch() {
+void EquityNewsTab::start_fetch(bool force) {
     if (current_symbol_.isEmpty())
         return;
     clear_cards();
+    news_loaded_ = false; // a REFRESH is a fresh load: its failure must reach the error handler
     count_label_->setText("");
     status_label_->setText(tr("Loading news…"));
     status_label_->show();
     loading_overlay_->show_loading(tr("LOADING NEWS…"));
     using NP = services::equity::NewsProvider;
     services::equity::EquityResearchService::instance().fetch_news(current_symbol_, 20,
-                                                                   use_newsapi_ ? NP::NewsApi : NP::Auto);
+                                                                   use_newsapi_ ? NP::NewsApi : NP::Auto, force);
 }
 
 // Enable the "NewsAPI" item only when a key is configured in Data Sources; if it
@@ -144,7 +154,7 @@ void EquityNewsTab::build_ui() {
                                         "border-radius:3px; padding:4px 12px; font-size:10px; font-weight:700; }"
                                         "QPushButton:hover { border-color:%3; color:%3; }")
                                     .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
-    connect(refresh_btn_, &QPushButton::clicked, this, [this]() { start_fetch(); });
+    connect(refresh_btn_, &QPushButton::clicked, this, [this]() { start_fetch(/*force=*/true); });
     hl->addWidget(refresh_btn_);
     vl->addWidget(hdr);
 

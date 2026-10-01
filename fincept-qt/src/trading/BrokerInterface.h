@@ -174,6 +174,20 @@ class IBroker {
         return {false, QString(), QString(), QString(), QString(), QStringLiteral("Silent refresh not supported")};
     }
 
+    // --- Paper venue ---
+    // True ONLY when `creds` are positively identified as this broker's PAPER (sandbox)
+    // environment, so a Fincept PAPER order can go to the broker instead of the local pt_*
+    // simulator (UnifiedTrading::uses_native_paper). Be conservative: live, contradictory or
+    // unidentifiable credentials must return false. BrokerProfile::has_native_paper alone only
+    // says the broker OFFERS a paper venue, not that the stored credentials are the paper ones —
+    // a live key in a PAPER-mode account would otherwise send a real order. Default false: the
+    // broker is never used as a paper venue and PAPER mode stays on the local simulator. Override
+    // once the paper environment can be read from the credentials alone.
+    virtual bool is_paper_environment(const BrokerCredentials& creds) const {
+        Q_UNUSED(creds);
+        return false;
+    }
+
     // --- Orders ---
     virtual OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) = 0;
     virtual ApiResponse<QJsonObject> modify_order(const BrokerCredentials& creds, const QString& order_id,

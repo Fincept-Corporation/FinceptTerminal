@@ -7,7 +7,9 @@
 #include <QString>
 #include <QVector>
 
+#include <atomic>
 #include <functional>
+#include <memory>
 
 class QNetworkAccessManager;
 
@@ -60,6 +62,14 @@ class CandleDataFetcher : public QObject {
     // Native Yahoo Finance fetch (replaces the old Python yfinance fallback).
     void fetch_from_yahoo(const QStringList& symbols, const QString& timeframe, int lookback_days,
                           MultiCandleCallback callback);
+
+    // One Yahoo chart request for `sym`. On failure with `bare_fallback_left` set it
+    // re-issues once with the bare ticker (see fetch_from_yahoo) instead of reporting.
+    void yahoo_fetch_one(const QString& sym, const QString& yahoo_symbol, bool bare_fallback_left,
+                         const QString& interval, int aggregate, qint64 period1, qint64 period2, int64_t tf_ms,
+                         std::shared_ptr<QHash<QString, QVector<OhlcvCandle>>> results,
+                         std::shared_ptr<QStringList> errors, std::shared_ptr<std::atomic<int>> remaining,
+                         MultiCandleCallback callback);
 
     static QVector<OhlcvCandle> broker_candles_to_ohlcv(const QVector<fincept::trading::BrokerCandle>& src,
                                                         const QString& timeframe);

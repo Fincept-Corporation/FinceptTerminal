@@ -26,6 +26,7 @@
 #include <QSet>
 #include <QUuid>
 #include <QXmlStreamReader>
+#include <QtConcurrent>
 
 #ifdef HAS_QT_WEBSOCKETS
 #    include <QtWebSockets/QWebSocket>
@@ -38,6 +39,91 @@ namespace fincept::services {
 
 // HTTP timing + browser user agent — used by the RSS fetch paths.
 static constexpr int kFeedTransferTimeoutMs = 4000; // 4s per RSS feed request
+
+// ── Cache (de)serialisation + merge helpers ─────────────────────────────────
+
+QString NewsService::serialize_articles(const QVector<NewsArticle>& articles) {
+    QJsonArray arr;
+    for (const auto& a : articles) {
+        QJsonObject o;
+        o["id"] = a.id;
+        o["time"] = a.time;
+        o["headline"] = a.headline;
+        o["summary"] = a.summary;
+        o["source"] = a.source;
+        o["region"] = a.region;
+        o["category"] = a.category;
+        o["link"] = a.link;
+        o["sort_ts"] = static_cast<qint64>(a.sort_ts);
+        o["tier"] = a.tier;
+        o["priority"] = priority_string(a.priority);
+        o["sentiment"] = sentiment_string(a.sentiment);
+        o["impact"] = impact_string(a.impact);
+        o["lang"] = a.lang;
+        QJsonArray tickers;
+        for (const auto& t : a.tickers)
+            tickers.append(t);
+        o["tickers"] = tickers;
+        arr.append(o);
+    }
+    return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+}
+
+QVector<NewsArticle> NewsService::deserialize_articles(const QString& json) {
+    const QJsonArray arr = QJsonDocument::fromJson(json.toUtf8()).array();
+    QVector<NewsArticle> articles;
+    articles.reserve(arr.size());
+    for (const auto& v : arr) {
+        const QJsonObject o = v.toObject();
+        NewsArticle a;
+        a.id = o["id"].toString();
+        a.time = o["time"].toString();
+        a.headline = o["headline"].toString();
+        a.summary = o["summary"].toString();
+        a.source = o["source"].toString();
+        a.region = o["region"].toString();
+        a.category = o["category"].toString();
+        a.link = o["link"].toString();
+        a.sort_ts = o["sort_ts"].toVariant().toLongLong();
+        a.tier = o["tier"].toInt(4);
+        a.priority = priority_from_string(o["priority"].toString());
+        a.sentiment = sentiment_from_string(o["sentiment"].toString());
+        a.impact = impact_from_string(o["impact"].toString());
+        a.lang = o["lang"].toString();
+        for (const auto& t : o["tickers"].toArray())
+            a.tickers << t.toString();
+        // Threat + source flag are pure functions of the fields above, so they
+        // are recomputed here rather than bloating the cache. Without this a
+        // cache-served list lost every threat badge and credibility flag.
+        a.threat = classify_threat(a);
+        a.source_flag = source_flag_for(a.source);
+        articles.append(std::move(a));
+    }
+    return articles;
+}
+
+void NewsService::merge_unique(QVector<NewsArticle>& all, QSet<QString>& seen_ids,
+                               const QVector<NewsArticle>& incoming) {
+    for (const auto& a : incoming) {
+        if (a.id.isEmpty() || !seen_ids.contains(a.id)) {
+            seen_ids.insert(a.id);
+            all.append(a);
+        }
+    }
+}
+
+void NewsService::persist_articles_async(const QVector<NewsArticle>& articles) {
+    if (articles.isEmpty())
+        return;
+    // Single-transaction INSERT OR IGNORE with FTS triggers — keep it off the UI
+    // thread. Database hands each worker its own SQLite connection, and ids are
+    // stable now, so repeat refreshes only insert genuinely new articles.
+    (void)QtConcurrent::run([articles]() {
+        auto r = fincept::NewsArticleRepository::instance().upsert_batch(articles);
+        if (r.is_err())
+            LOG_WARN("NewsService", "Persisting articles failed: " + QString::fromStdString(r.error()));
+    });
+}
 
 // Use a real browser User-Agent — major financial publishers reject
 // "FinceptTerminal/4.0" as scraper traffic. Browser UA gets us 200s on
@@ -64,30 +150,16 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
     if (!force) {
         const QVariant cached = fincept::CacheManager::instance().get("news:articles");
         if (!cached.isNull()) {
-            const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
-            QVector<NewsArticle> articles;
-            articles.reserve(arr.size());
-            for (const auto& v : arr) {
-                const QJsonObject o = v.toObject();
-                NewsArticle a;
-                a.id = o["id"].toString();
-                a.time = o["time"].toString();
-                a.headline = o["headline"].toString();
-                a.summary = o["summary"].toString();
-                a.source = o["source"].toString();
-                a.region = o["region"].toString();
-                a.category = o["category"].toString();
-                a.link = o["link"].toString();
-                a.sort_ts = o["sort_ts"].toVariant().toLongLong();
-                a.tier = o["tier"].toInt(4);
-                a.priority = priority_from_string(o["priority"].toString());
-                a.sentiment = sentiment_from_string(o["sentiment"].toString());
-                a.impact = impact_from_string(o["impact"].toString());
-                a.lang = o["lang"].toString();
-                for (const auto& t : o["tickers"].toArray())
-                    a.tickers << t.toString();
-                articles.append(a);
-            }
+            const QVector<NewsArticle> articles = deserialize_articles(cached.toString());
+            // A cache-served list must still report how many feeds/sources it
+            // came from (the intel strip reads them) — they were only ever set
+            // by a network fetch, so a cold start showed "0 feeds / 0 sources".
+            feed_count_ = list_effective_feeds().size();
+            QSet<QString> sources;
+            for (const auto& a : articles)
+                sources.insert(a.source);
+            active_sources_ = sources.values();
+            latest_articles_ = articles;
             cb(true, articles);
             publish_articles_to_hub(articles);
             return;
@@ -109,6 +181,7 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
     struct FetchState {
         QMutex mutex;
         QVector<NewsArticle> all_articles;
+        QSet<QString> seen_ids; // cross-feed dedup (same URL served by two feeds)
         QAtomicInt remaining{0};
         ArticlesCallback callback;
         NewsService* service = nullptr;
@@ -162,7 +235,7 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
 
             {
                 QMutexLocker lock(&state->mutex);
-                state->all_articles.append(articles);
+                merge_unique(state->all_articles, state->seen_ids, articles);
             }
 
             if (state->remaining.fetchAndSubRelaxed(1) == 1) {
@@ -176,33 +249,14 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
                     sources.insert(a.source);
                 state->service->active_sources_ = sources.values();
 
-                // Serialize to CacheManager
-                QJsonArray arr;
-                for (const auto& a : all) {
-                    QJsonObject o;
-                    o["id"] = a.id;
-                    o["time"] = a.time;
-                    o["headline"] = a.headline;
-                    o["summary"] = a.summary;
-                    o["source"] = a.source;
-                    o["region"] = a.region;
-                    o["category"] = a.category;
-                    o["link"] = a.link;
-                    o["sort_ts"] = static_cast<qint64>(a.sort_ts);
-                    o["tier"] = a.tier;
-                    o["priority"] = priority_string(a.priority);
-                    o["sentiment"] = sentiment_string(a.sentiment);
-                    o["impact"] = impact_string(a.impact);
-                    o["lang"] = a.lang;
-                    QJsonArray tickers;
-                    for (const auto& t : a.tickers)
-                        tickers.append(t);
-                    o["tickers"] = tickers;
-                    arr.append(o);
+                // Keep the last-known-good cache when every feed failed (see the
+                // progressive path) instead of overwriting it with an empty list.
+                if (!all.isEmpty()) {
+                    fincept::CacheManager::instance().put("news:articles", QVariant(serialize_articles(all)),
+                                                          kArticleCacheTtlSec, "news");
+                    state->service->latest_articles_ = all;
+                    state->service->persist_articles_async(all);
                 }
-                fincept::CacheManager::instance().put(
-                    "news:articles", QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
-                    kArticleCacheTtlSec, "news");
 
                 LOG_INFO("NewsService",
                          QString("Fetched %1 articles from %2 sources").arg(all.size()).arg(sources.size()));
@@ -223,30 +277,15 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
     if (!force) {
         const QVariant cached = fincept::CacheManager::instance().get("news:articles");
         if (!cached.isNull()) {
-            const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
-            QVector<NewsArticle> articles;
-            articles.reserve(arr.size());
-            for (const auto& v : arr) {
-                const QJsonObject o = v.toObject();
-                NewsArticle a;
-                a.id = o["id"].toString();
-                a.time = o["time"].toString();
-                a.headline = o["headline"].toString();
-                a.summary = o["summary"].toString();
-                a.source = o["source"].toString();
-                a.region = o["region"].toString();
-                a.category = o["category"].toString();
-                a.link = o["link"].toString();
-                a.sort_ts = o["sort_ts"].toVariant().toLongLong();
-                a.tier = o["tier"].toInt(4);
-                a.priority = priority_from_string(o["priority"].toString());
-                a.sentiment = sentiment_from_string(o["sentiment"].toString());
-                a.impact = impact_from_string(o["impact"].toString());
-                a.lang = o["lang"].toString();
-                for (const auto& t : o["tickers"].toArray())
-                    a.tickers << t.toString();
-                articles.append(a);
-            }
+            const QVector<NewsArticle> articles = deserialize_articles(cached.toString());
+            // See fetch_all_news(): a cache-served list still has to report the
+            // feed/source counts the intel strip displays.
+            feed_count_ = list_effective_feeds().size();
+            QSet<QString> sources;
+            for (const auto& a : articles)
+                sources.insert(a.source);
+            active_sources_ = sources.values();
+            latest_articles_ = articles;
             final_cb(true, articles);
             emit articles_partial(articles, feed_count_, feed_count_);
             publish_articles_to_hub(articles);
@@ -269,6 +308,7 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
     struct FetchState {
         QMutex mutex;
         QVector<NewsArticle> all_articles;
+        QSet<QString> seen_ids; // cross-feed dedup (same URL served by two feeds)
         QAtomicInt remaining{0};
         QAtomicInt done{0};
         ArticlesCallback callback;
@@ -321,7 +361,7 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
             int feeds_done = 0;
             {
                 QMutexLocker lock(&state->mutex);
-                state->all_articles.append(batch);
+                merge_unique(state->all_articles, state->seen_ids, batch);
                 feeds_done = state->done.fetchAndAddRelaxed(1) + 1;
                 // Partial snapshot sorted by time for progressive display
                 snapshot = state->all_articles;
@@ -351,33 +391,10 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
                 // the last-known-good news and leave a blank widget after a
                 // restart. Keep the previous cache in that case.
                 if (!all.isEmpty()) {
-                    QJsonArray parr;
-                    for (const auto& a : all) {
-                        QJsonObject o;
-                        o["id"] = a.id;
-                        o["time"] = a.time;
-                        o["headline"] = a.headline;
-                        o["summary"] = a.summary;
-                        o["source"] = a.source;
-                        o["region"] = a.region;
-                        o["category"] = a.category;
-                        o["link"] = a.link;
-                        o["sort_ts"] = static_cast<qint64>(a.sort_ts);
-                        o["tier"] = a.tier;
-                        o["priority"] = priority_string(a.priority);
-                        o["sentiment"] = sentiment_string(a.sentiment);
-                        o["impact"] = impact_string(a.impact);
-                        o["lang"] = a.lang;
-                        QJsonArray tickers;
-                        for (const auto& t : a.tickers)
-                            tickers.append(t);
-                        o["tickers"] = tickers;
-                        parr.append(o);
-                    }
-                    fincept::CacheManager::instance().put(
-                        "news:articles",
-                        QVariant(QString::fromUtf8(QJsonDocument(parr).toJson(QJsonDocument::Compact))),
-                        kArticleCacheTtlSec, "news");
+                    fincept::CacheManager::instance().put("news:articles", QVariant(serialize_articles(all)),
+                                                          kArticleCacheTtlSec, "news");
+                    state->service->latest_articles_ = all;
+                    state->service->persist_articles_async(all);
                 } else {
                     LOG_WARN("NewsService", "All feeds returned no articles — keeping last-known-good cache");
                 }
@@ -590,33 +607,9 @@ void NewsService::refresh(const QStringList& topics) {
     // overwrites with fresh data when it lands.
     const QVariant cached = fincept::CacheManager::instance().get("news:articles");
     if (!cached.isNull()) {
-        const QJsonArray arr = QJsonDocument::fromJson(cached.toString().toUtf8()).array();
-        if (!arr.isEmpty()) {
-            QVector<NewsArticle> articles;
-            articles.reserve(arr.size());
-            for (const auto& v : arr) {
-                const QJsonObject o = v.toObject();
-                NewsArticle a;
-                a.id = o["id"].toString();
-                a.time = o["time"].toString();
-                a.headline = o["headline"].toString();
-                a.summary = o["summary"].toString();
-                a.source = o["source"].toString();
-                a.region = o["region"].toString();
-                a.category = o["category"].toString();
-                a.link = o["link"].toString();
-                a.sort_ts = o["sort_ts"].toVariant().toLongLong();
-                a.tier = o["tier"].toInt(4);
-                a.priority = priority_from_string(o["priority"].toString());
-                a.sentiment = sentiment_from_string(o["sentiment"].toString());
-                a.impact = impact_from_string(o["impact"].toString());
-                a.lang = o["lang"].toString();
-                for (const auto& t : o["tickers"].toArray())
-                    a.tickers << t.toString();
-                articles.append(a);
-            }
+        const QVector<NewsArticle> articles = deserialize_articles(cached.toString());
+        if (!articles.isEmpty())
             publish_articles_to_hub(articles);
-        }
     }
 
     // All non-cluster topics derive from the general feed; one fetch

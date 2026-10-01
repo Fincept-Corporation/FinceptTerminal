@@ -272,6 +272,65 @@ class FootballFieldChart:
             'format_type': format_type
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `football_field.py generate <flat-params-json>` (argv length 3, the JSON being an
+# OBJECT). The native form takes the methods ARRAY (`generate <methods_json> [shares]`), so a service-style call is
+# handled here: methods come from `methods` or from `<name>_low` / `<name>_high` pairs, and optional
+# `current_price` / `offer_price` become the reference lines. Native invocations (JSON array) are untouched.
+_SERVICE_COMMANDS = ("generate", "football_field")
+_SVC_LABELS = {"dcf": "DCF", "comps": "Trading Comps", "precedent": "Precedent Transactions", "lbo": "LBO Analysis",
+               "premiums": "Premiums Paid", "52w": "52-Week Range"}
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _service_dispatch(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return False
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return False
+    if not isinstance(p, dict):
+        return False
+    try:
+        methods = p.get("methods") if isinstance(p.get("methods"), list) else []
+        if not methods:
+            for key in sorted(p):
+                if key.endswith("_low") and key[:-4] + "_high" in p:
+                    name = key[:-4]
+                    low, high = _svc_num(p, key), _svc_num(p, name + "_high")
+                    if low is not None and high is not None:
+                        methods.append({"method": _SVC_LABELS.get(name, name.replace("_", " ").title()),
+                                        "low": low, "high": high, "midpoint": (low + high) / 2.0})
+        if not methods:
+            raise ValueError("No valuation ranges supplied (expected `methods` or <name>_low/<name>_high pairs)")
+        chart = FootballFieldChart()
+        ranges = [chart.add_valuation_range(m.get("method", "Unknown"), m.get("low", 0), m.get("high", 0),
+                                            m.get("midpoint"), weight=m.get("weight", 1.0)) for m in methods]
+        current_price = _svc_num(p, "current_price")
+        offer_price = _svc_num(p, "offer_price")
+        format_type = str(p.get("format_type", "auto"))
+        data = {
+            "chart": chart.generate_chart_data(ranges, current_price=current_price, offer_price=offer_price,
+                                               format_type=format_type),
+            "summary": chart.generate_summary_table(ranges, current_price=current_price, format_type=format_type),
+        }
+        print(json.dumps({"success": True, "data": data}, default=str))
+    except Exception as e:
+        print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
+        sys.exit(1)
+    return True
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration
 
@@ -282,6 +341,8 @@ def main():
         python football_field.py generate '[{"method":"DCF","low":1e9,"high":1.5e9,"midpoint":1.25e9}]' 1.1e9 1.3e9 billions
     """
 
+    if _service_dispatch(sys.argv):
+        return
     if len(sys.argv) < 2:
         result = {"success": False, "error": "Usage: football_field.py <command> [args...]"}
         print(json.dumps(result))

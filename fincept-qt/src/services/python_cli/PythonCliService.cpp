@@ -43,8 +43,19 @@ void PythonCliService::run(const QString& script, const QStringList& args, CliCa
             }
 
             const QJsonObject obj = doc.object();
-            if (obj.contains("error")) {
-                out.error = obj["error"].toString(QStringLiteral("Script reported error"));
+            // `"error"` is a failure only when it carries one. A success payload that
+            // also reports `"error": null` / `false` / `""` (several scripts do) must
+            // not be turned into a failure — same rule PythonRunner applies.
+            const QJsonValue err_val = obj.value("error");
+            const bool has_error = err_val.isString()   ? !err_val.toString().trimmed().isEmpty()
+                                   : err_val.isBool()   ? err_val.toBool()
+                                   : err_val.isObject() ? !err_val.toObject().isEmpty()
+                                   : err_val.isArray()  ? !err_val.toArray().isEmpty()
+                                                        : !(err_val.isNull() || err_val.isUndefined());
+            if (has_error) {
+                out.error = err_val.isString() ? err_val.toString() : obj.value("message").toString();
+                if (out.error.isEmpty())
+                    out.error = QStringLiteral("Script reported error");
                 if (cb)
                     cb(out);
                 return;

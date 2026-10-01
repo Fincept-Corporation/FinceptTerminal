@@ -499,10 +499,26 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
         if (!self)
             return;
         if (running) {
-            // Disable — stop is fast, safe on main thread
-            McpManager::instance().stop_server(sid);
-            self->refresh_installed();
-            self->update_status_bar();
+            // Disable. stop_server() is NOT fast: McpClient::stop() terminates the
+            // child, waits (2 s + 1 s kill) and joins its worker thread (up to 3 s),
+            // so on the UI thread a slow server froze the terminal for several
+            // seconds (P1). Do it on a worker and rebuild the cards when it is done.
+            toggle_btn->setText(tr("⟳ STOPPING..."));
+            toggle_btn->setEnabled(false);
+            (void)QtConcurrent::run([sid, self]() {
+                McpManager::instance().stop_server(sid);
+                if (!self)
+                    return;
+                QMetaObject::invokeMethod(
+                    self,
+                    [self]() {
+                        if (!self)
+                            return;
+                        self->refresh_installed();
+                        self->update_status_bar();
+                    },
+                    Qt::QueuedConnection);
+            });
         } else {
             if (!self->confirm_server_launch(cfg_copy))
                 return;
@@ -643,6 +659,47 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
     });
     btns->addWidget(auto_btn);
 
+    // RESTART — McpManager::restart_server() existed but only the health checker
+    // used it; a wedged or errored server could only be fixed by disable + enable.
+    if (running || error) {
+        auto* restart_btn = new QPushButton(tr("RESTART"));
+        restart_btn->setObjectName("cardLogsBtn");
+        restart_btn->setCursor(Qt::PointingHandCursor);
+        restart_btn->setAccessibleName(tr("Restart %1").arg(s.name));
+        restart_btn->setToolTip(tr("Stop the server and start it again."));
+        connect(restart_btn, &QPushButton::clicked, this, [sid, self, running, restart_btn, cfg_copy]() {
+            if (!self)
+                return;
+            // A running server was already approved (or autostarted); a failed one is a
+            // fresh launch, so it gets the same command-line consent as the toggle.
+            if (!running && !self->confirm_server_launch(cfg_copy))
+                return;
+            restart_btn->setText(tr("RESTARTING..."));
+            restart_btn->setEnabled(false);
+            // stop + start block for seconds (process launch, JSON-RPC handshake) — off the UI thread.
+            (void)QtConcurrent::run([sid, self]() {
+                const auto r = McpManager::instance().restart_server(sid);
+                if (!self)
+                    return;
+                QMetaObject::invokeMethod(
+                    self,
+                    [self, r]() {
+                        if (!self)
+                            return;
+                        if (r.is_err()) {
+                            const QString msg = QString::fromStdString(r.error());
+                            LOG_ERROR("McpServers", "Restart failed: " + msg);
+                            QMessageBox::warning(self, tr("Server Failed to Restart"), msg);
+                        }
+                        self->refresh_installed();
+                        self->update_status_bar();
+                    },
+                    Qt::QueuedConnection);
+            });
+        });
+        btns->addWidget(restart_btn);
+    }
+
     btns->addStretch(1);
 
     // REMOVE
@@ -664,10 +721,27 @@ QWidget* McpServersScreen::build_server_card(const McpServerConfig& s) {
                        QMessageBox::Yes | QMessageBox::Cancel, self);
         if (mb.exec() != QMessageBox::Yes)
             return;
-        McpManager::instance().stop_server(sid);
-        McpManager::instance().remove_server(sid);
-        self->refresh_installed();
-        self->update_status_bar();
+        // remove_server() stops the server first (a multi-second join, see the toggle
+        // above), so it must not run on the UI thread either.
+        (void)QtConcurrent::run([sid, self]() {
+            const auto r = McpManager::instance().remove_server(sid);
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, r]() {
+                    if (!self)
+                        return;
+                    if (r.is_err()) {
+                        const QString msg = QString::fromStdString(r.error());
+                        LOG_ERROR("McpServers", "Remove failed: " + msg);
+                        QMessageBox::warning(self, tr("Remove Server"), msg);
+                    }
+                    self->refresh_installed();
+                    self->update_status_bar();
+                },
+                Qt::QueuedConnection);
+        });
     });
     btns->addWidget(remove_btn);
 

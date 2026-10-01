@@ -92,6 +92,9 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     void update_line_view();
     void refresh_provider_status();
     void load_dataset_range_for_active_capability();
+    /// Derive Correlation / PCA / VaR / Drawdown / Beta from an OHLCV response (see the
+    /// definition) and mark exactly those surfaces as real data.
+    void apply_risk_surfaces(const fincept::DatabentoOhlcvResult& r);
 
     /// Mark `type`'s z-grid as holding genuine (fetched or imported) data and
     /// refresh the tier badge. Called only from a provider/CSV path that
@@ -105,6 +108,15 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
 
     QString current_symbol_or_default() const;
     float spot_for(const QString& sym) const;
+    /// True when `sym` has a REAL quote (subscribed cache or hub) - i.e. spot_for()
+    /// is not returning its 100.0 placeholder. Fetches for option surfaces must not
+    /// run on the placeholder: the spot sets the strike window and the IV solve.
+    bool has_live_spot(const QString& sym) const;
+    /// (Re)subscribe to the current symbol's `market:quote:<sym>` while visible so
+    /// spot_cache_ holds a live price. Nothing else ever populated it, so spot_for()
+    /// returned the 100.0 placeholder for any symbol no other screen happened to be
+    /// subscribed to.
+    void resubscribe_spot();
     const std::vector<std::vector<float>>* active_z_grid() const;
 
     // Control bar widgets (kept for dynamic rebuild)
@@ -181,6 +193,10 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     // Spot cache, populated from DataHub::peek("market:quote:<sym>") on demand.
     // Falls back to a constant if the hub has no quote for the symbol.
     QHash<QString, float> spot_cache_;
+    QString spot_symbol_; // symbol whose quote topic is currently subscribed ("" = none)
+    /// True while on_group_symbol_changed() is applying a symbol it received, so the
+    /// resulting on_control_symbol_changed() does not publish it straight back.
+    bool applying_group_symbol_ = false;
 
     // Category accent colors (R,G,B)
     static constexpr int CAT_COLORS[][3] = {

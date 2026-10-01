@@ -11,6 +11,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <utility>
+
 namespace fincept::services {
 
 using namespace fincept::relmap;
@@ -23,12 +25,18 @@ RelationshipMapService& RelationshipMapService::instance() {
 static constexpr int kRelMapTtlSec = 10 * 60; // 10 min
 
 void RelationshipMapService::fetch(const QString& ticker) {
-    if (loading_)
+    const QString requested = ticker.trimmed().toUpper();
+    if (requested.isEmpty())
         return;
-    if (ticker.trimmed().isEmpty())
+    if (loading_) {
+        // A different symbol asked for mid-download used to be dropped, so the screen
+        // ended up showing the in-flight symbol while the search box said the new one.
+        // Remember the latest request; it starts as soon as the current one lands.
+        pending_ticker_ = (requested == current_ticker_) ? QString() : requested;
         return;
+    }
 
-    current_ticker_ = ticker.toUpper();
+    current_ticker_ = requested;
 
     // Check cache first
     const QString cache_key = "relmap:" + current_ticker_;
@@ -36,8 +44,11 @@ void RelationshipMapService::fetch(const QString& ticker) {
     if (!cached.isNull()) {
         LOG_DEBUG("RelMapService", "Cache hit for " + current_ticker_);
         emit progress_changed(100, "Loaded from cache");
-        parse_result(cached.toString());
-        return;
+        if (parse_result(cached.toString()))
+            return;
+        // Entries cached before failures stopped being stored can hold an error shell;
+        // drop it and fall through to a real fetch instead of serving it until the TTL.
+        fincept::CacheManager::instance().remove(cache_key);
     }
 
     loading_ = true;
@@ -48,19 +59,44 @@ void RelationshipMapService::fetch(const QString& ticker) {
     python::PythonRunner::instance().run(
         "relationship_map.py", {current_ticker_}, [this, cache_key](python::PythonResult result) {
             loading_ = false;
+            // A newer symbol was requested while this one downloaded: whatever this run
+            // produced is stale for the UI, so start the newer one straight away.
+            const QString next = std::exchange(pending_ticker_, QString());
 
             if (!result.success || result.output.trimmed().isEmpty()) {
                 LOG_ERROR("RelMapService", "Python script failed: exit=" + QString::number(result.exit_code));
-                emit fetch_failed("Failed to fetch data for " + current_ticker_);
+                if (!next.isEmpty()) {
+                    fetch(next);
+                    return;
+                }
+                fail_fetch("Failed to fetch data for " + current_ticker_);
                 return;
             }
 
-            // Cache raw JSON output
-            fincept::CacheManager::instance().put(cache_key, QVariant(result.output), kRelMapTtlSec, "relmap");
+            if (!next.isEmpty()) {
+                // Keep the good payload cached so flipping back is instant, but don't
+                // render it - the user has already moved on.
+                if (!QJsonDocument::fromJson(result.output.toUtf8()).object().contains("error"))
+                    fincept::CacheManager::instance().put(cache_key, QVariant(result.output), kRelMapTtlSec,
+                                                          "relmap");
+                fetch(next);
+                return;
+            }
 
             emit progress_changed(70, "Parsing results...");
-            parse_result(result.output);
+            // Only a payload that parsed into a real company is worth caching: caching
+            // the raw output first pinned script-level {"error": ...} replies (and
+            // empty "unknown ticker" shells) for the whole 10-minute TTL.
+            if (parse_result(result.output))
+                fincept::CacheManager::instance().put(cache_key, QVariant(result.output), kRelMapTtlSec, "relmap");
         });
+}
+
+void RelationshipMapService::fail_fetch(const QString& message) {
+    emit fetch_failed(message);
+    if (hub_registered_ && !current_ticker_.isEmpty())
+        fincept::datahub::DataHub::instance().publish_error(
+            QStringLiteral("geopolitics:relationship_graph:") + current_ticker_, message.left(200));
 }
 
 void RelationshipMapService::clear() {
@@ -69,18 +105,23 @@ void RelationshipMapService::clear() {
     current_ticker_.clear();
 }
 
-void RelationshipMapService::parse_result(const QString& json_output) {
+bool RelationshipMapService::parse_result(const QString& json_output) {
     QJsonDocument doc = QJsonDocument::fromJson(json_output.toUtf8());
     if (!doc.isObject()) {
-        emit fetch_failed("Invalid JSON response");
-        return;
+        fail_fetch("Invalid JSON response");
+        return false;
     }
 
     QJsonObject root = doc.object();
     if (root.contains("error")) {
-        emit fetch_failed(root["error"].toString());
-        return;
+        fail_fetch(root["error"].toString());
+        return false;
     }
+
+    // Start from a blank slate on every parse. Only the fresh-download path used to reset
+    // data_; a cache hit appended its peers / holders / officers onto whatever symbol was
+    // loaded before it (duplicated rows, another company's peers).
+    data_ = {};
 
     emit progress_changed(80, "Building graph data...");
 
@@ -128,6 +169,15 @@ void RelationshipMapService::parse_result(const QString& json_output) {
     data_.company.trailing_eps = co["trailing_eps"].toDouble();
     data_.company.forward_eps = co["forward_eps"].toDouble();
     data_.company.shares_outstanding = co["shares_outstanding"].toDouble();
+
+    // yfinance answers an unknown / delisted symbol with an empty record rather than an
+    // error, and the script fills every field with defaults - which rendered a graph of
+    // zeros. No price and no market cap means there is nothing to show.
+    if (data_.company.current_price <= 0 && data_.company.market_cap <= 0) {
+        data_ = {};
+        fail_fetch(QStringLiteral("No market data found for %1 - check the symbol").arg(current_ticker_));
+        return false;
+    }
 
     // ── Governance ───────────────────────────────────────────────────────
     QJsonObject gov = root["governance"].toObject();
@@ -234,6 +284,23 @@ void RelationshipMapService::parse_result(const QString& json_output) {
     data_.calendar.ex_dividend_date = cal["ex_dividend_date"].toString();
     data_.calendar.dividend_date = cal["dividend_date"].toString();
 
+    // The script has no corporate-events feed, so the Events cluster (and its filter
+    // checkbox) were permanently empty. The earnings / dividend calendar it does return
+    // is the closest real data - surface it as the events.
+    const auto add_calendar_event = [this](const QString& date, const QString& what) {
+        if (date.trimmed().isEmpty())
+            return;
+        CorporateEvent ev;
+        ev.date = date.trimmed();
+        ev.form = QStringLiteral("calendar");
+        ev.description = what;
+        ev.category = QStringLiteral("calendar");
+        data_.events.append(ev);
+    };
+    add_calendar_event(data_.calendar.earnings_date, QStringLiteral("Earnings"));
+    add_calendar_event(data_.calendar.ex_dividend_date, QStringLiteral("Ex-dividend"));
+    add_calendar_event(data_.calendar.dividend_date, QStringLiteral("Dividend paid"));
+
     // ── Institutional Holders ─────────────────────────────────────────────
     for (const auto& v : root["institutional_holders"].toArray()) {
         QJsonObject h = v.toObject();
@@ -321,6 +388,7 @@ void RelationshipMapService::parse_result(const QString& json_output) {
                                   .arg(data_.insider_holders.size())
                                   .arg(data_.peers.size())
                                   .arg(data_.data_quality));
+    return true;
 }
 
 ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co, const QVector<PeerCompany>& peers) {

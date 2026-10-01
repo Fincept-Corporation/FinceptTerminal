@@ -10,8 +10,10 @@
 #include "trading/TradingTypes.h"
 
 #include <QHash>
+#include <QMap>
 #include <QMutex>
 #include <QObject>
+#include <QPair>
 #include <QPointer>
 #include <QString>
 #include <QTimer>
@@ -46,6 +48,21 @@ class AccountDataStream : public QObject {
     // credentials, so this is a no-op for an unconfigured account.
     void refresh_portfolio_now();
 
+    // Pull ONE channel now: "positions" | "holdings" | "orders" | "balance" |
+    // "quote". Serves a forced DataHub refresh (DataStreamManager::refresh) without
+    // refetching the other three portfolio channels. No-op when the stream is
+    // stopped or the channel name is unknown; "quote" is skipped while the live
+    // WebSocket is delivering ticks.
+    void refresh_channel(const QString& channel);
+
+    // Carry a previous incarnation's subscriptions — per-consumer symbol sets,
+    // active-feed sets and the selected symbol — onto this (freshly started)
+    // stream. DataStreamManager::restart_stream() destroys and recreates a stream
+    // on every credential change, and the subscriptions live ONLY on the stream
+    // object, so without this every consumer's symbols silently vanished and the
+    // WebSocket re-subscribed to nothing.
+    void adopt_subscriptions(const AccountDataStream& previous);
+
     // --- Symbol management (multi-consumer) ---
     // Each consumer ("equity:watchlist", "algo:<deploymentId>", …) owns an
     // independent symbol set. The WS/poll universe is the UNION across all
@@ -68,6 +85,11 @@ class AccountDataStream : public QObject {
     void fetch_latest_trade(const QString& symbol);
     void fetch_calendar();
     void fetch_clock();
+    // Opening/closing auction prints for `symbol` (brokers that implement
+    // get_historical_auctions_single, e.g. Alpaca; silent no-op elsewhere) →
+    // auctions_fetched. And the trade-condition code table → condition_codes_fetched.
+    void fetch_auctions(const QString& symbol);
+    void fetch_condition_codes();
 
     // --- Cached data access (main thread only) ---
     QVector<BrokerPosition> cached_positions() const;
@@ -93,6 +115,23 @@ class AccountDataStream : public QObject {
     void clock_fetched(const QString& account_id, const MarketClock& clock);
     void connection_state_changed(const QString& account_id, ConnectionState state);
     void token_expired(const QString& account_id);
+
+    // Symbol-tagged twins of orderbook_fetched / latest_trade_fetched /
+    // time_sales_fetched. The legacy signals carry no symbol, so a slow response (or
+    // a late depth push) for the PREVIOUS symbol was indistinguishable from the
+    // current one and got painted under it. Each of these is emitted immediately
+    // after its legacy counterpart, with the symbol the data is for. New consumers
+    // should connect here and drop payloads whose symbol is no longer selected.
+    void orderbook_for_symbol(const QString& account_id, const QString& symbol,
+                              const QVector<QPair<double, double>>& bids, const QVector<QPair<double, double>>& asks,
+                              double spread, double spread_pct, const QVector<int>& bid_orders,
+                              const QVector<int>& ask_orders);
+    void time_sales_for_symbol(const QString& account_id, const QString& symbol, const QVector<BrokerTrade>& trades);
+    void latest_trade_for_symbol(const QString& account_id, const QString& symbol, const BrokerTrade& trade);
+    // Results of fetch_auctions() / fetch_condition_codes(). `codes` maps
+    // condition code → description (EquityBottomPanel::set_condition_codes shape).
+    void auctions_fetched(const QString& account_id, const QString& symbol, const QVector<BrokerAuction>& auctions);
+    void condition_codes_fetched(const QString& account_id, const QMap<QString, QString>& codes);
 
   private:
     // --- Token expiry check ---

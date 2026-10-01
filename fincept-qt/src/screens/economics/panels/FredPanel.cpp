@@ -113,6 +113,13 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
         QJsonArray clean;
         for (const auto& v : obs) {
             auto obj = v.toObject();
+            // fred_data.py already emits `value` as a JSON number (and drops FRED's "."
+            // gaps). toString() on a number is empty, so without this check every
+            // observation hit the isEmpty() skip below and the panel showed 0 rows.
+            if (obj["value"].isDouble()) {
+                clean.append(obj);
+                continue;
+            }
             const QString val_str = obj["value"].toString();
             if (val_str == "." || val_str.isEmpty())
                 continue;

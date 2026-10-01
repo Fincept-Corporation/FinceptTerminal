@@ -53,6 +53,9 @@ class PolymarketDetailPanel : public QWidget {
     /// Called when credentials state changes so ticket can show/hide the
     /// "connect account" placeholder vs the actual ticket form.
     void set_trading_enabled(bool enabled);
+    /// Restrict the ticket's ORDER TYPE box to the codes the active exchange can place
+    /// (from ExchangeCapabilities). The box was a fixed GTC/FOK/FAK list for every venue.
+    void set_order_types(const QStringList& types);
 
     // Polymarket-only enrichment setters — guarded by active_id at the caller.
     void set_price_summary(const fincept::services::polymarket::PriceSummary& summary);

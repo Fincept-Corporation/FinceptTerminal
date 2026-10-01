@@ -278,14 +278,40 @@ void QuantStatsView::build_ui() {
 // ── set_data ──────────────────────────────────────────────────────────────────
 
 void QuantStatsView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
+    const bool portfolio_changed = summary.portfolio.id != summary_.portfolio.id;
     summary_ = summary;
     currency_ = currency;
+
+    // Results belong to the book they were computed for - drop them when the
+    // user switches portfolio instead of showing the previous one's statistics
+    // until the new run lands.
+    if (portfolio_changed) {
+        qs_data_ = QJsonObject();
+        mc_data_ = QJsonObject();
+        for (QStackedWidget* st : {returns_stack_, drawdown_stack_, rolling_stack_, mc_stack_}) {
+            if (st)
+                st->setCurrentIndex(0);
+        }
+    }
 
     // Populate metrics immediately from live summary data
     update_metrics();
 
-    // Kick off Python fetch automatically
-    run_quantstats();
+    // Kick off the Python fetch automatically - but only when the analysis
+    // inputs changed. set_data() now also runs on every portfolio refresh (and
+    // on every re-entry to this tab); the 1-year history download + QuantStats
+    // run does not depend on live prices, so repeating it each minute only
+    // burned a Python slot. The RUN button still forces a fresh run.
+    QStringList parts;
+    parts.reserve(summary_.holdings.size());
+    for (const auto& h : summary_.holdings)
+        parts.append(h.symbol + QLatin1Char(':') + QString::number(h.quantity, 'g', 10));
+    parts.sort();
+    const QString signature = summary_.portfolio.id + QLatin1Char('|') + parts.join(QLatin1Char(','));
+    if (signature != qs_signature_ && !qs_running_) {
+        qs_signature_ = signature;
+        run_quantstats();
+    }
 }
 
 // ── update_metrics ────────────────────────────────────────────────────────────

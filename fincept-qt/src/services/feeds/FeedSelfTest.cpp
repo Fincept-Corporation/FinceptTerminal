@@ -67,6 +67,33 @@ int run_feed_selftest() {
         check("csv: 2 rows", items.size() == 2);
         check("csv: field price", !items.isEmpty() && items[0].fields.value("price") == "200");
     }
+    { // CSV: quoted fields containing the delimiter, CRLF line endings
+        FeedSubscription s;
+        s.id = "t4q";
+        s.name = "CSVQ";
+        s.format = FeedFormat::Csv;
+        const QByteArray csv = "name,price\r\n\"Apple, Inc.\",200\r\n\"Say \"\"hi\"\"\",410\r\n";
+        const auto items = FeedScraper::parse(csv, s);
+        check("csv quoted: 2 rows", items.size() == 2);
+        check("csv quoted: comma kept inside field",
+              !items.isEmpty() && items[0].fields.value("name") == "Apple, Inc." &&
+                  items[0].fields.value("price") == "200");
+        check("csv quoted: escaped quote", items.size() > 1 && items[1].fields.value("name") == "Say \"hi\"");
+        check("csv crlf: last header trimmed", !items.isEmpty() && items[0].fields.contains("price"));
+    }
+    { // Item links are publisher-supplied: only web URLs may survive
+        FeedSubscription s;
+        s.id = "t4l";
+        s.name = "Links";
+        s.format = FeedFormat::Auto;
+        const QByteArray rss = "<?xml version=\"1.0\"?><rss version=\"2.0\"><channel>"
+                               "<item><title>Evil</title><link>file:///C:/Windows/System32/calc.exe</link></item>"
+                               "<item><title>Good</title><link>https://example.com/a</link></item>"
+                               "</channel></rss>";
+        const auto items = FeedScraper::parse(rss, s);
+        check("link: non-web scheme dropped", items.size() == 2 && items[0].link.isEmpty());
+        check("link: https kept", items.size() == 2 && items[1].link == "https://example.com/a");
+    }
     const QByteArray custom_xml = "<data><record><headline>H1</headline><url>http://m/1</url><sym>ABC</sym></record>"
                                   "<record><headline>H2</headline><url>http://m/2</url><sym>XYZ</sym></record></data>";
 

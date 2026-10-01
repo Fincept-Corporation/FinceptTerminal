@@ -1,12 +1,15 @@
 #include "screens/info/TermsScreen.h"
 
+#include "core/events/EventBus.h"
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMetaMethod>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -49,8 +52,16 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
     scroll_ = new QScrollArea;
     scroll_->setWidgetResizable(true);
     scroll_->setStyleSheet("QScrollArea { border: none; background: transparent; }");
-    scroll_->setWidget(build_page());
     root->addWidget(scroll_, 1);
+    // Page is built on first show — see showEvent().
+}
+
+void TermsScreen::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (!page_built_) {
+        page_built_ = true;
+        scroll_->setWidget(build_page());
+    }
 }
 
 // ── Re-translation ────────────────────────────────────────────────────────────
@@ -58,7 +69,7 @@ TermsScreen::TermsScreen(QWidget* parent) : QWidget(parent) {
 // every label as a member. QScrollArea::setWidget() deletes the old content.
 
 void TermsScreen::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange && scroll_) {
+    if (event->type() == QEvent::LanguageChange && scroll_ && page_built_) {
         scroll_->setWidget(build_page());
     }
     QWidget::changeEvent(event);
@@ -73,14 +84,21 @@ QWidget* TermsScreen::build_page() {
     vl->setContentsMargins(24, 24, 24, 24);
     vl->setSpacing(6);
 
+    // The pre-login info stack connects the navigate_* signals; a docked copy has
+    // no listener. Detect which host we are in and route accordingly (see the
+    // links below) rather than leaving dead buttons in the docked copy.
+    const bool in_auth_stack = isSignalConnected(QMetaMethod::fromSignal(&TermsScreen::navigate_back));
+
     // Back button
-    auto* back_btn = new QPushButton(tr("< BACK"));
-    back_btn->setCursor(Qt::PointingHandCursor);
-    back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                    "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
-                                .arg(colors::TEXT_SECONDARY(), MF, colors::TEXT_PRIMARY()));
-    connect(back_btn, &QPushButton::clicked, this, &TermsScreen::navigate_back);
-    vl->addWidget(back_btn, 0, Qt::AlignLeft);
+    if (in_auth_stack) {
+        auto* back_btn = new QPushButton(tr("< BACK"));
+        back_btn->setCursor(Qt::PointingHandCursor);
+        back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
+                                        "font-size: 12px; %2 } QPushButton:hover { color: %3; }")
+                                    .arg(colors::TEXT_SECONDARY(), MF, colors::TEXT_PRIMARY()));
+        connect(back_btn, &QPushButton::clicked, this, &TermsScreen::navigate_back);
+        vl->addWidget(back_btn, 0, Qt::AlignLeft);
+    }
 
     // Title
     auto* title = new QLabel(tr("TERMS OF SERVICE"));
@@ -179,14 +197,30 @@ QWidget* TermsScreen::build_page() {
         return btn;
     };
 
+    // Docked copy: open the target as its own dock panel via the navigation bus.
+    auto open_panel = [](const char* screen_id) {
+        EventBus::instance().publish(QStringLiteral("nav.switch_screen"),
+                                     QVariantMap{{QStringLiteral("screen_id"), QString::fromLatin1(screen_id)}});
+    };
+
     auto* privacy_link = make_link(tr("Privacy Policy"));
-    connect(privacy_link, &QPushButton::clicked, this, &TermsScreen::navigate_privacy);
+    connect(privacy_link, &QPushButton::clicked, this, [this, in_auth_stack, open_panel]() {
+        if (in_auth_stack)
+            emit navigate_privacy();
+        else
+            open_panel("privacy");
+    });
     fhl->addWidget(privacy_link);
 
     fhl->addStretch();
 
     auto* contact_link = make_link(tr("Contact Us"));
-    connect(contact_link, &QPushButton::clicked, this, &TermsScreen::navigate_contact);
+    connect(contact_link, &QPushButton::clicked, this, [this, in_auth_stack, open_panel]() {
+        if (in_auth_stack)
+            emit navigate_contact();
+        else
+            open_panel("contact");
+    });
     fhl->addWidget(contact_link);
 
     vl->addWidget(footer);

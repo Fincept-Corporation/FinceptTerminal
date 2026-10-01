@@ -10,6 +10,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QUuid>
 
 #include <cmath>
@@ -28,18 +29,36 @@ QString stable_request_id() {
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
 
+// Inactivity timeout for read-only RPC calls. Without it a stalled endpoint
+// leaves the reply (and the swap panel's "Validating with RPC…" state) hanging
+// until the OS gives up on the socket.
+constexpr int kRpcTransferTimeoutMs = 30 * 1000;
+
+// QNetworkReply::errorString() embeds the full request URL for HTTP-level
+// failures, and the configured endpoint carries the Helius key in its query
+// string (`?api-key=…`). That string is logged and surfaced in the UI, so scrub
+// the key before it leaves this file (P14: never log credentials).
+QString rpc_client_redact_secrets(QString s) {
+    static const QRegularExpression kKeyParam(QStringLiteral("(api[-_]?key=)[^&\\s\"']+"),
+                                              QRegularExpression::CaseInsensitiveOption);
+    s.replace(kKeyParam, QStringLiteral("\\1***"));
+    return s;
+}
+
 } // namespace
 
 double SplTokenBalance::ui_amount() const noexcept {
     if (amount_raw.isEmpty()) {
         return 0.0;
     }
+    // Atomic amounts are u64 on-chain; toLongLong() fails above 2^63-1 and the
+    // balance would read 0. A double parse covers the full range.
     bool ok = false;
-    const auto raw = amount_raw.toLongLong(&ok);
-    if (!ok) {
+    const double raw = amount_raw.toDouble(&ok);
+    if (!ok || raw < 0.0) {
         return 0.0;
     }
-    return static_cast<double>(raw) / std::pow(10.0, decimals);
+    return raw / std::pow(10.0, decimals);
 }
 
 SolanaRpcClient::SolanaRpcClient(QObject* parent) : QObject(parent) {
@@ -96,6 +115,11 @@ void SolanaRpcClient::post_rpc(const QString& method, const QJsonObject& params_
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    // sendTransaction is excluded on purpose: aborting it client-side would
+    // report failure for a transaction the RPC may already have accepted.
+    if (method != QLatin1String("sendTransaction")) {
+        req.setTransferTimeout(kRpcTransferTimeoutMs);
+    }
 
     const QByteArray body = QJsonDocument(envelope).toJson(QJsonDocument::Compact);
     auto* reply = nam_->post(req, body);
@@ -107,7 +131,10 @@ void SolanaRpcClient::post_rpc(const QString& method, const QJsonObject& params_
             return;
         }
         if (reply->error() != QNetworkReply::NoError) {
-            const QString err = reply->errorString();
+            const bool timed_out = reply->error() == QNetworkReply::TimeoutError ||
+                                   reply->error() == QNetworkReply::OperationCanceledError;
+            const QString err = timed_out ? QStringLiteral("RPC request timed out")
+                                          : rpc_client_redact_secrets(reply->errorString());
             LOG_WARN("SolanaRpc", method + " failed: " + err);
             callback(Result<QJsonObject>::err(err.toStdString()));
             return;

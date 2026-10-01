@@ -20,6 +20,9 @@
 #include "services/notifications/providers/WebhookProvider.h"
 #include "services/notifications/providers/WhatsAppProvider.h"
 
+#include <QMetaObject>
+#include <QThread>
+
 #include <algorithm>
 
 namespace fincept::notifications {
@@ -62,6 +65,15 @@ void NotificationService::register_providers() {
 // ── Send ──────────────────────────────────────────────────────────────────────
 
 void NotificationService::send(const NotificationRequest& req) {
+    // history_/unread_ and every provider's HttpClient call (a QNetworkAccessManager
+    // owned by the main thread) belong to this object's thread. Callers such as
+    // workflow nodes and background services can be on a worker — hop over rather
+    // than touch them from there.
+    if (QThread::currentThread() != this->thread()) {
+        QMetaObject::invokeMethod(this, [this, req]() { send(req); }, Qt::QueuedConnection);
+        return;
+    }
+
     // Read per-trigger filter from settings
     auto& repo = SettingsRepository::instance();
     auto get_bool = [&](const QString& key, bool def) -> bool {
@@ -132,6 +144,12 @@ void NotificationService::send(const NotificationRequest& req) {
 
 void NotificationService::send_to(const QString& provider_id, const NotificationRequest& req,
                                   std::function<void(bool, QString)> cb) {
+    if (QThread::currentThread() != this->thread()) {
+        QMetaObject::invokeMethod(
+            this, [this, provider_id, req, cb = std::move(cb)]() mutable { send_to(provider_id, req, std::move(cb)); },
+            Qt::QueuedConnection);
+        return;
+    }
     auto* p = provider(provider_id);
     if (!p) {
         cb(false, QString("Provider '%1' not found").arg(provider_id));

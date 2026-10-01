@@ -884,8 +884,14 @@ void PlanningView::recompute_assumptions() {
     if (sav_assump_note_)
         sav_assump_note_->setText(note);
 
-    // Seed the return inputs from the real CAGR (user can still override).
-    if (have_history_) {
+    // Seed the return inputs from the real CAGR (user can still override) - ONCE
+    // per portfolio. This runs on every snapshot reload, i.e. every refresh, and
+    // re-seeding each time overwrote whatever the user had typed into the very
+    // fields the note above tells them to edit. The snapshots carry their own
+    // portfolio id, so this also works before set_data() has delivered a summary.
+    const QString snap_pid = snapshots_.isEmpty() ? QString() : snapshots_.first().portfolio_id;
+    if (have_history_ && !snap_pid.isEmpty() && snap_pid != assumptions_seeded_for_) {
+        assumptions_seeded_for_ = snap_pid;
         const double pct = hist_cagr_ * 100.0;
         if (expected_return_)
             expected_return_->setValue(pct);

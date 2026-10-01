@@ -288,9 +288,58 @@ void register_utility_tier1_extra(NodeRegistry& registry) {
                 {"key", "Key Field", "string", "", {}, ""},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>& inputs,
+            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                // Operation / Key Field were ignored (the input came back unchanged).
+                const QString op = params.value("operation").toString("flatten");
+                const QString key = params.value("key").toString();
+                const QJsonValue data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+
+                if (op == "flatten" && data.isArray()) {
+                    QJsonArray out;
+                    for (const QJsonValue& v : data.toArray()) {
+                        if (v.isArray()) {
+                            for (const QJsonValue& inner : v.toArray())
+                                out.append(inner);
+                        } else {
+                            out.append(v);
+                        }
+                    }
+                    cb(true, out, {});
+                    return;
+                }
+                if (op == "nest" && data.isArray()) {
+                    // Wrap the whole array under `key` ("items" when no key is given).
+                    QJsonObject out;
+                    out[key.isEmpty() ? QStringLiteral("items") : key] = data.toArray();
+                    cb(true, out, {});
+                    return;
+                }
+                if (op == "unpivot" && data.isArray()) {
+                    // Wide -> long: every field except the Key Field becomes a {key, variable, value} row.
+                    QJsonArray out;
+                    for (const QJsonValue& item : data.toArray()) {
+                        if (!item.isObject())
+                            continue;
+                        const QJsonObject obj = item.toObject();
+                        for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+                            if (!key.isEmpty() && it.key() == key)
+                                continue;
+                            QJsonObject row;
+                            if (!key.isEmpty())
+                                row[key] = obj.value(key);
+                            row["variable"] = it.key();
+                            row["value"] = it.value();
+                            out.append(row);
+                        }
+                    }
+                    cb(true, out, {});
+                    return;
+                }
+                if (op == "pivot") {
+                    cb(false, {}, "Reshape cannot pivot — use the Pivot Table node (Index / Columns / Values)");
+                    return;
+                }
                 cb(true, data, {});
             },
     });

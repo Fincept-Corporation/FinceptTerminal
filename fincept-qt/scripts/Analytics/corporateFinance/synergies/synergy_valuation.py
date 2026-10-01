@@ -288,11 +288,62 @@ class SynergyValuation:
             }
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `synergy_valuation.py value <flat-params-json>` (argv length 3). The native form is
+# `dcf revenue_synergies cost_synergies integration_costs [discount_rate]` (each a list or a scalar), so a
+# service-style call is translated here and then falls through to the native dispatch. Any other argv shape is
+# untouched.
+_SERVICE_COMMANDS = ("value",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _svc_ramp(annual, ramp_years, years=10):
+    """Annual run-rate reached linearly over `ramp_years`, then held."""
+    ramp_years = max(int(ramp_years), 1)
+    return [annual * min((i + 1) / ramp_years, 1.0) for i in range(years)]
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    ramp = _svc_num(p, "ramp_years", default=4.0)
+    # Absolute run-rates win; otherwise percentages are applied to the target's revenue (cost synergies to an
+    # assumed 80% cost base). The panel passes `target_revenue` alongside the percentages.
+    base_revenue = _svc_num(p, "target_revenue", "combined_revenue", default=300e6)
+    revenue_run_rate = _svc_num(p, "annual_revenue_synergies", "annual_synergies", default=None)
+    if revenue_run_rate is None:
+        revenue_run_rate = _svc_num(p, "revenue_synergy_pct", "synergy_pct", default=0.0) * base_revenue
+    cost_run_rate = _svc_num(p, "annual_cost_synergies", default=None)
+    if cost_run_rate is None:
+        cost_run_rate = _svc_num(p, "cost_synergy_pct", default=0.0) * base_revenue * 0.8
+    integration = _svc_num(p, "integration_cost", "integration_costs", default=0.0)
+    # One-time integration costs fall 60 / 40 over the first two years.
+    integration_by_year = [integration * 0.6, integration * 0.4] + [0.0] * 8
+    return [argv[0], "dcf", json.dumps(_svc_ramp(revenue_run_rate, ramp)), json.dumps(_svc_ramp(cost_run_rate, ramp)),
+            json.dumps(integration_by_year), repr(_svc_num(p, "discount_rate", default=0.10))]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

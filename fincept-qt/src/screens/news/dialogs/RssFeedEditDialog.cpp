@@ -14,6 +14,8 @@
 #include <QUuid>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace fincept::screens {
 
 namespace {
@@ -122,6 +124,11 @@ void RssFeedEditDialog::build_ui() {
     if (is_builtin_id_) {
         id_input_->setReadOnly(true);
         id_input_->setToolTip(tr("Built-in feed ID is fixed."));
+    } else if (!initial_.id.isEmpty()) {
+        // Editing an existing user feed: the id is its key. Changing it used to
+        // upsert a second row and leave the original behind as a duplicate.
+        id_input_->setReadOnly(true);
+        id_input_->setToolTip(tr("A feed's ID cannot be changed after it is created."));
     }
     form->addRow(tr("ID"), id_input_);
 
@@ -291,6 +298,18 @@ void RssFeedEditDialog::try_accept() {
     if (!QUrl(f.url).isValid() || !(f.url.startsWith("http://") || f.url.startsWith("https://"))) {
         QMessageBox::warning(this, tr("Invalid URL"), tr("URL must start with http:// or https://."));
         return;
+    }
+    if (initial_.id.isEmpty()) {
+        // New feed: upsert would silently overwrite an existing feed (built-in or
+        // user) that happens to share the typed ID.
+        const auto existing = services::NewsService::instance().list_all_feeds_for_editor();
+        const bool taken = std::any_of(existing.cbegin(), existing.cend(),
+                                       [&f](const auto& e) { return e.feed.id == f.id; });
+        if (taken) {
+            QMessageBox::warning(this, tr("ID already in use"),
+                                 tr("A feed with the ID \"%1\" already exists. Choose a different ID.").arg(f.id));
+            return;
+        }
     }
 
     if (!test_run_) {

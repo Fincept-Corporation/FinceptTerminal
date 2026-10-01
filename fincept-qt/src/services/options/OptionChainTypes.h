@@ -14,6 +14,8 @@
 #include <QString>
 #include <QVector>
 
+#include <cmath>
+
 namespace fincept::services::options {
 
 // ── Underlying classification ──────────────────────────────────────────────
@@ -33,6 +35,16 @@ inline const char* underlying_kind_str(UnderlyingKind k) {
         default:
             return "UNKNOWN";
     }
+}
+
+// Strike label shared by every F&O view. Whole strikes >= 100 print without decimals
+// ("24000"); strikes below 100 keep two ("45.00"); and a FRACTIONAL strike keeps two
+// as well. Stock options trade on 2.5 / 0.5 steps, and the old `'f', strike < 100 ? 2 : 0`
+// printed 1272.5 as "1273" — the wrong strike on the chain, in the Builder and on the
+// OI charts.
+inline QString format_strike(double strike) {
+    const bool whole = std::abs(strike - std::round(strike)) < 1e-9;
+    return QString::number(strike, 'f', (whole && strike >= 100) ? 0 : 2);
 }
 
 // ── Greeks ────────────────────────────────────────────────────────────────

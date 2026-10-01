@@ -196,11 +196,17 @@ QHash<QString, QSet<QString>> ExchangeSession::snapshot_watched() const {
 
 // ── WS lifecycle ───────────────────────────────────────────────────────────
 
-bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList& all_symbols) {
+bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList& all_symbols, bool hub_owned) {
     stop_ws();
 
     ws_primary_symbol_ = primary_symbol;
     ws_all_symbols_ = all_symbols;
+    // Fold in the pairs DataHub subscribers (dashboard ticker / trade tiles) need, so
+    // a screen starting its own stream does not silently drop them.
+    for (const auto& pair : hub_pairs_) {
+        if (!ws_all_symbols_.contains(pair))
+            ws_all_symbols_.append(pair);
+    }
 
     const QString python_path = python::PythonRunner::instance().python_path();
     QString script_path;
@@ -278,7 +284,7 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
             return false;
         }
         args << "-u" << "-B" << script_path << exchange_id_;
-        for (const auto& sym : all_symbols)
+        for (const auto& sym : ws_all_symbols_)
             args << sym;
     }
 
@@ -307,6 +313,7 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
 
     ws_process_->start(python_path, args);
     ws_should_run_ = true;
+    ws_hub_owned_ = hub_owned;
     ws_uptime_.restart();
     LOG_INFO(kSessionTag, QString("WS stream start requested for %1/%2").arg(exchange_id_, primary_symbol));
     return true;
@@ -323,6 +330,7 @@ void ExchangeSession::stop_ws() {
     ws_process_ = nullptr;
     ws_connected_ = false;
     ws_should_run_ = false; // deliberate stop — suppress the finished-driven respawn
+    ws_hub_owned_ = false;
     proc->disconnect(this);
     proc->terminate();
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), proc, &QObject::deleteLater);
@@ -372,12 +380,13 @@ void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus sta
     QPointer<ExchangeSession> self = this;
     const QString primary = ws_primary_symbol_;
     const QStringList all = ws_all_symbols_;
-    QTimer::singleShot(backoff_ms, this, [self, primary, all]() {
+    const bool hub_owned = ws_hub_owned_; // a respawn must not change who owns the stream
+    QTimer::singleShot(backoff_ms, this, [self, primary, all, hub_owned]() {
         if (!self || !self->ws_should_run_)
             return;
         if (self->is_ws_active())
             return; // already back up (e.g. a manual restart beat us to it)
-        self->start_ws(primary, all);
+        self->start_ws(primary, all, hub_owned);
     });
 }
 
@@ -388,6 +397,13 @@ void ExchangeSession::set_ws_primary_symbol(const QString& symbol) {
             return;
         ws_primary_symbol_ = symbol;
     }
+    // The re-pointed primary is now part of what the process streams. Record it so
+    // the launch list stays truthful — a later respawn starts from it, and the
+    // DataHub demand path (ExchangeSessionManager) compares against it to decide
+    // whether the stream already covers a pair, instead of relaunching on every
+    // symbol switch.
+    if (!ws_all_symbols_.contains(symbol))
+        ws_all_symbols_.append(symbol);
     // Re-point the live stream in place — ws_stream.py switches its
     // orderbook/trades/ohlc tasks to the new primary (stdin command) without
     // dropping the watchlist ticker streams. Fall back to a relaunch only if

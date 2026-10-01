@@ -232,14 +232,8 @@ void SupplyChartPanel::retranslateUi() {
         title_->setText(tr("SUPPLY CHART · 12 MONTHS"));
     if (legend_)
         legend_->setText(tr("● TOTAL  ● CIRCULATING  ● BURNED"));
-    // Re-derive the LIVE/DEMO pill the same way on_supply_history_update does
-    // (mirror the canonical treasury:buyback_epoch mock flag).
-    bool is_mock = false;
-    const auto epoch_v = fincept::datahub::DataHub::instance().peek(QStringLiteral("treasury:buyback_epoch"));
-    if (epoch_v.canConvert<fincept::wallet::BuybackEpoch>()) {
-        is_mock = epoch_v.value<fincept::wallet::BuybackEpoch>().is_mock;
-    }
-    update_demo_chip(is_mock);
+    // Re-render the LIVE/DEMO pill from the flag of the series on screen.
+    update_demo_chip(series_is_mock_);
 }
 
 // ── Updates ────────────────────────────────────────────────────────────────
@@ -248,19 +242,22 @@ void SupplyChartPanel::on_supply_history_update(const QVariant& v) {
     if (!v.canConvert<QVector<fincept::wallet::SupplyHistoryPoint>>())
         return;
     const auto pts = v.value<QVector<fincept::wallet::SupplyHistoryPoint>>();
-    if (pts.isEmpty())
+    if (pts.isEmpty()) {
+        // An empty series is a legitimate (if useless) answer from the worker;
+        // dropping it silently left a blank chart with a LIVE pill.
+        show_error_strip(tr("The supply-history feed returned no data points yet."));
         return;
-
-    // Mock detection: the supply-history vector itself carries no flag, but
-    // both treasury:* topics share a producer (BuybackBurnService) and a
-    // refresh path. Peek treasury:buyback_epoch — the canonical mock signal
-    // — and mirror its flag onto our pill so all three panels read DEMO
-    // together when the worker endpoint is unconfigured.
-    bool is_mock = false;
-    const auto epoch_v = fincept::datahub::DataHub::instance().peek(QStringLiteral("treasury:buyback_epoch"));
-    if (epoch_v.canConvert<fincept::wallet::BuybackEpoch>()) {
-        is_mock = epoch_v.value<fincept::wallet::BuybackEpoch>().is_mock;
     }
+
+    // Mock detection comes from the points themselves. This used to peek the
+    // separate treasury:buyback_epoch topic and mirror its flag, which was both
+    // racy (supply history can publish before the epoch does, and the epoch
+    // value expires from peek() after its 60 s TTL while this series lives for
+    // an hour) — so a fabricated curve could be labelled LIVE.
+    bool is_mock = false;
+    for (const auto& p : pts)
+        is_mock = is_mock || p.is_mock;
+    series_is_mock_ = is_mock;
     update_demo_chip(is_mock);
 
     total_series_->clear();
@@ -289,6 +286,8 @@ void SupplyChartPanel::on_supply_history_update(const QVariant& v) {
         return; // nothing valid
     if (y_min == y_max)
         y_max = y_min + 1.0; // avoid degenerate axis
+    if (x_min == x_max)
+        x_max = x_min + 24LL * 60 * 60 * 1000; // single sample: QDateTimeAxis rejects min == max
 
     x_axis_->setRange(QDateTime::fromMSecsSinceEpoch(x_min), QDateTime::fromMSecsSinceEpoch(x_max));
     const double pad = (y_max - y_min) * 0.05;

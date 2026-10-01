@@ -336,7 +336,12 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
     QElapsedTimer clock;
     clock.start();
     for (int i = 0; clock.elapsed() < kPollBudgetMs; ++i) {
-        QThread::msleep(static_cast<unsigned long>(i < kFastPollCount ? kFastPollMs : kSlowPollMs));
+        // Sliced sleep so a user's Stop lands within ~100 ms instead of after the poll gap.
+        if (!detail::cancellable_sleep(i < kFastPollCount ? kFastPollMs : kSlowPollMs)) {
+            resp.cancelled = true;
+            resp.error = "Request cancelled";
+            return resp;
+        }
 
         auto poll = eventloop_request("GET", poll_url, {}, hdr, 15000);
         if (!poll.success) {
@@ -582,7 +587,27 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     bool challenged_fabrication = false;
 
     LlmResponse resp;
+    // Wall-clock ceiling for the whole tool phase (mcp/tool_loop_deadline_ms, 0 = off).
+    // This loop deliberately has no ROUND budget (see kFinceptHardStop), which left it
+    // with no budget at all: 200 rounds x a poll of up to 2 minutes each, with the one
+    // LLM worker thread — and every request queued behind it — held the whole time.
+    // Exhausting it is a normal outcome: it falls through to the plain-text close-out
+    // turn below, exactly like the no-progress stop (CLAUDE.md M7).
+    const qint64 tool_deadline_ms = detail::tool_loop_deadline_ms();
     for (int round = 0; round < kFinceptHardStop; ++round) {
+        if (detail::cancel_requested()) {
+            resp = LlmResponse{};
+            resp.cancelled = true;
+            resp.error = "Request cancelled";
+            return resp;
+        }
+        if (round > 0 && tool_deadline_ms > 0 && turn_clock.elapsed() >= tool_deadline_ms) {
+            LOG_WARN(kLlmFinceptTag, QString("Fincept: tool phase hit the %1 s time budget after %2 round(s) — "
+                                             "requesting close-out")
+                                         .arg(tool_deadline_ms / 1000)
+                                         .arg(round));
+            break;
+        }
         QJsonArray structured_calls;
         const QString prompt = compose_prompt(round_blocks.isEmpty() ? QString() : kContinueHint);
         resp = fincept_submit_poll(prompt, &structured_calls);

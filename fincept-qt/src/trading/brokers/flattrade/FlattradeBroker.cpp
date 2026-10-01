@@ -4,6 +4,7 @@
 #include "trading/brokers/BrokerClientOrderId.h"
 #include "trading/brokers/BrokerHttp.h"
 #include "trading/brokers/BrokerTokenUtil.h"
+#include "trading/instruments/InstrumentService.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -165,7 +166,12 @@ OrderPlaceResponse FlattradeBroker::place_order(const BrokerCredentials& creds, 
     jdata["prd"] = ft_enum_map().product_or(order.product_type, "I");
     jdata["exch"] = order.exchange;
     // tsym goes in raw — make_body percent-encodes the JSON wrapper exactly once.
-    jdata["tsym"] = order.symbol;
+    // NorenAPI wants the scrip master's trading symbol ("RELIANCE-EQ"), not the normalised
+    // "RELIANCE" the equity ticket carries. Map through the instrument master; an unknown symbol
+    // (master not loaded, or the F&O chain's already-native symbol) is sent exactly as given.
+    const auto br_sym =
+        InstrumentService::instance().to_brsymbol(order.symbol, order.exchange, QStringLiteral("flattrade"));
+    jdata["tsym"] = (br_sym.has_value() && !br_sym->isEmpty()) ? *br_sym : order.symbol;
     jdata["qty"] = QString::number(static_cast<int>(order.quantity));
     jdata["dscqty"] = "0";
     jdata["prctyp"] = ft_enum_map().order_type_or(order.order_type, "MKT");
@@ -173,10 +179,9 @@ OrderPlaceResponse FlattradeBroker::place_order(const BrokerCredentials& creds, 
     jdata["trgprc"] = QString::number(order.stop_price, 'f', 2);
     jdata["ret"] = order.validity.isEmpty() ? "DAY" : order.validity;
     jdata["mkt_protection"] = "0";
-    // Unique per attempt so a retry after an 8s client-side timeout is a
-    // broker-side duplicate rather than a second live order (see
-    // BrokerClientOrderId.h). Was the constant "fincept", which deduplicated nothing.
-    jdata["remarks"] = make_client_order_ref(20);
+    // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+    // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+    jdata["remarks"] = client_order_ref_for(order, 20);
     jdata["ordersource"] = "API";
 
     auto& http = BrokerHttp::instance();
@@ -630,8 +635,10 @@ ApiResponse<QVector<BrokerCandle>> FlattradeBroker::get_history(const BrokerCred
     if (!to.isValid())
         to = QDate::currentDate();
 
-    int64_t from_epoch = QDateTime(from, QTime(9, 15, 0)).toSecsSinceEpoch();
-    int64_t to_epoch = QDateTime(to, QTime(15, 30, 0)).toSecsSinceEpoch();
+    // NSE session bounds are IST wall-clock; anchor them in IST, not the machine's zone, or the
+    // requested window slides by the zone offset on a non-IST PC.
+    int64_t from_epoch = QDateTime(from, QTime(9, 15, 0), ist_zone()).toSecsSinceEpoch();
+    int64_t to_epoch = QDateTime(to, QTime(15, 30, 0), ist_zone()).toSecsSinceEpoch();
 
     bool is_daily = (resolution == "D" || resolution == "1D" || resolution == "W" || resolution == "M");
     auto& http = BrokerHttp::instance();
@@ -702,6 +709,8 @@ ApiResponse<QVector<BrokerCandle>> FlattradeBroker::get_history(const BrokerCred
             // Timestamp format: "DD-MM-YYYY HH:MM:SS"
             QString time_str = o.value("time").toString();
             QDateTime dt = QDateTime::fromString(time_str, "dd-MM-yyyy HH:mm:ss");
+            if (dt.isValid())
+                dt.setTimeZone(ist_zone()); // Noren timestamps are IST wall-clock, not machine-local
             BrokerCandle c;
             c.timestamp = dt.isValid() ? dt.toSecsSinceEpoch() * 1000LL : 0LL;
             c.open = o.value("into").toString().toDouble();

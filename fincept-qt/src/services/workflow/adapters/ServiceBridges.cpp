@@ -7,10 +7,12 @@
 #include "services/notifications/NotificationService.h"
 #include "services/workflow/AuditLogger.h"
 #include "services/workflow/ConfirmationService.h"
+#include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/RiskManager.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "storage/repositories/WorkflowRepository.h"
+#include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
@@ -48,6 +50,50 @@ using fincept::python::PythonResult;
 using fincept::python::PythonRunner;
 
 namespace fincept::workflow {
+
+// ── CSV helpers for the "Convert to File" bridge ──────────────────────
+
+// One CSV cell: full-precision numbers (QString::number() kept 6 significant digits, so
+// 1234.5678 was exported as 1234.57 and 12345678 as 1.23457e+07), true/false, empty for
+// null, nested values as JSON, and RFC 4180 quoting where needed.
+static QString bridge_csv_cell(const QJsonValue& v) {
+    QString s = ExpressionEngine::value_to_string(v);
+    if (s.contains(QLatin1Char(',')) || s.contains(QLatin1Char('"')) || s.contains(QLatin1Char('\n')) ||
+        s.contains(QLatin1Char('\r')))
+        s = QLatin1Char('"') + s.replace(QLatin1Char('"'), QLatin1String("\"\"")) + QLatin1Char('"');
+    return s;
+}
+
+// Rows -> CSV text. The header is the union of every row's keys (first-seen order) — taking
+// it from row 0 alone dropped any column that first appears later.
+static QString bridge_csv_from_rows(const QJsonArray& rows) {
+    QStringList headers;
+    for (const QJsonValue& row : rows) {
+        if (!row.isObject())
+            continue;
+        for (const QString& key : row.toObject().keys()) {
+            if (!headers.contains(key))
+                headers << key;
+        }
+    }
+    QString csv;
+    if (headers.isEmpty())
+        return csv;
+    QStringList head_cells;
+    for (const QString& h : headers)
+        head_cells << bridge_csv_cell(h);
+    csv += head_cells.join(QLatin1Char(',')) + QLatin1Char('\n');
+    for (const QJsonValue& row : rows) {
+        if (!row.isObject())
+            continue;
+        const QJsonObject obj = row.toObject();
+        QStringList cells;
+        for (const QString& h : headers)
+            cells << bridge_csv_cell(obj.value(h));
+        csv += cells.join(QLatin1Char(',')) + QLatin1Char('\n');
+    }
+    return csv;
+}
 
 // Semi-Auto gate for headless workflow order nodes. When the account is in
 // Semi-Auto mode, queue the (entry) order for manual approval — it surfaces in
@@ -1331,6 +1377,19 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 return;
             }
 
+            // HttpClient only does GET/POST and has no header support: PUT and DELETE used to be
+            // sent as GET and the Headers parameter was dropped. The API Call node already does
+            // all of that (methods, headers, timeout) — route those requests through it.
+            if (method == "PUT" || method == "DELETE" || !params.value("headers").toObject().isEmpty()) {
+                const auto* api = NodeRegistry::instance().find("utility.api_call");
+                if (api && api->execute) {
+                    QJsonObject api_params = params;
+                    api_params["auth_type"] = "none";
+                    api->execute(api_params, inputs, cb);
+                    return;
+                }
+            }
+
             auto& http = HttpClient::instance();
             if (method == "POST") {
                 QJsonObject body = params.value("body").toObject();
@@ -1377,14 +1436,23 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 cb(false, {}, "Code is empty");
                 return;
             }
+            // The Language select offers JavaScript, but only a Python runtime is wired: the old
+            // code ran JavaScript source through Python and reported a baffling SyntaxError.
+            if (language.compare("python", Qt::CaseInsensitive) != 0) {
+                cb(false, {}, QString("The Code node can only run Python — '%1' is not supported").arg(language));
+                return;
+            }
 
-            // Inject upstream input as a variable the script can access
-            if (!inputs.isEmpty() && !inputs[0].isNull()) {
-                QString input_json =
-                    QString::fromUtf8(QJsonDocument(inputs[0].isObject() ? QJsonDocument(inputs[0].toObject())
-                                                                         : QJsonDocument(inputs[0].toArray()))
-                                          .toJson(QJsonDocument::Compact));
-                code = QString("import json\n_input = json.loads('%1')\n").arg(input_json.replace("'", "\\'")) + code;
+            // Inject the upstream input as `_input`. It travels base64-encoded: pasting the JSON
+            // text into a single-quoted Python literal broke on any backslash, quote or newline
+            // inside a string value (the \n escape became a raw newline -> invalid JSON), and a
+            // scalar input arrived as [].
+            if (!inputs.isEmpty() && !inputs[0].isNull() && !inputs[0].isUndefined()) {
+                const QByteArray encoded =
+                    QJsonDocument(QJsonArray{inputs[0]}).toJson(QJsonDocument::Compact).toBase64();
+                code = QString("import json, base64\n_input = json.loads(base64.b64decode('%1').decode('utf-8'))[0]\n")
+                           .arg(QString::fromLatin1(encoded)) +
+                       code;
             }
 
             // Append a JSON output wrapper if user doesn't print JSON themselves
@@ -1440,6 +1508,7 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 out["size"] = file.size();
                 cb(true, out, {});
             } else if (operation == "write" || operation == "append") {
+                QDir().mkpath(QFileInfo(path).absolutePath()); // "output/x.csv" used to fail when output/ was missing
                 QFile file(path);
                 auto mode = QIODevice::WriteOnly | QIODevice::Text;
                 if (operation == "append")
@@ -1497,6 +1566,18 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 return;
             }
 
+            // Only JSON and CSV are produced here. xlsx / xml / pdf used to fall into a branch that
+            // wrote compact JSON under the requested name — a "report.pdf" that no PDF reader
+            // can open, reported as a success.
+            if (format != "json" && format != "csv") {
+                cb(false, {},
+                   QString("Convert to File cannot write '%1' — use the Spreadsheet node for xlsx, the PDF Report "
+                           "node for pdf, or the XML node for xml")
+                       .arg(format));
+                return;
+            }
+
+            QDir().mkpath(QFileInfo(path).absolutePath());
             QFile file(path);
             if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 cb(false, {}, QString("Cannot open: %1").arg(file.errorString()));
@@ -1507,32 +1588,9 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 QJsonDocument doc =
                     inputs[0].isObject() ? QJsonDocument(inputs[0].toObject()) : QJsonDocument(inputs[0].toArray());
                 file.write(doc.toJson(QJsonDocument::Indented));
-            } else if (format == "csv") {
-                // Convert JSON array of objects to CSV
-                QString csv;
-                if (inputs[0].isArray()) {
-                    QJsonArray arr = inputs[0].toArray();
-                    if (!arr.isEmpty() && arr[0].isObject()) {
-                        QStringList headers = arr[0].toObject().keys();
-                        csv += headers.join(",") + "\n";
-                        for (const QJsonValue& row : arr) {
-                            QStringList vals;
-                            for (const QString& h : headers) {
-                                QJsonValue v = row.toObject().value(h);
-                                QString s = v.isString() ? "\"" + v.toString().replace("\"", "\"\"") + "\""
-                                                         : QString::number(v.toDouble());
-                                vals << s;
-                            }
-                            csv += vals.join(",") + "\n";
-                        }
-                    }
-                }
-                file.write(csv.toUtf8());
             } else {
-                file.write(QString::fromUtf8(QJsonDocument(inputs[0].isObject() ? QJsonDocument(inputs[0].toObject())
-                                                                                : QJsonDocument(inputs[0].toArray()))
-                                                 .toJson(QJsonDocument::Compact))
-                               .toUtf8());
+                // CSV from an array of objects
+                file.write(bridge_csv_from_rows(inputs[0].toArray()).toUtf8());
             }
             file.close();
 
@@ -1646,6 +1704,7 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 out["compressed_size"] = data.size();
                 out["original_size"] = decompressed.size();
                 out["operation"] = "decompress";
+                out["format_note"] = "Qt qCompress container (.qz) — not a .zip / .gz / .tar.gz archive";
                 cb(true, out, {});
             } else {
                 QByteArray compressed = qCompress(data);
@@ -1664,6 +1723,9 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 out["compressed_size"] = compressed.size();
                 out["ratio"] = data.size() > 0 ? static_cast<double>(compressed.size()) / data.size() : 0.0;
                 out["operation"] = "compress";
+                // The Format select offers zip / gzip / tar.gz, but the file written is Qt's own
+                // qCompress container: other tools cannot open it. Say so.
+                out["format_note"] = "Qt qCompress container (.qz) — not a .zip / .gz / .tar.gz archive";
                 cb(true, out, {});
             }
         };
@@ -1756,7 +1818,11 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                         bool is_item = is_atom ? (xml.name() == u"entry") : (xml.name() == u"item");
                         if (is_item) {
                             QJsonObject item;
-                            while (!(xml.isEndElement() && (xml.name() == u"item" || xml.name() == u"entry"))) {
+                            // Stop at end-of-input / a parse error as well: on a truncated or malformed
+                            // feed the end tag never arrives and this loop used to spin forever —
+                            // on the UI thread.
+                            while (!(xml.isEndElement() && (xml.name() == u"item" || xml.name() == u"entry")) &&
+                                   !xml.atEnd() && !xml.hasError()) {
                                 xml.readNext();
                                 if (xml.isStartElement()) {
                                     QString tag = xml.name().toString();
@@ -1860,6 +1926,17 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                 return;
             }
 
+            // "select" must really be read-only: the statement text used to run whatever it
+            // contained regardless of the chosen operation.
+            if (op == "select") {
+                const QString first = query.trimmed().section(QRegularExpression("\\s+"), 0, 0).toUpper();
+                if (first != "SELECT" && first != "WITH" && first != "PRAGMA" && first != "EXPLAIN") {
+                    cb(false, {}, "The Select operation only runs SELECT queries — use Insert / Update / Delete / Raw "
+                                  "for other statements");
+                    return;
+                }
+            }
+
             QSqlDatabase db;
             QString conn_name;
             if (db_source == "custom") {
@@ -1884,7 +1961,16 @@ static void wire_utility_bridges(NodeRegistry& registry) {
                     return;
                 }
             } else {
-                db = QSqlDatabase::database();
+                // Writing to the application's own database from a workflow (it holds credentials,
+                // settings and every saved workflow) is not allowed; reading is.
+                if (op != "select") {
+                    cb(false, {}, "A workflow cannot modify the application's own database — set Database to "
+                                  "\"custom\" and use a database file");
+                    return;
+                }
+                // QSqlDatabase::database() is the Qt *default* connection, which the app never opens
+                // (it uses a named one), so "local" always failed with "No database connection".
+                db = fincept::Database::instance().connection();
                 if (!db.isOpen()) {
                     cb(false, {}, "No database connection available");
                     return;
@@ -2205,6 +2291,9 @@ static void wire_utility_bridges(NodeRegistry& registry) {
         chart_def->execute = [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                                 std::function<void(bool, QJsonValue, QString)> cb) {
             QString chart_type = params.value("chart_type").toString("line");
+            static const QSet<QString> kChartTypes = {"line", "bar", "candlestick", "scatter", "pie", "heatmap"};
+            if (!kChartTypes.contains(chart_type))
+                chart_type = "line"; // it is spliced into the script text — only known names get through
             QString title = params.value("title").toString("");
             int width = static_cast<int>(params.value("width").toDouble(800));
             int height = static_cast<int>(params.value("height").toDouble(600));
@@ -2230,12 +2319,14 @@ except ImportError:
     print(json.dumps({"error": "matplotlib not installed"}))
     sys.exit(0)
 
-data = json.loads(r'''%1''')
+import base64 as _b64
+# Text values arrive base64-encoded: quoting them into the script broke on quotes and backslashes.
+data = json.loads(_b64.b64decode('%1').decode('utf-8'))
 chart_type = '%2'
-title = '%3'
+title = _b64.b64decode('%3').decode('utf-8')
 width = %4
 height = %5
-path = r'%6'
+path = _b64.b64decode('%6').decode('utf-8')
 
 os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
 
@@ -2281,7 +2372,7 @@ if isinstance(data, list) and len(data) > 0:
             vals = [row.get(y_keys[0], 0) for row in data]
             labels = [str(v)[:15] for v in x_vals]
             ax.set_facecolor('#1a1a2e')
-            ax.pie(vals, labels=labels, autopct='%%1.1f%%%%', textprops={'color': '#d0d0d0', 'fontsize': 8})
+            ax.pie(vals, labels=labels, autopct=lambda pct: '{:.1f}%'.format(pct), textprops={'color': '#d0d0d0', 'fontsize': 8})
         elif chart_type == 'heatmap':
             import numpy as np
             matrix = [[row.get(k, 0) for k in y_keys] for row in data]
@@ -2328,12 +2419,12 @@ plt.close()
 
 print(json.dumps({"path": path, "chart_type": chart_type, "size": os.path.getsize(path)}))
 )PY")
-                               .arg(data_json.replace("\\", "\\\\").replace("'", "\\'"))
+                               .arg(QString::fromLatin1(data_json.toUtf8().toBase64()))
                                .arg(chart_type)
-                               .arg(title.replace("'", "\\'"))
+                               .arg(QString::fromLatin1(title.toUtf8().toBase64()))
                                .arg(width)
                                .arg(height)
-                               .arg(path.replace("\\", "/").replace("'", "\\'"));
+                               .arg(QString::fromLatin1(path.toUtf8().toBase64()));
 
             PythonRunner::instance().run_code(code, [cb, path, chart_type](const PythonResult& res) {
                 if (!res.success) {

@@ -243,10 +243,89 @@ class LBOModel:
             }
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `lbo_model.py <command> <flat-params-json>` (argv length 3). The native forms are
+# positional (`build target_company assumptions [years]`, `sensitivity base_case growth_scenarios exit_multiples`),
+# so a service-style call is translated here and then falls through to the native dispatch. Native invocations
+# (any other argv shape) are untouched.
+_SERVICE_COMMANDS = ("build", "sensitivity")
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _svc_entry(p):
+    """Shared flat-param reading for both commands -> dict of floats."""
+    ebitda = _svc_num(p, "ebitda", default=None)
+    margin = _svc_num(p, "ebitda_margin", default=0.25)
+    revenue = _svc_num(p, "revenue", default=None)
+    if ebitda is None:
+        ebitda = revenue * margin if revenue else 200e6
+    if not revenue:
+        revenue = ebitda / margin if margin > 0 else ebitda * 4
+    entry_multiple = _svc_num(p, "entry_multiple", "entry_base", default=None)
+    if entry_multiple is None:
+        price = _svc_num(p, "purchase_price", "entry_valuation", "entry_ev", default=None)
+        entry_multiple = price / ebitda if (price and ebitda) else 8.0
+    exit_multiple = _svc_num(p, "exit_multiple", "exit_base", default=entry_multiple)
+    hold = int(_svc_num(p, "holding_period", "hold_years", default=5.0))
+    return {"ebitda": ebitda, "margin": margin, "revenue": revenue, "entry_multiple": entry_multiple,
+            "exit_multiple": exit_multiple, "hold": max(hold, 1)}
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    if argv[1] == "build":
+        e = _svc_entry(p)
+        debt = _svc_num(p, "senior_debt", default=0.0) + _svc_num(p, "sub_debt", default=0.0)
+        leverage = debt / e["ebitda"] if (debt and e["ebitda"]) else _svc_num(p, "debt_multiple", "target_leverage", default=5.0)
+        # Leverage can never exceed what the entry price funds.
+        leverage = min(leverage, max(e["entry_multiple"] - 1.0, 1.0))
+        assumptions = {
+            "entry_multiple": e["entry_multiple"], "exit_multiples": [e["exit_multiple"]], "target_leverage": leverage,
+            "revenue_growth": _svc_num(p, "revenue_growth", default=0.05), "ebitda_margin": e["margin"],
+            "capex_pct_revenue": _svc_num(p, "capex_pct_revenue", default=0.03),
+            "nwc_pct_revenue": _svc_num(p, "nwc_pct_revenue", default=0.05),
+            "tax_rate": _svc_num(p, "tax_rate", default=0.21), "exit_year": e["hold"],
+            "hurdle_irr": _svc_num(p, "hurdle_irr", default=0.20), "projection_years": e["hold"],
+        }
+        target = {"company_name": str(p.get("company_name", "Target")), "revenue": e["revenue"], "ebitda": e["ebitda"]}
+        return [argv[0], "build", json.dumps(target), json.dumps(assumptions), str(e["hold"])]
+    # sensitivity: vary revenue growth against exit multiple around the base case.
+    e = _svc_entry(p)
+    base = {"revenue": e["revenue"], "ebitda_margin": e["margin"], "entry_multiple": e["entry_multiple"],
+            "exit_multiple": e["exit_multiple"], "holding_period": e["hold"], "company_name": "Target"}
+    centre = _svc_num(p, "exit_base", default=e["exit_multiple"])
+    span = _svc_num(p, "range", default=2.0)
+    steps = int(_svc_num(p, "steps", default=5.0))
+    steps = min(max(steps, 3), 11)
+    exits = [round(max(centre - span + 2.0 * span * i / (steps - 1), 0.5), 2) for i in range(steps)]
+    growth = p.get("growth_scenarios")
+    if not isinstance(growth, list) or not growth:
+        g0 = _svc_num(p, "revenue_growth", default=0.08)
+        growth = [round(g0 + d, 4) for d in (-0.06, -0.03, 0.0, 0.03, 0.06)]
+    return [argv[0], "sensitivity", json.dumps(base), json.dumps(growth), json.dumps(exits)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {
             "success": False,

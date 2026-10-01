@@ -41,6 +41,7 @@ class ChatAgentPanel : public QWidget {
     void on_toggle_schedule();
 
     // Tasks
+    void on_add_task();
     void on_refresh_tasks();
     void on_cancel_task();
     void on_view_task_detail();
@@ -74,6 +75,7 @@ class ChatAgentPanel : public QWidget {
 
     // Tasks tab
     QListWidget* task_list_ = nullptr;
+    QPushButton* task_add_btn_ = nullptr;
     QPushButton* task_refresh_btn_ = nullptr;
     QPushButton* task_cancel_btn_ = nullptr;
     QPushButton* task_detail_btn_ = nullptr;

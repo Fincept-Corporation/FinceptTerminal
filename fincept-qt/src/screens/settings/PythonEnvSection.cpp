@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMessageBox>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -267,6 +268,17 @@ void PythonEnvSection::build_ui() {
     root->addWidget(install_log_);
 
     // ── Signal connections ────────────────────────────────────────────────────
+    // The banner above warns that upgrades can break the terminal, but the bulk
+    // actions used to run on a single click with no confirmation.
+    auto confirm_upgrade = [this](int package_count) {
+        return QMessageBox::warning(this, tr("Upgrade Packages"),
+                                    tr("Upgrade %1 package(s) to the newest versions their requirement specs "
+                                       "allow?\n\nIncompatible versions can make analytics scripts crash or "
+                                       "return wrong results, and this panel cannot roll them back.")
+                                        .arg(package_count),
+                                    QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Yes;
+    };
+
     connect(refresh_btn_, &QPushButton::clicked, this, &PythonEnvSection::load_packages);
 
     connect(search_input_, &QLineEdit::textChanged, this, &PythonEnvSection::apply_filter);
@@ -295,7 +307,7 @@ void PythonEnvSection::build_ui() {
             start_action(q);
     });
 
-    connect(upgrade_all_btn_, &QPushButton::clicked, this, [this]() {
+    connect(upgrade_all_btn_, &QPushButton::clicked, this, [this, confirm_upgrade]() {
         ActionBatch b1, b2;
         b1.venv = "venv-numpy1";
         b1.upgrade = true;
@@ -314,14 +326,24 @@ void PythonEnvSection::build_ui() {
             q << b1;
         if (!b2.packages.isEmpty())
             q << b2;
-        if (!q.isEmpty())
+        if (!q.isEmpty() && confirm_upgrade(static_cast<int>(b1.packages.size() + b2.packages.size())))
             start_action(q);
     });
 
-    connect(batch_action_btn_, &QPushButton::clicked, this, [this]() {
+    connect(batch_action_btn_, &QPushButton::clicked, this, [this, confirm_upgrade]() {
         auto batches = build_batches_for_selected();
-        if (!batches.isEmpty())
-            start_action(batches);
+        if (batches.isEmpty())
+            return;
+        // Only upgrades need the warning; installing missing packages is the
+        // normal repair path.
+        int upgrade_count = 0;
+        for (const auto& b : std::as_const(batches)) {
+            if (b.upgrade)
+                upgrade_count += static_cast<int>(b.packages.size());
+        }
+        if (upgrade_count > 0 && !confirm_upgrade(upgrade_count))
+            return;
+        start_action(batches);
     });
 }
 
@@ -426,6 +448,12 @@ void PythonEnvSection::load_packages() {
         return;
     }
 
+    // A refresh clicked while a listing is still running would clear the data
+    // and re-arm list_proc_ underneath it (the old run's `finished` is
+    // disconnected), leaving the table stuck on "Loading..." forever.
+    if (list_proc_->state() != QProcess::NotRunning)
+        return;
+
     all_packages_.clear();
     installed_v1_.clear();
     installed_v2_.clear();
@@ -468,6 +496,16 @@ void PythonEnvSection::start_list_venv(const QString& venv_name) {
 
     connect(list_proc_, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
             [this, venv_name](int exit_code, QProcess::ExitStatus) { on_list_finished(venv_name, exit_code); });
+
+    // `finished` is never emitted when the process cannot even start (uv missing
+    // or not executable), which left the panel on "Loading..." with no way out.
+    connect(list_proc_, &QProcess::errorOccurred, this, [this, venv_name](QProcess::ProcessError err) {
+        if (err != QProcess::FailedToStart)
+            return;
+        LOG_WARN("PythonEnv", "uv pip list could not start for " + venv_name);
+        QMetaObject::invokeMethod(
+            this, [this, venv_name]() { on_list_finished(venv_name, -1); }, Qt::QueuedConnection);
+    });
 
     list_proc_->start(mgr.uv_path(), {"pip", "list", "--python", python});
     LOG_DEBUG("PythonEnv", "Started uv pip list for " + venv_name);
@@ -720,6 +758,17 @@ void PythonEnvSection::run_next_batch() {
                     on_action_finished(exit_code);
                 }
             });
+
+    // Same as the listing process: a failed launch emits no `finished`, which
+    // would leave every button on this panel disabled for the rest of the session.
+    connect(action_proc_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
+        if (err != QProcess::FailedToStart)
+            return;
+        LOG_ERROR("PythonEnv", "uv pip install could not start");
+        action_queue_.clear();
+        QMetaObject::invokeMethod(
+            this, [this]() { on_action_finished(-1); }, Qt::QueuedConnection);
+    });
 
     LOG_INFO("PythonEnv", QString("uv pip install: venv=%1  upgrade=%2  packages=%3")
                               .arg(batch.venv)

@@ -11,9 +11,13 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
+#include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QIntValidator>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -24,6 +28,7 @@
 #include <QScrollArea>
 #include <QString>
 #include <QTextEdit>
+#include <QUrl>
 #include <QUuid>
 #include <QVBoxLayout>
 #include <QVector>
@@ -31,6 +36,40 @@
 namespace fincept::screens::datasources {
 
 namespace col = fincept::ui::colors;
+
+namespace {
+
+/// A URL a connector can actually use: scheme and host both present ("localhost:9200"
+/// parses as scheme "localhost" with no host, and the TEST probe then rejects it).
+bool cfgdlg_is_full_url(const QString& text) {
+    const QUrl u(text, QUrl::TolerantMode);
+    return u.isValid() && !u.scheme().isEmpty() && !u.host().isEmpty();
+}
+
+bool cfgdlg_is_port_field(const QString& name) {
+    return name.compare(QLatin1String("port"), Qt::CaseInsensitive) == 0 || name.endsWith(QLatin1String("Port"));
+}
+
+/// Open-file filter for the Browse button of a connector's `filepath` field.
+QString cfgdlg_file_filter(const QString& connector_id) {
+    static const QHash<QString, QString> kFilters = {
+        {"csv", QStringLiteral("CSV / text (*.csv *.tsv *.txt)")},
+        {"excel", QStringLiteral("Excel workbooks (*.xlsx *.xlsm *.xls)")},
+        {"json", QStringLiteral("JSON (*.json *.jsonl *.ndjson)")},
+        {"parquet", QStringLiteral("Parquet (*.parquet)")},
+        {"geoparquet", QStringLiteral("Parquet (*.parquet *.geoparquet)")},
+        {"xml", QStringLiteral("XML (*.xml)")},
+        {"avro", QStringLiteral("Avro (*.avro)")},
+        {"orc", QStringLiteral("ORC (*.orc)")},
+        {"feather", QStringLiteral("Feather (*.feather)")},
+        {"arrow-ipc", QStringLiteral("Arrow IPC (*.arrow *.feather *.ipc)")},
+        {"sqlite", QStringLiteral("SQLite databases (*.db *.sqlite *.sqlite3 *.db3)")},
+    };
+    const QString specific = kFilters.value(connector_id);
+    return specific.isEmpty() ? QObject::tr("All files (*)") : specific + QStringLiteral(";;") + QObject::tr("All files (*)");
+}
+
+} // namespace
 
 QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& config, const QString& edit_id,
                                       bool duplicate) {
@@ -196,7 +235,7 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
             if (field.type == FieldType::Password)
                 edit->setEchoMode(QLineEdit::Password);
             if (field.type == FieldType::Number)
-                edit->setValidator(new QIntValidator(0, 999999999, edit));
+                edit->setValidator(new QIntValidator(0, cfgdlg_is_port_field(field.name) ? 65535 : 999999999, edit));
             const QString text = existing_cfg.contains(field.name)
                                      ? existing_cfg.value(field.name).toVariant().toString()
                                      : field.default_value;
@@ -204,6 +243,9 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
             input = edit;
         }
 
+        // Service-account JSON pasted into a Textarea is as secret as a password field.
+        if (field.type == FieldType::Textarea && field.name.contains(QLatin1String("credential"), Qt::CaseInsensitive))
+            has_secret_field = true;
         if (field.type == FieldType::Password) {
             has_secret_field = true;
             input->setAccessibleName(QObject::tr("%1 (secret)").arg(field.label));
@@ -220,7 +262,33 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
         field_widgets[field.name] = input;
         focus_chain.append(input);
-        form->addWidget(input, row, 1);
+
+        // File-backed connectors asked for a path with nothing but a placeholder
+        // ("Select CSV file") — give them a real picker.
+        QWidget* grid_widget = input;
+        auto* path_edit = qobject_cast<QLineEdit*>(input);
+        if (path_edit && (field.type == FieldType::File || field.name == QLatin1String("filepath"))) {
+            auto* path_row = new QWidget(&dlg);
+            auto* path_hl = new QHBoxLayout(path_row);
+            path_hl->setContentsMargins(0, 0, 0, 0);
+            path_hl->setSpacing(6);
+            path_hl->addWidget(path_edit, 1);
+            auto* browse = new QPushButton(QObject::tr("Browse..."), path_row);
+            browse->setCursor(Qt::PointingHandCursor);
+            browse->setAccessibleName(QObject::tr("Browse for %1").arg(field.label));
+            const QString file_filter = cfgdlg_file_filter(config.id);
+            QObject::connect(browse, &QPushButton::clicked, &dlg, [&dlg, path_edit, file_filter]() {
+                const QString current = path_edit->text().trimmed();
+                const QString start_dir = current.isEmpty() ? QString() : QFileInfo(current).absolutePath();
+                const QString picked =
+                    QFileDialog::getOpenFileName(&dlg, QObject::tr("Select File"), start_dir, file_filter);
+                if (!picked.isEmpty())
+                    path_edit->setText(QDir::toNativeSeparators(picked));
+            });
+            path_hl->addWidget(browse);
+            grid_widget = path_row;
+        }
+        form->addWidget(grid_widget, row, 1);
         ++row;
     }
 
@@ -307,6 +375,16 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     name_edit->setFocus();
 
     QObject::connect(cancel, &QPushButton::clicked, &dlg, &QDialog::reject);
+    // One error presenter for every failed save: styled once here rather than per call
+    // site, with the caret moved to the offending field instead of just naming it.
+    auto show_error = [status](const QString& message, QWidget* focus_widget) {
+        status->setText(message);
+        status->setStyleSheet(
+            QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
+        if (focus_widget)
+            focus_widget->setFocus(Qt::OtherFocusReason);
+    };
+
     QObject::connect(save, &QPushButton::clicked, &dlg, [&, existing_loaded]() {
         QJsonObject cfg_json;
 
@@ -331,11 +409,30 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
             }
 
             if (field.required && field.type != FieldType::Checkbox && text_value.isEmpty()) {
-                status->setText(QObject::tr("Missing required field: %1").arg(field.label));
-                status->setStyleSheet(
-                    QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
-                if (widget) // put the caret where the problem is instead of just naming it
-                    widget->setFocus(Qt::OtherFocusReason);
+                show_error(QObject::tr("Missing required field: %1").arg(field.label), widget);
+                return;
+            }
+
+            // Shape checks. Nothing validated these, so a bare "localhost:9200" in a URL
+            // field, port 99999 or truncated JSON saved fine and only failed (or probed
+            // nothing) later.
+            if (field.type == FieldType::Url && !text_value.isEmpty() && !cfgdlg_is_full_url(text_value)) {
+                show_error(QObject::tr("%1 must be a full URL including the scheme, e.g. %2")
+                               .arg(field.label, field.placeholder.isEmpty() ? QStringLiteral("https://host")
+                                                                             : field.placeholder),
+                           widget);
+                return;
+            }
+            if (field.type == FieldType::Number && cfgdlg_is_port_field(field.name) && !text_value.isEmpty()) {
+                const int port = text_value.toInt();
+                if (port < 1 || port > 65535) {
+                    show_error(QObject::tr("%1 must be between 1 and 65535").arg(field.label), widget);
+                    return;
+                }
+            }
+            if (field.type == FieldType::Textarea && field.label.contains(QLatin1String("JSON"), Qt::CaseInsensitive) &&
+                !text_value.isEmpty() && !QJsonDocument::fromJson(text_value.toUtf8()).isObject()) {
+                show_error(QObject::tr("%1 must be a valid JSON object").arg(field.label), widget);
                 return;
             }
         }
@@ -355,9 +452,7 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
 
         const auto result = DataSourceRepository::instance().save(ds);
         if (result.is_err()) {
-            status->setText(QObject::tr("Failed to save: %1").arg(QString::fromStdString(result.error())));
-            status->setStyleSheet(
-                QString("color:%1;font-size:12px;font-weight:700;background:transparent;").arg(col::NEGATIVE()));
+            show_error(QObject::tr("Failed to save: %1").arg(QString::fromStdString(result.error())), nullptr);
             return;
         }
 

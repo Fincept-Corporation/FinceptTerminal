@@ -199,8 +199,19 @@ void McpServersScreen::showEvent(QShowEvent* e) {
         loaded_ = true;
         populate_marketplace();
         refresh_installed();
-        update_status_bar();
+    } else {
+        // servers_changed is ignored while the screen is hidden (the isVisible() guard
+        // in the constructor), so a server started/stopped/removed elsewhere — an AI
+        // tool call, the health-check restarter, autostart finishing — left the view
+        // stale until a manual REFRESH. Rebuild the active view on every show.
+        if (active_view_ == 0)
+            populate_marketplace();
+        else if (active_view_ == 1)
+            refresh_installed();
+        else
+            refresh_tools();
     }
+    update_status_bar();
 }
 
 void McpServersScreen::hideEvent(QHideEvent* e) {

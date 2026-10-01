@@ -140,6 +140,13 @@ void PortfolioBlotter::build_ui() {
 
     connect(hdr, &QHeaderView::sectionClicked, this, &PortfolioBlotter::on_header_clicked);
     connect(table_, &QTableWidget::cellClicked, this, &PortfolioBlotter::on_row_clicked);
+    // Double-click a position -> open it in Equity Research. Rows are paged, so
+    // resolve the symbol through the page slice, never the raw row index.
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        const auto page = paged_view();
+        if (row >= 0 && row < page.size())
+            emit open_symbol_requested(QStringLiteral("equity_research"), page[row].symbol);
+    });
 
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(table_, &QTableWidget::customContextMenuRequested, this, &PortfolioBlotter::on_context_menu);
@@ -290,14 +297,36 @@ void PortfolioBlotter::set_holdings(const QVector<portfolio::HoldingWithQuote>& 
 }
 
 void PortfolioBlotter::fetch_sparklines() {
-    if (holdings_.isEmpty())
+    if (holdings_.isEmpty()) {
+        hub_unsubscribe_all();
+        return;
+    }
+
+    // Symbols we have never heard about start as pending; ones already loaded
+    // keep their data rather than flashing back to the placeholder each poll.
+    QStringList symbols;
+    symbols.reserve(holdings_.size());
+    for (const auto& h : holdings_) {
+        if (!sparkline_state_.contains(h.symbol))
+            sparkline_state_[h.symbol] = SparklineState::Pending;
+        symbols.append(h.symbol);
+    }
+    symbols.sort();
+
+    // D3: subscriptions live exactly as long as the table is visible. While
+    // hidden showEvent() subscribes, so a poll landing off-screen must not.
+    if (!isVisible())
         return;
 
-    // Mark all symbols as pending before the fetch.
-    for (const auto& h : holdings_)
-        sparkline_state_[h.symbol] = SparklineState::Pending;
+    // The 60 s portfolio poll hands us the same symbol set every time. The hub
+    // already refreshes subscribed topics on its own cadence, so tearing the
+    // subscriptions down and force-fetching every sparkline again each minute
+    // was pure churn.
+    if (hub_active_ && symbols == sub_symbols_)
+        return;
 
-    hub_resubscribe_sparklines();
+    // Holdings changed: force so a newly added row does not wait out min_interval.
+    hub_resubscribe_sparklines(/*force_refresh=*/true);
 }
 
 void PortfolioBlotter::repaint_sparkline_cells() {
@@ -327,11 +356,15 @@ void PortfolioBlotter::repaint_sparkline_cells() {
     }
 }
 
-void PortfolioBlotter::hub_resubscribe_sparklines() {
+void PortfolioBlotter::hub_resubscribe_sparklines(bool force_refresh) {
     auto& hub = datahub::DataHub::instance();
-    // Holdings set is dynamic (portfolio edits replace it wholesale).
+    // Holdings set is dynamic (portfolio edits replace it wholesale). This also
+    // drops the broker-quote subscriptions, which subscribe_broker_quotes()
+    // re-establishes below - before this was fixed every holdings refresh
+    // silently ended the live broker feed until the screen was re-shown.
     hub.unsubscribe(this);
     hub_active_ = false;
+    sub_symbols_.clear();
 
     if (holdings_.isEmpty())
         return;
@@ -351,10 +384,17 @@ void PortfolioBlotter::hub_resubscribe_sparklines() {
             repaint_sparkline_cells();
         });
     }
-    // force=true: holdings set changes on portfolio edits; bypass the sparkline
-    // min_interval so the row reflects the new symbol without waiting 30s.
-    hub.request(topics, /*force=*/true);
+    // force_refresh: holdings set changes on portfolio edits; bypass the sparkline
+    // min_interval so the row reflects the new symbol without waiting 30s. A plain
+    // re-show must not force - subscribe() already cold-starts any stale topic.
+    if (force_refresh)
+        hub.request(topics, /*force=*/true);
     hub_active_ = true;
+    for (const auto& h : holdings_)
+        sub_symbols_.append(h.symbol);
+    sub_symbols_.sort();
+
+    subscribe_broker_quotes();
 }
 
 void PortfolioBlotter::hub_unsubscribe_all() {
@@ -362,18 +402,42 @@ void PortfolioBlotter::hub_unsubscribe_all() {
         return;
     datahub::DataHub::instance().unsubscribe(this);
     hub_active_ = false;
+    sub_symbols_.clear();
+}
+
+void PortfolioBlotter::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // D3: (re)subscribe when the table becomes visible; hideEvent() ends it.
+    if (!hub_active_ && !holdings_.isEmpty())
+        hub_resubscribe_sparklines(/*force_refresh=*/false);
+}
+
+void PortfolioBlotter::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    hub_unsubscribe_all();
 }
 
 void PortfolioBlotter::hub_resubscribe_broker_quotes(const QString& broker_account_id) {
-    if (broker_account_id.isEmpty() || holdings_.isEmpty())
+    if (broker_account_id_ == broker_account_id && hub_active_)
+        return; // already wired for this account - repeated calls must not stack handlers
+    broker_account_id_ = broker_account_id;
+    // Rebuild every hub subscription for this owner in one place. subscribe()
+    // appends (it never de-duplicates), so adding broker handlers on top of an
+    // existing set - as every screen show used to - multiplied the callbacks.
+    if (hub_active_)
+        hub_resubscribe_sparklines(/*force_refresh=*/false);
+}
+
+void PortfolioBlotter::subscribe_broker_quotes() {
+    if (broker_account_id_.isEmpty() || holdings_.isEmpty())
         return;
-    auto account = trading::AccountManager::instance().get_account(broker_account_id);
+    auto account = trading::AccountManager::instance().get_account(broker_account_id_);
     if (account.broker_id.isEmpty() || account.state != trading::ConnectionState::Connected)
         return;
 
     auto& hub = datahub::DataHub::instance();
     const QString bid = account.broker_id;
-    const QString aid = broker_account_id;
+    const QString aid = broker_account_id_;
 
     for (const auto& h : holdings_) {
         // Indian stocks in yfinance format end with .NS or .BO
@@ -673,7 +737,10 @@ void PortfolioBlotter::populate_table() {
             sym_item->setData(Qt::UserRole, h.symbol);
 
         // QTY
-        set_cell(kColQty, format_value(h.quantity, h.quantity == std::floor(h.quantity) ? 0 : 2));
+        // Sub-unit holdings (e.g. 0.00123 BTC) rounded to "0.00" with 2 decimals.
+        set_cell(kColQty, format_value(h.quantity, h.quantity == std::floor(h.quantity) ? 0
+                                                   : std::abs(h.quantity) < 1.0        ? 6
+                                                                                       : 2));
 
         // LAST (price)
         set_cell(kColLast, format_value(h.current_price));
@@ -822,6 +889,9 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     }());
     menu.addSeparator();
 
+    auto* research_act = menu.addAction(tr("Open in Equity Research"));
+    auto* news_act = menu.addAction(tr("Open in News"));
+    menu.addSeparator();
     auto* edit_act = menu.addAction(tr("Edit Transaction"));
     auto* delete_act = menu.addAction(tr("Close / Delete Position"));
 
@@ -836,6 +906,10 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
         return f;
     }());
 
+    connect(research_act, &QAction::triggered, this,
+            [this, symbol]() { emit open_symbol_requested(QStringLiteral("equity_research"), symbol); });
+    connect(news_act, &QAction::triggered, this,
+            [this, symbol]() { emit open_symbol_requested(QStringLiteral("news"), symbol); });
     connect(edit_act, &QAction::triggered, this, [this, symbol]() { emit edit_transaction_requested(symbol); });
     connect(delete_act, &QAction::triggered, this, [this, symbol]() { emit delete_position_requested(symbol); });
 

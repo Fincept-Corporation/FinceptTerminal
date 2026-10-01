@@ -33,6 +33,10 @@ logging.basicConfig(
     stream=sys.stderr,
     force=True
 )
+# Module logger — main() references `logger` when an agent-card lookup fails;
+# without this definition that except-handler itself raised NameError and the
+# whole run aborted instead of falling back to the supplied config.
+logger = logging.getLogger("finagent_core.main")
 
 # Add parent directory to path
 parent_dir = str(Path(__file__).parent.parent)
@@ -57,8 +61,16 @@ def _strip_emoji(text: str) -> str:
     return _EMOJI_RE.sub("", text)
 
 def stream_print(chunk_type: str, content: str):
-    """Print a streaming chunk with immediate flush for real-time output"""
-    print(f"{chunk_type.upper()}: {_strip_emoji(content)}", flush=True)
+    """Print a streaming chunk with immediate flush for real-time output.
+
+    The host reads stdout line by line, so a newline inside `content` (a native
+    token such as "\n\n", or a multi-line DONE payload) would split the chunk and
+    the continuation lines would be dropped. Newlines are therefore written as the
+    two characters backslash-n; AgentService's extract() turns them back into
+    newlines.
+    """
+    text = _strip_emoji(content).replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
+    print(f"{chunk_type.upper()}: {text}", flush=True)
 
 
 def _extract_workflow_response(result: Any) -> str:
@@ -77,6 +89,11 @@ def _extract_workflow_response(result: Any) -> str:
         content = result.content
         if content:
             return str(content)
+    # FinancialWorkflowTemplates workflows return {"success": True, "response": "<text>"}.
+    # That text is the answer — without this it fell through to the JSON dump below,
+    # so the UI showed the whole envelope (escaped newlines and all) as the "response".
+    if isinstance(result, dict) and isinstance(result.get("response"), str) and result["response"].strip():
+        return result["response"]
     # SimpleWorkflowExecutor dict: {"success": True, "results": [...], "context": {...}}
     if isinstance(result, dict):
         # Collect all step results into a readable string
@@ -91,6 +108,54 @@ def _extract_workflow_response(result: Any) -> str:
     return str(result)
 
 
+def _portfolio_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Fallback portfolio payload: the caller's params minus host bookkeeping keys.
+
+    Older callers pass portfolio fields at the top level of `params`. The whole dict
+    used to be handed to the workflow as the "portfolio", bookkeeping included
+    (workflow_type / user_id / llm_profile_id) — noise in the LLM prompt.
+    """
+    skip = ("workflow_type", "user_id", "llm_profile_id")
+    return {k: v for k, v in params.items() if k not in skip}
+
+
+def _run_error_text(response: Any):
+    """Return the error text when an Agno run failed, else None.
+
+    Agno reports a failed run (missing/invalid API key, provider error, ...) as an
+    ordinary RunOutput with status ERROR whose `content` is the error message. It
+    used to be wrapped as {"success": True, "response": "<error message>"}, so the
+    UI showed an API-key error as a successful answer.
+    """
+    status = getattr(response, "status", None)
+    value = getattr(status, "value", status)
+    if isinstance(value, str) and value.upper() == "ERROR":
+        content = getattr(response, "content", None)
+        return str(content) if content else "Agent run failed"
+    return None
+
+
+def _ui_guardrails_config(ui_cfg: Any):
+    """Translate the CREATE tab's guardrail checkboxes into GuardrailsModule.from_config keys.
+
+    The editor saves `guardrails: true` plus `guardrails_config` =
+    {pii_detection, injection_check, financial_compliance}. Nothing read that block,
+    so ticking a single protection still enabled the full default set. Returns None
+    (-> default_financial, the previous behaviour) unless at least one box is ticked.
+    """
+    if not isinstance(ui_cfg, dict):
+        return None
+    pii = bool(ui_cfg.get("pii_detection"))
+    injection = bool(ui_cfg.get("injection_check"))
+    compliance = bool(ui_cfg.get("financial_compliance"))
+    if not (pii or injection or compliance):
+        return None
+    cfg: Dict[str, Any] = {"pii_protection": pii, "injection_protection": injection}
+    if compliance:
+        cfg["trading_compliance"] = {"max_position_pct": 0.10}
+    return cfg
+
+
 def _setup_agent_modules(agent, config: Dict[str, Any], params: Dict[str, Any]):
     """
     Setup ALL optional CoreAgent modules from config/params.
@@ -101,6 +166,8 @@ def _setup_agent_modules(agent, config: Dict[str, Any], params: Dict[str, Any]):
     guardrails_cfg = config.get("guardrails") or params.get("guardrails")
     if guardrails_cfg:
         cfg = guardrails_cfg if isinstance(guardrails_cfg, dict) else None
+        if cfg is None:
+            cfg = _ui_guardrails_config(config.get("guardrails_config"))
         agent.setup_guardrails(cfg)
 
     # Tracing
@@ -330,6 +397,11 @@ def dispatch_action(
                 agent.start_trace("agent_run", {"query": query[:100], "session_id": session_id})
 
             response = agent.run(query, full_config, session_id, stream)
+            run_err = _run_error_text(response)
+            if run_err:
+                if agent._tracing:
+                    agent.end_trace()
+                return {"success": False, "error": run_err}
             result = {"success": True, "response": agent.get_response_content(response)}
 
             # Check guardrails on output if enabled
@@ -362,6 +434,9 @@ def dispatch_action(
                 return {"success": False, "error": "Input rejected by guardrails", "violations": guard_result["violations"]}
             query = guard_result["text"]
         response = agent.run_team(query, team_config, params.get("session_id"))
+        team_err = _run_error_text(response)
+        if team_err:
+            return {"success": False, "error": team_err}
         return {"success": True, "response": agent.get_response_content(response)}
 
     if action == "run_workflow":
@@ -469,10 +544,15 @@ def dispatch_action(
 
     if action == "create_portfolio_plan":
         from finagent_core.execution_planner import ExecutionPlanner
-        portfolio_id = params.get("portfolio_id")
-        if not portfolio_id:
-            return {"success": False, "error": "Missing 'portfolio_id'"}
-        plan = ExecutionPlanner.portfolio_rebalance_plan(portfolio_id)
+        # The C++ caller (AgentService::create_portfolio_plan / the MCP
+        # create_portfolio_plan tool) sends optional `goals`, not a portfolio id —
+        # so requiring `portfolio_id` made every such call fail. Accept an id from
+        # either place and fall back to the default portfolio.
+        goals = params.get("goals") if isinstance(params.get("goals"), dict) else {}
+        portfolio_id = params.get("portfolio_id") or goals.get("portfolio_id") or "default"
+        plan = ExecutionPlanner.portfolio_rebalance_plan(str(portfolio_id))
+        if goals:
+            plan.context["goals"] = goals
         return {"success": True, "plan": plan.to_dict()}
 
     if action == "execute_plan":
@@ -480,7 +560,10 @@ def dispatch_action(
         plan_dict = params.get("plan")
         if not plan_dict:
             return {"success": False, "error": "Missing 'plan'"}
-        return execute_plan(plan_dict, api_keys)
+        # `config` carries the resolved LLM (active_llm → config["model"]) so the
+        # plan's agent steps run on the user's model, not a provider guessed from
+        # whichever API key happens to be present.
+        return execute_plan(plan_dict, api_keys, config)
 
     if action == "generate_dynamic_plan":
         from finagent_core.execution_planner import generate_dynamic_plan
@@ -556,14 +639,19 @@ def dispatch_action(
         from finagent_core.repositories import RepositoryFactory, AgentMemory
         import uuid
         repo = RepositoryFactory.get_memory_repository()
+        # AgentService::save_memory_repo sends `options` (type / metadata / importance)
+        # and calls the type `memory_type`; both used to be dropped, so every saved
+        # memory came out as a plain "fact" with default importance.
+        opts = params.get("options") if isinstance(params.get("options"), dict) else {}
         memory = AgentMemory(
             id=str(uuid.uuid4()),
             agent_id=params.get("agent_id", "default"),
             user_id=params.get("user_id"),
-            memory_type=params.get("type", "fact"),
+            memory_type=(params.get("type") or params.get("memory_type")
+                         or opts.get("type") or opts.get("memory_type") or "fact"),
             content=params.get("content"),
-            metadata=params.get("metadata", {}),
-            importance=params.get("importance", 0.5)
+            metadata=params.get("metadata") or opts.get("metadata") or {},
+            importance=params.get("importance", opts.get("importance", 0.5))
         )
         memory_id = repo.create(memory)
         return {"success": True, "memory_id": memory_id}
@@ -650,7 +738,7 @@ def dispatch_action(
         from finagent_core.core_agent import CoreAgent
         agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
         _setup_agent_modules(agent, config, params)
-        portfolio_data = params.get("portfolio_data", params)
+        portfolio_data = params.get("portfolio_data") or _portfolio_params(params)
         result = agent.run_portfolio_rebalancing(portfolio_data, config)
         response_text = _extract_workflow_response(result)
         return {"success": True, "response": response_text, "result": result if isinstance(result, dict) else None}
@@ -659,7 +747,7 @@ def dispatch_action(
         from finagent_core.core_agent import CoreAgent
         agent = CoreAgent(api_keys=api_keys, user_id=params.get("user_id"))
         _setup_agent_modules(agent, config, params)
-        portfolio_data = params.get("portfolio_data", params)
+        portfolio_data = params.get("portfolio_data") or _portfolio_params(params)
         result = agent.run_risk_assessment(portfolio_data, config)
         response_text = _extract_workflow_response(result)
         return {"success": True, "response": response_text, "result": result if isinstance(result, dict) else None}
@@ -672,6 +760,9 @@ def dispatch_action(
                  "GDP growth trajectory, central bank policy stance and yield curve shape, "
                  "key upcoming economic releases, and the overall macro risk environment for equities.")
         result = agent.run(query, config)
+        run_err = _run_error_text(result)
+        if run_err:
+            return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
         return {"success": True, "response": response_text}
 
@@ -686,6 +777,9 @@ def dispatch_action(
                  f"latest EPS vs consensus estimate, revenue beat/miss, key guidance changes, "
                  f"margin trends, management commentary highlights, and post-earnings price reaction.")
         result = agent.run(query, config)
+        run_err = _run_error_text(result)
+        if run_err:
+            return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
         return {"success": True, "symbol": symbol, "response": response_text}
 
@@ -698,6 +792,9 @@ def dispatch_action(
                  "key macro drivers behind the rotation, and specific sector ETF recommendations "
                  "to overweight and underweight in the current regime.")
         result = agent.run(query, config)
+        run_err = _run_error_text(result)
+        if run_err:
+            return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
         return {"success": True, "response": response_text}
 
@@ -712,6 +809,9 @@ def dispatch_action(
                  f"implied volatility skew changes, and what the options flow signals "
                  f"directionally for the underlying.")
         result = agent.run(query, config)
+        run_err = _run_error_text(result)
+        if run_err:
+            return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
         return {"success": True, "symbol": symbol, "response": response_text}
 
@@ -727,6 +827,9 @@ def dispatch_action(
                  f"social media buzz and trending topics, analyst rating changes, "
                  f"insider activity, and an overall sentiment score with directional bias.")
         result = agent.run(query, config)
+        run_err = _run_error_text(result)
+        if run_err:
+            return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
         return {"success": True, "symbol": symbol, "response": response_text}
 
@@ -738,6 +841,9 @@ def dispatch_action(
         if not query:
             return {"success": False, "error": "Missing 'query' in params"}
         result = agent.run(query, config)
+        run_err = _run_error_text(result)
+        if run_err:
+            return {"success": False, "error": run_err}
         response_text = _extract_workflow_response(result)
         return {"success": True, "response": response_text}
 
@@ -754,7 +860,9 @@ def dispatch_action(
         content = params.get("content")
         if not content:
             return {"success": False, "error": "Missing 'content' in params"}
-        memory_id = agent.store_memory(content, params.get("type", "fact"), params.get("metadata"))
+        # C++ (AgentService::store_memory) names the bucket `memory_type`; accept both.
+        memory_id = agent.store_memory(content, params.get("type") or params.get("memory_type") or "fact",
+                                       params.get("metadata"))
         return {"success": True, "memory_id": memory_id}
 
     if action == "recall_memories":
@@ -763,7 +871,8 @@ def dispatch_action(
         am_cfg = dict(params.get("agentic_memory") or config.get("agentic_memory") or {"user_id": params.get("user_id", "default")})
         am_cfg.setdefault("agent_id", params.get("agent_id") or config.get("id") or config.get("agent_id") or "unnamed")
         agent.setup_agentic_memory(am_cfg)
-        memories = agent.recall_memories(params.get("query"), params.get("type"), params.get("limit", 5))
+        memories = agent.recall_memories(params.get("query"), params.get("type") or params.get("memory_type"),
+                                         params.get("limit", 5))
         return {"success": True, "memories": memories, "count": len(memories)}
 
     # =========================================================================
@@ -824,11 +933,15 @@ def dispatch_action(
         from finagent_core.core_agent import CoreAgent
         agent = CoreAgent(api_keys=api_keys)
         tools = agent.list_available_tools()
+        total = sum(len(v) for v in tools.values())
         return {
             "success": True,
             "tools": tools,
             "categories": list(tools.keys()),
-            "total": sum(len(v) for v in tools.values())
+            "total": total,
+            # The C++ AgentToolsInfo parser reads `total_count`; `total` is kept
+            # for existing consumers (additive — never rename an output key).
+            "total_count": total
         }
 
     if action == "list_models":
@@ -927,7 +1040,15 @@ def dispatch_action(
         task_id = params.get("task_id")
         if not task_id:
             return {"success": False, "error": "Missing 'task_id' in params"}
-        get_state_manager().update_status(task_id, "cancel_requested")
+        mgr = get_state_manager()
+        current = mgr.get_task(task_id)
+        if current and current.get("status") in ("paused", "paused_for_input"):
+            # Nothing is running to observe a cooperative `cancel_requested` flag
+            # (the subprocess exited when the task paused), so the row would sit in
+            # that state forever. Cancel it outright.
+            mgr.update_status(task_id, "cancelled")
+            return {"success": True, "task_id": task_id, "signal": "cancelled"}
+        mgr.update_status(task_id, "cancel_requested")
         return {"success": True, "task_id": task_id, "signal": "cancel_requested"}
 
     # ── Agentic Mode — Scheduled recurring tasks ────────────────────────────
@@ -1131,13 +1252,18 @@ def dispatch_action_streaming(
                 resp_content = ""
                 try:
                     response = core_agent.run(query, full_config, session_id, stream=False)
+                    fallback_run_err = _run_error_text(response)
+                    if fallback_run_err:
+                        raise RuntimeError(fallback_run_err)
                     resp_content = core_agent.get_response_content(response) or ""
                     if resp_content:
                         words = resp_content.split()
                         chunk_size = 5
                         for i in range(0, len(words), chunk_size):
                             chunk = ' '.join(words[i:i+chunk_size])
-                            stream_print("token", chunk)
+                            # Leading space between chunks (the host keeps one leading
+                            # space of a token) so concatenated tokens read as words.
+                            stream_print("token", (" " if i else "") + chunk)
                 except Exception as fallback_err:
                     stream_print("error", str(fallback_err))
 
@@ -1183,6 +1309,10 @@ def dispatch_action_streaming(
                 stream_print("thinking", f"Agent '{name}' processing...")
 
             response = agent.run_team(query, team_config, params.get("session_id"))
+            team_stream_err = _run_error_text(response)
+            if team_stream_err:
+                stream_print("error", team_stream_err)
+                return {"success": False, "error": team_stream_err}
             content = agent.get_response_content(response)
 
             if content:
@@ -1190,7 +1320,7 @@ def dispatch_action_streaming(
                 chunk_size = 5
                 for i in range(0, len(words), chunk_size):
                     chunk = ' '.join(words[i:i+chunk_size])
-                    stream_print("token", chunk)
+                    stream_print("token", (" " if i else "") + chunk)
 
             stream_print("done", "completed")
             return {"success": True, "response": content}

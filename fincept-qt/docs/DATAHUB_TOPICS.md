@@ -76,12 +76,12 @@ plan's risk-mitigation cadence).
 
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
-| `geopolitics:events` | `GeopoliticsService` | 2 min | 30 s | Conflict monitor news events (default params). Payload: `EventsPage` (events sorted newest-first + pagination + credits metering). |
+| `geopolitics:events` | `GeopoliticsService` | 2 min | 30 s | Conflict monitor news events (default params). Payload: `EventsPage` (events sorted newest-first + pagination + credits metering). Only an unfiltered first-page fetch publishes here; filtered/paged Monitor queries are delivered to their caller via `events_loaded` and matched by `EventsPage::request_key`. |
 | `geopolitics:countries` | `GeopoliticsService` | 10 min | 60 s | Unique country list w/ event counts |
 | `geopolitics:categories` | `GeopoliticsService` | 10 min | 60 s | Unique event category list |
 | `geopolitics:cities` | `GeopoliticsService` | 10 min | 60 s | Cities with extracted coordinates |
 | `geopolitics:hdx:<context>` | `GeopoliticsService` | 1 h | 60 s | `<context>` = conflicts, humanitarian, country:<iso>, topic:<slug>, search:<q> |
-| `geopolitics:trade:<kind>` | `GeopoliticsService` | 15 min (push-only) | — | `<kind>` = benefits, restrictions |
+| `geopolitics:trade:<kind>` | `GeopoliticsService` | 15 min (push-only) | — | `<kind>` = benefits, restrictions, blocs, barrier |
 | `geopolitics:geolocation` | `GeopoliticsService` | 15 min (push-only) | — | Extracted coords from headline batch |
 | `geopolitics:relationship_graph:<ticker>` | `RelationshipMapService` | 10 min | 2 min | yfinance-backed corporate relationship snapshot |
 
@@ -171,7 +171,7 @@ Terminal-wide topics — same numbers shown to every user, no `<pubkey>` segment
 |---|---|---|---|---|
 | `treasury:buyback_epoch` | `BuybackBurnService` | 60 s | 30 s | Current epoch summary. Shape: `BuybackEpoch{epoch_no, start/end_ts_ms, revenue_total/subs/predmkt/misc_usd, buyback_usd, staker_yield_usd, treasury_topup_usd, fncpt_bought/burned_raw, fncpt_decimals, avg_buy_price_usd, burn_signature, is_mock}`. The three USD splits (`buyback`, `staker_yield`, `treasury_topup`) implement the plan §5.4 50/25/25 distribution; the worker chooses the actual percentages per epoch. `burn_signature` is base58 — `BuybackBurnPanel` opens it on Solscan. |
 | `treasury:burn_total` | `BuybackBurnService` | 5 min | 60 s | All-time totals. Shape: `BurnTotal{total_burned_raw, supply_remaining_raw, decimals, spent_on_buyback_usd, is_mock}`. |
-| `treasury:supply_history` | `BuybackBurnService` | 1 h | 5 min | 12-month time-series for the supply chart. Shape: `QVector<SupplyHistoryPoint{ts_ms, total_raw, circulating_raw, burned_raw, decimals}>`. Producer publishes the whole vector on every refresh; subscribers (`SupplyChartPanel`) replace the series wholesale. |
+| `treasury:supply_history` | `BuybackBurnService` | 1 h | 5 min | 12-month time-series for the supply chart. Shape: `QVector<SupplyHistoryPoint{ts_ms, total_raw, circulating_raw, burned_raw, decimals, is_mock}>` (`is_mock` marks the built-in demo series; the chart's DEMO pill reads it). Producer publishes the whole vector on every refresh; subscribers (`SupplyChartPanel`) replace the series wholesale. |
 | `treasury:reserves` | `TreasuryService` | 5 min | 60 s | Current SOL + USDC holdings of the treasury multisig. Source: `SolanaRpcClient::get_sol_balance` + `get_token_balance(USDC mint)` against the pubkey in SecureStorage `fincept.treasury_pubkey`. SOL→USD price is peeked from `market:price:token:<wSOL>` so we don't double-fetch. Shape: `TreasuryReserves{pubkey_b58, sol_lamports, usdc_amount, sol_usd_price, total_usd, multisig_label, multisig_url, is_mock}`. |
 | `treasury:runway` | `TreasuryService` | 5 min | 60 s | Months of runway at current burn. Computed as `total_usd / monthly_opex_usd`; opex from SecureStorage `fincept.treasury_monthly_opex_usd` (default $100k). Shape: `TreasuryRunway{total_usd, monthly_opex_usd, months, is_mock}`. Re-derived in lock-step with `treasury:reserves`. |
 

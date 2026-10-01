@@ -3,6 +3,7 @@
 // connections. Full CRUD lives in the dedicated Data Sources screen.
 
 #include <QEvent>
+#include <QShowEvent>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -14,6 +15,10 @@ class DataSourcesSection : public QWidget {
     explicit DataSourcesSection(QWidget* parent = nullptr);
 
   protected:
+    /// Re-reads the connection list every time the section is shown — sources are
+    /// added / removed / toggled in the full Data Sources screen, and the list
+    /// used to stay frozen at whatever existed when Settings was constructed.
+    void showEvent(QShowEvent* e) override;
     void changeEvent(QEvent* event) override;
 
   private:

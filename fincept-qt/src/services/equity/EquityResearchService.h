@@ -2,6 +2,7 @@
 #pragma once
 #include "services/equity/EquityResearchModels.h"
 
+#include <QHash>
 #include <QObject>
 #include <QTimer>
 
@@ -39,7 +40,9 @@ class EquityResearchService : public QObject {
     void fetch_financials(const QString& symbol);
     void fetch_technicals(const QString& symbol, const QString& period = "1y");
     void fetch_peers(const QString& symbol, const QStringList& peer_symbols);
-    void fetch_news(const QString& symbol, int count = 20, NewsProvider provider = NewsProvider::Auto);
+    /// `force` drops the cached result first, so a user-pressed REFRESH really re-fetches.
+    void fetch_news(const QString& symbol, int count = 20, NewsProvider provider = NewsProvider::Auto,
+                    bool force = false);
 
     /// The configured & enabled NewsAPI.org key from the Data Sources tab, or an
     /// empty string when none. Used to gate the News-tab provider switch and to
@@ -93,6 +96,7 @@ class EquityResearchService : public QObject {
     static constexpr int kInfoTtlSec = 300;
     static constexpr int kHistoricalTtlSec = 120;
     static constexpr int kNewsTtlSec = 180;
+    static constexpr int kFinancialsTtlSec = 600; // statements only change quarterly
 
     // ── Debounce ──────────────────────────────────────────────────────────────
     static constexpr int kDebounceMs = 350;
@@ -102,6 +106,16 @@ class EquityResearchService : public QObject {
     // Dedicated NAM for third-party NewsAPI.org calls — kept separate from the
     // Fincept-backend HttpClient singleton (which carries base-url/session token).
     QNetworkAccessManager* news_nam_ = nullptr;
+
+    // In-flight guards: the Financials/Valuation tabs and the Sentiment blend all
+    // ask for the same symbol at about the same time, and each used to spawn its own
+    // Python process. A repeat request while one is running is dropped — the
+    // completion signal is broadcast to every listener anyway. Value = start time
+    // (ms since epoch); an entry older than kInflightMaxAgeMs is treated as lost so a
+    // callback that never fires cannot wedge the symbol forever.
+    QHash<QString, qint64> financials_inflight_;
+    QHash<QString, qint64> technicals_inflight_;
+    static constexpr qint64 kInflightMaxAgeMs = 90'000;
 };
 
 } // namespace fincept::services::equity

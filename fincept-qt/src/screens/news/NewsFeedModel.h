@@ -66,6 +66,8 @@ class NewsFeedModel : public QAbstractListModel {
 
   private:
     QString monitor_color_for(const QString& article_id) const;
+    /// Recount unseen rows for the ACTIVE view mode (WIRE rows or cluster leads).
+    void recount_unseen();
 
     QVector<services::NewsArticle> articles_;
     QVector<services::NewsCluster> clusters_;
@@ -77,7 +79,7 @@ class NewsFeedModel : public QAbstractListModel {
     QHash<QString, QString> article_monitor_color_; // O(1) vs QMap's O(log n)
     QSet<QString> geo_article_ids_;
     int pulse_phase_ = 0;  // 0-3 for animation cycle
-    int unseen_count_ = 0; // incremental counter, avoids O(n) scan
+    int unseen_count_ = 0; // incremental counter for the active view mode, avoids O(n) scans
 
     // Per-row pre-formatted display strings — avoids string allocations in paint()
     struct FormattedRow {

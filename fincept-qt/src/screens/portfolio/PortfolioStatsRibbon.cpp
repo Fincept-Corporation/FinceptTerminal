@@ -118,7 +118,7 @@ QWidget* PortfolioStatsRibbon::build_risk_grid() {
     sharpe_ = add_grid_chip(g, 0, 0, tr("SHARPE"));
     conc_ = add_grid_chip(g, 0, 1, tr("CONC"));
     beta_ = add_grid_chip(g, 1, 0, tr("BETA"));
-    vol_ = add_grid_chip(g, 1, 1, tr("VOL 30D"));
+    vol_ = add_grid_chip(g, 1, 1, tr("VOL"));
     mdd_ = add_grid_chip(g, 2, 0, tr("MDD"));
     risk_ = add_grid_chip(g, 2, 1, tr("RISK"));
 
@@ -145,7 +145,10 @@ void PortfolioStatsRibbon::apply_chip_tooltips() {
     set(conc_, tr("Concentration — combined weight of your three largest positions."));
     set(beta_, tr("Beta — OLS regression of portfolio returns against the benchmark index. "
                   "1.0 means it moves with the market."));
-    set(vol_, tr("Volatility — annualised standard deviation of the last 30 days of returns."));
+    // Not a 30-day figure: PortfolioService derives it from every daily snapshot it
+    // holds (up to a year), so the label and tooltip must not promise 30 days.
+    set(vol_, tr("Volatility — annualised standard deviation of daily portfolio returns "
+                 "across the snapshot history (up to one year)."));
     set(mdd_, tr("Maximum drawdown — worst peak-to-trough decline in the snapshot history."));
     set(risk_, tr("Composite risk score, 0–100. Lower is calmer; above 60 is aggressive."));
 }
@@ -230,6 +233,8 @@ void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
         for (int i = 0; i < std::min<int>(3, ws.size()); ++i)
             top3 += ws[i];
         conc_.value->setText(QString("%1%").arg(QString::number(top3, 'f', 1)));
+    } else {
+        conc_.value->setText(QStringLiteral("--")); // sold out: don't keep the old figure
     }
 }
 
@@ -247,6 +252,8 @@ void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
 
     if (m.concentration_top3.has_value())
         conc_.value->setText(fmt_pct_opt(m.concentration_top3));
+    else
+        conc_.value->setText(QStringLiteral("--"));
 
     // MDD always negative — semantic NEGATIVE color.
     mdd_.value->setText(fmt_pct_opt(m.max_drawdown));
@@ -290,7 +297,7 @@ void PortfolioStatsRibbon::retranslateUi() {
     if (beta_.label)
         beta_.label->setText(tr("BETA"));
     if (vol_.label)
-        vol_.label->setText(tr("VOL 30D"));
+        vol_.label->setText(tr("VOL"));
     if (mdd_.label)
         mdd_.label->setText(tr("MDD"));
     if (risk_.label)

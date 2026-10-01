@@ -563,6 +563,16 @@ void CryptoOrderEntry::set_current_price(double price) {
     update_cost_preview();
 }
 
+void CryptoOrderEntry::set_limit_price(double price) {
+    if (price <= 0.0 || !price_edit_)
+        return;
+    if (active_type_ == 0)
+        set_order_type(1); // MARKET -> LIMIT
+    else if (active_type_ == 2)
+        set_order_type(3); // STOP -> STOP-LMT
+    price_edit_->setText(format_price_plain(price));
+}
+
 void CryptoOrderEntry::set_mode(bool is_paper) {
     is_paper_ = is_paper;
     mode_label_->setText(is_paper ? tr("PAPER") : tr("LIVE"));
@@ -649,8 +659,13 @@ void CryptoOrderEntry::on_submit() {
 
     status_label_->setVisible(false);
 
-    const double price = price_edit_->text().toDouble();
-    const double stop_price = stop_price_edit_->text().toDouble();
+    // Only read the price / trigger boxes for the order types that show them.
+    // Both fields keep their text when hidden, so a limit price typed earlier
+    // used to ride along on a MARKET or STOP order (and a stale trigger on a
+    // LIMIT) straight into the exchange request — place_exchange_order sends
+    // any price > 0 as the order price.
+    const double price = (active_type_ == 1 || active_type_ == 3) ? price_edit_->text().toDouble() : 0.0;
+    const double stop_price = (active_type_ == 2 || active_type_ == 3) ? stop_price_edit_->text().toDouble() : 0.0;
     const double sl = sl_edit_->text().toDouble();
     const double tp = tp_edit_->text().toDouble();
 

@@ -77,8 +77,10 @@ QWidget* QuantModulePanel::build_advanced_models_panel() {
     vl->setSpacing(12);
 
     auto* model_type = new QComboBox(w);
-    model_type->addItems(
-        {"LSTM", "GRU", "Transformer", "Localformer", "HIST", "GAT", "LightGBM", "XGBoost", "CatBoost"});
+    // Only the architectures qlib_advanced_models.py implements. The combo also offered
+    // Localformer / HIST / GAT / LightGBM / XGBoost / CatBoost, every one of which the
+    // script rejected as an unknown model type.
+    model_type->addItems({"LSTM", "GRU", "Transformer"});
     model_type->setStyleSheet(combo_ss());
     combo_inputs_["adv_model"] = model_type;
     vl->addWidget(build_input_row(tr("Model Type"), model_type, w));
@@ -190,7 +192,7 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
         show_loading(
             tr("Computing %1 over %2 prices...").arg(combo_inputs_["fe_indicator"]->currentText()).arg(series.size()));
         QJsonObject params;
-        params["data"] = text_inputs_["fe_data"]->text();
+        params["data"] = series; // the validated numeric array, not the raw text field
         params["indicator"] = combo_inputs_["fe_indicator"]->currentText();
         params["window"] = window;
         AIQuantLabService::instance().feature_compute(params);
@@ -245,10 +247,15 @@ QWidget* QuantModulePanel::build_feature_engineering_panel() {
             display_error(tr("Enter the target return series."));
             return;
         }
+        if (rets.size() < 10) {
+            display_error(tr("IC ranking needs at least 10 paired observations; you provided %1 returns.")
+                              .arg(rets.size()));
+            return;
+        }
         show_loading(tr("Ranking %1 feature(s) by IC...").arg(doc.object().size()));
         QJsonObject params;
         params["features"] = doc.object();
-        params["returns"] = text_inputs_["fe_sel_returns"]->text();
+        params["returns"] = rets; // the validated numeric array, not the raw text field
         params["top_k"] = int_inputs_["fe_topk"]->value();
         AIQuantLabService::instance().feature_select_by_ic(params);
     });
@@ -425,7 +432,7 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
     text_inputs_["bl_cov"] = bl_cov;
     blvl->addWidget(build_input_row(tr("Covariance Matrix"), bl_cov, bl));
     auto* bl_views = new QLineEdit(bl);
-    bl_views->setPlaceholderText(tr("Views (comma-separated, e.g. 0.05,0.10)"));
+    bl_views->setPlaceholderText(tr("Expected return per asset, in the order listed (e.g. 0.05,0.10)"));
     bl_views->setStyleSheet(input_ss());
     text_inputs_["bl_views"] = bl_views;
     blvl->addWidget(build_input_row(tr("Views"), bl_views, bl));
@@ -464,6 +471,13 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
             display_error(tr("Each view needs exactly one confidence — got %1 view(s) and %2 confidence(s).")
                               .arg(views.size())
                               .arg(confs.size()));
+            return;
+        }
+        // View i is an absolute view on asset i (in the order listed above).
+        if (views.size() > assets.size()) {
+            display_error(tr("You gave %1 view(s) but only %2 asset(s); views map to assets in order.")
+                              .arg(views.size())
+                              .arg(assets.size()));
             return;
         }
         QJsonParseError perr{};

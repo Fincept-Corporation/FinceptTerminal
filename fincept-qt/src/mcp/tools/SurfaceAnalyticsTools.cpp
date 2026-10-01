@@ -20,6 +20,10 @@
 #include <QJsonObject>
 #include <QObject>
 
+#include <cmath>
+#include <limits>
+#include <optional>
+
 namespace fincept::mcp::tools {
 
 namespace {
@@ -65,11 +69,14 @@ static const std::array<std::pair<surface::ChartType, const char*>, 35> kChartTy
     {surface::ChartType::MonetaryPolicyPath, "MonetaryPolicyPath"},
 }};
 
-surface::ChartType parse_chart_type(const QString& name) {
+// nullopt for an unknown name. This used to fall back to Volatility, so a typo like
+// "YieldCurv" quietly returned the Volatility capability row as if it were the answer.
+std::optional<surface::ChartType> parse_chart_type(const QString& name) {
+    const QString wanted = name.trimmed();
     for (const auto& p : kChartTypes)
-        if (name.compare(p.second, Qt::CaseInsensitive) == 0)
+        if (wanted.compare(QString::fromLatin1(p.second), Qt::CaseInsensitive) == 0)
             return p.first;
-    return surface::ChartType::Volatility;
+    return std::nullopt;
 }
 
 QJsonObject capability_to_json(const surface::SurfaceCapability& c) {
@@ -92,26 +99,37 @@ QJsonObject capability_to_json(const surface::SurfaceCapability& c) {
     };
 }
 
+// Grid values are floats, and QJsonValue(float) widens to double — so 0.21f is written
+// as 0.20999999344348907 (17 digits). A 20x20 surface times six grids is thousands of
+// those, i.e. roughly 3x the tokens for digits no float carries. Round to 4 decimals,
+// which is far finer than the data's own precision. NaN/inf have no JSON form -> null.
+double surface_json_num(float v) {
+    if (!std::isfinite(v))
+        return std::numeric_limits<double>::quiet_NaN(); // QJsonValue serialises NaN as null
+    return std::round(static_cast<double>(v) * 1e4) / 1e4;
+}
+
+QJsonArray surface_float_array(const std::vector<float>& xs) {
+    QJsonArray arr;
+    for (float v : xs)
+        arr.append(surface_json_num(v));
+    return arr;
+}
+
 QJsonArray z_to_json(const std::vector<std::vector<float>>& z) {
     QJsonArray rows;
-    for (const auto& row : z) {
-        QJsonArray r;
-        for (float v : row)
-            r.append(v);
-        rows.append(r);
-    }
+    for (const auto& row : z)
+        rows.append(surface_float_array(row));
     return rows;
 }
 
 QJsonObject vol_surface_to_json(const surface::VolatilitySurfaceData& v) {
-    QJsonArray strikes, exps;
-    for (float s : v.strikes)
-        strikes.append(s);
+    QJsonArray strikes = surface_float_array(v.strikes), exps;
     for (int e : v.expirations)
         exps.append(e);
     return QJsonObject{
         {"underlying", QString::fromStdString(v.underlying)},
-        {"spot_price", v.spot_price},
+        {"spot_price", surface_json_num(v.spot_price)},
         {"strikes", strikes},
         {"expirations", exps},
         {"z", z_to_json(v.z)},
@@ -119,15 +137,13 @@ QJsonObject vol_surface_to_json(const surface::VolatilitySurfaceData& v) {
 }
 
 QJsonObject greeks_to_json(const surface::GreeksSurfaceData& g) {
-    QJsonArray strikes, exps;
-    for (float s : g.strikes)
-        strikes.append(s);
+    QJsonArray strikes = surface_float_array(g.strikes), exps;
     for (int e : g.expirations)
         exps.append(e);
     return QJsonObject{
         {"underlying", QString::fromStdString(g.underlying)},
         {"greek", QString::fromStdString(g.greek_name)},
-        {"spot_price", g.spot_price},
+        {"spot_price", surface_json_num(g.spot_price)},
         {"strikes", strikes},
         {"expirations", exps},
         {"z", z_to_json(g.z)},
@@ -135,9 +151,7 @@ QJsonObject greeks_to_json(const surface::GreeksSurfaceData& g) {
 }
 
 QJsonObject skew_to_json(const surface::SkewSurfaceData& s) {
-    QJsonArray deltas, exps;
-    for (float d : s.deltas)
-        deltas.append(d);
+    QJsonArray deltas = surface_float_array(s.deltas), exps;
     for (int e : s.expirations)
         exps.append(e);
     return QJsonObject{
@@ -149,9 +163,7 @@ QJsonObject skew_to_json(const surface::SkewSurfaceData& s) {
 }
 
 QJsonObject db_surface_to_json(const DatabentoSurfaceResult& r) {
-    QJsonArray xs, ys, xls, yls;
-    for (float v : r.x_axis)
-        xs.append(v);
+    QJsonArray xs = surface_float_array(r.x_axis), ys, xls, yls;
     for (int v : r.y_axis)
         ys.append(v);
     for (const auto& s : r.x_labels)
@@ -188,10 +200,26 @@ QJsonObject ohlcv_result_to_json(const DatabentoOhlcvResult& r) {
     return QJsonObject{{"success", r.success}, {"error", r.error}, {"data", data}};
 }
 
-QJsonObject futures_result_to_json(const DatabentoFuturesResult& /*r*/) {
-    // CommodityForwardData / ContangoData are large internal structs; expose
-    // a summary rather than full grids to keep the tool result manageable.
-    return QJsonObject{{"note", "Use surface_ready / cached_futures payload (large nested grids)"}};
+QJsonObject futures_result_to_json(const DatabentoFuturesResult& r) {
+    // This used to return only {"note": "Use surface_ready / cached_futures payload"} —
+    // a success result with NO futures data in it, for a tool whose whole purpose is the
+    // term structure. Both grids are small (commodities x contract months), so send them.
+    auto grid = [](const std::vector<std::string>& labels, const std::vector<int>& months,
+                   const std::vector<std::vector<float>>& z) {
+        QJsonArray names;
+        for (const auto& n : labels)
+            names.append(QString::fromStdString(n));
+        QJsonArray ms;
+        for (int m : months)
+            ms.append(m);
+        return QJsonObject{{"commodities", names}, {"contract_months", ms}, {"z", z_to_json(z)}};
+    };
+    return QJsonObject{
+        {"success", r.success},
+        {"error", r.error},
+        {"forward", grid(r.forward.commodities, r.forward.contract_months, r.forward.z)},
+        {"contango", grid(r.contango.commodities, r.contango.contract_months, r.contango.z)},
+    };
 }
 
 // Bridge helper for *_ready signals. Each DB fetch kicks the call and
@@ -276,7 +304,14 @@ std::vector<ToolDef> get_surface_analytics_tools() {
                              .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
             const auto ct = parse_chart_type(args["chart_type"].toString());
-            return ToolResult::ok_data(capability_to_json(surface::capability_for(ct)));
+            if (!ct) {
+                QStringList names;
+                for (const auto& p : kChartTypes)
+                    names << QString::fromLatin1(p.second);
+                return ToolResult::fail("Unknown chart_type '" + args["chart_type"].toString().trimmed() +
+                                        "'. Valid names: " + names.join(", "));
+            }
+            return ToolResult::ok_data(capability_to_json(surface::capability_for(*ct)));
         };
         tools.push_back(std::move(t));
     }
@@ -342,14 +377,25 @@ std::vector<ToolDef> get_surface_analytics_tools() {
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .array("symbols", "Symbols to fetch", QJsonObject{{"type", "string"}})
+                             .required()
                              .integer("days", "History window in days")
                              .default_int(60)
                              .between(1, 5000)
                              .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             QStringList syms;
-            for (const auto& v : args["symbols"].toArray())
-                syms.append(v.toString());
+            for (const auto& v : args["symbols"].toArray()) {
+                const QString sym = v.toString().trimmed();
+                if (!sym.isEmpty())
+                    syms.append(sym);
+            }
+            if (syms.isEmpty()) {
+                // A billable Databento call with nothing to fetch — fail before it is made.
+                AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [](auto resolve) {
+                    resolve(ToolResult::fail("'symbols' must be a non-empty array of tickers"));
+                });
+                return;
+            }
             const int days = args["days"].toInt(60);
             bridge_db_fetch(
                 {}, std::move(ctx), promise, [syms, days]() { DatabentoService::instance().fetch_ohlcv(syms, days); },
@@ -369,11 +415,21 @@ std::vector<ToolDef> get_surface_analytics_tools() {
         t.input_schema =
             ToolSchemaBuilder()
                 .array("commodities", "Commodity root symbols (e.g. CL, NG, GC)", QJsonObject{{"type", "string"}})
+                .required()
                 .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             QStringList cs;
-            for (const auto& v : args["commodities"].toArray())
-                cs.append(v.toString());
+            for (const auto& v : args["commodities"].toArray()) {
+                const QString c = v.toString().trimmed();
+                if (!c.isEmpty())
+                    cs.append(c);
+            }
+            if (cs.isEmpty()) {
+                AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [](auto resolve) {
+                    resolve(ToolResult::fail("'commodities' must be a non-empty array of root symbols (e.g. CL, NG)"));
+                });
+                return;
+            }
             bridge_db_fetch(
                 {}, std::move(ctx), promise, [cs]() { DatabentoService::instance().fetch_futures_term_structure(cs); },
                 &DatabentoService::futures_ready,
@@ -497,11 +553,20 @@ std::vector<ToolDef> get_surface_analytics_tools() {
         ToolDef t = make_db_surface_tool("fetch_databento_stress_test",
                                          "Run stress-test P&L surface for a basket of symbols.", {});
         t.input_schema =
-            ToolSchemaBuilder().array("symbols", "Basket symbols", QJsonObject{{"type", "string"}}).build();
+            ToolSchemaBuilder().array("symbols", "Basket symbols", QJsonObject{{"type", "string"}}).required().build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             QStringList syms;
-            for (const auto& v : args["symbols"].toArray())
-                syms.append(v.toString());
+            for (const auto& v : args["symbols"].toArray()) {
+                const QString sym = v.toString().trimmed();
+                if (!sym.isEmpty())
+                    syms.append(sym);
+            }
+            if (syms.isEmpty()) {
+                AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [](auto resolve) {
+                    resolve(ToolResult::fail("'symbols' must be a non-empty array of tickers"));
+                });
+                return;
+            }
             bridge_db_fetch(
                 {}, std::move(ctx), promise, [syms]() { DatabentoService::instance().fetch_stress_test(syms); },
                 &DatabentoService::surface_ready,

@@ -480,8 +480,23 @@ void GovDataTreasuryPanel::on_result(const QString& request_id, const services::
 
 // ── Populate ─────────────────────────────────────────────────────────────────
 
+namespace {
+// government_us_data.py returns the rows under "data" (the panel used to read a "json" key the script
+// never emits, so every Prices/Auctions table rendered empty). Keep "json" as a fallback.
+QJsonArray gov_treasury_rows(const QJsonObject& json) {
+    return json["data"].isArray() ? json["data"].toArray() : json["json"].toArray();
+}
+
+// Rates arrive as fractions (0.04125 == 4.125 %); the columns are labelled in percent.
+QString gov_treasury_pct(const QJsonValue& v) {
+    if (v.isNull() || v.isUndefined() || !v.isDouble())
+        return QStringLiteral("—");
+    return QString::number(v.toDouble() * 100.0, 'f', 3);
+}
+} // namespace
+
 void GovDataTreasuryPanel::populate_prices(const QJsonObject& json) {
-    const QJsonArray records = json["json"].toArray();
+    const QJsonArray records = gov_treasury_rows(json);
     prices_table_->setRowCount(0);
     prices_table_->setRowCount(records.size());
 
@@ -499,7 +514,7 @@ void GovDataTreasuryPanel::populate_prices(const QJsonObject& json) {
         type_item->setForeground(QColor(kGovDataTreasuryColor));
         prices_table_->setItem(i, 1, type_item);
 
-        prices_table_->setItem(i, 2, new QTableWidgetItem(fmt(r["rate"])));
+        prices_table_->setItem(i, 2, new QTableWidgetItem(gov_treasury_pct(r["rate"])));
         QString mat = r["maturity_date"].toString();
         prices_table_->setItem(i, 3, new QTableWidgetItem(mat.isEmpty() ? "—" : mat));
 
@@ -513,7 +528,7 @@ void GovDataTreasuryPanel::populate_prices(const QJsonObject& json) {
 }
 
 void GovDataTreasuryPanel::populate_auctions(const QJsonObject& json) {
-    const QJsonArray records = json["json"].toArray();
+    const QJsonArray records = gov_treasury_rows(json);
     auctions_table_->setRowCount(0);
     auctions_table_->setRowCount(records.size());
 
@@ -532,18 +547,28 @@ void GovDataTreasuryPanel::populate_auctions(const QJsonObject& json) {
         auctions_table_->setItem(i, 1, type_item);
 
         auctions_table_->setItem(i, 2, new QTableWidgetItem(r["securityTerm"].toString()));
-        QString adate = r["auctionDate"].toString();
+        QString adate = r["auctionDate"].toString().left(10); // "2026-09-24T00:00:00" -> date
         auctions_table_->setItem(i, 3, new QTableWidgetItem(adate.isEmpty() ? "—" : adate));
 
+        // Bills auction on a discount rate; notes/bonds on a yield (the discount-rate field is null for
+        // them, which left the HIGH RATE column blank for every coupon security).
+        QJsonValue high_rate = r["highDiscountRate"];
+        if (high_rate.isNull() || high_rate.isUndefined())
+            high_rate = r["highYield"];
+        if (high_rate.isNull() || high_rate.isUndefined())
+            high_rate = r["highInvestmentRate"];
+
         for (int c : {4, 5, 6}) {
-            auto key = c == 4 ? "highDiscountRate" : c == 5 ? "highPrice" : "bidToCoverRatio";
-            auto* it = new QTableWidgetItem(fmt(r[key]));
+            const QString text = c == 4   ? gov_treasury_pct(high_rate)
+                                 : c == 5 ? fmt(r["highPrice"])
+                                          : fmt(r["bidToCoverRatio"]);
+            auto* it = new QTableWidgetItem(text);
             it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             auctions_table_->setItem(i, c, it);
         }
 
         double offering = r["offeringAmount"].toDouble(0);
-        QString os = offering > 0 ? "$" + QString::number(static_cast<qlonglong>(offering / 1e9), 'f', 1) + "B" : "—";
+        QString os = offering > 0 ? "$" + QString::number(offering / 1e9, 'f', 1) + "B" : "—";
         auctions_table_->setItem(i, 7, new QTableWidgetItem(os));
     }
     LOG_INFO("GovTreasury", QString("Loaded %1 auction records").arg(records.size()));
@@ -553,9 +578,9 @@ void GovDataTreasuryPanel::populate_summary(const QJsonObject& json) {
     total_securities_label_->setText(QString::number(json["total_securities"].toInt()));
 
     auto yield = json["yield_summary"].toObject();
-    min_rate_label_->setText(QString::number(yield["min_rate"].toDouble(), 'f', 3) + "%");
-    max_rate_label_->setText(QString::number(yield["max_rate"].toDouble(), 'f', 3) + "%");
-    avg_rate_label_->setText(QString::number(yield["avg_rate"].toDouble(), 'f', 3) + "%");
+    min_rate_label_->setText(gov_treasury_pct(yield["min_rate"]) + "%");
+    max_rate_label_->setText(gov_treasury_pct(yield["max_rate"]) + "%");
+    avg_rate_label_->setText(gov_treasury_pct(yield["avg_rate"]) + "%");
 
     auto price = json["price_summary"].toObject();
     min_price_label_->setText(QString::number(price["min_price"].toDouble(), 'f', 2));

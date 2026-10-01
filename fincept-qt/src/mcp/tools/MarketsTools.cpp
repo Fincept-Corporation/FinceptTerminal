@@ -13,6 +13,9 @@
 #include <QJsonDocument>
 #include <QTimeZone>
 
+#include <algorithm>
+#include <memory>
+
 namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "MarketsTools";
@@ -126,13 +129,20 @@ std::vector<ToolDef> get_markets_tools() {
                     return ToolResult::ok_data(doc.object());
             }
 
-            QJsonObject result_obj;
-            QString error;
+            // Heap state: the wait below is bounded (120 s) while a queued Python run is
+            // not, and a callback that fires afterwards must not write into this unwound frame.
+            struct LookupState {
+                QJsonObject result_obj;
+                QString error;
+            };
+            auto st = std::make_shared<LookupState>();
 
             auto* runner = &fincept::python::PythonRunner::instance();
             const QStringList py_args = {"search", query, QString::number(limit)};
-            detail::run_async_wait(runner, [&](auto signal_done) {
-                runner->run("yfinance_data.py", py_args, [&, signal_done](const fincept::python::PythonResult& r) {
+            detail::run_async_wait(runner, [runner, st, py_args, query](auto signal_done) {
+                runner->run("yfinance_data.py", py_args, [st, query, signal_done](const fincept::python::PythonResult& r) {
+                    QString& error = st->error;
+                    QJsonObject& result_obj = st->result_obj;
                     if (!r.success) {
                         error = r.error.isEmpty() ? r.output : r.error;
                     } else {
@@ -171,10 +181,15 @@ std::vector<ToolDef> get_markets_tools() {
                 });
             });
 
+            const QString error = st->error;
+            const QJsonObject result_obj = st->result_obj;
             if (!error.isEmpty()) {
                 LOG_WARN(TAG, QString("lookup_symbol error [%1]: %2").arg(query, error));
                 return ToolResult::fail(error);
             }
+            if (result_obj.isEmpty())
+                return ToolResult::fail("Symbol lookup did not complete in time (the Python runner may be busy) — "
+                                        "try again");
 
             if (result_obj.value("count").toInt() == 0) {
                 LOG_INFO(TAG, "lookup_symbol no matches for " + query);
@@ -206,7 +221,13 @@ std::vector<ToolDef> get_markets_tools() {
                                    {"description", "1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max (default 1mo)"}}},
             {"interval", QJsonObject{{"type", "string"},
                                      {"description", "1m, 5m, 15m, 30m, 1h, 1d, 1wk, 1mo (default 1d). "
-                                                     "Intraday intervals (<1d) limit period to ~60d."}}}};
+                                                     "Intraday intervals (<1d) limit period to ~60d."}}},
+            {"limit", QJsonObject{{"type", "integer"},
+                                  {"description", "Max bars returned, latest bars (default 60, max 1000). "
+                                                  "A longer window is cut to its latest `limit` bars and flagged "
+                                                  "truncated."},
+                                  {"minimum", 1},
+                                  {"maximum", 1000}}}};
         t.input_schema.required = {"symbol"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString symbol = args["symbol"].toString().trimmed().toUpper();
@@ -237,8 +258,16 @@ std::vector<ToolDef> get_markets_tools() {
                 return ToolResult::fail("No history data available for " + symbol);
             }
 
+            // A 1y daily window is ~250 bars and "max" is thousands — far over the result
+            // budget, and the overflow shaper keeps the OLDEST items, i.e. exactly the bars the
+            // model cares least about. Return the latest `limit` and say so (§M3/M4).
+            const int limit = std::clamp(args["limit"].toInt(60), 1, 1000);
+            const qsizetype total_bars = points.size();
+            const qsizetype first_bar = total_bars > limit ? total_bars - limit : 0;
+
             QJsonArray bars;
-            for (const auto& p : points) {
+            for (qsizetype i = first_bar; i < total_bars; ++i) {
+                const auto& p = points[i];
                 bars.append(QJsonObject{
                     {"timestamp", p.timestamp},
                     {"date", QDateTime::fromSecsSinceEpoch(p.timestamp, QTimeZone::UTC).toString(Qt::ISODate)},
@@ -249,11 +278,18 @@ std::vector<ToolDef> get_markets_tools() {
                     {"volume", static_cast<double>(p.volume)}});
             }
 
-            return ToolResult::ok_data(QJsonObject{{"symbol", symbol},
-                                                   {"period", period},
-                                                   {"interval", interval},
-                                                   {"count", bars.size()},
-                                                   {"bars", bars}});
+            QJsonObject out{{"symbol", symbol}, {"period", period}, {"interval", interval},
+                            {"count", bars.size()}, {"total_bars", total_bars}, {"bars", bars}};
+            if (first_bar > 0) {
+                out["truncated"] = true;
+                return ToolResult::ok(QStringLiteral("Returned the latest %1 of %2 bars (oldest %3 omitted) — raise "
+                                                     "`limit` (max 1000) or use a shorter `period`.")
+                                          .arg(bars.size())
+                                          .arg(total_bars)
+                                          .arg(first_bar),
+                                      out);
+            }
+            return ToolResult::ok_data(out);
         };
         tools.push_back(std::move(t));
     }

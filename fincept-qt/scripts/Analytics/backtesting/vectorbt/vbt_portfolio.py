@@ -29,6 +29,56 @@ from typing import Dict, Any, Optional, Tuple, Callable, List
 from dataclasses import dataclass, field
 
 
+def periods_per_year(index) -> float:
+    """Bars per year implied by a price/equity index (used to annualise Sharpe/vol/CAGR).
+
+    Everything here used to assume 252 bars/year, which is only right for DAILY equity
+    bars: a 1h or 5m run was annualised as if each bar were a day (CAGR exponent and the
+    sqrt(periods) factor both off by ~x6-x78), and 7-day crypto data was understated.
+    - daily-like spacing: 252 when the index has weekend gaps (equities), 365 when it does
+      not (crypto/FX 24x7); weekly 52; monthly 12
+    - intraday: observed bars / calendar years spanned (so session length and holidays are
+      measured, not guessed)
+    """
+    try:
+        # Only a real datetime index carries a frequency; a RangeIndex would be silently
+        # reinterpreted as 1970-epoch nanoseconds and yield an absurd bars/year.
+        if not isinstance(index, pd.DatetimeIndex) and getattr(getattr(index, 'dtype', None), 'kind', '') != 'M':
+            return 252.0
+        idx = pd.DatetimeIndex(index)
+        n = len(idx)
+        if n < 3:
+            return 252.0
+        secs = idx.asi8.astype('float64')
+        # asi8 is in the index's own resolution (ns/us/ms/s): normalise to seconds.
+        unit = str(idx.dtype)
+        if 'ns' in unit:
+            secs = secs / 1e9
+        elif 'us' in unit:
+            secs = secs / 1e6
+        elif 'ms' in unit:
+            secs = secs / 1e3
+        deltas = np.diff(secs)
+        deltas = deltas[deltas > 0]
+        if len(deltas) == 0:
+            return 252.0
+        med = float(np.median(deltas))
+        if med < 1.0:  # sub-second spacing is not market data; keep the daily convention
+            return 252.0
+        if med >= 25 * 86400:
+            return 12.0
+        if med >= 6 * 86400:
+            return 52.0
+        if med >= 20 * 3600:
+            return 252.0 if bool(np.any(deltas > 1.5 * 86400)) else 365.0
+        span_years = float(secs[-1] - secs[0]) / (365.25 * 86400.0)
+        if span_years <= 0:
+            return 252.0
+        return float(max(1.0, (n - 1) / span_years))
+    except Exception:
+        return 252.0
+
+
 # ============================================================================
 # Trade Record Accessors (mimics vbt.Portfolio.trades / entry_trades / etc.)
 # ============================================================================
@@ -193,17 +243,24 @@ class SimplePortfolio:
         self._returns_accessor_obj = None
 
     @classmethod
-    def from_equity_series(cls, equity: pd.Series, init_cash: float) -> 'SimplePortfolio':
-        """Build a SimplePortfolio from a pre-computed equity series (e.g. multi-asset combined)."""
-        empty_trades = pd.DataFrame(columns=[
-            'Entry Idx', 'Exit Idx', 'Size', 'Entry Price', 'Exit Price',
-            'PnL', 'Return', 'Entry Fees', 'Exit Fees', 'Direction', 'Status',
-        ])
+    def from_equity_series(cls, equity: pd.Series, init_cash: float,
+                           trade_records: Optional[pd.DataFrame] = None) -> 'SimplePortfolio':
+        """Build a SimplePortfolio from a pre-computed equity series (e.g. multi-asset combined).
+
+        `trade_records` (the per-symbol trades concatenated) feeds the trade statistics; without
+        it a multi-asset run reported 0 trades / 0% win rate / 0 profit factor alongside a trade
+        list that was not empty.
+        """
+        if trade_records is None or len(trade_records) == 0:
+            trade_records = pd.DataFrame(columns=[
+                'Entry Idx', 'Exit Idx', 'Size', 'Entry Price', 'Exit Price',
+                'PnL', 'Return', 'Entry Fees', 'Exit Fees', 'Direction', 'Status',
+            ])
         close_proxy = pd.Series(equity.values, index=equity.index, name='Close')
         return cls(
             equity_series=equity,
             close_series=close_proxy,
-            trade_records=empty_trades,
+            trade_records=trade_records,
             init_cash=init_cash,
         )
 
@@ -213,6 +270,10 @@ class SimplePortfolio:
 
     def value(self) -> pd.Series:
         return self._equity
+
+    def periods_per_year(self) -> float:
+        """Bars per year of this portfolio's equity index (annualisation basis)."""
+        return periods_per_year(self._equity.index)
 
     @property
     def close(self) -> pd.Series:
@@ -572,8 +633,11 @@ class SimplePortfolio:
         else:
             daily_ret = np.array([])
 
+        # Annualisation basis follows the bar interval (see periods_per_year).
+        ppy = self.periods_per_year()
+
         # Annualized return
-        years = n / 252.0
+        years = n / ppy
         if years > 0 and self._init_cash > 0 and equity[-1] > 0:
             ann_ret = (equity[-1] / self._init_cash) ** (1 / years) - 1
         else:
@@ -583,7 +647,7 @@ class SimplePortfolio:
         # Volatility
         if len(daily_ret) > 1:
             daily_std = float(np.std(daily_ret, ddof=1))
-            ann_vol = daily_std * np.sqrt(252)
+            ann_vol = daily_std * np.sqrt(ppy)
         else:
             daily_std = 0.0
             ann_vol = 0.0
@@ -595,10 +659,12 @@ class SimplePortfolio:
         else:
             s['Sharpe Ratio'] = 0.0
 
-        # Sortino
+        # Sortino: standard downside deviation = sqrt(mean(min(r, 0)^2)) over ALL bars.
+        # (It used the sample std of only the negative bars, which both re-centres them on
+        # their own mean and divides by the number of losing bars — overstating downside risk
+        # and understating Sortino whenever losses are the minority.)
         if len(daily_ret) > 1:
-            neg = daily_ret[daily_ret < 0]
-            downside_std = float(np.std(neg, ddof=1)) * np.sqrt(252) if len(neg) > 1 else 0.0
+            downside_std = float(np.sqrt(np.mean(np.minimum(daily_ret, 0.0) ** 2))) * np.sqrt(ppy)
         else:
             downside_std = 0.0
         s['Sortino Ratio'] = ann_ret / downside_std if downside_std > 1e-10 else 0.0
@@ -625,7 +691,12 @@ class SimplePortfolio:
             s['Win Rate [%]'] = float(len(winners) / len(pnl) * 100) if len(pnl) > 0 else 0.0
             total_wins = float(np.sum(winners)) if len(winners) > 0 else 0.0
             total_losses = float(np.sum(np.abs(losers))) if len(losers) > 0 else 0.0
-            s['Profit Factor'] = total_wins / total_losses if total_losses > 0 else 0.0
+            # Winners and no losing trade -> +inf (the JSON layer turns it into null and the
+            # UI shows "∞"); the old 0.0 read as "worst possible" for the best possible run.
+            if total_losses > 0:
+                s['Profit Factor'] = total_wins / total_losses
+            else:
+                s['Profit Factor'] = float('inf') if total_wins > 0 else 0.0
         else:
             s['Win Rate [%]'] = 0.0
             s['Profit Factor'] = 0.0
@@ -666,6 +737,7 @@ def build_portfolio(
     commission = float(request.get('commission', 0.0))
     slippage = float(request.get('slippage', 0.0))
     allow_short = request.get('allowShort', False)
+    exit_reasons = None  # per-bar stop labels, filled in below when SL/TP/trailing are active
 
     _sys.stderr.write(f'[PF-BUILD] === build_portfolio START ===\n')
     _sys.stderr.write(f'[PF-BUILD] commission={commission}, slippage={slippage}, allow_short={allow_short}\n')
@@ -711,12 +783,10 @@ def build_portfolio(
         _sys.stderr.write(f'[PF-BUILD] Applying exit signals for SL/TP/TS\n')
         entries_before = int(entries.sum())
         exits_before = int(exits.sum())
-        entries, exits = _apply_exit_signals(
-            close_series, entries, exits,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-            trailing_stop=trailing_stop,
+        stop_mask, exit_reasons = _manual_stops(
+            close_series, entries, stop_loss, take_profit, trailing_stop, return_reasons=True
         )
+        exits = exits | stop_mask
         _sys.stderr.write(f'[PF-BUILD] After SL/TP: entries {entries_before}->{int(entries.sum())}, exits {exits_before}->{int(exits.sum())}\n')
 
     # Calculate position sizes
@@ -738,6 +808,7 @@ def build_portfolio(
         size_series=size_series,
         allow_short=allow_short,
         track_per_bar=True,
+        exit_reasons=exit_reasons,
     )
 
     _sys.stderr.write(f'[PF-BUILD] === _simulate_signals returned ===\n')
@@ -961,6 +1032,7 @@ def _simulate_signals(
     size_series: Optional[pd.Series] = None,
     allow_short: bool = False,
     track_per_bar: bool = False,
+    exit_reasons: Optional[List[str]] = None,
 ) -> Tuple[pd.Series, pd.DataFrame, float, Optional[Dict]]:
     """
     Simulate a long-only (or long/short) portfolio from boolean signals.
@@ -1002,6 +1074,7 @@ def _simulate_signals(
     asset_flow_vals = np.zeros(n) if track_per_bar else None
 
     entry_price = 0.0
+    entry_fee = 0.0
     entry_idx = 0
     in_position = False
     prev_position = 0.0
@@ -1025,13 +1098,18 @@ def _simulate_signals(
                 # Close position
                 fee = abs(position) * sell_price * commission
                 total_fees += fee
-                pnl = (sell_price - entry_price) * position - fee
+                # Trade P&L is NET of both legs' commission. It used to subtract only the
+                # exit fee, so Σ(trade PnL) overshot the equity curve by every entry fee and
+                # win rate / profit factor / expectancy all read better than the account did.
+                pnl = (sell_price - entry_price) * position - entry_fee - fee
                 duration = max(1, i - entry_idx)  # bars (integer)
-                ret = (sell_price / entry_price - 1.0) if entry_price > 0 else 0.0
+                cost_basis = entry_price * position + entry_fee
+                ret = (pnl / cost_basis) if cost_basis > 0 else 0.0
 
+                reason = exit_reasons[i] if (exit_reasons is not None and exit_reasons[i]) else 'signal'
                 trades.append(_make_trade_record(
-                    entry_idx, i, entry_price, sell_price, position, pnl, fee,
-                    duration=duration, ret=ret,
+                    entry_idx, i, entry_price, sell_price, position, pnl, entry_fee + fee,
+                    duration=duration, ret=ret, entry_fee=entry_fee, exit_reason=reason,
                 ))
                 _sys.stderr.write(f'[SIMULATE] EXIT #{n_exits_triggered} at bar {i}: sell_price={sell_price:.2f}, shares={position:.4f}, pnl={pnl:.2f}\n')
                 cash += position * sell_price - fee
@@ -1055,11 +1133,17 @@ def _simulate_signals(
                     fee = shares * buy_price * commission
                     total_fees += fee
                     cost = shares * buy_price + fee
-                    if cost <= cash:
+                    # All-in sizing computes shares = cash / (price*(1+commission)), so cost
+                    # equals cash up to float round-off; a strict `cost <= cash` then rejected
+                    # roughly one re-entry in six ("ENTRY SKIPPED: cost=93941.79 > cash=93941.79")
+                    # and silently dropped those trades from every backtest. Allow a relative
+                    # 1e-9 tolerance and clamp the dust so cash never goes negative.
+                    if cost <= cash * (1.0 + 1e-9):
                         n_entries_triggered += 1
-                        cash -= cost
+                        cash = max(cash - cost, 0.0)
                         position = shares
                         entry_price = buy_price
+                        entry_fee = fee
                         entry_idx = i
                         in_position = True
                         _sys.stderr.write(f'[SIMULATE] ENTRY #{n_entries_triggered} at bar {i}: buy_price={buy_price:.2f}, shares={shares:.4f}, cost={cost:.2f}, cash_left={cash:.2f}\n')
@@ -1081,16 +1165,19 @@ def _simulate_signals(
 
     # Close any open position at end
     if in_position and position > 0:
-        final_price = close_vals[-1]
+        # Same exit slippage as every in-loop exit (the end-of-data liquidation used to be
+        # filled at the raw close, a free price improvement on the final trade).
+        final_price = close_vals[-1] * (1 - slippage)
         fee = position * final_price * commission
         total_fees += fee
-        pnl = (final_price - entry_price) * position - fee
+        pnl = (final_price - entry_price) * position - entry_fee - fee
         duration = max(1, n - 1 - entry_idx)  # bars (integer)
-        ret = (final_price / entry_price - 1.0) if entry_price > 0 else 0.0
+        cost_basis = entry_price * position + entry_fee
+        ret = (pnl / cost_basis) if cost_basis > 0 else 0.0
 
         trades.append(_make_trade_record(
-            entry_idx, n - 1, entry_price, final_price, position, pnl, fee,
-            duration=duration, ret=ret,
+            entry_idx, n - 1, entry_price, final_price, position, pnl, entry_fee + fee,
+            duration=duration, ret=ret, entry_fee=entry_fee, exit_reason='end_of_data',
         ))
         cash += position * final_price - fee
         equity_vals[-1] = cash
@@ -1135,13 +1222,21 @@ def _make_trade_record(
     fees: float,
     duration=None,
     ret: float = 0.0,
+    entry_fee: Optional[float] = None,
+    exit_reason: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Create a trade record dict matching vbt's records_readable format."""
+    """Create a trade record dict matching vbt's records_readable format.
+
+    `fees` is the round-trip total. When the entry leg's fee is known (`entry_fee`) it is
+    reported exactly; otherwise the total is split evenly between the two legs.
+    """
     if duration is None:
         duration = max(1, exit_idx - entry_idx)  # integer: number of bars
     if ret == 0.0 and entry_price > 0:
         ret = (exit_price / entry_price - 1.0)
-    return {
+    if entry_fee is None:
+        entry_fee = fees / 2
+    rec = {
         'Entry Idx': entry_idx,
         'Exit Idx': exit_idx,
         'Entry Price': entry_price,
@@ -1149,11 +1244,14 @@ def _make_trade_record(
         'Size': size,
         'PnL': pnl,
         'Return': ret,
-        'Entry Fees': fees / 2,
-        'Exit Fees': fees / 2,
+        'Entry Fees': entry_fee,
+        'Exit Fees': fees - entry_fee,
         'Duration': duration,
         'Status': 'Closed',
     }
+    if exit_reason:
+        rec['Exit Reason'] = exit_reason
+    return rec
 
 
 def _empty_trade_df() -> pd.DataFrame:
@@ -1189,12 +1287,20 @@ def _manual_stops(
     stop_loss: Optional[float],
     take_profit: Optional[float],
     trailing_stop: Optional[float],
-) -> pd.Series:
-    """Calculate stop-loss/take-profit exits manually."""
+    return_reasons: bool = False,
+):
+    """Calculate stop-loss/take-profit exits manually.
+
+    stop_loss / take_profit / trailing_stop are FRACTIONS of price (0.05 = 5%) — the unit the
+    request carries (BacktestingScreen sends spinbox% / 100) and that vbt_signals uses. They
+    were divided by 100 again here, so a 5% stop in the UI armed a 0.05% stop and nearly
+    every trade was stopped out on the first tick.
+    """
     n = len(close_series)
     close_vals = close_series.values.astype(float)
     entry_mask = entries.values.astype(bool)
     exit_mask = np.zeros(n, dtype=bool)
+    reasons = [''] * n  # 'stop_loss' | 'take_profit' | 'trailing_stop' per exit bar
 
     in_position = False
     entry_price = 0.0
@@ -1210,24 +1316,28 @@ def _manual_stops(
             peak_price = max(peak_price, close_vals[i])
 
             # Stop-loss check
-            if stop_loss and close_vals[i] <= entry_price * (1 - stop_loss / 100):
+            if stop_loss and close_vals[i] <= entry_price * (1 - stop_loss):
                 exit_mask[i] = True
+                reasons[i] = 'stop_loss'
                 in_position = False
                 continue
 
             # Take-profit check
-            if take_profit and close_vals[i] >= entry_price * (1 + take_profit / 100):
+            if take_profit and close_vals[i] >= entry_price * (1 + take_profit):
                 exit_mask[i] = True
+                reasons[i] = 'take_profit'
                 in_position = False
                 continue
 
             # Trailing stop check
-            if trailing_stop and close_vals[i] <= peak_price * (1 - trailing_stop / 100):
+            if trailing_stop and close_vals[i] <= peak_price * (1 - trailing_stop):
                 exit_mask[i] = True
+                reasons[i] = 'trailing_stop'
                 in_position = False
                 continue
 
-    return pd.Series(exit_mask, index=close_series.index)
+    result = pd.Series(exit_mask, index=close_series.index)
+    return (result, reasons) if return_reasons else result
 
 
 def _calculate_position_size(

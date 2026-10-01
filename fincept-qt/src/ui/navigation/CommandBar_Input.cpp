@@ -65,13 +65,11 @@ void CommandBar::on_text_changed(const QString& text) {
             auto* item = new QListWidgetItem(list_);
             item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
             auto* row = new QWidget;
-            row->setStyleSheet("background:transparent;");
+            row->setObjectName("cbRow");
             auto* rl = new QHBoxLayout(row);
             rl->setContentsMargins(10, 6, 10, 6);
             auto* hint = new QLabel(QString("Type a symbol or name to search %1s...").arg(active_asset_type_));
-            hint->setStyleSheet(
-                QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
-                    .arg(colors::TEXT_TERTIARY.get()));
+            hint->setObjectName("cbEmpty");
             rl->addWidget(hint);
             item->setSizeHint(QSize(0, 30));
             list_->setItemWidget(item, row);
@@ -157,14 +155,12 @@ void CommandBar::on_text_changed(const QString& text) {
                     auto* item = new QListWidgetItem(list_);
                     item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
                     auto* row = new QWidget;
-                    row->setStyleSheet("background:transparent;");
+                    row->setObjectName("cbRow");
                     auto* hl2 = new QHBoxLayout(row);
                     hl2->setContentsMargins(10, 6, 10, 6);
                     auto* lbl = new QLabel(QString("Press Enter to close all except %1")
                                                .arg(resolve_screen_id(first_token).toUpper().replace("_", " ")));
-                    lbl->setStyleSheet(QString("color:%1;font-size:11px;"
-                                               "font-family:'Consolas',monospace;background:transparent;")
-                                           .arg(colors::AMBER.get()));
+                    lbl->setObjectName("cbNote");
                     hl2->addWidget(lbl);
                     item->setSizeHint(QSize(0, 30));
                     list_->setItemWidget(item, row);
@@ -215,25 +211,20 @@ void CommandBar::on_text_changed(const QString& text) {
         item->setData(Qt::UserRole + 1, cmd.aliases.first());
 
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName("cbRow");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 5, 10, 5);
         hl->setSpacing(6);
 
         auto* alias_lbl = new QLabel(cmd.aliases.first().toUpper());
-        alias_lbl->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;"
-                                         "font-family:'Consolas',monospace;background:transparent;")
-                                     .arg(colors::TEXT_PRIMARY.get()));
+        alias_lbl->setObjectName("cbAlias");
         alias_lbl->setFixedWidth(72);
 
         auto* sep_lbl = new QLabel(QStringLiteral("\u203A"));
-        sep_lbl->setStyleSheet(
-            QString("color:%1;font-size:12px;background:transparent;").arg(colors::TEXT_TERTIARY.get()));
+        sep_lbl->setObjectName("cbSep");
 
         auto* name_lbl = new QLabel(cmd.name);
-        name_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
-                                        "font-family:'Consolas',monospace;")
-                                    .arg(colors::TEXT_SECONDARY.get()));
+        name_lbl->setObjectName("cbDesc");
 
         hl->addWidget(alias_lbl);
         hl->addWidget(sep_lbl);
@@ -241,9 +232,7 @@ void CommandBar::on_text_changed(const QString& text) {
 
         if (!cmd.shortcut.isEmpty()) {
             auto* sc_lbl = new QLabel(cmd.shortcut);
-            sc_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;"
-                                          "background:transparent;")
-                                      .arg(colors::TEXT_DIM.get()));
+            sc_lbl->setObjectName("cbShortcut");
             hl->addWidget(sc_lbl);
         }
 

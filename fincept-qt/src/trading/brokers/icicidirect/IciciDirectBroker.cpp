@@ -282,10 +282,9 @@ OrderPlaceResponse IciciDirectBroker::place_order(const BrokerCredentials& creds
         {"expiry_date", expiry_iso},
         {"right", right},
         {"strike_price", strike_str},
-        // Unique per attempt so a retry after an 8s client-side timeout is a
-        // broker-side duplicate rather than a second live order (see
-        // BrokerClientOrderId.h).
-        {"user_remark", make_client_order_ref(20)},
+        // Stable per order intent (UnifiedOrder::client_order_id) so a retry after an 8s
+        // client-side timeout carries the same reference (see BrokerClientOrderId.h).
+        {"user_remark", client_order_ref_for(order, 20)},
     };
 
     auto resp = breeze_request("POST", "/order", payload, creds);

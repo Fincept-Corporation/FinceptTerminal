@@ -4,6 +4,7 @@
 
 #include <QDateTime>
 #include <QHeaderView>
+#include <QLineEdit>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -26,6 +27,15 @@ QString format_age(qint64 ms_since_epoch) {
 DataHubInspector::DataHubInspector(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
+
+    // The hub easily holds hundreds of topics (one per symbol / series); without a
+    // filter the table is unusable for finding a specific one.
+    filter_edit_ = new QLineEdit(this);
+    filter_edit_->setPlaceholderText(tr("Filter topics..."));
+    filter_edit_->setClearButtonEnabled(true);
+    filter_edit_->setAccessibleName(tr("Filter DataHub topics"));
+    connect(filter_edit_, &QLineEdit::textChanged, this, [this](const QString&) { refresh(); });
+    layout->addWidget(filter_edit_);
 
     table_ = new QTableWidget(this);
     table_->setColumnCount(6);
@@ -51,8 +61,9 @@ DataHubInspector::DataHubInspector(QWidget* parent) : QWidget(parent) {
 void DataHubInspector::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     refresh();
-    if (!initial_sized_) {
-        // Size once based on initial content; user can drag thereafter.
+    // Size once, from the first populate that actually has rows (sizing against an
+    // empty table just fits the headers); the user can drag thereafter.
+    if (!initial_sized_ && table_->rowCount() > 0) {
         table_->resizeColumnsToContents();
         initial_sized_ = true;
     }
@@ -74,6 +85,10 @@ void DataHubInspector::retranslateUi() {
     if (table_) {
         table_->setHorizontalHeaderLabels(
             {tr("Topic"), tr("Subs"), tr("Publishes"), tr("Last Publish"), tr("Last Refresh"), tr("State")});
+    }
+    if (filter_edit_) {
+        filter_edit_->setPlaceholderText(tr("Filter topics..."));
+        filter_edit_->setAccessibleName(tr("Filter DataHub topics"));
     }
     // State-column cells are re-rendered (translated) on the next refresh().
 }
@@ -101,8 +116,11 @@ void DataHubInspector::refresh() {
         }
     };
 
+    const QString needle = filter_edit_ ? filter_edit_->text().trimmed() : QString();
+
     for (int row = 0; row < n; ++row) {
         const auto& s = stats[row];
+        table_->setRowHidden(row, !needle.isEmpty() && !s.topic.contains(needle, Qt::CaseInsensitive));
         set_cell(row, 0, s.topic);
         set_cell(row, 1, QString::number(s.subscriber_count));
         set_cell(row, 2, QString::number(s.total_publishes));

@@ -3,6 +3,7 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
 #include "ui/theme/Theme.h"
@@ -18,12 +19,18 @@
 namespace fincept::screens::widgets {
 
 namespace {
-QString fmt_pnl(double v) {
+// Lakh / crore only reads right for rupee accounts; a USD/EUR/GBP broker
+// (Alpaca, IBKR, Tradier, Saxo) printed 150,000 as "+1.50L".
+QString fmt_pnl(double v, bool inr) {
     const QString sign = v >= 0 ? "+" : "";
-    if (std::abs(v) >= 1.0e7)
+    if (inr && std::abs(v) >= 1.0e7)
         return sign + QString::number(v / 1.0e7, 'f', 2) + "Cr";
-    if (std::abs(v) >= 1.0e5)
+    if (inr && std::abs(v) >= 1.0e5)
         return sign + QString::number(v / 1.0e5, 'f', 2) + "L";
+    if (!inr && std::abs(v) >= 1.0e9)
+        return sign + QString::number(v / 1.0e9, 'f', 2) + "B";
+    if (!inr && std::abs(v) >= 1.0e6)
+        return sign + QString::number(v / 1.0e6, 'f', 2) + "M";
     return sign + QString::number(v, 'f', 2);
 }
 } // namespace
@@ -62,6 +69,20 @@ TodayPnLWidget::TodayPnLWidget(const QJsonObject& cfg, QWidget* parent) : BaseWi
 
     vl->addLayout(grid);
     vl->addStretch(1);
+
+    // Title-bar refresh = "retry". It used to be wired to nothing, so the 20 s
+    // "No data yet - click refresh to retry" prompt pointed at a dead button.
+    // The account stream polls on its own cadence, so the only thing a retry can
+    // do is (re)start that stream, show the loading state again, and ask the hub.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (broker_id_.isEmpty() || account_id_.isEmpty())
+            return;
+        ensure_stream_running();
+        if (positions_value_ && positions_value_->text() == QStringLiteral("—"))
+            set_loading(true);
+        datahub::DataHub::instance().request(
+            trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions")), /*force=*/true);
+    });
 
     set_configurable(true);
     apply_styles();
@@ -112,6 +133,8 @@ void TodayPnLWidget::hub_resubscribe() {
     if (broker_id_.isEmpty() || account_id_.isEmpty())
         return;
     const QString topic = trading::broker_topic(broker_id_, account_id_, QStringLiteral("positions"));
+    if (positions_value_ && positions_value_->text() == QStringLiteral("—"))
+        set_loading(true); // nothing shown yet — see OpenPositionsWidget::hub_resubscribe
     hub.subscribe(this, topic, [this](const QVariant& v) {
         if (!v.canConvert<QVector<trading::BrokerPosition>>())
             return;
@@ -157,16 +180,20 @@ void TodayPnLWidget::populate(const QVector<trading::BrokerPosition>& rows) {
             realized += p.pnl;
     }
 
+    // Unknown broker -> keep the historical (rupee) notation.
+    const auto* broker = trading::BrokerRegistry::instance().get(broker_id_);
+    const bool inr = !broker || broker->profile().currency == QLatin1String("INR");
+
     const QColor total_col = total_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
-    total_pnl_label_->setText(fmt_pnl(total_pnl));
+    total_pnl_label_->setText(fmt_pnl(total_pnl, inr));
     total_pnl_label_->setStyleSheet(
         QString("color:%1;font-size:24px;font-weight:700;background:transparent;padding:4px 0;").arg(total_col.name()));
 
-    day_pnl_value_->setText(fmt_pnl(day_pnl));
+    day_pnl_value_->setText(fmt_pnl(day_pnl, inr));
     day_pnl_value_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
                                       .arg(day_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 
-    realized_pnl_value_->setText(fmt_pnl(realized));
+    realized_pnl_value_->setText(fmt_pnl(realized, inr));
     realized_pnl_value_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
                                            .arg(realized >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
 

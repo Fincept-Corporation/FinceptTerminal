@@ -8,6 +8,7 @@
 #include "screens/fno/LegEditorTable.h"
 #include "screens/fno/MultiStraddleSubTab.h"
 #include "screens/fno/OISubTab.h"
+#include "screens/fno/OptionChainModel.h"
 #include "screens/fno/OptionChainTable.h"
 #include "screens/fno/ScreenerSubTab.h"
 #include "services/options/OptionChainService.h"
@@ -15,6 +16,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHideEvent>
 #include <QLabel>
 #include <QSet>
@@ -41,6 +43,35 @@ void replace_placeholder(QStackedWidget* stack, QHash<int, QWidget*>& tabs, int 
     tabs.insert(slot, target);
     if (old)
         old->deleteLater();
+}
+
+// Map a symbol as other screens spell it onto an F&O underlying name. Watchlist /
+// Markets / Equity Research publish yfinance-style or exchange-prefixed spellings
+// ("RELIANCE.NS", "NSE:RELIANCE-EQ", "^NSEI", "NIFTY 50"), none of which match the
+// instrument master's bare underlying ("RELIANCE", "NIFTY"), so a linked symbol change
+// silently did nothing. Unrecognised input passes through unchanged (and is still
+// validated against the broker's picker by ChainSubTab::request_underlying).
+QString fno_underlying_for_link(QString s) {
+    s = s.trimmed().toUpper();
+    if (const int c = s.indexOf(QLatin1Char(':')); c >= 0)
+        s = s.mid(c + 1);
+    for (const QString& suf : {QStringLiteral(".NS"), QStringLiteral(".BO"), QStringLiteral("-EQ"),
+                               QStringLiteral("-INDEX")}) {
+        if (s.endsWith(suf))
+            s.chop(int(suf.size()));
+    }
+    static const QHash<QString, QString> kAlias = {
+        {QStringLiteral("^NSEI"), QStringLiteral("NIFTY")},
+        {QStringLiteral("NIFTY 50"), QStringLiteral("NIFTY")},
+        {QStringLiteral("NIFTY50"), QStringLiteral("NIFTY")},
+        {QStringLiteral("^NSEBANK"), QStringLiteral("BANKNIFTY")},
+        {QStringLiteral("NIFTY BANK"), QStringLiteral("BANKNIFTY")},
+        {QStringLiteral("NIFTYBANK"), QStringLiteral("BANKNIFTY")},
+        {QStringLiteral("BANK NIFTY"), QStringLiteral("BANKNIFTY")},
+        {QStringLiteral("NIFTY FIN SERVICE"), QStringLiteral("FINNIFTY")},
+        {QStringLiteral("NIFTY MID SELECT"), QStringLiteral("MIDCPNIFTY")},
+    };
+    return kAlias.value(s, s);
 }
 
 } // namespace
@@ -184,7 +215,14 @@ void FnoScreen::ensure_tab_built(SubTab which) {
             connect(chain_tab_->table(), &OptionChainTable::leg_clicked, builder_tab_,
                     [this](qint64 token, double strike, bool is_call, int lots) {
                         Q_UNUSED(token);
-                        const auto& chain = fincept::services::options::OptionChainService::instance().last_chain();
+                        // Resolve the leg from the chain the user is CLICKING in, not the
+                        // service-wide last_chain(): that is whichever series published last
+                        // (any underlying/expiry), so a click could pull another series'
+                        // token/expiry/premium for the same strike — and it carries no
+                        // Greeks/IV, which are only applied to the republished hub snapshot.
+                        if (!chain_tab_ || !chain_tab_->table())
+                            return;
+                        const auto& chain = chain_tab_->table()->chain_model()->chain();
                         fincept::services::options::StrategyLeg leg;
                         leg.strike = strike;
                         leg.type =
@@ -356,7 +394,7 @@ void FnoScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
         return;
     ensure_tab_built(TabChain);
     if (chain_tab_)
-        chain_tab_->request_underlying(ref.symbol.toUpper());
+        chain_tab_->request_underlying(fno_underlying_for_link(ref.symbol));
 }
 
 fincept::SymbolRef FnoScreen::current_symbol() const {
@@ -380,10 +418,18 @@ fincept::SymbolRef FnoScreen::current_symbol() const {
 
 void FnoScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    // The chain subscription follows the SCREEN's visibility (not the Chain page's), so
+    // the other sub-tabs keep receiving chain updates.
+    if (chain_tab_)
+        chain_tab_->on_screen_shown();
 }
 
 void FnoScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    // A hidden Chain page gets no hide event of its own when the screen goes away, so
+    // release the subscription explicitly (P3 / D3).
+    if (chain_tab_)
+        chain_tab_->on_screen_hidden();
 }
 
 void FnoScreen::changeEvent(QEvent* event) {

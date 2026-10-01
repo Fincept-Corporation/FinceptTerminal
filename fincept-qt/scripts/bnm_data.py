@@ -34,7 +34,9 @@ Returns JSON output for C++ integration.
 
 import sys
 import json
+import ssl
 import requests
+import requests.adapters
 import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date, timedelta, timezone
@@ -84,6 +86,23 @@ class BNMError:
 
 
 # ---------------------------------------------------------------------------
+# TLS adapter
+# ---------------------------------------------------------------------------
+
+class _BnmTlsAdapter(requests.adapters.HTTPAdapter):
+    """api.bnm.gov.my only offers RSA key-exchange cipher suites (AES128-GCM-SHA256), which
+    Python/OpenSSL 3's default security level refuses to negotiate - every request failed with
+    "SSLV3_ALERT_HANDSHAKE_FAILURE" even though curl and browsers connect fine. Relax the cipher
+    security level for this one host; certificate and hostname verification stay on."""
+
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = ssl.create_default_context()
+        ctx.set_ciphers("DEFAULT:@SECLEVEL=1")
+        kwargs["ssl_context"] = ctx
+        super().init_poolmanager(*args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
 # Main wrapper
 # ---------------------------------------------------------------------------
 
@@ -102,6 +121,7 @@ class BNMWrapper:
             "User-Agent": "Fincept-Terminal/4.0.2",
             "Accept":     ACCEPT_HEADER,
         })
+        self.session.mount("https://api.bnm.gov.my", _BnmTlsAdapter())
 
     # ------------------------------------------------------------------
     # Internal helpers

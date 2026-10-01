@@ -18,6 +18,8 @@
 #include <QUrl>
 #include <QUrlQuery>
 
+#include <cmath>
+
 namespace fincept::services::maritime {
 
 namespace {
@@ -123,11 +125,19 @@ PortsCatalog::PortsCatalog(QObject* parent) : QObject(parent) {
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════════
 
+QString PortsCatalog::name_context(const QString& query) {
+    return QStringLiteral("name:") + query.trimmed().toLower();
+}
+
+QString PortsCatalog::bbox_context(double min_lat, double max_lat, double min_lng, double max_lng) {
+    return QStringLiteral("bbox:%1,%2,%3,%4").arg(min_lat).arg(max_lat).arg(min_lng).arg(max_lng);
+}
+
 void PortsCatalog::search_by_name(const QString& query, int limit) {
     const QString q = query.trimmed();
     if (q.isEmpty())
         return;
-    const QString context = QStringLiteral("name:") + q.toLower();
+    const QString context = name_context(q);
 
     // Cache hit — skip network entirely.
     const QString cache_key = cache_key_for("name", q.toLower() + ":" + QString::number(limit));
@@ -145,7 +155,7 @@ void PortsCatalog::search_by_bbox(double min_lat, double max_lat, double min_lng
         emit error_occurred(QStringLiteral("bbox"), QStringLiteral("Invalid bbox"));
         return;
     }
-    const QString context = QStringLiteral("bbox:%1,%2,%3,%4").arg(min_lat).arg(max_lat).arg(min_lng).arg(max_lng);
+    const QString context = bbox_context(min_lat, max_lat, min_lng, max_lng);
 
     const QString cache_key = cache_key_for(
         "bbox", QStringLiteral("%1,%2,%3,%4,%5").arg(min_lat).arg(max_lat).arg(min_lng).arg(max_lng).arg(limit));
@@ -222,7 +232,9 @@ void PortsCatalog::fetch_wikidata_by_name(const QString& query, int limit, const
                                           "  OPTIONAL { ?port wdt:P1937 ?unlocode . }"
                                           "  SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\". }"
                                           "} LIMIT %2")
-                               .arg(query.toLower().replace(QStringLiteral("\""), QStringLiteral("\\\"")))
+                               .arg(query.toLower()
+                                        .replace(QStringLiteral("\\"), QStringLiteral("\\\\"))
+                                        .replace(QStringLiteral("\""), QStringLiteral("\\\"")))
                                .arg(limit);
 
     QUrl url(kWikidataEndpoint);
@@ -313,11 +325,11 @@ void PortsCatalog::fetch_wikidata_by_bbox(double min_lat, double max_lat, double
         // (rounded-coord, lower-name) below.
         if (rows.size() < 3) {
             LOG_INFO("PortsCatalog", QString("Wikidata bbox sparse (%1) — supplementing with OSM").arg(rows.size()));
-            self->fetch_overpass_by_bbox(min_lat, max_lat, min_lng, max_lng, limit, context);
-            // Cache what we got from Wikidata so the supplemental call's
-            // results merge can read it back. We use a very short partial-
-            // cache here — overpass callback reads it and republishes with
-            // dedup, then writes the merged blob.
+            // The Wikidata rows ride along as the seed: the Overpass callback merges
+            // them with the OSM hits (dedup by name / proximity) and writes the merged
+            // blob. They used to be discarded, so a bbox with 2 Wikidata ports and an
+            // Overpass hiccup showed nothing.
+            self->fetch_overpass_by_bbox(min_lat, max_lat, min_lng, max_lng, limit, context, rows);
             return;
         }
         const QString cache_key = cache_key_for(
@@ -384,9 +396,13 @@ void PortsCatalog::fetch_marineregions_by_name(const QString& query, int limit, 
         rows.reserve(by_mrgid.size());
         for (auto it = by_mrgid.cbegin(); it != by_mrgid.cend() && rows.size() < limit; ++it)
             rows.append(it.value());
-        const QString cache_key = cache_key_for("name", query.toLower() + ":" + QString::number(limit));
-        fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
-                                              kCacheTtlSec, "maritime");
+        // An empty answer is not cached: a transient upstream miss would otherwise
+        // pin "no ports" for the whole 7-day TTL.
+        if (!rows.isEmpty()) {
+            const QString cache_key = cache_key_for("name", query.toLower() + ":" + QString::number(limit));
+            fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
+                                                  kCacheTtlSec, "maritime");
+        }
         LOG_INFO("PortsCatalog", QString("MarineRegions: %1 ports for '%2'").arg(rows.size()).arg(query));
         emit self->ports_found(rows, context);
         if (self->hub_registered_)
@@ -399,7 +415,7 @@ void PortsCatalog::fetch_marineregions_by_name(const QString& query, int limit, 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 void PortsCatalog::fetch_overpass_by_bbox(double min_lat, double max_lat, double min_lng, double max_lng, int limit,
-                                          const QString& context) {
+                                          const QString& context, const QVector<PortRecord>& seed) {
     // Overpass takes (south, west, north, east). Match the common port-ish
     // tag combinations: seamark:type=harbour (canonical maritime tag),
     // industrial=port (commercial/container), harbour=yes (catch-all).
@@ -428,11 +444,17 @@ void PortsCatalog::fetch_overpass_by_bbox(double min_lat, double max_lat, double
     const QByteArray body_bytes = body.toString(QUrl::FullyEncoded).toUtf8();
     auto* reply = nam_->post(req, body_bytes);
     QPointer<PortsCatalog> self = this;
-    connect(reply, &QNetworkReply::finished, this, [self, reply, min_lat, max_lat, min_lng, max_lng, limit, context]() {
+    connect(reply, &QNetworkReply::finished, this,
+            [self, reply, min_lat, max_lat, min_lng, max_lng, limit, context, seed]() {
         reply->deleteLater();
         if (!self)
             return;
         if (reply->error() != QNetworkReply::NoError) {
+            // Keep what Wikidata found rather than failing the whole lookup.
+            if (!seed.isEmpty()) {
+                emit self->ports_found(seed, context);
+                return;
+            }
             emit self->error_occurred(context, QString("Overpass: %1").arg(reply->errorString()));
             return;
         }
@@ -467,10 +489,45 @@ void PortsCatalog::fetch_overpass_by_bbox(double min_lat, double max_lat, double
             if (rows.size() >= limit)
                 break;
         }
-        const QString cache_key = cache_key_for(
-            "bbox", QStringLiteral("%1,%2,%3,%4,%5").arg(min_lat).arg(max_lat).arg(min_lng).arg(max_lng).arg(limit));
-        fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
-                                              kCacheTtlSec, "maritime");
+        // Overpass answers HTTP 200 with a "remark" (and no elements) when the query
+        // times out or the server is overloaded - that is a failure, not an empty
+        // region, and must not be cached for a week.
+        if (rows.isEmpty() && root.contains(QStringLiteral("remark"))) {
+            if (!seed.isEmpty()) {
+                emit self->ports_found(seed, context);
+                return;
+            }
+            emit self->error_occurred(context, QString("Overpass: %1").arg(root["remark"].toString().left(120)));
+            return;
+        }
+        // Merge the Wikidata seed with the OSM hits: same name, or within ~1 km, is the
+        // same port (the two sources geocode it slightly differently).
+        if (!seed.isEmpty()) {
+            QVector<PortRecord> merged = seed;
+            for (const auto& osm : std::as_const(rows)) {
+                bool dup = false;
+                for (const auto& known : std::as_const(merged)) {
+                    if (known.name.compare(osm.name, Qt::CaseInsensitive) == 0 ||
+                        (std::abs(known.latitude - osm.latitude) < 0.01 &&
+                         std::abs(known.longitude - osm.longitude) < 0.01)) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup)
+                    merged.append(osm);
+                if (merged.size() >= limit)
+                    break;
+            }
+            rows = merged;
+        }
+        if (!rows.isEmpty()) {
+            const QString cache_key = cache_key_for(
+                "bbox",
+                QStringLiteral("%1,%2,%3,%4,%5").arg(min_lat).arg(max_lat).arg(min_lng).arg(max_lng).arg(limit));
+            fincept::CacheManager::instance().put(cache_key, QVariant(QString::fromUtf8(serialize_results(rows))),
+                                                  kCacheTtlSec, "maritime");
+        }
         LOG_INFO("PortsCatalog", QString("Overpass: %1 ports in bbox").arg(rows.size()));
         emit self->ports_found(rows, context);
         if (self->hub_registered_)

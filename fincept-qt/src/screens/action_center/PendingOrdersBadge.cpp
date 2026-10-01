@@ -30,7 +30,10 @@ PendingOrdersBadge::PendingOrdersBadge(QWidget* parent) : QLabel(parent) {
 }
 
 void PendingOrdersBadge::refresh_count() {
-    count_ = ActionCenter::instance().get_stats().total_pending;
+    // get_stats() loads and JSON-parses EVERY order ever queued (limit 100000) just to count
+    // the pending ones; this runs on each ActionCenter signal on the UI thread. The pending
+    // query is WHERE-filtered, so it only touches the handful of rows that matter.
+    count_ = int(ActionCenter::instance().get_pending_orders().size());
     setText(QString::fromUtf8("\xe2\x8f\xb8 %1").arg(count_)); // ⏸ N
     setVisible(count_ > 0);
 }

@@ -93,6 +93,15 @@ HomeTab::HomeTab(QWidget* parent) : QWidget(parent) {
 
     auto& hub = fincept::datahub::DataHub::instance();
     connect(&hub, &fincept::datahub::DataHub::topic_error, this, &HomeTab::on_topic_error);
+    // The strip used to stay up until REFRESH / a mode change even after the
+    // next poll succeeded, so a one-off RPC blip read as a standing failure.
+    connect(&hub, &fincept::datahub::DataHub::topic_updated, this, [this](const QString& topic, const QVariant&) {
+        const QLatin1String prefix("wallet:balance:");
+        if (current_pubkey_.isEmpty() || error_is_stream_notice_ || !topic.startsWith(prefix))
+            return;
+        if (QStringView(topic).mid(prefix.size()) == QStringView(current_pubkey_))
+            clear_error_strip();
+    });
 
     apply_mode_to_buttons(svc.balance_mode_is_stream());
     if (svc.is_connected()) {
@@ -436,11 +445,20 @@ void HomeTab::on_mode_changed(bool is_stream) {
 
 void HomeTab::on_topic_error(const QString& topic, const QString& error) {
     if (topic.startsWith(QStringLiteral("wallet:balance:"))) {
+        // The producer's STREAM→poll fallback notice is informational, not a
+        // failed fetch ("Balance fetch failed: STREAM unavailable…" read as an
+        // outage while balances were in fact updating).
+        if (error.startsWith(QLatin1String("STREAM unavailable"))) {
+            show_error_strip(error);
+            error_is_stream_notice_ = true;
+            return;
+        }
         show_error_strip(tr("Balance fetch failed: %1").arg(error));
     }
 }
 
 void HomeTab::clear_error_strip() {
+    error_is_stream_notice_ = false;
     if (error_strip_ && error_strip_->isVisible()) {
         error_strip_->hide();
         error_strip_text_->clear();
@@ -469,6 +487,13 @@ void HomeTab::showEvent(QShowEvent* e) {
     // is the dangerous direction.
     if (mode_label_)
         mode_label_->setText(cluster_label());
+    // "CONNECTED" is a relative timestamp computed once at connect time and
+    // would read "just now" for the rest of the session — refresh on show.
+    if (row_connected_value_ && !current_pubkey_.isEmpty()) {
+        const auto& st = fincept::wallet::WalletService::instance().state();
+        if (st.connected_at_ms > 0)
+            row_connected_value_->setText(relative_time(st.connected_at_ms));
+    }
 }
 
 void HomeTab::hideEvent(QHideEvent* e) {

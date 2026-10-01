@@ -34,6 +34,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShortcut>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStandardPaths>
@@ -586,6 +587,17 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     detail_connections_list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     connect(detail_connections_list_, &QListWidget::itemClicked, this,
             &DataSourcesScreen::on_detail_connection_activated);
+    connect(detail_connections_list_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+        if (item && (item->flags() & Qt::ItemIsEnabled))
+            on_connection_edit(item->data(Qt::UserRole).toString());
+    });
+    detail_connections_list_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(detail_connections_list_, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        const auto* item = detail_connections_list_->itemAt(pos);
+        if (!item || !(item->flags() & Qt::ItemIsEnabled))
+            return;
+        show_connection_menu(item->data(Qt::UserRole).toString(), detail_connections_list_->viewport()->mapToGlobal(pos));
+    });
     body_vl->addWidget(detail_connections_list_);
 
     // ── Action buttons ───────────────────────────────────────────────────────
@@ -623,7 +635,8 @@ QWidget* DataSourcesScreen::build_detail_panel() {
     test_connection_btn_->setCursor(Qt::PointingHandCursor);
     test_connection_btn_->setEnabled(false);
     test_connection_btn_->setAccessibleName(tr("Test selected connection"));
-    test_connection_btn_->setToolTip(tr("Opens a TCP connection to the endpoint. Does not validate API keys."));
+    test_connection_btn_->setToolTip(tr("Opens a TCP connection to the endpoint (file connectors: checks the saved "
+                                        "path exists and is readable). Does not validate API keys."));
     connect(test_connection_btn_, &QPushButton::clicked, this,
             [this]() { on_connection_test(effective_detail_connection_id()); });
     edit_test_hl->addWidget(test_connection_btn_);
@@ -753,6 +766,29 @@ QWidget* DataSourcesScreen::build_connections_page() {
                                       QString("QTableWidget { alternate-background-color: %1; }").arg(col::ROW_ALT()));
     connect(connections_table_, &QTableWidget::itemSelectionChanged, this,
             &DataSourcesScreen::on_connection_selection_changed);
+    // Per-connection actions. This page used to offer only the enable toggle and the
+    // bulk buttons, leaving edit / duplicate / test / delete of one connection with
+    // no way in from here.
+    connect(connections_table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        const auto* item = connections_table_->item(row, 1);
+        if (item && !item->data(Qt::UserRole).toString().isEmpty())
+            on_connection_edit(item->data(Qt::UserRole).toString());
+    });
+    connections_table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(connections_table_, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        const int row = connections_table_->rowAt(pos.y()); // rowAt: also covers the checkbox column
+        if (row < 0)
+            return;
+        const auto* name_item = connections_table_->item(row, 1);
+        if (!name_item || name_item->data(Qt::UserRole).toString().isEmpty())
+            return;
+        if (!name_item->isSelected())
+            connections_table_->selectRow(row);
+        show_connection_menu(name_item->data(Qt::UserRole).toString(), connections_table_->viewport()->mapToGlobal(pos));
+    });
+    auto* delete_shortcut = new QShortcut(QKeySequence(Qt::Key_Delete), connections_table_);
+    delete_shortcut->setContext(Qt::WidgetShortcut);
+    connect(delete_shortcut, &QShortcut::activated, this, &DataSourcesScreen::on_bulk_delete_selected);
 
     vl->addWidget(connections_table_, 1);
     return page;

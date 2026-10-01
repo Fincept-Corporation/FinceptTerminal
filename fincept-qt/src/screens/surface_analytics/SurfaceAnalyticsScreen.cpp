@@ -36,6 +36,9 @@
 #include <QVBoxLayout>
 #include <QVariant>
 
+#include <QPointer>
+
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 
@@ -50,11 +53,13 @@ QString SurfaceAnalyticsScreen::current_symbol_or_default() const {
     return s;
 }
 
-float SurfaceAnalyticsScreen::spot_for(const QString& sym) const {
+namespace {
+// Live spot for `sym` from the subscription cache or a hub snapshot. 0 = none known.
+float surface_live_spot(const QHash<QString, float>& cache, const QString& sym) {
     if (sym.isEmpty())
-        return 100.0f;
-    auto it = spot_cache_.constFind(sym);
-    if (it != spot_cache_.constEnd())
+        return 0.0f;
+    auto it = cache.constFind(sym);
+    if (it != cache.constEnd() && it.value() > 0.0f)
         return it.value();
     // Best-effort hub lookup; if no quote published yet, returns invalid QVariant.
     auto& hub = fincept::datahub::DataHub::instance();
@@ -70,7 +75,62 @@ float SurfaceAnalyticsScreen::spot_for(const QString& sym) const {
         if (ok && d > 0.0)
             return (float)d;
     }
-    return 100.0f;
+    return 0.0f;
+}
+} // namespace
+
+float SurfaceAnalyticsScreen::spot_for(const QString& sym) const {
+    // 100.0 is a PLACEHOLDER for sample-data generation only; has_live_spot() tells
+    // callers whether it is safe to send a spot to a data provider.
+    const float live = surface_live_spot(spot_cache_, sym);
+    return live > 0.0f ? live : 100.0f;
+}
+
+bool SurfaceAnalyticsScreen::has_live_spot(const QString& sym) const {
+    return surface_live_spot(spot_cache_, sym) > 0.0f;
+}
+
+void SurfaceAnalyticsScreen::resubscribe_spot() {
+    auto& hub = fincept::datahub::DataHub::instance();
+    if (!spot_symbol_.isEmpty()) {
+        hub.unsubscribe(this, QString("market:quote:%1").arg(spot_symbol_));
+        spot_symbol_.clear();
+    }
+    if (!isVisible())
+        return; // showEvent re-arms it (P3 / D3: subscribe only while visible)
+    const QString sym = current_symbol_or_default();
+    if (sym.isEmpty())
+        return;
+    const QString topic = QString("market:quote:%1").arg(sym);
+    spot_symbol_ = sym;
+    QPointer<SurfaceAnalyticsScreen> self = this;
+    hub.subscribe(this, topic, [self, sym](const QVariant& v) {
+        if (!self)
+            return;
+        double price = 0.0;
+        if (v.canConvert<fincept::services::QuoteData>())
+            price = v.value<fincept::services::QuoteData>().price;
+        else
+            price = v.toDouble();
+        if (!(price > 0.0))
+            return;
+        const float prev = self->spot_cache_.value(sym, 0.0f);
+        self->spot_cache_.insert(sym, float(price));
+        if (self->current_symbol_or_default() != sym)
+            return;
+        if (self->control_panel_)
+            self->control_panel_->set_spot(price);
+        // The sample surfaces on screen were generated off the 100.0 placeholder (or an
+        // older spot); rebuild them around the real level. Never when any grid holds
+        // fetched/imported data - load_demo_data() would discard it.
+        if (self->real_data_charts_.isEmpty() && (prev <= 0.0f || std::abs(price - prev) / prev > 0.01)) {
+            self->load_demo_data();
+            self->update_chart();
+            self->update_metrics();
+            self->update_inspector_lineage();
+        }
+    });
+    hub.request(topic, /*force*/ false);
 }
 
 void SurfaceAnalyticsScreen::mark_chart_real(ChartType type) {
@@ -134,12 +194,15 @@ void SurfaceAnalyticsScreen::showEvent(QShowEvent* e) {
             Qt::UniqueConnection);
     refresh_provider_status();
     load_dataset_range_for_active_capability();
+    resubscribe_spot();
 }
 
 void SurfaceAnalyticsScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     auto& svc = DatabentoService::instance();
     disconnect(&svc, nullptr, this, nullptr);
+    fincept::datahub::DataHub::instance().unsubscribe(this);
+    spot_symbol_.clear();
 }
 
 // ── Live language switch ──────────────────────────────────────────────────────
@@ -214,6 +277,7 @@ void SurfaceAnalyticsScreen::restore_state(const QVariantMap& state) {
         cs.iv_method = state.value("iv_method", cs.iv_method).toString();
         cs.basket = state.value("basket", cs.basket).toStringList();
         control_panel_->apply_state(cs);
+        resubscribe_spot();
         load_demo_data();
         update_chart();
         update_metrics();
@@ -232,7 +296,9 @@ void SurfaceAnalyticsScreen::on_group_symbol_changed(const fincept::SymbolRef& r
         return;
     cs.symbol = ref.symbol.toUpper();
     control_panel_->apply_state(cs);
+    applying_group_symbol_ = true;
     on_control_symbol_changed(cs.symbol);
+    applying_group_symbol_ = false;
 }
 
 fincept::SymbolRef SurfaceAnalyticsScreen::current_symbol() const {

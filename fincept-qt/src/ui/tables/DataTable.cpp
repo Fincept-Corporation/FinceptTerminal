@@ -1,5 +1,6 @@
 #include "ui/tables/DataTable.h"
 
+#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 
 #include <QHeaderView>
@@ -30,7 +31,8 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
     horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     // NOTE: sorting is intentionally NOT enabled here.
     // Callers that need sorting (e.g. WatchlistScreen) opt in with
-    // setSortingEnabled(true) after attaching numeric EditRole values.
+    // setSortingEnabled(true) after giving numeric columns a numeric sort key
+    // (set_cell_numeric() / ui::NumericTableWidgetItem).
     // Enabling it globally causes lexicographic sort on tables that only
     // use setText() — e.g. "$10" sorts before "$2", "100K" before "2M".
     setStyleSheet(QString("QTableWidget { background: %1; alternate-background-color: %2; "
@@ -106,8 +108,26 @@ void DataTable::set_cell_color(int row, int col, const QString& color) {
 
 void DataTable::set_cell_numeric(int row, int col, double value) {
     auto* it = item(row, col);
-    if (it)
-        it->setData(Qt::EditRole, value);
+    if (!it)
+        return;
+    // A QTableWidgetItem shares Qt::EditRole with Qt::DisplayRole, so the old
+    // `setData(Qt::EditRole, value)` replaced the formatted text ("$1.2M",
+    // "+3.4%") with the bare number. Swap in a NumericTableWidgetItem instead:
+    // it sorts by `value` while the display text stays exactly as it was.
+    if (const auto* existing = dynamic_cast<NumericTableWidgetItem*>(it); existing && existing->numeric_value() == value)
+        return;
+    auto* numeric = new NumericTableWidgetItem(it->text(), value);
+    // Carry over every role + the flags (foreground, alignment, tooltip, font, ...).
+    // Copy-assignment does not touch the numeric key held by the subclass.
+    static_cast<QTableWidgetItem&>(*numeric) = *it;
+
+    // Replacing an item re-inserts it, which would re-sort the table mid-update.
+    const bool was_sorting = isSortingEnabled();
+    if (was_sorting)
+        setSortingEnabled(false);
+    setItem(row, col, numeric); // takes ownership; deletes the old item
+    if (was_sorting)
+        setSortingEnabled(true);
 }
 
 } // namespace fincept::ui

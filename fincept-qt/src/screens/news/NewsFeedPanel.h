@@ -38,6 +38,9 @@ class NewsFeedPanel : public QWidget {
     void article_clicked(const services::NewsArticle& article);
     void cluster_clicked(const services::NewsCluster& cluster);
     void near_bottom();
+    /// Context-menu "filter feed by $TICKER" — the screen routes it through the
+    /// same path as a typed search.
+    void ticker_filter_requested(const QString& ticker);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -45,6 +48,7 @@ class NewsFeedPanel : public QWidget {
   private slots:
     void on_item_clicked(const QModelIndex& index);
     void check_scroll_position();
+    void show_context_menu(const QPoint& pos);
 
   private:
     void build_breaking_banner();

@@ -91,13 +91,50 @@ void QuantModulePanel::display_rl_trading_result(const QString& command, const Q
         };
         results_layout_->addWidget(gs_card_row(top, this));
 
+        // The agent is trained on the first ~80% of the daily bars and evaluated on the held-out
+        // rest, then compared with simply holding the stock over that same window.
+        const auto eval = payload.value("evaluation").toObject();
+        const auto data = payload.value("data").toObject();
+        if (!eval.isEmpty()) {
+            const double agent_ret = eval.value("portfolio_return").toDouble(); // already percent
+            const double hold_ret = eval.value("buy_hold_return_pct").toDouble();
+            const auto test_period = data.value("test_period").toArray();
+            results_layout_->addWidget(gs_section_header(
+                tr("OUT-OF-SAMPLE EVALUATION  |  %1  |  %2 → %3")
+                    .arg(data.value("ticker").toString(),
+                         test_period.size() > 0 ? test_period[0].toString() : QStringLiteral("—"),
+                         test_period.size() > 1 ? test_period[1].toString() : QStringLiteral("—")),
+                accent));
+            QList<QWidget*> oos = {
+                gs_make_card(tr("AGENT RETURN"), QString::number(agent_ret, 'f', 2) + "%", this,
+                             gs_pos_neg_color(agent_ret)),
+                gs_make_card(tr("BUY & HOLD"), QString::number(hold_ret, 'f', 2) + "%", this,
+                             gs_pos_neg_color(hold_ret)),
+                gs_make_card(tr("EXCESS VS HOLD"), QString::number(agent_ret - hold_ret, 'f', 2) + "%", this,
+                             gs_pos_neg_color(agent_ret - hold_ret)),
+                gs_make_card(tr("MEAN REWARD"), QString::number(eval.value("mean_reward").toDouble(), 'f', 4), this),
+            };
+            results_layout_->addWidget(gs_card_row(oos, this));
+            QList<QWidget*> split = {
+                gs_make_card(tr("TRAIN BARS"), QString::number(data.value("train_bars").toInt()), this),
+                gs_make_card(tr("TEST BARS"), QString::number(data.value("test_bars").toInt()), this),
+                gs_make_card(tr("EVAL EPISODES"), QString::number(eval.value("n_episodes").toInt()), this),
+                gs_make_card(tr("REWARD STD"), QString::number(eval.value("std_reward").toDouble(), 'f', 4), this),
+            };
+            results_layout_->addWidget(gs_card_row(split, this));
+        }
+        const QString model_path = payload.value("model_path").toString();
+        if (!model_path.isEmpty()) {
+            auto* path_lbl = gs_section_header(tr("Model saved to %1").arg(model_path), accent);
+            path_lbl->setWordWrap(true);
+            path_lbl->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            results_layout_->addWidget(path_lbl);
+        }
+
         const QString msg = payload.value("message").toString();
         if (!msg.isEmpty()) {
-            auto* lbl = new QLabel(msg);
+            auto* lbl = gs_section_header(msg, accent);
             lbl->setWordWrap(true);
-            lbl->setStyleSheet(
-                QString("color:%1; font-size:11px; padding:8px 10px; background:%2; border-left:3px solid %3;")
-                    .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
             results_layout_->addWidget(lbl);
         }
         status_label_->setText(tr("Trained %1 — %2 steps")
@@ -120,7 +157,9 @@ void QuantModulePanel::display_rl_trading_result(const QString& command, const Q
             gs_make_card(tr("MEAN REWARD"),
                          QString::number(mean_reward, 'f', 4) + " ± " + QString::number(std_reward, 'f', 4), this,
                          gs_pos_neg_color(mean_reward)),
-            gs_make_card(tr("PORTFOLIO RETURN"), fmt_pct_safe(QJsonValue(port_ret), 2), this,
+            // portfolio_return is already in percent (the script multiplies by 100); running it
+            // through fmt_pct_safe() scaled it by 100 a second time (5.7% showed as 567%).
+            gs_make_card(tr("PORTFOLIO RETURN"), QString::number(port_ret, 'f', 2) + "%", this,
                          gs_pos_neg_color(port_ret)),
             gs_make_card(tr("MEAN PORTFOLIO VAL"), QString::number(mean_pv, 'f', 2), this),
         };
@@ -172,7 +211,7 @@ void QuantModulePanel::display_rl_trading_result(const QString& command, const Q
         status_label_->setText(tr("Eval %1 eps  reward=%2  return=%3%")
                                    .arg(n_eps)
                                    .arg(mean_reward, 0, 'f', 4)
-                                   .arg(port_ret * 100, 0, 'f', 2));
+                                   .arg(port_ret, 0, 'f', 2));
         return;
     }
 
@@ -464,10 +503,13 @@ void QuantModulePanel::display_meta_learning_result(const QString& command, cons
         }
 
         if (!ranking.isEmpty()) {
+            // The Ensemble tab asks for "model keys from the selection output", but the key was
+            // never shown here (only the model id), so there was nothing to copy.
             QStringList headers =
-                is_classification
-                    ? QStringList{tr("Rank"), tr("Model ID"), tr("Score"), tr("Accuracy"), tr("F1"), tr("AUC-ROC")}
-                    : QStringList{tr("Rank"), tr("Model ID"), tr("Score"), tr("R²"), tr("RMSE"), tr("MSE")};
+                is_classification ? QStringList{tr("Rank"), tr("Model ID"), tr("Model Key"), tr("Score"),
+                                                tr("Accuracy"), tr("F1"), tr("AUC-ROC")}
+                                  : QStringList{tr("Rank"), tr("Model ID"), tr("Model Key"), tr("Score"), tr("R²"),
+                                                tr("RMSE"), tr("MSE")};
             QStringList metric_keys = is_classification ? QStringList{"accuracy", "f1_score", "auc_roc"}
                                                         : QStringList{"r2_score", "rmse", "mse"};
 
@@ -496,10 +538,14 @@ void QuantModulePanel::display_meta_learning_result(const QString& command, cons
                     mid_it->setForeground(QColor(ui::colors::POSITIVE()));
                 table->setItem(i, 1, mid_it);
 
+                auto* key_it = new QTableWidgetItem(r.value("model_key").toString());
+                key_it->setFlags(key_it->flags() | Qt::ItemIsSelectable); // selectable so it can be copied
+                table->setItem(i, 2, key_it);
+
                 auto* score_it = new QTableWidgetItem(QString::number(score, 'f', 4));
                 score_it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
                 score_it->setForeground(QColor(gs_pos_neg_color(score)));
-                table->setItem(i, 2, score_it);
+                table->setItem(i, 3, score_it);
 
                 for (int c = 0; c < metric_keys.size(); ++c) {
                     const double v = metrics.value(metric_keys[c]).toDouble();
@@ -511,7 +557,7 @@ void QuantModulePanel::display_meta_learning_result(const QString& command, cons
                         else if (v < 0)
                             it->setForeground(QColor(ui::colors::NEGATIVE()));
                     }
-                    table->setItem(i, c + 3, it);
+                    table->setItem(i, c + 4, it);
                 }
                 table->setRowHeight(i, 26);
             }

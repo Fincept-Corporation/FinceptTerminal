@@ -13,6 +13,8 @@
 #include <QUrl>
 #include <QUrlQuery>
 
+#include <algorithm>
+
 namespace fincept::services::prediction::kalshi_ns {
 
 namespace pr = fincept::services::prediction;
@@ -347,6 +349,14 @@ static void fill_book_from_levels(pr::PredictionOrderBook& book, const QJsonArra
     // Asks naturally come out ascending after this inversion, because
     // Kalshi returns NO bids best-first (highest NO price), which maps
     // to the lowest YES ask first.
+    //
+    // ...if the API really returns best-first. Polymarket's CLOB returns worst-first
+    // and the book widgets treat index 0 as the best level, so don't depend on the
+    // wire order here either: normalise to bids high->low / asks low->high.
+    std::stable_sort(book.bids.begin(), book.bids.end(),
+                     [](const pr::OrderLevel& a, const pr::OrderLevel& b) { return a.price > b.price; });
+    std::stable_sort(book.asks.begin(), book.asks.end(),
+                     [](const pr::OrderLevel& a, const pr::OrderLevel& b) { return a.price < b.price; });
 }
 
 void KalshiRestClient::fetch_order_book(const QString& ticker, int depth) {

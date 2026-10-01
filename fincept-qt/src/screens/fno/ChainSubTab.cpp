@@ -171,15 +171,51 @@ QString ChainSubTab::active_underlying() const {
 void ChainSubTab::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     is_visible_ = true;
+    // Already live for the current selection (the screen stayed up while another sub-tab
+    // was in front): nothing to redo. Re-subscribing would idle the topic for an instant
+    // and tear down the live WS feed for no reason.
+    if (!active_topic_.isEmpty() && active_topic_ == current_topic())
+        return;
     resubscribe();
 }
 
 void ChainSubTab::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
+    // Switching to another F&O sub-tab hides this page but leaves the screen up — keep
+    // the chain flowing for the tabs that read it. A hide of the whole screen is
+    // handled here too (the screen is already not visible) and by on_screen_hidden().
+    is_visible_ = owning_screen_visible();
+    if (!is_visible_)
+        drop_subscription();
+}
+
+bool ChainSubTab::owning_screen_visible() const {
+    for (const QWidget* w = parentWidget(); w; w = w->parentWidget()) {
+        if (w->objectName() == QLatin1String("fnoScreen"))
+            return w->isVisible();
+    }
+    return false;
+}
+
+void ChainSubTab::on_screen_shown() {
+    // Normally this tab's own showEvent has already subscribed; this covers the case
+    // where another sub-tab (restored session) is the visible one.
+    if (is_visible_)
+        return;
+    is_visible_ = true;
+    resubscribe();
+}
+
+void ChainSubTab::on_screen_hidden() {
     is_visible_ = false;
+    drop_subscription();
+}
+
+void ChainSubTab::drop_subscription() {
     auto& hub = fincept::datahub::DataHub::instance();
     if (!active_topic_.isEmpty()) {
         hub.unsubscribe(this, active_topic_);
+        hub.unsubscribe_errors(this, active_topic_);
         active_topic_.clear();
     }
     if (!tick_pattern_.isEmpty()) {
@@ -262,6 +298,13 @@ void ChainSubTab::on_refresh_clicked() {
 
 void ChainSubTab::rebuild_picker_for_broker(const QString& broker_id, bool keep_selection) {
     LOG_INFO("FnoChain", QString("rebuild_picker_for_broker: broker='%1' keep=%2").arg(broker_id).arg(keep_selection));
+    // The previous broker's chain topic must not stay subscribed while this picker is
+    // rebuilt: several paths below end in an empty state ("Loading instruments…",
+    // "Select a broker", no NFO data) without re-subscribing, and the next publish on
+    // the OLD topic (WS refresh, Greeks republish) would flip the table back to the old
+    // broker's chain under the new broker's name. Every success path re-subscribes
+    // through resubscribe() when the tab is visible.
+    drop_subscription();
     if (broker_id.isEmpty()) {
         LOG_WARN("FnoChain", "rebuild_picker_for_broker: empty broker_id — showing 'Select a broker'");
         show_empty_state(tr("Select a broker."));
@@ -407,14 +450,10 @@ void ChainSubTab::rebuild_expiries_for_underlying(const QString& broker_id, cons
 
 void ChainSubTab::resubscribe() {
     auto& hub = fincept::datahub::DataHub::instance();
-    if (!active_topic_.isEmpty()) {
-        hub.unsubscribe(this, active_topic_);
-        active_topic_.clear();
-    }
-    if (!tick_pattern_.isEmpty()) {
-        hub.unsubscribe_pattern(this, tick_pattern_);
-        tick_pattern_.clear();
-    }
+    // Also drops the error-channel subscription: re-adding subscribe_errors() on every
+    // resubscribe (each expiry / underlying change, every re-show) stacked one more
+    // error handler per call on the same topic.
+    drop_subscription();
     const QString topic = current_topic();
     if (topic.isEmpty()) {
         show_empty_state(tr("Pick a broker, underlying, and expiry."));
@@ -423,16 +462,25 @@ void ChainSubTab::resubscribe() {
     // Loading state: hide_empty_state() used to flip straight to the table, so
     // between subscribing and the first publish the user stared at an empty grid
     // with no indication anything was in flight. Keep the message visible until
-    // rows actually arrive (or an existing snapshot is already rendered).
-    if (table_ && table_->chain_model()->rowCount() > 0)
+    // rows actually arrive. A snapshot already rendered for THIS topic (hidden and
+    // re-shown tab) stays on screen; one left over from a different underlying /
+    // expiry must not — it would sit under the new picker selection (and feed the
+    // right-click order / Builder paths) until the first publish landed.
+    if (table_ && holds_rows_for(topic)) {
         hide_empty_state();
-    else
+    } else {
+        if (table_ && table_->chain_model()->rowCount() > 0)
+            table_->chain_model()->set_chain(OptionChain{});
         show_empty_state(tr("Loading %1 %2 chain…").arg(header_->underlying(), header_->expiry()));
+    }
     active_topic_ = topic;
 
     QPointer<ChainSubTab> self = this;
-    hub.subscribe(this, topic, [self](const QVariant& v) {
+    hub.subscribe(this, topic, [self, topic](const QVariant& v) {
         if (!self)
+            return;
+        // A late delivery for a topic we've since left must not overwrite the new one.
+        if (self->active_topic_ != topic)
             return;
         if (!v.canConvert<OptionChain>())
             return;
@@ -441,9 +489,17 @@ void ChainSubTab::resubscribe() {
         self->header_->update_from_chain(chain);
         self->hide_empty_state();
     });
-    hub.subscribe_errors(this, topic, [self](const QString& err) {
-        if (!self)
+    hub.subscribe_errors(this, topic, [self, topic](const QString& err) {
+        if (!self || self->active_topic_ != topic)
             return;
+        // Last-known-good stays visible (P11): a transient refresh failure used to wipe
+        // a perfectly usable chain and the ribbon. The header's freshness label turns
+        // amber/red as the snapshot ages, which is the honest signal; only a topic that
+        // has never loaded gets the error screen.
+        if (self->holds_rows_for(topic)) {
+            LOG_WARN("FnoChain", QString("Refresh failed for %1 — keeping last snapshot: %2").arg(topic, err));
+            return;
+        }
         self->show_empty_state(ChainSubTab::tr("Chain unavailable: %1").arg(err));
     });
 
@@ -468,6 +524,13 @@ void ChainSubTab::resubscribe() {
     hub.request(topic, /*force*/ false);
 
     LOG_INFO("FnoChain", QString("Subscribed to %1").arg(topic));
+}
+
+bool ChainSubTab::holds_rows_for(const QString& topic) const {
+    if (!table_ || table_->chain_model()->rowCount() <= 0)
+        return false;
+    const auto& held = table_->chain_model()->chain();
+    return OptionChainService::instance().chain_topic(held.broker_id, held.underlying, held.expiry) == topic;
 }
 
 void ChainSubTab::show_empty_state(const QString& message) {

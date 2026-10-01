@@ -121,10 +121,6 @@ class CryptoChart : public QWidget {
     bool bounds_dirty_ = true;
     void recompute_bounds();
 
-    // Pending timeframe request while a fetch is already in-flight
-    // set_candles() will emit timeframe_changed again if this is set
-    QString pending_tf_;
-
     fincept::ui::ChartOverlayManager* overlay_mgr_ = nullptr;
     fincept::ui::IndicatorPicker* indicator_picker_ = nullptr;
 

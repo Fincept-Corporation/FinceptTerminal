@@ -18,7 +18,10 @@ class DashboardCanvas : public QWidget {
     ~DashboardCanvas() override;
 
     void load_layout(const GridLayout& layout);
-    GridLayout current_layout() const { return layout_; }
+    /// The layout as the user designed it. While the visible grid is only a
+    /// narrower fold of that layout (small panel, no edits since), this returns
+    /// the original rather than the squashed fold.
+    GridLayout current_layout() const;
     void apply_template(const QString& template_id);
     void add_widget(const QString& widget_type_id);
     void remove_widget(const QString& instance_id);
@@ -47,6 +50,8 @@ class DashboardCanvas : public QWidget {
 
   private:
     void apply_bg();
+    /// Clamp every item into layout_.cols columns and re-compact.
+    void fit_items_to_cols();
     void reflow_tiles(bool animate = false);
     void update_canvas_height();
     void update_placeholder(const GridCell& cell);
@@ -84,6 +89,11 @@ class DashboardCanvas : public QWidget {
     // The column count the user last explicitly set (via load/apply/drag).
     // Responsive shrink is allowed, but we restore this when width permits.
     int canonical_cols_ = 12;
+    /// The items exactly as loaded/designed (at canonical_cols_), kept so a
+    /// narrow fold can be undone when the panel widens. Valid until the user
+    /// edits the arrangement (add/remove/drag/resize).
+    QVector<GridItem> canonical_items_;
+    bool canonical_valid_ = false;
 
     fincept::ui::ThemeTokens tokens_{};
 };

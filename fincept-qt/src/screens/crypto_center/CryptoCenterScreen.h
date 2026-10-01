@@ -53,6 +53,7 @@ class CryptoCenterScreen : public QWidget {
 
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
+    void on_connect_failed(const QString& reason);
 
     // Header
     QWidget* header_ = nullptr;
@@ -75,6 +76,7 @@ class CryptoCenterScreen : public QWidget {
     QLabel* empty_lede_ = nullptr;
     QLabel* empty_security_label_ = nullptr;
     QLabel* empty_security_text_ = nullptr;
+    QLabel* empty_error_ = nullptr; ///< reason the last connect attempt failed (hidden until then)
     QPushButton* connect_button_ = nullptr;
 
     // Connected state

@@ -1,5 +1,6 @@
 #include "screens/dashboard/MarketPulsePanel.h"
 
+#include "core/events/EventBus.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "screens/dashboard/widgets/LoadingOverlay.h"
@@ -12,6 +13,7 @@
 #include <QPalette>
 #include <QSet>
 #include <QShowEvent>
+#include <QTimeZone>
 
 #include <algorithm>
 
@@ -529,6 +531,10 @@ MarketPulsePanel::MoverRow MarketPulsePanel::make_mover_row(QWidget* parent, QVB
     MoverRow r;
     r.container = new QWidget(parent);
     r.container->setObjectName("pulseMoverRow");
+    // Double-click opens the row's symbol (see eventFilter()). The symbol itself
+    // is stamped on the container by fill_mover_row().
+    r.container->setCursor(Qt::PointingHandCursor);
+    r.container->installEventFilter(this);
 
     auto* hl = new QHBoxLayout(r.container);
     hl->setContentsMargins(12, 5, 12, 5);
@@ -560,6 +566,8 @@ void MarketPulsePanel::fill_mover_row(const MoverRow& row, const QString& symbol
     if (!row.container)
         return;
     row.container->setVisible(true);
+    row.container->setProperty("pulse_symbol", symbol);
+    row.container->setToolTip(tr("Double-click to open %1 in Equity Research").arg(symbol));
     row.symbol->setText(symbol);
     row.arrow->setText(change >= 0 ? QString(QChar(0x25B2)) : QString(QChar(0x25BC)));
     row.change->setText(QString("%1%2%").arg(change >= 0 ? "+" : "").arg(change, 0, 'f', 2));
@@ -658,14 +666,19 @@ QWidget* MarketPulsePanel::build_global_snapshot_section() {
     struct RowDef {
         const char* label;
         StatRow& row;
+        const char* symbol; // quote symbol the row is fed from (see rebuild_snapshot_from_cache)
     };
     RowDef defs[] = {
-        {"VIX", vix_row_},   {"US 10Y", us10y_row_}, {"DXY", dxy_row_},
-        {"GOLD", gold_row_}, {"OIL WTI", oil_row_},  {"BTC", btc_row_},
+        {"VIX", vix_row_, "^VIX"},       {"US 10Y", us10y_row_, "^TNX"}, {"DXY", dxy_row_, "DX-Y.NYB"},
+        {"GOLD", gold_row_, "GC=F"},     {"OIL WTI", oil_row_, "CL=F"},  {"BTC", btc_row_, "BTC-USD"},
     };
 
     for (auto& d : defs) {
         auto* rw = new QWidget(this);
+        rw->setProperty("pulse_symbol", QString::fromLatin1(d.symbol));
+        rw->setToolTip(tr("Double-click to open %1 in Equity Research").arg(QString::fromLatin1(d.symbol)));
+        rw->setCursor(Qt::PointingHandCursor);
+        rw->installEventFilter(this);
         auto* hl = new QHBoxLayout(rw);
         hl->setContentsMargins(12, 4, 12, 4);
 
@@ -745,37 +758,64 @@ QWidget* MarketPulsePanel::build_market_hours_section() {
 
 // ── Market status helper ─────────────────────────────────────────────────────
 
+namespace {
+
+// One trading venue's regular session, in the exchange's OWN local time.
+//
+// The old implementation compared fixed UTC hours (US "14-21 UTC", UK "8-17
+// UTC", ...), which are winter-time values: for ~8 months of the year the US
+// and UK sessions are an hour off (the panel showed NYSE OPEN for the first
+// hour after the close), and the half-hour opens (NYSE 09:30, NSE 09:15,
+// SSE 09:30) were rounded to the hour. Resolving the exchange's time zone makes
+// DST and the real session times correct. Midday breaks (TSE, SSE) report CLOSED.
+struct PulseSession {
+    const char* region;
+    const char* tz_id;
+    int pre_min;     // pre-market / pre-open start, minutes after local midnight (== open_min if none)
+    int open_min;    // regular session open
+    int close_min;   // regular session close
+    int break_start; // midday break [start, end); 0/0 when the venue has none
+    int break_end;
+};
+
+constexpr PulseSession kPulseSessions[] = {
+    {"US", "America/New_York", 4 * 60, 9 * 60 + 30, 16 * 60, 0, 0},
+    {"UK", "Europe/London", 7 * 60, 8 * 60, 16 * 60 + 30, 0, 0},
+    {"JP", "Asia/Tokyo", 9 * 60, 9 * 60, 15 * 60 + 30, 11 * 60 + 30, 12 * 60 + 30},
+    {"CN", "Asia/Shanghai", 9 * 60 + 15, 9 * 60 + 30, 15 * 60, 11 * 60 + 30, 13 * 60},
+    {"IN", "Asia/Kolkata", 9 * 60, 9 * 60 + 15, 15 * 60 + 30, 0, 0},
+};
+
+// Pure function of (region, instant) so it can be checked without a clock.
+QString pulse_session_status(const QString& region, const QDateTime& utc_now) {
+    for (const auto& s : kPulseSessions) {
+        if (region != QLatin1String(s.region))
+            continue;
+        const QTimeZone tz{QByteArray(s.tz_id)};
+        if (!tz.isValid())
+            break;
+        const QDateTime local = utc_now.toTimeZone(tz);
+        if (local.date().dayOfWeek() >= 6) // Sat / Sun in the exchange's own calendar
+            return QStringLiteral("CLOSED");
+        const int m = local.time().hour() * 60 + local.time().minute();
+        if (m >= s.break_start && m < s.break_end)
+            return QStringLiteral("CLOSED");
+        if (m >= s.open_min && m < s.close_min)
+            return QStringLiteral("OPEN");
+        if (m >= s.pre_min && m < s.open_min)
+            return QStringLiteral("PRE");
+        break;
+    }
+    return QStringLiteral("CLOSED");
+}
+
+} // namespace
+
 QString MarketPulsePanel::market_status(const QString& region) {
     // Returns an English source key. Display-time translation happens in
     // refresh_market_hours() so the key is stable for retranslateUi().
-    auto now = QDateTime::currentDateTimeUtc();
-    int hour = now.time().hour();
-    int day = now.date().dayOfWeek(); // 1=Mon, 7=Sun
-
-    if (day >= 6)
-        return QStringLiteral("CLOSED");
-
-    if (region == "US") {
-        if (hour >= 13 && hour < 14)
-            return QStringLiteral("PRE");
-        if (hour >= 14 && hour < 21)
-            return QStringLiteral("OPEN");
-    } else if (region == "UK") {
-        if (hour >= 7 && hour < 8)
-            return QStringLiteral("PRE");
-        if (hour >= 8 && hour < 17)
-            return QStringLiteral("OPEN");
-    } else if (region == "JP") {
-        if (hour >= 0 && hour < 6)
-            return QStringLiteral("OPEN");
-    } else if (region == "CN") {
-        if (hour >= 1 && hour < 7)
-            return QStringLiteral("OPEN");
-    } else if (region == "IN") {
-        if (hour >= 3 && hour < 10)
-            return QStringLiteral("OPEN");
-    }
-    return QStringLiteral("CLOSED");
+    // No exchange-holiday calendar: a weekday holiday still reads as open.
+    return pulse_session_status(region, QDateTime::currentDateTimeUtc());
 }
 
 // ── Refresh ───────────────────────────────────────────────────────────────────
@@ -1073,6 +1113,18 @@ void MarketPulsePanel::refresh_data() {
     push(kMoverSymbols);
     push(kSnapshotSymbols);
     hub.request(topics, /*force=*/true); // user-triggered refresh
+}
+
+bool MarketPulsePanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonDblClick) {
+        const QString sym = obj->property("pulse_symbol").toString();
+        if (!sym.isEmpty()) {
+            EventBus::instance().publish("nav.open_symbol",
+                                         QVariantMap{{"screen_id", "equity_research"}, {"symbol", sym}});
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 void MarketPulsePanel::changeEvent(QEvent* event) {

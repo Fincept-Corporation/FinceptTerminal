@@ -3,6 +3,7 @@
 
 #include "core/events/EventBus.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
 #include "screens/relationship_map/RelationshipGraphScene.h"
 #include "services/markets/MarketSearchService.h"
 #include "services/relationship_map/RelationshipMapService.h"
@@ -16,6 +17,8 @@
 #include <QShowEvent>
 #include <QVBoxLayout>
 
+#include <utility>
+
 namespace fincept::screens {
 
 using namespace fincept::ui;
@@ -27,6 +30,15 @@ static inline QString MF() {
 
 static constexpr int kSearchDebounceMs = 300;
 static constexpr int kMaxSearchResults = 10;
+
+/// Hand a ticker to Equity Research. nav.open_symbol navigates first (constructing the
+/// screen if it has never been opened) and then delivers the symbol; the old
+/// equity_research.load_symbol publish never navigated and was lost entirely when that
+/// screen didn't exist yet.
+static void relmap_open_in_equity_research(const QString& ticker) {
+    fincept::EventBus::instance().publish("nav.open_symbol",
+                                          {{"screen_id", QStringLiteral("equity_research")}, {"symbol", ticker}});
+}
 
 /// Convert exchange + symbol to yfinance-compatible ticker.
 static QString to_yfinance_symbol(const QString& symbol, const QString& exchange, const QString& country = {}) {
@@ -61,11 +73,24 @@ RelationshipMapScreen::RelationshipMapScreen(QWidget* parent) : QWidget(parent) 
 void RelationshipMapScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     hide_dropdown();
+    // A linked symbol that arrived while hidden is analysed now (no Python spawn for
+    // a screen nobody is looking at).
+    if (!pending_group_symbol_.isEmpty())
+        load_group_symbol(std::exchange(pending_group_symbol_, QString()));
+    // Same for the ticker restored from the saved session.
+    if (restore_search_pending_) {
+        restore_search_pending_ = false;
+        if (!has_data_)
+            on_search();
+    }
 }
 
 void RelationshipMapScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     hide_dropdown();
+    // Don't let a pending typeahead debounce fire an asset search while hidden.
+    if (search_debounce_)
+        search_debounce_->stop();
 }
 
 bool RelationshipMapScreen::eventFilter(QObject* obj, QEvent* event) {
@@ -207,16 +232,19 @@ void RelationshipMapScreen::build_ui() {
     // Layout selector — display labels are translatable; the enum value is
     // carried in itemData so logic is language-independent.
     layout_combo_ = new QComboBox;
+    // LAYERED (columns) and RADIAL are implemented. A FORCE entry used to sit here but
+    // never changed anything, so it is gone (a saved Force mode restores to LAYERED).
     layout_combo_->addItem(tr("LAYERED"), (int)LayoutMode::Layered);
     layout_combo_->addItem(tr("RADIAL"), (int)LayoutMode::Radial);
-    layout_combo_->addItem(tr("FORCE"), (int)LayoutMode::Force);
     layout_combo_->setStyleSheet(QString("QComboBox { background: %1; color: %2; border: 1px solid %3; "
                                          "padding: 3px 8px; font-size: 10px; %4 }")
                                      .arg(colors::BG_SURFACE(), colors::TEXT_SECONDARY(), colors::BORDER_DIM(), MF()));
     connect(layout_combo_, &QComboBox::currentIndexChanged, this, [this](int idx) {
         layout_mode_ = static_cast<LayoutMode>(layout_combo_->itemData(idx).toInt());
-        if (has_data_)
+        if (has_data_) {
             rebuild_graph();
+            view_->fit_to_content(); // a different arrangement has different extents
+        }
         ScreenStateManager::instance().notify_changed(this);
     });
     hhl->addWidget(layout_combo_);
@@ -317,10 +345,10 @@ void RelationshipMapScreen::build_ui() {
 
     root->addWidget(status);
 
-    // Center card click → navigate to equity research
-    connect(scene_, &relmap::RelationshipGraphScene::center_card_clicked, this, [](const QString& ticker) {
-        fincept::EventBus::instance().publish("equity_research.load_symbol", {{"symbol", ticker}, {"type", "equity"}});
-    });
+    // Double-click on the centre company or a peer → open it in Equity Research. (A single
+    // click only inspects: it opens the detail panel via node_activated below.)
+    connect(scene_, &relmap::RelationshipGraphScene::symbol_open_requested, this,
+            [](const QString& ticker) { relmap_open_in_equity_research(ticker); });
     // Any node click opens the right-side detail panel (previously the slot was
     // never connected, so the panel was unreachable).
     connect(scene_, &relmap::RelationshipGraphScene::node_activated, this, &RelationshipMapScreen::on_node_selected);
@@ -522,6 +550,7 @@ void RelationshipMapScreen::on_search() {
     search_input_->blockSignals(true);
     search_input_->setText(ticker);
     search_input_->blockSignals(false);
+    requested_ticker_ = ticker;
     progress_bar_->show();
     progress_bar_->setValue(0);
     detail_panel_->hide();
@@ -683,9 +712,19 @@ void RelationshipMapScreen::on_progress(int percent, const QString& message) {
 }
 
 void RelationshipMapScreen::on_data_ready(const RelationshipData& payload) {
+    // data_ready is a broadcast from the shared service: a refresh the hub (or anything
+    // else) started for another symbol must not replace the graph the user asked for.
+    if (!requested_ticker_.isEmpty() && payload.company.ticker.compare(requested_ticker_, Qt::CaseInsensitive) != 0)
+        return;
     current_data_ = payload;
     has_data_ = true;
     loaded_ticker_ = payload.company.ticker;
+    // Echo a user-driven analysis to the linked group; one that the group itself
+    // asked for must not be published back.
+    const bool from_group = group_driven_ticker_ == loaded_ticker_.toUpper();
+    group_driven_ticker_.clear();
+    if (!from_group && link_group_ != SymbolGroup::None)
+        SymbolContext::instance().set_group_symbol(link_group_, SymbolRef::equity(loaded_ticker_), this);
     progress_bar_->hide();
     progress_label_->setText(tr("Complete"));
     legend_widget_->show();
@@ -707,8 +746,14 @@ void RelationshipMapScreen::on_fetch_failed(const QString& error) {
     progress_label_->setText(tr("Error: %1 — press ANALYZE to retry").arg(error.simplified().left(90)));
     progress_label_->setToolTip(error);
     progress_label_->setStyleSheet(QString("color: %1; font-size: 9px; %2").arg(colors::NEGATIVE(), MF()));
-    // Leave the previous graph up rather than a blank canvas; the status bar
-    // still reports what is on screen.
+    // Leave the previous graph up rather than a blank canvas. on_search() cleared
+    // has_data_ while loading; if a graph is still on screen, make it live again so its
+    // filters / layout / node actions keep working instead of going dead.
+    if (!has_data_ && !current_data_.company.ticker.isEmpty() && !scene_->items().isEmpty()) {
+        has_data_ = true;
+        legend_widget_->show();
+        update_status_bar();
+    }
     if (status_nodes_ && !has_data_)
         status_nodes_->setText(tr("NO DATA"));
 }
@@ -795,6 +840,37 @@ void RelationshipMapScreen::on_node_selected(const QString& label, const QString
                     break;
                 }
             }
+
+            // Tradable nodes (the company and its peers) get actions: open the ticker in
+            // Equity Research, or (for a peer) re-centre this map on it.
+            const bool is_company = label == current_data_.company.ticker;
+            bool is_peer = false;
+            for (const auto& p : std::as_const(current_data_.peers))
+                if (p.ticker == label)
+                    is_peer = true;
+            if (is_company || is_peer) {
+                auto make_action = [&](const QString& text) {
+                    auto* btn = new QPushButton(text);
+                    btn->setCursor(Qt::PointingHandCursor);
+                    btn->setStyleSheet(
+                        QString("QPushButton { background: rgba(217,119,6,0.15); color: %1; border: 1px solid %3; "
+                                "padding: 5px 8px; font-size: 10px; font-weight: 700; %2 }"
+                                "QPushButton:hover { background: %1; color: %4; }")
+                            .arg(colors::AMBER(), MF(), colors::AMBER_DIM(), colors::BG_BASE()));
+                    layout->addWidget(btn);
+                    return btn;
+                };
+                connect(make_action(tr("OPEN IN EQUITY RESEARCH")), &QPushButton::clicked, this,
+                        [label]() { relmap_open_in_equity_research(label); });
+                if (is_peer)
+                    connect(make_action(tr("RE-CENTER MAP ON %1").arg(label)), &QPushButton::clicked, this,
+                            [this, label]() {
+                                search_input_->blockSignals(true);
+                                search_input_->setText(label);
+                                search_input_->blockSignals(false);
+                                on_search();
+                            });
+            }
         }
 
         detail_panel_->show();
@@ -841,7 +917,7 @@ void RelationshipMapScreen::retranslateUi() {
     if (layout_combo_) {
         const QSignalBlocker block(layout_combo_);
         const int idx = layout_combo_->currentIndex();
-        const QStringList labels = {tr("LAYERED"), tr("RADIAL"), tr("FORCE")};
+        const QStringList labels = {tr("LAYERED"), tr("RADIAL")};
         for (int i = 0; i < layout_combo_->count() && i < labels.size(); ++i)
             layout_combo_->setItemText(i, labels[i]);
         layout_combo_->setCurrentIndex(idx);
@@ -879,6 +955,35 @@ void RelationshipMapScreen::retranslateUi() {
             entry.first->setText(relmap::category_label(entry.second));
 }
 
+// ── IGroupLinked ──────────────────────────────────────────────────────────────
+
+void RelationshipMapScreen::on_group_symbol_changed(const SymbolRef& ref) {
+    const QString symbol = ref.symbol.trimmed().toUpper();
+    if (symbol.isEmpty())
+        return;
+    if (!isVisible()) {
+        pending_group_symbol_ = symbol;
+        return;
+    }
+    load_group_symbol(symbol);
+}
+
+void RelationshipMapScreen::load_group_symbol(const QString& symbol) {
+    if (has_data_ && symbol == loaded_ticker_.toUpper())
+        return;
+    group_driven_ticker_ = symbol;
+    search_input_->blockSignals(true);
+    search_input_->setText(symbol);
+    search_input_->blockSignals(false);
+    on_search();
+}
+
+SymbolRef RelationshipMapScreen::current_symbol() const {
+    if (loaded_ticker_.isEmpty())
+        return {};
+    return SymbolRef::equity(loaded_ticker_);
+}
+
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap RelationshipMapScreen::save_state() const {
@@ -904,7 +1009,13 @@ void RelationshipMapScreen::restore_state(const QVariantMap& state) {
 
     if (!ticker.isEmpty() && search_input_) {
         search_input_->setText(ticker);
-        on_search();
+        // The router restores state right after constructing the screen, possibly while
+        // it is still hidden (symbol-link materialisation). Analysing then would spawn
+        // the yfinance run for a screen nobody has opened - wait for the first show.
+        if (isVisible())
+            on_search();
+        else
+            restore_search_pending_ = true;
     }
 }
 

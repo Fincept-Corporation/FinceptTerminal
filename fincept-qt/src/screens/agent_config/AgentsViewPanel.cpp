@@ -26,6 +26,12 @@ static QLabel* section_hdr(const QString& text) {
     return lbl;
 }
 
+// Status-line styling in one place (was eight identical inline setStyleSheet pairs).
+static void set_status(QLabel* lbl, const QString& text, const QString& color) {
+    lbl->setText(text);
+    lbl->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(color));
+}
+
 static const QString kInput = QString("background:%1;color:%2;border:1px solid %3;padding:4px 8px;font-size:12px;")
                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_MED());
 
@@ -465,14 +471,10 @@ void AgentsViewPanel::setup_connections() {
         run_btn_->setText(tr("RUN AGENT"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
-            result_status_->setText(tr("Completed in %1ms").arg(r.execution_time_ms));
-            result_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+            set_status(result_status_, tr("Completed in %1ms").arg(r.execution_time_ms), ui::colors::POSITIVE());
         } else {
             result_display_->setPlainText(tr("Error: %1").arg(r.error));
-            result_status_->setText(tr("FAILED"));
-            result_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+            set_status(result_status_, tr("FAILED"), ui::colors::NEGATIVE());
         }
     });
 
@@ -491,7 +493,7 @@ void AgentsViewPanel::setup_connections() {
                 QTextCursor cursor = result_display_->textCursor();
                 cursor.movePosition(QTextCursor::End);
                 result_display_->setTextCursor(cursor);
-                result_display_->insertPlainText(token + " ");
+                result_display_->insertPlainText(token);
             });
 
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
@@ -503,14 +505,13 @@ void AgentsViewPanel::setup_connections() {
         run_btn_->setText(tr("RUN AGENT"));
         if (r.success) {
             result_display_->setMarkdown(r.response);
-            result_status_->setText(tr("Completed in %1ms").arg(r.execution_time_ms));
-            result_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+            set_status(result_status_, tr("Completed in %1ms").arg(r.execution_time_ms), ui::colors::POSITIVE());
+        } else if (r.error == QLatin1String(services::AgentService::kCancelledError)) {
+            // User pressed STOP — keep whatever streamed in so far.
+            set_status(result_status_, tr("Stopped"), ui::colors::WARNING());
         } else {
             result_display_->setPlainText(tr("Error: %1").arg(r.error));
-            result_status_->setText(tr("FAILED"));
-            result_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+            set_status(result_status_, tr("FAILED"), ui::colors::NEGATIVE());
         }
     });
 
@@ -537,8 +538,7 @@ void AgentsViewPanel::setup_connections() {
         run_btn_->setEnabled(true);
         run_btn_->setText(tr("RUN AGENT"));
         result_display_->setPlainText(tr("Error: %1").arg(msg));
-        result_status_->setText(tr("ERROR"));
-        result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+        set_status(result_status_, tr("ERROR"), ui::colors::NEGATIVE());
     });
 
     // Reload profile combo when LLM config changes
@@ -801,8 +801,7 @@ void AgentsViewPanel::save_current_config() {
     db.category = agent.category;
     db.config_json = QString::fromUtf8(QJsonDocument(build_config_from_editor()).toJson(QJsonDocument::Compact));
     services::AgentService::instance().save_config(db);
-    result_status_->setText(tr("Config saved"));
-    result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::POSITIVE()));
+    set_status(result_status_, tr("Config saved"), ui::colors::POSITIVE());
 }
 
 void AgentsViewPanel::delete_current_config() {
@@ -816,13 +815,18 @@ void AgentsViewPanel::delete_current_config() {
                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
     services::AgentService::instance().delete_config(filtered_agents_[selected_agent_idx_].id);
-    result_status_->setText(tr("Config deleted"));
-    result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::WARNING()));
+    set_status(result_status_, tr("Config deleted"), ui::colors::WARNING());
 }
 
 void AgentsViewPanel::run_query() {
+    // While a streaming run is in flight the button doubles as STOP (the agent can
+    // otherwise spend minutes of paid LLM/tool calls with no way to interrupt it).
+    if (executing_) {
+        services::AgentService::instance().cancel_run(pending_request_id_);
+        return;
+    }
     const QString q = query_input_->toPlainText().trimmed();
-    if (q.isEmpty() || executing_)
+    if (q.isEmpty())
         return;
 
     executing_ = true;
@@ -830,8 +834,7 @@ void AgentsViewPanel::run_query() {
     run_btn_->setText(tr("RUNNING..."));
     result_display_->clear();
     routing_info_label_->hide();
-    result_status_->setText(tr("Executing..."));
-    result_status_->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::AMBER()));
+    set_status(result_status_, tr("Executing..."), ui::colors::AMBER());
 
     const QJsonObject config = build_config_from_editor();
     auto& svc = services::AgentService::instance();
@@ -841,10 +844,14 @@ void AgentsViewPanel::run_query() {
         svc.execute_routed_query(q, config);
     } else {
         const QString om = output_model_combo_->currentText();
-        if (om != "text")
+        if (om != "text") {
             pending_request_id_ = svc.run_agent_structured(q, config, om);
-        else
+        } else {
             pending_request_id_ = svc.run_agent_streaming(q, config);
+            // Streaming runs can be cancelled — re-enable the button as STOP.
+            run_btn_->setEnabled(true);
+            run_btn_->setText(tr("STOP"));
+        }
     }
 }
 

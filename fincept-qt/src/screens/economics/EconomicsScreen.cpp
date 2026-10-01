@@ -46,9 +46,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSet>
 #include <QVBoxLayout>
 
 #include <iterator>
+#include <utility>
 
 namespace fincept::screens {
 
@@ -207,6 +209,7 @@ void EconomicsScreen::build_ui() {
     scroll_->setFrameShape(QFrame::NoFrame);
 
     badge_bar_ = new QWidget(this);
+    badge_bar_->setObjectName(QStringLiteral("econBadgeBar"));
     auto* bhl = new QHBoxLayout(badge_bar_);
     bhl->setContentsMargins(6, 3, 6, 3);
     bhl->setSpacing(4);
@@ -218,6 +221,7 @@ void EconomicsScreen::build_ui() {
         entry.color = src.color;
 
         auto* btn = new QPushButton(src.label);
+        btn->setObjectName(QStringLiteral("econBadge_") + src.id); // styled by the badge bar's stylesheet
         btn->setCheckable(true);
         btn->setFixedHeight(26);
         btn->setAccessibleName(tr("Data source: %1").arg(QString::fromUtf8(src.label)));
@@ -262,23 +266,22 @@ void EconomicsScreen::refresh_theme() {
 
     scroll_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;").arg(BG_BASE(), BORDER_DIM()));
 
-    badge_bar_->setStyleSheet(QString("background:%1;").arg(BG_BASE()));
-
-    // Re-style all badge buttons
+    // Style every source badge with ONE stylesheet on the badge bar (id selectors per badge).
+    // Calling setStyleSheet() on each of the badges re-parsed and re-polished all of them on every
+    // theme change.
+    QString badge_qss = QString("#econBadgeBar { background:%1; }").arg(BG_BASE());
     for (const auto& entry : sources_) {
-        if (!entry.badge)
-            continue;
-        QColor c(entry.color);
-        QString rgba = QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
-        static_cast<QPushButton*>(entry.badge)
-            ->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:1px solid %3;"
-                                    "  font-size:9px; font-weight:700; padding:0 10px; letter-spacing:0.3px; }"
-                                    "QPushButton:hover { color:%4; border-color:%5; }"
-                                    "QPushButton:checked { background:rgba(%6,0.12); color:%7;"
-                                    "  border-color:%7; }")
-                                .arg(BG_SURFACE(), TEXT_TERTIARY(), BORDER_DIM(), TEXT_PRIMARY(), BORDER_BRIGHT())
-                                .arg(rgba, entry.color));
+        const QColor c(entry.color);
+        const QString rgba = QString("%1,%2,%3").arg(c.red()).arg(c.green()).arg(c.blue());
+        badge_qss += QString("#econBadge_%1 { background:%2; color:%3; border:1px solid %4;"
+                             "  font-size:9px; font-weight:700; padding:0 10px; letter-spacing:0.3px; }"
+                             "#econBadge_%1:hover { color:%5; border-color:%6; }"
+                             "#econBadge_%1:checked { background:rgba(%7,0.12); color:%8;"
+                             "  border-color:%8; }")
+                         .arg(entry.id, BG_SURFACE(), TEXT_TERTIARY(), BORDER_DIM(), TEXT_PRIMARY(), BORDER_BRIGHT())
+                         .arg(rgba, entry.color);
     }
+    badge_bar_->setStyleSheet(badge_qss);
 
     stack_->setStyleSheet(QString("background:%1;").arg(BG_BASE()));
 }
@@ -315,6 +318,11 @@ EconPanelBase* EconomicsScreen::get_or_create_panel(SourceEntry& entry) {
     entry.panel = panel;
     stack_->addWidget(panel);
     LOG_INFO("EconomicsScreen", "Created panel for: " + entry.id);
+
+    // Apply the state saved for this panel (restore_state() ran before the panel existed).
+    const QString state_key = entry.id + "_panel";
+    if (pending_panel_states_.contains(state_key))
+        panel->restore_panel_state(pending_panel_states_.take(state_key).toMap());
     return panel;
 }
 
@@ -332,7 +340,10 @@ void EconomicsScreen::switch_to(const QString& source_id) {
             EconPanelBase* panel = get_or_create_panel(entry);
             if (panel) {
                 stack_->setCurrentWidget(panel);
-                panel->activate();
+                // activate() resets a panel to its intro text. Skip it when the panel is showing
+                // data (or waiting on a request) so switching sources doesn't throw results away.
+                if (!panel->keeps_state_on_activate())
+                    panel->activate();
             }
         }
     }
@@ -341,7 +352,10 @@ void EconomicsScreen::switch_to(const QString& source_id) {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap EconomicsScreen::save_state() const {
-    QVariantMap state{{"source_id", active_id_}};
+    // Start from the saved state of panels not built this session, so saving after opening only
+    // some panels doesn't drop everyone else's inputs.
+    QVariantMap state = pending_panel_states_;
+    state["source_id"] = active_id_;
     for (const auto& entry : sources_) {
         if (entry.panel) {
             auto ps = entry.panel->save_panel_state();
@@ -353,12 +367,23 @@ QVariantMap EconomicsScreen::save_state() const {
 }
 
 void EconomicsScreen::restore_state(const QVariantMap& state) {
+    // Panels are lazy: queue the state of the ones that don't exist yet BEFORE switching, so the
+    // target panel is built with its restored inputs already in place (and is not activated with
+    // defaults first), then apply to panels that already exist.
+    QSet<QString> queued;
+    for (const auto& entry : std::as_const(sources_)) {
+        const QString key = entry.id + "_panel";
+        if (!entry.panel && state.contains(key)) {
+            pending_panel_states_[key] = state.value(key);
+            queued.insert(key);
+        }
+    }
     const QString id = state.value("source_id").toString();
     if (!id.isEmpty())
         switch_to(id);
     for (auto& entry : sources_) {
         const QString key = entry.id + "_panel";
-        if (entry.panel && state.contains(key))
+        if (entry.panel && state.contains(key) && !queued.contains(key))
             entry.panel->restore_panel_state(state.value(key).toMap());
     }
 }

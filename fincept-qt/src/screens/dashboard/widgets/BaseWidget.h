@@ -108,6 +108,28 @@ class BaseWidget : public QFrame {
     /// retranslate their own widgets.
     virtual void retranslateUi();
 
+    /// Open `symbol` in another screen through the `nav.open_symbol` event
+    /// (navigates, constructing the screen if needed, then hands it the
+    /// symbol via IGroupLinked). Default target is Equity Research; pass
+    /// "crypto_trading" + asset_class "crypto" for crypto pairs.
+    void open_symbol(const QString& symbol, const QString& screen_id = QStringLiteral("equity_research"),
+                     const QString& asset_class = QStringLiteral("equity"), const QString& exchange = {});
+
+    /// Make `w` open `symbol` in Equity Research when double-clicked. Use for
+    /// rows/cells that are plain QWidgets (table widgets should connect to
+    /// cellDoubleClicked instead). Safe to call repeatedly on the same widget
+    /// (e.g. when a recycled row is refilled) — it only refreshes the symbol.
+    void link_symbol(QWidget* w, const QString& symbol);
+
+    /// Make `w` switch to the full `screen_id` screen (nav.switch_screen) when
+    /// double-clicked. For rows that describe an event/dataset rather than a
+    /// ticker (economic calendar, geopolitics, vessels, prediction markets).
+    void link_screen(QWidget* w, const QString& screen_id, const QString& tooltip);
+
+    /// Handles the double-clicks installed by link_symbol() / link_screen().
+    /// Subclasses that override this must chain to BaseWidget::eventFilter().
+    bool eventFilter(QObject* obj, QEvent* event) override;
+
   private:
     void refresh_base_theme();
     void on_config_clicked();

@@ -6,6 +6,7 @@
 #include "core/logging/Logger.h"
 #include "storage/cache/CacheManager.h"
 
+#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -21,6 +22,29 @@ static constexpr int kTransferTimeoutMs = 10000; // 10s per API request
 
 namespace fincept::services {
 
+namespace {
+
+// Human-readable reason from an API error body ({"success":false,"message":...}),
+// or `fallback` when the server said nothing usable. Surfaced to the user so a
+// rejected post/reply/vote says WHY (rate limit, not signed in, too short...)
+// instead of a generic "Failed".
+QString forum_svc_error_text(const QJsonObject& root, const QString& fallback) {
+    for (const char* key : {"message", "error", "detail"}) {
+        const QJsonValue v = root.value(QLatin1String(key));
+        if (v.isString() && !v.toString().trimmed().isEmpty())
+            return v.toString().trimmed();
+    }
+    return fallback;
+}
+
+// A path segment taken from data (uuid / username / sort) must not be able to
+// add "/", "?" or ".." to the request path.
+QString forum_svc_seg(const QString& s) {
+    return QString::fromLatin1(QUrl::toPercentEncoding(s));
+}
+
+} // namespace
+
 ForumService& ForumService::instance() {
     static ForumService s;
     return s;
@@ -32,6 +56,15 @@ ForumService::ForumService() {
 
 QString ForumService::api_key() const {
     return auth::AuthManager::instance().session().api_key;
+}
+
+// Cache key suffix for responses that depend on WHO is asking (permissions,
+// per-user vote state). A global key served the previous account's view for up
+// to the TTL after a login/logout.
+static QString forum_cache_scope(const QString& api_key) {
+    if (api_key.isEmpty())
+        return QStringLiteral("anon");
+    return QString::fromLatin1(QCryptographicHash::hash(api_key.toUtf8(), QCryptographicHash::Sha1).toHex().left(8));
 }
 
 // ── Low-level HTTP helpers ────────────────────────────────────────────────────
@@ -70,14 +103,16 @@ void ForumService::post_req(const QString& path, const QJsonObject& body, std::f
     auto* reply = nam_->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
         reply->deleteLater();
+        // On failure the whole body is handed to the callback (it carries the
+        // server's "message"); on success just "data", as before.
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
         if (reply->error() != QNetworkReply::NoError) {
             LOG_WARN("ForumService", QString("POST error: %1").arg(reply->errorString()));
-            cb(false, {});
+            cb(false, root);
             return;
         }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        auto root = doc.object();
-        cb(root.value("success").toBool(), root.value("data").toObject());
+        const bool ok = root.value("success").toBool();
+        cb(ok, ok ? root.value("data").toObject() : root);
     });
 }
 
@@ -90,13 +125,14 @@ void ForumService::put_req(const QString& path, const QJsonObject& body, std::fu
     auto* reply = nam_->put(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
         reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
         if (reply->error() != QNetworkReply::NoError) {
-            cb(false, {});
+            LOG_WARN("ForumService", QString("PUT error: %1").arg(reply->errorString()));
+            cb(false, root);
             return;
         }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        auto root = doc.object();
-        cb(root.value("success").toBool(), root.value("data").toObject());
+        const bool ok = root.value("success").toBool();
+        cb(ok, ok ? root.value("data").toObject() : root);
     });
 }
 
@@ -195,7 +231,9 @@ ForumProfile ForumService::parse_profile(const QJsonObject& o) {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 void ForumService::fetch_categories(CategoriesCallback cb) {
-    const QVariant cached = fincept::CacheManager::instance().get("forum:categories");
+    // Permissions are per-account, so the cache entry is too.
+    const QString cats_key = "forum:categories:" + forum_cache_scope(api_key());
+    const QVariant cached = fincept::CacheManager::instance().get(cats_key);
     if (!cached.isNull()) {
         auto root = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
         QVector<ForumCategory> cats;
@@ -210,13 +248,13 @@ void ForumService::fetch_categories(CategoriesCallback cb) {
         return;
     }
 
-    get("/forum/categories", [cb](bool ok, QJsonObject data) {
+    get("/forum/categories", [cb, cats_key](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {}, {});
             return;
         }
         fincept::CacheManager::instance().put(
-            "forum:categories", QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            cats_key, QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
             kCategoriesTtlSec, "forum");
         QVector<ForumCategory> cats;
         for (const auto& v : data.value("categories").toArray())
@@ -234,7 +272,7 @@ void ForumService::fetch_posts(int category_id, int page, const QString& sort, P
     QString path = QString("/forum/categories/%1/posts?page=%2&sort=%3")
                        .arg(category_id)
                        .arg(page)
-                       .arg(sort.isEmpty() ? "latest" : sort);
+                       .arg(forum_svc_seg(sort.isEmpty() ? QStringLiteral("latest") : sort));
     get(path, [cb](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {});
@@ -258,7 +296,7 @@ void ForumService::fetch_posts(int category_id, int page, const QString& sort, P
 }
 
 void ForumService::fetch_post(const QString& post_uuid, PostDetailCallback cb) {
-    get("/forum/posts/" + post_uuid, [cb](bool ok, QJsonObject data) {
+    get("/forum/posts/" + forum_svc_seg(post_uuid), [cb](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {});
             return;
@@ -296,7 +334,9 @@ void ForumService::fetch_stats(StatsCallback cb) {
 }
 
 void ForumService::fetch_trending(PostsCallback cb) {
-    const QVariant cached = fincept::CacheManager::instance().get("forum:trending");
+    // Posts carry the caller's own vote state, so this cache is per-account too.
+    const QString trending_key = "forum:trending:" + forum_cache_scope(api_key());
+    const QVariant cached = fincept::CacheManager::instance().get(trending_key);
     if (!cached.isNull()) {
         auto data = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
         ForumPostsPage result;
@@ -307,13 +347,13 @@ void ForumService::fetch_trending(PostsCallback cb) {
         return;
     }
 
-    get("/forum/posts/trending", [cb](bool ok, QJsonObject data) {
+    get("/forum/posts/trending", [cb, trending_key](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {});
             return;
         }
         fincept::CacheManager::instance().put(
-            "forum:trending", QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
+            trending_key, QVariant(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact))),
             kTrendingTtlSec, "forum");
         ForumPostsPage result;
         for (const auto& v : data.value("trending_posts").toArray())
@@ -339,6 +379,13 @@ void ForumService::search(const QString& query, int page, PostsCallback cb) {
         auto pag = data.value("pagination").toObject();
         result.page = pag.value("page").toInt(1);
         result.limit = pag.value("limit").toInt(20);
+        // `pages` was never filled in for search, so results beyond the first page
+        // had no "Next page" button. Prefer the server's count, else derive it.
+        result.pages = pag.value("pages").toInt(0);
+        if (result.pages <= 0)
+            result.pages = result.limit > 0 ? (result.total + result.limit - 1) / result.limit : 1;
+        if (result.pages < 1)
+            result.pages = 1;
         cb(true, result);
     });
 }
@@ -354,7 +401,7 @@ void ForumService::fetch_my_profile(ProfileCallback cb) {
 }
 
 void ForumService::fetch_profile(const QString& username, ProfileCallback cb) {
-    get("/forum/profile/" + username, [cb](bool ok, QJsonObject data) {
+    get("/forum/profile/" + forum_svc_seg(username), [cb](bool ok, QJsonObject data) {
         if (!ok) {
             cb(false, {});
             return;
@@ -367,27 +414,40 @@ void ForumService::create_post(int category_id, const QString& title, const QStr
     QJsonObject body;
     body["title"] = title;
     body["content"] = content;
-    post_req(QString("/forum/categories/%1/posts").arg(category_id), body,
-             [cb](bool ok, QJsonObject) { cb(ok, ok ? "Post created" : "Failed to create post"); });
+    post_req(QString("/forum/categories/%1/posts").arg(category_id), body, [cb](bool ok, QJsonObject data) {
+        if (ok)
+            fincept::CacheManager::instance().clear_category("forum"); // post counts / trending changed
+        cb(ok, ok ? QStringLiteral("Post created") : forum_svc_error_text(data, QStringLiteral("Failed to create post")));
+    });
 }
 
 void ForumService::create_comment(const QString& post_uuid, const QString& content, BoolCallback cb) {
     QJsonObject body;
     body["content"] = content;
-    post_req("/forum/posts/" + post_uuid + "/comments", body,
-             [cb](bool ok, QJsonObject) { cb(ok, ok ? "Comment posted" : "Failed to post comment"); });
+    post_req("/forum/posts/" + forum_svc_seg(post_uuid) + "/comments", body, [cb](bool ok, QJsonObject data) {
+        if (ok)
+            fincept::CacheManager::instance().clear_category("forum"); // reply counts / trending changed
+        cb(ok, ok ? QStringLiteral("Comment posted")
+                  : forum_svc_error_text(data, QStringLiteral("Failed to post comment")));
+    });
 }
 
 void ForumService::vote_post(const QString& post_uuid, const QString& vote_type, BoolCallback cb) {
     QJsonObject body;
     body["vote_type"] = vote_type;
-    post_req("/forum/posts/" + post_uuid + "/vote", body, [cb](bool ok, QJsonObject) { cb(ok, {}); });
+    post_req("/forum/posts/" + forum_svc_seg(post_uuid) + "/vote", body, [cb](bool ok, QJsonObject data) {
+        if (ok)
+            fincept::CacheManager::instance().clear_category("forum"); // cached trending/vote state is stale
+        cb(ok, ok ? QString() : forum_svc_error_text(data, QStringLiteral("Vote failed")));
+    });
 }
 
 void ForumService::vote_comment(const QString& comment_uuid, const QString& vote_type, BoolCallback cb) {
     QJsonObject body;
     body["vote_type"] = vote_type;
-    post_req("/forum/comments/" + comment_uuid + "/vote", body, [cb](bool ok, QJsonObject) { cb(ok, {}); });
+    post_req("/forum/comments/" + forum_svc_seg(comment_uuid) + "/vote", body, [cb](bool ok, QJsonObject data) {
+        cb(ok, ok ? QString() : forum_svc_error_text(data, QStringLiteral("Vote failed")));
+    });
 }
 
 void ForumService::update_profile(const QString& display_name, const QString& bio, const QString& signature,
@@ -397,8 +457,10 @@ void ForumService::update_profile(const QString& display_name, const QString& bi
     body["bio"] = bio;
     body["signature"] = signature;
     body["avatar_color"] = avatar_color;
-    put_req("/forum/profile", body,
-            [cb](bool ok, QJsonObject) { cb(ok, ok ? "Profile updated" : "Failed to update profile"); });
+    put_req("/forum/profile", body, [cb](bool ok, QJsonObject data) {
+        cb(ok, ok ? QStringLiteral("Profile updated")
+                  : forum_svc_error_text(data, QStringLiteral("Failed to update profile")));
+    });
 }
 
 } // namespace fincept::services

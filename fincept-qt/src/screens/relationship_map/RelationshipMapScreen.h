@@ -1,6 +1,7 @@
 // src/screens/relationship_map/RelationshipMapScreen.h
 #pragma once
 
+#include "core/symbol/IGroupLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "screens/relationship_map/RelationshipMapTypes.h"
 #include "services/markets/MarketSearchService.h"
@@ -27,10 +28,18 @@ namespace fincept::screens {
 
 /// Corporate Intelligence Relationship Map — full screen with search, graph,
 /// filter panel, detail panel, legend, and status bar.
-class RelationshipMapScreen : public QWidget, public IStatefulScreen {
+class RelationshipMapScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit RelationshipMapScreen(QWidget* parent = nullptr);
+
+    // IGroupLinked — the map is centred on one company, so it can follow (and drive)
+    // a colour-linked symbol group, and `nav.open_symbol` can open a ticker in it.
+    void set_group(SymbolGroup g) override { link_group_ = g; }
+    SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const SymbolRef& ref) override;
+    SymbolRef current_symbol() const override;
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;
@@ -49,6 +58,8 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
     void on_search();
+    /// Analyse `symbol` on behalf of a group / nav.open_symbol request (never re-published).
+    void load_group_symbol(const QString& symbol);
     void on_search_text_changed(const QString& text);
     void fire_asset_search(const QString& query);
     void on_asset_results(const QList<fincept::services::MarketSearchService::Item>& results);
@@ -113,7 +124,14 @@ class RelationshipMapScreen : public QWidget, public IStatefulScreen {
     relmap::RelationshipData current_data_;
     bool has_data_ = false;
     QString loaded_ticker_;             // ticker currently shown in the graph
+    QString requested_ticker_;          // ticker of the latest ANALYZE (stale / foreign replies are ignored)
     bool search_input_focused_ = false; // only show dropdown when user is actively typing
+
+    // Symbol-group linking
+    SymbolGroup link_group_ = SymbolGroup::None;
+    QString pending_group_symbol_; // group symbol that arrived while the screen was hidden
+    QString group_driven_ticker_;  // ticker whose load was started by a group change (don't echo it back)
+    bool restore_search_pending_ = false; // restored ticker waiting for the first show
 };
 
 } // namespace fincept::screens

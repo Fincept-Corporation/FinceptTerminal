@@ -95,6 +95,14 @@ def fetch_price_data(symbols, period="1y"):
     if not available:
         return None
     close = close[available].dropna(how="all")
+    # A ticker yfinance could not price (delisted, mutual-fund code, bad suffix) comes
+    # back as an all-NaN column. Left in, the main() pct_change().dropna() discards
+    # EVERY row and the whole run fails with "Insufficient price history" because of
+    # one holding. Drop such columns; main() derives `available` from what is left
+    # and reports it in the "symbols" output key.
+    close = close.dropna(axis=1, how="all")
+    if close.shape[1] == 0:
+        return None
     return close
 
 

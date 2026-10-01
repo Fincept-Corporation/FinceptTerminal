@@ -75,6 +75,20 @@ LOCATION_PATTERNS = {
 }
 
 
+def _word_regex(term):
+    """Whole-word matcher (look-arounds, so multi-word terms work too).
+
+    A bare ``term in text`` test matched inside other words: "rome" in
+    "Jerome Powell", "paris" in "comparison", "india" in "Indiana",
+    "oslo" in "closlow"-style tokens."""
+    return re.compile(r'(?<![a-z0-9])' + re.escape(term) + r'(?![a-z0-9])')
+
+
+# Compiled once per process.
+_CITY_MATCHERS = [(_word_regex(city), city, lat, lon) for city, (lat, lon) in CITY_COORDS.items()]
+_COUNTRY_MATCHERS = [(_word_regex(pattern), pattern, code) for pattern, code in LOCATION_PATTERNS.items()]
+
+
 def extract_and_geocode(articles_json):
     """Extract locations from article text and return coordinates."""
     try:
@@ -90,15 +104,15 @@ def extract_and_geocode(articles_json):
         locations = []
 
         # Check cities first (more specific)
-        for city, (lat, lon) in CITY_COORDS.items():
-            if city in text:
+        for regex, city, lat, lon in _CITY_MATCHERS:
+            if regex.search(text):
                 loc = {"name": city.title(), "lat": lat, "lon": lon, "type": "city"}
                 locations.append(loc)
                 all_locations[city] = loc
 
         # Check countries
-        for pattern, code in LOCATION_PATTERNS.items():
-            if pattern in text and code in COUNTRY_COORDS:
+        for regex, pattern, code in _COUNTRY_MATCHERS:
+            if code in COUNTRY_COORDS and regex.search(text):
                 lat, lon = COUNTRY_COORDS[code]
                 if not any(l["name"].lower() == pattern for l in locations):
                     loc = {"name": pattern.title(), "code": code, "lat": lat, "lon": lon, "type": "country"}
@@ -236,15 +250,18 @@ def main(args=None):
 
     command = args[0]
 
-    if command == "extract_and_geocode":
-        result = extract_and_geocode(resolve_arg(args[1]))
-    elif command == "nearby_infrastructure":
-        if len(args) < 4:
-            result = {"success": False, "error": "Usage: nearby_infrastructure <lat> <lon> <radius_km>"}
+    try:
+        if command == "extract_and_geocode":
+            result = extract_and_geocode(resolve_arg(args[1]))
+        elif command == "nearby_infrastructure":
+            if len(args) < 4:
+                result = {"success": False, "error": "Usage: nearby_infrastructure <lat> <lon> <radius_km>"}
+            else:
+                result = nearby_infrastructure(args[1], args[2], args[3])
         else:
-            result = nearby_infrastructure(args[1], args[2], args[3])
-    else:
-        result = {"success": False, "error": f"Unknown command: {command}"}
+            result = {"success": False, "error": f"Unknown command: {command}"}
+    except Exception as exc:  # malformed payload (e.g. not an array) — report, don't traceback
+        result = {"success": False, "error": f"{type(exc).__name__}: {exc}"}
 
     print(json.dumps(result))
 

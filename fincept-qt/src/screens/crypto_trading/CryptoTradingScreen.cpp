@@ -334,6 +334,12 @@ void CryptoTradingScreen::setup_ui() {
     connect(bottom_panel_, &CryptoBottomPanel::close_all_positions_requested, this,
             [this](const QString&) { on_close_all_positions(); });
     connect(chart_, &CryptoChart::timeframe_changed, this, [this](const QString& tf) {
+        // Bars of the old timeframe (on screen, or buffered from the WS) must not
+        // be mixed into the new one: a 1m bar appended to a 1h series is a bogus
+        // candle until the REST history replaces the set.
+        chart_->clear();
+        chart_symbol_.clear();
+        pending_candles_.clear();
         ExchangeService::instance().set_ws_timeframe(tf);
         hub_subscribe_topics(); // re-point the OHLC subscription to the new tf
         async_fetch_candles(selected_symbol_, tf);
@@ -548,9 +554,14 @@ void CryptoTradingScreen::hub_subscribe_topics() {
             if (!self || td.symbol != self->selected_symbol_)
                 return;
             crypto::TradeEntry e;
+            e.id = td.id;
             e.side = td.side;
             e.price = td.price;
             e.amount = td.amount;
+            // The tape's TIME column renders e.timestamp; leaving it at the 0
+            // default stamped every row 00:00:00 (epoch). Fall back to receive
+            // time if the exchange sent none.
+            e.timestamp = td.timestamp > 0 ? td.timestamp : QDateTime::currentMSecsSinceEpoch();
             // Hard cap — belt and braces against the drain ever stalling
             // (hidden screen, blocked event loop). Newest wins: the time &
             // sales tape only ever renders the most recent rows anyway.

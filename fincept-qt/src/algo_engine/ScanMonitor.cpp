@@ -121,7 +121,21 @@ void ScanMonitor::poll(const QString& id) {
     CandleDataFetcher::instance().fetch_multi(
         w.symbols, w.timeframe, w.lookback_days, src, w.broker_id, w.account_id,
         [this, id](const QHash<QString, QVector<OhlcvCandle>>& data, const QStringList& errors) {
-            Q_UNUSED(errors);
+            if (data.isEmpty() && !errors.isEmpty()) {
+                // Every symbol failed to fetch. The errors used to be dropped and on_candles()
+                // then reported "watching" for a watch that had evaluated nothing.
+                if (runners_.contains(id)) {
+                    LOG_WARN("ScanMonitor",
+                             QString("watch %1: no candles fetched (%2 error(s), first: %3)")
+                                 .arg(id)
+                                 .arg(errors.size())
+                                 .arg(errors.first()));
+                    ScanWatchRepository::instance().touch_status(id, QStringLiteral("error"),
+                                                                 QDateTime::currentMSecsSinceEpoch());
+                    emit watch_status_changed(id, QStringLiteral("error"));
+                }
+                return;
+            }
             on_candles(id, data);
         });
 }

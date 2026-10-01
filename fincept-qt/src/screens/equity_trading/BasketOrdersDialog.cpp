@@ -1,5 +1,6 @@
 #include "screens/equity_trading/BasketOrdersDialog.h"
 
+#include "screens/equity_trading/EquityTypes.h"
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
@@ -257,7 +258,7 @@ void BasketOrdersDialog::refresh_legs_table() {
         set(LSide, leg.side == OrderSide::Buy ? tr("BUY") : tr("SELL"));
         legs_table_->item(i, LSide)->setForeground(leg.side == OrderSide::Buy ? QColor(colors::POSITIVE())
                                                                               : QColor(colors::NEGATIVE()));
-        set(LQty, QString::number(leg.quantity));
+        set(LQty, format_quantity(leg.quantity));
         set(LType, leg.order_type == OrderType::Market ? tr("MKT") : tr("LMT"));
         set(LPrice, leg.order_type == OrderType::Market ? QStringLiteral("—") : QString::number(leg.price, 'f', 2));
         set(LProduct, leg.product_type == ProductType::Delivery ? tr("CNC")
@@ -369,8 +370,12 @@ void BasketOrdersDialog::on_execute() {
         }
     }
     if (immediate.isEmpty()) {
-        status_label_->setText(tr("%1 basket(s) queued for approval").arg(queued));
-        status_label_->setStyleSheet(QString("color:%1;font-size:11px;").arg(colors::AMBER()));
+        // queued == 0 means queue_order() failed for every account — say so rather than "0 queued".
+        const bool none_queued = (queued == 0);
+        status_label_->setText(none_queued ? tr("Could not queue the basket for approval — nothing was sent")
+                                           : tr("%1 basket(s) queued for approval").arg(queued));
+        status_label_->setStyleSheet(
+            QString("color:%1;font-size:11px;").arg(none_queued ? colors::NEGATIVE() : colors::AMBER()));
         return;
     }
 

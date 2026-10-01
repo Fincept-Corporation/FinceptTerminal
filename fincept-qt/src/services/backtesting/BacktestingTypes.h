@@ -257,8 +257,12 @@ inline QStringList ratio_metric_keys() {
 
 /// Keys whose values are already percentages (0-100 scale or 0-1 scale)
 inline QStringList pct_metric_keys() {
-    return {"total_return", "annualized_return", "max_drawdown", "win_rate", "volatility",
-            "totalReturn",  "annualizedReturn",  "maxDrawdown",  "winRate"};
+    // pnlPercent / pnl_percent are per-trade return FRACTIONS in every provider
+    // (vectorbt Return, backtesting.py ReturnPct, zipline, fasttrade) — they rendered as a
+    // bare 0.0304 in the DETAILS table instead of 3.04%. lossRate is 1 - winRate.
+    return {"total_return", "annualized_return", "max_drawdown", "win_rate",  "volatility",
+            "totalReturn",  "annualizedReturn",  "maxDrawdown",  "winRate",   "pnlPercent",
+            "pnl_percent",  "lossRate",          "loss_rate"};
 }
 
 /// Keys whose values are counts (integers)

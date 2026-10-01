@@ -255,11 +255,65 @@ class MARegression:
             }
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `regression_analysis.py run <flat-params-json>` (argv length 3) with the subject
+# company's metrics. The native form is `regression <comp_data> <subject_metrics> <type>`, which needs the
+# comparable set up front, so a service-style call takes `comp_data` from the request when present and otherwise
+# builds it from the deals (with revenue / EBITDA / growth) already in the local deal database, then falls through
+# to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("run",)
+
+
+def _svc_db_comps():
+    """Comparable rows {name, ev, revenue, ebitda, growth} from the local deal database (complete rows only)."""
+    try:
+        from corporateFinance.deal_database.database_schema import MADatabase
+        db = MADatabase()
+        rows = []
+        for deal in db.get_all_deals():
+            ev = deal.get("enterprise_value") or deal.get("deal_value")
+            for fin in db.get_deal_financials(deal["deal_id"]) or []:
+                revenue, ebitda, growth = fin.get("revenue"), fin.get("ebitda"), fin.get("revenue_growth")
+                if ev and revenue and ebitda is not None and growth is not None:
+                    rows.append({"name": deal.get("target_name", ""), "ev": float(ev), "revenue": float(revenue),
+                                 "ebitda": float(ebitda), "growth": float(growth)})
+                    break
+        return rows
+    except Exception:
+        return []
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    comps = p.get("comp_data")
+    if not isinstance(comps, list) or not comps:
+        comps = _svc_db_comps()
+    if len(comps) < 3:
+        # Printed as the script-level error envelope; PythonRunner surfaces `error` to the screen.
+        print(json.dumps({"success": False, "error": "Regression needs at least 3 comparable deals with EV, revenue, "
+                          "EBITDA and growth. Paste them as `comp_data` (list of {name, ev, revenue, ebitda, growth}) "
+                          "or load deals into the Deal Database first.", "command": argv[1]}))
+        sys.exit(1)
+    subject = p.get("subject") if isinstance(p.get("subject"), dict) else {}
+    regression_type = str(p.get("type", p.get("regression_type", "multiple"))).lower()
+    return [argv[0], "regression", json.dumps(comps), json.dumps(subject), regression_type]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

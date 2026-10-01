@@ -241,22 +241,33 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
 
 void DBnomicsService::fetch_observations(const QString& provider_code, const QString& dataset_code,
                                          const QString& series_code) {
-    const QString path =
-        QString("/series/%1/%2/%3?observations=1&format=json").arg(provider_code).arg(dataset_code).arg(series_code);
+    // Series codes may carry characters that are not legal in a URL path segment.
+    const auto seg = [](const QString& s) { return QString::fromUtf8(QUrl::toPercentEncoding(s)); };
+    const QString path = QString("/series/%1/%2/%3?observations=1&format=json")
+                             .arg(seg(provider_code), seg(dataset_code), seg(series_code));
     const QString full_id = QString("%1/%2/%3").arg(provider_code).arg(dataset_code).arg(series_code);
     LOG_INFO("DBnomicsService", QString("Fetching observations for %1").arg(full_id));
 
     fincept::HttpClient::instance().get(
         build_url(path),
         [this, full_id, provider_code, dataset_code, series_code](fincept::Result<QJsonDocument> result) {
+            // A failed hub refresh must clear the topic's in_flight flag (publish_error), or retries
+            // are refused until the scheduler's refresh_timeout fires. The signal is still emitted
+            // for the screen's spinner and for the MCP tools that wait on it.
+            auto fail = [this, &provider_code, &dataset_code, &series_code](const QString& message) {
+                emit error_occurred("observations", message);
+                if (hub_registered_)
+                    fincept::datahub::DataHub::instance().publish_error(
+                        hub_topic(provider_code, dataset_code, series_code), message);
+            };
             if (result.is_err()) {
-                emit error_occurred("observations", QString::fromStdString(result.error()));
+                fail(QString::fromStdString(result.error()));
                 return;
             }
             QJsonObject root = result.value().object();
             QJsonArray docs = root["series"].toObject()["docs"].toArray();
             if (docs.isEmpty()) {
-                emit error_occurred("observations", "No data returned for series");
+                fail("No data returned for series");
                 return;
             }
             QJsonObject doc = docs[0].toObject();

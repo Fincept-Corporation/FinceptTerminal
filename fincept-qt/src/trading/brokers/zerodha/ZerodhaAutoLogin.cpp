@@ -33,6 +33,10 @@ HttpResult do_request(QNetworkAccessManager& nam, QNetworkRequest req, const QBy
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, follow_redirects
                                                                    ? QNetworkRequest::NoLessSafeRedirectPolicy
                                                                    : QNetworkRequest::ManualRedirectPolicy);
+    // The loop below has no timer of its own: without a transfer timeout a stalled
+    // socket would block this worker thread (and the silent-refresh sweep that
+    // calls it) forever. A timed-out reply finishes with status 0 + an error string.
+    req.setTransferTimeout(30000);
     QNetworkReply* reply = is_post ? nam.post(req, body) : nam.get(req);
 
     QEventLoop loop;

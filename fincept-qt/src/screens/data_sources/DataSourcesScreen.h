@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPoint>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -94,6 +95,9 @@ class DataSourcesScreen : public QWidget, public fincept::screens::IStatefulScre
     void show_config_dialog(const ConnectorConfig& config, const QString& edit_id = "", bool duplicate = false);
     void update_connection_status_cell(const QString& conn_id, bool ok, const QString& msg);
     void apply_stat_filter(int stat_index);
+    /// Right-click menu for one saved connection: edit / duplicate / test / delete.
+    /// These slots existed but nothing in the UI could reach them.
+    void show_connection_menu(const QString& conn_id, const QPoint& global_pos);
 
     QVector<ConnectorConfig> filtered_connectors() const;
     QVector<DataSource> filtered_connection_rows() const;

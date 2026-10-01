@@ -72,6 +72,9 @@ QString DockScreenRouter::title_for_id(const QString& id) {
         {"polymarket", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Prediction Markets")},
         {"relationship_map", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Relationship Map")},
         {"derivatives", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Derivatives")},
+        {"fno", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "F&O")},
+        {"screener", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Screener")},
+        {"crypto_center", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Crypto Center")},
         {"alt_investments", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Alt Investments")},
         {"ma_analytics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "M&A Analytics")},
         {"surface_analytics", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Surface Analytics")},
@@ -117,9 +120,15 @@ DockScreenRouter::DockScreenRouter(ads::CDockManager* manager, QObject* parent) 
 }
 
 void DockScreenRouter::on_group_symbol_changed_external(SymbolGroup g, const SymbolRef& ref, QObject* source) {
-    for (auto it = group_linked_.begin(); it != group_linked_.end(); ++it) {
+    // Iterate a copy: a screen's handler may navigate/materialise another screen,
+    // which inserts into group_linked_ and would invalidate a live iterator.
+    const auto linked_snapshot = group_linked_;
+    for (auto it = linked_snapshot.cbegin(); it != linked_snapshot.cend(); ++it) {
         IGroupLinked* linked = it.value();
-        if (!linked || linked->group() != g)
+        // screens_ is the source of truth for live screens: an entry here whose
+        // screen has been torn down (moved to another frame) is stale and its
+        // raw pointer must not be touched.
+        if (!linked || !screens_.contains(it.key()) || linked->group() != g)
             continue;
         auto* as_obj = dynamic_cast<QObject*>(linked);
         if (as_obj && as_obj == source)

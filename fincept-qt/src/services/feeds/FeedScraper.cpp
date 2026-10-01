@@ -18,6 +18,40 @@ namespace {
 
 constexpr int kSampleMax = 60;
 
+// Split one CSV/TSV line, honouring double-quoted fields (a quoted field may hold
+// the delimiter, and "" is an escaped quote). A plain split() broke any row whose
+// text contained a comma, shifting every later column.
+QStringList feed_csv_split_line(const QString& line, QChar delim) {
+    QStringList cells;
+    QString cur;
+    bool in_quotes = false;
+    for (qsizetype i = 0; i < line.size(); ++i) {
+        const QChar ch = line.at(i);
+        if (in_quotes) {
+            if (ch == QLatin1Char('"')) {
+                if (i + 1 < line.size() && line.at(i + 1) == QLatin1Char('"')) {
+                    cur += QLatin1Char('"');
+                    ++i;
+                } else {
+                    in_quotes = false;
+                }
+            } else {
+                cur += ch;
+            }
+        } else if (ch == QLatin1Char('"') && cur.trimmed().isEmpty()) {
+            cur.clear();
+            in_quotes = true;
+        } else if (ch == delim) {
+            cells << cur;
+            cur.clear();
+        } else {
+            cur += ch;
+        }
+    }
+    cells << cur;
+    return cells;
+}
+
 QString make_id(const QString& feed_id, const FeedItem& it) {
     const QString basis = feed_id + "|" + (it.link.isEmpty() ? it.title : it.link);
     return QString::fromLatin1(QCryptographicHash::hash(basis.toUtf8(), QCryptographicHash::Sha1).toHex());
@@ -90,26 +124,38 @@ QVector<FeedItem> FeedScraper::parse(const QByteArray& body, const FeedSubscript
     if (fmt == FeedFormat::Auto)
         fmt = sniff_format(body);
 
-    if (sub.parse_mode == ParseMode::Manual) {
+    auto dispatch = [&]() -> QVector<FeedItem> {
+        if (sub.parse_mode == ParseMode::Manual) {
+            switch (fmt) {
+                case FeedFormat::Json:
+                    return parse_json(body, sub);
+                case FeedFormat::Csv:
+                    return parse_csv(body, sub);
+                default:
+                    return parse_xml_manual(body, sub); // rss/atom/xml all element-based
+            }
+        }
         switch (fmt) {
             case FeedFormat::Json:
                 return parse_json(body, sub);
             case FeedFormat::Csv:
                 return parse_csv(body, sub);
+            case FeedFormat::Html:
+                return {}; // auto HTML table extraction out of scope for v1 auto mode
             default:
-                return parse_xml_manual(body, sub); // rss/atom/xml all element-based
+                return parse_rss_atom(body, sub);
         }
+    };
+
+    // Item links are publisher-supplied and end up behind "open in browser"
+    // actions — keep web URLs only. (Item ids are derived before this, so they
+    // are unaffected.)
+    QVector<FeedItem> items = dispatch();
+    for (auto& it : items) {
+        if (!it.link.isEmpty() && !feed_link_is_web_url(it.link))
+            it.link.clear();
     }
-    switch (fmt) {
-        case FeedFormat::Json:
-            return parse_json(body, sub);
-        case FeedFormat::Csv:
-            return parse_csv(body, sub);
-        case FeedFormat::Html:
-            return {}; // auto HTML table extraction out of scope for v1 auto mode
-        default:
-            return parse_rss_atom(body, sub);
-    }
+    return items;
 }
 
 // ── Auto RSS/Atom (ported from NewsService::parse_rss_xml, emitting FeedItem) ──
@@ -276,7 +322,11 @@ QVector<FeedItem> FeedScraper::parse_csv(const QByteArray& body, const FeedSubsc
     if (lines.size() < 2)
         return {};
     const QChar delim = lines.first().contains('\t') ? QChar('\t') : QChar(',');
-    const QStringList headers = lines.first().split(delim);
+    // Trim header names: with CRLF line endings the last header kept a trailing
+    // '\r', so a manual mapping to that column never matched.
+    QStringList headers = feed_csv_split_line(lines.first(), delim);
+    for (QString& h : headers)
+        h = h.trimmed();
     const bool manual = sub.parse_mode == ParseMode::Manual;
 
     auto col_index = [&](const QString& path) -> int {
@@ -289,7 +339,7 @@ QVector<FeedItem> FeedScraper::parse_csv(const QByteArray& body, const FeedSubsc
 
     QVector<FeedItem> items;
     for (int r = 1; r < lines.size(); ++r) {
-        const QStringList cells = lines[r].split(delim);
+        const QStringList cells = feed_csv_split_line(lines[r], delim);
         auto cell = [&](int i) { return (i >= 0 && i < cells.size()) ? cells[i].trimmed() : QString(); };
         FeedItem it;
         if (manual) {
@@ -503,8 +553,8 @@ DiscoveredSchema FeedScraper::discover_csv(const QByteArray& body) {
     if (lines.isEmpty())
         return s;
     const QChar delim = lines.first().contains('\t') ? QChar('\t') : QChar(',');
-    const QStringList headers = lines.first().split(delim);
-    const QStringList firstRow = lines.size() > 1 ? lines[1].split(delim) : QStringList();
+    const QStringList headers = feed_csv_split_line(lines.first(), delim);
+    const QStringList firstRow = lines.size() > 1 ? feed_csv_split_line(lines[1], delim) : QStringList();
     for (int i = 0; i < headers.size(); ++i)
         s.fields.append(
             {headers[i].trimmed(), i < firstRow.size() ? firstRow[i].trimmed().left(kSampleMax) : QString()});

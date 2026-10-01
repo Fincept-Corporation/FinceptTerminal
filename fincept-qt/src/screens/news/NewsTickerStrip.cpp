@@ -28,6 +28,25 @@ NewsTickerStrip::NewsTickerStrip(QWidget* parent)
 }
 
 void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breaking_articles) {
+    // The screen re-pushes this list on every filter pass and every progressive
+    // partial. When it hasn't actually changed, keep the scroll position instead
+    // of snapping the strip back to the start each time.
+    {
+        QStringList incoming;
+        for (const auto& article : breaking_articles) {
+            if (article.priority == services::Priority::FLASH || article.priority == services::Priority::URGENT ||
+                article.priority == services::Priority::BREAKING)
+                incoming << article.id;
+        }
+        if (!incoming.isEmpty() && incoming.size() == entries_.size()) {
+            bool same = true;
+            for (int i = 0; i < incoming.size() && same; ++i)
+                same = entries_[i].article.id == incoming[i];
+            if (same)
+                return;
+        }
+    }
+
     entries_.clear();
     total_width_ = 0;
 

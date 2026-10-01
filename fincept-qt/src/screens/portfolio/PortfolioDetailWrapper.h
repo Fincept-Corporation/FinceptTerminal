@@ -21,6 +21,9 @@ class PortfolioDetailWrapper : public QWidget {
     void update_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
     void update_metrics(const portfolio::ComputedMetrics& metrics);
     void update_correlation(const QHash<QString, double>& matrix);
+    /// Pre-select the Optimization view's "Target Return" method at
+    /// @p annual_return (a fraction, e.g. 0.08). Creates the view if needed.
+    void set_optimization_target(double annual_return);
 
   protected:
     void changeEvent(QEvent* event) override;

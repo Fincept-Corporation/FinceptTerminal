@@ -17,6 +17,8 @@
 #include <QSplitter>
 #include <QVBoxLayout>
 
+#include <cmath>
+
 // ── Screen-level stylesheet ─────────────────────────────────────────────────
 
 namespace {
@@ -154,7 +156,10 @@ void AsiaMarketsScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
     if (first_show_) {
         first_show_ = false;
-        on_category_changed(0);
+        // restore_state() may already have selected (and started loading) another category — do not
+        // reset to the first one, and do not start a second load for the same one.
+        if (endpoint_list_->count() == 0 && !loading_)
+            on_category_changed(active_category_);
     }
 }
 
@@ -380,7 +385,7 @@ QWidget* AsiaMarketsScreen::create_data_panel() {
     refresh_btn_->setObjectName("asiaRefreshBtn");
     refresh_btn_->setCursor(Qt::PointingHandCursor);
     refresh_btn_->setFixedWidth(65);
-    connect(refresh_btn_, &QPushButton::clicked, this, &AsiaMarketsScreen::on_execute);
+    connect(refresh_btn_, &QPushButton::clicked, this, &AsiaMarketsScreen::on_refresh);
 
     tbl->addWidget(data_status_);
     tbl->addWidget(record_count_);
@@ -445,6 +450,8 @@ void AsiaMarketsScreen::on_category_changed(int index) {
         return;
     active_category_ = index;
     active_endpoint_.clear();
+    ++request_seq_; // anything still in flight belongs to the previous category
+    set_loading(false);
     exec_btn_->setEnabled(false);
 
     // Update button states
@@ -490,8 +497,9 @@ void AsiaMarketsScreen::on_endpoint_clicked(QListWidgetItem* item) {
     active_endpoint_ = ep;
     exec_btn_->setEnabled(true);
 
-    // Auto-execute
-    on_execute();
+    // Auto-execute. Picking another endpoint while a query is running supersedes it (the old
+    // result is dropped as stale) instead of being silently ignored.
+    run_query(false);
 }
 
 void AsiaMarketsScreen::on_search_changed(const QString& text) {
@@ -509,7 +517,21 @@ void AsiaMarketsScreen::on_search_changed(const QString& text) {
 }
 
 void AsiaMarketsScreen::on_execute() {
-    if (loading_ || active_endpoint_.isEmpty())
+    if (loading_)
+        return;
+    run_query(false);
+}
+
+void AsiaMarketsScreen::on_refresh() {
+    // REFRESH used to be a second EXECUTE and was answered from the 2-minute result cache, i.e. it
+    // refreshed nothing. Bypass the cache.
+    if (loading_)
+        return;
+    run_query(true);
+}
+
+void AsiaMarketsScreen::run_query(bool force) {
+    if (active_endpoint_.isEmpty())
         return;
 
     QStringList extra;
@@ -518,7 +540,7 @@ void AsiaMarketsScreen::on_execute() {
         extra << sym;
     }
 
-    execute_query(active_endpoint_, extra);
+    execute_query(active_endpoint_, extra, force);
 }
 
 void AsiaMarketsScreen::on_view_toggle() {
@@ -550,27 +572,40 @@ void AsiaMarketsScreen::load_endpoints(int cat_index) {
 
     set_loading(true);
     endpoint_list_->clear();
+    endpoint_count_label_->setText(tr("%1 endpoints").arg(0));
     data_status_->setText(tr("Loading endpoints..."));
 
     QPointer<AsiaMarketsScreen> self = this;
+    const int seq = ++request_seq_;
 
     services::asia_markets::AsiaMarketsService::instance().fetch_endpoints(
-        script, [self, script, cache_key](const services::asia_markets::EndpointsResult& r) {
+        script, [self, seq, script, cache_key](const services::asia_markets::EndpointsResult& r) {
             if (!self)
                 return;
+
+            // Keep a good listing even if the user has moved on to another category...
+            if (r.success) {
+                fincept::CacheManager::instance().put(
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(r.data).toJson(QJsonDocument::Compact))),
+                    60 * 60, "asia_markets");
+                self->endpoint_cache_[script] = r.data;
+            }
+            // ...but never paint it (or auto-run one of its endpoints) over the current category.
+            if (seq != self->request_seq_)
+                return;
+
             self->set_loading(false);
 
             if (!r.success) {
-                self->data_status_->setText(AsiaMarketsScreen::tr("Failed to load endpoints"));
+                // Show the reason (it used to be a bare "Failed to load endpoints") and note that
+                // clicking the category again retries.
+                self->data_status_->setText(
+                    AsiaMarketsScreen::tr("Failed to load endpoints: %1").arg(r.error.simplified().left(160)));
+                LOG_ERROR("AsiaMarkets", "Endpoint load failed for " + script + ": " + r.error.left(300));
                 return;
             }
 
-            const QJsonObject obj = r.data;
-            fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 60 * 60,
-                "asia_markets");
-            self->endpoint_cache_[script] = obj;
-            self->populate_endpoint_list(obj);
+            self->populate_endpoint_list(r.data);
         });
 }
 
@@ -639,30 +674,50 @@ void AsiaMarketsScreen::populate_endpoint_list(const QJsonObject& result) {
         }
     }
     QListWidgetItem* to_select = first_sina ? first_sina : first_real;
+    if (!pending_endpoint_.isEmpty()) {
+        // restore_state(): re-open the endpoint the user had selected instead of the default pick
+        for (int i = 0; i < endpoint_list_->count(); ++i) {
+            if (endpoint_list_->item(i)->data(Qt::UserRole).toString() == pending_endpoint_) {
+                to_select = endpoint_list_->item(i);
+                break;
+            }
+        }
+        pending_endpoint_.clear();
+    }
     if (to_select) {
         endpoint_list_->setCurrentItem(to_select);
         on_endpoint_clicked(to_select);
     }
 }
 
-void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList& extra_args) {
+void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList& extra_args, bool force) {
     const QString script = categories_[active_category_].script;
     QStringList args;
     args << endpoint << extra_args;
 
-    // Cache market data for 2 minutes
+    // Cache market data for 2 minutes. Entries are {rows, columns}; older entries were a bare rows array.
     const QString cache_key = "asia:query:" + script + ":" + args.join(":");
+    if (force)
+        fincept::CacheManager::instance().remove(cache_key);
     const QVariant cached = fincept::CacheManager::instance().get(cache_key);
     if (!cached.isNull()) {
         auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-        if (doc.isArray() && !doc.array().isEmpty()) {
-            const QJsonArray data_array = doc.array();
+        QJsonArray data_array;
+        QStringList cols;
+        if (doc.isObject()) {
+            data_array = doc.object()["rows"].toArray();
+            for (const auto& c : doc.object()["columns"].toArray())
+                cols << c.toString();
+        } else if (doc.isArray()) {
+            data_array = doc.array();
+        }
+        if (!data_array.isEmpty()) {
             record_count_->setText(tr("%1 records").arg(data_array.size()));
             record_count_->show();
             data_status_->setText(tr("%1 (cached)").arg(endpoint));
             last_data_ = data_array;
             json_view_->clear();
-            display_table(data_array);
+            display_table(data_array, cols);
             if (!is_table_view_)
                 display_json(data_array);
             return;
@@ -674,10 +729,14 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
     record_count_->hide();
 
     QPointer<AsiaMarketsScreen> self = this;
+    const int seq = ++request_seq_;
 
     services::asia_markets::AsiaMarketsService::instance().query(
-        script, endpoint, extra_args, [self, endpoint, cache_key](const services::asia_markets::QueryResult& r) {
+        script, endpoint, extra_args, [self, seq, endpoint, cache_key](const services::asia_markets::QueryResult& r) {
             if (!self)
+                return;
+            // The user switched category or picked another endpoint while this ran: drop the result.
+            if (seq != self->request_seq_)
                 return;
             self->set_loading(false);
 
@@ -693,14 +752,17 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
             self->data_status_->setText(endpoint);
 
             if (!data_array.isEmpty()) {
+                QJsonObject cache_obj;
+                cache_obj["rows"] = data_array;
+                cache_obj["columns"] = QJsonArray::fromStringList(r.columns);
                 fincept::CacheManager::instance().put(
-                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(data_array).toJson(QJsonDocument::Compact))),
+                    cache_key, QVariant(QString::fromUtf8(QJsonDocument(cache_obj).toJson(QJsonDocument::Compact))),
                     2 * 60, "asia_markets");
             }
 
             self->last_data_ = data_array;
             self->json_view_->clear();
-            self->display_table(data_array);
+            self->display_table(data_array, r.columns);
             if (!self->is_table_view_)
                 self->display_json(data_array);
 
@@ -710,17 +772,23 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 
 // ── Display ─────────────────────────────────────────────────────────────────
 
-void AsiaMarketsScreen::display_table(const QJsonArray& rows_json) {
+void AsiaMarketsScreen::display_table(const QJsonArray& rows_json, const QStringList& ordered_columns) {
     if (rows_json.isEmpty()) {
+        // Don't leave the previous endpoint's rows on screen under a "No data returned" status.
+        data_table_->setRowCount(0);
+        data_table_->setColumnCount(0);
         data_status_->setText(tr("No data returned"));
         return;
     }
 
-    // Columns from first row
-    QStringList columns;
-    auto first = rows_json[0].toObject();
-    for (auto it = first.begin(); it != first.end(); ++it)
-        columns << it.key();
+    // Prefer the ordered column list from the script: QJsonObject sorts its keys, so deriving the
+    // columns from a row scrambles the source DataFrame's real column order. Fall back to row keys.
+    QStringList columns = ordered_columns;
+    if (columns.isEmpty()) {
+        auto first = rows_json[0].toObject();
+        for (auto it = first.begin(); it != first.end(); ++it)
+            columns << it.key();
+    }
 
     int max_rows = qMin(rows_json.size(), 2000);
 
@@ -744,7 +812,17 @@ void AsiaMarketsScreen::display_table(const QJsonArray& rows_json) {
             bool is_neg = false;
             if (val.isDouble()) {
                 double v = val.toDouble();
-                text = QString::number(v, 'g', 8);
+                if (v == std::floor(v) && std::abs(v) < 1e15) {
+                    // Exact integer (volume, turnover, market cap): render in full — 'g',8 turned a
+                    // 成交额 of 1234567890 into "1.2345679e+09".
+                    text = QString::number(static_cast<qint64>(v));
+                } else {
+                    text = QString::number(v, 'f', 4);
+                    while (text.endsWith('0'))
+                        text.chop(1);
+                    if (text.endsWith('.'))
+                        text.chop(1);
+                }
                 is_neg = v < 0;
             } else if (val.isNull()) {
                 text = "--";
@@ -777,7 +855,8 @@ void AsiaMarketsScreen::display_json(const QJsonArray& rows_json) {
 }
 
 void AsiaMarketsScreen::display_error(const QString& error) {
-    data_status_->setText(tr("Error"));
+    // The JSON tab may not be the visible one — put the reason where the user is looking.
+    data_status_->setText(tr("Error: %1").arg(error.simplified().left(160)));
     record_count_->hide();
 
     data_table_->clear();
@@ -818,17 +897,33 @@ QVariantMap AsiaMarketsScreen::save_state() const {
 
 void AsiaMarketsScreen::restore_state(const QVariantMap& state) {
     const int region = state.value("region", 0).toInt();
-    if (region != active_region_)
+    if (region >= 0 && region < regions_.size() && region != active_region_)
         on_region_changed(region);
 
+    // Symbol and endpoint first: the category switch below can populate the list (and auto-run an
+    // endpoint) synchronously from the cache, and that run must use the restored symbol/endpoint.
+    if (symbol_input_ && state.contains("symbol"))
+        symbol_input_->setText(state.value("symbol").toString());
+    pending_endpoint_ = state.value("endpoint").toString();
+
     const int cat = state.value("category", 0).toInt();
-    if (cat != active_category_)
+    if (cat >= 0 && cat < categories_.size() && (cat != active_category_ || endpoint_list_->count() == 0))
         on_category_changed(cat);
+    else if (!pending_endpoint_.isEmpty() && endpoint_list_->count() > 0) {
+        // Same category, list already loaded: select the remembered endpoint directly.
+        for (int i = 0; i < endpoint_list_->count(); ++i) {
+            auto* item = endpoint_list_->item(i);
+            if (item->data(Qt::UserRole).toString() == pending_endpoint_) {
+                endpoint_list_->setCurrentItem(item);
+                on_endpoint_clicked(item);
+                break;
+            }
+        }
+        pending_endpoint_.clear();
+    }
 
     if (search_input_ && state.contains("search"))
         search_input_->setText(state.value("search").toString());
-    if (symbol_input_ && state.contains("symbol"))
-        symbol_input_->setText(state.value("symbol").toString());
     if (json_view_ && state.contains("json_result"))
         json_view_->setPlainText(state.value("json_result").toString());
 }

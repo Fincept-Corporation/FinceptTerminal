@@ -219,6 +219,28 @@ int NewsArticleRepository::count() const {
 // ── prune_older_than ─────────────────────────────────────────────────────────
 
 Result<void> NewsArticleRepository::prune_older_than(int64_t cutoff_ts) {
+    // Bookmarked ("saved") articles are the user's own collection — retention must
+    // not delete them. The `saved` column is added at runtime by ensure_saved_column()
+    // (there is no migration), so prune can run before it exists: ask the schema
+    // rather than assuming, and fall back to the plain delete (no column = nothing
+    // can have been bookmarked yet).
+    bool has_saved_column = false;
+    { // scoped: the PRAGMA statement must be finished before the DELETE runs
+        auto info = db().execute("PRAGMA table_info(news_articles)", {});
+        if (info.is_ok()) {
+            auto& q = info.value();
+            while (q.next()) {
+                if (q.value(1).toString() == QLatin1String("saved")) {
+                    has_saved_column = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (has_saved_column) {
+        return exec_write("DELETE FROM news_articles WHERE sort_ts < ? AND COALESCE(saved, 0) = 0",
+                          {static_cast<qint64>(cutoff_ts)});
+    }
     return exec_write("DELETE FROM news_articles WHERE sort_ts < ?", {static_cast<qint64>(cutoff_ts)});
 }
 

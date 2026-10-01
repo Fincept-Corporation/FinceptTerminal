@@ -20,8 +20,11 @@
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSplitter>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -115,13 +118,22 @@ void PolymarketScreen::showEvent(QShowEvent* e) {
                     else if (ks)
                         l = tr("Kalshi");
                     command_bar_->set_account_status(pm || ks, l);
+                    // The trade ticket + blotter were only (de)activated when an adapter was
+                    // wired, so connecting (or clearing) an account left them stale until the
+                    // user switched exchange and back.
+                    refresh_trading_state();
                 });
             }
         }
 
-        // Wire the initially-active adapter and pull the first view.
+        // Wire the initially-active adapter and pull the first view (or the restored
+        // search — restore_state() puts the saved query in the box but never ran it).
         connect_active_adapter();
-        load_current_view();
+        const QString restored_query = command_bar_->search_text().trimmed();
+        if (!restored_query.isEmpty())
+            on_search_submitted(restored_query);
+        else
+            load_current_view();
     }
     if (has_selection_ && !subscribed_asset_ids_.isEmpty()) {
         if (auto* a = active_adapter())
@@ -132,6 +144,13 @@ void PolymarketScreen::showEvent(QShowEvent* e) {
 void PolymarketScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     refresh_timer_->stop();
+    // Drop the live market subscription while hidden (D3 / P3): showEvent re-subscribes
+    // subscribed_asset_ids_, which is kept. Without this the socket (and its order-book
+    // delta stream) stayed open for the whole time the screen was off-screen.
+    if (has_selection_ && !subscribed_asset_ids_.isEmpty()) {
+        if (auto* a = active_adapter())
+            a->unsubscribe_market(subscribed_asset_ids_);
+    }
 }
 
 // ── UI Build ────────────────────────────────────────────────────────────────
@@ -176,6 +195,13 @@ void PolymarketScreen::build_ui() {
     leaderboard_->setMinimumWidth(260);
     leaderboard_->setMaximumWidth(320);
     leaderboard_->setVisible(false);
+    // Double-click a trader -> their public Polymarket profile (trader_clicked had no
+    // receiver). Only well-formed wallet addresses are turned into a URL.
+    connect(leaderboard_, &PolymarketLeaderboard::trader_clicked, this, [](const QString& address) {
+        static const QRegularExpression kWalletRe(QStringLiteral("^0x[0-9a-fA-F]{40}$"));
+        if (kWalletRe.match(address).hasMatch())
+            QDesktopServices::openUrl(QUrl(QStringLiteral("https://polymarket.com/profile/") + address));
+    });
 
     splitter->addWidget(browse_panel_);
     splitter->addWidget(detail_splitter);
@@ -219,6 +245,8 @@ void PolymarketScreen::build_ui() {
                 if (auto* ks = dynamic_cast<pred::kalshi_ns::KalshiAdapter*>(reg.adapter(QStringLiteral("kalshi")))) {
                     if (auto creds = pred::PredictionCredentialStore::load_kalshi())
                         ks->set_credentials(*creds);
+                    else
+                        ks->set_credentials({}); // CLEAR: the adapter kept the old key, so trading stayed enabled
                 }
             }
             const bool has_pm = pred::PredictionCredentialStore::load_polymarket().has_value();
@@ -344,14 +372,24 @@ void PolymarketScreen::connect_active_adapter() {
     adapter_connections_ << connect(a, &pred::PredictionExchangeAdapter::open_orders_ready, this,
                                     &PolymarketScreen::on_open_orders_ready);
     adapter_connections_ << connect(a, &pred::PredictionExchangeAdapter::order_cancelled, this,
-                                    [a](const QString& oid, bool ok, const QString& err) {
+                                    [this, a](const QString& oid, bool ok, const QString& err) {
                                         if (!ok) {
                                             LOG_WARN("PredictionMarkets", "Cancel failed: " + err);
+                                            // Tell the user — the row just stays in the blotter otherwise.
+                                            if (status_bar_)
+                                                status_bar_->set_selected(
+                                                    tr("Cancel failed (%1): %2").arg(oid.left(10), err));
                                             return;
                                         }
-                                        // Refresh the full list after cancel confirms.
-                                        a->fetch_open_orders();
-                                        Q_UNUSED(oid);
+                                        // Refresh the full list after cancel confirms. Cancel-all on
+                                        // Polymarket fans out one cancel per order, each of which used
+                                        // to trigger its own fetch_open_orders (a Python process each) —
+                                        // coalesce them into one.
+                                        const int seq = ++orders_refresh_seq_;
+                                        QTimer::singleShot(400, this, [this, a, seq]() {
+                                            if (seq == orders_refresh_seq_)
+                                                a->fetch_open_orders();
+                                        });
                                     });
     adapter_connections_ << connect(a, &pred::PredictionExchangeAdapter::balance_ready, this,
                                     [this](const pred::AccountBalance& b) {
@@ -404,17 +442,23 @@ void PolymarketScreen::connect_active_adapter() {
         adapter_connections_ << connect(ks, &pred::kalshi_ns::KalshiAdapter::single_order_ready, this,
                                         &PolymarketScreen::on_kalshi_single_order);
         adapter_connections_ << connect(ks, &pred::kalshi_ns::KalshiAdapter::order_amended, this,
-                                        [ks](const QString& oid, bool ok, const QString& err) {
+                                        [this, ks](const QString& oid, bool ok, const QString& err) {
                                             if (!ok) {
                                                 LOG_WARN("PredictionMarkets", "Amend failed: " + err);
+                                                if (status_bar_)
+                                                    status_bar_->set_selected(
+                                                        tr("Amend failed (%1): %2").arg(oid.left(10), err));
                                                 return;
                                             }
                                             ks->fetch_order(oid);
                                         });
         adapter_connections_ << connect(ks, &pred::kalshi_ns::KalshiAdapter::orders_batch_cancelled, this,
-                                        [ks](const QStringList&, bool ok, const QString& err) {
-                                            if (!ok)
+                                        [this, ks](const QStringList&, bool ok, const QString& err) {
+                                            if (!ok) {
                                                 LOG_WARN("PredictionMarkets", "Batch cancel failed: " + err);
+                                                if (status_bar_)
+                                                    status_bar_->set_selected(tr("Cancel-all failed: %1").arg(err));
+                                            }
                                             ks->fetch_open_orders();
                                         });
         // Kick off the exchange status + schedule fetch; results land in the
@@ -436,6 +480,12 @@ void PolymarketScreen::connect_active_adapter() {
     // leaderboard endpoint). Show it only when the adapter advertises it.
     const auto caps = a->capabilities();
     leaderboard_->setVisible(caps.has_leaderboard);
+    if (caps.has_leaderboard) {
+        // Nothing ever requested the leaderboard, so the panel stayed empty (see
+        // on_leaderboard_ready). The service caches it for 5 minutes.
+        leaderboard_->set_loading(true);
+        a->fetch_leaderboard(50);
+    }
 
     // Tags are populated per-adapter so the category row reflects the
     // active exchange's taxonomy.
@@ -478,6 +528,17 @@ void PolymarketScreen::install_presentation(const polymarket::ExchangePresentati
         const bool has_creds = a && a->has_credentials();
         if (detail_panel_)
             detail_panel_->set_trading_enabled(has_creds);
+        if (detail_panel_ && a) {
+            // GTC is the baseline; FOK / FAK only where the adapter can actually place them
+            // (Kalshi's bridge has no time-in-force field — those were rejected by the API).
+            const auto caps = a->capabilities();
+            QStringList types{QStringLiteral("GTC")};
+            if (caps.supports_fok)
+                types << QStringLiteral("FOK");
+            if (caps.supports_fak)
+                types << QStringLiteral("FAK");
+            detail_panel_->set_order_types(types);
+        }
         if (has_creds && a) {
             a->fetch_balance();
             a->fetch_positions();
@@ -523,6 +584,23 @@ void PolymarketScreen::install_presentation(const polymarket::ExchangePresentati
     }
 }
 
+void PolymarketScreen::refresh_trading_state() {
+    auto* a = active_adapter();
+    const bool has_creds = a && a->has_credentials();
+    if (detail_panel_)
+        detail_panel_->set_trading_enabled(has_creds);
+    if (order_blotter_) {
+        order_blotter_->setVisible(has_creds);
+        if (!has_creds)
+            order_blotter_->clear();
+    }
+    if (has_creds && a) {
+        a->fetch_balance();
+        a->fetch_positions();
+        a->fetch_open_orders();
+    }
+}
+
 void PolymarketScreen::connect_polymarket_extras() {
     auto& svc = pmx::PolymarketService::instance();
     polymarket_extras_connections_ << connect(&svc, &pmx::PolymarketService::price_summary_ready, this,
@@ -539,8 +617,12 @@ void PolymarketScreen::connect_polymarket_extras() {
 
 void PolymarketScreen::on_view_changed(const QString& view) {
     active_view_ = view;
-    if (command_bar_)
+    if (command_bar_) {
         command_bar_->set_active_view(view);
+        // Picking a view leaves search mode — clear the query so a later refresh
+        // doesn't re-run the stale search over the view the user just chose.
+        command_bar_->set_search_text(QString());
+    }
     if (status_bar_)
         status_bar_->set_view(view);
     load_current_view();
@@ -549,8 +631,10 @@ void PolymarketScreen::on_view_changed(const QString& view) {
 
 void PolymarketScreen::on_category_changed(const QString& category) {
     active_category_ = category;
-    if (command_bar_)
+    if (command_bar_) {
         command_bar_->set_active_category(category);
+        command_bar_->set_search_text(QString()); // see on_view_changed
+    }
     ScreenStateManager::instance().notify_changed(this);
     load_current_view();
 }
@@ -571,12 +655,27 @@ void PolymarketScreen::on_search_submitted(const QString& query) {
 
 void PolymarketScreen::on_sort_changed(const QString& sort_by) {
     active_sort_ = sort_by;
-    if (!first_show_)
+    if (!first_show_) {
+        if (command_bar_)
+            command_bar_->set_search_text(QString()); // see on_view_changed
         load_current_view();
+    }
 }
 
 void PolymarketScreen::on_refresh() {
-    load_current_view();
+    // Honour an active search. The 60 s auto-refresh and the ↻ button both called
+    // load_current_view() unconditionally, which replaced the user's search results
+    // with the default list while the query was still sitting in the search box.
+    const QString query = command_bar_ ? command_bar_->search_text().trimmed() : QString();
+    if (!query.isEmpty())
+        on_search_submitted(query);
+    else
+        load_current_view();
+    // Cached 5 min in the service, so this is cheap on most ticks.
+    if (auto* a = active_adapter()) {
+        if (a->capabilities().has_leaderboard)
+            a->fetch_leaderboard(50);
+    }
 }
 
 void PolymarketScreen::on_exchange_changed(const QString& exchange_id) {
@@ -631,28 +730,37 @@ void PolymarketScreen::on_event_selected(const pred::PredictionEvent& event) {
 // ── Detail Panel Slots ──────────────────────────────────────────────────────
 
 void PolymarketScreen::on_interval_changed(const QString& interval) {
+    chart_interval_ = interval;
+    fetch_chart_history();
+}
+
+void PolymarketScreen::on_outcome_changed(int index) {
+    if (index < 0)
+        return;
+    chart_outcome_idx_ = index;
+    fetch_chart_history();
+}
+
+void PolymarketScreen::fetch_chart_history() {
+    // The interval handler always fetched outcome 0 and the outcome handler always
+    // used "1d", so changing one silently reset the other (and selecting a market
+    // fetched "1d" while the toolbar could still read 1W). One helper now.
     if (!has_selection_ || selected_market_.outcomes.isEmpty())
         return;
     auto* a = active_adapter();
     if (!a)
         return;
+    const int idx = qBound(0, chart_outcome_idx_, static_cast<int>(selected_market_.outcomes.size()) - 1);
 
     int fidelity = 5;
-    if (interval == "1h" || interval == "6h")
+    if (chart_interval_ == "1h" || chart_interval_ == "6h")
         fidelity = 1;
-    else if (interval == "1w")
+    else if (chart_interval_ == "1w")
         fidelity = 30;
-    else if (interval == "1m" || interval == "max")
+    else if (chart_interval_ == "1m" || chart_interval_ == "max")
         fidelity = 60;
 
-    a->fetch_price_history(selected_market_.outcomes.first().asset_id, interval, fidelity);
-}
-
-void PolymarketScreen::on_outcome_changed(int index) {
-    if (!has_selection_ || index < 0 || index >= selected_market_.outcomes.size())
-        return;
-    if (auto* a = active_adapter())
-        a->fetch_price_history(selected_market_.outcomes[index].asset_id, "1d", 5);
+    a->fetch_price_history(selected_market_.outcomes[idx].asset_id, chart_interval_, fidelity);
 }
 
 void PolymarketScreen::on_related_market_clicked(const pred::PredictionMarket& market) {
@@ -682,10 +790,19 @@ void PolymarketScreen::load_current_view() {
     } else if (active_view_ == "SPORTS") {
         a->list_markets(QStringLiteral("sports"), active_sort_, 100, 0);
     } else if (active_view_ == "RESOLVED" || active_view_ == "SETTLED") {
-        // The adapter interface doesn't expose a closed-markets filter today —
-        // fall back to the default list. Kalshi exposes this via event
-        // status; that improvement can land with the API fix pass.
-        a->list_events(category, QStringLiteral("endDate"), 100, 0);
+        // The adapter interface has no closed-markets filter, so this view used to show the
+        // OPEN events sorted by end date — not resolved ones at all. Go to the exchanges'
+        // own status filters: Kalshi /events?status=settled, Polymarket /events?closed=true
+        // (the adapter is wired to PolymarketService's events_ready either way). Closed
+        // events are ordered by volume — Gamma's endDate order puts far-future placeholder
+        // dates first.
+        if (auto* ks = dynamic_cast<pred::kalshi_ns::KalshiAdapter*>(a)) {
+            ks->list_events_by_status(QStringLiteral("settled"), category, 100);
+        } else if (active_is_polymarket()) {
+            pmx::PolymarketService::instance().fetch_events(active_sort_, 100, 0, /*closed=*/true);
+        } else {
+            a->list_events(category, QStringLiteral("endDate"), 100, 0);
+        }
     } else if (active_view_ == "HISTORY") {
         // Kalshi-only: archived markets served by /historical/markets. No
         // Polymarket equivalent, so the pill is hidden for Polymarket via
@@ -714,9 +831,11 @@ void PolymarketScreen::select_market(const pred::PredictionMarket& market) {
         return;
 
     if (!market.outcomes.isEmpty()) {
-        const QString primary = market.outcomes.first().asset_id;
-        a->fetch_order_book(primary);
-        a->fetch_price_history(primary, "1d", 5);
+        a->fetch_order_book(market.outcomes.first().asset_id);
+        // set_market() above reset the chart's outcome combo to the first outcome; the
+        // interval combo keeps the user's choice.
+        chart_outcome_idx_ = 0;
+        fetch_chart_history();
     }
     a->fetch_recent_trades(market.key, 100);
 
@@ -839,27 +958,81 @@ void PolymarketScreen::on_tags_ready(const QStringList& tags) {
     command_bar_->set_categories(tags);
 }
 
+// The order book panel always shows the selected market's PRIMARY outcome (the one
+// select_market() fetches). Replies are matched on asset id so a slow response for
+// the previously-selected market — or the other outcome's book (Kalshi emits both
+// the yes and no book per REST call; Polymarket streams one per token) — can't
+// overwrite it, nor poison the ticket's tick/min-size limits taken from the book.
+// An empty asset id (adapters that don't tag it) is accepted as before.
+bool PolymarketScreen::is_primary_asset(const QString& asset_id) const {
+    if (!has_selection_)
+        return false;
+    if (asset_id.isEmpty() || selected_market_.outcomes.isEmpty())
+        return true;
+    return selected_market_.outcomes.first().asset_id == asset_id;
+}
+
 void PolymarketScreen::on_order_book_ready(const pred::PredictionOrderBook& book) {
-    if (detail_panel_)
+    if (detail_panel_ && is_primary_asset(book.asset_id))
         detail_panel_->set_order_book(book);
 }
 
 void PolymarketScreen::on_price_history_ready(const pred::PriceHistory& history) {
-    if (detail_panel_)
-        detail_panel_->set_price_history(history);
+    if (!detail_panel_ || !has_selection_)
+        return;
+    // Drop a reply for a market/outcome that is no longer selected (history requests
+    // are issued per outcome, and a slow one used to repaint the chart under the
+    // newly-selected market).
+    if (!history.asset_id.isEmpty()) {
+        bool belongs = false;
+        for (const auto& o : selected_market_.outcomes) {
+            if (o.asset_id == history.asset_id) {
+                belongs = true;
+                break;
+            }
+        }
+        if (!belongs)
+            return;
+    }
+    detail_panel_->set_price_history(history);
 }
 
 void PolymarketScreen::on_trades_ready(const QVector<pred::PredictionTrade>& trades) {
-    if (detail_panel_)
-        detail_panel_->set_trades(trades);
+    if (!detail_panel_ || !has_selection_)
+        return;
+    // Polymarket tags trades with the condition id, Kalshi with "<ticker>:yes"; ignore a
+    // reply that belongs to a previously-selected market.
+    if (!trades.isEmpty()) {
+        const QString& aid = trades.first().asset_id;
+        const QString& mid = selected_market_.key.market_id;
+        if (!aid.isEmpty() && !mid.isEmpty() && aid != mid && !aid.startsWith(mid + QLatin1Char(':')))
+            return;
+    }
+    detail_panel_->set_trades(trades);
 }
 
-void PolymarketScreen::on_leaderboard_ready(const QVariantList& /*entries*/) {
-    // Leaderboard shape is exchange-specific and not modeled in prediction::
-    // today. The legacy Polymarket leaderboard panel takes services::polymarket::
-    // types, so when the active adapter is Polymarket we fetch through the
-    // PolymarketService directly. Adapter-emitted QVariantList leaderboards
-    // are ignored here until the panel is retyped.
+void PolymarketScreen::on_leaderboard_ready(const QVariantList& entries) {
+    // The adapter forwards PolymarketService's leaderboard as a QVariantList of maps
+    // (rank / address / display_name / profile_image / pnl / volume / num_trades).
+    // This handler used to be a no-op and nothing requested the data, so the panel
+    // sat on "Leaderboard data not available" forever.
+    if (!leaderboard_)
+        return;
+    QVector<pmx::LeaderboardEntry> rows;
+    rows.reserve(entries.size());
+    for (const QVariant& v : entries) {
+        const QVariantMap m = v.toMap();
+        pmx::LeaderboardEntry e;
+        e.rank = m.value(QStringLiteral("rank")).toInt();
+        e.address = m.value(QStringLiteral("address")).toString();
+        e.display_name = m.value(QStringLiteral("display_name")).toString();
+        e.profile_image = m.value(QStringLiteral("profile_image")).toString();
+        e.pnl = m.value(QStringLiteral("pnl")).toDouble();
+        e.volume = m.value(QStringLiteral("volume")).toDouble();
+        e.num_trades = m.value(QStringLiteral("num_trades")).toInt();
+        rows.push_back(e);
+    }
+    leaderboard_->set_entries(rows);
 }
 
 void PolymarketScreen::on_adapter_error(const QString& ctx, const QString& msg) {
@@ -868,6 +1041,9 @@ void PolymarketScreen::on_adapter_error(const QString& ctx, const QString& msg) 
     LOG_WARN("PredictionMarkets", ctx + ": " + msg);
     if (status_bar_)
         status_bar_->set_selected(QString("%1: %2").arg(ctx, msg));
+    // A failed leaderboard fetch would otherwise leave the panel on "Loading…".
+    if (ctx == QStringLiteral("FetchLeaderboard") && leaderboard_)
+        leaderboard_->set_unavailable(msg);
     // A place_order failure/rejection lands here because run_py's error path emits
     // error_occurred and skips the order_placed signal. Reset the order ticket from
     // "Submitting…" and surface the reason, else the submit button stays disabled.
@@ -893,8 +1069,10 @@ void PolymarketScreen::on_ws_price_updated(const QString& asset_id, double price
     }
 }
 
-void PolymarketScreen::on_ws_orderbook_updated(const QString& /*asset_id*/, const pred::PredictionOrderBook& book) {
-    if (detail_panel_)
+void PolymarketScreen::on_ws_orderbook_updated(const QString& asset_id, const pred::PredictionOrderBook& book) {
+    // Every subscribed outcome streams its own book; only the displayed (primary) one
+    // may reach the panel, otherwise it flickers between the YES and NO books.
+    if (detail_panel_ && is_primary_asset(asset_id))
         detail_panel_->set_order_book(book);
 }
 

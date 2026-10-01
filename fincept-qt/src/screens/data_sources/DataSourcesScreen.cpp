@@ -242,6 +242,7 @@ QVariantMap DataSourcesScreen::save_state() const {
     QVariantMap state{
         {"connector_id", selected_connector_id_},
         {"category", static_cast<int>(active_category_)},
+        {"show_all", show_all_categories_},
     };
     if (search_edit_)
         state["search"] = search_edit_->text();
@@ -251,13 +252,23 @@ QVariantMap DataSourcesScreen::save_state() const {
 }
 
 void DataSourcesScreen::restore_state(const QVariantMap& state) {
-    const QString id = state.value("connector_id").toString();
-    if (!id.isEmpty())
-        select_connector_by_id(id);
+    // "category" was written by save_state() but never read back, so the category filter
+    // reset on every launch. Restore it (range-checked: state comes from disk) and
+    // rebuild before selecting the connector, which must be visible to be selected.
+    const int category = state.value("category", -1).toInt();
+    if (category >= 0 && category <= static_cast<int>(Category::OpenBanking))
+        active_category_ = static_cast<Category>(category);
+    if (state.contains("show_all"))
+        show_all_categories_ = state.value("show_all").toBool();
     if (search_edit_ && state.contains("search"))
         search_edit_->setText(state.value("search").toString());
     if (conn_search_edit_ && state.contains("conn_search"))
         conn_search_edit_->setText(state.value("conn_search").toString());
+    rebuild_all_views();
+
+    const QString id = state.value("connector_id").toString();
+    if (!id.isEmpty())
+        select_connector_by_id(id);
 }
 
 } // namespace fincept::screens::datasources

@@ -21,14 +21,19 @@
 #include "python/PythonRunner.h"
 #include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
+#include "storage/repositories/AgentConfigRepository.h"
 #include "storage/repositories/LlmConfigRepository.h"
+#include "storage/repositories/LlmProfileRepository.h"
+#include "storage/repositories/McpServerRepository.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMetaObject>
 #include <QPointer>
 #include <QProcess>
+#include <QSet>
 #include <QTimer>
 #include <QUuid>
 #include <QVariant>
@@ -105,6 +110,118 @@ mcp::ToolFilter resolve_tool_filter(const QJsonObject& config) {
     }
     filter.max_tools = tf.value("max_tools").toInt(0);
     return filter;
+}
+
+// McpServer.args is stored as a JSON array (current) or a space-separated
+// string (legacy) — same two formats McpManager accepts.
+QJsonArray agent_svc_mcp_args(const QString& raw) {
+    QJsonArray out;
+    if (raw.trimmed().startsWith(QLatin1Char('['))) {
+        const QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8());
+        if (doc.isArray()) {
+            for (const auto& v : doc.array())
+                out.append(v.toString());
+            return out;
+        }
+    }
+    for (const QString& part : raw.split(QLatin1Char(' '), Qt::SkipEmptyParts))
+        out.append(part);
+    return out;
+}
+
+// McpServer.env: a JSON object (current) or legacy "KEY=VAL KEY2=VAL2".
+QJsonObject agent_svc_mcp_env(const QString& raw) {
+    QJsonObject out;
+    if (raw.trimmed().startsWith(QLatin1Char('{'))) {
+        const QJsonDocument doc = QJsonDocument::fromJson(raw.toUtf8());
+        if (doc.isObject()) {
+            const QJsonObject o = doc.object();
+            for (auto it = o.constBegin(); it != o.constEnd(); ++it)
+                out.insert(it.key(), it.value().toString());
+            return out;
+        }
+    }
+    for (const QString& pair : raw.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+        const qsizetype eq = pair.indexOf(QLatin1Char('='));
+        if (eq > 0)
+            out.insert(pair.left(eq), pair.mid(eq + 1));
+    }
+    return out;
+}
+
+/// Fill in what a caller left out of an agent config before it is shipped to Python.
+///
+///  1. A saved (DB) agent named only by `agent_id` — the AI Chat selector, the
+///     MCP run tools, routing results. Python resolves `agent_id` against its own
+///     card registry, which knows nothing about agents created in the CREATE tab,
+///     so those agents silently ran as the generic assistant (no instructions,
+///     tools or feature flags). The saved config is merged UNDER whatever the
+///     caller supplied, and the model is re-resolved from the agent's profile
+///     assignment — the persisted `model` snapshot is deliberately ignored (it
+///     goes stale, and new saves no longer carry an API key).
+///  2. `mcp_server_ids` (the CREATE tab's MCP SERVERS selection) → the full
+///     `mcp_servers` definitions core_agent._connect_mcp_servers expects. Done
+///     here rather than at save time so server env secrets are never written
+///     into the agent config.
+QJsonObject agent_svc_expand_config(const QJsonObject& config) {
+    QJsonObject out = config;
+
+    const QString agent_id = out.value(QStringLiteral("agent_id")).toString();
+    if (!agent_id.isEmpty() && !out.contains(QStringLiteral("instructions"))) {
+        const auto saved = AgentConfigRepository::instance().get(agent_id);
+        if (saved.is_ok()) {
+            const QJsonObject saved_cfg = QJsonDocument::fromJson(saved.value().config_json.toUtf8()).object();
+            for (auto it = saved_cfg.constBegin(); it != saved_cfg.constEnd(); ++it) {
+                // `model`: stale snapshot (re-resolved below). terminal_mcp_* /
+                // terminal_tools: run-scoped bridge wiring that build_payload() mints
+                // itself — a stored value must never pre-empt (or smuggle in) a token.
+                if (it.key() == QLatin1String("model") || it.key() == QLatin1String("terminal_tools") ||
+                    it.key().startsWith(QLatin1String("terminal_mcp_")))
+                    continue;
+                if (!out.contains(it.key()))
+                    out.insert(it.key(), it.value());
+            }
+            if (out.value(QStringLiteral("model")).toObject().value(QStringLiteral("provider")).toString().isEmpty()) {
+                const ResolvedLlmProfile resolved =
+                    ai_chat::LlmService::instance().resolve_profile(QStringLiteral("agent"), agent_id);
+                if (!resolved.provider.isEmpty())
+                    out.insert(QStringLiteral("model"), ai_chat::LlmService::profile_to_json(resolved));
+            }
+        }
+    }
+
+    const QJsonArray server_ids = out.value(QStringLiteral("mcp_server_ids")).toArray();
+    if (!server_ids.isEmpty() && !out.contains(QStringLiteral("mcp_servers"))) {
+        QSet<QString> wanted;
+        for (const auto& v : server_ids)
+            wanted.insert(v.toString());
+        const auto servers = McpServerRepository::instance().list_all();
+        if (servers.is_ok()) {
+            QJsonArray defs;
+            for (const auto& s : servers.value()) {
+                if (!s.enabled || !wanted.contains(s.id))
+                    continue;
+                QJsonObject d;
+                d.insert(QStringLiteral("id"), s.id);
+                d.insert(QStringLiteral("name"), s.name);
+                d.insert(QStringLiteral("command"), s.command);
+                d.insert(QStringLiteral("args"), agent_svc_mcp_args(s.args));
+                d.insert(QStringLiteral("env"), agent_svc_mcp_env(s.env));
+                d.insert(QStringLiteral("transport"), QStringLiteral("stdio"));
+                defs.append(d);
+            }
+            if (!defs.isEmpty())
+                out.insert(QStringLiteral("mcp_servers"), defs);
+        }
+    }
+    return out;
+}
+
+/// The bridge run-scope token build_payload() minted for this payload ("" when
+/// the bridge is off or the caller supplied its own). Streaming runners pass it
+/// to TerminalMcpBridge::end_run() when their subprocess exits.
+QString agent_svc_run_token(const QJsonObject& payload) {
+    return payload.value(QStringLiteral("config")).toObject().value(QStringLiteral("terminal_mcp_token")).toString();
 }
 } // namespace
 
@@ -293,7 +410,10 @@ QJsonObject AgentService::build_api_keys() const {
 // ── Payload builder ──────────────────────────────────────────────────────────
 
 QJsonObject AgentService::build_payload(const QString& action, const QJsonObject& params,
-                                        const QJsonObject& config) const {
+                                        const QJsonObject& config_in) const {
+    // Saved agents named only by id + MCP server selections become full configs
+    // here, so every caller (chat, MCP tools, routing, tests) behaves the same.
+    const QJsonObject config = agent_svc_expand_config(config_in);
     QJsonObject payload;
     payload["action"] = action;
     payload["api_keys"] = build_api_keys();
@@ -391,6 +511,30 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
     return payload;
 }
 
+QJsonObject AgentService::model_config_for_profile(const QString& profile_id, const QString& context_type) const {
+    ResolvedLlmProfile resolved;
+    if (!profile_id.isEmpty()) {
+        const auto pr = LlmProfileRepository::instance().get_profile(profile_id);
+        if (pr.is_ok()) {
+            const LlmProfile& p = pr.value();
+            resolved.profile_id = p.id;
+            resolved.profile_name = p.name;
+            resolved.provider = p.provider;
+            resolved.model_id = p.model_id;
+            resolved.api_key = p.api_key;
+            resolved.base_url = p.base_url;
+            resolved.temperature = p.temperature;
+            resolved.max_tokens = p.max_tokens;
+            resolved.system_prompt = p.system_prompt;
+        }
+    }
+    if (resolved.provider.isEmpty() && !context_type.isEmpty())
+        resolved = ai_chat::LlmService::instance().resolve_profile(context_type, {});
+    if (resolved.provider.isEmpty())
+        return {};
+    return ai_chat::LlmService::profile_to_json(resolved);
+}
+
 // ── Python lightweight runner ────────────────────────────────────────────────
 
 void AgentService::run_python_light(const QString& action, const QJsonObject& params,
@@ -446,7 +590,14 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                                     std::function<void(bool, QJsonObject)> on_result) {
     auto& py = python::PythonRunner::instance();
     if (!py.is_available()) {
-        on_result(false, QJsonObject{{"error", "Python not available"}});
+        // Deferred, never synchronous: callers (run_agent, run_team, …) hand the
+        // request id back to their panel only AFTER this returns, and the panel's
+        // request-id guard drops a result that arrives earlier — the UI then sat
+        // on "Executing..." forever. Cold-start interpreter detection makes this
+        // reachable whenever a run is started in the first seconds.
+        QMetaObject::invokeMethod(
+            this, [on_result]() { on_result(false, QJsonObject{{"error", "Python not available"}}); },
+            Qt::QueuedConnection);
         return;
     }
 
@@ -457,7 +608,7 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
     // process is gone so its token stops authenticating. Empty (or a
     // caller-supplied token, which the bridge never registered) makes end_run a
     // no-op, so this is safe for every action including the non-agent ones.
-    const QString run_token = payload.value("config").toObject().value("terminal_mcp_token").toString();
+    const QString run_token = agent_svc_run_token(payload);
 
     QString python_path = py.python_path();
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
@@ -477,9 +628,13 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
     QPointer<AgentService> self = this;
     auto timer = std::make_shared<QElapsedTimer>();
     timer->start();
+    // A crashed child raises BOTH errorOccurred(Crashed) and finished(); without a
+    // shared "already answered" flag on_result fired twice (two error toasts /
+    // two signals for one request).
+    auto settled = std::make_shared<bool>(false);
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-            [self, proc, action, on_result, timer, run_token](int exit_code, QProcess::ExitStatus) {
+            [self, proc, action, on_result, timer, run_token, settled](int exit_code, QProcess::ExitStatus) {
                 mcp::TerminalMcpBridge::instance().end_run(run_token);
                 int elapsed = timer->elapsed();
 
@@ -487,8 +642,9 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                 QString stderr_str = QString::fromUtf8(proc->readAllStandardError());
                 proc->deleteLater();
 
-                if (!self)
+                if (!self || *settled)
                     return;
+                *settled = true;
 
                 // Extract JSON from output
                 QString json_str = python::extract_json(stdout_str);
@@ -514,16 +670,26 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                 on_result(true, result);
             });
 
-    connect(proc, &QProcess::errorOccurred, this, [self, proc, action, on_result, timer,
-                                                   run_token](QProcess::ProcessError) {
-        mcp::TerminalMcpBridge::instance().end_run(run_token);
-        QString err = proc->errorString();
-        proc->deleteLater();
-        if (!self)
-            return;
-        LOG_ERROR("AgentService", QString("%1 process error: %2").arg(action, err));
-        on_result(false, QJsonObject{{"error", "Process error: " + err}});
-    });
+    connect(proc, &QProcess::errorOccurred, this,
+            [self, proc, action, on_result, run_token, settled](QProcess::ProcessError e) {
+                // Only a failed spawn ends without a finished() signal. A crash is
+                // reported by finished() (with the child's stderr, which is a far
+                // better message than "Process crashed"); write/read errors mean
+                // the child is already on its way out.
+                if (e != QProcess::FailedToStart) {
+                    LOG_WARN("AgentService",
+                             QString("%1 process error %2: %3").arg(action).arg(int(e)).arg(proc->errorString()));
+                    return;
+                }
+                mcp::TerminalMcpBridge::instance().end_run(run_token);
+                QString err = proc->errorString();
+                proc->deleteLater();
+                if (!self || *settled)
+                    return;
+                *settled = true;
+                LOG_ERROR("AgentService", QString("%1 process error: %2").arg(action, err));
+                on_result(false, QJsonObject{{"error", "Process error: " + err}});
+            });
 
     LOG_INFO("AgentService", QString("Running %1 via stdin (%2 bytes)").arg(action).arg(payload_bytes.size()));
     proc->start(python_path, {script_path, "--stdin"});

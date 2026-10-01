@@ -169,6 +169,11 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
     product_combo_->setObjectName("eqOeCombo");
     product_combo_->addItems({tr("Intraday (MIS)"), tr("Delivery (CNC)"), tr("Margin (NRML)")});
     product_combo_->setFixedHeight(28);
+    // MIS / CNC / NRML change the margin the broker quotes.
+    connect(product_combo_, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
+        if (margin_timer_)
+            margin_timer_->start();
+    });
     params->addWidget(product_title_, prow, 0);
     params->addWidget(product_combo_, prow, 1);
     ++prow;
@@ -184,6 +189,8 @@ EquityOrderEntry::EquityOrderEntry(QWidget* parent) : QWidget(parent) {
         current_exchange_ = ex;
         if (symbol_label_)
             symbol_label_->setText(QStringLiteral("%1 · %2").arg(current_symbol_, ex));
+        if (margin_timer_)
+            margin_timer_->start(); // margin is per exchange
     });
     params->addWidget(exchange_title_, prow, 0);
     params->addWidget(exchange_combo_, prow, 1);
@@ -638,6 +645,9 @@ void EquityOrderEntry::set_buy_side(bool is_buy) {
     submit_btn_->setObjectName(is_buy ? "eqBuySubmit" : "eqSellSubmit");
     submit_btn_->style()->unpolish(submit_btn_);
     submit_btn_->style()->polish(submit_btn_);
+    // Required margin differs by side (and by order type / product / exchange, below).
+    if (margin_timer_)
+        margin_timer_->start();
 }
 
 void EquityOrderEntry::set_order_type(int idx) {
@@ -650,6 +660,8 @@ void EquityOrderEntry::set_order_type(int idx) {
     price_edit_->setEnabled(idx == 1 || idx == 3);      // Limit, SL-Limit
     stop_price_edit_->setEnabled(idx == 2 || idx == 3); // SL, SL-Limit
     update_cost_preview();
+    if (margin_timer_)
+        margin_timer_->start();
 }
 
 void EquityOrderEntry::set_balance(double balance) {
@@ -691,6 +703,11 @@ void EquityOrderEntry::set_symbol(const QString& symbol) {
         price_is_stale_ = false;
         render_price_label();
         update_cost_preview();
+        // Same for the broker margin: it was quoted for the previous symbol.
+        if (margin_label_)
+            margin_label_->hide();
+        if (margin_timer_)
+            margin_timer_->start();
     }
 }
 
@@ -753,6 +770,27 @@ bool EquityOrderEntry::validate_entry(double& qty_out) {
         const double trigger_px = stop_price_edit_->text().trimmed().toDouble(&tp_ok);
         if (!tp_ok || !std::isfinite(trigger_px) || trigger_px <= 0.0)
             return fail(tr("Enter a valid trigger price"));
+    }
+
+    // Optional protective legs: blank means "none", but a box that is filled in and does not
+    // parse ("2,450", "abc") used to become 0.0 in build_order() — the order went out with
+    // the stop-loss / target the trader believed they had set silently dropped.
+    auto filled_but_invalid = [](const QLineEdit* edit) {
+        if (!edit)
+            return false;
+        const QString txt = edit->text().trimmed();
+        if (txt.isEmpty())
+            return false;
+        bool num_ok = false;
+        const double v = txt.toDouble(&num_ok);
+        return !num_ok || !std::isfinite(v) || v <= 0.0;
+    };
+    const bool sl_bad = filled_but_invalid(sl_edit_);
+    if (sl_bad || filled_but_invalid(tp_edit_)) {
+        // SL / TP live in the collapsible ADVANCED section — open it so the offending box is visible.
+        if (advanced_toggle_ && advanced_section_ && !advanced_section_->isVisible())
+            advanced_toggle_->click();
+        return fail(sl_bad ? tr("Stop loss is not a valid price") : tr("Take profit is not a valid price"));
     }
     return true;
 }
@@ -906,7 +944,12 @@ void EquityOrderEntry::show_order_status(const QString& msg, bool success) {
     set_send_locked(false);
     status_label_->setText(msg);
     status_label_->setStyleSheet(QString("color: %1;").arg(success ? colors::POSITIVE() : colors::NEGATIVE()));
-    QTimer::singleShot(5000, status_label_, [this]() { status_label_->clear(); });
+    // Clear only if THIS message is still showing: an older result's timer must not wipe a
+    // newer message (validation error / next order's outcome) a few seconds after it appeared.
+    QTimer::singleShot(5000, status_label_, [this, msg]() {
+        if (status_label_->text() == msg)
+            status_label_->clear();
+    });
 }
 
 void EquityOrderEntry::set_limit_price(double price) {
@@ -1007,10 +1050,13 @@ void EquityOrderEntry::fetch_margin_async() {
         return;
 
     const double qty = qty_edit_->text().toDouble();
-    if (qty <= 0)
+    if (qty <= 0) {
+        margin_label_->hide(); // no quantity -> no margin; don't leave the last figure up
         return;
+    }
 
-    // Guard against concurrent fetches
+    // Guard against concurrent fetches. A skipped request is NOT dropped: the in-flight
+    // result belongs to older inputs, so the completion below re-arms this timer.
     bool expected = false;
     if (!margin_fetching_.compare_exchange_strong(expected, true))
         return;
@@ -1048,10 +1094,26 @@ void EquityOrderEntry::fetch_margin_async() {
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, result]() {
+            [self, result, order]() {
                 if (!self)
                     return;
                 self->margin_fetching_ = false;
+                // The ticket may have changed while the broker call was in flight (symbol,
+                // side, qty, price...). That margin belongs to the OLD ticket — showing it
+                // would quote the wrong requirement, so drop it and fetch for the current one.
+                const bool inputs_changed =
+                    self->current_symbol_ != order.symbol || self->exchange_combo_->currentText() != order.exchange ||
+                    (self->is_buy_side_ ? trading::OrderSide::Buy : trading::OrderSide::Sell) != order.side ||
+                    self->selected_order_type() != order.order_type ||
+                    self->selected_product_type() != order.product_type ||
+                    self->qty_edit_->text().toDouble() != order.quantity ||
+                    self->price_edit_->text().toDouble() != order.price ||
+                    self->stop_price_edit_->text().toDouble() != order.stop_price;
+                if (inputs_changed) {
+                    self->margin_label_->hide();
+                    self->margin_timer_->start();
+                    return;
+                }
                 if (result.success && result.data) {
                     const auto& m = *result.data;
                     const QString sym = currency_symbol(self->current_currency_);

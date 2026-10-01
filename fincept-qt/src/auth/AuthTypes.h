@@ -1,4 +1,5 @@
 #pragma once
+#include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
@@ -304,11 +305,11 @@ struct ValidationResult {
 
 inline ValidationResult validate_email(const QString& email) {
     if (email.isEmpty())
-        return {false, "Email is required"};
+        return {false, QCoreApplication::translate("AuthTypes", "Email is required")};
     // Basic email regex
     QRegularExpression re("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     if (!re.match(email).hasMatch())
-        return {false, "Invalid email format"};
+        return {false, QCoreApplication::translate("AuthTypes", "Invalid email format")};
     return {true, {}};
 }
 

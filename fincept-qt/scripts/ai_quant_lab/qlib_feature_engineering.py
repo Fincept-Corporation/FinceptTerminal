@@ -11,6 +11,7 @@ Features:
 """
 
 import json
+import re
 import sys
 from typing import Dict, List, Any, Optional, Union, Callable
 import warnings
@@ -33,6 +34,7 @@ class FeatureEngineer:
 
     def __init__(self):
         self.features = {}
+        self.last_ic_scores = {}
 
     # Technical Indicators
     def moving_average(self, data: pd.Series, window: int = 20, method: str = 'sma') -> pd.Series:
@@ -269,6 +271,7 @@ class FeatureEngineer:
         from scipy.stats import pearsonr, spearmanr
 
         ic_scores = {}
+        self.last_ic_scores = {}   # signed IC per feature, exposed to the CLI for display
         for col in features.columns:
             valid_idx = features[col].notna() & returns.notna()
             if valid_idx.sum() < 10:
@@ -282,7 +285,12 @@ class FeatureEngineer:
             else:
                 ic, _ = spearmanr(feature_vals, return_vals)
 
+            # A constant feature gives NaN correlation; ranking NaN is undefined.
+            if not np.isfinite(ic):
+                continue
+
             ic_scores[col] = abs(ic)
+            self.last_ic_scores[col] = float(ic)
 
         # Sort by IC and select top-K
         sorted_features = sorted(ic_scores.items(), key=lambda x: x[1], reverse=True)
@@ -372,16 +380,91 @@ class FeatureExpressionEngine:
         Returns:
             Calculated feature series
         """
-        # Simple expression evaluation (production would use proper parser)
-        # For now, this is a placeholder implementation
-        # Real implementation would parse AST and evaluate
+        # This used to return data['close'] for every expression, so the panel
+        # reported the raw price column as if it were the computed feature. Parse the
+        # expression with ``ast`` and walk a strict whitelist instead -- no eval(), so
+        # nothing but arithmetic, field names and the functions registered above runs.
+        import ast
+        import operator
+        import re
 
-        # Example: Just return close for demonstration
-        if '$close' in expression and 'Ref' not in expression:
-            return self.data['close']
-        else:
-            # Placeholder - real implementation would parse and evaluate
-            return self.data['close']
+        text = re.sub(r'\$([A-Za-z_][A-Za-z0-9_]*)', r'\1', str(expression or '').strip())
+        if not text:
+            raise ValueError("Expression is empty")
+        try:
+            tree = ast.parse(text, mode='eval')
+        except SyntaxError as e:
+            raise ValueError(f"Invalid expression syntax: {e.msg}")
+
+        columns = {str(c).lower(): self.data[c].astype(float) for c in self.data.columns}
+        if not columns:
+            raise ValueError("Data has no columns")
+        windowed = {'ref', 'mean', 'std', 'sum', 'max', 'min', 'rank'}
+
+        def bind(name, fn):
+            if name in windowed:
+                return lambda s, n: fn(s, self._window(n))
+            return fn
+
+        functions = {name.lower(): bind(name.lower(), fn) for name, fn in self.functions.items()}
+        functions['greater'] = lambda a, b: np.maximum(a, b)
+        functions['less'] = lambda a, b: np.minimum(a, b)
+        functions['delta'] = lambda s, n: s - s.shift(self._window(n))
+        binops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+                  ast.Div: operator.truediv, ast.Pow: operator.pow}
+
+        def walk(node):
+            if isinstance(node, ast.Expression):
+                return walk(node.body)
+            if isinstance(node, ast.Constant):
+                if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+                    return node.value
+                raise ValueError("Only numeric literals are allowed")
+            if isinstance(node, ast.Name):
+                key = node.id.lower()
+                if key not in columns:
+                    raise ValueError(f"Unknown field '{node.id}'. Available fields: {', '.join(columns)}")
+                return columns[key]
+            if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+                value = walk(node.operand)
+                return -value if isinstance(node.op, ast.USub) else value
+            if isinstance(node, ast.BinOp) and type(node.op) in binops:
+                return binops[type(node.op)](walk(node.left), walk(node.right))
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
+                fn = functions.get(node.func.id.lower())
+                if fn is None:
+                    raise ValueError(f"Unknown function '{node.func.id}'. Available: "
+                                     f"{', '.join(sorted(self.functions))}, Greater, Less, Delta")
+                return fn(*[walk(a) for a in node.args])
+            raise ValueError("Unsupported expression element; use fields, numbers, + - * / **, "
+                             "and the supported functions")
+
+        result = walk(tree)
+        if not isinstance(result, pd.Series):
+            raise ValueError("Expression must reference at least one data field")
+        return result.replace([np.inf, -np.inf], np.nan)
+
+    @staticmethod
+    def _window(n) -> int:
+        """Window / lag arguments must be positive whole numbers, not series."""
+        if isinstance(n, pd.Series) or float(n) != int(n) or int(n) < 1:
+            raise ValueError("Window / period arguments must be positive whole numbers")
+        return int(n)
+
+
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
 
 
 def main():
@@ -393,9 +476,20 @@ def main():
     command = sys.argv[1]
     engineer = FeatureEngineer()
 
+    def num_list(value):
+        """Accept a JSON array or the comma/space-separated string typed into the UI."""
+        if isinstance(value, str):
+            return [float(tok) for tok in re.split(r'[,;\s]+', value.strip()) if tok]
+        return value
+
     try:
         params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
         data = params.get("data", [])
+        if command != "evaluate_expression":
+            data = num_list(data)
+            for key in ("high", "low", "volume"):
+                if key in params:
+                    params[key] = num_list(params[key])
 
         if command == "check_status":
             result = {
@@ -472,22 +566,33 @@ def main():
             result = {"success": True, "data": r.tolist()}
 
         elif command == "select_features_by_ic":
-            features = {k: pd.Series(v) for k, v in params.get("features", {}).items()}
-            returns_s = pd.Series(params.get("returns", []))
-            r = engineer.select_features_by_ic(features, returns_s, params.get("top_k", 10),
+            # The selector works on a DataFrame (feature columns x observations); it used
+            # to be handed a dict and failed with "'dict' object has no attribute 'columns'".
+            features = pd.DataFrame({k: pd.Series(num_list(v), dtype=float)
+                                     for k, v in params.get("features", {}).items()})
+            returns_s = pd.Series(num_list(params.get("returns", [])), dtype=float)
+            r = engineer.select_features_by_ic(features, returns_s, int(params.get("top_k", 10)),
                                                params.get("method", "pearson"))
-            result = {"success": True, "selected_features": r}
+            if not engineer.last_ic_scores:
+                result = {"success": False,
+                          "error": "No feature had at least 10 paired observations with the returns "
+                                   "(and a non-constant value) -- supply longer series."}
+            else:
+                result = {"success": True, "selected_features": r,
+                          "ic_scores": {k: engineer.last_ic_scores[k] for k in r}}
 
         elif command == "evaluate_expression":
-            df = pd.DataFrame(params.get("data", {}))
+            df = pd.DataFrame({k: pd.Series(num_list(v), dtype=float)
+                               for k, v in params.get("data", {}).items()})
             engine = FeatureExpressionEngine(df)
             expr_result = engine.evaluate(params.get("expression", ""))
-            result = {"success": True, "data": expr_result.dropna().tolist() if hasattr(expr_result, 'tolist') else expr_result}
+            result = {"success": True, "expression": params.get("expression", ""),
+                      "data": expr_result.dropna().tolist()}
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(result))
+        print(json.dumps(_json_safe(result)))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

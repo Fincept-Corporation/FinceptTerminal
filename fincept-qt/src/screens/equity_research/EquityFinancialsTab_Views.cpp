@@ -25,6 +25,7 @@
 #include <QHeaderView>
 #include <QJsonObject>
 #include <QLineSeries>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -106,17 +107,22 @@ void EquityFinancialsTab::build_ui() {
         if (!tbl)
             return;
 
-        // Build sanitised ticker prefix from object name or use generic
-        QString ticker = objectName().isEmpty() ? "equity" : objectName();
-        ticker.remove(QRegularExpression(R"([^A-Za-z0-9_\-])"));
+        // Sanitised ticker prefix. This used the tab's objectName(), which nothing ever
+        // sets, so every export was called "equity_income_….csv" whatever the symbol.
+        QString ticker = current_symbol_.isEmpty() ? QStringLiteral("equity") : current_symbol_;
+        ticker.replace(QRegularExpression(R"([^A-Za-z0-9_\-])"), QStringLiteral("_"));
 
         QString filename =
             QString("%1_%2_%3.csv").arg(ticker, label, QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
         QString dest = services::FileManagerService::instance().storage_dir() + "/" + filename;
 
         QFile f(dest);
-        if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            // Used to return silently — the click appeared to do nothing.
+            QMessageBox::warning(this, tr("Export failed"),
+                                 tr("Could not write the CSV file:\n%1\n%2").arg(dest, f.errorString()));
             return;
+        }
         QTextStream out(&f);
 
         // Header row
@@ -133,16 +139,30 @@ void EquityFinancialsTab::build_ui() {
             for (int c = 0; c < tbl->columnCount(); ++c) {
                 auto* item = tbl->item(r, c);
                 QString cell = item ? item->text() : "";
+                // Statement cells display "391.04B"; export the raw figure instead (and an
+                // empty cell, not a "—" glyph, for a line the filing does not carry).
+                if (item && item->data(Qt::UserRole).isValid())
+                    cell = QString::number(item->data(Qt::UserRole).toDouble(), 'f', 2);
+                else if (c > 0 && cell == QStringLiteral("—"))
+                    cell.clear();
                 if (cell.contains(',') || cell.contains('"') || cell.contains('\n'))
                     cell = "\"" + cell.replace("\"", "\"\"") + "\"";
                 row << cell;
             }
             out << row.join(",") << "\n";
         }
+        out.flush();
+        const bool write_ok = (out.status() == QTextStream::Ok) && (f.error() == QFile::NoError);
         f.close();
+        if (!write_ok) {
+            QMessageBox::warning(this, tr("Export failed"), tr("Writing the CSV file failed:\n%1").arg(dest));
+            return;
+        }
 
         services::FileManagerService::instance().register_file(dest, QFileInfo(dest).fileName(), QFileInfo(dest).size(),
                                                                "text/csv", "equity_research");
+        QMessageBox::information(this, tr("Export complete"),
+                                 tr("Saved %n row(s) to:\n%1", "", tbl->rowCount()).arg(dest));
     });
 
     vl->addWidget(btn_bar);

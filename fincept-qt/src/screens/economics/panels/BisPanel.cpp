@@ -1,11 +1,12 @@
 // src/screens/economics/panels/BisPanel.cpp
-// BIS SDMX API — 13 statistical domains, no API key required.
-// Commands: get_central_bank_policy_rates, get_effective_exchange_rates,
-//           get_exchange_rates, get_long_term_interest_rates,
-//           get_short_term_interest_rates, get_credit_to_non_financial_sector,
-//           get_house_prices, get_economic_overview
+// BIS SDMX API — statistical domains (dataflows), no API key required.
+// Command: fetch_series <dataflow> <country> [start_year] [end_year]
+//          (WS_CBPOL, WS_EER, WS_XRU, WS_TC, WS_DSR, WS_CREDIT_GAP, WS_SPP, WS_LONG_CPI)
 // Response: { "success": true, "data": [...], "metadata": {...} }
-// data[] rows: { "date": "YYYY-MM", "value": 1.23, "country": "US", "series_key": "..." }
+// data[] rows: { "date": "YYYY-MM", "value": 1.23, "series": "" } — `series` is empty when the
+// dataflow holds a single series, otherwise the series key (several series are never averaged).
+// The older get_* commands return raw SDMX-JSON (no flat rows) and some target dataflows BIS has
+// retired (WS_LTINT / WS_STINT / WS_CRD / WS_HP), so they are not used here.
 #include "screens/economics/panels/BisPanel.h"
 
 #include "core/logging/Logger.h"
@@ -15,6 +16,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
+#include <QSet>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -25,23 +27,23 @@ static constexpr const char* kBisSourceId = "bis";
 static constexpr const char* kBisColor = "#9D4EDD"; // purple
 } // namespace
 
-// Dataset combo entries: { display label, CLI command, placeholder country hint }
+// Dataset combo entries: { display label, BIS dataflow, placeholder country hint, default country }
 struct BisDataset {
     QString label;
-    QString command;
+    QString flow;
     QString country_hint;
     QString default_country;
 };
 
 static const QList<BisDataset> kBisDatasets = {
-    {"Central Bank Policy Rates", "get_central_bank_policy_rates", "e.g. US, GB, JP, DE", "US"},
-    {"Effective Exchange Rates", "get_effective_exchange_rates", "e.g. US, GB, JP", "US"},
-    {"Exchange Rates vs USD", "get_exchange_rates", "e.g. GB, JP, DE, AU", "GB"},
-    {"Long-term Interest Rates", "get_long_term_interest_rates", "e.g. US, DE, JP, GB", "US"},
-    {"Short-term Interest Rates", "get_short_term_interest_rates", "e.g. US, DE, JP, GB", "US"},
-    {"Credit to Non-Financial Sector", "get_credit_to_non_financial_sector", "e.g. US, CN, JP", "US"},
-    {"House Prices", "get_house_prices", "e.g. US, GB, DE, AU", "US"},
-    {"Economic Overview (multi-series)", "get_economic_overview", "e.g. US", "US"},
+    {"Central Bank Policy Rates", "WS_CBPOL", "e.g. US, GB, JP, DE", "US"},
+    {"Effective Exchange Rates (nominal, broad)", "WS_EER", "e.g. US, GB, JP", "US"},
+    {"Exchange Rates vs USD", "WS_XRU", "e.g. GB, JP, DE, AU", "GB"},
+    {"Total Credit to Non-Financial Sector", "WS_TC", "e.g. US, CN, JP", "US"},
+    {"Debt Service Ratios", "WS_DSR", "e.g. US, GB, DE", "US"},
+    {"Credit-to-GDP Gaps", "WS_CREDIT_GAP", "e.g. US, CN, JP", "US"},
+    {"Selected Property Prices", "WS_SPP", "e.g. US, GB, DE, AU", "US"},
+    {"Long Consumer Price Series", "WS_LONG_CPI", "e.g. US, GB, DE", "US"},
 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -109,8 +111,6 @@ void BisPanel::on_dataset_changed(int index) {
         country_input_->text() == kBisDatasets[qMax(0, index - 1)].default_country) {
         country_input_->setText(ds.default_country);
     }
-    // Economic overview doesn't use a country filter
-    country_input_->setEnabled(ds.command != "get_economic_overview");
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -121,27 +121,25 @@ void BisPanel::on_fetch() {
         return;
     const auto& ds = kBisDatasets[idx];
 
-    QStringList args;
     const QString country = country_input_->text().trimmed().toUpper();
     const QString start = start_input_->text().trimmed();
     const QString end = end_input_->text().trimmed();
 
-    // economic_overview doesn't take country/date args
-    if (ds.command != "get_economic_overview") {
-        if (country.isEmpty()) {
-            show_empty(tr("Enter a country code (e.g. US, GB, JP)"));
-            return;
-        }
-        args << country;
-        if (!start.isEmpty())
-            args << start;
-        if (!start.isEmpty() && !end.isEmpty())
-            args << end;
+    if (country.isEmpty()) {
+        show_empty(tr("Enter a country code (e.g. US, GB, JP)"));
+        return;
     }
 
+    // CLI: fetch_series <dataflow> <country> [start_year] [end_year]
+    QStringList args{ds.flow, country};
+    if (!start.isEmpty())
+        args << start;
+    if (!start.isEmpty() && !end.isEmpty())
+        args << end;
+
     show_loading(tr("Fetching BIS %1…").arg(ds.label));
-    services::EconomicsService::instance().execute(kBisSourceId, kBisScript, ds.command, args,
-                                                   "bis_" + ds.command + "_" + country);
+    services::EconomicsService::instance().execute(kBisSourceId, kBisScript, "fetch_series", args,
+                                                   "bis_" + ds.flow + "_" + country);
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -156,20 +154,22 @@ void BisPanel::on_result(const QString& request_id, const services::EconomicsRes
     }
 
     // BIS response: { "success": true, "data": [...], "metadata": {...} }
-    // data[] rows: { "date": "YYYY-MM", "value": 1.23, "country": "US", "series_key": "..." }
-    // economic_overview may return nested: { "data": { "exchange_rates": [...], ... } }
-    QJsonArray rows = result.data["data"].toArray();
+    // data[] rows: { "date": "YYYY-MM", "value": 1.23, "series": "" }
+    const QJsonArray raw = result.data["data"].toArray();
 
-    if (rows.isEmpty()) {
-        // Try nested overview structure — flatten all sub-arrays into one
-        const QJsonObject data_obj = result.data["data"].toObject();
-        if (!data_obj.isEmpty()) {
-            for (const auto& key : data_obj.keys()) {
-                const QJsonArray sub = data_obj[key].toArray();
-                for (const auto& v : sub)
-                    rows.append(v);
-            }
-        }
+    // `series` is empty for single-series dataflows — drop the blank column. When a
+    // dataflow carries several series (different units/sectors), LATEST/CHANGE/MIN/MAX/AVG
+    // would mix unrelated series, so the stat cards are hidden in that case.
+    QJsonArray rows;
+    QSet<QString> distinct_series;
+    for (const auto& rv : raw) {
+        QJsonObject row = rv.toObject();
+        const QString series = row.value("series").toString();
+        if (series.isEmpty())
+            row.remove("series");
+        else
+            distinct_series.insert(series);
+        rows.append(row);
     }
 
     if (rows.isEmpty()) {
@@ -180,6 +180,7 @@ void BisPanel::on_result(const QString& request_id, const services::EconomicsRes
     // Build title from metadata
     const QString title = "BIS: " + dataset_combo_->currentText() + " — " + country_input_->text().trimmed().toUpper();
 
+    set_stats_visible(distinct_series.size() <= 1);
     display(rows, title);
     LOG_INFO("BisPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }

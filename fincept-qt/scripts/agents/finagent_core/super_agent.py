@@ -572,7 +572,11 @@ class SuperAgent:
                 "Fincept API failed",
                 "Cannot connect to Fincept API",
             )
-            if isinstance(content, str) and any(content.startswith(p) for p in _ERROR_PREFIXES):
+            # Agno marks a failed run with status ERROR (content = the error text) — the
+            # reliable signal; the prefixes above only cover Fincept-provider messages.
+            _status = getattr(getattr(response, "status", None), "value", getattr(response, "status", None))
+            _run_failed = isinstance(_status, str) and _status.upper() == "ERROR"
+            if _run_failed or (isinstance(content, str) and any(content.startswith(p) for p in _ERROR_PREFIXES)):
                 return {
                     "success": False,
                     "error": content,

@@ -1,8 +1,12 @@
 """
 Our World in Data Fetcher
-CO2, energy, health, poverty, education, democracy data for all countries.
-Uses OWID API and GitHub CSV data. No API key required.
+CO2, energy, health, poverty, GDP per capita, democracy data for all countries.
+Chart data comes from the public OWID grapher CSV endpoint
+(https://ourworldindata.org/grapher/<slug>.csv) - no API key required. The GitHub JSON
+datasets (owid/co2-data, owid/energy-data) this script used to read no longer exist (HTTP 404).
 """
+import csv
+import io
 import sys
 import json
 import os
@@ -61,155 +65,135 @@ def search_indicators(query: str) -> Any:
     return data
 
 
-def get_co2_data(country: str = "World") -> Any:
-    """Get CO2 and greenhouse gas emissions data for a country.
-    Uses Our World in Data CO2 dataset via GitHub.
-    country: Country name as in OWID (e.g. 'United States', 'Germany', 'China', 'World').
+# command -> (grapher chart slug, human title)
+GRAPHER_CHARTS = {
+    "co2": ("annual-co2-emissions-per-country", "Annual CO2 emissions (tonnes)"),
+    "co2_per_capita": ("co-emissions-per-capita", "CO2 emissions per capita (tonnes)"),
+    "energy": ("primary-energy-cons", "Primary energy consumption (TWh)"),
+    "life_expectancy": ("life-expectancy", "Life expectancy at birth (years)"),
+    "poverty": ("share-of-population-in-extreme-poverty", "Share of population in extreme poverty (%)"),
+    "gdp_per_capita": ("gdp-per-capita-worldbank", "GDP per capita (PPP, constant international $)"),
+    "democracy": ("electoral-democracy-index", "Electoral democracy index (V-Dem, 0-1)"),
+}
+GRAPHER_CSV_URL = "https://ourworldindata.org/grapher/{slug}.csv"
+
+
+def get_grapher_data(slug: str, title: str, country: str = None, start: str = None, end: str = None) -> Any:
+    """Fetch an OWID chart's data and return [{country, year, value}] rows.
+
+    country: entity name or ISO-3 code, case-insensitive ('United States', 'USA', 'World').
+             Empty / 'all' returns every entity.
+    start/end: inclusive year bounds.
     """
-    url = "https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.json"
+    url = GRAPHER_CSV_URL.format(slug=slug)
     try:
-        response = session.get(url, timeout=30)
+        response = session.get(url, params={"csvType": "full", "useColumnShortNames": "true"}, timeout=60)
         response.raise_for_status()
-        data = response.json()
-        # Find country
-        country_data = None
-        for key, val in data.items():
-            if key.lower() == country.lower():
-                country_data = val
-                break
-        if country_data is None:
-            # fuzzy search
-            matches = [k for k in data.keys() if country.lower() in k.lower()]
-            if matches:
-                country_data = data[matches[0]]
-                country = matches[0]
-            else:
-                return {"error": f"Country '{country}' not found", "available_sample": list(data.keys())[:20]}
+    except requests.exceptions.HTTPError as e:
+        return {"error": f"HTTP {e.response.status_code}: OWID chart '{slug}' unavailable"}
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Request failed: {str(e)}"}
 
-        # Return last 50 years of data
-        records = country_data.get("data", [])
-        recent = records[-50:] if len(records) > 50 else records
-        return {
-            "country": country,
-            "data": recent,
-            "count": len(recent),
-            "fields": list(recent[0].keys()) if recent else [],
-        }
-    except Exception as e:
-        return {"error": f"Failed to fetch CO2 data: {str(e)}"}
-
-
-def get_energy_data(country: str = "World") -> Any:
-    """Get energy consumption and production data for a country.
-    country: Country name as in OWID.
-    """
-    url = "https://raw.githubusercontent.com/owid/energy-data/master/owid-energy-data.json"
+    reader = csv.reader(io.StringIO(response.text))
+    header = next(reader, None)
+    if not header or len(header) < 4:
+        return {"error": f"Unexpected CSV layout for OWID chart '{slug}'"}
+    # entity, code, year, <value column>, [extras...]
+    wanted = (country or "").strip().lower()
+    all_entities = wanted in ("", "all")
     try:
-        response = session.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        country_data = None
-        for key, val in data.items():
-            if key.lower() == country.lower():
-                country_data = val
-                break
-        if country_data is None:
-            matches = [k for k in data.keys() if country.lower() in k.lower()]
-            if matches:
-                country_data = data[matches[0]]
-                country = matches[0]
-            else:
-                return {"error": f"Country '{country}' not found", "available_sample": list(data.keys())[:20]}
+        start_year = int(start) if start else None
+        end_year = int(end) if end else None
+    except ValueError:
+        return {"error": "Start/end must be years (e.g. 2000 2023)"}
 
-        records = country_data.get("data", [])
-        recent = records[-30:] if len(records) > 30 else records
-        return {
-            "country": country,
-            "data": recent,
-            "count": len(recent),
-            "fields": list(recent[0].keys()) if recent else [],
-        }
-    except Exception as e:
-        return {"error": f"Failed to fetch energy data: {str(e)}"}
+    rows = []
+    entities = set()
+    for rec in reader:
+        if len(rec) < 4:
+            continue
+        entities.add(rec[0])
+        if not all_entities and rec[0].lower() != wanted and rec[1].lower() != wanted:
+            continue
+        try:
+            year = int(rec[2])
+        except ValueError:
+            continue
+        if (start_year and year < start_year) or (end_year and year > end_year):
+            continue
+        if rec[3] == "":
+            continue  # missing observation - a gap stays a gap
+        try:
+            value = float(rec[3])
+        except ValueError:
+            continue
+        rows.append({"country": rec[0], "year": year, "value": value})
 
+    if not rows and not all_entities:
+        close = sorted(e for e in entities if wanted in e.lower())[:10]
+        return {"error": f"No {title} data for '{country}' in the requested range",
+                "suggestions": close or sorted(entities)[:20]}
 
-def get_health_data(country: str = None) -> Any:
-    """Get health indicators (life expectancy, child mortality, etc.) via OWID API."""
-    # Life expectancy indicator
-    params = {"entityName": country} if country else {}
-    data = _make_request("indicators/life-expectancy", params=params)
-    if isinstance(data, dict) and "error" not in data:
-        return {"category": "health", "country": country, "indicator": "life_expectancy", "data": data}
-    # Fallback: return indicator IDs for health metrics
     return {
-        "category": "health",
-        "note": "Use indicator command with numeric IDs for specific metrics",
-        "common_health_indicators": {
-            "life_expectancy": "Search 'life expectancy' via search command",
-            "child_mortality": "Search 'child mortality' via search command",
-            "maternal_mortality": "Search 'maternal mortality rate' via search command",
-        }
+        "success": True,
+        "title": title,
+        "country": "All" if all_entities else rows[0]["country"],
+        "chart": slug,
+        "count": len(rows),
+        "fields": ["country", "year", "value"],
+        "data": rows,
+        "source": "Our World in Data",
+        "url": url,
     }
 
 
-def get_poverty_data(country: str = None) -> Any:
-    """Get poverty and inequality data via OWID API."""
-    params = {}
-    if country:
-        params["entityName"] = country
-    data = _make_request("indicators/share-of-population-in-extreme-poverty", params=params)
-    if isinstance(data, dict) and "error" not in data:
-        return {"category": "poverty", "country": country, "indicator": "extreme_poverty", "data": data}
-    return {
-        "category": "poverty",
-        "note": "Use search command to find specific poverty indicators",
-        "common_poverty_indicators": {
-            "extreme_poverty": "Search 'extreme poverty' via search command",
-            "gini_coefficient": "Search 'gini coefficient' via search command",
-            "income_share": "Search 'income share' via search command",
-        }
-    }
+def get_co2_data(country: str = "World", start: str = None, end: str = None) -> Any:
+    """Annual CO2 emissions for a country (name as in OWID: 'United States', 'Germany', 'World')."""
+    slug, title = GRAPHER_CHARTS["co2"]
+    return get_grapher_data(slug, title, country, start, end)
 
 
-def get_democracy_data(country: str = None) -> Any:
-    """Get democracy and governance indices (V-Dem, Freedom House, Polity)."""
-    params = {}
-    if country:
-        params["entityName"] = country
-    data = _make_request("indicators/electoral-democracy", params=params)
-    if isinstance(data, dict) and "error" not in data:
-        return {"category": "democracy", "country": country, "data": data}
-    return {
-        "category": "democracy",
-        "note": "Use search command to find democracy/governance indicators",
-        "suggested_searches": ["v-dem", "democracy index", "freedom house", "polity"],
-    }
+def get_energy_data(country: str = "World", start: str = None, end: str = None) -> Any:
+    """Primary energy consumption for a country (name as in OWID)."""
+    slug, title = GRAPHER_CHARTS["energy"]
+    return get_grapher_data(slug, title, country, start, end)
+
+
+def get_health_data(country: str = None, start: str = None, end: str = None) -> Any:
+    """Health indicator: life expectancy at birth."""
+    slug, title = GRAPHER_CHARTS["life_expectancy"]
+    return get_grapher_data(slug, title, country, start, end)
+
+
+def get_poverty_data(country: str = None, start: str = None, end: str = None) -> Any:
+    """Share of the population living in extreme poverty."""
+    slug, title = GRAPHER_CHARTS["poverty"]
+    return get_grapher_data(slug, title, country, start, end)
+
+
+def get_democracy_data(country: str = None, start: str = None, end: str = None) -> Any:
+    """Electoral democracy index (V-Dem)."""
+    slug, title = GRAPHER_CHARTS["democracy"]
+    return get_grapher_data(slug, title, country, start, end)
 
 
 def main(args=None):
     if args is None:
         args = sys.argv[1:]
     if not args:
-        print(json.dumps({"error": "No command provided. Available: co2, energy, health, poverty, democracy, indicator, search"}))
+        print(json.dumps({"error": "No command provided. Available: co2, co2_per_capita, energy, life_expectancy, poverty, gdp_per_capita, health, democracy, indicator, search"}))
         return
 
     command = args[0]
 
-    if command == "co2":
-        country = args[1] if len(args) > 1 else "World"
-        result = get_co2_data(country)
-    elif command == "energy":
-        country = args[1] if len(args) > 1 else "World"
-        result = get_energy_data(country)
-    elif command == "health":
-        country = args[1] if len(args) > 1 else None
-        result = get_health_data(country)
-    elif command == "poverty":
-        country = args[1] if len(args) > 1 else None
-        result = get_poverty_data(country)
-    elif command == "democracy":
-        country = args[1] if len(args) > 1 else None
-        result = get_democracy_data(country)
+    # <command> [country] [start_year] [end_year]
+    chart_commands = set(GRAPHER_CHARTS) | {"health"}
+    if command in chart_commands:
+        country = args[1] if len(args) > 1 else ("World" if command in ("co2", "energy", "co2_per_capita") else None)
+        start = args[2] if len(args) > 2 else None
+        end = args[3] if len(args) > 3 else None
+        slug, title = GRAPHER_CHARTS["life_expectancy" if command == "health" else command]
+        result = get_grapher_data(slug, title, country, start, end)
     elif command == "indicator":
         if len(args) < 2:
             result = {"error": "Usage: indicator <indicator_id>"}
@@ -224,7 +208,7 @@ def main(args=None):
         else:
             result = search_indicators(args[1])
     else:
-        result = {"error": f"Unknown command: {command}. Available: co2, energy, health, poverty, democracy, indicator, search"}
+        result = {"error": f"Unknown command: {command}. Available: co2, co2_per_capita, energy, life_expectancy, poverty, gdp_per_capita, health, democracy, indicator, search"}
 
     print(json.dumps(result))
 

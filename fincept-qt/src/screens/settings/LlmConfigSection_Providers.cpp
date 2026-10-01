@@ -35,6 +35,7 @@ constexpr const char* TAG_PROVIDERS = "LlmConfigSection";
 #include <QScrollArea>
 #include <QSplitter>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <memory>
@@ -689,6 +690,16 @@ void LlmConfigSection::on_save_provider() {
     if (!is_fincept && cfg.model.isEmpty()) {
         show_status(tr("Model name is required"), true);
         return;
+    }
+    // The base URL feeds straight into the request endpoint — reject typos here
+    // rather than as an opaque connection error on the first chat message.
+    if (!cfg.base_url.isEmpty()) {
+        const QUrl u(cfg.base_url, QUrl::StrictMode);
+        const QString scheme = u.scheme().toLower();
+        if (!u.isValid() || u.host().isEmpty() || (scheme != QLatin1String("http") && scheme != QLatin1String("https"))) {
+            show_status(tr("Base URL must be a full http:// or https:// address"), true);
+            return;
+        }
     }
 
     // Save first (INSERT OR REPLACE), THEN set active (deactivates others + activates this one)

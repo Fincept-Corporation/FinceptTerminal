@@ -9,10 +9,15 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -356,10 +361,30 @@ QWidget* MAModulePanel::build_valuation_panel() {
     double_inputs_["prec_ebitda"] = prec_ebitda;
     prec_vl->addWidget(build_input_row(tr("Target EBITDA") + " ($)", prec_ebitda, prec));
 
+    // Comparable deals are optional: without them the analysis uses the completed deals already in the local
+    // deal database (Deal Database tab), and says so if there are none.
+    auto* prec_comps = new QTextEdit(prec);
+    prec_comps->setPlaceholderText(tr("Comparable deals (optional) - JSON array: [{\"acquirer\":\"A\",\"target\":\"B\","
+                                      "\"deal_value\":1e9,\"revenue\":4e8,\"ebitda\":1e8,\"premium\":28}, ...]. "
+                                      "Leave empty to use the local deal database."));
+    prec_comps->setMaximumHeight(110);
+    prec_vl->addWidget(prec_comps);
+
     auto* prec_run = make_run_button(tr("RUN PRECEDENT ANALYSIS"), prec);
-    connect(prec_run, &QPushButton::clicked, this, [this]() {
-        status_label_->setText(tr("Running Precedent Txns..."));
+    connect(prec_run, &QPushButton::clicked, this, [this, prec_comps]() {
         QJsonObject params;
+        const QString comps_text = prec_comps->toPlainText().trimmed();
+        if (!comps_text.isEmpty()) {
+            QJsonParseError perr{};
+            const QJsonDocument comps_doc = QJsonDocument::fromJson(comps_text.toUtf8(), &perr);
+            if (perr.error != QJsonParseError::NoError || !comps_doc.isArray()) {
+                status_label_->setText(tr("Invalid JSON"));
+                display_error(tr("Comparable deals must be a valid JSON array (%1).").arg(perr.errorString()));
+                return;
+            }
+            params["comparables"] = comps_doc.array();
+        }
+        status_label_->setText(tr("Running Precedent Txns..."));
         params["target_revenue"] = double_inputs_["prec_revenue"]->value();
         params["target_ebitda"] = double_inputs_["prec_ebitda"]->value();
         MAAnalyticsService::instance().calculate_precedent_transactions(params);

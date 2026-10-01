@@ -315,6 +315,17 @@ EquityOverviewTab::EquityOverviewTab(QWidget* parent) : QWidget(parent) {
                     return;
                 if (loading_overlay_)
                     loading_overlay_->hide_loading();
+                // Legs that never arrived for THIS symbol must not keep showing the previous
+                // symbol's figures behind the banner — blank them (the legs that did land stay).
+                if (!info_loaded_)
+                    render_info(services::equity::StockInfo{});
+                if (!quote_loaded_) {
+                    const QString dash = QString::fromUtf8("\xe2\x80\x94");
+                    for (auto* lbl : {open_val_, high_val_, low_val_, prev_close_val_, vol_val_})
+                        lbl->setText(dash);
+                }
+                if (!historical_loaded_)
+                    rebuild_chart({});
                 const QString detail = message.trimmed();
                 set_overview_error(this, detail.isEmpty() ? tr("%1 data could not be loaded.").arg(ctx)
                                                           : tr("%1 data could not be loaded: %2").arg(ctx, detail));
@@ -328,6 +339,10 @@ void EquityOverviewTab::set_symbol(const QString& symbol) {
     info_loaded_ = quote_loaded_ = historical_loaded_ = false;
     set_overview_error(this, QString()); // drop the previous symbol's failure
     loading_overlay_->show_loading(tr("LOADING OVERVIEW…"));
+    // Candles for the period button that is currently selected. The screen used to
+    // fetch a fixed 1Y series for every new symbol, leaving a 1M/5Y selection showing
+    // 1Y data under the wrong highlighted button. Quote + info come from the screen.
+    services::equity::EquityResearchService::instance().load_historical_only(symbol, current_period_);
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -551,7 +566,8 @@ void EquityOverviewTab::switch_period(QPushButton* btn, const QString& period) {
     // Reload data with new period
     if (!current_symbol_.isEmpty()) {
         set_overview_error(this, QString()); // the previous period's failure no longer applies
-        services::equity::EquityResearchService::instance().load_symbol(current_symbol_, period);
+        // Only the candles depend on the period — quote + info are already on screen.
+        services::equity::EquityResearchService::instance().load_historical_only(current_symbol_, period);
     }
 }
 
@@ -680,7 +696,7 @@ void EquityOverviewTab::on_quote_loaded(services::equity::QuoteData q) {
     high_val_->setText(fmt_price(q.high));
     low_val_->setText(fmt_price(q.low));
     prev_close_val_->setText(fmt_price(q.prev_close));
-    vol_val_->setText(fmt_large(q.volume));
+    vol_val_->setText(q.volume > 0.0 ? fmt_large(q.volume) : QString::fromUtf8("\xe2\x80\x94"));
 }
 
 void EquityOverviewTab::on_info_loaded(services::equity::StockInfo info) {
@@ -702,6 +718,10 @@ void EquityOverviewTab::on_info_loaded(services::equity::StockInfo info) {
 
 void EquityOverviewTab::render_info(const services::equity::StockInfo& info) {
     const QString na = tr("N/A");
+    // The info payload reports a field the source lacks as 0 — show N/A, not a made-up
+    // "0" / "0.00%" (shares, float, volumes and the balance-sheet snapshot included).
+    auto large_or_na = [&na](double v) { return v > 0.0 ? fmt_large(v) : na; };
+    auto pct_or_na = [&na](double v) { return v != 0.0 ? fmt_pct(v) : na; };
 
     // Re-render quote and chart with correct currency
     if (quote_loaded_) {
@@ -721,20 +741,22 @@ void EquityOverviewTab::render_info(const services::equity::StockInfo& info) {
     fwd_pe_val_->setText(info.forward_pe > 0 ? QString::number(info.forward_pe, 'f', 2) : na);
     peg_val_->setText(info.peg_ratio > 0 ? QString::number(info.peg_ratio, 'f', 2) : na);
     pb_val_->setText(info.price_to_book > 0 ? QString::number(info.price_to_book, 'f', 2) : na);
-    div_val_->setText(info.dividend_yield > 0 ? fmt_pct(info.dividend_yield) : na);
+    // yfinance (pinned 0.2.66) reports dividendYield already in percent (AAPL: 0.33 for
+    // 0.33%) while every other ratio here is a fraction, so fmt_pct()'s ×100 printed 33.00%.
+    div_val_->setText(info.dividend_yield > 0 ? fmt_pct(info.dividend_yield / 100.0) : na);
     beta_val_->setText(info.beta != 0.0 ? QString::number(info.beta, 'f', 2) : na);
 
     // Share Stats
-    shares_out_val_->setText(fmt_large(info.shares_outstanding));
-    float_val_->setText(fmt_large(info.float_shares));
-    insiders_val_->setText(fmt_pct(info.held_insiders_pct));
-    institutions_val_->setText(fmt_pct(info.held_institutions_pct));
-    short_pct_val_->setText(fmt_pct(info.short_pct_of_float));
+    shares_out_val_->setText(large_or_na(info.shares_outstanding));
+    float_val_->setText(large_or_na(info.float_shares));
+    insiders_val_->setText(pct_or_na(info.held_insiders_pct));
+    institutions_val_->setText(pct_or_na(info.held_institutions_pct));
+    short_pct_val_->setText(pct_or_na(info.short_pct_of_float));
 
     // 52 Week Range
     w52h_val_->setText(fmt_price(info.week52_high));
     w52l_val_->setText(fmt_price(info.week52_low));
-    avg_vol_val_->setText(fmt_large(info.avg_volume));
+    avg_vol_val_->setText(large_or_na(info.avg_volume));
 
     // Analyst Targets
     target_high_val_->setText(fmt_price(info.target_high));
@@ -769,15 +791,15 @@ void EquityOverviewTab::render_info(const services::equity::StockInfo& info) {
                                       .arg(ui::colors::BG_RAISED(), rec_color));
 
     // Profitability
-    gross_margin_val_->setText(fmt_pct(info.gross_margins));
-    op_margin_val_->setText(fmt_pct(info.operating_margins));
-    profit_margin_val_->setText(fmt_pct(info.profit_margins));
-    roa_val_->setText(fmt_pct(info.roa));
-    roe_val_->setText(fmt_pct(info.roe));
+    gross_margin_val_->setText(pct_or_na(info.gross_margins));
+    op_margin_val_->setText(pct_or_na(info.operating_margins));
+    profit_margin_val_->setText(pct_or_na(info.profit_margins));
+    roa_val_->setText(pct_or_na(info.roa));
+    roe_val_->setText(pct_or_na(info.roe));
 
     // Growth
-    rev_growth_val_->setText(fmt_pct(info.revenue_growth));
-    earnings_growth_val_->setText(fmt_pct(info.earnings_growth));
+    rev_growth_val_->setText(pct_or_na(info.revenue_growth));
+    earnings_growth_val_->setText(pct_or_na(info.earnings_growth));
 
     // Company Info
     company_desc_->setText(info.description);
@@ -786,9 +808,9 @@ void EquityOverviewTab::render_info(const services::equity::StockInfo& info) {
     company_currency_->setText(info.currency.isEmpty() ? na : info.currency);
 
     // Financial Health
-    cash_val_->setText(fmt_large(info.total_cash));
-    debt_val_->setText(fmt_large(info.total_debt));
-    free_cf_val_->setText(fmt_large(info.free_cashflow));
+    cash_val_->setText(large_or_na(info.total_cash));
+    debt_val_->setText(large_or_na(info.total_debt));
+    free_cf_val_->setText(info.free_cashflow != 0.0 ? fmt_large(info.free_cashflow) : na);
 }
 
 void EquityOverviewTab::on_historical_loaded(QString symbol, QVector<services::equity::Candle> candles) {
@@ -804,6 +826,12 @@ void EquityOverviewTab::on_historical_loaded(QString symbol, QVector<services::e
 void EquityOverviewTab::rebuild_chart(const QVector<services::equity::Candle>& candles) {
 #ifdef HAS_QT_WEBENGINE
     if (kline_chart_) {
+        if (candles.isEmpty()) {
+            // set_candles() ignores an empty series, which would leave the previous
+            // symbol's chart on screen — an empty result must actually clear it.
+            kline_chart_->clear();
+            return;
+        }
         QJsonArray arr;
         for (const auto& c : candles) {
             QJsonObject obj;
@@ -938,7 +966,8 @@ void EquityOverviewTab::retranslateUi() {
         high_val_->setText(fmt_price(cached_quote_.high));
         low_val_->setText(fmt_price(cached_quote_.low));
         prev_close_val_->setText(fmt_price(cached_quote_.prev_close));
-        vol_val_->setText(fmt_large(cached_quote_.volume));
+        vol_val_->setText(cached_quote_.volume > 0.0 ? fmt_large(cached_quote_.volume)
+                                                     : QString::fromUtf8("\xe2\x80\x94"));
     }
 }
 

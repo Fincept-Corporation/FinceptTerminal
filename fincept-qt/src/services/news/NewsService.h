@@ -6,6 +6,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QTimer>
@@ -248,6 +249,29 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     static void enrich_article(NewsArticle& article);
     static QString strip_html(const QString& html);
 
+    /// Deterministic article id. Hash of the (fragment/trailing-slash
+    /// normalised) link, falling back to source + headline when the item has no
+    /// link, so the same story keeps the same id across refreshes and across
+    /// feeds. Ids used to embed the fetch timestamp, which made every refresh
+    /// look like a brand-new set of articles — breaking seen/bookmark state,
+    /// notification dedup and the history merge.
+    static QString stable_article_id(const QString& link, const QString& source, const QString& headline);
+    /// Feed-supplied links are untrusted: only http(s) URLs are ever kept.
+    static bool is_web_url(const QString& url);
+
+    /// JSON round-trip used for the CacheManager copy of the article list.
+    /// Deserialising re-derives threat + source flag (not stored in the cache).
+    static QString serialize_articles(const QVector<NewsArticle>& articles);
+    static QVector<NewsArticle> deserialize_articles(const QString& json);
+
+    /// Append `incoming` to `all`, skipping ids already recorded in `seen_ids`.
+    static void merge_unique(QVector<NewsArticle>& all, QSet<QString>& seen_ids,
+                             const QVector<NewsArticle>& incoming);
+
+    /// Write a freshly fetched list to the news_articles table on a worker
+    /// thread (history, bookmarks, seen state and FTS all read from it).
+    void persist_articles_async(const QVector<NewsArticle>& articles);
+
     QNetworkAccessManager* nam_ = nullptr;
     QTimer* refresh_timer_ = nullptr;
     static constexpr int kArticleCacheTtlSec = 600; // 10 min
@@ -255,9 +279,18 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     int feed_count_ = 0;
     QStringList active_sources_;
 
+    /// Last complete article list (RSS + live pushes). Lets a live push extend
+    /// the current list directly instead of depending on the cache TTL.
+    QVector<NewsArticle> latest_articles_;
+
     // WebSocket live feed
     QWebSocket* live_ws_ = nullptr;
     bool live_connected_ = false;
+    int live_reconnect_attempts_ = 0;
+    /// Bumped on every connect/disconnect so a reconnect timer armed for an
+    /// earlier socket becomes a no-op instead of re-opening a dropped one.
+    quint64 live_epoch_ = 0;
+    quint64 live_reconnect_token_ = 0; ///< only the latest armed reconnect timer may fire
 
     /// Publish `news:general` + fan out `news:symbol:<sym>` and
     /// `news:category:<cat>` derived slices. Called from both the

@@ -5,6 +5,7 @@
 //
 // Part of the partial-class split of DocsScreen.cpp.
 
+#include "core/keys/KeyConfigManager.h"
 #include "screens/docs/DocsScreen.h"
 #include "screens/docs/DocsScreen_internal.h"
 #include "ui/theme/Theme.h"
@@ -12,7 +13,10 @@
 #include <QCoreApplication>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeySequence>
 #include <QLabel>
+#include <QList>
+#include <QMap>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -54,7 +58,7 @@ QWidget* DocsScreen::page_welcome() {
                               "trading capabilities, quantitative research tools, and AI-powered analytics — "
                               "all in a single unified terminal interface.\n\n"
                               "With 50+ integrated screens, real-time WebSocket feeds, embedded Python analytics, "
-                              "and 16 broker integrations, Fincept Terminal bridges the gap between "
+                              "and 20+ broker integrations, Fincept Terminal bridges the gap between "
                               "retail and institutional tooling."),
                            ui::colors::AMBER));
 
@@ -119,36 +123,47 @@ QWidget* DocsScreen::page_getting_started() {
 
     vl->addWidget(make_section_panel("1", tr("LAUNCH & LOGIN"),
                                      tr("When you first launch Fincept Terminal, you'll see the login screen. "
-                                        "You can either:\n\n"
-                                        "■  Register a new account with email and password\n"
-                                        "■  Continue as Guest (limited features)\n"
-                                        "■  Log in with existing credentials\n\n"
-                                        "After login, you'll land on the Dashboard — your home base."),
+                                        "You can:\n\n"
+                                        "■  Register a new account with your email (confirm it with the verification "
+                                        "code we email you)\n"
+                                        "■  Continue with Google\n"
+                                        "■  Log in with existing credentials (plus your two-factor code, if enabled)\n\n"
+                                        "After login you set a 6-digit PIN that unlocks the terminal — it also locks "
+                                        "after a period of inactivity, or on demand with Ctrl+L. Then choose a plan "
+                                        "(the Free plan continues straight in) and you'll land on the Dashboard — "
+                                        "your home base."),
                                      ui::colors::POSITIVE));
 
     vl->addWidget(make_section_panel("2", tr("THE INTERFACE"),
-                                     tr("The terminal has four main zones:\n\n"
-                                        "TOOLBAR (top) — File, Navigate, View, Help menus + session info\n"
-                                        "TAB BAR — 14 primary tabs: Dashboard, Markets, Crypto, Portfolio, etc.\n"
-                                        "CONTENT AREA — The active screen fills this zone\n"
+                                     tr("The terminal is a dockable workspace:\n\n"
+                                        "TOOLBAR (top) — File, Navigate, View and Help menus + session info\n"
+                                        "PANELS — every screen opens as a panel you can tab, split, float, or tear "
+                                        "off into its own window (right-click a panel tab)\n"
+                                        "COMMAND BAR (Ctrl+\\) and COMPONENT BROWSER (Ctrl+K) — jump to any screen "
+                                        "or action by typing\n"
                                         "STATUS BAR (bottom) — Version, market indicators, connection status\n\n"
-                                        "Use the Navigate menu (in toolbar) to access 30+ additional screens "
-                                        "organized by category: Markets & Data, Trading, Research, Tools, etc."),
+                                        "Use the Navigate menu to open any of the 50+ screens, organized by "
+                                        "category: Markets & Data, Trading & Portfolio, Crypto, Research & "
+                                        "Intelligence, and Tools. Click the coloured dot in a panel header to link "
+                                        "panels so they share their selected symbol."),
                                      ui::colors::INFO));
 
     vl->addWidget(make_section_panel("3", tr("KEYBOARD SHORTCUTS"),
                                      tr("F11  — Toggle fullscreen\n"
-                                        "F10  — Focus mode (hide tab/status bars for maximum screen space)\n"
+                                        "F10  — Focus mode (hide toolbar/status bars for maximum screen space)\n"
                                         "F5   — Refresh current screen\n"
-                                        "Ctrl+P — Take screenshot (saved to home directory)"),
+                                        "Ctrl+P — Take screenshot (saved to home directory)\n\n"
+                                        "See the Keyboard Shortcuts topic for the full list. Every binding can be "
+                                        "changed in Settings → Keybindings."),
                                      ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("4", tr("SUBSCRIPTION PLANS"),
-                                     tr("Fincept Terminal offers tiered access:\n\n"
-                                        "■  FREE — Basic market data, limited screens, paper trading\n"
-                                        "■  PRO — Full market data, all screens, real trading, AI chat\n"
-                                        "■  ENTERPRISE — Everything + API access, priority support\n\n"
-                                        "Manage your plan from Settings or the Pricing screen."),
+                                     tr("This open-source edition uses credit-based plans:\n\n"
+                                        "■  FREE — start right away with a limited credit allowance\n"
+                                        "■  PAID PLANS — more credits, longer validity and priority support "
+                                        "(compare them on the Pricing screen)\n\n"
+                                        "Your credit balance and payment history are under Profile → Billing. "
+                                        "Fincept Terminal Enterprise is a separate product, billed separately."),
                                      ui::colors::AMBER));
 
     vl->addWidget(
@@ -163,29 +178,105 @@ QWidget* DocsScreen::page_getting_started() {
 }
 
 QWidget* DocsScreen::page_keyboard_shortcuts() {
-    return make_page(
-        tr("KEYBOARD SHORTCUTS"), tr("Global shortcuts and navigation keys"),
-        {
-            {tr("GLOBAL SHORTCUTS"), tr("F11  — Toggle fullscreen mode\n"
-                                        "F10  — Toggle focus mode (hides tab bar and status bar)\n"
-                                        "F5   — Refresh the current screen data\n"
-                                        "Ctrl+P — Capture screenshot (saved to ~/FinceptScreenshot_*.png)")},
-            {tr("FILE MENU"), tr("New Workspace — Create a fresh workspace layout\n"
-                                 "Open Workspace — Load a saved workspace\n"
-                                 "Save Workspace — Persist current layout\n"
-                                 "Import Data — Import external data files\n"
-                                 "Export Data — Export current view data\n"
-                                 "Refresh All — Refresh all active data feeds")},
-            {tr("NAVIGATE MENU"), tr("Access 30+ screens organized in sub-menus:\n"
-                                     "■  Markets & Data — Screener, Economics, DBnomics, AkShare, Gov Data\n"
-                                     "■  Trading & Portfolio — Equity Trading, Derivatives, Watchlist\n"
-                                     "■  Research — Equity Research, M&A, Geopolitics, Surface Analytics\n"
-                                     "■  Tools — Report Builder, Node Editor, Code Editor, Excel, Notes")},
-            {tr("VIEW MENU"), tr("Fullscreen (F11) — Use full monitor space\n"
-                                 "Focus Mode (F10) — Hide chrome for maximum content area\n"
-                                 "Refresh (F5) — Reload current screen\n"
-                                 "Screenshot (Ctrl+P) — Capture to file")},
-        });
+    // Built from the live KeyConfigManager rather than a hand-written list: the
+    // old static page named four shortcuts and menus that no longer exist, and
+    // could not know about rebinds. Numbered runs (Focus Window 1-9, Move to
+    // Monitor 1-9) are collapsed into one row each.
+    auto& km = KeyConfigManager::instance();
+    auto key_text = [&km](KeyAction a) {
+        const QString k = km.key(a).toString(QKeySequence::NativeText);
+        return k.isEmpty() ? QStringLiteral("—") : k;
+    };
+
+    struct Row {
+        QString keys;
+        QString what;
+    };
+    QMap<QString, QList<Row>> groups;
+    QStringList group_order;
+    auto add_row = [&](const QString& group, const QString& keys, const QString& what) {
+        if (!groups.contains(group))
+            group_order.append(group);
+        groups[group].append({keys, what});
+    };
+
+    for (const KeyAction a : km.all_actions()) {
+        switch (a) {
+            case KeyAction::FocusWindow1:
+                add_row(km.group_name(a), QString("%1 … %2").arg(key_text(a), key_text(KeyAction::FocusWindow9)),
+                        tr("Focus window 1–9"));
+                break;
+            case KeyAction::MoveWindowToMonitor1:
+                add_row(km.group_name(a),
+                        QString("%1 … %2").arg(key_text(a), key_text(KeyAction::MoveWindowToMonitor9)),
+                        tr("Move window to monitor 1–9"));
+                break;
+            case KeyAction::FocusWindow2:
+            case KeyAction::FocusWindow3:
+            case KeyAction::FocusWindow4:
+            case KeyAction::FocusWindow5:
+            case KeyAction::FocusWindow6:
+            case KeyAction::FocusWindow7:
+            case KeyAction::FocusWindow8:
+            case KeyAction::FocusWindow9:
+            case KeyAction::MoveWindowToMonitor2:
+            case KeyAction::MoveWindowToMonitor3:
+            case KeyAction::MoveWindowToMonitor4:
+            case KeyAction::MoveWindowToMonitor5:
+            case KeyAction::MoveWindowToMonitor6:
+            case KeyAction::MoveWindowToMonitor7:
+            case KeyAction::MoveWindowToMonitor8:
+            case KeyAction::MoveWindowToMonitor9:
+                break; // folded into the 1–9 rows above
+            default:
+                add_row(km.group_name(a), key_text(a), km.display_name(a));
+                break;
+        }
+    }
+
+    // No capture: tr() is a static member, and an unused `this` capture is a
+    // -Wunused-lambda-capture error on Apple Clang.
+    auto group_title = [](const QString& g) {
+        if (g == QLatin1String("Global"))
+            return tr("GLOBAL SHORTCUTS");
+        if (g == QLatin1String("Navigation"))
+            return tr("COMMAND BAR NAVIGATION");
+        if (g == QLatin1String("News"))
+            return tr("NEWS SCREEN");
+        if (g == QLatin1String("Code Editor"))
+            return tr("CODE EDITOR");
+        if (g == QLatin1String("Windows"))
+            return tr("WINDOWS & PANELS");
+        return g.toUpper();
+    };
+
+    std::vector<std::pair<QString, QString>> sections;
+    for (const QString& g : group_order) {
+        QStringList lines;
+        for (const Row& r : groups.value(g))
+            lines << QString("%1  —  %2").arg(r.keys, r.what);
+        sections.emplace_back(group_title(g), lines.join('\n'));
+    }
+
+    sections.emplace_back(
+        tr("COMMAND BAR"),
+        tr("Ctrl+\\  —  Toggle the command bar. Type a function code or a verb to do almost anything in the "
+           "terminal; type \"?\" to list the actions available."));
+    sections.emplace_back(
+        tr("MENUS"),
+        tr("FILE — New Window, Move to Monitor, Close Window / Close All Windows, New / Open / Save / Save As "
+           "layout, Import / Export layout, File Manager, Refresh All\n"
+           "NAVIGATE — Markets & Data, Trading & Portfolio, Crypto, Research & Intelligence and Tools sub-menus, "
+           "plus Forum, Docs, Support and About\n"
+           "VIEW — Component Browser, Fullscreen, Focus Mode, Always on Top, Float Panel, Quick Switch "
+           "(workspace perspectives), Refresh Screen, Take Screenshot\n"
+           "HELP — About, Help Center, Contact Us, Terms of Service, Privacy Policy, Trademarks, Check for "
+           "Updates, Logout"));
+    sections.emplace_back(tr("CUSTOMIZING"),
+                          tr("Every binding above can be changed in Settings → Keybindings. This page shows the "
+                             "bindings currently in effect."));
+
+    return make_page(tr("KEYBOARD SHORTCUTS"), tr("Global shortcuts and navigation keys"), sections);
 }
 
 // ============================================================================
@@ -358,6 +449,22 @@ QWidget* DocsScreen::page_watchlist() {
                                     "INTERMEDIATE: Multiple watchlists organized by strategy or sector\n"
                                     "ADVANCED: Use watchlists as a pre-screened universe for your scanning\n"
                                     "PRO: Dynamic watchlists driven by screener output and quantitative filters")},
+        });
+}
+
+QWidget* DocsScreen::page_screener() {
+    return make_page(
+        tr("SCREENER"), tr("Full-screen stock screener over a broad large-cap basket"),
+        {
+            {tr("OVERVIEW"), tr("The Screener lists a broad basket of large-cap stocks with live quotes in a "
+                                "full-width table. It is the full-screen version of the dashboard Screener "
+                                "widget and shares its data path.")},
+            {tr("KEY FEATURES"), tr("■  Live quotes — the table updates while the screen is visible\n"
+                                    "■  Symbol / name search box to narrow the list\n"
+                                    "■  Sort selector to rank by the measure you care about\n"
+                                    "■  Filtering and sorting happen client-side, so they respond instantly")},
+            {tr("TIPS"), tr("■  The screen only streams while it is on screen — switch away and updates pause\n"
+                            "■  Use Watchlist to keep the symbols you find here")},
         });
 }
 

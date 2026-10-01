@@ -93,6 +93,15 @@ void PortfolioTxnPanel::build_ui() {
 
     table_->verticalHeader()->setDefaultSectionSize(24);
 
+    // Rows are re-sorted by the header, so read the symbol back from the cell
+    // itself rather than indexing into txns_. The empty-state row has no symbol
+    // item (column 1), which the null check skips.
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        const auto* sym_item = table_->item(row, 1);
+        if (sym_item && !sym_item->text().isEmpty())
+            emit symbol_activated(sym_item->text());
+    });
+
     layout->addWidget(table_, 1);
 }
 

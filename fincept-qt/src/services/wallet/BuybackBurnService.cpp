@@ -35,6 +35,18 @@ QString trim_trailing_slash(QString s) {
     return s;
 }
 
+// The worker contract says atomic amounts are integer *strings*, but a JSON
+// number is an easy mistake on the producer side — and QJsonValue::toString()
+// on a number silently returns "", which the panel renders as "—" for the
+// headline burn figures. Accept either; large values lose nothing below 2^53.
+QString buyback_svc_raw_amount(const QJsonValue& v) {
+    if (v.isString())
+        return v.toString();
+    if (v.isDouble())
+        return QString::number(v.toDouble(), 'f', 0);
+    return {};
+}
+
 } // namespace
 
 BuybackBurnService::BuybackBurnService(QObject* parent) : QObject(parent) {
@@ -90,6 +102,7 @@ void BuybackBurnService::refresh(const QStringList& topics) {
 void BuybackBurnService::refresh_buyback_epoch(const QString& endpoint) {
     QNetworkRequest req(QUrl(endpoint + QStringLiteral("/buyback/current")));
     req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("FinceptTerminal/BuybackBurnService"));
+    req.setTransferTimeout(15 * 1000);
 
     auto* reply = nam_->get(req);
     QPointer<BuybackBurnService> self = this;
@@ -120,8 +133,8 @@ void BuybackBurnService::refresh_buyback_epoch(const QString& endpoint) {
         e.buyback_usd = j.value(QStringLiteral("buyback_usd")).toDouble();
         e.staker_yield_usd = j.value(QStringLiteral("staker_yield_usd")).toDouble();
         e.treasury_topup_usd = j.value(QStringLiteral("treasury_topup_usd")).toDouble();
-        e.fncpt_bought_raw = j.value(QStringLiteral("fncpt_bought_raw")).toString();
-        e.fncpt_burned_raw = j.value(QStringLiteral("fncpt_burned_raw")).toString();
+        e.fncpt_bought_raw = buyback_svc_raw_amount(j.value(QStringLiteral("fncpt_bought_raw")));
+        e.fncpt_burned_raw = buyback_svc_raw_amount(j.value(QStringLiteral("fncpt_burned_raw")));
         e.fncpt_decimals = j.value(QStringLiteral("fncpt_decimals")).toInt(6);
         e.avg_buy_price_usd = j.value(QStringLiteral("avg_buy_price_usd")).toDouble();
         e.burn_signature = j.value(QStringLiteral("burn_signature")).toString();
@@ -133,6 +146,7 @@ void BuybackBurnService::refresh_buyback_epoch(const QString& endpoint) {
 
 void BuybackBurnService::refresh_burn_total(const QString& endpoint) {
     QNetworkRequest req(QUrl(endpoint + QStringLiteral("/burn/total")));
+    req.setTransferTimeout(15 * 1000);
     auto* reply = nam_->get(req);
     QPointer<BuybackBurnService> self = this;
     QObject::connect(reply, &QNetworkReply::finished, this, [self, reply]() {
@@ -152,8 +166,8 @@ void BuybackBurnService::refresh_burn_total(const QString& endpoint) {
         const auto j = doc.object();
 
         BurnTotal t;
-        t.total_burned_raw = j.value(QStringLiteral("total_burned_raw")).toString();
-        t.supply_remaining_raw = j.value(QStringLiteral("supply_remaining_raw")).toString();
+        t.total_burned_raw = buyback_svc_raw_amount(j.value(QStringLiteral("total_burned_raw")));
+        t.supply_remaining_raw = buyback_svc_raw_amount(j.value(QStringLiteral("supply_remaining_raw")));
         t.decimals = j.value(QStringLiteral("decimals")).toInt(6);
         t.spent_on_buyback_usd = j.value(QStringLiteral("spent_on_buyback_usd")).toDouble();
         t.ts_ms = QDateTime::currentMSecsSinceEpoch();
@@ -164,6 +178,7 @@ void BuybackBurnService::refresh_burn_total(const QString& endpoint) {
 
 void BuybackBurnService::refresh_supply_history(const QString& endpoint) {
     QNetworkRequest req(QUrl(endpoint + QStringLiteral("/supply/history")));
+    req.setTransferTimeout(15 * 1000);
     auto* reply = nam_->get(req);
     QPointer<BuybackBurnService> self = this;
     QObject::connect(reply, &QNetworkReply::finished, this, [self, reply]() {
@@ -188,10 +203,11 @@ void BuybackBurnService::refresh_supply_history(const QString& endpoint) {
             const auto p = v.toObject();
             SupplyHistoryPoint sp;
             sp.ts_ms = static_cast<qint64>(p.value(QStringLiteral("ts_ms")).toDouble());
-            sp.total_raw = p.value(QStringLiteral("total_raw")).toString();
-            sp.circulating_raw = p.value(QStringLiteral("circulating_raw")).toString();
-            sp.burned_raw = p.value(QStringLiteral("burned_raw")).toString();
+            sp.total_raw = buyback_svc_raw_amount(p.value(QStringLiteral("total_raw")));
+            sp.circulating_raw = buyback_svc_raw_amount(p.value(QStringLiteral("circulating_raw")));
+            sp.burned_raw = buyback_svc_raw_amount(p.value(QStringLiteral("burned_raw")));
             sp.decimals = p.value(QStringLiteral("decimals")).toInt(6);
+            sp.is_mock = false;
             points.push_back(sp);
         }
         hub.publish(QString::fromLatin1(kTopicSupplyHistory), QVariant::fromValue(points));
@@ -225,7 +241,10 @@ void BuybackBurnService::publish_mock_buyback_epoch() {
     e.fncpt_burned_raw = QStringLiteral("82400000000000");
     e.fncpt_decimals = 6;
     e.avg_buy_price_usd = 0.000257;
-    e.burn_signature = QStringLiteral("5kj3wMockBurnSignaturePlaceholderXXXXXXXXXXX");
+    // No fabricated signature: a made-up base58 string is indistinguishable from
+    // a real one to any consumer that doesn't check is_mock (explorer links,
+    // exports, MCP introspection). The panel renders "demo — no on-chain tx".
+    e.burn_signature.clear();
     e.ts_ms = now;
     e.is_mock = true;
     fincept::datahub::DataHub::instance().publish(QString::fromLatin1(kTopicBuybackEpoch), QVariant::fromValue(e));
@@ -261,6 +280,7 @@ void BuybackBurnService::publish_mock_supply_history() {
         sp.burned_raw = QString::number(burned);
         sp.circulating_raw = QString::number(kTotal - burned);
         sp.decimals = 6;
+        sp.is_mock = true; // lets the chart label itself without peeking another topic
         points.push_back(sp);
     }
     fincept::datahub::DataHub::instance().publish(QString::fromLatin1(kTopicSupplyHistory),

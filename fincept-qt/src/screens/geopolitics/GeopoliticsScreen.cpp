@@ -11,6 +11,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QCompleter>
 #include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -20,17 +21,26 @@ namespace fincept::screens {
 
 using namespace fincept::services::geo;
 
+namespace {
+// Page size the screen requests - passed explicitly so the request key it records
+// matches the one the service stamps on the reply.
+constexpr int kGeoScreenEventsLimit = 100;
+} // namespace
+
 // ── Constructor ──────────────────────────────────────────────────────────────
 GeopoliticsScreen::GeopoliticsScreen(QWidget* parent) : QWidget(parent) {
-    build_ui();
-    connect_service();
-
+    // The timers must exist before build_ui(): build_top_bar() connects the UTC clock
+    // label to clock_timer_, and with the timer still null that connect() was a no-op,
+    // so the clock froze at the minute the screen was constructed.
     refresh_timer_ = new QTimer(this);
     refresh_timer_->setInterval(5 * 60 * 1000);
-    connect(refresh_timer_, &QTimer::timeout, this, &GeopoliticsScreen::on_apply_filters);
+    connect(refresh_timer_, &QTimer::timeout, this, &GeopoliticsScreen::on_auto_refresh);
 
     clock_timer_ = new QTimer(this);
     clock_timer_->setInterval(1000);
+
+    build_ui();
+    connect_service();
 
     connect(&fincept::ui::ThemeManager::instance(), &fincept::ui::ThemeManager::theme_changed, this,
             [this](const fincept::ui::ThemeTokens&) { refresh_theme(); });
@@ -48,6 +58,7 @@ void GeopoliticsScreen::showEvent(QShowEvent* e) {
         on_apply_filters();
         GeopoliticsService::instance().fetch_unique_countries();
         GeopoliticsService::instance().fetch_unique_categories();
+        GeopoliticsService::instance().fetch_unique_cities();
     }
     LOG_INFO("Geopolitics", "Screen shown");
 }
@@ -94,6 +105,11 @@ void GeopoliticsScreen::retranslateUi() {
         apply_btn_->setText(tr("APPLY FILTERS"));
     if (clear_btn_)
         clear_btn_->setText(tr("CLEAR"));
+    if (prev_page_btn_)
+        prev_page_btn_->setText(tr("◀ PREV"));
+    if (next_page_btn_)
+        next_page_btn_->setText(tr("NEXT ▶"));
+    update_pager();
     if (legend_title_)
         legend_title_->setText(tr("LEGEND"));
     // Combo's first row is the fixed "All Categories" entry (others are data).
@@ -115,6 +131,10 @@ void GeopoliticsScreen::connect_service() {
     connect(&svc, &GeopoliticsService::events_loaded, this, &GeopoliticsScreen::on_events_loaded);
     connect(&svc, &GeopoliticsService::error_occurred, this, &GeopoliticsScreen::on_error);
     connect(&svc, &GeopoliticsService::categories_loaded, this, &GeopoliticsScreen::on_categories_loaded);
+    // The service already fetched these on first show but nothing consumed them -
+    // they now feed the country / city autocomplete.
+    connect(&svc, &GeopoliticsService::countries_loaded, this, &GeopoliticsScreen::on_countries_loaded);
+    connect(&svc, &GeopoliticsService::cities_loaded, this, &GeopoliticsScreen::on_cities_loaded);
 }
 
 // ── Build UI ─────────────────────────────────────────────────────────────────
@@ -142,6 +162,26 @@ void GeopoliticsScreen::build_ui() {
     content_stack_->addWidget(relationship_panel_);
     content_stack_->addWidget(trade_panel_);
     body->addWidget(content_stack_, 1);
+
+    // Relations tab drill-downs: a conflict card jumps to that country's events or
+    // its HDX datasets, a crisis card to the matching HDX topic.
+    connect(relationship_panel_, &RelationshipPanel::events_requested, this, [this](const QString& country) {
+        country_edit_->setText(country);
+        city_edit_->clear();
+        category_combo_->setCurrentIndex(0);
+        on_tab_changed(0);
+        on_apply_filters();
+    });
+    connect(relationship_panel_, &RelationshipPanel::hdx_country_requested, this, [this](const QString& country) {
+        // Start the search before the tab is shown so the panel's first-show
+        // default fetch doesn't fire as well.
+        hdx_panel_->explore_country(country);
+        on_tab_changed(1);
+    });
+    connect(relationship_panel_, &RelationshipPanel::hdx_topic_requested, this, [this](const QString& topic) {
+        hdx_panel_->explore_topic(topic);
+        on_tab_changed(1);
+    });
 
     auto* body_w = new QWidget(this);
     body_w->setLayout(body);
@@ -275,6 +315,11 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     country_edit_->setAccessibleName(tr("Filter by country"));
     country_edit_->setClearButtonEnabled(true);
     connect(country_edit_, &QLineEdit::returnPressed, this, &GeopoliticsScreen::on_apply_filters);
+    country_model_ = new QStringListModel(this);
+    auto* country_completer = new QCompleter(country_model_, this);
+    country_completer->setCaseSensitivity(Qt::CaseInsensitive);
+    country_completer->setFilterMode(Qt::MatchContains);
+    country_edit_->setCompleter(country_completer);
     vl->addWidget(country_edit_);
 
     city_lbl_ = new QLabel(tr("CITY"), panel);
@@ -286,6 +331,11 @@ QWidget* GeopoliticsScreen::build_filter_panel() {
     city_edit_->setAccessibleName(tr("Filter by city"));
     city_edit_->setClearButtonEnabled(true);
     connect(city_edit_, &QLineEdit::returnPressed, this, &GeopoliticsScreen::on_apply_filters);
+    city_model_ = new QStringListModel(this);
+    auto* city_completer = new QCompleter(city_model_, this);
+    city_completer->setCaseSensitivity(Qt::CaseInsensitive);
+    city_completer->setFilterMode(Qt::MatchContains);
+    city_edit_->setCompleter(city_completer);
     vl->addWidget(city_edit_);
 
     category_lbl_ = new QLabel(tr("CATEGORY"), panel);
@@ -417,6 +467,37 @@ QWidget* GeopoliticsScreen::build_status_bar() {
 
     hl->addStretch();
 
+    // PREV / PAGE x / y / NEXT. One scoped stylesheet covers all three widgets.
+    auto* pager = new QWidget(bar);
+    pager->setStyleSheet(QString("QPushButton { color:%1; background:transparent; border:1px solid %2; padding:0 8px;"
+                                 "font-size:%3px; font-family:%4; font-weight:700; }"
+                                 "QPushButton:hover:enabled { color:%5; border-color:%5; }"
+                                 "QPushButton:disabled { color:%6; border-color:%6; }"
+                                 "QLabel { color:%1; font-size:%3px; font-family:%4; font-weight:700; }")
+                             .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
+                             .arg(ui::fonts::TINY)
+                             .arg(ui::fonts::DATA_FAMILY())
+                             .arg(ui::colors::NEGATIVE(), ui::colors::TEXT_TERTIARY()));
+    auto* pl = new QHBoxLayout(pager);
+    pl->setContentsMargins(0, 0, 0, 0);
+    pl->setSpacing(6);
+    prev_page_btn_ = new QPushButton(tr("◀ PREV"), pager);
+    next_page_btn_ = new QPushButton(tr("NEXT ▶"), pager);
+    page_lbl_ = new QLabel(tr("PAGE %1").arg(1), pager);
+    for (auto* b : {prev_page_btn_, next_page_btn_}) {
+        b->setFixedHeight(18);
+        b->setCursor(Qt::PointingHandCursor);
+    }
+    prev_page_btn_->setToolTip(tr("Newer events (previous page)"));
+    next_page_btn_->setToolTip(tr("Older events (next page) — each page uses API credits"));
+    connect(prev_page_btn_, &QPushButton::clicked, this, &GeopoliticsScreen::on_prev_page);
+    connect(next_page_btn_, &QPushButton::clicked, this, &GeopoliticsScreen::on_next_page);
+    pl->addWidget(prev_page_btn_);
+    pl->addWidget(page_lbl_);
+    pl->addWidget(next_page_btn_);
+    hl->addWidget(pager);
+    update_pager();
+
     credits_label_ = new QLabel(tr("CREDITS: —"), bar);
     credits_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
                                       .arg(ui::colors::TEXT_TERTIARY())
@@ -425,10 +506,7 @@ QWidget* GeopoliticsScreen::build_status_bar() {
     hl->addWidget(credits_label_);
 
     status_label_ = new QLabel(tr("READY"), bar);
-    status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                     .arg(ui::colors::POSITIVE())
-                                     .arg(ui::fonts::TINY)
-                                     .arg(ui::fonts::DATA_FAMILY));
+    set_status_color(ui::colors::POSITIVE());
     hl->addWidget(status_label_);
 
     return bar;
@@ -436,15 +514,61 @@ QWidget* GeopoliticsScreen::build_status_bar() {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 void GeopoliticsScreen::on_apply_filters() {
-    auto country = country_edit_->text().trimmed();
-    auto city = city_edit_->text().trimmed();
-    auto category = category_combo_->currentData().toString();
+    request_events(1, /*reuse_filters=*/false);
+}
+
+void GeopoliticsScreen::on_prev_page() {
+    if (current_page_ > 1)
+        request_events(current_page_ - 1, /*reuse_filters=*/true);
+}
+
+void GeopoliticsScreen::on_next_page() {
+    if (current_page_ < total_pages_)
+        request_events(current_page_ + 1, /*reuse_filters=*/true);
+}
+
+void GeopoliticsScreen::on_auto_refresh() {
+    // Refresh the page the user is on (and the filters they applied), not whatever is
+    // typed in the boxes right now.
+    request_events(current_page_, /*reuse_filters=*/true);
+    auto_refresh_pending_ = true;
+}
+
+void GeopoliticsScreen::request_events(int page, bool reuse_filters) {
+    if (!reuse_filters) {
+        applied_country_ = country_edit_->text().trimmed();
+        applied_city_ = city_edit_->text().trimmed();
+        applied_category_ = category_combo_->currentData().toString();
+    }
     status_label_->setText(tr("LOADING..."));
+    set_status_color(ui::colors::WARNING());
+    // A manual request always re-frames the map; on_auto_refresh() flips this back
+    // right after it calls us.
+    auto_refresh_pending_ = false;
+    events_inflight_ = true;
+    update_pager();
+    last_request_key_ =
+        events_request_key(applied_country_, applied_city_, applied_category_, kGeoScreenEventsLimit, page, {}, {}, {});
+    GeopoliticsService::instance().fetch_events(applied_country_, applied_city_, applied_category_,
+                                                kGeoScreenEventsLimit, page);
+}
+
+void GeopoliticsScreen::update_pager() {
+    if (!page_lbl_ || !prev_page_btn_ || !next_page_btn_)
+        return;
+    page_lbl_->setText(total_pages_ > 0 ? tr("PAGE %1 / %2").arg(current_page_).arg(total_pages_)
+                                        : tr("PAGE %1").arg(current_page_));
+    prev_page_btn_->setEnabled(!events_inflight_ && current_page_ > 1);
+    next_page_btn_->setEnabled(!events_inflight_ && current_page_ < total_pages_);
+}
+
+void GeopoliticsScreen::set_status_color(const QString& color) {
+    if (!status_label_)
+        return;
     status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                     .arg(ui::colors::WARNING())
+                                     .arg(color)
                                      .arg(ui::fonts::TINY)
                                      .arg(ui::fonts::DATA_FAMILY));
-    GeopoliticsService::instance().fetch_events(country, city, category);
 }
 
 void GeopoliticsScreen::on_clear_filters() {
@@ -493,6 +617,14 @@ void GeopoliticsScreen::on_tab_changed(int index) {
 }
 
 void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
+    // Shared signal: the dashboard's hub refresh and MCP tools fire it too. Only
+    // the reply to our own last request may replace the (possibly filtered) table.
+    if (page.request_key != last_request_key_)
+        return;
+    events_inflight_ = false;
+    current_page_ = qMax(1, page.current_page);
+    total_pages_ = page.total_pages;
+    update_pager();
     const int shown = page.events.size();
     const int total = page.total_events;
     int mapped = 0;
@@ -538,11 +670,34 @@ void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
 
     status_label_->setText(tr("READY"));
     status_label_->setToolTip(QString()); // clear any stale error detail
-    status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                     .arg(ui::colors::POSITIVE())
-                                     .arg(ui::fonts::TINY)
-                                     .arg(ui::fonts::DATA_FAMILY));
-    monitor_panel_->set_events(page.events);
+    set_status_color(ui::colors::POSITIVE());
+    // The 5-minute refresh must not throw away the user's pan/zoom.
+    monitor_panel_->set_events(page.events, /*fit_map=*/!auto_refresh_pending_);
+    auto_refresh_pending_ = false;
+}
+
+void GeopoliticsScreen::on_countries_loaded(QVector<services::geo::UniqueCountry> countries) {
+    if (!country_model_)
+        return;
+    // Most active countries first so the popup leads with the useful ones.
+    std::sort(countries.begin(), countries.end(),
+              [](const services::geo::UniqueCountry& a, const services::geo::UniqueCountry& b) {
+                  return a.event_count > b.event_count;
+              });
+    QStringList names;
+    names.reserve(countries.size());
+    for (const auto& c : countries)
+        if (!c.country.isEmpty())
+            names.append(c.country);
+    country_model_->setStringList(names);
+}
+
+void GeopoliticsScreen::on_cities_loaded(QStringList cities) {
+    if (!city_model_)
+        return;
+    // The API lists a city once per country, so names repeat (e.g. "San Jose").
+    cities.removeDuplicates();
+    city_model_->setStringList(cities);
 }
 
 void GeopoliticsScreen::on_categories_loaded(QVector<services::geo::UniqueCategory> cats) {
@@ -625,17 +780,30 @@ void GeopoliticsScreen::rebuild_legend(const QVector<services::geo::UniqueCatego
 }
 
 void GeopoliticsScreen::on_error(const QString& context, const QString& message) {
+    // error_occurred is shared with the HDX / Trade panels, which report their own
+    // failures inline - an HDX hiccup must not flip the Monitor's status bar to
+    // ERROR (it stayed that way until the next successful events fetch). Only the
+    // Monitor's own feeds belong here.
+    static const QStringList kMonitorContexts = {QStringLiteral("events"), QStringLiteral("countries"),
+                                                 QStringLiteral("categories"), QStringLiteral("cities")};
+    if (!kMonitorContexts.contains(context))
+        return;
+    LOG_ERROR("Geopolitics", QString("[%1] %2").arg(context, message));
+    // Reference-list failures (autocomplete / legend) are cosmetic: keep the status
+    // bar for the events feed the user is actually looking at.
+    if (context != QStringLiteral("events"))
+        return;
     // "ERROR" alone told the user nothing and left the real cause in a log
     // file they can't see. Surface a short reason inline, the full text on
     // hover, and point at the retry that actually exists (APPLY FILTERS).
     const QString brief = message.simplified().left(72);
     status_label_->setText(brief.isEmpty() ? tr("ERROR") : tr("ERROR: %1").arg(brief));
     status_label_->setToolTip(tr("%1\n\n%2\n\nClick APPLY FILTERS to retry.").arg(context, message));
-    status_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                     .arg(ui::colors::NEGATIVE())
-                                     .arg(ui::fonts::TINY)
-                                     .arg(ui::fonts::DATA_FAMILY));
-    LOG_ERROR("Geopolitics", QString("[%1] %2").arg(context, message));
+    set_status_color(ui::colors::NEGATIVE());
+    // A failed auto-refresh must not leave the flag set for the next manual apply.
+    auto_refresh_pending_ = false;
+    events_inflight_ = false;
+    update_pager();
 }
 
 // ── IStatefulScreen ───────────────────────────────────────────────────────────

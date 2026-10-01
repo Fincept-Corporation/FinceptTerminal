@@ -90,7 +90,7 @@ void SparklineStripWidget::apply_config(const QJsonObject& cfg) {
     const QJsonArray arr = cfg.value("symbols").toArray();
     for (const auto& v : arr) {
         const QString s = v.toString().trimmed().toUpper();
-        if (!s.isEmpty())
+        if (!s.isEmpty() && !next.contains(s)) // rows_ is keyed by symbol
             next.append(s);
     }
     if (next.isEmpty())
@@ -136,6 +136,9 @@ void SparklineStripWidget::build_rows() {
         grid->addWidget(r.symbol, i, 0);
         grid->addWidget(r.spark, i, 1);
         grid->addWidget(r.last, i, 2);
+        link_symbol(r.symbol, sym);
+        link_symbol(r.spark, sym);
+        link_symbol(r.last, sym);
         rows_.insert(sym, r);
     }
     vl->addLayout(grid);
@@ -240,7 +243,8 @@ void SparklineStripWidget::apply_styles() {
 void SparklineStripWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("SPARKLINES"));
-    build_rows(); // re-renders row labels in the new language
+    // No translatable text in the rows; rebuilding them here blanked every
+    // sparkline until the next hub publish.
 }
 
 } // namespace fincept::screens::widgets

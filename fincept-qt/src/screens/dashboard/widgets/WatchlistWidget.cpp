@@ -43,7 +43,13 @@ WatchlistWidget::WatchlistWidget(QWidget* parent)
     table_ = new ui::DataTable;
     table_->set_headers({tr("SYMBOL"), tr("PRICE"), tr("CHG"), tr("CHG%")});
     table_->set_column_widths({100, 90, 80, 70});
+    table_->setToolTip(tr("Double-click a row to open it in Equity Research"));
     vl->addWidget(table_);
+
+    connect(table_, &QTableWidget::cellDoubleClicked, this, [this](int row, int /*col*/) {
+        if (auto* it = table_->item(row, 0))
+            open_symbol(it->text());
+    });
 
     connect(this, &BaseWidget::refresh_requested, this, &WatchlistWidget::refresh_data);
 
@@ -180,7 +186,11 @@ void WatchlistWidget::render_from_cache() {
         if (it == row_cache_.constEnd())
             continue;
         const auto& q = it.value();
-        table_->add_row({q.symbol, QString("$%1").arg(q.price, 0, 'f', 2),
+        // The watchlist is free-form, so it can hold index levels (^GSPC), FX
+        // rates (EURUSD=X) and futures (GC=F) — none of which are dollar prices.
+        const bool is_dollar_price = !q.symbol.startsWith(QLatin1Char('^')) && !q.symbol.contains(QLatin1Char('='));
+        table_->add_row({q.symbol,
+                         is_dollar_price ? QString("$%1").arg(q.price, 0, 'f', 2) : QString::number(q.price, 'f', 2),
                          QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2),
                          QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2)});
         int row = table_->rowCount() - 1;

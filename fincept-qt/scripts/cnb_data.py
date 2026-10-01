@@ -55,6 +55,13 @@ DEFAULT_LANG    = "EN"
 PRIBOR_TERMS = ["ONE_DAY", "ONE_WEEK", "TWO_WEEKS", "ONE_MONTH",
                 "TWO_MONTHS", "THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "TWELVE_MONTHS"]
 
+# The CNB API now takes the tenor as `period=` (it used to be `term=`) and spells the longer
+# tenors in the singular; TWO_MONTHS / NINE_MONTHS are no longer published. Keep accepting the
+# legacy names this tool has always documented.
+PRIBOR_PERIOD_API = {
+    "THREE_MONTHS": "THREE_MONTH", "SIX_MONTHS": "SIX_MONTH", "TWELVE_MONTHS": "ONE_YEAR",
+}
+
 # Main fixing currencies (Table A equivalent)
 FIXING_CURRENCIES = [
     "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "DKK", "EUR", "GBP",
@@ -281,7 +288,7 @@ class CNBWrapper:
                         term: str = "THREE_MONTHS") -> Dict[str, Any]:
         """PRIBOR for a specific term and year. term: ONE_DAY, THREE_MONTHS, etc."""
         y      = year or datetime.now(timezone.utc).year
-        params = {"year": y, "term": term}
+        params = {"year": y, "period": PRIBOR_PERIOD_API.get(term, term)}
         try:
             raw   = self._get("pribor/daily-year-term", params)
             pribs = raw.get("pribs", [])
@@ -350,9 +357,15 @@ class CNBWrapper:
         """PRIBOR for multiple years merged into one series."""
         current_year = datetime.now(timezone.utc).year
         all_rows: List[Dict] = []
+        first_error: Optional[Dict[str, Any]] = None
         for y in range(current_year - years + 1, current_year + 1):
             r = self.get_pribor_year(y, term)
+            if not r.get("success") and first_error is None:
+                first_error = r
             all_rows.extend(r.get("data", []))
+        if not all_rows and first_error is not None:
+            # Don't present a failed request as an empty-but-successful series
+            return first_error
         return {
             "success":   True,
             "term":      term,

@@ -91,12 +91,36 @@ Result<void> LlmProfileRepository::delete_profile(const QString& id) {
 }
 
 Result<void> LlmProfileRepository::set_default(const QString& id) {
-    // Clear all defaults then set the target — two writes, still atomic because
-    // callers should wrap in a transaction if needed; for UI use this is fine.
+    // Clear all defaults then set the target. idx_llm_profiles_default is a partial
+    // UNIQUE index on is_default = 1, so this cannot be one CASE-style UPDATE (the
+    // new default would collide with the old one mid-statement) — use a transaction
+    // so a failure or an unknown id cannot leave the table with no default. If the
+    // caller is already inside a transaction BEGIN fails and we run in theirs.
+    const bool own_tx = db().begin_transaction().is_ok();
+    auto finish = [&](Result<void> r) {
+        if (own_tx) {
+            if (r.is_ok()) {
+                auto c = db().commit();
+                if (c.is_err()) {
+                    db().rollback();
+                    return c;
+                }
+            } else {
+                db().rollback();
+            }
+        }
+        return r;
+    };
+
     auto r = exec_write("UPDATE llm_profiles SET is_default = 0", {});
     if (r.is_err())
-        return r;
-    return exec_write("UPDATE llm_profiles SET is_default = 1 WHERE id = ?", {id});
+        return finish(r);
+    auto set = db().execute("UPDATE llm_profiles SET is_default = 1 WHERE id = ?", {id});
+    if (set.is_err())
+        return finish(Result<void>::err(set.error()));
+    if (set.value().numRowsAffected() == 0)
+        return finish(Result<void>::err("Profile not found"));
+    return finish(Result<void>::ok());
 }
 
 // ── Assignment CRUD ───────────────────────────────────────────────────────────

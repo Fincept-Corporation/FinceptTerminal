@@ -207,9 +207,13 @@ def get_datasets_by_publisher(publisher_id: str, rows: int = 100) -> Dict[str, A
         JSON response with dataset list
     """
     try:
-        # Search for datasets by owner_org
-        query = f"owner_org:{publisher_id}"
-        params = {'q': query, 'rows': rows}
+        # organization_list returns publisher *names* (slugs), and CKAN's `owner_org` field holds
+        # the organisation's UUID - filtering `owner_org:<slug>` matched nothing, so every
+        # publisher looked empty. Filter on the `organization` (name) field; keep owner_org for
+        # callers that really pass a UUID.
+        looks_like_uuid = len(publisher_id) == 36 and publisher_id.count('-') == 4
+        field = 'owner_org' if looks_like_uuid else 'organization'
+        params = {'fq': f'{field}:{publisher_id}', 'rows': rows}
 
         result = _make_request("package_search", params)
 
@@ -562,31 +566,33 @@ def get_popular_publishers(limit: int = 20) -> Dict[str, Any]:
         JSON response with popular publishers
     """
     try:
-        # Get all publishers first
-        publishers_result = get_publishers()
+        # One faceted search returns the dataset count of every publisher, most-published first.
+        # (This used to take the first `limit` publishers alphabetically and issue one search each,
+        # so it was neither "popular" nor cheap - and every count came back 0.)
+        result = _make_request("package_search", {
+            'rows': 0,
+            'facet.field': '["organization"]',
+            'facet.limit': limit
+        })
 
-        if publishers_result["error"]:
-            return publishers_result
+        if result["error"]:
+            return result
 
-        publishers = publishers_result.get("data", [])
+        search_data = result.get("data", {})
+        facet_counts = (search_data.get("facets") or {}).get("organization", {})
+        display_names = {
+            item.get("name"): item.get("display_name")
+            for item in ((search_data.get("search_facets") or {}).get("organization", {}).get("items") or [])
+        }
 
-        # Get dataset count for each publisher (limited for performance)
-        popular_publishers = []
-
-        for publisher in publishers[:limit]:
-            try:
-                datasets_result = get_datasets_by_publisher(publisher["id"], 1)
-                if not datasets_result["error"]:
-                    search_data = datasets_result.get("metadata", {})
-                    total_count = search_data.get("total_count", 0)
-
-                    popular_publishers.append({
-                        "id": publisher["id"],
-                        "name": publisher["name"],
-                        "dataset_count": total_count
-                    })
-            except:
-                continue  # Skip if publisher fails
+        popular_publishers = [
+            {
+                "id": pub_id,
+                "name": display_names.get(pub_id) or pub_id.replace("-", " ").title(),
+                "dataset_count": count
+            }
+            for pub_id, count in facet_counts.items()
+        ]
 
         # Sort by dataset count
         popular_publishers.sort(key=lambda x: x["dataset_count"], reverse=True)

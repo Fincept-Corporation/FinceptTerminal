@@ -394,11 +394,49 @@ class CostSynergyAnalyzer:
             'on_track': realization_rate >= 85.0
         }
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `cost_synergies.py calculate <flat-params-json>` (argv length 3). The native form
+# is `cost <synergy_type> <params_json>`, so a service-style call is translated here and then falls through to the
+# native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    params = dict(p)
+    synergy_type = str(params.pop("synergy_type", ""))
+    if not synergy_type:
+        if "duplicate_roles" in params:
+            synergy_type = "headcount"
+        elif "facilities_to_close" in params:
+            synergy_type = "facilities"
+        else:
+            synergy_type = "procurement"
+    if synergy_type == "procurement":
+        spend = params.get("combined_spend", params.get("combined_opex"))
+        if spend is not None and "combined_spend" not in params:
+            params["combined_spend"] = spend
+        pct = params.get("synergy_pct")
+        if isinstance(pct, (int, float)) and not isinstance(pct, bool) and "volume_discount" not in params:
+            params["volume_discount"] = pct / 100.0 if pct > 1.0 else pct
+    return [argv[0], "cost", synergy_type, json.dumps(params)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

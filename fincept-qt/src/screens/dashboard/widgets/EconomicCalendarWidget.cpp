@@ -256,6 +256,7 @@ void EconomicCalendarWidget::populate(const QJsonArray& events) {
 
         auto* row = new QWidget(this);
         row->setStyleSheet(QString("background: %1;").arg(alt ? ui::colors::BG_RAISED() : "transparent"));
+        link_screen(row, QStringLiteral("economics"), tr("Double-click to open the Economics screen"));
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 

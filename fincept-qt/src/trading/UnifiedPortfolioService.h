@@ -14,6 +14,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QVector>
 
@@ -76,6 +77,15 @@ class UnifiedPortfolioService : public QObject {
     /// Enumerate active INR accounts, ensure their streams run, connect signals.
     /// Idempotent — call on every screen show; new accounts get picked up.
     void activate();
+
+    /// Counterpart of activate() for when the Portfolio Monitor is hidden (P3/D3):
+    /// stops the summary throttle timer and disconnects this service from every
+    /// account stream, so a hidden screen costs no per-tick patching, rebuilds or
+    /// signal emission. NOT refcounted — idempotent, and the next activate()
+    /// re-seeds from the streams' caches, re-wires and refreshes (so call it from
+    /// hideEvent(), activate() from showEvent()). The streams themselves keep
+    /// running: they are shared with other screens and algos.
+    void deactivate();
 
     /// Force an immediate portfolio refetch on every tracked account.
     void refresh_all();
@@ -143,6 +153,10 @@ class UnifiedPortfolioService : public QObject {
         QString paper_portfolio_id;
         bool live = false;
         bool wired = false; // stream signals connected
+        // The stream object `wired` refers to. DataStreamManager::restart_stream()
+        // replaces a stream on every credential change, leaving the connections on
+        // the dead one — connect_stream() compares against this to re-wire.
+        QPointer<QObject> wired_stream;
         QVector<BrokerPosition> positions;
         QVector<BrokerHolding> holdings;
     };

@@ -81,14 +81,16 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     text_inputs_["bt_instruments"] = instruments;
     vl->addWidget(build_input_row(tr("Instruments"), instruments, w));
 
-    auto* start_date = new QDateEdit(QDate(2020, 1, 1), w);
+    // Default window: the last three years (it was a fixed 2020-2024, i.e. already stale).
+    const QDate today = QDate::currentDate();
+    auto* start_date = new QDateEdit(today.addYears(-3), w);
     start_date->setDisplayFormat("yyyy-MM-dd");
     start_date->setCalendarPopup(true);
     start_date->setStyleSheet(input_ss());
     date_inputs_["bt_start"] = start_date;
     vl->addWidget(build_input_row(tr("Start Date"), start_date, w));
 
-    auto* end_date = new QDateEdit(QDate(2024, 1, 1), w);
+    auto* end_date = new QDateEdit(today, w);
     end_date->setDisplayFormat("yyyy-MM-dd");
     end_date->setCalendarPopup(true);
     end_date->setStyleSheet(input_ss());
@@ -107,7 +109,9 @@ QWidget* QuantModulePanel::build_backtesting_panel() {
     vl->addWidget(build_input_row(tr("Top K Positions"), topk, w));
 
     auto* benchmark = new QLineEdit(w);
-    benchmark->setPlaceholderText(tr("SH000300 (CSI300)"));
+    // The backtest prices come from Yahoo Finance, so the benchmark must be a Yahoo symbol. The
+    // old placeholder ("SH000300", a Qlib/CSI 300 id) resolved to nothing and produced a flat line.
+    benchmark->setPlaceholderText(tr("SPY (Yahoo Finance symbol; blank = SPY)"));
     benchmark->setStyleSheet(input_ss());
     text_inputs_["bt_benchmark"] = benchmark;
     vl->addWidget(build_input_row(tr("Benchmark"), benchmark, w));

@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSet>
 #include <QStringList>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -20,8 +21,18 @@ class HDXDataPanel : public QWidget {
   public:
     explicit HDXDataPanel(QWidget* parent = nullptr);
 
+    /// Jump to the Explorer view and search HDX for `country` (used by the
+    /// Relations tab). Safe to call before the panel has ever been shown.
+    void explore_country(const QString& country);
+    /// Same, for a topic keyword ("displacement", "food security", ...).
+    void explore_topic(const QString& topic);
+
   protected:
     void changeEvent(QEvent* event) override;
+    /// First show triggers the initial HDX fetch. Doing it in the constructor
+    /// spawned a Python process whenever the Geopolitics screen opened, even
+    /// when the user never visited this tab.
+    void showEvent(QShowEvent* event) override;
 
   private slots:
     void on_hdx_results(const QString& context, QVector<fincept::services::geo::HDXDataset> datasets);
@@ -33,6 +44,12 @@ class HDXDataPanel : public QWidget {
     void connect_service();
     void populate_table(const QVector<fincept::services::geo::HDXDataset>& datasets);
     void show_loading(bool on);
+    /// Replace the table with a centred message (empty result, error, prompt).
+    void show_message(const QString& text);
+    /// Highlight the active view button and show/hide the explorer bar.
+    void set_active_view(int index);
+    /// Show cached results for `index` or issue its fetch (once).
+    void load_view(int index);
     void retranslateUi();
 
     // View tab buttons
@@ -64,10 +81,17 @@ class HDXDataPanel : public QWidget {
     // Fixed English view-tab labels, re-applied in retranslateUi (upper-cased).
     QStringList view_labels_;
 
-    // Per-view result cache (avoids re-fetching on tab switch)
+    // Per-view result cache (avoids re-fetching on tab switch). The Explorer has
+    // its own slot: sharing cache_datasets_ made a country search overwrite what
+    // the Datasets tab showed.
     QVector<fincept::services::geo::HDXDataset> cache_conflicts_;
     QVector<fincept::services::geo::HDXDataset> cache_humanitarian_;
+    QVector<fincept::services::geo::HDXDataset> cache_explorer_;
     QVector<fincept::services::geo::HDXDataset> cache_datasets_;
+    // Result contexts ("conflicts", "humanitarian", ...) with a request in flight,
+    // so flipping tabs while a load is pending doesn't spawn a duplicate.
+    QSet<QString> inflight_;
+    bool shown_once_ = false;
 };
 
 } // namespace fincept::screens

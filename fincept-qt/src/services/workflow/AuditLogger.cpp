@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QTimeZone>
 #include <QUuid>
 
 namespace fincept::workflow {
@@ -56,7 +57,11 @@ Result<QVector<AuditEntry>> AuditLogger::query(const QDateTime& from, const QDat
                                                bool filter_by_action) const {
     QString sql = "SELECT id, action, workflow_id, node_id, symbol, details, metadata, paper, timestamp "
                   "FROM workflow_audit_log WHERE timestamp BETWEEN ? AND ?";
-    QVariantList params = {from.toString(Qt::ISODate), to.toString(Qt::ISODate)};
+    // The column holds SQLite's datetime('now'): UTC, "yyyy-MM-dd HH:mm:ss". The bounds used to be
+    // local-time ISO strings ("...T..."), which sort differently from the stored space-separated
+    // text — every row on the first day of the range fell outside it — and ignored the UTC offset.
+    static const QString kStoredFormat = QStringLiteral("yyyy-MM-dd HH:mm:ss");
+    QVariantList params = {from.toUTC().toString(kStoredFormat), to.toUTC().toString(kStoredFormat)};
 
     if (filter_by_action) {
         sql += " AND action = ?";
@@ -145,7 +150,11 @@ AuditEntry AuditLogger::map_entry(QSqlQuery& q) {
     e.details = q.value(5).toString();
     e.metadata = QJsonDocument::fromJson(q.value(6).toString().toUtf8()).object();
     e.paper_trading = q.value(7).toBool();
-    e.timestamp = QDateTime::fromString(q.value(8).toString(), Qt::ISODate);
+    // Stored as UTC "yyyy-MM-dd HH:mm:ss" (SQLite datetime('now')).
+    e.timestamp = QDateTime::fromString(q.value(8).toString(), QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    if (!e.timestamp.isValid())
+        e.timestamp = QDateTime::fromString(q.value(8).toString(), Qt::ISODate);
+    e.timestamp.setTimeZone(QTimeZone::utc());
     return e;
 }
 

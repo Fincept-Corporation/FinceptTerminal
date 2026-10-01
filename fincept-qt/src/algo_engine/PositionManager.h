@@ -52,6 +52,9 @@ class PositionManager {
 
   private:
     void update_drawdown();
+    // Raises paused_by_loss_limit once realized daily P&L breaches max_daily_loss_.
+    // Assumes mutex_ is already held.
+    void latch_daily_loss_if_breached();
     // Body of reset_daily(); assumes mutex_ is already held (QMutex is not
     // recursive, so reset_daily_if_new_day() cannot call reset_daily()).
     void reset_daily_locked();

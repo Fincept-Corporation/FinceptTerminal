@@ -99,6 +99,11 @@ void WebSocketClient::disconnect() {
         if (!self)
             return;
         LOG_INFO(kTag, QString("[%1] Disconnect requested for %2").arg(thread_label(), redact_url(self->url_)));
+        // An explicit close is not a dropped connection: without this, the
+        // `disconnected` signal that close() produces below scheduled an automatic
+        // reconnect and the owner's "disconnect" re-opened the socket behind its back.
+        // The next connect_to() re-enables auto-reconnect; unexpected drops still retry.
+        self->reconnect_stopped_ = true;
         self->reconnect_timer_.stop();
         self->socket_->close();
     });
@@ -144,6 +149,10 @@ bool WebSocketClient::is_connected() const {
 void WebSocketClient::on_connected() {
     LOG_INFO(kTag, QString("[%1] Connected to %2").arg(thread_label(), redact_url(url_)));
     reconnect_attempts_ = 0;
+    // A reconnect timer armed by an earlier drop (e.g. a stale `disconnected` that
+    // arrived after the owner had already re-opened the socket) must not fire into
+    // a live connection.
+    reconnect_timer_.stop();
     emit connected();
 }
 
@@ -160,6 +169,10 @@ void WebSocketClient::on_disconnected() {
                            .arg(MAX_RECONNECT_ATTEMPTS)
                            .arg(delay));
         reconnect_timer_.start(delay);
+    } else if (reconnect_stopped_) {
+        // Explicit disconnect() or stop_reconnect(): expected, not an error.
+        LOG_INFO(kTag, QString("[%1] Auto-reconnect disabled — not reconnecting %2")
+                           .arg(thread_label(), redact_url(url_)));
     } else {
         LOG_ERROR(kTag, QString("[%1] Max reconnect attempts (%2) reached for %3")
                             .arg(thread_label())

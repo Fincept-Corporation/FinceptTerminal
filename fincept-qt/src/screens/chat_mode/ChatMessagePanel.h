@@ -119,6 +119,8 @@ class ChatMessagePanel : public QWidget {
 
     void add_message_bubble(const QString& role, const QString& content, const QString& timestamp = {});
     QTextEdit* add_streaming_bubble();
+    /// Drop the placeholder row of the in-flight reply (no-op if there is none).
+    void remove_streaming_bubble_row();
     void insert_collapsed_thinking_card(int before_index = -1);
     void resize_bubble(QTextEdit* bubble);
     void scroll_to_bottom();

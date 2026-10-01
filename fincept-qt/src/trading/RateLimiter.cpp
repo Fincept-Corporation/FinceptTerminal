@@ -1,5 +1,7 @@
 #include "RateLimiter.h"
 
+#include <algorithm>
+
 namespace fincept::trading {
 
 OrderRateLimiter& OrderRateLimiter::instance() {
@@ -44,18 +46,22 @@ void OrderRateLimiter::acquire(BrokerId broker) {
     auto& limit = get_or_create(broker);
     QMutexLocker locker(&limit.mutex);
 
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    qint64 min_interval_ms = 1000 / limit.orders_per_second;
-    qint64 elapsed = now - limit.last_order_ms;
+    // Reserve this caller's slot while still holding the lock, then sleep outside
+    // it. The old code released the lock, slept, and only then stamped
+    // last_order_ms — so two threads arriving together both measured the same
+    // "elapsed", both slept the same time and both fired in the same instant,
+    // defeating the limit exactly when concurrent paths (basket + algo + split) hit
+    // one broker. Each caller now claims the next free slot: last + interval.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 min_interval_ms = 1000 / limit.orders_per_second;
+    if (limit.last_order_ms > now + 60000) // wall clock stepped backwards — don't sleep out the difference
+        limit.last_order_ms = now;
+    const qint64 slot = std::max(now, limit.last_order_ms + min_interval_ms);
+    limit.last_order_ms = slot;
+    locker.unlock();
 
-    if (elapsed < min_interval_ms) {
-        qint64 wait = min_interval_ms - elapsed;
-        locker.unlock();
-        QThread::msleep(static_cast<unsigned long>(wait));
-        locker.relock();
-    }
-
-    limit.last_order_ms = QDateTime::currentMSecsSinceEpoch();
+    if (slot > now)
+        QThread::msleep(static_cast<unsigned long>(slot - now));
 }
 
 void OrderRateLimiter::set_limit(BrokerId broker, int orders_per_second) {

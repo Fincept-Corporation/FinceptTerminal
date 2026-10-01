@@ -5,11 +5,13 @@
 #include "services/agents/AgentService.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmProfileRepository.h"
+#include "storage/repositories/PortfolioRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
 #include <QCoreApplication>
 #include <QHBoxLayout>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QShowEvent>
 #include <QSplitter>
@@ -52,6 +54,17 @@ static const WorkflowDef kWorkflows[] = {
 };
 
 static constexpr int kWorkflowCount = static_cast<int>(sizeof(kWorkflows) / sizeof(kWorkflows[0]));
+
+// Validation-message styling in one place (was two identical inline setStyleSheet pairs).
+static void set_params_status(QLabel* lbl, const QString& text, const QString& color) {
+    lbl->setText(text);
+    lbl->setStyleSheet(QString("color:%1;font-size:10px;padding:2px 0;").arg(color));
+}
+
+// Workflows that analyse a user portfolio (and so offer the PORTFOLIO picker).
+static bool workflow_uses_portfolio(const QString& id) {
+    return id == QLatin1String("portfolio_rebal") || id == QLatin1String("risk_assessment");
+}
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
@@ -241,6 +254,30 @@ QWidget* WorkflowsViewPanel::build_params_panel() {
     symbol_row_->setVisible(false);
     bl->addWidget(symbol_row_);
 
+    // Portfolio row (portfolio rebalancing / risk assessment). Those workflows used to
+    // run with no portfolio at all — finagent_core was handed this tab's bookkeeping
+    // params as the "portfolio data". One stylesheet on the row styles label + combo.
+    portfolio_row_ = new QWidget(this);
+    portfolio_row_->setStyleSheet(
+        QString("QLabel{color:%1;font-size:10px;font-weight:700;letter-spacing:1px;min-width:55px;}"
+                "QComboBox{background:%2;color:%3;border:1px solid %4;padding:3px 6px;font-size:11px;}"
+                "QComboBox::drop-down{border:none;}"
+                "QComboBox QAbstractItemView{background:%2;color:%3;selection-background-color:%5;}")
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::BORDER_MED(), ui::colors::AMBER_DIM()));
+    {
+        auto* pl = new QHBoxLayout(portfolio_row_);
+        pl->setContentsMargins(0, 0, 0, 0);
+        pl->setSpacing(6);
+        portfolio_label_ = new QLabel(tr("PORTFOLIO"));
+        pl->addWidget(portfolio_label_);
+        portfolio_combo_ = new QComboBox;
+        portfolio_combo_->setToolTip(tr("Portfolio whose holdings the workflow analyses"));
+        pl->addWidget(portfolio_combo_, 1);
+    }
+    portfolio_row_->setVisible(false);
+    bl->addWidget(portfolio_row_);
+
     // Query row (shown for query-requiring workflows)
     query_row_ = new QWidget(this);
     {
@@ -408,7 +445,7 @@ void WorkflowsViewPanel::setup_connections() {
                 QTextCursor cursor = result_display_->textCursor();
                 cursor.movePosition(QTextCursor::End);
                 result_display_->setTextCursor(cursor);
-                result_display_->insertPlainText(token + " ");
+                result_display_->insertPlainText(token);
             });
 
     connect(&svc, &services::AgentService::agent_stream_done, this, [this](services::AgentExecutionResult r) {
@@ -499,8 +536,13 @@ void WorkflowsViewPanel::on_workflow_selected(int row) {
         tr("%1  —  PARAMETERS").arg(QCoreApplication::translate("WorkflowsViewPanel", def->label)).toUpper());
     wf_desc_label_->setText(QCoreApplication::translate("WorkflowsViewPanel", def->desc));
 
-    symbol_row_->setVisible(def->needs_symbol);
+    // options_scan takes an OPTIONAL symbol ("Symbol optional" in its description and
+    // in finagent_core) — the field used to be hidden for it, so it could never be set.
+    symbol_row_->setVisible(def->needs_symbol || wf_id == QLatin1String("options_scan"));
     query_row_->setVisible(def->needs_query);
+    portfolio_row_->setVisible(workflow_uses_portfolio(wf_id));
+    if (workflow_uses_portfolio(wf_id))
+        refresh_portfolios();
 
     run_btn_->setEnabled(true);
     params_status_->clear();
@@ -525,17 +567,17 @@ void WorkflowsViewPanel::run_current_workflow() {
     QJsonObject params;
     if (symbol_row_->isVisible()) {
         const QString sym = symbol_input_->text().trimmed().toUpper();
-        if (sym.isEmpty()) {
+        if (sym.isEmpty() && current_workflow_type_ != QLatin1String("options_scan")) {
             executing_ = false;
             run_btn_->setEnabled(true);
             run_btn_->setText(tr("RUN WORKFLOW"));
-            params_status_->setText(tr("Symbol is required"));
-            params_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+            set_params_status(params_status_, tr("Symbol is required"), ui::colors::NEGATIVE());
             return;
         }
-        params["symbol"] = sym;
-        log_display_->append(QString("[PARAM] symbol=%1").arg(sym));
+        if (!sym.isEmpty()) { // options_scan: empty = scan the whole market
+            params["symbol"] = sym;
+            log_display_->append(QString("[PARAM] symbol=%1").arg(sym));
+        }
     }
     if (query_row_->isVisible()) {
         const QString q = query_input_->toPlainText().trimmed();
@@ -543,17 +585,36 @@ void WorkflowsViewPanel::run_current_workflow() {
             executing_ = false;
             run_btn_->setEnabled(true);
             run_btn_->setText(tr("RUN WORKFLOW"));
-            params_status_->setText(tr("Query is required"));
-            params_status_->setStyleSheet(
-                QString("color:%1;font-size:10px;padding:2px 0;").arg(ui::colors::NEGATIVE()));
+            set_params_status(params_status_, tr("Query is required"), ui::colors::NEGATIVE());
             return;
         }
         params["query"] = q;
     }
 
-    const QString profile_id = llm_profile_combo_->currentData().toString();
-    if (!profile_id.isEmpty())
-        params["llm_profile_id"] = profile_id;
+    if (portfolio_row_->isVisible() && !portfolio_combo_->currentData().toString().isEmpty()) {
+        const QString pf_id = portfolio_combo_->currentData().toString();
+        QJsonObject pd;
+        pd["portfolio_id"] = pf_id;
+        pd["name"] = portfolio_combo_->currentText();
+        QJsonArray holdings;
+        const auto assets = PortfolioRepository::instance().get_assets(pf_id);
+        if (assets.is_ok()) {
+            for (const auto& a : assets.value()) {
+                QJsonObject h;
+                h["symbol"] = a.symbol;
+                h["quantity"] = a.quantity;
+                h["avg_cost"] = a.avg_buy_price;
+                holdings.append(h);
+            }
+        }
+        pd["holdings"] = holdings;
+        params["portfolio_data"] = pd;
+        log_display_->append(QString("[PARAM] portfolio=%1 (%2 holdings)").arg(pd["name"].toString()).arg(holdings.size()));
+    }
+
+    // Always sent: empty means "inherit" (the workflow default shown under the
+    // picker); AgentService::run_workflow resolves either into the run's LLM.
+    params["llm_profile_id"] = llm_profile_combo_->currentData().toString();
 
     params_status_->clear();
     pending_request_id_ = services::AgentService::instance().run_workflow(current_workflow_type_, params);
@@ -562,6 +623,24 @@ void WorkflowsViewPanel::run_current_workflow() {
 
 void WorkflowsViewPanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    // Portfolios can be created/removed on the Portfolio screen between visits.
+    if (portfolio_row_ && portfolio_row_->isVisible())
+        refresh_portfolios();
+}
+
+void WorkflowsViewPanel::refresh_portfolios() {
+    const QString prev_id = portfolio_combo_->currentData().toString();
+    portfolio_combo_->blockSignals(true);
+    portfolio_combo_->clear();
+    portfolio_combo_->addItem(tr("None (let the agent look it up)"), QString{});
+    const auto res = PortfolioRepository::instance().list_portfolios();
+    if (res.is_ok()) {
+        for (const auto& pf : res.value())
+            portfolio_combo_->addItem(pf.name, pf.id);
+    }
+    const int restore = prev_id.isEmpty() ? 0 : portfolio_combo_->findData(prev_id);
+    portfolio_combo_->setCurrentIndex(restore >= 0 ? restore : 0);
+    portfolio_combo_->blockSignals(false);
 }
 
 // ── Re-translation ───────────────────────────────────────────────────────────
@@ -607,6 +686,8 @@ void WorkflowsViewPanel::retranslateUi() {
         llm_profile_title_->setText(tr("LLM PROFILE"));
     if (symbol_label_)
         symbol_label_->setText(tr("SYMBOL"));
+    if (portfolio_label_)
+        portfolio_label_->setText(tr("PORTFOLIO"));
     if (symbol_input_)
         symbol_input_->setPlaceholderText(tr("e.g. AAPL"));
     if (query_label_)

@@ -33,7 +33,7 @@ using namespace fincept::ui;
 namespace {
 
 QString strike_label(const OptionChainRow& row) {
-    QString s = QString::number(row.strike, 'f', row.strike < 100 ? 2 : 0);
+    QString s = fincept::services::options::format_strike(row.strike);
     if (row.is_atm)
         s += "  " + QCoreApplication::translate("OISubTab", "(ATM)");
     return s;
@@ -57,11 +57,11 @@ OISubTab::OISubTab(QWidget* parent) : QWidget(parent) {
 
     setup_ui();
 
-    connect(&fincept::services::options::OptionChainService::instance(),
-            &fincept::services::options::OptionChainService::chain_published, this,
-            [this](const OptionChain& chain) { on_chain_published({}, QVariant::fromValue(chain)); });
-    subscribed_ = true;
-
+    // No chain_published connection here: that signal fires for every chain assembly
+    // for the widget's whole lifetime, so a hidden OI tab kept re-rendering three
+    // charts and — once hideEvent/showEvent had armed the hub subscription as well —
+    // handled each publish twice. Live updates come from the visibility-scoped hub
+    // subscription in showEvent(); this only seeds the first paint.
     const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
     if (!cached.rows.isEmpty())
         on_chain_published({}, QVariant::fromValue(cached));
@@ -164,6 +164,10 @@ void OISubTab::showEvent(QShowEvent* e) {
                                                                 self->on_chain_published(topic, v);
                                                             });
     subscribed_ = true;
+    // Catch up on a snapshot published while this tab was hidden.
+    const auto& cached = fincept::services::options::OptionChainService::instance().last_chain();
+    if (!cached.rows.isEmpty() && cached.timestamp_ms != last_chain_.timestamp_ms)
+        on_chain_published({}, QVariant::fromValue(cached));
 }
 
 void OISubTab::hideEvent(QHideEvent* e) {

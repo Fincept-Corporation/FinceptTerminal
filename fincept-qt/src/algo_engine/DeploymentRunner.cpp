@@ -31,6 +31,9 @@ using fincept::Database;
 
 namespace fincept::algo {
 
+// Minimum gap between a rejected order and the next order attempt (see emit_order_signal).
+static constexpr int64_t kRunnerRejectBackoffMs = 5000;
+
 DeploymentRunner::DeploymentRunner(const services::algo::AlgoDeployment& deployment,
                                    const services::algo::AlgoStrategy& strategy, QObject* parent)
     : QObject(parent),
@@ -522,6 +525,13 @@ void DeploymentRunner::emit_order_signal(const AlgoOrderSignal& signal_in) {
     if (!pending_orders_.isEmpty())
         return;
 
+    // Back off after a rejection. A rejected exit leaves the position open, so the very next
+    // tick re-fires the same stop-loss / take-profit and the broker rejects it again — a
+    // sustained rejection (market closed, margin, bad symbol) became one live order attempt
+    // per tick for as long as it lasted.
+    if (last_reject_ms_ > 0 && QDateTime::currentMSecsSinceEpoch() - last_reject_ms_ < kRunnerRejectBackoffMs)
+        return;
+
     // Stamp the deployment's mode so the engine routes paper→simulated-fill and
     // live→broker. This is the single safety gate that stops a PAPER deployment
     // from ever hitting a real broker, even though it carries a real account id
@@ -586,15 +596,25 @@ void DeploymentRunner::on_order_filled(const QString& broker_order_id, double fi
     persist_trade(trade);
     emit trade_executed(trade);
     emit metrics_updated(deployment_.id, position_mgr_->metrics());
-    emit_live_snapshot(fill_price, QStringLiteral("%1 FILLED %2 @ %3")
-                                       .arg(is_entry ? QStringLiteral("ENTRY") : QStringLiteral("EXIT"))
-                                       .arg(fill_qty, 0, 'f', 0)
-                                       .arg(fill_price, 0, 'f', 2));
+    QString fill_note = QStringLiteral("%1 FILLED %2 @ %3")
+                            .arg(is_entry ? QStringLiteral("ENTRY") : QStringLiteral("EXIT"))
+                            .arg(fill_qty, 0, 'f', 0)
+                            .arg(fill_price, 0, 'f', 2);
+    if (!is_entry && position_mgr_->is_paused()) {
+        // The realizing exit tripped the daily-loss limit — say so, otherwise the
+        // card just stops trading with no explanation.
+        LOG_WARN("AlgoEngine", QString("Deployment %1: daily loss limit reached — new entries halted until the next "
+                                       "trading day")
+                                   .arg(deployment_.id));
+        fill_note += QStringLiteral(" — DAILY LOSS LIMIT HIT, entries halted");
+    }
+    emit_live_snapshot(fill_price, fill_note);
 }
 
 void DeploymentRunner::on_order_rejected(const QString& /*broker_order_id*/, const QString& reason) {
     if (!pending_orders_.isEmpty())
         pending_orders_.removeFirst();
+    last_reject_ms_ = QDateTime::currentMSecsSinceEpoch();
     LOG_ERROR("AlgoEngine", QString("Deployment %1: order rejected: %2").arg(deployment_.id, reason));
 }
 
@@ -741,7 +761,14 @@ void DeploymentRunner::finalize_basket_if_complete() {
         pnl = position_mgr_->record_exit_legs(now);
         clear_resolved_legs(); // basket closed — nothing to reattach on restart
         resolved_expiry_.clear();
-        emit_live_snapshot(0, QStringLiteral("EXIT basket closed, P&L %1").arg(pnl, 0, 'f', 2));
+        QString exit_note = QStringLiteral("EXIT basket closed, P&L %1").arg(pnl, 0, 'f', 2);
+        if (position_mgr_->is_paused()) {
+            LOG_WARN("AlgoEngine", QString("Deployment %1: daily loss limit reached — new entries halted until the next "
+                                           "trading day")
+                                       .arg(deployment_.id));
+            exit_note += QStringLiteral(" — DAILY LOSS LIMIT HIT, entries halted");
+        }
+        emit_live_snapshot(0, exit_note);
     }
 
     basket_fills_.clear();

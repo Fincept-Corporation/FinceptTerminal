@@ -1,7 +1,9 @@
 // src/ui/notifications/DesktopNotifier.cpp
 #include "ui/notifications/DesktopNotifier.h"
 
+#include "app/WindowFrame.h"
 #include "core/logging/Logger.h"
+#include "core/window/WindowRegistry.h"
 #include "ui/notifications/NotificationService.h" // ToastService
 
 #include <QApplication>
@@ -40,6 +42,20 @@ void DesktopNotifier::init() {
 
     auto* menu = new QMenu();
     menu->addAction(QStringLiteral("Show Fincept"), qApp, []() {
+        // Bring up a real terminal window. The old "first top-level widget that
+        // isn't a QMenu" walk could land on a toast / tooltip / hidden dialog
+        // instead of a WindowFrame.
+        const auto frames = WindowRegistry::instance().frames();
+        if (!frames.isEmpty()) {
+            QWidget* frame = frames.first();
+            if (frame->isMinimized())
+                frame->showNormal();
+            else
+                frame->show();
+            frame->raise();
+            frame->activateWindow();
+            return;
+        }
         for (auto* tw : qApp->topLevelWidgets()) {
             if (tw->isWindow() && !tw->inherits("QMenu")) {
                 tw->showNormal();

@@ -74,8 +74,9 @@ Optional (speeds up rebuilds): **ccache 4.13.4** on Windows is auto-detected.
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal
 ./setup.sh      # Linux / macOS — installs toolchain + Qt via aqtinstall, then builds
-setup.bat       # Windows — run from a VS 2022 Developer Command Prompt
 ```
+
+> **Windows:** `setup.sh` is Linux / macOS only. Install the prerequisites in [GETTING_STARTED.md](./GETTING_STARTED.md#quick-setup), then follow the manual steps below from a **Developer Command Prompt for VS 2022** (or Developer PowerShell) so MSVC and the Windows SDK are on `PATH`.
 
 ### Manual — CMake presets
 

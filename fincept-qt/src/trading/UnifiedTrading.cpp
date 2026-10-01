@@ -180,6 +180,51 @@ QString hydrate_modify_fields(IBroker& broker, const BrokerCredentials& creds, c
                                resting->product_type, resting->order_type));
     return {};
 }
+
+/// True when `account` is in PAPER mode AND that PAPER mode runs on the broker's own paper
+/// venue (Alpaca paper-api) instead of the local pt_* simulator: the broker offers native
+/// paper and the account's stored credentials are positively that venue's paper environment
+/// (IBroker::is_paper_environment).
+///
+/// Fails CLOSED. BrokerProfile::has_native_paper only says the broker OFFERS paper; the
+/// credentials may be live ones (a new account defaults to PAPER mode whatever keys it
+/// holds), and sending those a "paper" ticket would place a real order. Anything uncertain
+/// — live keys, unidentifiable environment, a broker that has not opted in — answers false,
+/// which keeps the local simulator, exactly as before this existed.
+bool native_paper_venue(const BrokerAccount& account) {
+    if (account.trading_mode != "paper")
+        return false;
+    auto* broker = BrokerRegistry::instance().get(account.broker_id);
+    if (!broker || !broker->profile().has_native_paper)
+        return false; // cheap exit before touching secure storage
+    const auto creds = AccountManager::instance().load_credentials(account.account_id);
+    return !creds.api_key.isEmpty() && broker->is_paper_environment(creds);
+}
+
+/// PAPER mode served by the local pt_* simulator. Everything else — LIVE, or PAPER on a
+/// native broker paper venue — goes through the broker adapter.
+bool local_paper(const BrokerAccount& account) {
+    return account.trading_mode == "paper" && !native_paper_venue(account);
+}
+
+/// Guard for every broker call made on behalf of a PAPER-mode account. native_paper_venue()
+/// already decided this, but credentials can change between that decision and the call, and
+/// a PAPER ticket must never reach a live exchange — so re-verify on the exact credentials
+/// about to be used. Returns an empty string when the call may proceed.
+QString paper_venue_refusal(const BrokerAccount& account, const IBroker& broker, const BrokerCredentials& creds) {
+    if (account.trading_mode != "paper")
+        return {};
+    if (!creds.api_key.isEmpty() && broker.is_paper_environment(creds))
+        return {};
+    return QStringLiteral("Refusing to send a PAPER order: this account's credentials are not verified as the "
+                          "broker's paper environment");
+}
+
+/// Mode tag for a response that went through the broker adapter: "paper" for a PAPER account
+/// on the broker's paper venue (the UI mode is preserved), "live" otherwise.
+QString broker_mode_tag(const BrokerAccount& account) {
+    return account.trading_mode == "paper" ? QStringLiteral("paper") : QStringLiteral("live");
+}
 } // namespace
 
 UnifiedTrading& UnifiedTrading::instance() {
@@ -351,6 +396,10 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& order_id) {
 // Account-Aware Order Routing (new multi-account API)
 // ============================================================================
 
+bool UnifiedTrading::uses_native_paper(const QString& account_id) const {
+    return native_paper_venue(AccountManager::instance().get_account(account_id));
+}
+
 UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, const UnifiedOrder& order) {
     auto account = AccountManager::instance().get_account(account_id);
     if (account.account_id.isEmpty())
@@ -406,8 +455,11 @@ UnifiedOrderResponse UnifiedTrading::place_order(const QString& account_id, cons
     UnifiedOrder routed = order;
     stamp_client_order_id(routed);
 
-    UnifiedOrderResponse resp = (account.trading_mode == "paper") ? place_paper_order_for_account(account_id, routed)
-                                                                  : place_live_order_for_account(account_id, routed);
+    // PAPER mode normally means the local simulator; for a broker with a verified native
+    // paper venue it means that venue, reached through the same adapter as a live order
+    // (the mode tag stays "paper"). See native_paper_venue().
+    UnifiedOrderResponse resp = local_paper(account) ? place_paper_order_for_account(account_id, routed)
+                                                     : place_live_order_for_account(account_id, routed);
 
     if (resp.success) {
         publish(OrderPlacedEvent{account_id, resp.order_id, order.symbol, order.exchange, order.side, order.quantity,
@@ -423,7 +475,7 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& account_id, con
     if (account.account_id.isEmpty())
         return {false, "", "Account not found: " + account_id, ""};
 
-    if (account.trading_mode == "paper") {
+    if (local_paper(account)) {
         try {
             pt_cancel_order(order_id);
             return {true, order_id, "Paper order cancelled", "paper"};
@@ -434,12 +486,14 @@ UnifiedOrderResponse UnifiedTrading::cancel_order(const QString& account_id, con
 
     auto* broker = BrokerRegistry::instance().get(account.broker_id);
     if (!broker)
-        return {false, "", "Broker not found: " + account.broker_id, "live"};
+        return {false, "", "Broker not found: " + account.broker_id, broker_mode_tag(account)};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return {false, order_id, refusal, "paper"};
     rate_limit_broker(account.broker_id);
     auto result = broker->cancel_order(creds, order_id);
-    return {result.success, order_id, result.error, "live"};
+    return {result.success, order_id, result.error, broker_mode_tag(account)};
 }
 
 UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, const QString& order_id,
@@ -448,14 +502,16 @@ UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, con
     if (account.account_id.isEmpty())
         return {false, "", "Account not found: " + account_id, ""};
 
-    if (account.trading_mode == "paper")
+    if (local_paper(account))
         return {false, "", "Modify not supported for paper orders", "paper"};
 
     auto* broker = BrokerRegistry::instance().get(account.broker_id);
     if (!broker)
-        return {false, "", "Broker not found: " + account.broker_id, "live"};
+        return {false, "", "Broker not found: " + account.broker_id, broker_mode_tag(account)};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return {false, order_id, refusal, "paper"};
 
     // Hydrate side/symbol/exchange/product/order_type from the resting order
     // before dispatching. Several brokers replace the whole order on modify, so
@@ -470,12 +526,12 @@ UnifiedOrderResponse UnifiedTrading::modify_order(const QString& account_id, con
     const QString hydrate_err = hydrate_modify_fields(*broker, creds, order_id, mods);
     if (!hydrate_err.isEmpty()) {
         LOG_ERROR(kUtLog, QString("Modify refused on account %1: %2").arg(account_id, hydrate_err));
-        return {false, order_id, hydrate_err, "live"};
+        return {false, order_id, hydrate_err, broker_mode_tag(account)};
     }
 
     rate_limit_broker(account.broker_id);
     auto result = broker->modify_order(creds, order_id, mods);
-    return {result.success, order_id, result.error, "live"};
+    return {result.success, order_id, result.error, broker_mode_tag(account)};
 }
 
 UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString& account_id,
@@ -538,20 +594,28 @@ UnifiedOrderResponse UnifiedTrading::place_paper_order_for_account(const QString
 UnifiedOrderResponse UnifiedTrading::place_live_order_for_account(const QString& account_id,
                                                                   const UnifiedOrder& order) {
     auto account = AccountManager::instance().get_account(account_id);
+    const QString mode = broker_mode_tag(account);
     auto* broker = BrokerRegistry::instance().get(account.broker_id);
     if (!broker)
-        return {false, "", "Broker not found: " + account.broker_id, "live"};
+        return {false, "", "Broker not found: " + account.broker_id, mode};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
     if (creds.access_token.isEmpty())
-        return {false, "", "No credentials for account " + account.display_name + ". Please authenticate.", "live"};
+        return {false, "", "No credentials for account " + account.display_name + ". Please authenticate.", mode};
+
+    // The one place a single order reaches a broker. A PAPER-mode account only gets here
+    // via a verified native paper venue — re-check on the exact credentials about to be used.
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+        LOG_ERROR(kUtLog, QString("%1 (account %2)").arg(refusal, account_id));
+        return {false, "", refusal, mode};
+    }
 
     // Space orders out to the broker's published per-second cap. Without this a
     // broadcast / basket / algo loop fires as fast as the network allows and the
     // API key gets throttled or banned mid-batch.
     rate_limit_broker(account.broker_id);
     auto result = broker->place_order(creds, order);
-    return {result.success, result.order_id, result.error, "live"};
+    return {result.success, result.order_id, result.error, mode};
 }
 
 // ============================================================================
@@ -585,7 +649,7 @@ ApiResponse<CancelAllResult> UnifiedTrading::cancel_all_orders(const QString& ac
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
 
-    if (account.trading_mode == "paper") {
+    if (local_paper(account)) {
         CancelAllResult result;
         auto pending = pt_get_orders(account.paper_portfolio_id, "pending");
         for (const auto& order : pending) {
@@ -607,10 +671,12 @@ ApiResponse<CancelAllResult> UnifiedTrading::cancel_all_orders(const QString& ac
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return {false, std::nullopt, refusal};
     auto resp = broker->cancel_all_orders(creds);
     if (resp.success && resp.data.has_value()) {
         publish(AllOrdersCancelledEvent{account_id, (int)resp.data->canceled_order_ids.size(),
-                                        (int)resp.data->failed.size(), "live"});
+                                        (int)resp.data->failed.size(), broker_mode_tag(account)});
     }
     return resp;
 }
@@ -620,7 +686,7 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
 
-    if (account.trading_mode == "paper") {
+    if (local_paper(account)) {
         CloseAllResult result;
         auto positions = pt_get_positions(account.paper_portfolio_id);
         for (const auto& pos : positions) {
@@ -660,10 +726,12 @@ ApiResponse<CloseAllResult> UnifiedTrading::close_all_positions(const QString& a
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return {false, std::nullopt, refusal};
     auto resp = broker->close_all_positions(creds);
     if (resp.success && resp.data.has_value()) {
         publish(AllPositionsClosedEvent{account_id, (int)resp.data->closed_symbols.size(),
-                                        (int)resp.data->failed.size(), "live"});
+                                        (int)resp.data->failed.size(), broker_mode_tag(account)});
     }
     return resp;
 }
@@ -674,7 +742,7 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(const QString& ac
     if (account.account_id.isEmpty())
         return {false, std::nullopt, "Account not found: " + account_id};
 
-    if (account.trading_mode == "paper") {
+    if (local_paper(account)) {
         auto positions = pt_get_positions(account.paper_portfolio_id);
         for (const auto& pos : positions) {
             QString pos_sym = pos.symbol;
@@ -705,6 +773,8 @@ ApiResponse<OrderPlaceResponse> UnifiedTrading::close_position(const QString& ac
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return {false, std::nullopt, refusal};
     return broker->close_position(creds, symbol, exchange, product_type);
 }
 
@@ -734,7 +804,7 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
         return {false, std::nullopt, "Risk check failed: " + risk_err};
     }
 
-    if (account.trading_mode == "paper") {
+    if (local_paper(account)) {
         // Paper mode: get paper positions, calculate delta, place paper order
         auto positions = pt_get_positions(account.paper_portfolio_id);
         double current = 0;
@@ -802,6 +872,8 @@ ApiResponse<SmartOrderResult> UnifiedTrading::place_smart_order(const QString& a
         return {false, std::nullopt, "Broker not found: " + account.broker_id};
 
     auto creds = AccountManager::instance().load_credentials(account_id);
+    if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty())
+        return {false, std::nullopt, refusal};
     rate_limit_broker(account.broker_id);
     return SmartOrderEngine::instance().execute(broker, creds, order);
 }
@@ -872,7 +944,11 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
         return;
     }
 
-    const bool is_paper = (account.trading_mode == "paper");
+    // is_paper = served by the LOCAL simulator. A PAPER account on a verified native broker
+    // paper venue goes through the broker like a live one, yet stays "paper" for the risk
+    // gate and the completion event (paper_mode).
+    const bool paper_mode = (account.trading_mode == "paper");
+    const bool is_paper = local_paper(account);
 
     // Resolve broker + credentials up front on the calling thread (consistent
     // with the existing place_live_order_for_account helper).
@@ -904,6 +980,17 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
                      false,
                      {},
                      "No credentials for account " + account.display_name + ". Please authenticate."});
+                result.failed++;
+            }
+            if (callback)
+                callback(result);
+            return;
+        }
+        if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+            BasketOrderResult result;
+            result.total = basket.orders.size();
+            for (const auto& order : basket.orders) {
+                result.results.append({order.symbol, order.exchange, false, {}, refusal});
                 result.failed++;
             }
             if (callback)
@@ -944,7 +1031,7 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
     QPointer<UnifiedTrading> self = this;
     const QString basket_strategy = basket.strategy_name;
     const QString broker_id = account.broker_id;
-    (void)QtConcurrent::run([self, account_id, basket_strategy, orders, is_paper, broker, broker_id, creds,
+    (void)QtConcurrent::run([self, account_id, basket_strategy, orders, is_paper, paper_mode, broker, broker_id, creds,
                              paper_portfolio_id, callback]() {
         BasketOrderResult result;
         result.total = orders.size();
@@ -963,7 +1050,8 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             // Basket legs bypass place_order, so the risk gate is applied per leg
             // here. A blocked leg fails on its own; the rest of the basket still
             // goes out, matching how a broker-rejected leg already behaves.
-            const QString leg_risk = risk_block_reason(order.symbol, order.side, order.quantity, order.price, is_paper);
+            const QString leg_risk =
+                risk_block_reason(order.symbol, order.side, order.quantity, order.price, paper_mode);
             if (!leg_risk.isEmpty()) {
                 LOG_INFO(kUtLog, QString("Risk limit rejected basket leg %1 on account %2: %3")
                                      .arg(order.symbol, account_id, leg_risk));
@@ -1029,10 +1117,11 @@ void UnifiedTrading::place_basket_orders(const QString& account_id, const Basket
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, account_id, basket_strategy, is_paper, result, callback]() {
+            [self, account_id, basket_strategy, paper_mode, result, callback]() {
                 // Notify listeners (e.g. TradingNotificationBridge) that the basket finished.
                 publish(BasketCompletedEvent{account_id, basket_strategy, result.successful, result.failed,
-                                             result.total, is_paper ? QStringLiteral("paper") : QStringLiteral("live")});
+                                             result.total,
+                                             paper_mode ? QStringLiteral("paper") : QStringLiteral("live")});
                 if (callback)
                     callback(result);
             },
@@ -1120,7 +1209,10 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
         return;
     }
 
-    const bool is_paper = (account.trading_mode == "paper");
+    // is_paper = served by the LOCAL simulator; a PAPER account on a verified native broker
+    // paper venue goes through the broker adapter like a live one (the risk gate above
+    // already used the account's actual mode).
+    const bool is_paper = local_paper(account);
 
     IBroker* broker = nullptr;
     BrokerCredentials creds;
@@ -1147,6 +1239,14 @@ void UnifiedTrading::place_split_orders(const QString& account_id, const SplitOr
                                    false,
                                    {},
                                    "No credentials for account " + account.display_name + ". Please authenticate."});
+            result.chunks_failed++;
+            if (callback)
+                callback(result);
+            return;
+        }
+        if (const QString refusal = paper_venue_refusal(account, *broker, creds); !refusal.isEmpty()) {
+            SplitOrderResult result;
+            result.results.append({request.base_order.symbol, request.base_order.exchange, false, {}, refusal});
             result.chunks_failed++;
             if (callback)
                 callback(result);

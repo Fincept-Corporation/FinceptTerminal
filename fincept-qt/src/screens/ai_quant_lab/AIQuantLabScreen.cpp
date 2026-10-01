@@ -520,8 +520,12 @@ QVariantMap AIQuantLabScreen::save_state() const {
 
 void AIQuantLabScreen::restore_state(const QVariantMap& state) {
     const int idx = state.value("module_index", 0).toInt();
-    if (idx >= 0 && idx < modules_.size())
+    if (idx >= 0 && idx < modules_.size()) {
+        // The first showEvent() selects module 0; without this it ran AFTER the restore
+        // and replaced the saved module with the first one on every launch.
+        first_show_ = false;
         on_module_selected(idx);
+    }
 }
 
 } // namespace fincept::screens

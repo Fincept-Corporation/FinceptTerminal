@@ -14,6 +14,13 @@ import aiohttp
 import re
 import html
 
+# aiohttp defaults to aiodns when it is installed, and aiodns times out on many
+# Windows setups ("Timeout while contacting DNS servers"). The threaded resolver
+# uses the OS resolver instead (same fix as bis_data.py).
+if sys.platform == "win32":
+    import aiohttp.connector as _aiohttp_connector
+    _aiohttp_connector.DefaultResolver = aiohttp.ThreadedResolver
+
 # NASDAQ API URLs
 NASDAQ_BASE_URL = "https://api.nasdaq.com/api"
 NASDAQ_EQUITY_DIR_URL = "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqtraded.txt"

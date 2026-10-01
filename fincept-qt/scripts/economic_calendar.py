@@ -143,11 +143,19 @@ def scrape_forex_calendar_alt(date_str="oct15.2026"):
     }
 
 if __name__ == "__main__":
-    # Use Selenium method (more reliable)
-    data = scrape_forex_calendar("oct16.2026")
+    import sys
 
-    # Save to JSON file
-    with open('forex_calendar.json', 'w') as f:
-        json.dump(data, f, indent=2)
+    # Usage: economic_calendar.py [date]   e.g. oct16.2026 (Forex Factory day format).
+    # The Economics panel passes the date as the first argument - it used to be ignored and
+    # the script always scraped "oct16.2026" (and dropped a forex_calendar.json into the cwd).
+    months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    today = datetime.now()
+    date_arg = sys.argv[1] if len(sys.argv) > 1 else f"{months[today.month - 1]}{today.day}.{today.year}"
+
+    # Use Selenium method (more reliable)
+    try:
+        data = scrape_forex_calendar(date_arg)
+    except Exception as e:
+        data = {"error": f"Calendar scrape failed: {str(e)[:300]}"}
 
     print(json.dumps(data, indent=2))

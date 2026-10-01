@@ -84,6 +84,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     QWidget* build_loading_state();
     QWidget* build_main_view();
     void update_content_state();
+    void update_loading_anim(); // run the skeleton pulse only while it is on screen
     void update_main_view_data();
     void request_refresh();
     void load_demo_portfolio();
@@ -121,9 +122,16 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     portfolio::PortfolioSummary current_summary_;
     portfolio::ComputedMetrics current_metrics_;
     bool summary_loaded_ = false;
+    bool asset_refresh_queued_ = false; // coalesces bursts of asset_added/asset_sold into one refresh
     bool order_panel_visible_ = false;
     bool show_ffn_ = false;
     std::optional<portfolio::DetailView> active_detail_;
+
+    // How much snapshot history the charts are fed. The PERF chart offers 5Y / ALL
+    // and PERF/RISK offers ALL, but the screen asked for the service default (365
+    // days), so even after a backfill wrote years of NAV rows those periods could
+    // never show more than one year. (compute_metrics reads its own 1-year window.)
+    static constexpr int kSnapshotHistoryDays = 3650;
 
     // Refresh timer (P3)
     QTimer* refresh_timer_ = nullptr;
@@ -148,6 +156,7 @@ class PortfolioScreen : public QWidget, public IStatefulScreen, public IGroupLin
     CtaCardLabels empty_import_card_;
     CtaCardLabels empty_demo_card_;
     QLabel* loading_label_ = nullptr;
+    QPropertyAnimation* loading_anim_ = nullptr;
 
     // Symbol-group link (None when unlinked).
     SymbolGroup link_group_ = SymbolGroup::None;

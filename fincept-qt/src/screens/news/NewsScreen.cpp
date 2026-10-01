@@ -35,6 +35,13 @@
 
 namespace fincept::screens {
 
+// Desktop notifications are only raised for articles this fresh — otherwise every
+// FLASH / BREAKING / monitor hit already sitting in the feed fires at launch.
+static constexpr int64_t kNewsNotifyMaxAgeSec = 1800;
+// The notified-id sets only exist to dedupe; cap them so a long session can't
+// grow them forever (clearing at worst re-notifies something still in the feed).
+static constexpr int kNewsNotifiedSetCap = 20000;
+
 NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("newsScreen");
     LOG_INFO("NewsScreen", "Applying news_screen_styles");
@@ -48,6 +55,10 @@ NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
     time_range_ = settings.value("time_range", "24H").toString();
     sort_mode_ = settings.value("sort_mode", "RELEVANCE").toString();
     view_mode_ = settings.value("view_mode", "WIRE").toString();
+    // The variant and language filter were written to QSettings on change but
+    // never read back, so a restart silently reset them.
+    active_variant_ = settings.value("variant", "FULL").toString();
+    active_lang_ = settings.value("language", "ALL").toString();
     settings.endGroup();
 
     build_ui();
@@ -60,13 +71,15 @@ NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
     command_bar_->set_active_time_range(time_range_);
     command_bar_->set_active_sort(sort_mode_);
     command_bar_->set_active_view(view_mode_);
+    command_bar_->set_active_variant(active_variant_);
+    command_bar_->set_active_language(active_lang_);
 
     // Drop a symbol anywhere on the News screen to filter the feed by that
     // ticker. Reuses the search-query pipeline so caching/highlighting stay
     // coherent with keyword search.
     symbol_dnd::installDropFilter(this, [this](const SymbolRef& ref, SymbolGroup) {
         if (ref.is_valid())
-            on_search_changed(ref.symbol);
+            on_group_symbol_changed(ref);
     });
 
     LOG_INFO("NewsScreen", "News screen constructed (no data fetch in constructor)");
@@ -167,12 +180,37 @@ void NewsScreen::connect_signals() {
     connect(detail_panel_, &NewsDetailPanel::analyze_requested, this, &NewsScreen::on_analyze_requested);
     connect(detail_panel_, &NewsDetailPanel::panel_closed, this, &NewsScreen::on_detail_closed);
     connect(detail_panel_, &NewsDetailPanel::bookmark_requested, this, [this](const services::NewsArticle& article) {
-        auto r = fincept::NewsArticleRepository::instance().toggle_saved(article.id);
-        if (r.is_ok()) {
-            auto saved_r = fincept::NewsArticleRepository::instance().load_saved();
-            if (saved_r.is_ok())
-                side_panel_->update_saved(saved_r.value());
-        }
+        // SQLite on a worker (P1). The article is upserted first so the toggle
+        // can't fail with "Article not found" for a row that was never stored
+        // (live pushes, or anything the 30-day prune already removed). On any
+        // failure the button is re-synced from the DB instead of staying toggled.
+        QPointer<NewsScreen> self = this;
+        (void)QtConcurrent::run([self, article]() {
+            auto& repo = fincept::NewsArticleRepository::instance();
+            (void)repo.upsert_batch({article});
+            auto r = repo.toggle_saved(article.id);
+            QVector<services::NewsArticle> saved;
+            if (r.is_ok()) {
+                if (auto saved_r = repo.load_saved(); saved_r.is_ok())
+                    saved = saved_r.value();
+            }
+            const bool ok = r.is_ok();
+            const QString err = ok ? QString() : QString::fromStdString(r.error());
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, ok, err, saved = std::move(saved)]() {
+                    if (!self)
+                        return;
+                    if (ok)
+                        self->side_panel_->update_saved(saved);
+                    else
+                        LOG_WARN("NewsScreen", "Bookmark toggle failed: " + err);
+                    self->detail_panel_->refresh_bookmark_state();
+                },
+                Qt::QueuedConnection);
+        });
     });
 
     // RTL toggle
@@ -191,7 +229,20 @@ void NewsScreen::connect_signals() {
     // Language filter
     connect(command_bar_, &NewsCommandBar::language_filter_changed, this, [this](const QString& lang) {
         active_lang_ = lang.isEmpty() ? QStringLiteral("ALL") : lang;
+        visible_article_count_ = PAGE_SIZE;
+        QSettings s;
+        s.beginGroup("news");
+        s.setValue("language", active_lang_);
+        s.endGroup();
+        ScreenStateManager::instance().notify_changed(this);
         apply_filters_async();
+    });
+
+    // Feed context menu → "Filter feed by $TICKER" shows the ticker in the box.
+    connect(feed_panel_, &NewsFeedPanel::ticker_filter_requested, this, [this](const QString& ticker) {
+        SymbolRef ref;
+        ref.symbol = ticker;
+        on_group_symbol_changed(ref);
     });
 
     // Pulse animation timer (500ms cycle for new item glow)
@@ -230,33 +281,44 @@ void NewsScreen::connect_signals() {
             return;
         const QSet<QString> ids = std::move(pending_seen_ids_);
         pending_seen_ids_.clear();
+        const int flushed = static_cast<int>(ids.size());
         QPointer<NewsScreen> self = this;
-        (void)QtConcurrent::run([ids, self]() {
+        (void)QtConcurrent::run([ids, self, flushed]() {
             for (const auto& id : ids)
                 fincept::NewsArticleRepository::instance().mark_seen(id);
             if (self) {
                 QMetaObject::invokeMethod(
                     self,
-                    [self]() {
+                    [self, flushed]() {
                         if (self)
-                            LOG_INFO("NewsScreen", QString("Flushed %1 seen IDs to DB").arg(0));
+                            LOG_DEBUG("NewsScreen", QString("Flushed %1 seen IDs to DB").arg(flushed));
                     },
                     Qt::QueuedConnection);
             }
         });
     });
 
-    // Scroll-based seen tracking
+    // Scroll-based seen tracking. Only the rows between the first and last one
+    // inside the viewport are looked at (indexAt on the viewport edges) — the
+    // old loop asked visualRect() of EVERY row on every scroll tick.
     connect(feed_panel_->list_view()->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
         auto* lv = feed_panel_->list_view();
-        const QRect viewport_rect = lv->viewport()->rect();
-        for (int i = 0; i < feed_panel_->model()->rowCount(); ++i) {
-            const auto idx = feed_panel_->model()->index(i, 0);
-            if (lv->visualRect(idx).intersects(viewport_rect)) {
-                const QString id = feed_panel_->model()->article_at(i).id;
-                feed_panel_->model()->mark_seen(id);
-                pending_seen_ids_.insert(id);
-            }
+        auto* model = feed_panel_->model();
+        const int row_count = model->rowCount();
+        if (row_count == 0)
+            return;
+        const QModelIndex first = lv->indexAt(QPoint(4, 2));
+        if (!first.isValid())
+            return;
+        const QModelIndex last = lv->indexAt(QPoint(4, lv->viewport()->height() - 2));
+        const int first_row = first.row();
+        const int last_row = last.isValid() ? last.row() : row_count - 1;
+        for (int i = first_row; i <= last_row && i < row_count; ++i) {
+            const QString id = model->article_at(i).id;
+            if (id.isEmpty())
+                continue;
+            model->mark_seen(id);
+            pending_seen_ids_.insert(id);
         }
         if (!pending_seen_ids_.isEmpty())
             seen_flush_timer_->start();
@@ -310,8 +372,10 @@ void NewsScreen::connect_signals() {
         auto idx = feed_panel_->list_view()->currentIndex();
         if (idx.isValid()) {
             auto article = feed_panel_->model()->article_at(idx.row());
-            if (!article.link.isEmpty())
-                QDesktopServices::openUrl(QUrl(article.link));
+            // Feed links are untrusted — web URLs only.
+            const QUrl url(article.link);
+            if (url.isValid() && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https")))
+                QDesktopServices::openUrl(url);
         }
     });
 
@@ -346,6 +410,14 @@ void NewsScreen::showEvent(QShowEvent* e) {
     }
     services::NewsService::instance().connect_live_feed();
     subscribe_mcp_events();
+
+    if (!first_show_) {
+        // Returning to the screen: articles_updated is ignored while hidden, so
+        // the list could be hours old with the next auto-refresh a full interval
+        // away. force=false serves the 10-minute cache instantly when it is
+        // still fresh and only hits the network when it has expired.
+        refresh_data(/*force=*/false);
+    }
 
     if (first_show_) {
         first_show_ = false;
@@ -405,6 +477,7 @@ void NewsScreen::hideEvent(QHideEvent* e) {
     visible_ = false;
     ticker_strip_->pause();
     pulse_timer_->stop();
+    enrichment_timer_->stop(); // no point spawning Python for a hidden screen
     services::NewsService::instance().stop_auto_refresh();
     services::NewsService::instance().disconnect_live_feed();
     filter_generation_.fetch_add(1, std::memory_order_relaxed);
@@ -517,9 +590,11 @@ void NewsScreen::on_group_symbol_changed(const SymbolRef& ref) {
     if (!ref.is_valid())
         return;
     // Route through the same pipeline the search box uses so caching,
-    // highlighting, and notifications stay consistent. We don't touch
-    // the command bar's text box — the search query is the data-layer
-    // filter, which is what drives feed filtering.
+    // highlighting, and notifications stay consistent. The symbol is also
+    // shown in the search box (without re-triggering it) — otherwise the feed
+    // is silently narrowed to a handful of articles with no visible reason and
+    // no way to clear it.
+    command_bar_->set_search_text(ref.symbol);
     on_search_changed(ref.symbol);
 }
 
@@ -658,11 +733,17 @@ void NewsScreen::on_monitor_deleted(const QString& id) {
 
 void NewsScreen::on_analyze_requested(const QString& url) {
     QPointer<NewsScreen> self = this;
-    services::NewsService::instance().analyze_article(url, [self](bool ok, services::NewsAnalysis analysis) {
+    services::NewsService::instance().analyze_article(url, [self, url](bool ok, services::NewsAnalysis analysis) {
         if (!self)
+            return;
+        // The request can take many seconds; the user may have opened another
+        // article since. Don't paint this article's analysis over a different one.
+        if (self->detail_panel_->current_article_link() != url)
             return;
         if (ok)
             self->detail_panel_->show_analysis(analysis);
+        else
+            self->detail_panel_->show_analysis_failed(); // used to leave the button spinning for 30 s
     });
 }
 
@@ -683,40 +764,59 @@ void NewsScreen::on_detail_closed() {
 
 void NewsScreen::refresh_data(bool force) {
     LOG_INFO("NewsScreen", "refresh_data: start");
+    // A refresh over an existing list keeps showing that list (P11: never blank
+    // the screen while waiting) instead of swapping in the skeleton, and the
+    // partial snapshots below don't replace it — they used to shrink a full list
+    // to the first feed's handful of articles and grow it back every refresh.
+    const bool had_articles = !all_articles_.isEmpty();
     loading_ = true;
     command_bar_->set_loading(true);
-    feed_panel_->set_loading(true);
+    if (!had_articles)
+        feed_panel_->set_loading(true);
 
     auto* svc = &services::NewsService::instance();
 
     QPointer<NewsScreen> self = this;
     auto conn = std::make_shared<QMetaObject::Connection>();
     *conn = connect(svc, &services::NewsService::articles_partial, this,
-                    [self, conn](QVector<services::NewsArticle> articles, int done, int total) {
+                    [self, conn, had_articles](QVector<services::NewsArticle> articles, int done, int total) {
                         if (!self)
                             return;
-                        self->all_articles_ = std::move(articles);
                         self->command_bar_->set_loading_progress(done, total);
-                        // Hide skeleton as soon as we have any articles to render —
-                        // otherwise the overlay traps progressive partials and the
-                        // user sees a blank list until the slowest feed times out.
-                        if (!self->all_articles_.isEmpty()) {
+                        if (!had_articles && !articles.isEmpty()) {
+                            self->all_articles_ = std::move(articles);
+                            // Hide skeleton as soon as we have any articles to render —
+                            // otherwise the overlay traps progressive partials and the
+                            // user sees a blank list until the slowest feed times out.
                             self->feed_panel_->set_loading(false);
+                            self->apply_filters_async();
                         }
-                        self->apply_filters_async();
                         if (done == total)
                             QObject::disconnect(*conn);
                     });
 
-    svc->fetch_all_news_progressive(force, [self](bool ok, QVector<services::NewsArticle> articles) {
+    svc->fetch_all_news_progressive(force, [self, conn, svc](bool ok, QVector<services::NewsArticle> articles) {
         if (!self)
             return;
+        // The fetch is over — drop the partial-snapshot connection even if the
+        // service never emitted a done == total partial (otherwise each refresh
+        // would leave another handler behind).
+        QObject::disconnect(*conn);
         self->loading_ = false;
         self->command_bar_->set_loading(false);
+        self->command_bar_->set_loading_progress(0, 0);
         self->feed_panel_->set_loading(false);
         if (!ok) {
             LOG_ERROR("NewsScreen", "Failed to fetch news");
-            self->feed_panel_->set_empty_state(true);
+            if (self->all_articles_.isEmpty())
+                self->feed_panel_->set_empty_state(true);
+            return;
+        }
+        // Every feed failing (network loss) yields an empty result: keep the
+        // last list rather than wiping it. An empty result with ZERO enabled
+        // feeds is legitimate and does clear the screen.
+        if (articles.isEmpty() && !self->all_articles_.isEmpty() && svc->feed_count() > 0) {
+            LOG_WARN("NewsScreen", "Refresh returned no articles — keeping the previous list");
             return;
         }
         self->all_articles_ = std::move(articles);
@@ -971,10 +1071,15 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
         };
         if (get_bool("notifications.news_breaking", true)) {
             using namespace fincept::notifications;
+            const int64_t notify_now = QDateTime::currentSecsSinceEpoch();
             for (const auto& cluster : breaking) {
                 const QString& lead_id = cluster.lead_article.id;
+                if (notify_now - cluster.lead_article.sort_ts > kNewsNotifyMaxAgeSec)
+                    continue; // stale: already in the feed when we started
                 if (notified_breaking_.contains(lead_id))
                     continue;
+                if (notified_breaking_.size() > kNewsNotifiedSetCap)
+                    notified_breaking_.clear();
                 notified_breaking_.insert(lead_id);
 
                 NotificationRequest req;
@@ -1098,14 +1203,19 @@ void NewsScreen::update_monitors() {
     };
     if (get_bool("notifications.news_monitors", true)) {
         using namespace fincept::notifications;
+        const int64_t notify_now = QDateTime::currentSecsSinceEpoch();
         for (const auto& monitor : monitors) {
             if (!monitor.enabled)
                 continue;
             const auto& articles = matches.value(monitor.id);
             for (const auto& article : articles) {
+                if (notify_now - article.sort_ts > kNewsNotifyMaxAgeSec)
+                    continue; // stale: already in the feed when we started
                 const QString dedup_key = monitor.id + ":" + article.id;
                 if (notified_monitors_.contains(dedup_key))
                     continue;
+                if (notified_monitors_.size() > kNewsNotifiedSetCap)
+                    notified_monitors_.clear();
                 notified_monitors_.insert(dedup_key);
 
                 NotificationRequest req;
@@ -1123,31 +1233,38 @@ void NewsScreen::compute_deviations() {
     int64_t now = QDateTime::currentSecsSinceEpoch();
     int64_t hour_ago = now - 3600;
 
+    // Last-hour volume per category across the WHOLE feed. This used to count
+    // the UI-filtered list, so picking a category/time range/search changed the
+    // "normal" level the spike was judged against.
     QMap<QString, int> current_counts;
-    for (const auto& a : filtered_articles_) {
+    for (const auto& a : std::as_const(all_articles_)) {
         if (a.sort_ts >= hour_ago)
             current_counts[a.category]++;
     }
 
+    // The history is HOURLY (168 = 7 days, 24 needed before judging), but this
+    // function runs on every filter change and every progressive partial — it
+    // used to append a sample each time, so "24 hours of history" was reached
+    // within one refresh and spikes were scored against half-loaded lists
+    // (spurious "DEVIATION" notifications). Judge against the history as it
+    // stands, and add a new sample at most once an hour from a complete list.
     QVector<QPair<QString, double>> deviations;
 
     for (auto it = current_counts.begin(); it != current_counts.end(); ++it) {
-        auto& baseline = baselines_[it.key()];
-        baseline.hourly_counts.append(it.value());
-
-        while (baseline.hourly_counts.size() > 168)
-            baseline.hourly_counts.removeFirst();
-
-        if (baseline.hourly_counts.size() < 24)
+        if (loading_) // partial list — counts are not comparable to the baseline
+            break;
+        auto found = baselines_.find(it.key());
+        if (found == baselines_.end() || found->hourly_counts.size() < 24)
             continue;
+        auto& baseline = *found;
 
         double sum = 0;
-        for (int c : baseline.hourly_counts)
+        for (int c : std::as_const(baseline.hourly_counts))
             sum += c;
         baseline.mean_count = sum / baseline.hourly_counts.size();
 
         double var_sum = 0;
-        for (int c : baseline.hourly_counts) {
+        for (int c : std::as_const(baseline.hourly_counts)) {
             double diff = c - baseline.mean_count;
             var_sum += diff * diff;
         }
@@ -1161,6 +1278,22 @@ void NewsScreen::compute_deviations() {
             deviations.append({it.key(), z_score});
     }
 
+    const bool take_sample = !loading_ && !all_articles_.isEmpty() && (now - last_baseline_sample_ts_ >= 3600);
+    if (take_sample) {
+        last_baseline_sample_ts_ = now;
+        QSet<QString> categories;
+        for (auto it = current_counts.cbegin(); it != current_counts.cend(); ++it)
+            categories.insert(it.key());
+        for (auto it = baselines_.cbegin(); it != baselines_.cend(); ++it)
+            categories.insert(it.key());
+        for (const auto& category : std::as_const(categories)) {
+            auto& baseline = baselines_[category];
+            baseline.hourly_counts.append(current_counts.value(category, 0)); // quiet hours count as 0
+            while (baseline.hourly_counts.size() > 168)
+                baseline.hourly_counts.removeFirst();
+        }
+    }
+
     std::sort(deviations.begin(), deviations.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
 
     side_panel_->update_deviations(deviations);
@@ -1172,6 +1305,15 @@ void NewsScreen::compute_deviations() {
         auto r = repo.get(key);
         return r.is_ok() && !r.value().isEmpty() ? (r.value() == "1") : def;
     };
+
+    // Re-arm categories that have calmed down, so a later spike notifies again
+    // (the dedup set used to hold a category for the rest of the session).
+    for (auto it = notified_deviations_.begin(); it != notified_deviations_.end();) {
+        const QString cat = *it;
+        const bool still_spiking = std::any_of(deviations.cbegin(), deviations.cend(),
+                                               [&cat](const auto& d) { return d.first == cat; });
+        it = still_spiking ? std::next(it) : notified_deviations_.erase(it);
+    }
 
     if (get_bool("notifications.news_deviations", true)) {
         using namespace fincept::notifications;
@@ -1199,8 +1341,14 @@ void NewsScreen::compute_deviations() {
                 continue;
             if (article.impact != services::Impact::HIGH)
                 continue;
+            // Only fresh items: every FLASH item of the last day used to fire a
+            // Critical notification at launch.
+            if (now - article.sort_ts > kNewsNotifyMaxAgeSec)
+                continue;
             if (notified_flash_.contains(article.id))
                 continue;
+            if (notified_flash_.size() > kNewsNotifiedSetCap)
+                notified_flash_.clear();
             notified_flash_.insert(article.id);
 
             NotificationRequest req;
@@ -1212,9 +1360,12 @@ void NewsScreen::compute_deviations() {
         }
     }
 
-    // Persist baselines
-    services::NewsCorrelationService::instance().update_baseline(
-        current_counts, [](bool /*ok*/, QMap<QString, services::CategoryBaseline> /*baselines*/) {});
+    // Persist baselines — once per hourly sample. This used to spawn a Python
+    // process on every UI update (dozens per refresh) and discard the result.
+    if (take_sample) {
+        services::NewsCorrelationService::instance().update_baseline(
+            current_counts, [](bool /*ok*/, QMap<QString, services::CategoryBaseline> /*baselines*/) {});
+    }
 }
 
 void NewsScreen::sort_articles(QVector<services::NewsArticle>& articles) const {
@@ -1252,7 +1403,7 @@ QVariantMap NewsScreen::save_state() const {
     // queries, so users can't see what's hiding articles).
     return {
         {"category", active_category_}, {"time_range", time_range_},  {"sort_mode", sort_mode_},
-        {"view_mode", view_mode_},      {"variant", active_variant_},
+        {"view_mode", view_mode_},      {"variant", active_variant_}, {"language", active_lang_},
     };
 }
 
@@ -1263,13 +1414,18 @@ void NewsScreen::restore_state(const QVariantMap& state) {
     view_mode_ = state.value("view_mode", "WIRE").toString();
     // Drop any legacy "search_query" stored by an older build — see save_state().
     search_query_.clear();
-    active_variant_ = state.value("variant", "FULL").toString();
+    active_variant_ = state.value("variant", active_variant_).toString();
+    active_lang_ = state.value("language", active_lang_).toString();
 
     if (command_bar_) {
         command_bar_->set_active_category(active_category_);
         command_bar_->set_active_time_range(time_range_);
         command_bar_->set_active_sort(sort_mode_);
         command_bar_->set_active_view(view_mode_);
+        // The variant/language filters apply to the feed, so the combos must show
+        // them — restoring only the member left a hidden filter behind.
+        command_bar_->set_active_variant(active_variant_);
+        command_bar_->set_active_language(active_lang_);
     }
 }
 

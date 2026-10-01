@@ -11,7 +11,6 @@
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "python/PythonRunner.h"
 #include "services/file_manager/FileManagerService.h"
 #include "services/notebooks/NotebookLibraryService.h"
 #include "ui/theme/Theme.h"
@@ -35,7 +34,10 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QSaveFile>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QShortcut>
@@ -135,6 +137,106 @@ inline QString kStyle() {
 namespace fincept::screens {
 
 using namespace fincept::ui;
+
+// ── nbformat output (de)serialisation ────────────────────────────────────────
+// Saved notebooks used to carry an empty "outputs" array for every cell, so a
+// notebook reopened after a run showed an execution count but no results.
+
+namespace {
+
+// nbformat stores multi-line text as an array of lines, each keeping its "\n".
+QJsonArray nb_text_to_lines(const QString& text) {
+    QJsonArray lines;
+    const QStringList parts = text.split(QLatin1Char('\n'));
+    for (int i = 0; i < parts.size(); ++i) {
+        const bool last = (i + 1 == parts.size());
+        if (last && parts[i].isEmpty())
+            break; // text ended with a newline — no phantom empty line
+        lines.append(last ? parts[i] : parts[i] + QLatin1Char('\n'));
+    }
+    return lines;
+}
+
+// A text field is either one string or an array of lines. Terminal escape
+// sequences (Jupyter colours its tracebacks) are stripped — the output view is
+// plain text.
+QString nb_lines_to_text(const QJsonValue& v) {
+    QString text;
+    if (v.isArray()) {
+        for (const QJsonValue& line : v.toArray())
+            text += line.toString();
+    } else {
+        text = v.toString();
+    }
+    static const QRegularExpression kAnsi(QStringLiteral("\\x1b\\[[0-9;]*[A-Za-z]"));
+    text.remove(kAnsi);
+    return text;
+}
+
+QJsonArray nb_outputs_to_json(const QVector<CellOutput>& outputs, int exec_count) {
+    QJsonArray arr;
+    for (const CellOutput& out : outputs) {
+        QJsonObject o;
+        if (out.type == QLatin1String("stream")) {
+            o["output_type"] = QStringLiteral("stream");
+            o["name"] = out.name.isEmpty() ? QStringLiteral("stdout") : out.name;
+            o["text"] = nb_text_to_lines(out.text);
+        } else if (out.type == QLatin1String("error")) {
+            o["output_type"] = QStringLiteral("error");
+            o["ename"] = out.error_name;
+            o["evalue"] = out.error_value;
+            QJsonArray tb;
+            for (const QString& line : out.traceback)
+                tb.append(line);
+            o["traceback"] = tb;
+        } else if (out.type == QLatin1String("execute_result")) {
+            o["output_type"] = QStringLiteral("execute_result");
+            o["execution_count"] = exec_count > 0 ? QJsonValue(exec_count) : QJsonValue();
+            QJsonObject data;
+            data["text/plain"] = nb_text_to_lines(out.text);
+            o["data"] = data;
+            o["metadata"] = QJsonObject();
+        } else {
+            continue;
+        }
+        arr.append(o);
+    }
+    return arr;
+}
+
+QVector<CellOutput> nb_outputs_from_json(const QJsonArray& arr) {
+    QVector<CellOutput> outputs;
+    for (const QJsonValue& v : arr) {
+        const QJsonObject o = v.toObject();
+        const QString type = o.value(QStringLiteral("output_type")).toString();
+        CellOutput out;
+        if (type == QLatin1String("stream")) {
+            out.type = QStringLiteral("stream");
+            out.name = o.value(QStringLiteral("name")).toString(QStringLiteral("stdout"));
+            out.text = nb_lines_to_text(o.value(QStringLiteral("text")));
+        } else if (type == QLatin1String("error")) {
+            out.type = QStringLiteral("error");
+            out.error_name = o.value(QStringLiteral("ename")).toString();
+            out.error_value = o.value(QStringLiteral("evalue")).toString();
+            for (const QJsonValue& line : o.value(QStringLiteral("traceback")).toArray())
+                out.traceback << nb_lines_to_text(line);
+            out.text = out.traceback.join(QLatin1Char('\n'));
+        } else if (type == QLatin1String("execute_result") || type == QLatin1String("display_data")) {
+            // Only the plain-text rendition can be shown; images/HTML are skipped.
+            const QJsonValue plain = o.value(QStringLiteral("data")).toObject().value(QStringLiteral("text/plain"));
+            if (plain.isUndefined())
+                continue;
+            out.type = QStringLiteral("execute_result");
+            out.text = nb_lines_to_text(plain);
+        } else {
+            continue;
+        }
+        outputs.append(out);
+    }
+    return outputs;
+}
+
+} // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CodeTextEdit — editor with keyboard shortcuts
@@ -521,6 +623,10 @@ void CodeEditorScreen::on_insert_below(const QString& cell_id) {
 }
 
 void CodeEditorScreen::add_cell_after(const QString& after_id, const QString& type) {
+    // rebuild_cells() re-creates every widget from cells_, which only learns about
+    // typing on run/save — pull the live text back first or adding a cell wipes
+    // whatever was typed since.
+    sync_cells_from_widgets();
     NotebookCell cell;
     cell.id = new_cell_id();
     cell.cell_type = type;
@@ -552,6 +658,7 @@ void CodeEditorScreen::on_delete_cell(const QString& cell_id) {
         }
     }
 
+    sync_cells_from_widgets(); // the rebuild below must not drop other cells' unsaved typing
     int idx = find_cell_index(cell_id);
     if (idx >= 0) {
         cells_.removeAt(idx);
@@ -571,9 +678,9 @@ void CodeEditorScreen::on_move_cell_up(const QString& cell_id) {
     if (idx <= 0)
         return;
 
-    auto* cw = find_cell_widget(cell_id);
-    if (cw)
-        cells_[idx] = cw->cell_data();
+    // Sync EVERY cell (not just the moved one) — rebuild_cells() re-creates all
+    // widgets from cells_ — and keep outputs, which cell_data() does not carry.
+    sync_cells_from_widgets();
 
     cells_.swapItemsAt(idx, idx - 1);
     rebuild_cells();
@@ -585,9 +692,7 @@ void CodeEditorScreen::on_move_cell_down(const QString& cell_id) {
     if (idx < 0 || idx >= cells_.size() - 1)
         return;
 
-    auto* cw = find_cell_widget(cell_id);
-    if (cw)
-        cells_[idx] = cw->cell_data();
+    sync_cells_from_widgets();
 
     cells_.swapItemsAt(idx, idx + 1);
     rebuild_cells();
@@ -599,9 +704,7 @@ void CodeEditorScreen::on_toggle_cell_type(const QString& cell_id) {
     if (idx < 0)
         return;
 
-    auto* cw = find_cell_widget(cell_id);
-    if (cw)
-        cells_[idx] = cw->cell_data();
+    sync_cells_from_widgets();
 
     cells_[idx].cell_type = (cells_[idx].cell_type == "code") ? "markdown" : "code";
     cells_[idx].outputs.clear();
@@ -650,10 +753,13 @@ void CodeEditorScreen::on_rename_cell(const QString& cell_id) {
 
     // Empty name means "use auto preview from source"
     cells_[idx].title = name;
+    if (auto* cw = find_cell_widget(cell_id))
+        cw->set_title(name); // else the next sync/save reads the stale title back
     update_navigator();
 }
 
 void CodeEditorScreen::on_clear_outputs() {
+    sync_cells_from_widgets(); // rebuild below must keep unsaved typing
     for (auto& cell : cells_) {
         cell.outputs.clear();
         cell.execution_count = 0;
@@ -720,7 +826,8 @@ void CodeEditorScreen::on_run_cell(const QString& cell_id) {
     QPointer<CodeEditorScreen> self = this;
     QString cid = cell_id;
 
-    python::PythonRunner::instance().run_code(code, [self, cid, exec_num](python::PythonResult result) {
+    services::NotebookLibraryService::instance().run_cell(
+        code, [self, cid, exec_num](const services::NotebookRunResult& result) {
         if (!self)
             return;
 
@@ -861,6 +968,11 @@ bool CodeEditorScreen::load_notebook_from_path(const QString& path) {
         QJsonObject cell_metadata = co["metadata"].toObject();
         cell.title = cell_metadata["fincept_title"].toString().trimmed();
         cell.execution_count = co["execution_count"].toInt(0);
+        if (cell.cell_type == "code") {
+            cell.outputs = nb_outputs_from_json(co["outputs"].toArray());
+            // Keep numbering monotonic with what the file already shows.
+            execution_counter_ = qMax(execution_counter_, cell.execution_count);
+        }
         cells_.append(cell);
     }
 
@@ -918,7 +1030,7 @@ void CodeEditorScreen::on_save_notebook() {
 
         if (cell.cell_type == "code") {
             co["execution_count"] = cell.execution_count > 0 ? QJsonValue(cell.execution_count) : QJsonValue();
-            co["outputs"] = QJsonArray();
+            co["outputs"] = nb_outputs_to_json(cell.outputs, cell.execution_count);
         }
         json_cells.append(co);
     }
@@ -936,10 +1048,11 @@ void CodeEditorScreen::on_save_notebook() {
     metadata["kernelspec"] = kernelspec;
     root["metadata"] = metadata;
 
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-        file.close();
+    // QSaveFile commits via rename: a failed write can no longer leave the user's
+    // only copy of the notebook truncated (library notebooks are edited in place).
+    QSaveFile file(path);
+    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) >= 0 &&
+        file.commit()) {
         notebook_path_ = path;
         clean_fingerprint_ = notebook_fingerprint();
         LOG_INFO("CodeEditor", "Saved notebook: " + path);

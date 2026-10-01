@@ -17,11 +17,14 @@
 #include "storage/repositories/WorkflowRepository.h"
 
 #include <QJsonArray>
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
 #include <QTimer>
 #include <QUuid>
+
+#include <atomic>
 
 namespace fincept::mcp::tools {
 
@@ -118,11 +121,8 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
                                                        : ToolResult::fail("Routing failed"));
                                      holder->deleteLater();
                                  });
-                QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
-                                     resolve(ToolResult::fail(msg));
-                                     holder->deleteLater();
-                                 });
+                // No error_occurred listener: routing reports failure through routing_result
+                // (success=false), and that signal's category-keyed errors belong to other calls.
             });
         };
         tools.push_back(std::move(t));
@@ -163,7 +163,12 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
                                                                         holder->deleteLater();
                                                                     });
                                                    QObject::connect(svc, &services::AgentService::error_occurred,
-                                                                    holder, [resolve, holder](QString, QString msg) {
+                                                                    holder,
+                                                                    [resolve, holder](QString err_ctx, QString msg) {
+                                                                        // execute_multi_query reports failure as "multi_query";
+                                                                        // every other context is somebody else's call.
+                                                                        if (err_ctx != QLatin1String("multi_query"))
+                                                                            return;
                                                                         resolve(ToolResult::fail(msg));
                                                                         holder->deleteLater();
                                                                     });
@@ -177,25 +182,46 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
     // Note: these emit agent_result via the AgentExecutionResult signal but
     // do NOT return a request_id (they kick off internally). We use a
     // single-shot connection that resolves on the first agent_result.
-    auto bridge_workflow_no_reqid = [](auto kick, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
+    //
+    // Because the result cannot be tied to the call, two of these in flight at once would
+    // resolve each other: the first agent_result finished BOTH promises, so a second ticker's
+    // analysis came back carrying the first ticker's report. Once the first call returns a
+    // job receipt the model is free to start another immediately, so this was easy to hit.
+    // Allow one at a time (the claim expires with the tool budget so a lost callback cannot
+    // wedge the tool), and ignore results of runs resolved by id elsewhere. A run started from
+    // the Agent screen can still be mistaken for ours — that needs the service to return a
+    // request id (see report).
+    auto bridge_workflow_no_reqid = [](auto kick, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise,
+                                       const char* failed_text = "Run failed") {
+        auto& busy_until_ms = mcp_agent_workflow_busy_until_ms();
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        qint64 seen = busy_until_ms.load();
+        if (seen > now ||
+            !busy_until_ms.compare_exchange_strong(seen, now + kDefaultAgentTimeoutMs + 10000)) {
+            AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [](auto resolve) {
+                resolve(ToolResult::fail(
+                    "Another agent workflow run is still in progress — its result cannot be told apart from this "
+                    "one's. Wait for it (job_status / job_result) before starting another."));
+            });
+            return;
+        }
         auto* svc = &services::AgentService::instance();
         AsyncDispatch::callback_to_promise(
-            svc, std::move(ctx), promise, [svc, kick = std::move(kick)](auto resolve) mutable {
+            svc, std::move(ctx), promise,
+            [svc, kick = std::move(kick), failed_text](auto resolve) mutable {
                 auto* holder = new QObject(svc);
                 QObject::connect(
                     svc, &services::AgentService::agent_result, holder,
-                    [resolve, holder](services::AgentExecutionResult r) {
+                    [resolve, holder, failed_text](services::AgentExecutionResult r) {
+                        if (mcp_agent_reqid_known(r.request_id))
+                            return; // that run is awaited by id by another tool
+                        mcp_agent_workflow_busy_until_ms().store(0);
                         if (r.success)
-                            resolve(ToolResult::ok(r.response.isEmpty() ? "OK" : r.response, result_to_json(r)));
+                            resolve(agent_run_ok(r));
                         else
-                            resolve(ToolResult::fail(r.error.isEmpty() ? "Run failed" : r.error));
+                            resolve(ToolResult::fail(r.error.isEmpty() ? QString::fromUtf8(failed_text) : r.error));
                         holder->deleteLater();
                     });
-                QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
-                                     resolve(ToolResult::fail(msg));
-                                     holder->deleteLater();
-                                 });
                 kick();
             });
     };
@@ -399,17 +425,14 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
                                      if (r.request_id != req_id)
                                          return;
                                      if (r.success)
-                                         resolve(ToolResult::ok(r.response, result_to_json(r)));
+                                         resolve(agent_run_ok(r));
                                      else
                                          resolve(
                                              ToolResult::fail(r.error.isEmpty() ? "Streaming run failed" : r.error));
                                      holder->deleteLater();
                                  });
-                QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
-                                     resolve(ToolResult::fail(msg));
-                                     holder->deleteLater();
-                                 });
+                // As in dispatch_agent_run: failure arrives through agent_stream_done(success=false);
+                // the category-keyed error_occurred signal belongs to unrelated calls.
             });
         };
         tools.push_back(std::move(t));
@@ -438,30 +461,18 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
                              .default_str("")
                              .length(0, 128)
                              .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
+        t.async_handler = [bridge_workflow_no_reqid](const QJsonObject& args, ToolContext ctx,
+                                                     std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString query = args["query"].toString();
             const QJsonObject config = args["config"].toObject();
             const QString session_id = args["session_id"].toString();
-            auto* svc = &services::AgentService::instance();
-            AsyncDispatch::callback_to_promise(
-                svc, std::move(ctx), promise, [svc, query, config, session_id](auto resolve) {
-                    auto* holder = new QObject(svc);
-                    QObject::connect(svc, &services::AgentService::agent_result, holder,
-                                     [resolve, holder](services::AgentExecutionResult r) {
-                                         if (r.success)
-                                             resolve(ToolResult::ok(r.response, result_to_json(r)));
-                                         else
-                                             resolve(
-                                                 ToolResult::fail(r.error.isEmpty() ? "Routed query failed" : r.error));
-                                         holder->deleteLater();
-                                     });
-                    QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                     [resolve, holder](QString, QString msg) {
-                                         resolve(ToolResult::fail(msg));
-                                         holder->deleteLater();
-                                     });
-                    svc->execute_routed_query(query, config, session_id);
-                });
+            // execute_routed_query is void and its result carries no request id — same
+            // situation (and the same guard) as the financial workflows above.
+            bridge_workflow_no_reqid(
+                [query, config, session_id]() {
+                    services::AgentService::instance().execute_routed_query(query, config, session_id);
+                },
+                std::move(ctx), promise, "Routed query failed");
         };
         tools.push_back(std::move(t));
     }

@@ -4,6 +4,7 @@
 
 #include "core/logging/Logger.h"
 #include "trading/brokers/BrokerHttp.h"
+#include "trading/brokers/BrokerModifyFields.h"
 #include "trading/brokers/BrokerTokenUtil.h"
 
 #include <QCryptographicHash>
@@ -211,7 +212,8 @@ OrderPlaceResponse FyersBroker::place_order(const BrokerCredentials& creds, cons
                         {"side", fyers_int_map().side_or(order.side, 1)},
                         {"productType", fyers_str_map().product_or(order.product_type, "INTRADAY")},
                         {"validity", order.validity},
-                        {"offlineOrder", false}};
+                        // AMO flag, as place_multi_order already sends it (offlineOrder = after-market order).
+                        {"offlineOrder", order.amo}};
 
     if (order.order_type == OrderType::Limit || order.order_type == OrderType::StopLossLimit)
         payload["limitPrice"] = order.price;
@@ -246,11 +248,48 @@ OrderPlaceResponse FyersBroker::place_order(const BrokerCredentials& creds, cons
 
 ApiResponse<QJsonObject> FyersBroker::modify_order(const BrokerCredentials& creds, const QString& order_id,
                                                    const QJsonObject& modifications) {
-    QJsonObject payload = modifications;
+    // PATCH /orders/sync takes Fyers-native fields: id, type (1 limit / 2 market / 3 stop /
+    // 4 stop-limit), qty, limitPrice, stopPrice. The terminal's modify callers send
+    // {quantity, price} plus the order's type as TEXT ("LIMIT"), none of which Fyers reads — the
+    // old pass-through left the request with nothing to modify. Translate to the native fields;
+    // a caller that already supplies native numeric fields keeps them untouched.
+    int64_t ts = now_ts();
+    QJsonObject payload;
     payload["id"] = order_id;
+    for (const char* k : {"type", "qty", "limitPrice", "stopPrice"}) {
+        const QJsonValue v = modifications.value(QLatin1String(k));
+        if (v.isDouble())
+            payload[QLatin1String(k)] = v;
+    }
+    if (!payload.contains("type")) {
+        QString t = modify_fields::text(modifications, modify_fields::kOrderType).trimmed().toUpper();
+        t.remove('_').remove(' ').remove('-');
+        int ftype = 0;
+        if (t == "LIMIT" || t == "1")
+            ftype = 1;
+        else if (t == "MARKET" || t == "2")
+            ftype = 2;
+        else if (t == "STOP" || t == "STOPMARKET" || t == "STOPLOSSMARKET" || t == "SLM" || t == "3")
+            ftype = 3;
+        else if (t == "STOPLIMIT" || t == "STOPLOSSLIMIT" || t == "SL" || t == "4")
+            ftype = 4;
+        if (ftype > 0)
+            payload["type"] = ftype;
+    }
+    const int ftype = payload.value("type").toInt(0);
+    if (!payload.contains("qty") && modify_fields::has_any(modifications, modify_fields::kQuantity))
+        payload["qty"] = static_cast<int>(modify_fields::number(modifications, modify_fields::kQuantity));
+    if (!payload.contains("limitPrice") && ftype != 2 && modify_fields::has_any(modifications, modify_fields::kPrice))
+        payload["limitPrice"] = modify_fields::number(modifications, modify_fields::kPrice);
+    if (!payload.contains("stopPrice") && (ftype == 3 || ftype == 4) &&
+        modify_fields::has_any(modifications, modify_fields::kTrigger))
+        payload["stopPrice"] = modify_fields::number(modifications, modify_fields::kTrigger);
+    if (payload.size() <= 1)
+        return {false, std::nullopt, "Nothing to modify — supply a quantity or price", ts};
+
     auto resp =
         BrokerHttp::instance().patch_json(QString(base_url()) + "/api/v3/orders/sync", payload, auth_headers(creds));
-    int64_t ts = now_ts();
+    ts = now_ts();
     if (!resp.success)
         return {false, std::nullopt, resp.error, ts};
     if (resp.json.value("s").toString() == "ok")
@@ -446,7 +485,9 @@ ApiResponse<QVector<BrokerQuote>> FyersBroker::get_quotes(const BrokerCredential
             if (i > batch_start)
                 syms += ",";
             const QString fyers_sym = to_fyers_sym(symbols[i]);
-            syms += fyers_sym;
+            // Percent-encode each symbol (':' kept): a '&' in "NSE:M&M-EQ" would otherwise end the
+            // `symbols` parameter. The reverse map stays keyed by the raw wire symbol.
+            syms += QString::fromUtf8(QUrl::toPercentEncoding(fyers_sym, QByteArray(":")));
             fyers_to_orig.insert(fyers_sym, symbols[i]);
         }
         auto resp =
@@ -519,7 +560,8 @@ ApiResponse<QVector<BrokerCandle>> FyersBroker::get_history(const BrokerCredenti
                             QString& err) -> bool {
         const QString url =
             QString("%1/data/history?symbol=%2&resolution=%3&date_format=1&range_from=%4&range_to=%5&cont_flag=1")
-                .arg(base_url(), fyers_sym, fyers_res, range_from, range_to);
+                .arg(base_url(), QString::fromUtf8(QUrl::toPercentEncoding(fyers_sym, QByteArray(":"))), fyers_res,
+                     range_from, range_to);
 
         auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
         if (!resp.success) {
@@ -613,7 +655,9 @@ ApiResponse<QVector<BrokerQuote>> FyersBroker::get_historical_quotes_single(cons
                                                                             const QString& /*start*/,
                                                                             const QString& /*end*/, int /*limit*/) {
 
-    const QString url = QString("%1/data/depth?symbol=%2&ohlcv_flag=1").arg(base_url(), to_fyers_sym(symbol));
+    const QString url =
+        QString("%1/data/depth?symbol=%2&ohlcv_flag=1")
+            .arg(base_url(), QString::fromUtf8(QUrl::toPercentEncoding(to_fyers_sym(symbol), QByteArray(":"))));
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
     int64_t ts = now_ts();
     if (!resp.success)
@@ -984,7 +1028,9 @@ ApiResponse<MarketDepth> FyersBroker::get_market_depth(const BrokerCredentials& 
                                                        const QString& exchange) {
 
     Q_UNUSED(exchange);
-    const QString url = QString("%1/data/depth?symbol=%2&ohlcv_flag=1").arg(base_url(), to_fyers_sym(symbol));
+    const QString url =
+        QString("%1/data/depth?symbol=%2&ohlcv_flag=1")
+            .arg(base_url(), QString::fromUtf8(QUrl::toPercentEncoding(to_fyers_sym(symbol), QByteArray(":"))));
     auto resp = BrokerHttp::instance().get(url, auth_headers(creds));
     int64_t ts = now_ts();
 

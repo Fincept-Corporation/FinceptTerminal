@@ -38,6 +38,14 @@ void PolymarketOrderBook::set_data(const PredictionOrderBook& book) {
     QMutexLocker lock(&mutex_);
     bids_ = book.bids;
     asks_ = book.asks;
+    // Fixed 2 dp rendered a 0.001-tick market's 0.525 / 0.526 levels both as "0.53" and
+    // made its click-to-price rounding invisible. 0 = tick unknown: keep the last value.
+    if (book.tick_size >= 0.01)
+        price_decimals_ = 2;
+    else if (book.tick_size >= 0.001)
+        price_decimals_ = 3;
+    else if (book.tick_size > 0.0)
+        price_decimals_ = 4;
 
     // Calculate spread
     double best_bid = bids_.isEmpty() ? 0 : bids_[0].price;
@@ -187,7 +195,8 @@ void PolymarketOrderBook::rebuild_cache() {
         p.fillRect(w - bar_w, y, bar_w, ROW_HEIGHT, QColor(220, 38, 38, 25));
 
         p.setPen(QColor(colors::NEGATIVE()));
-        p.drawText(4, y, col_w, ROW_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, QString::number(asks_[i].price, 'f', 2));
+        p.drawText(4, y, col_w, ROW_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter,
+                   QString::number(asks_[i].price, 'f', price_decimals_));
         p.setPen(QColor(colors::TEXT_SECONDARY()));
         p.drawText(col_w, y, col_w, ROW_HEIGHT, Qt::AlignRight | Qt::AlignVCenter,
                    QString::number(asks_[i].size, 'f', 1));
@@ -217,7 +226,8 @@ void PolymarketOrderBook::rebuild_cache() {
         p.fillRect(w - bar_w, y, bar_w, ROW_HEIGHT, QColor(22, 163, 74, 25));
 
         p.setPen(QColor(colors::POSITIVE()));
-        p.drawText(4, y, col_w, ROW_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, QString::number(bids_[i].price, 'f', 2));
+        p.drawText(4, y, col_w, ROW_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter,
+                   QString::number(bids_[i].price, 'f', price_decimals_));
         p.setPen(QColor(colors::TEXT_SECONDARY()));
         p.drawText(col_w, y, col_w, ROW_HEIGHT, Qt::AlignRight | Qt::AlignVCenter,
                    QString::number(bids_[i].size, 'f', 1));

@@ -221,6 +221,12 @@ void VideoPlayerWidget::play_custom_url() {
 }
 
 void VideoPlayerWidget::play_url(const QString& url, const QString& title) {
+    // Two quick channel clicks used to race: both yt-dlp resolutions ran and
+    // whichever finished last won, so the channel playing was not always the
+    // last one picked (and a direct stream could be overridden by a late
+    // YouTube result). Cancel any earlier resolution first.
+    cancel_ytdlp();
+
     current_url_ = url;
     current_title_ = title;
     pending_title_ = title;
@@ -293,6 +299,7 @@ void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, con
 
     // Use yt-dlp to get the best direct stream URL (no downloading, just URL extraction)
     auto* proc = new QProcess(this);
+    ytdlp_proc_ = proc;
     connect(proc, &QProcess::finished, this, &VideoPlayerWidget::on_ytdlp_finished);
     connect(proc, &QProcess::finished, proc, &QProcess::deleteLater);
     connect(proc, &QProcess::errorOccurred, this, &VideoPlayerWidget::on_ytdlp_error);
@@ -301,6 +308,19 @@ void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, con
     // --no-playlist: single video only
     // -g: print URL only, don't download
     proc->start(ytdlp_program, {"-f", "best[ext=mp4]/best", "--no-playlist", "-g", youtube_url});
+}
+
+void VideoPlayerWidget::cancel_ytdlp() {
+    QProcess* proc = ytdlp_proc_.data();
+    if (!proc)
+        return;
+    ytdlp_proc_.clear();
+    // Detach our slots first: kill() makes `finished`/`errorOccurred` fire, and
+    // they would otherwise report the aborted run as a failure (or play it).
+    // The proc->deleteLater connection (receiver = proc) is left in place.
+    proc->disconnect(this);
+    proc->kill();
+    proc->deleteLater();
 }
 
 void VideoPlayerWidget::on_ytdlp_finished(int exit_code, QProcess::ExitStatus /*status*/) {
@@ -358,7 +378,9 @@ void VideoPlayerWidget::play_direct(const QString& stream_url) {
 }
 
 void VideoPlayerWidget::stop_playback() {
+    cancel_ytdlp(); // STOP while a YouTube URL is still resolving must win
 #ifdef HAS_QT_MULTIMEDIA
+    resume_on_show_ = false;
     player_->stop();
     player_->setSource(QUrl());
 #endif
@@ -457,10 +479,45 @@ void VideoPlayerWidget::on_theme_changed() {
     apply_styles();
 }
 
+void VideoPlayerWidget::showEvent(QShowEvent* e) {
+    BaseWidget::showEvent(e);
+#ifdef HAS_QT_MULTIMEDIA
+    if (resume_on_show_ && player_) {
+        resume_on_show_ = false;
+        player_->play();
+    }
+#endif
+}
+
+void VideoPlayerWidget::hideEvent(QHideEvent* e) {
+    BaseWidget::hideEvent(e);
+#ifdef HAS_QT_MULTIMEDIA
+    if (player_ && player_->playbackState() == QMediaPlayer::PlayingState) {
+        player_->pause();
+        resume_on_show_ = true;
+    }
+#endif
+}
+
 void VideoPlayerWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("LIVE TV / STREAMS"));
-    build_channel_list(); // re-renders channel names + descriptions + custom-URL helper text
+    // Re-label the existing controls. This used to call build_channel_list()
+    // again, which built a second, never-shown list page on top of the stack
+    // (and appended to channel_rows_, so apply_styles() then restyled the old
+    // rows) — a leak that translated nothing visible.
+    if (channel_header_)
+        channel_header_->setText(tr("FINANCIAL TV"));
+    if (custom_header_)
+        custom_header_->setText(tr("CUSTOM STREAM"));
+    if (url_input_)
+        url_input_->setPlaceholderText(tr("YouTube URL, HLS (.m3u8), MP4, or direct stream..."));
+    if (play_btn_)
+        play_btn_->setText(tr("PLAY"));
+    if (helper_label_)
+        helper_label_->setText(tr("YouTube streams resolved via yt-dlp and played inline."));
+    if (stop_btn_)
+        stop_btn_->setText(QString(QChar(0x25A0)) + " " + tr("STOP"));
 }
 
 } // namespace fincept::screens::widgets

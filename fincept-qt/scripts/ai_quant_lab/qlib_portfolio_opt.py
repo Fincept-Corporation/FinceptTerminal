@@ -95,7 +95,8 @@ class PortfolioOptimizationService:
                     asset_idx = assets.index(asset)
                     # Lower confidence = higher uncertainty
                     view_var = (1 - confidence) * tau * cov_matrix.iloc[asset_idx, asset_idx]
-                    Omega[i, i] = view_var
+                    # confidence == 1 would make Omega singular (np.linalg.inv raises)
+                    Omega[i, i] = max(view_var, 1e-12)
 
             # Step 3: Black-Litterman formula
             # Posterior returns = equilibrium + adjustment from views
@@ -475,6 +476,21 @@ class PortfolioOptimizationService:
         return sorted_items.tolist()
 
 
+def _json_safe(obj):
+    """Replace NaN / +-Infinity with None before json.dumps.
+
+    Python emits them as bare ``NaN`` / ``Infinity`` tokens, which are not JSON: the
+    terminal's parser rejects the WHOLE payload ("malformed JSON") over one empty cell.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def main():
     """CLI interface"""
     if len(sys.argv) < 2:
@@ -500,11 +516,28 @@ def main():
         elif command == "black_litterman":
             cov_raw = params.get("cov_matrix", [])
             assets = params.get("assets", [f"A{i}" for i in range(len(cov_raw))])
+            # The panel sends views / confidences as flat lists, one entry per asset in
+            # the order the assets were typed. The model wants {asset: value} dicts --
+            # passing the raw arrays failed with "'numpy.ndarray' object has no
+            # attribute 'items'" on every run.
+            def as_asset_map(value, field):
+                if isinstance(value, dict):
+                    return {str(k): float(v) for k, v in value.items()}
+                values = [float(v) for v in (value or [])]
+                if len(values) > len(assets):
+                    raise ValueError(f"{field} has {len(values)} entries but only {len(assets)} assets were given")
+                return dict(zip(assets, values))
+
+            views_map = as_asset_map(params.get("views"), "views")
+            conf_map = as_asset_map(params.get("view_confidences"), "view_confidences")
+            if len(conf_map) != len(views_map):
+                raise ValueError("Each view needs exactly one confidence "
+                                 f"(got {len(views_map)} view(s) and {len(conf_map)} confidence(s))")
             result = service.black_litterman(
                 market_caps=pd.Series(params.get("market_caps", []), index=assets),
                 cov_matrix=pd.DataFrame(cov_raw, index=assets, columns=assets),
-                views=np.array(params.get("views", [])),
-                view_confidences=np.array(params.get("view_confidences", [])),
+                views=views_map,
+                view_confidences=conf_map,
                 risk_free_rate=params.get("risk_free_rate", 0.02),
                 tau=params.get("tau", 0.025),
                 risk_aversion=params.get("risk_aversion", 2.5)
@@ -547,7 +580,7 @@ def main():
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}
 
-        print(json.dumps(result))
+        print(json.dumps(_json_safe(result)))
 
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e)}))

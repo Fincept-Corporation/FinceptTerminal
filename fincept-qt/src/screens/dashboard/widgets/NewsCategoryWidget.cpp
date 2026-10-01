@@ -6,6 +6,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -15,6 +16,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QSpinBox>
+#include <QUrl>
 
 namespace fincept::screens::widgets {
 
@@ -36,7 +38,16 @@ NewsCategoryWidget::NewsCategoryWidget(const QJsonObject& cfg, QWidget* parent)
     list_->setWordWrap(true);
     list_->setSelectionMode(QAbstractItemView::NoSelection);
     list_->setFocusPolicy(Qt::NoFocus);
+    list_->setToolTip(tr("Click a headline to open the article"));
     vl->addWidget(list_, 1);
+
+    // Headline → article. The URL rides on the item (Qt::UserRole); only
+    // http(s) links are opened.
+    connect(list_, &QListWidget::itemClicked, this, [](QListWidgetItem* item) {
+        const QUrl url(item->data(Qt::UserRole).toString());
+        if (url.isValid() && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https")))
+            QDesktopServices::openUrl(url);
+    });
 
     set_configurable(true);
     apply_styles();
@@ -57,6 +68,10 @@ void NewsCategoryWidget::apply_config(const QJsonObject& cfg) {
     max_rows_ = qBound(3, cfg.value("max_rows").toInt(12), 50);
     badge_->setText(category_.toUpper());
     list_->clear();
+    // Show the loading overlay until the first delivery for this category —
+    // the list used to sit blank (indistinguishable from "broken") while the
+    // topic fetched.
+    set_loading(true);
 
     if (isVisible())
         hub_resubscribe();
@@ -103,6 +118,13 @@ void NewsCategoryWidget::on_articles(const QVariant& v) {
         const QString line = QString("[%1]  %2").arg(time, a.headline);
         auto* item = new QListWidgetItem(line, list_);
         item->setToolTip(a.summary.isEmpty() ? a.headline : a.summary);
+        item->setData(Qt::UserRole, a.link);
+    }
+    // Empty state — an unknown/quiet category rendered a blank list.
+    if (n == 0) {
+        auto* empty = new QListWidgetItem(tr("No articles in this category"), list_);
+        empty->setFlags(Qt::NoItemFlags);
+        empty->setTextAlignment(Qt::AlignCenter);
     }
     set_loading(false);
 }
@@ -153,7 +175,11 @@ void NewsCategoryWidget::apply_styles() {
 void NewsCategoryWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("NEWS — CATEGORY"));
-    hub_resubscribe(); // re-renders badge + list with current category label
+    // Re-render from the hub — but only while subscribed. This used to call
+    // hub_resubscribe() unconditionally, so a language switch made every hidden
+    // tile subscribe (and stay subscribed until its next hide).
+    if (hub_active_)
+        hub_resubscribe();
 }
 
 } // namespace fincept::screens::widgets

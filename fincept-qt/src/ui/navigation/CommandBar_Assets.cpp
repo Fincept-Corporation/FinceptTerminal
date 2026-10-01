@@ -165,12 +165,11 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
         auto* item = new QListWidgetItem(list_);
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName("cbRow");
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(10, 6, 10, 6);
         auto* lbl = new QLabel(tr("No results found"));
-        lbl->setStyleSheet(QString("color:%1;font-size:11px;font-family:'Consolas',monospace;background:transparent;")
-                               .arg(colors::TEXT_TERTIARY.get()));
+        lbl->setObjectName("cbEmpty");
         rl->addWidget(lbl);
         item->setSizeHint(QSize(0, 30));
         list_->setItemWidget(item, row);
@@ -198,21 +197,17 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
         item->setData(Qt::UserRole + 2, type);      // asset type
 
         auto* row = new QWidget;
-        row->setStyleSheet("background:transparent;");
+        row->setObjectName("cbRow");
         auto* hl = new QHBoxLayout(row);
         hl->setContentsMargins(10, 4, 10, 4);
         hl->setSpacing(8);
 
         auto* sym_lbl = new QLabel(yf_symbol);
-        sym_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:700;"
-                                       "font-family:'Consolas',monospace;background:transparent;")
-                                   .arg(colors::TEXT_PRIMARY.get()));
+        sym_lbl->setObjectName("cbAsset");
         sym_lbl->setFixedWidth(110);
 
         auto* name_lbl = new QLabel(name);
-        name_lbl->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;"
-                                        "font-family:'Consolas',monospace;")
-                                    .arg(colors::TEXT_SECONDARY.get()));
+        name_lbl->setObjectName("cbDesc");
         name_lbl->setMaximumWidth(200);
 
         hl->addWidget(sym_lbl);
@@ -220,19 +215,13 @@ void CommandBar::on_asset_results(const QJsonArray& results) {
 
         if (!exchange.isEmpty()) {
             auto* exch_lbl = new QLabel(exchange);
-            exch_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-family:'Consolas',monospace;"
-                                            "background:transparent;")
-                                        .arg(colors::TEXT_TERTIARY.get()));
+            exch_lbl->setObjectName("cbExch");
             hl->addWidget(exch_lbl);
         }
 
         // Type badge
         auto* type_lbl = new QLabel(type.toUpper());
-        type_lbl->setStyleSheet(QString("color:%1;font-size:9px;font-weight:700;"
-                                        "font-family:'Consolas',monospace;background:%2;"
-                                        "padding:1px 4px;border-radius:2px;")
-                                    .arg(colors::AMBER.get())
-                                    .arg(colors::BG_RAISED.get()));
+        type_lbl->setObjectName("cbType");
         hl->addWidget(type_lbl);
 
         item->setSizeHint(QSize(0, 32));
@@ -253,12 +242,18 @@ void CommandBar::select_asset(const QString& symbol, const QString& type) {
     hide_dropdown();
     input_->clearFocus();
 
-    // Navigate to equity_research and tell it to load the symbol
-    emit navigate_to("equity_research");
-    EventBus::instance().publish("equity_research.load_symbol", {
-                                                                    {"symbol", symbol},
-                                                                    {"type", type},
-                                                                });
+    // Navigate to equity_research and tell it to load the symbol. nav.open_symbol
+    // navigates (constructing the screen if needed) and then hands over the symbol
+    // through IGroupLinked — and, unlike the app-wide equity_research.load_symbol
+    // broadcast it replaces, only the frame this command bar lives in acts, so the
+    // Equity Research panels of other open windows are left alone. `type` (asset
+    // type) was never read by the receiver.
+    Q_UNUSED(type)
+    EventBus::instance().publish("nav.open_symbol", {
+                                                        {"screen_id", QStringLiteral("equity_research")},
+                                                        {"symbol", symbol},
+                                                        {"exclusive", true},
+                                                    });
 }
 
 // ── dropdown helpers ─────────────────────────────────────────────────────────

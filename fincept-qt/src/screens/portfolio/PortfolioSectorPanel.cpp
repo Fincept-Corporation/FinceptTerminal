@@ -176,8 +176,24 @@ void PortfolioSectorPanel::update_donut() {
     auto* chart = donut_view_->chart();
     chart->removeAllSeries();
 
-    if (holdings_.isEmpty())
+    // Tear down the legend rows. Hoisted above the empty check so selling the last
+    // position clears them too (they used to outlive the donut they described).
+    auto clear_legend = [this]() {
+        if (auto* old = legend_widget_->layout()) {
+            QLayoutItem* item;
+            while ((item = old->takeAt(0)) != nullptr) {
+                if (item->widget())
+                    item->widget()->deleteLater();
+                delete item;
+            }
+            delete old;
+        }
+    };
+
+    if (holdings_.isEmpty()) {
+        clear_legend();
         return;
+    }
 
     // Group by inferred sector using actual portfolio weights
     QHash<QString, double> sector_weights;
@@ -216,15 +232,7 @@ void PortfolioSectorPanel::update_donut() {
     chart->addSeries(series);
 
     // Rebuild legend
-    if (auto* old = legend_widget_->layout()) {
-        QLayoutItem* item;
-        while ((item = old->takeAt(0)) != nullptr) {
-            if (item->widget())
-                item->widget()->deleteLater();
-            delete item;
-        }
-        delete old;
-    }
+    clear_legend();
 
     auto* legend_layout = new QVBoxLayout(legend_widget_);
     legend_layout->setContentsMargins(4, 0, 0, 0);

@@ -157,7 +157,9 @@ void AlgoDeployDialog::build_ui() {
     timeframe_combo_ = new QComboBox(this);
     for (const auto& tf : algo_timeframes())
         timeframe_combo_->addItem(tf);
-    timeframe_combo_->setCurrentIndex(4);
+    // Default 5m. (A hard-coded index 4 landed on "10m" — not 5m — once "live" was prepended
+    // to the list, so a bare deploy silently ran on the wrong bars.)
+    timeframe_combo_->setCurrentIndex(qMax(0, timeframe_combo_->findText(QStringLiteral("5m"))));
     timeframe_label_ = new QLabel(tr("Timeframe:"), this);
     form->addRow(timeframe_label_, timeframe_combo_);
 
@@ -328,6 +330,18 @@ void AlgoDeployDialog::on_ok() {
     }
 
     QString mode = mode_combo_->currentData().toString();
+
+    // BOTH modes take their market data from a connected broker account (DeploymentRunner
+    // subscribes the quote feed through it). With none selected the deployment starts, gets no
+    // quotes and is marked "error" by the 30s watchdog — so refuse here, with the reason.
+    if (account_combo_->currentData().toString().isEmpty()) {
+        QMessageBox::warning(this, tr("Validation"),
+                             tr("No connected broker account is selected. Deployments — paper ones too — read their "
+                                "live prices from a connected broker.\n\nConnect a broker in Equity Trading, then "
+                                "deploy again."));
+        return;
+    }
+
     if (mode == "live") {
         QString account_id = account_combo_->currentData().toString();
         if (account_id.isEmpty()) {

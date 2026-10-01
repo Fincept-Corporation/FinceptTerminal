@@ -1,6 +1,7 @@
 #include "screens/fno/OrderConfirmDialog.h"
 
 #include "core/logging/Logger.h"
+#include "trading/AccountManager.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
 #include "ui/theme/Theme.h"
@@ -247,7 +248,30 @@ void OrderConfirmDialog::start_margin_fetch() {
         on_margin_loaded(false, {}, tr("Broker %1 not registered").arg(chain_.broker_id));
         return;
     }
-    BrokerCredentials creds = broker->load_credentials();
+    // Credentials live under the ACCOUNT's scoped keys (account.<uuid>.*) —
+    // IBroker::load_credentials() only reads the legacy single-broker keys, which
+    // are empty for any account added through the multi-account flow, so the margin
+    // request went out unauthenticated and the field always showed "—". Resolve the
+    // account the same way the chain assembly does (active first, else first), and
+    // only fall back to the legacy keys when no account credentials exist.
+    BrokerCredentials creds;
+    {
+        auto& accounts_mgr = fincept::trading::AccountManager::instance();
+        const auto accounts = accounts_mgr.list_accounts(chain_.broker_id);
+        QString account_id;
+        for (const auto& acct : accounts) {
+            if (acct.is_active) {
+                account_id = acct.account_id;
+                break;
+            }
+        }
+        if (account_id.isEmpty() && !accounts.isEmpty())
+            account_id = accounts.first().account_id;
+        if (!account_id.isEmpty())
+            creds = accounts_mgr.load_credentials(account_id);
+        if (creds.access_token.isEmpty())
+            creds = broker->load_credentials();
+    }
 
     QVector<UnifiedOrder> orders;
     orders.reserve(strategy_.legs.size());

@@ -27,11 +27,11 @@ struct StatCanSeries {
 };
 
 static const QList<StatCanSeries> kStatCanSeries = {
-    {"Real GDP (Chained 2017 $, SA)", "gdp", "Table 36-10-0104-01, v65201210, quarterly"},
+    {"Real GDP (Chained 2017 $, SA)", "gdp", "Table 36-10-0434-01, v65201210, monthly"},
     {"CPI All-Items, Canada", "cpi", "Table 18-10-0004-01, v41690973, monthly"},
     {"Unemployment Rate", "unemployment", "Table 14-10-0287-01, v2062815, monthly"},
     {"Employment Rate", "employment", "Table 14-10-0287-01, v2062817, monthly"},
-    {"Population Estimate (Canada)", "population", "Table 17-10-0005-01, v466668, quarterly"},
+    {"Population Estimate (Canada)", "population", "Table 17-10-0005-01, v466668, annual (July 1)"},
     {"Housing Starts (SA, SAAR)", "housing", "Table 34-10-0158-01, v52300157, monthly"},
 };
 

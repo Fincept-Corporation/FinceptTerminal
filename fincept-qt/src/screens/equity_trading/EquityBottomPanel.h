@@ -212,6 +212,8 @@ class EquityBottomPanel : public QWidget {
 
     QString account_id_;
     bool is_paper_ = true;
+    // Mirrors set_us_market_tabs_visible(); the AUCTIONS tab additionally needs rows to show.
+    bool us_tabs_visible_ = true;
 };
 
 } // namespace fincept::screens::equity

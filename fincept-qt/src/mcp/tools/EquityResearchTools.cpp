@@ -29,6 +29,9 @@
 #include <QJsonObject>
 #include <QObject>
 
+#include <algorithm>
+#include <initializer_list>
+
 namespace fincept::mcp::tools {
 
 namespace {
@@ -111,9 +114,30 @@ QJsonObject info_to_json(const services::equity::StockInfo& i) {
     };
 }
 
-QJsonArray candles_to_json(const QVector<services::equity::Candle>& cs) {
+// EquityResearchService::error_occurred(context, message) carries a CATEGORY ("Quote",
+// "News", ...) — not a request id — and the service is shared with the Equity Research
+// screen. The handlers below used to resolve on ANY error from ANY caller, so a news
+// failure for another symbol (or the user clicking around the screen) failed an unrelated
+// in-flight quote call. Accept only the contexts this tool's own request can produce.
+bool er_error_is_ours(const QString& error_context, std::initializer_list<const char*> ours) {
+    for (const char* c : ours) {
+        if (error_context.compare(QLatin1String(c), Qt::CaseInsensitive) == 0)
+            return true;
+    }
+    return false;
+}
+
+// Historical bars: the latest `limit`, never the oldest. The overflow shaper keeps the
+// FIRST items of an array, so an unbounded 1y/5y series came back as the stalest bars with
+// the recent ones parked behind result_fetch. `omitted` reports what was cut (§M3/M4).
+QJsonArray candles_to_json_latest(const QVector<services::equity::Candle>& cs, int limit, qsizetype* omitted) {
+    const qsizetype total = cs.size();
+    const qsizetype first = total > limit ? total - limit : 0;
+    if (omitted)
+        *omitted = first;
     QJsonArray arr;
-    for (const auto& c : cs) {
+    for (qsizetype i = first; i < total; ++i) {
+        const auto& c = cs[i];
         arr.append(QJsonObject{
             {"timestamp", c.timestamp},
             {"open", c.open},
@@ -267,7 +291,15 @@ std::vector<ToolDef> get_equity_research_tools() {
         t.default_timeout_ms = kDefaultTimeoutMs;
         t.input_schema = ToolSchemaBuilder().string("query", "Search query").required().length(1, 128).build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString q = args["query"].toString();
+            const QString q = args["query"].toString().trimmed();
+            if (q.isEmpty()) {
+                // search_symbols() returns silently on a blank query and emits nothing, which
+                // would leave this call hanging until the watchdog.
+                AsyncDispatch::callback_to_promise(nullptr, ctx, promise, [](auto resolve) {
+                    resolve(ToolResult::fail("'query' must not be blank"));
+                });
+                return;
+            }
             auto* svc = &services::equity::EquityResearchService::instance();
             AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, q](auto resolve) {
                 auto* holder = new QObject(svc);
@@ -287,9 +319,13 @@ std::vector<ToolDef> get_equity_research_tools() {
                                      resolve(ToolResult::ok_data(arr));
                                      holder->deleteLater();
                                  });
+                // A failed search is reported as error_occurred("Search", …). Only that
+                // context is ours — other contexts are other callers' quote/info failures.
                 QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
-                                     resolve(ToolResult::fail(msg));
+                                 [resolve, holder](const QString& context, const QString& message) {
+                                     if (context != QLatin1String("Search"))
+                                         return;
+                                     resolve(ToolResult::fail(message));
                                      holder->deleteLater();
                                  });
                 svc->search_symbols(q);
@@ -315,16 +351,21 @@ std::vector<ToolDef> get_equity_research_tools() {
                              .string("period", "Historical period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max)")
                              .default_str("1y")
                              .length(1, 8)
+                             .integer("limit", "Max historical bars returned (latest bars; default 60, max 1000)")
+                             .default_int(60)
+                             .between(1, 1000)
                              .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString sym = args["symbol"].toString().toUpper();
+            const QString sym = args["symbol"].toString().trimmed().toUpper();
             const QString period = args["period"].toString("1y");
+            const int limit = std::clamp(args["limit"].toInt(60), 1, 1000);
             auto* svc = &services::equity::EquityResearchService::instance();
-            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, sym, period](auto resolve) {
+            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, sym, period, limit](auto resolve) {
                 struct State {
                     QJsonObject quote;
                     QJsonObject info;
                     QJsonArray candles;
+                    qsizetype candles_omitted = 0;
                     bool got_quote = false;
                     bool got_info = false;
                     bool got_hist = false;
@@ -333,12 +374,17 @@ std::vector<ToolDef> get_equity_research_tools() {
                 auto* holder = new QObject(svc);
                 auto try_finish = [resolve, holder, state, sym]() {
                     if (state->got_quote && state->got_info && state->got_hist) {
-                        resolve(ToolResult::ok_data(QJsonObject{
+                        QJsonObject out{
                             {"symbol", sym},
                             {"quote", state->quote},
                             {"info", state->info},
                             {"historical", state->candles},
-                        }));
+                        };
+                        if (state->candles_omitted > 0) {
+                            out["historical_truncated"] = true;
+                            out["historical_omitted_bars"] = static_cast<qint64>(state->candles_omitted);
+                        }
+                        resolve(ToolResult::ok_data(out));
                         holder->deleteLater();
                     }
                 };
@@ -359,15 +405,17 @@ std::vector<ToolDef> get_equity_research_tools() {
                                      try_finish();
                                  });
                 QObject::connect(svc, &services::equity::EquityResearchService::historical_loaded, holder,
-                                 [sym, state, try_finish](QString s, QVector<services::equity::Candle> cs) {
+                                 [sym, state, try_finish, limit](QString s, QVector<services::equity::Candle> cs) {
                                      if (s.toUpper() != sym)
                                          return;
-                                     state->candles = candles_to_json(cs);
+                                     state->candles = candles_to_json_latest(cs, limit, &state->candles_omitted);
                                      state->got_hist = true;
                                      try_finish();
                                  });
                 QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (!er_error_is_ours(err_ctx, {"Quote", "Info", "Historical"}))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -392,13 +440,19 @@ std::vector<ToolDef> get_equity_research_tools() {
                              .string("period", "Historical period (only used for historical)")
                              .default_str("1y")
                              .length(1, 8)
+                             .integer("limit", "Max bars returned, latest bars (only used for historical; default "
+                                               "60, max 1000)")
+                             .default_int(60)
+                             .between(1, 1000)
                              .build();
         t.async_handler = [which](const QJsonObject& args, ToolContext ctx,
                                   std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString sym = args["symbol"].toString().toUpper();
+            const QString sym = args["symbol"].toString().trimmed().toUpper();
             const QString period = args["period"].toString("1y");
+            const int limit = std::clamp(args["limit"].toInt(60), 1, 1000);
             auto* svc = &services::equity::EquityResearchService::instance();
-            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, sym, period, which](auto resolve) {
+            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise,
+                                               [svc, sym, period, which, limit](auto resolve) {
                 auto* holder = new QObject(svc);
                 if (which == 'q') {
                     QObject::connect(svc, &services::equity::EquityResearchService::quote_loaded, holder,
@@ -417,20 +471,32 @@ std::vector<ToolDef> get_equity_research_tools() {
                                          holder->deleteLater();
                                      });
                 } else { // 'h'
-                    QObject::connect(svc, &services::equity::EquityResearchService::historical_loaded, holder,
-                                     [sym, resolve, holder](QString s, QVector<services::equity::Candle> cs) {
-                                         if (s.toUpper() != sym)
-                                             return;
-                                         resolve(ToolResult::ok_data(QJsonObject{
-                                             {"symbol", s},
-                                             {"candles", candles_to_json(cs)},
-                                             {"count", static_cast<int>(cs.size())},
-                                         }));
-                                         holder->deleteLater();
-                                     });
+                    QObject::connect(
+                        svc, &services::equity::EquityResearchService::historical_loaded, holder,
+                        [sym, resolve, holder, limit](QString s, QVector<services::equity::Candle> cs) {
+                            if (s.toUpper() != sym)
+                                return;
+                            qsizetype omitted = 0;
+                            const QJsonArray candles = candles_to_json_latest(cs, limit, &omitted);
+                            QJsonObject out{
+                                {"symbol", s},
+                                {"candles", candles},
+                                {"count", static_cast<int>(candles.size())},
+                                {"total_bars", static_cast<int>(cs.size())},
+                            };
+                            if (omitted > 0) {
+                                out["truncated"] = true;
+                                out["omitted_oldest_bars"] = static_cast<qint64>(omitted);
+                            }
+                            resolve(ToolResult::ok_data(out));
+                            holder->deleteLater();
+                        });
                 }
+                const char* my_context = which == 'q' ? "Quote" : (which == 'i' ? "Info" : "Historical");
                 QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder, my_context](QString err_ctx, QString msg) {
+                                     if (!er_error_is_ours(err_ctx, {my_context}))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -481,7 +547,9 @@ std::vector<ToolDef> get_equity_research_tools() {
                                      holder->deleteLater();
                                  });
                 QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (!er_error_is_ours(err_ctx, {"Financials"}))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -520,7 +588,9 @@ std::vector<ToolDef> get_equity_research_tools() {
                                      holder->deleteLater();
                                  });
                 QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (!er_error_is_ours(err_ctx, {"Technicals"}))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -557,7 +627,9 @@ std::vector<ToolDef> get_equity_research_tools() {
                                      holder->deleteLater();
                                  });
                 QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (!er_error_is_ours(err_ctx, {"Peers"}))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });
@@ -600,7 +672,9 @@ std::vector<ToolDef> get_equity_research_tools() {
                                      holder->deleteLater();
                                  });
                 QObject::connect(svc, &services::equity::EquityResearchService::error_occurred, holder,
-                                 [resolve, holder](QString, QString msg) {
+                                 [resolve, holder](QString err_ctx, QString msg) {
+                                     if (!er_error_is_ours(err_ctx, {"News"}))
+                                         return;
                                      resolve(ToolResult::fail(msg));
                                      holder->deleteLater();
                                  });

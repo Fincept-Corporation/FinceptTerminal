@@ -215,8 +215,16 @@ EquityTechnicalsTab::EquityTechnicalsTab(QWidget* parent) : QWidget(parent) {
     // INDICATORS…" forever (the overlay is hidden only on the success path).
     connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
             [this](const QString& ctx, const QString&) {
-                if ((ctx == "Technicals" || ctx == "Historical") && loading_overlay_)
+                if (ctx != "Technicals" && ctx != "Historical")
+                    return;
+                if (loading_overlay_)
                     loading_overlay_->hide_loading();
+                // Nothing computed for this symbol: don't leave the previous symbol's rating and
+                // indicator tables on screen under the new symbol's name.
+                if (!data_loaded_) {
+                    populate(services::equity::TechnicalsData{});
+                    rating_label_->setText(QString::fromUtf8("\xe2\x80\x94"));
+                }
             });
 }
 
@@ -224,6 +232,7 @@ void EquityTechnicalsTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
+    data_loaded_ = false; // the figures on screen belong to the previous symbol until new ones land
     loading_overlay_->show_loading(tr("COMPUTING INDICATORS…"));
     services::equity::EquityResearchService::instance().fetch_technicals(symbol, "1y");
 }

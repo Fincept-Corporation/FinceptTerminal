@@ -25,6 +25,11 @@ class CryptoOrderBook : public QWidget {
 
     void add_tick_snapshot(const TickSnapshot& snap);
 
+    /// Drop the book, the spread readout and the Imb / Sig history. Called on a
+    /// symbol / exchange switch so the previous pair's levels can't be shown (or
+    /// clicked into the order ticket) while the new pair's first snapshot loads.
+    void clear();
+
   signals:
     void price_clicked(double price);
 
@@ -55,6 +60,7 @@ class CryptoOrderBook : public QWidget {
     double spread_ = 0;
     double spread_pct_ = 0;
     QVector<TickSnapshot> tick_history_;
+    qint64 last_tick_capture_ms_ = 0; // rate-limits the Imb / Sig snapshots to OB_TICK_CAPTURE_MS
 
     ObViewMode view_mode_ = ObViewMode::Book;
     QPixmap cache_;

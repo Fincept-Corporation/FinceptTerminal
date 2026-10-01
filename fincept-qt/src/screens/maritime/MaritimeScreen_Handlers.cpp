@@ -27,6 +27,7 @@
 #include <QHeaderView>
 #include <QJsonObject>
 #include <QLocale>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QSet>
 #include <QSplitter>
@@ -101,6 +102,7 @@ void MaritimeScreen::load_global_sample() {
     // lanes first, so a tight server cap would cluster. ~22x less than 45k.
     params.limit = 2000;
     set_status(tr("LOADING GLOBAL..."), ui::colors::AMBER);
+    auto_refresh_pending_ = false;
     pending_global_sample_ = true;
     filter_to_shapes_ = false; // global view is never shape-filtered
     show_map_loading(tr("LOADING GLOBAL VESSELS"));
@@ -142,13 +144,15 @@ void MaritimeScreen::run_area_search(double min_lat, double max_lat, double min_
     // (e.g. an ocean) can still match thousands of vessels.
     params.limit = 2000;
     set_status(tr("SEARCHING..."), ui::colors::AMBER);
+    auto_refresh_pending_ = false;
     pending_global_sample_ = false;
     show_map_loading(tr("SEARCHING AREA"));
     MaritimeService::instance().search_vessels_by_area(params);
 }
 
 void MaritimeScreen::on_places_found(QVector<services::maritime::GeoPlace> places, QString context) {
-    Q_UNUSED(context);
+    if (context != place_req_ctx_)
+        return; // reply to a query the user has already typed past
     place_results_ = places;
     if (!place_table_)
         return;
@@ -212,15 +216,34 @@ void MaritimeScreen::on_shapes_changed() {
 }
 
 void MaritimeScreen::on_places_error(const QString& context, const QString& message) {
-    Q_UNUSED(context);
     LOG_WARN("Maritime", QString("Place search failed: %1").arg(message));
+    if (context != place_req_ctx_)
+        return;
     if (place_status_)
         place_status_->setText(tr("Search failed: %1").arg(message));
 }
 
+bool MaritimeScreen::read_imo(QString* imo_out) {
+    QString raw = imo_edit_->text().trimmed();
+    if (raw.startsWith(QLatin1String("IMO"), Qt::CaseInsensitive))
+        raw = raw.mid(3).trimmed();
+    if (raw.isEmpty())
+        return false;
+    static const QRegularExpression kSevenDigits(QStringLiteral("^\\d{7}$"));
+    if (!kSevenDigits.match(raw).hasMatch()) {
+        search_result_card_->setVisible(false);
+        search_result_label_->setText(tr("IMO numbers are 7 digits (e.g. 9344745)."));
+        search_result_label_->setVisible(true);
+        set_status(tr("INVALID IMO"), ui::colors::AMBER);
+        return false;
+    }
+    *imo_out = raw;
+    return true;
+}
+
 void MaritimeScreen::on_search_vessel() {
-    auto imo = imo_edit_->text().trimmed();
-    if (imo.isEmpty())
+    QString imo;
+    if (!read_imo(&imo))
         return;
     search_result_card_->setVisible(false);
     search_result_label_->setVisible(false);
@@ -358,7 +381,8 @@ void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
     populate_routes_table();
     // update_map populates rendered_vessels_ + the moving/speed/ports stats;
     // run it before update_intelligence so LOADED = actual pins on the map.
-    update_map(page.vessels.mid(0, kRenderLimit));
+    update_map(page.vessels.mid(0, kRenderLimit), /*fit_camera=*/!auto_refresh_pending_);
+    auto_refresh_pending_ = false;
     update_intelligence(region_total, rendered_vessels_.size());
 
     // Real "UPDATED:" clock in the status bar — every successful load stamps it.
@@ -373,21 +397,7 @@ void MaritimeScreen::on_vessels_loaded(VesselsPage page) {
 
 void MaritimeScreen::on_vessel_found(VesselData vessel) {
     hide_map_loading();
-    search_result_card_->setVisible(true);
-    search_result_label_->setVisible(false);
-    sr_name_->setText(vessel.name);
-    sr_imo_->setText(tr("IMO: %1").arg(vessel.imo));
-    // Always state the age of the fix next to the coordinates.
-    const PositionAge age = position_age(vessel.last_updated);
-    sr_position_->setText(tr("Position: %1, %2  ·  %3")
-                              .arg(vessel.latitude, 0, 'f', 4)
-                              .arg(vessel.longitude, 0, 'f', 4)
-                              .arg(age_text(age)));
-    sr_position_->setToolTip(age.known ? tr("Reported %1 UTC").arg(age.when.toString(Qt::ISODate))
-                                       : tr("The API did not report a position timestamp for this vessel."));
-    sr_speed_->setText(tr("Speed: %1 kn").arg(vessel.speed, 0, 'f', 1));
-    sr_from_->setText(tr("From: %1").arg(vessel.from_port.isEmpty() ? QStringLiteral("—") : vessel.from_port));
-    sr_to_->setText(tr("To: %1").arg(vessel.to_port.isEmpty() ? QStringLiteral("—") : vessel.to_port));
+    show_vessel_card(vessel);
 
     // Focus the map on the tracked vessel: drop a single amber pin and zoom in
     // on its current position so TRACK actually takes the user there.
@@ -407,14 +417,29 @@ void MaritimeScreen::on_vessel_found(VesselData vessel) {
 }
 
 void MaritimeScreen::on_error(const QString& context, const QString& message) {
+    // The status-bar health probe runs alongside the first vessel load. Its failure
+    // used to cancel that load's global-sample flag, hide its loading overlay and
+    // flip the whole screen to ERROR while vessels were still on the way.
+    if (context == QLatin1String("health")) {
+        LOG_WARN("Maritime", QString("Health check failed: %1").arg(message));
+        if (source_value_)
+            source_value_->setText(tr("UNAVAILABLE"));
+        return;
+    }
     hide_map_loading();
     pending_global_sample_ = false;
+    auto_refresh_pending_ = false;
     if (context == "vessel_position") {
         search_result_card_->setVisible(false);
         search_result_label_->setText(tr("Error: %1").arg(message));
         search_result_label_->setVisible(true);
+    } else if (context == "vessel_history") {
+        search_result_label_->setText(tr("History unavailable: %1").arg(message));
+        search_result_label_->setVisible(true);
     }
     set_status(tr("ERROR"), ui::colors::NEGATIVE);
+    if (status_label_)
+        status_label_->setToolTip(QStringLiteral("[%1] %2").arg(context, message));
     LOG_ERROR("Maritime", QString("[%1] %2").arg(context, message));
 }
 
@@ -438,6 +463,8 @@ void MaritimeScreen::on_ports_found(QVector<services::maritime::PortRecord> port
         return;
     }
 
+    if (context != ports_req_ctx_)
+        return; // reply to a query the user has already typed past
     port_results_ = ports;
     if (!ports_table_)
         return;
@@ -478,6 +505,11 @@ void MaritimeScreen::on_ports_found(QVector<services::maritime::PortRecord> port
 
 void MaritimeScreen::on_ports_error(const QString& context, const QString& message) {
     LOG_WARN("Maritime", QString("Ports [%1]: %2").arg(context, message));
+    // Voyage origin/destination lookups run behind the scenes; their failures (and
+    // replies for superseded queries) don't belong in the user's ports box.
+    voyage_port_ctx_.remove(context);
+    if (context != ports_req_ctx_)
+        return;
     if (ports_status_)
         ports_status_->setText(tr("Lookup failed: %1").arg(message));
 }
@@ -556,7 +588,7 @@ void MaritimeScreen::update_credits(int remaining) {
                                       .arg(rgb));
 }
 
-void MaritimeScreen::update_map(const QVector<VesselData>& vessels) {
+void MaritimeScreen::update_map(const QVector<VesselData>& vessels, bool fit_camera) {
     rendered_vessels_.clear();
     rendered_vessels_.reserve(vessels.size());
     QVector<fincept::ui::MapPin> pins;
@@ -596,7 +628,55 @@ void MaritimeScreen::update_map(const QVector<VesselData>& vessels) {
     if (stat_speed_)
         stat_speed_->setText(speed_n > 0 ? QString("%1 kn").arg(speed_sum / speed_n, 0, 'f', 1) : QStringLiteral("—"));
     map_widget_->set_pins(pins);
-    map_widget_->fit_to_pins();
+    if (fit_camera)
+        map_widget_->fit_to_pins();
+}
+
+void MaritimeScreen::show_vessel_card(const VesselData& v) {
+    if (search_result_card_)
+        search_result_card_->setVisible(true);
+    if (search_result_label_)
+        search_result_label_->setVisible(false);
+    if (sr_name_)
+        sr_name_->setText(v.name);
+    if (sr_imo_)
+        sr_imo_->setText(tr("IMO: %1").arg(v.imo));
+    // Always state the age of the fix next to the coordinates.
+    const PositionAge age = position_age(v.last_updated);
+    if (sr_position_) {
+        sr_position_->setText(tr("Position: %1, %2  ·  %3")
+                                  .arg(v.latitude, 0, 'f', 4)
+                                  .arg(v.longitude, 0, 'f', 4)
+                                  .arg(age_text(age)));
+        sr_position_->setToolTip(age.known ? tr("Reported %1 UTC").arg(age.when.toString(Qt::ISODate))
+                                           : tr("The API did not report a position timestamp for this vessel."));
+    }
+    if (sr_speed_)
+        sr_speed_->setText(tr("Speed: %1 kn").arg(v.speed, 0, 'f', 1));
+    if (sr_from_)
+        sr_from_->setText(tr("From: %1").arg(v.from_port.isEmpty() ? QStringLiteral("—") : v.from_port));
+    if (sr_to_)
+        sr_to_->setText(tr("To: %1").arg(v.to_port.isEmpty() ? QStringLiteral("—") : v.to_port));
+    // Sync the IMO field so VOYAGE HISTORY works right after picking a vessel (never
+    // blank the user's own entry when a record carries no IMO).
+    if (imo_edit_ && !v.imo.isEmpty())
+        imo_edit_->setText(v.imo);
+}
+
+void MaritimeScreen::on_vessel_row_picked(int row, bool fly) {
+    if (!vessels_table_ || row < 0)
+        return;
+    auto* imo_item = vessels_table_->item(row, 1); // IMO column
+    if (!imo_item)
+        return;
+    for (const auto& v : std::as_const(rendered_vessels_)) {
+        if (v.imo != imo_item->text())
+            continue;
+        show_vessel_card(v);
+        if (fly && map_widget_ && (v.latitude != 0.0 || v.longitude != 0.0))
+            map_widget_->fly_to(v.latitude, v.longitude);
+        return;
+    }
 }
 
 void MaritimeScreen::rebuild_routes_from_vessels(const QVector<VesselData>& vessels) {
@@ -671,6 +751,7 @@ void MaritimeScreen::on_vessel_history(VesselHistoryPage page) {
         track.append(QPointF(h.latitude, h.longitude));
     }
 
+    rendered_vessels_.clear();          // the fleet pins are gone; history rows must not resolve to them
     map_widget_->set_pins(pins);        // clears any previous track
     map_widget_->set_track_path(track); // draw the connecting line
     map_widget_->fit_to_pins();

@@ -39,6 +39,9 @@ class ToolBar : public QWidget {
   protected:
     void resizeEvent(QResizeEvent* e) override;
     void changeEvent(QEvent* e) override;
+    // §P3: the 1 s clock ticks only while the toolbar is visible.
+    void showEvent(QShowEvent* e) override;
+    void hideEvent(QHideEvent* e) override;
 
   private slots:
     void update_clock();

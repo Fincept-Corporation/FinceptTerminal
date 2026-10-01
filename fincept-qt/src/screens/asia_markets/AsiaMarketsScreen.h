@@ -51,6 +51,7 @@ class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
     void on_search_changed(const QString& text);
     void on_execute();
     void on_view_toggle();
+    void on_refresh();
 
   private:
     void setup_ui();
@@ -67,8 +68,10 @@ class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
 
     void load_endpoints(int cat_index);
     void populate_endpoint_list(const QJsonObject& result);
-    void execute_query(const QString& endpoint, const QStringList& extra_args);
-    void display_table(const QJsonArray& data);
+    /// `force` skips (and evicts) the 2-minute result cache — used by REFRESH.
+    void execute_query(const QString& endpoint, const QStringList& extra_args, bool force = false);
+    void run_query(bool force);
+    void display_table(const QJsonArray& data, const QStringList& columns = {});
     void display_json(const QJsonArray& data);
     void display_error(const QString& error);
     void set_loading(bool loading);
@@ -118,6 +121,12 @@ class AsiaMarketsScreen : public QWidget, public IStatefulScreen {
     bool is_table_view_ = true;
     bool loading_ = false;
     QJsonArray last_data_;
+
+    // Bumped whenever the category or the query changes; an async callback that finds a different
+    // value is stale (e.g. category A's endpoint list arriving after the user moved on to B, which
+    // used to auto-run A's endpoint through B's script) and must not touch the UI.
+    int request_seq_ = 0;
+    QString pending_endpoint_; // endpoint to re-select once the list is populated (restore_state)
 };
 
 } // namespace fincept::screens

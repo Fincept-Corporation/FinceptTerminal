@@ -437,7 +437,14 @@ void VoiceConfigSection::on_save() {
     }
 
     LOG_INFO(TAG, QString("Voice config saved (stt=%1 tts=%2)").arg(stt, tts));
-    set_status(tr("Saved. Changes apply on next voice session."), false);
+    // Selecting Deepgram without a key saved "successfully" and then failed at the
+    // first voice session with no hint here as to why.
+    if ((stt == "deepgram" || tts == "deepgram") && api_key.isEmpty())
+        set_status(tr("Saved — but Deepgram is selected and no API key is set, so voice will fail until you add "
+                      "one."),
+                   true);
+    else
+        set_status(tr("Saved. Changes apply on next voice session."), false);
     emit config_changed();
 }
 

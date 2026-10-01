@@ -22,6 +22,28 @@ using fincept::python::extract_json;
 using fincept::python::PythonResult;
 using fincept::python::PythonRunner;
 
+namespace {
+
+// The fallback outputs below echo the connection config back as node output. That config holds the
+// saved connection's secrets (passwords, API keys, tokens), and node output is rendered in the
+// results panel, copied to the clipboard and handed to every downstream node — a Webhook or HTTP
+// node could have posted it anywhere. Mask anything that looks like a secret.
+QJsonObject ds_node_redact_config(const QJsonObject& config) {
+    static const QRegularExpression secret_re(
+        QStringLiteral("pass(word|wd)?|secret|token|api[_-]?key|private|credential|auth|signature|^key$|_key$"),
+        QRegularExpression::CaseInsensitiveOption);
+    QJsonObject out;
+    for (auto it = config.constBegin(); it != config.constEnd(); ++it) {
+        if (secret_re.match(it.key()).hasMatch() && !it.value().toString().isEmpty())
+            out[it.key()] = QStringLiteral("********");
+        else
+            out[it.key()] = it.value();
+    }
+    return out;
+}
+
+} // namespace
+
 void register_datasource_nodes(NodeRegistry& registry) {
     // ── Register Data Source connectors dynamically ────────────────
     // Ensure all connectors are registered first
@@ -187,7 +209,7 @@ void register_datasource_nodes(NodeRegistry& registry) {
                              out["message"] = ok ? "Successfully connected to data source server."
                                                  : "Failed to connect to data source server: " + sock.errorString();
                              out["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-                             out["config_applied"] = final_config;
+                             out["config_applied"] = ds_node_redact_config(final_config);
                              cb(ok, out, ok ? QString{} : out["message"].toString());
                          });
                      } else {
@@ -197,7 +219,7 @@ void register_datasource_nodes(NodeRegistry& registry) {
                          out["status"] = "mocked";
                          out["message"] = "No server endpoint configured. Returning applied config parameters.";
                          out["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-                         out["config_applied"] = final_config;
+                         out["config_applied"] = ds_node_redact_config(final_config);
                          cb(true, out, {});
                      }
                  }

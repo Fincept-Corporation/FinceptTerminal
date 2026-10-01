@@ -1,10 +1,11 @@
 // src/screens/economics/panels/AdbPanel.cpp
-// ADB (Asian Development Bank) — Key Indicators Database (KIDB), SDMX API.
-// No API key required. 14 Asia-Pacific economies, 7 dataflow categories.
+// ADB (Asian Development Bank) — Key Indicators Database (KIDB), SDMX API v5.
+// No API key required. 14 Asia-Pacific economies, 4 dataflow categories.
 // Commands: get_gdp, get_population, get_financial, get_trade,
 //           get_multiple_indicators
 // Response: { "data": [...], "metadata": {...}, "error": null }
-// data[] rows (SDMX parsed): { "date": "YYYY", "value": 1.23, "time_period": "YYYY", "series_key": "..." }
+// data[] rows (SDMX parsed): { "date": "YYYY", "value": 1.23, "time_period": "YYYY", "series_key": "0.0.0",
+//                              "indicator": "NGDP_XDC", "indicator_name": "GDP at current prices", "economy": "PHI" }
 #include "screens/economics/panels/AdbPanel.h"
 
 #include "core/logging/Logger.h"
@@ -15,6 +16,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
+#include <QSet>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -47,12 +49,18 @@ static const QList<QPair<QString, QString>> kEconomies = {
     {"Australia (AUS)", "AUS"},   {"New Zealand (NZL)", "NZL"}, {"All Economies", "all"},
 };
 
-// Common GDP/National Accounts indicators
+// Common GDP/National Accounts indicators (codes verified against the live KIDB DF_NA dataflow)
 static const QList<QPair<QString, QString>> kGdpIndicators = {
-    {"GDP, current prices (NGDP_XDC)", "NGDP_XDC"},           {"GDP per capita (NGDPPC_XDC)", "NGDPPC_XDC"},
-    {"GDP growth rate (NGDP_R_YOY_PT)", "NGDP_R_YOY_PT"},     {"Gross national income (GNI_XDC)", "GNI_XDC"},
-    {"Gross fixed capital formation (GFCF_XDC)", "GFCF_XDC"}, {"Exports of goods & services (EXG_XDC)", "EXG_XDC"},
-    {"Imports of goods & services (IMG_XDC)", "IMG_XDC"},     {"Government final consumption (GGFC_XDC)", "GGFC_XDC"},
+    {"GDP, current prices (NGDP_XDC)", "NGDP_XDC"},
+    {"GDP, constant prices (NGDP_R_XDC)", "NGDP_R_XDC"},
+    {"GDP growth, % annual (NGDP_R_PTX_PS)", "NGDP_R_PTX_PS"},
+    {"GDP per capita (NGDPPC_XDC)", "NGDPPC_XDC"},
+    {"GNI, current prices (NYG_XDC)", "NYG_XDC"},
+    {"Gross fixed capital formation (NFI_XDC_PS)", "NFI_XDC_PS"},
+    {"Exports of goods & services (NEGS_XDC_PS)", "NEGS_XDC_PS"},
+    {"Imports of goods & services (NIGS_XDC_PS)", "NIGS_XDC_PS"},
+    {"Government final consumption (NCGG_XDC)", "NCGG_XDC"},
+    {"GDP, current US$ million (NY_GDP_MKTP_CD)", "NY_GDP_MKTP_CD"},
 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -198,7 +206,34 @@ void AdbPanel::on_result(const QString& request_id, const services::EconomicsRes
 
     // ADB response: { "data": [...], "metadata": {...}, "error": null }
     // rows: { "date"/"time_period": "YYYY", "value": 1.23, "series_key": "..." }
-    QJsonArray rows = result.data["data"].toArray();
+    const QJsonArray raw = result.data["data"].toArray();
+
+    // Tidy the SDMX rows: `time_period` duplicates `date` and `series_key` is a positional index
+    // ("0.2.0") that means nothing to a user. Keep the indicator / economy columns only when the
+    // response carries several of them (Financial / Trade categories, "All Economies") — their
+    // LATEST/CHANGE/MIN/MAX/AVG would mix unrelated series, so the stat cards are hidden then.
+    QJsonArray rows;
+    QSet<QString> distinct_indicators;
+    QSet<QString> distinct_economies;
+    for (const auto& rv : raw) {
+        const QJsonObject r = rv.toObject();
+        distinct_indicators.insert(r.value("indicator").toString());
+        distinct_economies.insert(r.value("economy").toString());
+    }
+    const bool multi_indicator = distinct_indicators.size() > 1;
+    const bool multi_economy = distinct_economies.size() > 1;
+    const bool multi = multi_indicator || multi_economy;
+    for (const auto& rv : raw) {
+        const QJsonObject r = rv.toObject();
+        QJsonObject row;
+        row["date"] = r.value("date");
+        row["value"] = r.value("value");
+        if (multi_economy)
+            row["economy"] = r.value("economy");
+        if (multi_indicator)
+            row["indicator"] = r.value("indicator_name").toString(r.value("indicator").toString());
+        rows.append(row);
+    }
 
     if (rows.isEmpty()) {
         // Check for error embedded in data field
@@ -215,6 +250,7 @@ void AdbPanel::on_result(const QString& request_id, const services::EconomicsRes
     const QString cat_label = category_combo_->currentText();
     const QString title = "ADB: " + cat_label + " — " + economy_label;
 
+    set_stats_visible(!multi);
     display(rows, title);
     LOG_INFO("AdbPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(request_id));
 }

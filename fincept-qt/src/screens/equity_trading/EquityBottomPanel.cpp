@@ -1,7 +1,10 @@
 // EquityBottomPanel.cpp — tabbed portfolio display
 #include "screens/equity_trading/EquityBottomPanel.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "trading/AccountManager.h"
+#include "trading/BrokerRegistry.h"
 #include "ui/theme/Theme.h"
 
 #include <QDate>
@@ -70,6 +73,49 @@ QString fmt_money(double v, const QString& sym, bool signed_pfx = false) {
     return prefix + sym + mag;
 }
 
+// Grouped fixed-decimal number for table cells — same locale choice as fmt_money (lakh grouping
+// for ₹), no currency symbol and no forced sign.
+QString fmt_num(double v, int precision, const QString& sym) {
+    const QLocale loc = (sym == QString::fromUtf8("₹")) ? QLocale(QLocale::English, QLocale::India)
+                                                        : QLocale(QLocale::English, QLocale::UnitedStates);
+    return loc.toString(v, 'f', precision);
+}
+
+// Holdings numeric cell. The cell's TEXT is formatted (digit grouping, fixed decimals, "%"), and the
+// raw number rides in UserRole so sorting stays numeric. The previous code stored the double in the
+// Display/Edit role (QTableWidgetItem treats them as ONE role), so the view rendered the bare double
+// with 'g' / 6 significant digits: 1,234,567.89 showed as "1.23457E+06" and 123,456.79 as "123,457"
+// — in the Invested / Current columns of any real portfolio.
+class NumItem : public QTableWidgetItem {
+  public:
+    bool operator<(const QTableWidgetItem& other) const override {
+        return data(Qt::UserRole).toDouble() < other.data(Qt::UserRole).toDouble();
+    }
+};
+
+QTableWidgetItem* ensure_num_item(QTableWidget* table, int row, int col) {
+    auto* item = table->item(row, col);
+    if (!dynamic_cast<NumItem*>(item)) { // also true for a missing item
+        item = new NumItem;
+        item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
+        table->setItem(row, col, item); // replaces (and deletes) any plain item already there
+    }
+    return item;
+}
+
+void set_num_cell(QTableWidgetItem* item, double value, const QString& text) {
+    item->setText(text);
+    item->setData(Qt::UserRole, value);
+}
+
+// setStyleSheet() re-parses the sheet and re-polishes the widget. The positions / holdings
+// summary labels are refreshed on EVERY quote tick, but their colour only flips with the sign of
+// the P&L — so only touch the stylesheet when it actually changed (CLAUDE.md P7).
+void set_style_if_changed(QWidget* widget, const QString& style) {
+    if (widget && widget->styleSheet() != style)
+        widget->setStyleSheet(style);
+}
+
 QColor order_status_color(const QString& status) {
     const QString s = status.toLower();
     if (s == "filled" || s == "complete" || s == "completed")
@@ -117,6 +163,29 @@ QString table_btn_styles() {
                    "QPushButton#eqTableBtn[act=\"cancel\"]{background:rgba(220,38,38,0.12);color:%2;border-color:%7;}"
                    "QPushButton#eqTableBtn[act=\"cancel\"]:hover{background:rgba(220,38,38,0.28);}")
         .arg(c::BORDER_MED(), c::NEGATIVE(), c::POSITIVE(), c::INFO(), c::AMBER(), c::AMBER_DIM(), c::NEGATIVE_DIM());
+}
+
+// Exchange for the cross-screen "Open in…" row actions: what the broker reported for this
+// symbol (positions, then holdings), else the account's broker default (paper rows carry none).
+QString eqbp_row_exchange(const QVector<trading::BrokerPosition>& positions,
+                          const QVector<trading::BrokerHolding>& holdings, const QString& symbol,
+                          const QString& account_id) {
+    for (const auto& p : positions)
+        if (p.symbol == symbol && !p.exchange.isEmpty())
+            return p.exchange;
+    for (const auto& h : holdings)
+        if (h.symbol == symbol && !h.exchange.isEmpty())
+            return h.exchange;
+    const auto account = trading::AccountManager::instance().get_account(account_id);
+    if (auto* broker = trading::BrokerRegistry::instance().get(account.broker_id))
+        return broker->profile().default_exchange;
+    return {};
+}
+
+// nav.open_symbol hand-off (WindowFrame navigates, then delivers the symbol via IGroupLinked).
+void eqbp_open_symbol(const QString& screen_id, const QString& symbol, const QString& exchange) {
+    EventBus::instance().publish("nav.open_symbol",
+                                 {{"screen_id", screen_id}, {"symbol", symbol}, {"exchange", exchange}});
 }
 
 // Selection + scroll survive a rebuild. setRowCount()/setItem() throw away the
@@ -184,6 +253,7 @@ EquityBottomPanel::EquityBottomPanel(QWidget* parent) : QWidget(parent) {
     setup_time_sales_tab();
     setup_auctions_tab();
     setup_calendar_tab();
+    tabs_->setTabVisible(auctions_tab_idx_, false); // shown by set_auctions() once it has rows
 
     // Collapse toggle pinned to the tab-bar corner. Collapsing leaves only the
     // tab-bar header and returns the vertical space to the chart above.
@@ -476,11 +546,27 @@ void EquityBottomPanel::setup_positions_tab() {
         QAction* buy = menu.addAction(tr("Buy / Add  %1").arg(symbol));
         QAction* sell =
             menu.addAction(is_short ? tr("Buy / Cover  %1").arg(symbol) : tr("Sell / Reduce  %1").arg(symbol));
+        // Hand the ticker to Equity Research / News (derivative contracts have neither → no entry).
+        const QString exchange = eqbp_row_exchange(last_positions_, last_holdings_, symbol, account_id_);
+        const QString ticker = research_ticker_for(symbol, exchange);
+        QAction* research = nullptr;
+        QAction* news = nullptr;
+        if (!ticker.isEmpty()) {
+            menu.addSeparator();
+            research = menu.addAction(tr("Open %1 in Equity Research").arg(symbol));
+            news = menu.addAction(tr("News for %1").arg(symbol));
+        }
         QAction* chosen = menu.exec(positions_table_->viewport()->mapToGlobal(p));
+        if (!chosen)
+            return;
         if (chosen == buy)
             emit trade_symbol_requested(symbol, product, true, 0.0); // add → ticket defaults to 1
         else if (chosen == sell)
             emit trade_symbol_requested(symbol, product, is_short, held); // exit → pre-fill held qty
+        else if (chosen == research)
+            eqbp_open_symbol(QStringLiteral("equity_research"), ticker, exchange);
+        else if (chosen == news)
+            eqbp_open_symbol(QStringLiteral("news"), symbol, exchange);
     });
 
     // Left-click a position row → load that symbol's chart (parity with the
@@ -631,11 +717,26 @@ void EquityBottomPanel::setup_holdings_tab() {
         QAction* sell = menu.addAction(tr("Sell / Reduce  %1").arg(symbol));
         auto* qty_item = holdings_table_->item(row, 1); // Qty column
         const double held = qty_item ? qAbs(qty_item->text().toDouble()) : 0.0;
+        const QString exchange = eqbp_row_exchange(last_positions_, last_holdings_, symbol, account_id_);
+        const QString ticker = research_ticker_for(symbol, exchange);
+        QAction* research = nullptr;
+        QAction* news = nullptr;
+        if (!ticker.isEmpty()) {
+            menu.addSeparator();
+            research = menu.addAction(tr("Open %1 in Equity Research").arg(symbol));
+            news = menu.addAction(tr("News for %1").arg(symbol));
+        }
         QAction* chosen = menu.exec(holdings_table_->viewport()->mapToGlobal(p));
+        if (!chosen)
+            return;
         if (chosen == buy)
             emit trade_symbol_requested(symbol, QStringLiteral("CNC"), true, 0.0);
         else if (chosen == sell)
             emit trade_symbol_requested(symbol, QStringLiteral("CNC"), false, held);
+        else if (chosen == research)
+            eqbp_open_symbol(QStringLiteral("equity_research"), ticker, exchange);
+        else if (chosen == news)
+            eqbp_open_symbol(QStringLiteral("news"), symbol, exchange);
     });
 
     v->addWidget(holdings_table_, 1);
@@ -839,10 +940,13 @@ void EquityBottomPanel::set_currency(const QString& sym) {
 }
 
 void EquityBottomPanel::set_us_market_tabs_visible(bool visible) {
+    us_tabs_visible_ = visible;
     if (time_sales_tab_idx_ >= 0)
         tabs_->setTabVisible(time_sales_tab_idx_, visible);
+    // AUCTIONS only earns a tab once set_auctions() has delivered rows (nothing in the data
+    // streams feeds it yet — a permanently empty tab reads as broken).
     if (auctions_tab_idx_ >= 0)
-        tabs_->setTabVisible(auctions_tab_idx_, visible);
+        tabs_->setTabVisible(auctions_tab_idx_, visible && auctions_table_ && auctions_table_->rowCount() > 0);
     if (calendar_tab_idx_ >= 0)
         tabs_->setTabVisible(calendar_tab_idx_, visible);
 }
@@ -872,7 +976,8 @@ void EquityBottomPanel::update_positions_summary() {
     const QString pri = fincept::ui::colors::TEXT_PRIMARY();
     if (positions_total_pnl_label_) {
         positions_total_pnl_label_->setText(tr("Total P&L  %1").arg(fmt_money(total, currency_sym_, true)));
-        positions_total_pnl_label_->setStyleSheet(
+        set_style_if_changed(
+            positions_total_pnl_label_,
             QString("font-size:11px;font-weight:700;color:%1;").arg(total > 0 ? pos : (total < 0 ? neg : pri)));
     }
     if (positions_win_label_)
@@ -910,7 +1015,7 @@ void EquityBottomPanel::set_paper_positions(const QVector<trading::PtPosition>& 
         }
 
         ensure_item(positions_table_, i, 3)->setText(p.side.toUpper());
-        ensure_item(positions_table_, i, 4)->setText(QString::number(p.quantity, 'f', 0));
+        ensure_item(positions_table_, i, 4)->setText(format_quantity(p.quantity));
         ensure_item(positions_table_, i, 5)->setText(QString::number(p.entry_price, 'f', 2));
         ensure_item(positions_table_, i, 6)->setText(QString::number(p.current_price, 'f', 2));
 
@@ -949,7 +1054,7 @@ void EquityBottomPanel::set_paper_orders(const QVector<trading::PtOrder>& orders
         ensure_item(orders_table_, i, 2)->setText(o.product.isEmpty() ? QStringLiteral("MIS") : o.product.toUpper());
         ensure_item(orders_table_, i, 3)->setText(o.side.toUpper());
         ensure_item(orders_table_, i, 4)->setText(o.order_type.toUpper());
-        ensure_item(orders_table_, i, 5)->setText(QString::number(o.quantity, 'f', 0));
+        ensure_item(orders_table_, i, 5)->setText(format_quantity(o.quantity));
         ensure_item(orders_table_, i, 6)->setText(o.price ? QString::number(*o.price, 'f', 2) : tr("MKT"));
 
         auto* status_item = ensure_item(orders_table_, i, 7);
@@ -1112,7 +1217,7 @@ void EquityBottomPanel::set_positions(const QVector<trading::BrokerPosition>& po
         ensure_item(positions_table_, i, 1)->setText(p.product_type.isEmpty() ? "--" : p.product_type.toUpper());
         ensure_item(positions_table_, i, 2)->setText(p.exchange.isEmpty() ? "--" : p.exchange);
         ensure_item(positions_table_, i, 3)->setText(p.side.toUpper());
-        ensure_item(positions_table_, i, 4)->setText(QString::number(p.quantity, 'f', 0));
+        ensure_item(positions_table_, i, 4)->setText(format_quantity(p.quantity));
         ensure_item(positions_table_, i, 5)->setText(QString::number(p.avg_price, 'f', 2));
         ensure_item(positions_table_, i, 6)->setText(QString::number(p.ltp, 'f', 2));
 
@@ -1162,24 +1267,17 @@ void EquityBottomPanel::update_holding_quote(const QString& symbol, double ltp, 
         auto* sym_item = holdings_table_->item(r, 0);
         if (!sym_item || sym_item->text() != symbol)
             continue;
-        auto set_num = [&](int col, double v) {
-            auto* item = ensure_item(holdings_table_, r, col);
-            item->setData(Qt::DisplayRole, QString::number(v, 'f', 2));
-            item->setData(Qt::EditRole, v);
-        };
-        set_num(3, ltp);              // LTP
-        set_num(5, h->current_value); // Current
-        auto* pnl_item = ensure_item(holdings_table_, r, 6);
-        pnl_item->setData(Qt::DisplayRole, QString::number(h->pnl, 'f', 2));
-        pnl_item->setData(Qt::EditRole, h->pnl);
+        set_num_cell(ensure_num_item(holdings_table_, r, 3), ltp, fmt_num(ltp, 2, currency_sym_)); // LTP
+        set_num_cell(ensure_num_item(holdings_table_, r, 5), h->current_value,
+                     fmt_num(h->current_value, 2, currency_sym_)); // Current
+        auto* pnl_item = ensure_num_item(holdings_table_, r, 6);
+        set_num_cell(pnl_item, h->pnl, fmt_num(h->pnl, 2, currency_sym_));
         pnl_item->setForeground(h->pnl >= 0 ? pos_color : neg_color);
-        auto* pct_item = ensure_item(holdings_table_, r, 7);
-        pct_item->setData(Qt::DisplayRole, QString("%1%").arg(h->pnl_pct, 0, 'f', 2));
-        pct_item->setData(Qt::EditRole, h->pnl_pct);
+        auto* pct_item = ensure_num_item(holdings_table_, r, 7);
+        set_num_cell(pct_item, h->pnl_pct, QString("%1%").arg(h->pnl_pct, 0, 'f', 2));
         pct_item->setForeground(h->pnl_pct >= 0 ? pos_color : neg_color);
-        auto* day_item = ensure_item(holdings_table_, r, 8); // Today's P&L
-        day_item->setData(Qt::DisplayRole, QString::number(day_pnl, 'f', 2));
-        day_item->setData(Qt::EditRole, day_pnl);
+        auto* day_item = ensure_num_item(holdings_table_, r, 8); // Today's P&L
+        set_num_cell(day_item, day_pnl, fmt_num(day_pnl, 2, currency_sym_));
         day_item->setForeground(day_pnl >= 0 ? pos_color : neg_color);
         break; // one row per symbol
     }
@@ -1200,23 +1298,26 @@ void EquityBottomPanel::update_holding_quote(const QString& symbol, double ltp, 
     if (holdings_pnl_label_) {
         holdings_pnl_label_->setText(
             QString("%1%2").arg(total_pnl >= 0 ? "+" : "").arg(QString::number(total_pnl, 'f', 2)));
-        holdings_pnl_label_->setStyleSheet(
-            QString("color:%1;font-size:13px;font-weight:700;")
-                .arg(total_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+        set_style_if_changed(holdings_pnl_label_,
+                             QString("color:%1;font-size:13px;font-weight:700;")
+                                 .arg(total_pnl >= 0 ? fincept::ui::colors::POSITIVE()
+                                                     : fincept::ui::colors::NEGATIVE()));
     }
     if (holdings_day_pnl_label_) {
         holdings_day_pnl_label_->setText(
             QString("%1%2").arg(total_day_pnl >= 0 ? "+" : "").arg(QString::number(total_day_pnl, 'f', 2)));
-        holdings_day_pnl_label_->setStyleSheet(
-            QString("color:%1;font-size:13px;font-weight:700;")
-                .arg(total_day_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+        set_style_if_changed(holdings_day_pnl_label_,
+                             QString("color:%1;font-size:13px;font-weight:700;")
+                                 .arg(total_day_pnl >= 0 ? fincept::ui::colors::POSITIVE()
+                                                         : fincept::ui::colors::NEGATIVE()));
     }
     if (holdings_pnl_pct_label_) {
         holdings_pnl_pct_label_->setText(
             QString("%1%2%").arg(total_pct >= 0 ? "+" : "").arg(QString::number(total_pct, 'f', 2)));
-        holdings_pnl_pct_label_->setStyleSheet(
-            QString("color:%1;font-size:13px;font-weight:700;")
-                .arg(total_pct >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+        set_style_if_changed(holdings_pnl_pct_label_,
+                             QString("color:%1;font-size:13px;font-weight:700;")
+                                 .arg(total_pct >= 0 ? fincept::ui::colors::POSITIVE()
+                                                     : fincept::ui::colors::NEGATIVE()));
     }
 }
 
@@ -1289,6 +1390,14 @@ void EquityBottomPanel::update_quote(const QString& symbol, const trading::Broke
         auto& p = last_positions_[i];
         if (p.symbol != symbol)
             continue;
+        if (p.quantity == 0.0) {
+            // A squared-off position (Zerodha & co. keep it in the net list with qty 0)
+            // carries its REALISED P&L in `pnl`. Re-marking it as (ltp - avg) * 0 would
+            // wipe that figure — and the net-P&L total — on every tick; only the LTP moves.
+            p.ltp = ltp;
+            ensure_item(positions_table_, i, 6)->setText(QString::number(ltp, 'f', 2));
+            continue;
+        }
         double signed_qty = p.quantity;
         if (p.quantity > 0 && p.side.startsWith(QLatin1Char('s'), Qt::CaseInsensitive))
             signed_qty = -p.quantity; // broker reports a short as +qty with "sell"/"short"
@@ -1335,37 +1444,31 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
     const QColor pos_color(fincept::ui::colors::POSITIVE());
     const QColor neg_color(fincept::ui::colors::NEGATIVE());
 
-    auto set_num = [](QTableWidgetItem* it, double v, int precision) {
-        it->setData(Qt::DisplayRole, QString::number(v, 'f', precision));
-        it->setData(Qt::EditRole, v);
-    };
-
     for (int i = 0; i < last_holdings_.size(); ++i) {
         const auto& h = last_holdings_[i]; // carries prev_close across refreshes
         ensure_item(holdings_table_, i, 0)->setText(h.symbol);
-        set_num(ensure_item(holdings_table_, i, 1), h.quantity, 0);
-        set_num(ensure_item(holdings_table_, i, 2), h.avg_price, 2);
-        set_num(ensure_item(holdings_table_, i, 3), h.ltp, 2);
-        set_num(ensure_item(holdings_table_, i, 4), h.invested_value, 2);
-        set_num(ensure_item(holdings_table_, i, 5), h.current_value, 2);
+        set_num_cell(ensure_num_item(holdings_table_, i, 1), h.quantity, format_quantity(h.quantity));
+        set_num_cell(ensure_num_item(holdings_table_, i, 2), h.avg_price, fmt_num(h.avg_price, 2, currency_sym_));
+        set_num_cell(ensure_num_item(holdings_table_, i, 3), h.ltp, fmt_num(h.ltp, 2, currency_sym_));
+        set_num_cell(ensure_num_item(holdings_table_, i, 4), h.invested_value,
+                     fmt_num(h.invested_value, 2, currency_sym_));
+        set_num_cell(ensure_num_item(holdings_table_, i, 5), h.current_value,
+                     fmt_num(h.current_value, 2, currency_sym_));
 
-        auto* pnl_item = ensure_item(holdings_table_, i, 6);
-        pnl_item->setData(Qt::DisplayRole, QString::number(h.pnl, 'f', 2));
-        pnl_item->setData(Qt::EditRole, h.pnl);
+        auto* pnl_item = ensure_num_item(holdings_table_, i, 6);
+        set_num_cell(pnl_item, h.pnl, fmt_num(h.pnl, 2, currency_sym_));
         pnl_item->setForeground(h.pnl >= 0 ? pos_color : neg_color);
 
-        auto* pct_item = ensure_item(holdings_table_, i, 7);
-        pct_item->setData(Qt::DisplayRole, QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
-        pct_item->setData(Qt::EditRole, h.pnl_pct);
+        auto* pct_item = ensure_num_item(holdings_table_, i, 7);
+        set_num_cell(pct_item, h.pnl_pct, QString("%1%").arg(h.pnl_pct, 0, 'f', 2));
         pct_item->setForeground(h.pnl_pct >= 0 ? pos_color : neg_color);
 
         // Today's P&L = qty * (LTP - prev close). prev_close starts 0 (shown as 0)
         // and is filled from the live quote feed in update_holding_quote — generic
         // across brokers, no per-broker holdings parser needed.
         const double day_pnl = h.prev_close > 0.0 ? h.quantity * (h.ltp - h.prev_close) : 0.0;
-        auto* day_item = ensure_item(holdings_table_, i, 8);
-        day_item->setData(Qt::DisplayRole, QString::number(day_pnl, 'f', 2));
-        day_item->setData(Qt::EditRole, day_pnl);
+        auto* day_item = ensure_num_item(holdings_table_, i, 8);
+        set_num_cell(day_item, day_pnl, fmt_num(day_pnl, 2, currency_sym_));
         day_item->setForeground(day_pnl >= 0 ? pos_color : neg_color);
         total_day_pnl += day_pnl;
 
@@ -1418,23 +1521,26 @@ void EquityBottomPanel::set_holdings(const QVector<trading::BrokerHolding>& hold
     if (holdings_pnl_label_) {
         holdings_pnl_label_->setText(
             QString("%1%2").arg(total_pnl >= 0 ? "+" : "").arg(QString::number(total_pnl, 'f', 2)));
-        holdings_pnl_label_->setStyleSheet(
-            QString("color:%1;font-size:13px;font-weight:700;")
-                .arg(total_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+        set_style_if_changed(holdings_pnl_label_,
+                             QString("color:%1;font-size:13px;font-weight:700;")
+                                 .arg(total_pnl >= 0 ? fincept::ui::colors::POSITIVE()
+                                                     : fincept::ui::colors::NEGATIVE()));
     }
     if (holdings_day_pnl_label_) {
         holdings_day_pnl_label_->setText(
             QString("%1%2").arg(total_day_pnl >= 0 ? "+" : "").arg(QString::number(total_day_pnl, 'f', 2)));
-        holdings_day_pnl_label_->setStyleSheet(
-            QString("color:%1;font-size:13px;font-weight:700;")
-                .arg(total_day_pnl >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+        set_style_if_changed(holdings_day_pnl_label_,
+                             QString("color:%1;font-size:13px;font-weight:700;")
+                                 .arg(total_day_pnl >= 0 ? fincept::ui::colors::POSITIVE()
+                                                         : fincept::ui::colors::NEGATIVE()));
     }
     if (holdings_pnl_pct_label_) {
         holdings_pnl_pct_label_->setText(
             QString("%1%2%").arg(total_pct >= 0 ? "+" : "").arg(QString::number(total_pct, 'f', 2)));
-        holdings_pnl_pct_label_->setStyleSheet(
-            QString("color:%1;font-size:13px;font-weight:700;")
-                .arg(total_pct >= 0 ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
+        set_style_if_changed(holdings_pnl_pct_label_,
+                             QString("color:%1;font-size:13px;font-weight:700;")
+                                 .arg(total_pct >= 0 ? fincept::ui::colors::POSITIVE()
+                                                     : fincept::ui::colors::NEGATIVE()));
     }
 
     holdings_table_->setSortingEnabled(was_sorting);
@@ -1453,7 +1559,7 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
         ensure_item(orders_table_, i, 2)->setText(o.product_type.isEmpty() ? "--" : o.product_type.toUpper());
         ensure_item(orders_table_, i, 3)->setText(o.side.toUpper());
         ensure_item(orders_table_, i, 4)->setText(o.order_type.toUpper());
-        ensure_item(orders_table_, i, 5)->setText(QString::number(o.quantity, 'f', 0));
+        ensure_item(orders_table_, i, 5)->setText(format_quantity(o.quantity));
         // A market order has no price; "0.00" reads as a real (absurd) limit.
         ensure_item(orders_table_, i, 6)->setText(o.price > 0.0 ? QString::number(o.price, 'f', 2) : tr("MKT"));
         auto* status_item = ensure_item(orders_table_, i, 7);
@@ -1495,7 +1601,7 @@ void EquityBottomPanel::set_orders(const QVector<trading::BrokerOrderInfo>& orde
                 vlay->setContentsMargins(14, 14, 14, 14);
 
                 auto* qty_lbl = new QLabel(tr("QTY"));
-                auto* qty_edit = new QLineEdit(QString::number(qty, 'f', 0));
+                auto* qty_edit = new QLineEdit(format_quantity(qty));
                 auto* prc_lbl = new QLabel(tr("LIMIT PRICE"));
                 auto* prc_edit = new QLineEdit(QString::number(prc, 'f', 2));
 
@@ -1618,6 +1724,8 @@ void EquityBottomPanel::set_auctions(const QVector<trading::BrokerAuction>& auct
         }
     }
     auctions_table_->setUpdatesEnabled(true);
+    if (auctions_tab_idx_ >= 0)
+        tabs_->setTabVisible(auctions_tab_idx_, us_tabs_visible_ && auctions_table_->rowCount() > 0);
 }
 
 void EquityBottomPanel::set_condition_codes(const QMap<QString, QString>& codes) {
@@ -1751,10 +1859,11 @@ void EquityBottomPanel::set_calendar(const QVector<trading::MarketCalendarDay>& 
         auto set = [&](int col, const QString& text) {
             auto* item = ensure_item(calendar_table_, i, col);
             item->setText(text);
-            if (is_today) {
-                item->setForeground(QColor(fincept::ui::colors::AMBER()));
-                item->setBackground(row_color);
-            }
+            // Items are reused across reloads, so a row that was "today" in the previous
+            // load must have its highlight cleared (calendar refetched after midnight).
+            item->setForeground(is_today ? QColor(fincept::ui::colors::AMBER())
+                                         : QColor(fincept::ui::colors::TEXT_PRIMARY()));
+            item->setBackground(is_today ? QBrush(row_color) : QBrush());
         };
         set(0, d.date);
         set(1, d.open);

@@ -423,9 +423,13 @@ void InstrumentService::load_from_db_worker(const QString& broker_id) {
         db.setDatabaseName(db_path);
         if (db.open()) {
             QSqlQuery q(db);
+            // broker_token (column 13) must be selected: map_row_static() reads it by
+            // index, and the async loader above selects it. Omitting it here meant a
+            // cache warmed by a worker thread (charts / backtests / algos) silently
+            // lost every broker-native key (e.g. Upstox "NSE_EQ|INE…").
             q.prepare("SELECT instrument_token, exchange_token, symbol, brsymbol, name, "
                       "exchange, brexchange, expiry, strike, lot_size, instrument_type, "
-                      "tick_size, broker_id FROM instruments WHERE broker_id = ?");
+                      "tick_size, broker_id, broker_token FROM instruments WHERE broker_id = ?");
             q.addBindValue(broker_id);
             if (q.exec()) {
                 while (q.next())

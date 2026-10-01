@@ -46,6 +46,7 @@
 #include <QSplitter>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <memory>
 
 namespace fincept::screens {
@@ -60,9 +61,20 @@ void PortfolioScreen::on_portfolios_loaded(QVector<portfolio::Portfolio> portfol
         summary_loaded_ = false;
     } else {
         command_bar_->set_has_portfolios(true);
-        // Auto-select first portfolio if none selected
-        if (selected_id_.isEmpty()) {
+        const auto selected_it =
+            std::find_if(portfolios.begin(), portfolios.end(),
+                         [this](const portfolio::Portfolio& p) { return p.id == selected_id_; });
+        if (selected_id_.isEmpty() || selected_it == portfolios.end()) {
+            // Nothing selected - or the remembered selection (restore_state) names
+            // a portfolio that no longer exists, which would otherwise park the
+            // screen on a permanent "could not load" caption.
             on_portfolio_selected(portfolios.first().id);
+        } else {
+            // restore_state() runs before this list exists, so on_portfolio_selected()
+            // could not look the portfolio up then: the selector still read
+            // "SELECT PORTFOLIO" and the status bar had no name. Sync them now.
+            command_bar_->set_selected_portfolio(*selected_it);
+            status_bar_->set_portfolio_name(selected_it->name);
         }
     }
     update_content_state();
@@ -116,6 +128,14 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     update_main_view_data();
     update_content_state();
 
+    // Keep an open detail view / FFN view live. They were only handed the summary
+    // when first opened, so prices, P&L and weights froze until the user left and
+    // re-entered the tab (and F5 appeared to do nothing there).
+    if (active_detail_.has_value() && detail_wrapper_)
+        detail_wrapper_->update_data(summary, summary.portfolio.currency);
+    if (show_ffn_ && ffn_view_)
+        ffn_view_->set_data(summary, summary.portfolio.currency);
+
     // Auto-select highest weighted holding if none selected
     if (selected_symbol_.isEmpty() && !summary.holdings.isEmpty()) {
         double max_w = -1;
@@ -133,7 +153,7 @@ void PortfolioScreen::on_summary_loaded(portfolio::PortfolioSummary summary) {
     services::PortfolioService::instance().compute_metrics(summary);
 
     // Load performance history for the chart
-    services::PortfolioService::instance().load_snapshots(summary.portfolio.id);
+    services::PortfolioService::instance().load_snapshots(summary.portfolio.id, kSnapshotHistoryDays);
 
     // Load recent transactions for the history panel
     if (txn_panel_)
@@ -242,9 +262,23 @@ void PortfolioScreen::on_portfolio_deleted(QString id) {
 }
 
 void PortfolioScreen::on_asset_changed(QString portfolio_id) {
-    if (portfolio_id == selected_id_) {
-        services::PortfolioService::instance().refresh_summary(portfolio_id);
-    }
+    if (portfolio_id != selected_id_)
+        return;
+    // A burst of add_asset()/sell_asset() calls (the demo portfolio adds twelve in
+    // a row, an import adds one per holding) emits this once per asset. Each
+    // refresh is a quote fetch plus correlation/benchmark/metrics work, and the
+    // earlier ones are immediately superseded - queue one refresh for the burst.
+    if (asset_refresh_queued_)
+        return;
+    asset_refresh_queued_ = true;
+    QMetaObject::invokeMethod(
+        this,
+        [this]() {
+            asset_refresh_queued_ = false;
+            if (!selected_id_.isEmpty())
+                services::PortfolioService::instance().refresh_summary(selected_id_);
+        },
+        Qt::QueuedConnection);
 }
 
 void PortfolioScreen::on_create_requested() {
@@ -372,10 +406,11 @@ void PortfolioScreen::load_demo_portfolio() {
 
     // Connect BEFORE create_portfolio() — create_portfolio() emits portfolio_created
     // synchronously, so the lambda must be connected first or it will never fire.
-    QMetaObject::Connection* conn = new QMetaObject::Connection;
+    // shared_ptr: the handle is also needed after the call (below), and the raw
+    // new/delete pair leaked whenever the create failed.
+    auto conn = std::make_shared<QMetaObject::Connection>();
     *conn = connect(&svc, &services::PortfolioService::portfolio_created, this, [this, conn](portfolio::Portfolio p) {
         disconnect(*conn);
-        delete conn;
 
         auto& svc = services::PortfolioService::instance();
 
@@ -408,6 +443,12 @@ void PortfolioScreen::load_demo_portfolio() {
 
     // Create the demo portfolio (emits portfolio_created synchronously)
     svc.create_portfolio(tr("Demo Portfolio"), tr("Fincept User"), "USD", tr("Sample portfolio for demonstration"));
+
+    // If creation failed nothing was emitted and the one-shot is still armed -
+    // it would then fire for the NEXT portfolio the user creates and stuff twelve
+    // demo holdings into it. Disarm it.
+    if (*conn)
+        disconnect(*conn);
 }
 
 } // namespace fincept::screens

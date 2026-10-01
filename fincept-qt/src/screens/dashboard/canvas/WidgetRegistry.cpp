@@ -142,7 +142,14 @@ WidgetRegistry::WidgetRegistry() {
         {"portfolio_summary", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Portfolio Summary"),
          QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Portfolio"),
          QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Holdings overview with allocation breakdown"), 6, 4, 2,
-         3, [](const QJsonObject&) { return new widgets::PortfolioSummaryWidget; }});
+         3, [](const QJsonObject& cfg) {
+             // The tile persists its chosen portfolio through config(); the
+             // factory used to drop the config, so the selection reset to the
+             // first portfolio on every restart.
+             auto* w = new widgets::PortfolioSummaryWidget;
+             w->apply_config(cfg);
+             return w;
+         }});
 
     register_widget({"risk_metrics", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Risk Metrics"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Portfolio"),

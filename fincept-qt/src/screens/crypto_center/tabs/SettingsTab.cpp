@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QVBoxLayout>
@@ -222,6 +223,12 @@ void SettingsTab::build_ui() {
         body->addLayout(row);
 
         connect(slippage_slider_, &QSlider::valueChanged, this, &SettingsTab::on_slippage_changed);
+        // valueChanged fires on every pixel of a drag; the value is persisted
+        // once here instead (see on_slippage_changed).
+        connect(slippage_slider_, &QSlider::sliderReleased, this, [this]() {
+            SecureStorage::instance().store(QString::fromLatin1(kSlippageKey),
+                                            QString::number(slippage_slider_->value()));
+        });
 
         root->addWidget(panel);
     }
@@ -380,8 +387,9 @@ void SettingsTab::on_save_helius_key() {
         return;
     }
     helius_input_->clear();
-    helius_status_->setText(tr("Saved. Restart streaming to use the new key."));
+    helius_status_->setText(tr("Saved. Balances are refreshing through the new key."));
     LOG_INFO("SettingsTab", "Helius key stored");
+    apply_rpc_change();
 }
 
 void SettingsTab::on_clear_helius_key() {
@@ -393,10 +401,35 @@ void SettingsTab::on_clear_helius_key() {
     helius_input_->clear();
     helius_status_->setText(tr("Cleared. Public RPC will be used."));
     LOG_INFO("SettingsTab", "Helius key cleared");
+    apply_rpc_change();
+}
+
+void SettingsTab::apply_rpc_change() {
+    // SolanaRpcClient re-reads the endpoint on each poll, but an open STREAM
+    // session keeps the WebSocket URL it was created with — the old status
+    // text told the user to "restart streaming" by hand. Cycle the mode so the
+    // session is rebuilt against the new endpoint; in POLL mode just refetch so
+    // a bad key shows up immediately instead of at the next TTL tick.
+    // Both are no-ops while no wallet is connected.
+    auto& svc = fincept::wallet::WalletService::instance();
+    if (!svc.is_connected())
+        return;
+    if (svc.balance_mode_is_stream()) {
+        svc.set_balance_mode(false);
+        svc.set_balance_mode(true);
+    } else {
+        svc.force_balance_refresh();
+    }
 }
 
 void SettingsTab::on_slippage_changed(int bps) {
     slippage_value_->setText(format_bps(bps));
+    // Mid-drag: only the label tracks the handle. Hammering SecureStorage (an
+    // encrypted write) once per step on the UI thread made the slider stutter;
+    // sliderReleased persists the final value. Keyboard / wheel changes arrive
+    // with the handle up and are stored here.
+    if (slippage_slider_ && slippage_slider_->isSliderDown())
+        return;
     SecureStorage::instance().store(QString::fromLatin1(kSlippageKey), QString::number(bps));
 }
 
@@ -405,6 +438,20 @@ void SettingsTab::apply_mode_to_buttons(bool is_stream) {
     QSignalBlocker b2(mode_stream_button_);
     mode_poll_button_->setChecked(!is_stream);
     mode_stream_button_->setChecked(is_stream);
+}
+
+void SettingsTab::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    // The holdings table's own "Show all / Hide unverified" button writes the
+    // same persisted flag as the checkbox here; re-read it so the checkbox does
+    // not show a stale state after the user used the table's button.
+    if (show_unverified_checkbox_) {
+        auto unv_res = SecureStorage::instance().retrieve(QStringLiteral("wallet.show_unverified_tokens"));
+        const bool persisted =
+            unv_res.is_ok() && unv_res.value().compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
+        QSignalBlocker blocker(show_unverified_checkbox_);
+        show_unverified_checkbox_->setChecked(persisted);
+    }
 }
 
 void SettingsTab::changeEvent(QEvent* event) {

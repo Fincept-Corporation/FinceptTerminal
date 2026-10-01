@@ -33,6 +33,10 @@ class DBnomicsSelectionPanel : public QWidget {
     QString selected_dataset() const { return selected_dataset_; }
     QString selected_series() const { return selected_series_; }
 
+    /// Seed the remembered provider/dataset/series (state restore). The lists fill asynchronously;
+    /// the populate_*() calls highlight the matching row once it arrives.
+    void restore_selection(const QString& provider, const QString& dataset, const QString& series);
+
     QString global_search_text() const;
     QString provider_filter_text() const;
     QString series_search_text() const;

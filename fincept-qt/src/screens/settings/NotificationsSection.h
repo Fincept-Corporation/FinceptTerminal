@@ -38,7 +38,9 @@ class NotificationsSection : public QWidget {
     };
 
     void build_ui();
-    void save_provider_fields(const QString& provider_id, const ProviderWidgets& pw);
+    /// Validates then persists one provider. Returns false (and, for invalid input,
+    /// fills *error_out) when nothing was written.
+    bool save_provider_fields(const QString& provider_id, const ProviderWidgets& pw, QString* error_out = nullptr);
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.

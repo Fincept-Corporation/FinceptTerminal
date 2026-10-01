@@ -41,6 +41,8 @@
 #include <QScreen>
 #include <QSize>
 
+#include <algorithm>
+
 namespace fincept::mcp::tools {
 
 using namespace fincept::mcp::tools::workspace_internal;
@@ -101,8 +103,15 @@ void workspace_internal::register_symbol_action_tools(std::vector<ToolDef>& tool
                 const QString color = args["color"].toString();
                 if (!name.isEmpty())
                     reg.set_name(g, name);
-                if (!color.isEmpty())
+                if (!color.isEmpty()) {
+                    // QColor(<garbage>) is an invalid colour; installing it blanked the group's
+                    // swatch while the tool reported success.
+                    if (!QColor::isValidColorName(color)) {
+                        resolve(ToolResult::fail("Invalid 'color' '" + color + "' — use #RRGGBB or #AARRGGBB"));
+                        return;
+                    }
                     reg.set_color(g, QColor(color));
+                }
                 if (args["apply_enabled"].toBool(false))
                     reg.set_enabled(g, args["enabled"].toBool());
                 resolve(ToolResult::ok("Group metadata updated", group_to_json(g)));
@@ -191,9 +200,13 @@ void workspace_internal::register_symbol_action_tools(std::vector<ToolDef>& tool
                     return;
                 }
                 SymbolRef ref;
-                ref.symbol = args["symbol"].toString();
-                ref.exchange = args["exchange"].toString();
-                ref.asset_class = args["asset_class"].toString();
+                ref.symbol = args["symbol"].toString().trimmed();
+                ref.exchange = args["exchange"].toString().trimmed();
+                ref.asset_class = args["asset_class"].toString().trimmed();
+                if (!ref.is_valid()) {
+                    resolve(ToolResult::fail("'symbol' must not be blank"));
+                    return;
+                }
                 SymbolContext::instance().set_group_symbol(g, ref, nullptr);
                 resolve(ToolResult::ok("Group symbol set", QJsonObject{{"group", QString(symbol_group_letter(g))},
                                                                        {"symbol", ref.symbol}}));
@@ -293,9 +306,13 @@ void workspace_internal::register_symbol_action_tools(std::vector<ToolDef>& tool
                     return;
                 }
                 SymbolRef ref;
-                ref.symbol = args["symbol"].toString();
-                ref.exchange = args["exchange"].toString();
-                ref.asset_class = args["asset_class"].toString();
+                ref.symbol = args["symbol"].toString().trimmed();
+                ref.exchange = args["exchange"].toString().trimmed();
+                ref.asset_class = args["asset_class"].toString().trimmed();
+                if (!ref.is_valid()) {
+                    resolve(ToolResult::fail("'symbol' must not be blank"));
+                    return;
+                }
                 SymbolContext::instance().set_group_slot_symbol(g, args["slot"].toString(), ref, nullptr);
                 resolve(ToolResult::ok("Slot symbol set", QJsonObject{{"group", QString(symbol_group_letter(g))},
                                                                       {"slot", args["slot"].toString()},
@@ -332,15 +349,41 @@ void workspace_internal::register_symbol_action_tools(std::vector<ToolDef>& tool
     {
         ToolDef t;
         t.name = "list_actions";
-        t.description = "List every registered shell action (id, display, category, hotkey, parameter slots).";
+        t.description = "List registered shell actions (id, display, category, hotkey, parameter slots). The "
+                        "registry is large — use find_actions to search, or pass `category` / `limit` here.";
         t.category = "workspace";
         t.default_timeout_ms = kDefaultTimeoutMs;
-        t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
-            run_on_ui(std::move(ctx), promise, [](auto resolve) {
+        t.input_schema = ToolSchemaBuilder()
+                             .string("category", "Only actions in this category (case-insensitive; empty = all)")
+                             .default_str("")
+                             .length(0, 64)
+                             .integer("limit", "Max actions to return")
+                             .default_int(100)
+                             .between(1, 500)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
+            run_on_ui(std::move(ctx), promise, [args](auto resolve) {
+                const QString want_cat = args["category"].toString().trimmed();
+                const int limit = std::clamp(args["limit"].toInt(100), 1, 500);
                 QJsonArray arr;
+                int matched = 0;
                 for (const auto& id : ActionRegistry::instance().all_ids()) {
-                    if (auto* a = ActionRegistry::instance().find(id))
+                    auto* a = ActionRegistry::instance().find(id);
+                    if (!a)
+                        continue;
+                    if (!want_cat.isEmpty() && a->category.compare(want_cat, Qt::CaseInsensitive) != 0)
+                        continue;
+                    ++matched;
+                    if (arr.size() < limit)
                         arr.append(action_to_json(*a));
+                }
+                if (matched > arr.size()) {
+                    resolve(ToolResult::ok(QString("Showing %1 of %2 actions — pass `category`, raise `limit` (max "
+                                                   "500), or use find_actions to search.")
+                                               .arg(arr.size())
+                                               .arg(matched),
+                                           arr));
+                    return;
                 }
                 resolve(ToolResult::ok_data(arr));
             });
@@ -416,8 +459,9 @@ void workspace_internal::register_symbol_action_tools(std::vector<ToolDef>& tool
     {
         ToolDef t;
         t.name = "run_command_bar_text";
-        t.description = "Run a raw command-bar string ('dash add news', 'markets replace settings', 'news remove') "
-                        "against the focused window. Mirrors what a user typing would do.";
+        t.description = "Run a raw command-bar string using EXACT screen ids ('dashboard add news', 'markets replace "
+                        "settings', 'news remove', or a bare id to navigate) against the focused window. Unknown "
+                        "ids are rejected — list_available_screen_ids shows the valid ones.";
         t.category = "workspace";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultTimeoutMs;
@@ -448,6 +492,34 @@ void workspace_internal::register_symbol_action_tools(std::vector<ToolDef>& tool
                 auto m_add = re_add.match(text);
                 auto m_rep = re_replace.match(text);
                 auto m_rem = re_remove.match(text);
+
+                // The router calls below are void and just log for a screen id that does not
+                // exist, so every typo came back as "Added alongside" / "Navigated". Check the
+                // ids against the live registry first and report the bad one.
+                const QStringList known_ids = w->dock_router()->all_screen_ids();
+                auto unknown_id = [&known_ids](const QString& id) { return !known_ids.contains(id); };
+                QString bad;
+                if (m_add.hasMatch()) {
+                    bad = unknown_id(m_add.captured(1).trimmed()) ? m_add.captured(1).trimmed()
+                                                                  : (unknown_id(m_add.captured(2).trimmed())
+                                                                         ? m_add.captured(2).trimmed()
+                                                                         : QString());
+                } else if (m_rep.hasMatch()) {
+                    bad = unknown_id(m_rep.captured(1).trimmed()) ? m_rep.captured(1).trimmed()
+                                                                  : (unknown_id(m_rep.captured(2).trimmed())
+                                                                         ? m_rep.captured(2).trimmed()
+                                                                         : QString());
+                } else if (m_rem.hasMatch()) {
+                    bad = unknown_id(m_rem.captured(1).trimmed()) ? m_rem.captured(1).trimmed() : QString();
+                } else {
+                    bad = unknown_id(text) ? text : QString();
+                }
+                if (!bad.isEmpty()) {
+                    resolve(ToolResult::fail("Unknown screen id '" + bad +
+                                             "' — use list_available_screen_ids for the valid ids"));
+                    return;
+                }
+
                 if (m_add.hasMatch()) {
                     w->dock_router()->add_alongside(m_add.captured(1).trimmed(), m_add.captured(2).trimmed());
                     resolve(ToolResult::ok("Added alongside", QJsonObject{{"action", "add"},
@@ -463,7 +535,12 @@ void workspace_internal::register_symbol_action_tools(std::vector<ToolDef>& tool
                     return;
                 }
                 if (m_rem.hasMatch()) {
-                    w->dock_router()->remove_screen(m_rem.captured(1).trimmed());
+                    // remove_screen() closes every other panel before looking the kept one up; for
+                    // a screen with no dock widget yet that would close them all and open nothing.
+                    if (w->dock_router()->find_dock_widget(m_rem.captured(1).trimmed()))
+                        w->dock_router()->remove_screen(m_rem.captured(1).trimmed());
+                    else
+                        w->dock_router()->navigate(m_rem.captured(1).trimmed(), /*exclusive=*/true);
                     resolve(ToolResult::ok(
                         "Removed", QJsonObject{{"action", "remove"}, {"primary", m_rem.captured(1).trimmed()}}));
                     return;

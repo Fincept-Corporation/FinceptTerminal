@@ -51,6 +51,13 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                                   .arg(model_));
 
     for (int round = 0; !budget.exhausted(); ++round) {
+        // Stop pressed: leave before issuing another request or running more tools.
+        if (detail::cancel_requested()) {
+            LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: cancelled by user before round %1").arg(round));
+            resp.cancelled = true;
+            resp.error = "Request cancelled";
+            return resp;
+        }
         budget.note_round();
         QJsonObject fu;
         fu["model"] = model_;
@@ -147,6 +154,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         resp.content = strip_think_blocks(extract_openai_message_text(msg));
         parse_usage(resp, rj, provider_);
         resp.success = !resp.content.isEmpty();
+        // An empty final turn used to come back as a failure with NO message, which
+        // the Quick Chat bubble rendered as a bare "Error: ".
+        if (!resp.success)
+            resp.error = "The model returned an empty reply after using tools";
         LOG_INFO(kLlmToolLoopTag, QString("TOOL LOOP: finished after %1 round(s) — %2 chars of text")
                                       .arg(round + 1)
                                       .arg(resp.content.length()));
@@ -171,7 +182,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 }
             }
             auto text_result = try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
-            if (text_result.has_value() && text_result->success)
+            if (text_result.has_value() && (text_result->success || text_result->cancelled))
                 return text_result.value();
         }
         return resp;
@@ -236,7 +247,7 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                         }
                         auto text_result =
                             try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
-                        if (text_result.has_value() && text_result->success)
+                        if (text_result.has_value() && (text_result->success || text_result->cancelled))
                             return text_result.value();
                     }
                     if (resp.success)
@@ -312,6 +323,8 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
     // Execute each detected tool call
     QString tool_results;
     for (const auto& tc : calls) {
+        if (detail::cancel_requested())
+            break;
         LOG_INFO(kLlmToolLoopTag, "Executing text-detected tool: " + tc.name);
         int sep_disp = tc.name.indexOf(QStringLiteral("__"));
         QString display = (sep_disp >= 0) ? tc.name.mid(sep_disp + 2) : tc.name;
@@ -345,6 +358,14 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         int sep = tc.name.indexOf("__");
         QString short_name = (sep >= 0) ? tc.name.mid(sep + 2) : tc.name;
         tool_results += "\n**Tool: " + short_name + "**\n" + result_content + "\n";
+    }
+
+    if (detail::cancel_requested()) {
+        // Stop pressed while the tools ran: don't spend another request summarising.
+        LlmResponse cancelled_resp;
+        cancelled_resp.cancelled = true;
+        cancelled_resp.error = "Request cancelled";
+        return cancelled_resp;
     }
 
     if (tool_results.isEmpty())

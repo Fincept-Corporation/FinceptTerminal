@@ -1,8 +1,9 @@
 #pragma once
 // IntradayOIChart — minute-resolution OI history for a chosen strike's CE
 // and PE legs. Subscribes to two `oi:history:<broker>:<token>:<window>`
-// topics and re-requests every 60 s while visible (OISnapshotter flushes
-// once per minute, so faster polling is wasted work).
+// topics while visible (showEvent/hideEvent); the hub scheduler re-requests
+// them on the topic TTL (OISnapshotter flushes once per minute), so the chart
+// owns no refresh timer (D3).
 //
 // Data shape per topic: `QVector<OISample>` ordered ascending by ts_minute.
 // `OISample` carries oi, ltp, vol, iv — this chart shows oi only; the LTP
@@ -14,7 +15,6 @@
 #include <QEvent>
 #include <QPointer>
 #include <QString>
-#include <QTimer>
 
 class QDateTimeAxis;
 class QLineSeries;
@@ -46,7 +46,11 @@ class IntradayOIChart : public QChartView {
     void retranslateUi();
     void on_history(qint64 token, const QVariant& v);
     void replot();
-    void poll_refresh();
+    /// Subscribe to / drop the current CE+PE history topics on the hub. The pair is
+    /// only live while the chart is visible; set_subscription() just records the
+    /// target and attaches immediately when already shown.
+    void attach_topics();
+    void detach_topics();
 
     QChart* chart_ = nullptr;
     QLineSeries* ce_series_ = nullptr;
@@ -59,11 +63,10 @@ class IntradayOIChart : public QChartView {
     qint64 pe_token_ = 0;
     QString window_ = QStringLiteral("1d");
     QString ce_topic_, pe_topic_;
+    bool attached_ = false;
 
     QVector<fincept::services::options::OISample> ce_samples_;
     QVector<fincept::services::options::OISample> pe_samples_;
-
-    QTimer poll_timer_;
 };
 
 } // namespace fincept::screens::fno

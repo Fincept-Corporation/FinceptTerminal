@@ -429,11 +429,66 @@ def _build_standard_output(analysis: dict, sector: str) -> dict:
     }
 
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `technology.py calculate <flat-params-json>` (argv length 3) with the sector
+# inside the JSON and ratios as FRACTIONS (the panel divides percent inputs by 100). The native form is
+# `tech <sector> <data_json>`, which was written for a front end that sent growth / retention in PERCENT, so a
+# service-style call is translated here (including defaults for the sector-specific inputs the panel has no field
+# for) and then falls through to the native dispatch. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("calculate",)
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    data = dict(p)
+    sector = str(data.pop("sector", "saas"))
+    arr = _svc_num(data, "arr", "revenue", default=0.0)
+    if "market" in sector.lower():
+        # Marketplace: GMV follows from revenue and the take rate (assumed 15% when not supplied).
+        take_rate = _svc_num(data, "take_rate", default=0.15)
+        data["take_rate"] = take_rate
+        data.setdefault("revenue", arr)
+        data.setdefault("gmv", arr / take_rate if take_rate > 0 else 0.0)
+        # Net revenue retention (fraction) doubles as the retention proxy (percent) for both sides.
+        nrr = _svc_num(data, "nrr", default=None)
+        if nrr is not None:
+            data.setdefault("demand_side_retention", min(nrr * 100.0, 100.0))
+    elif "semi" in sector.lower():
+        data.setdefault("revenue", arr)
+        data.setdefault("r_and_d_pct", 0.20)
+        data.setdefault("design_win_backlog", arr * 1.5)
+    else:
+        # SaaS: the native code wants growth and net retention in percent (gross margin stays a fraction).
+        for key in ("growth", "revenue_growth_rate", "nrr", "net_retention_rate"):
+            v = _svc_num(data, key)
+            if v is not None:
+                data[key] = v * 100.0
+    return [argv[0], "tech", sector, json.dumps(data)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import sys
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

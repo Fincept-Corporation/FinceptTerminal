@@ -6,6 +6,7 @@
 #include <QLocale>
 #include <QRegularExpression>
 #include <QTime>
+#include <QUrl>
 
 namespace fincept::feeds {
 
@@ -180,6 +181,14 @@ qint64 parse_feed_datetime(const QString& text_in, QString& display, const QStri
 
     display = text.left(22);
     return 0;
+}
+
+bool feed_link_is_web_url(const QString& url) {
+    const QUrl u(url.trimmed());
+    if (!u.isValid() || u.host().isEmpty())
+        return false;
+    const QString scheme = u.scheme().toLower();
+    return scheme == QLatin1String("http") || scheme == QLatin1String("https");
 }
 
 bool looks_like_html(const QByteArray& body) {

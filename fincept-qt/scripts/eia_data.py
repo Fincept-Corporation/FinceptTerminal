@@ -1,6 +1,8 @@
 # EIA (U.S. Energy Information Administration) Data Wrapper
 # Provides access to Weekly Petroleum Status Report and Short Term Energy Outlook data
 
+import os
+import re
 import sys
 import json
 import asyncio
@@ -77,6 +79,10 @@ class EIAError(Exception):
     """Custom exception for EIA API errors"""
     pass
 
+def _redact_api_key(message: str) -> str:
+    """Mask the api_key query parameter that requests echoes back in error text."""
+    return re.sub(r"(api_key=)[^&\s]+", r"\1***", message)
+
 class EIADataFetcher:
     """Fault-tolerant EIA data fetcher"""
 
@@ -115,9 +121,9 @@ class EIADataFetcher:
                 return response.content
 
         except requests.exceptions.RequestException as e:
-            raise EIAError(f"HTTP request failed for {url}: {str(e)}")
+            raise EIAError(_redact_api_key(f"HTTP request failed for {url}: {str(e)}"))
         except Exception as e:
-            raise EIAError(f"Unexpected error fetching {url}: {str(e)}")
+            raise EIAError(_redact_api_key(f"Unexpected error fetching {url}: {str(e)}"))
 
     def _parse_petroleum_excel(self, excel_data: bytes, category: str, tables: List[str]) -> List[Dict]:
         """Parse petroleum status report Excel data"""
@@ -410,7 +416,9 @@ def main(args=None):
         sys.exit(1)
 
     command = args[0]
-    api_key = None  # In production, this should come from environment variables or config
+    # EIA_API_KEY is injected from Settings > Credentials (or the shell). Without it the key-free
+    # WPSR commands still work; get_steo reports "API key required".
+    api_key = os.environ.get("EIA_API_KEY") or None
 
     try:
         fetcher = EIADataFetcher(api_key=api_key)

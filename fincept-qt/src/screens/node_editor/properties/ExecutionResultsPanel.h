@@ -19,7 +19,8 @@ class ExecutionResultsPanel : public QWidget {
 
     void clear();
     void set_started(const QString& workflow_id);
-    void add_node_result(const NodeExecutionResult& result);
+    /// `node_label` is the node's display name; when empty the card falls back to a short id.
+    void add_node_result(const NodeExecutionResult& result, const QString& node_label = {});
     void set_finished(const WorkflowExecutionResult& result);
 
   protected:

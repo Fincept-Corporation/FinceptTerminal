@@ -24,6 +24,9 @@ from datetime import datetime, timedelta
 BASE_URL = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service"
 TIMEOUT = 30
 DEFAULT_PAGE_SIZE = 100
+# FiscalData accepts up to 10000 rows per page. "--all" used to walk the full history in
+# 100-row pages (50 round trips, ~75 s for Debt to the Penny); one 10000-row page is a single call.
+MAX_PAGE_SIZE = 10000
 
 
 def _make_request(endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -183,7 +186,7 @@ def _get_all_pages(endpoint: str, params: Dict[str, Any] = None, max_pages: int 
     if params is None:
         params = {}
 
-    original_page_size = params.get('page[size]', str(DEFAULT_PAGE_SIZE))
+    original_page_size = params.get('page[size]', str(MAX_PAGE_SIZE))
 
     # Override pagination parameters for internal use
     params['page[size]'] = original_page_size
@@ -391,6 +394,96 @@ def get_interest_expense(start_date: str = None, end_date: str = None,
         return result
 
 
+def get_exchange_rates(start_date: str = None, end_date: str = None, country: str = None,
+                       limit: int = None, all_pages: bool = False) -> Dict[str, Any]:
+    """
+    Get Treasury Reporting Rates of Exchange (quarterly foreign-currency rates per USD)
+
+    Args:
+        start_date: Filter for records on or after this date (YYYY-MM-DD)
+        end_date: Filter for records on or before this date (YYYY-MM-DD)
+        country: Filter by country name (e.g., 'Japan')
+        limit: Maximum number of records to return
+        all_pages: If True, retrieve all available records
+
+    Returns:
+        Dict containing exchange-rate data, metadata, and error information
+    """
+    params = {}
+    params['fields'] = 'record_date,country,currency,country_currency_desc,exchange_rate,effective_date'
+
+    filters = []
+    if start_date:
+        filters.append(f"record_date:gte:{start_date}")
+    if end_date:
+        filters.append(f"record_date:lte:{end_date}")
+    if country:
+        filters.append(f"country:eq:{country}")
+    if filters:
+        params['filter'] = ','.join(filters)
+
+    # Newest quarter first, then alphabetical so one quarter reads as a contiguous block
+    params['sort'] = '-record_date,country'
+
+    if limit:
+        params['page[size]'] = str(min(limit, MAX_PAGE_SIZE))
+
+    if all_pages and not limit:
+        return _get_all_pages('v1/accounting/od/rates_of_exchange', params)
+    else:
+        result = _make_request('v1/accounting/od/rates_of_exchange', params)
+
+        if limit and result['data'] and len(result['data']) > limit:
+            result['data'] = result['data'][:limit]
+            result['metadata']['total_count'] = len(result['data'])
+
+        return result
+
+
+def get_record_setting_auctions(start_date: str = None, end_date: str = None, security_type: str = None,
+                                limit: int = None, all_pages: bool = False) -> Dict[str, Any]:
+    """
+    Get Record-Setting Treasury Securities Auction Data (highest rates / offerings / bid-to-cover)
+
+    Args:
+        start_date: Filter for records on or after this date (YYYY-MM-DD)
+        end_date: Filter for records on or before this date (YYYY-MM-DD)
+        security_type: Filter by security type (e.g., 'Bills', 'Notes', 'Bonds', 'CMBs', 'TIPS', 'FRN')
+        limit: Maximum number of records to return
+        all_pages: If True, retrieve all available records
+
+    Returns:
+        Dict containing auction-record data, metadata, and error information
+    """
+    params = {}
+
+    filters = []
+    if start_date:
+        filters.append(f"record_date:gte:{start_date}")
+    if end_date:
+        filters.append(f"record_date:lte:{end_date}")
+    if security_type:
+        filters.append(f"security_type:eq:{security_type}")
+    if filters:
+        params['filter'] = ','.join(filters)
+
+    params['sort'] = '-record_date'
+
+    if limit:
+        params['page[size]'] = str(min(limit, MAX_PAGE_SIZE))
+
+    if all_pages and not limit:
+        return _get_all_pages('v2/accounting/od/record_setting_auction', params)
+    else:
+        result = _make_request('v2/accounting/od/record_setting_auction', params)
+
+        if limit and result['data'] and len(result['data']) > limit:
+            result['data'] = result['data'][:limit]
+            result['metadata']['total_count'] = len(result['data'])
+
+        return result
+
+
 def get_datasets() -> Dict[str, Any]:
     """
     Get available datasets from FiscalData (working endpoints only)
@@ -422,11 +515,18 @@ def get_datasets() -> Dict[str, Any]:
             "status": "working"
         },
         {
-            "endpoint": "v2/accounting/od/rates_of_exchange",
+            "endpoint": "v1/accounting/od/rates_of_exchange",
             "name": "Exchange Rates",
-            "description": "Daily currency exchange rates",
+            "description": "Treasury Reporting Rates of Exchange (quarterly)",
             "function": "get_exchange_rates",
-            "status": "not_available"
+            "status": "working"
+        },
+        {
+            "endpoint": "v2/accounting/od/record_setting_auction",
+            "name": "Record-Setting Auction Data",
+            "description": "Record highs for Treasury auction rates, offerings and bid-to-cover",
+            "function": "get_record_setting_auctions",
+            "status": "working"
         },
         {
             "endpoint": "v2/debt/to_the_summary",
@@ -695,6 +795,8 @@ def main():
                 "debt-to-penny [--fields=field1,field2] [--start-date=YYYY-MM-DD] [--end-date=YYYY-MM-DD] [--limit=N] [--all]",
                 "avg-interest-rates [--start-date=YYYY-MM-DD] [--end-date=YYYY-MM-DD] [--security-type=type] [--limit=N] [--all]",
                 "interest-expense [--start-date=YYYY-MM-DD] [--end-date=YYYY-MM-DD] [--expense-category=category] [--limit=N] [--all]",
+                "exchange-rates [--start-date=YYYY-MM-DD] [--end-date=YYYY-MM-DD] [--country=name] [--limit=N] [--all]",
+                "record-debt [--start-date=YYYY-MM-DD] [--end-date=YYYY-MM-DD] [--security-type=type] [--limit=N] [--all]",
                 "datasets"
             ]
         }))
@@ -776,6 +878,48 @@ def main():
 
         result = get_interest_expense(start_date, end_date, expense_category, limit, all_pages)
 
+    elif command == "exchange-rates":
+        start_date = None
+        end_date = None
+        country = None
+        limit = None
+        all_pages = False
+
+        for arg in sys.argv[2:]:
+            if arg.startswith("--start-date="):
+                start_date = _parse_date_range(arg.split("=", 1)[1])
+            elif arg.startswith("--end-date="):
+                end_date = _parse_date_range(arg.split("=", 1)[1])
+            elif arg.startswith("--country="):
+                country = arg.split("=", 1)[1]
+            elif arg.startswith("--limit="):
+                limit = int(arg.split("=", 1)[1])
+            elif arg == "--all":
+                all_pages = True
+
+        result = get_exchange_rates(start_date, end_date, country, limit, all_pages)
+
+    elif command == "record-debt":
+        start_date = None
+        end_date = None
+        security_type = None
+        limit = None
+        all_pages = False
+
+        for arg in sys.argv[2:]:
+            if arg.startswith("--start-date="):
+                start_date = _parse_date_range(arg.split("=", 1)[1])
+            elif arg.startswith("--end-date="):
+                end_date = _parse_date_range(arg.split("=", 1)[1])
+            elif arg.startswith("--security-type="):
+                security_type = arg.split("=", 1)[1]
+            elif arg.startswith("--limit="):
+                limit = int(arg.split("=", 1)[1])
+            elif arg == "--all":
+                all_pages = True
+
+        result = get_record_setting_auctions(start_date, end_date, security_type, limit, all_pages)
+
     elif command == "datasets":
         result = get_datasets()
 
@@ -783,7 +927,8 @@ def main():
         print(json.dumps({
             "error": f"Unknown command: {command}",
             "available_commands": [
-                "debt-to-penny", "avg-interest-rates", "interest-expense", "datasets"
+                "debt-to-penny", "avg-interest-rates", "interest-expense", "exchange-rates", "record-debt",
+                "datasets"
             ]
         }))
         sys.exit(1)

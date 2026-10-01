@@ -6,6 +6,7 @@ financial stress, consumer sentiment, PCE inflation, and more.
 import sys
 import json
 import os
+import re
 import requests
 from typing import Dict, Any, Optional, List
 
@@ -84,6 +85,13 @@ PCE_SERIES = {
 }
 
 
+def _redact_key(message: Any) -> str:
+    """Mask the API key that requests echoes back in HTTPError text
+    ("... for url: https://api.stlouisfed.org/...&api_key=<KEY>&...") so it never
+    reaches the UI or the logs."""
+    return re.sub(r'(api_key=)[^&\s]+', r'\1***', str(message))
+
+
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     if not API_KEY:
         return {
@@ -116,11 +124,11 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}", "error_code": "HTTP_ERROR"}
+        return {"error": f"HTTP {e.response.status_code}: {_redact_key(e)}", "error_code": "HTTP_ERROR"}
     except requests.exceptions.Timeout:
         return {"error": "FRED request timed out.", "error_code": "TIMEOUT"}
     except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}", "error_code": "REQUEST_FAILED"}
+        return {"error": f"Request failed: {_redact_key(e)}", "error_code": "REQUEST_FAILED"}
     except (json.JSONDecodeError, ValueError) as e:
         return {"error": f"JSON decode error: {str(e)}", "error_code": "PARSE_ERROR"}
 

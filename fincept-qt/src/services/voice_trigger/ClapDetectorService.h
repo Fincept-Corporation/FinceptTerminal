@@ -71,6 +71,7 @@ class ClapDetectorService : public QObject {
     QPointer<QProcess> process_;
     QByteArray stdout_buffer_;
     std::atomic<bool> active_{false};
+    bool script_error_emitted_ = false; // the running script already reported why it failed
 };
 
 } // namespace fincept::services

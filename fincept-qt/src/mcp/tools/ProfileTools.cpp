@@ -7,56 +7,87 @@
 #include "auth/AuthTypes.h"
 #include "auth/UserApi.h"
 #include "core/logging/Logger.h"
+#include "mcp/tools/ThreadHelper.h"
 #include "services/notifications/NotificationService.h"
 
-#include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonObject>
-#include <QTimer>
+
+#include <algorithm>
+#include <memory>
 
 namespace fincept::mcp::tools {
 
 using namespace fincept::auth;
 
-static constexpr int kTimeoutMs = 15000;
+// Upper bound on one UserApi round trip. Generous on purpose: the mutating calls
+// (regenerate_api_key, MFA) must not report "timed out" while the server is still
+// about to apply them, or the model retries a change that already happened.
+static constexpr int kProfileUserApiWaitMs = 60000;
 
 // ── Sync helper for UserApi callbacks ────────────────────────────────────────
 
-static ToolResult run_user_api(std::function<void(UserApi::Callback)> trigger) {
+// The old version spun a QEventLoop on the calling (worker) thread and called
+// UserApi — a main-thread QObject whose HttpClient owns the QNetworkAccessManager —
+// directly from it: the cross-thread hazard ThreadHelper.h documents, and a nested
+// event loop when invoked from the UI thread. Marshal the request to the service's
+// thread instead. Result state lives on the heap so a reply that arrives after the
+// bounded wait has given up writes into live memory, not a dead stack frame.
+struct ProfileApiWaitState {
     bool ok = false;
-    QString err;
+    QString err = QStringLiteral("API request timed out");
     QJsonObject data;
-    bool fired = false;
+};
 
-    QEventLoop loop;
-    QTimer::singleShot(kTimeoutMs, &loop, &QEventLoop::quit);
+// The server's profile / subscription payloads are passed through to the model, and
+// a profile document can carry the account's API key or session token. Strip those
+// exact credential keys at any depth — profile_get_api_key is the single, gated
+// route to key material.
+static void profile_scrub_secrets(QJsonObject& obj) {
+    static const QStringList kSecretKeys = {"api_key", "session_token", "access_token", "refresh_token", "password"};
+    for (const auto& k : kSecretKeys)
+        obj.remove(k);
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+        if (it.value().isObject()) {
+            QJsonObject child = it.value().toObject();
+            profile_scrub_secrets(child);
+            it.value() = child;
+        }
+    }
+}
 
-    trigger([&](ApiResponse resp) {
-        fired = true;
-        ok = resp.success;
-        data = resp.data;
-        err = resp.error;
-        loop.quit();
-    });
+static ToolResult run_user_api(std::function<void(UserApi::Callback)> trigger) {
+    auto st = std::make_shared<ProfileApiWaitState>();
 
-    if (!fired)
-        loop.exec();
+    detail::run_async_wait(
+        &UserApi::instance(),
+        [st, trigger](auto signal_done) {
+            trigger([st, signal_done](ApiResponse resp) {
+                st->ok = resp.success;
+                st->data = resp.data;
+                st->err = resp.error;
+                signal_done();
+            });
+        },
+        kProfileUserApiWaitMs);
 
-    if (!ok)
-        return ToolResult::fail(err.isEmpty() ? "API request failed" : err);
+    if (!st->ok)
+        return ToolResult::fail(st->err.isEmpty() ? "API request failed" : st->err);
+
+    profile_scrub_secrets(st->data);
 
     // Return array or object depending on what's in data
-    if (data.isEmpty())
+    if (st->data.isEmpty())
         return ToolResult::ok("OK");
 
     // If data has a single array-valued key, unwrap it
-    if (data.size() == 1) {
-        auto it = data.begin();
+    if (st->data.size() == 1) {
+        auto it = st->data.begin();
         if (it.value().isArray())
             return ToolResult::ok_data(it.value().toArray());
     }
 
-    return ToolResult::ok_data(data);
+    return ToolResult::ok_data(st->data);
 }
 
 // ── Tool registration ─────────────────────────────────────────────────────────
@@ -86,6 +117,7 @@ std::vector<ToolDef> get_profile_tools() {
         t.description = "Update the current user's profile fields. "
                         "Only include fields you want to change (username, phone, country).";
         t.category = "profile";
+        t.is_destructive = true; // edits the account record on the server
         t.input_schema.properties = QJsonObject{
             {"username", QJsonObject{{"type", "string"}, {"description", "New username"}}},
             {"phone", QJsonObject{{"type", "string"}, {"description", "Phone number"}}},
@@ -119,7 +151,12 @@ std::vector<ToolDef> get_profile_tools() {
             const auto& sess = AuthManager::instance().session();
             if (!sess.authenticated)
                 return ToolResult::fail("Not authenticated");
-            return ToolResult::ok_data(sess.to_json());
+            // to_json() carries api_key and session_token verbatim. Returning it here
+            // handed the live key to any tool loop WITHOUT the ExplicitConfirm gate
+            // profile_get_api_key (below) exists to enforce — the gate was moot while
+            // this ungated sibling echoed the same secret. to_persisted_json() is the
+            // existing secrets-stripped view.
+            return ToolResult::ok_data(sess.to_persisted_json());
         };
         tools.push_back(std::move(t));
     }
@@ -154,8 +191,14 @@ std::vector<ToolDef> get_profile_tools() {
         ToolDef t;
         t.name = "profile_regenerate_api_key";
         t.description = "Regenerate the API key. WARNING: the current API key will be "
-                        "immediately invalidated. Returns the new API key.";
+                        "immediately invalidated. The new key is not returned here (it is shown on the Profile "
+                        "screen); requires explicit user confirmation.";
         t.category = "profile";
+        // Invalidates the live key this terminal authenticates with and returns the
+        // new secret to whoever drove the tool loop — same exposure profile_get_api_key
+        // gates, plus an irreversible state change. Fails closed like that tool.
+        t.is_destructive = true;
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             return run_user_api([](auto cb) { UserApi::instance().regenerate_api_key(cb); });
@@ -171,12 +214,17 @@ std::vector<ToolDef> get_profile_tools() {
                         "Useful for security auditing.";
         t.category = "profile";
         t.input_schema.properties = QJsonObject{
-            {"limit", QJsonObject{{"type", "integer"}, {"description", "Max entries to return (default: 20)"}}},
-            {"offset", QJsonObject{{"type", "integer"}, {"description", "Offset for pagination (default: 0)"}}},
+            {"limit", QJsonObject{{"type", "integer"},
+                                  {"description", "Max entries to return (default: 20, max 100)"},
+                                  {"minimum", 1},
+                                  {"maximum", 100}}},
+            {"offset", QJsonObject{{"type", "integer"},
+                                   {"description", "Offset for pagination (default: 0)"},
+                                   {"minimum", 0}}},
         };
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            int limit = args["limit"].toInt(20);
-            int offset = args["offset"].toInt(0);
+            int limit = std::clamp(args["limit"].toInt(20), 1, 100);
+            int offset = std::max(0, args["offset"].toInt(0));
             return run_user_api([limit, offset](auto cb) { UserApi::instance().get_login_history(limit, offset, cb); });
         };
         tools.push_back(std::move(t));
@@ -188,6 +236,7 @@ std::vector<ToolDef> get_profile_tools() {
         t.name = "profile_enable_mfa";
         t.description = "Enable two-factor authentication (MFA/2FA) for the account.";
         t.category = "profile";
+        t.is_destructive = true; // changes account security settings
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             return run_user_api([](auto cb) { UserApi::instance().enable_mfa(cb); });
@@ -201,6 +250,10 @@ std::vector<ToolDef> get_profile_tools() {
         t.name = "profile_disable_mfa";
         t.description = "Disable two-factor authentication (MFA/2FA) for the account.";
         t.category = "profile";
+        // Weakens account security; a prompt-injected tool loop must never be able to
+        // do this unattended, so fail closed like profile_get_api_key.
+        t.is_destructive = true;
+        t.auth_required = AuthLevel::ExplicitConfirm;
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
             return run_user_api([](auto cb) { UserApi::instance().disable_mfa(cb); });
@@ -217,10 +270,13 @@ std::vector<ToolDef> get_profile_tools() {
                         "daily breakdown, and top endpoints by usage.";
         t.category = "profile";
         t.input_schema.properties = QJsonObject{
-            {"days", QJsonObject{{"type", "integer"}, {"description", "Number of days to look back (default: 30)"}}},
+            {"days", QJsonObject{{"type", "integer"},
+                                 {"description", "Number of days to look back (default: 30, max 365)"},
+                                 {"minimum", 1},
+                                 {"maximum", 365}}},
         };
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            int days = args["days"].toInt(30);
+            int days = std::clamp(args["days"].toInt(30), 1, 365);
             return run_user_api([days](auto cb) { UserApi::instance().get_user_usage(days, cb); });
         };
         tools.push_back(std::move(t));
@@ -261,12 +317,15 @@ std::vector<ToolDef> get_profile_tools() {
                         "credits purchased, status.";
         t.category = "profile";
         t.input_schema.properties = QJsonObject{
-            {"page", QJsonObject{{"type", "integer"}, {"description", "Page number (default: 1)"}}},
-            {"limit", QJsonObject{{"type", "integer"}, {"description", "Items per page (default: 20)"}}},
+            {"page", QJsonObject{{"type", "integer"}, {"description", "Page number (default: 1)"}, {"minimum", 1}}},
+            {"limit", QJsonObject{{"type", "integer"},
+                                  {"description", "Items per page (default: 20, max 100)"},
+                                  {"minimum", 1},
+                                  {"maximum", 100}}},
         };
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            int page = args["page"].toInt(1);
-            int limit = args["limit"].toInt(20);
+            int page = std::max(1, args["page"].toInt(1));
+            int limit = std::clamp(args["limit"].toInt(20), 1, 100);
             return run_user_api([page, limit](auto cb) { UserApi::instance().get_payment_history(page, limit, cb); });
         };
         tools.push_back(std::move(t));
@@ -279,46 +338,68 @@ std::vector<ToolDef> get_profile_tools() {
         t.description = "Get in-app notification history. Can filter to unread only.";
         t.category = "profile";
         t.input_schema.properties = QJsonObject{
-            {"limit", QJsonObject{{"type", "integer"}, {"description", "Max notifications (default: 20)"}}},
-            {"offset", QJsonObject{{"type", "integer"}, {"description", "Pagination offset (default: 0)"}}},
+            {"limit", QJsonObject{{"type", "integer"},
+                                  {"description", "Max notifications (default: 20, max 100)"},
+                                  {"minimum", 1},
+                                  {"maximum", 100}}},
+            {"offset", QJsonObject{{"type", "integer"},
+                                   {"description", "Pagination offset (default: 0)"},
+                                   {"minimum", 0}}},
             {"unread_only",
              QJsonObject{{"type", "boolean"}, {"description", "Only return unread notifications (default: false)"}}},
         };
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            int limit = args["limit"].toInt(20);
-            int offset = args["offset"].toInt(0);
-            bool unread = args["unread_only"].toBool(false);
+            const int limit = std::clamp(args["limit"].toInt(20), 1, 100);
+            const int offset = std::max(0, args["offset"].toInt(0));
+            const bool unread = args["unread_only"].toBool(false);
 
             using namespace fincept::notifications;
-            const auto& history = NotificationService::instance().history();
+            auto& svc = NotificationService::instance();
 
+            // history() hands back a reference into the service's own vector, which
+            // the UI thread appends to as notifications arrive — iterating it from a
+            // worker is a data race. Read it on the service's thread.
             QJsonArray arr;
-            int count = 0;
-            int skipped = 0;
-            for (const auto& rec : history) {
-                if (unread && rec.read)
-                    continue;
-                if (skipped < offset) {
-                    ++skipped;
-                    continue;
+            int matched = 0;
+            detail::run_on_target_thread_sync(&svc, [&]() {
+                int skipped = 0;
+                for (const auto& rec : svc.history()) {
+                    if (unread && rec.read)
+                        continue;
+                    ++matched;
+                    if (skipped < offset) {
+                        ++skipped;
+                        continue;
+                    }
+                    if (arr.size() >= limit)
+                        continue; // keep counting so `total` is the real match count
+
+                    QJsonObject obj;
+                    obj["id"] = rec.id;
+                    obj["title"] = rec.request.title;
+                    obj["message"] = rec.request.message;
+                    obj["read"] = rec.read;
+                    obj["time"] = rec.received_at.toString(Qt::ISODate);
+                    arr.append(obj);
                 }
-                if (count >= limit)
-                    break;
+            });
 
-                QJsonObject obj;
-                obj["id"] = rec.id;
-                obj["title"] = rec.request.title;
-                obj["message"] = rec.request.message;
-                obj["read"] = rec.read;
-                obj["time"] = rec.received_at.toString(Qt::ISODate);
-                arr.append(obj);
-                ++count;
-            }
-
+            // `total` used to be arr.size() — the page length, indistinguishable from
+            // "that is everything". Report the real match count and say when the page
+            // does not reach the end, so a clipped list is never read as complete.
+            const int returned = static_cast<int>(arr.size());
+            const bool has_more = offset + returned < matched;
             QJsonObject result;
             result["notifications"] = arr;
-            result["total"] = arr.size();
-            return ToolResult::ok("OK", QJsonValue(result));
+            result["total"] = matched;
+            result["returned"] = returned;
+            result["has_more"] = has_more;
+            return ToolResult::ok(has_more ? QStringLiteral("Showing %1 of %2 notifications — pass offset=%3 for the next page")
+                                                 .arg(returned)
+                                                 .arg(matched)
+                                                 .arg(offset + returned)
+                                           : QStringLiteral("OK"),
+                                  QJsonValue(result));
         };
         tools.push_back(std::move(t));
     }
@@ -337,7 +418,9 @@ std::vector<ToolDef> get_profile_tools() {
             int id = args["id"].toInt(-1);
             if (id < 0)
                 return ToolResult::fail("Missing or invalid 'id'");
-            fincept::notifications::NotificationService::instance().mark_read(id);
+            // Mutates the service's history and emits UI signals — do it on its thread.
+            auto& svc = fincept::notifications::NotificationService::instance();
+            detail::run_on_target_thread_sync(&svc, [&svc, id]() { svc.mark_read(id); });
             QJsonObject result;
             result["success"] = true;
             result["id"] = id;
@@ -354,7 +437,8 @@ std::vector<ToolDef> get_profile_tools() {
         t.category = "profile";
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
-            fincept::notifications::NotificationService::instance().mark_all_read();
+            auto& svc = fincept::notifications::NotificationService::instance();
+            detail::run_on_target_thread_sync(&svc, [&svc]() { svc.mark_all_read(); });
             return ToolResult::ok("All notifications marked as read");
         };
         tools.push_back(std::move(t));

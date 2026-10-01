@@ -21,6 +21,8 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
+#include <initializer_list>
+
 namespace fincept::screens {
 namespace {
 
@@ -327,20 +329,30 @@ void CftcPanel::on_result(const QString& request_id, const services::EconomicsRe
     // (the raw records have 40+ fields — we pick the key ones)
     if (request_id.startsWith("cftc_cot_")) {
         QJsonArray clean;
+        // CFTC's column names differ per report type — legacy: comm_*/noncomm_*, disaggregated:
+        // prod_merc_*/m_money_*, financial (TFF): dealer_*/lev_money_*. Take the first one present.
+        const auto pick = [](const QJsonObject& o, std::initializer_list<const char*> names) {
+            for (const char* name : names) {
+                const QJsonValue v = o[QLatin1String(name)];
+                if (!v.isUndefined())
+                    return v;
+            }
+            return QJsonValue();
+        };
         for (const auto& v : rows) {
             const auto obj = v.toObject();
             QJsonObject row;
             row["date"] = obj["report_date_as_yyyy_mm_dd"];
             row["market"] = obj["market_and_exchange_names"];
             row["open_interest"] = obj["open_interest_all"];
-            row["comm_long"] =
-                obj["comm_long_all"].isUndefined() ? obj["comm_positions_long_all"] : obj["comm_long_all"];
-            row["comm_short"] =
-                obj["comm_short_all"].isUndefined() ? obj["comm_positions_short_all"] : obj["comm_short_all"];
-            row["noncomm_long"] =
-                obj["noncomm_long_all"].isUndefined() ? obj["noncomm_positions_long_all"] : obj["noncomm_long_all"];
-            row["noncomm_short"] =
-                obj["noncomm_short_all"].isUndefined() ? obj["noncomm_positions_short_all"] : obj["noncomm_short_all"];
+            row["comm_long"] = pick(obj, {"comm_long_all", "comm_positions_long_all", "prod_merc_positions_long",
+                                          "dealer_positions_long_all"});
+            row["comm_short"] = pick(obj, {"comm_short_all", "comm_positions_short_all", "prod_merc_positions_short",
+                                           "dealer_positions_short_all"});
+            row["noncomm_long"] = pick(obj, {"noncomm_long_all", "noncomm_positions_long_all",
+                                             "m_money_positions_long_all", "lev_money_positions_long"});
+            row["noncomm_short"] = pick(obj, {"noncomm_short_all", "noncomm_positions_short_all",
+                                              "m_money_positions_short_all", "lev_money_positions_short"});
             clean.append(row);
         }
         display(clean, "CFTC COT: " + market_combo_->currentText() + " (" + report_type_combo_->currentText() + ")");

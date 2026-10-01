@@ -174,6 +174,37 @@ class VisibilityTimerGate final : public QObject {
     QPointer<QTimer> timer_;
 };
 
+/// The frame the user most recently worked in (updated from changeEvent). Only a
+/// fallback for wf_app_event_target() when no frame is the active window.
+QPointer<WindowFrame>& wf_last_active_frame() {
+    static QPointer<WindowFrame> frame;
+    return frame;
+}
+
+/// Picks the ONE frame that should act on an app-wide EventBus event.
+///
+/// Every WindowFrame subscribes to the same bus, so without arbitration a single
+/// publish of nav.switch_screen / equity.open_order_ticket / nav.open_symbol would
+/// navigate (or pop an order ticket in) every open window. Each frame's handler
+/// asks this helper from its queued lambda (GUI thread) and acts only when it is
+/// the answer, so exactly one frame handles each event:
+///   1. the active window, resolved to its owning frame — activeWindow() can be a
+///      floating ADS dock container or a modal dialog rather than the frame
+///      itself, both of which are parented (transitively) to a frame;
+///   2. else the frame the user last worked in (app not focused, e.g. an MCP tool
+///      or automation published the event);
+///   3. else the first registered frame.
+WindowFrame* wf_app_event_target() {
+    for (QWidget* w = QApplication::activeWindow(); w; w = w->parentWidget()) {
+        if (auto* frame = qobject_cast<WindowFrame*>(w))
+            return frame;
+    }
+    if (WindowFrame* last = wf_last_active_frame().data(); last && last->isVisible())
+        return last;
+    const auto frames = WindowRegistry::instance().frames();
+    return frames.isEmpty() ? nullptr : frames.first();
+}
+
 } // namespace
 
 int WindowFrame::next_window_id() {
@@ -440,6 +471,32 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         }
     });
 
+    // Apply "Show AI Chat Bubble" the moment it changes instead of waiting for the
+    // next screen change. settings.changed is published by whoever writes the
+    // setting (e.g. the MCP set_setting tool) and may arrive from a worker
+    // thread, so re-read and apply on the GUI thread. Every frame owns a bubble,
+    // so unlike the navigation events below this one is applied by all frames.
+    EventBus::instance().subscribe(this, "settings.changed", [this](const QVariantMap& d) {
+        const QString key = d.value("key").toString();
+        if (!key.isEmpty() && key != QLatin1String("appearance.show_chat_bubble"))
+            return;
+        QMetaObject::invokeMethod(
+            this,
+            [this]() {
+                // Chat mode hides the bubble on purpose; leaving it re-applies the setting.
+                if (!chat_bubble_ || chat_mode_)
+                    return;
+                auto r = SettingsRepository::instance().get("appearance.show_chat_bubble");
+                const bool show = !r.is_ok() || r.value() != "false";
+                chat_bubble_->setVisible(show);
+                if (show) {
+                    chat_bubble_->reposition();
+                    chat_bubble_->raise();
+                }
+            },
+            Qt::QueuedConnection);
+    });
+
     connect(toolbar, &ui::ToolBar::chat_mode_toggled, this, &WindowFrame::toggle_chat_mode);
     connect(toolbar, &ui::ToolBar::navigate_to, this, [this](const QString& id) {
         if (!locked_)
@@ -484,6 +541,11 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             });
 
     // MCP navigation tool → dock_router (cross-thread safe)
+    //
+    // The three app-wide subscriptions below (nav.switch_screen,
+    // equity.open_order_ticket, nav.open_symbol) are registered by EVERY frame, so
+    // each queued handler first asks wf_app_event_target() whether it is the one
+    // frame that should act — otherwise one publish would act in all open windows.
     EventBus::instance().subscribe(this, "nav.switch_screen", [this](const QVariantMap& nav_data) {
         QString screen_id = nav_data["screen_id"].toString();
         // Optional: callers that want a clean "take me there" switch (replace the
@@ -493,8 +555,9 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             QMetaObject::invokeMethod(
                 dock_router_,
                 [this, screen_id, exclusive]() {
-                    if (!locked_)
-                        dock_router_->navigate(screen_id, exclusive);
+                    if (locked_ || wf_app_event_target() != this)
+                        return;
+                    dock_router_->navigate(screen_id, exclusive);
                 },
                 Qt::QueuedConnection);
     });
@@ -514,13 +577,50 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         QMetaObject::invokeMethod(
             this,
             [this, symbol, exchange, match_exchanges, is_buy, price]() {
-                if (locked_ || !dock_router_)
+                if (locked_ || !dock_router_ || wf_app_event_target() != this)
                     return;
                 const QString id = QStringLiteral("equity_trading");
                 if (!dock_router_->screen_widget(id))
                     dock_router_->materialize_now(id); // create hidden, don't raise
                 if (auto* trading = qobject_cast<screens::EquityTradingScreen*>(dock_router_->screen_widget(id)))
                     trading->open_external_order_ticket(symbol, exchange, match_exchanges, is_buy, price);
+            },
+            Qt::QueuedConnection);
+    });
+
+    // "Open this symbol in <screen>" — the reliable way for one panel to hand a
+    // ticker to another. Publishing nav.switch_screen followed by a screen's own
+    // load event loses the symbol whenever the target hasn't been constructed
+    // yet: nav.switch_screen navigates on a queued call, so the second publish
+    // runs before the target exists to receive it. Here navigate() runs first
+    // (it materialises the screen synchronously), then the symbol is delivered
+    // through IGroupLinked — the same entry point symbol-group linking uses.
+    // Payload: screen_id, symbol (both required); asset_class (default
+    // "equity"; crypto_trading only accepts "crypto"), exchange, exclusive.
+    EventBus::instance().subscribe(this, "nav.open_symbol", [this](const QVariantMap& d) {
+        const QString screen_id = d.value("screen_id").toString();
+        SymbolRef ref;
+        ref.symbol = d.value("symbol").toString().trimmed();
+        ref.asset_class = d.value("asset_class", QStringLiteral("equity")).toString();
+        ref.exchange = d.value("exchange").toString();
+        const bool exclusive = d.value("exclusive", false).toBool();
+        if (screen_id.isEmpty() || !ref.is_valid())
+            return;
+        QMetaObject::invokeMethod(
+            this,
+            [this, screen_id, ref, exclusive]() {
+                // Only the target frame (see wf_app_event_target) acts; the other
+                // frames' copies of this handler are no-ops.
+                if (locked_ || !dock_router_ || wf_app_event_target() != this)
+                    return;
+                dock_router_->navigate(screen_id, exclusive);
+                auto* linked = dynamic_cast<IGroupLinked*>(dock_router_->screen_widget(screen_id));
+                if (!linked) {
+                    LOG_WARN("WindowFrame",
+                             QString("nav.open_symbol: '%1' does not accept a symbol (no IGroupLinked)").arg(screen_id));
+                    return;
+                }
+                linked->on_group_symbol_changed(ref);
             },
             Qt::QueuedConnection);
     });
@@ -540,6 +640,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // time. The registry resolves the focused frame live at invoke time.
     auto& km = KeyConfigManager::instance();
     auto& reg = ActionRegistry::instance();
+    QSet<QString> key_bound_ids; // registry ids whose hotkey is owned by a KeyAction
     for (KeyAction a : km.all_actions()) {
         const QString action_id = actions::action_id_for(a);
         if (action_id.isEmpty())
@@ -549,6 +650,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                      QString("KeyAction → action_id mapping references unregistered id: %1").arg(action_id));
             continue;
         }
+        key_bound_ids.insert(action_id);
         auto* act = km.action(a);
         if (!act)
             continue;
@@ -557,15 +659,66 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         // Everything else is window-scoped so only the focused frame fires.
         act->setShortcutContext(a == KeyAction::LockNow ? Qt::ApplicationShortcut : Qt::WindowShortcut);
         addAction(act);
-        connect(act, &QAction::triggered, this, [action_id]() {
+        connect(act, &QAction::triggered, this, [this, action_id]() {
+            // KeyConfigManager owns ONE QAction per KeyAction and every frame
+            // connects to it, so a single key press reaches this lambda once per
+            // open window. Without this guard toggles (F11, F10, F9, always-on-top)
+            // cancelled themselves out and "new window" / "cycle windows" ran N
+            // times. Only the frame the action resolves to handles it.
+            WindowFrame* target = wf_app_event_target();
+            if (target != this)
+                return;
             // Build a fresh context every invocation so the focused frame
             // is resolved live rather than captured. This is the bug-fix
             // that motivated the refactor.
             CommandContext ctx;
             ctx.shell = &TerminalShell::instance();
-            ctx.focused_frame = WindowCycler::instance().focused_frame();
+            ctx.focused_frame = target;
             // ctx.focused_panel left null — Phase 7 wires PanelRegistry's
             // focused-panel lookup once panels are UUID-keyed.
+            auto r = ActionRegistry::instance().invoke(action_id, ctx);
+            if (r.is_err()) {
+                LOG_DEBUG("WindowFrame",
+                          QString("Action %1 returned error: %2").arg(action_id, QString::fromStdString(r.error())));
+            }
+        });
+    }
+
+    // Registry actions that declare a default hotkey but have no KeyAction
+    // (cmdbar.toggle = Ctrl+\, palette.open = Ctrl+Shift+P). Nothing bound their
+    // ActionDef::default_hotkey, so the documented Ctrl+\ did nothing. Each frame
+    // owns its own QAction here with window scope, so only the active window fires.
+    for (const QString& action_id : reg.all_ids()) {
+        if (key_bound_ids.contains(action_id))
+            continue;
+        const ActionDef* def = reg.find(action_id);
+        if (!def || def->default_hotkey.isEmpty())
+            continue;
+        // Never share a sequence with a KeyAction: two QActions on one key in the
+        // same window make Qt treat the shortcut as ambiguous and fire neither.
+        bool clashes = false;
+        for (KeyAction a : km.all_actions()) {
+            if (km.key(a) == def->default_hotkey) {
+                clashes = true;
+                break;
+            }
+        }
+        if (clashes) {
+            LOG_WARN("WindowFrame", QString("Hotkey for %1 (%2) is already bound to a KeyAction — not binding it")
+                                        .arg(action_id, def->default_hotkey.toString()));
+            continue;
+        }
+        auto* hotkey_act = new QAction(this);
+        hotkey_act->setShortcut(def->default_hotkey);
+        hotkey_act->setShortcutContext(Qt::WindowShortcut);
+        addAction(hotkey_act);
+        connect(hotkey_act, &QAction::triggered, this, [this, action_id]() {
+            // Shell surfaces (command bar, palette): not on the login/lock/chat stacks.
+            if (locked_ || !stack_ || stack_->currentIndex() != 1)
+                return;
+            CommandContext ctx;
+            ctx.shell = &TerminalShell::instance();
+            ctx.focused_frame = this;
             auto r = ActionRegistry::instance().invoke(action_id, ctx);
             if (r.is_err()) {
                 LOG_DEBUG("WindowFrame",
@@ -720,11 +873,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
         } else if (action == "always_on_top") {
             set_always_on_top(!always_on_top_);
         } else if (action == "refresh") {
-            if (dock_manager_) {
-                auto* focused = dock_manager_->focusedDockWidget();
-                if (focused && focused->widget())
-                    QMetaObject::invokeMethod(focused->widget(), "refresh", Qt::QueuedConnection);
-            }
+            refresh_focused_panel(); // same path as the F5 shortcut
         } else if (action == "layout_new" || action == "layout_save_as") {
             // Both routes prompt for a name then save. layout.new = blank
             // workspace under that name; layout.save_as = capture-current
@@ -955,7 +1104,13 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
             // tab bar, status bar) before the first screen factory runs.
             // DashboardScreen construction can take 200-500ms; without this
             // the user sees a blank frame for that entire duration.
-            QTimer::singleShot(0, this, [this]() { dock_router_->navigate("dashboard"); });
+            // Skip it when something has already been opened in the meantime —
+            // e.g. a panel torn off / moved into this brand-new window — so the
+            // user doesn't get an unrequested Dashboard tiled next to it.
+            QTimer::singleShot(0, this, [this]() {
+                if (dock_router_->current_screen_id().isEmpty())
+                    dock_router_->navigate("dashboard");
+            });
             LOG_INFO("WindowFrame", "Deferred default dashboard navigate to after first paint");
         } else if (!dock_restored) {
             LOG_INFO("WindowFrame", QString("Deferring default navigate — frame spawned with adopted uuid %1 "
@@ -1309,6 +1464,13 @@ void WindowFrame::changeEvent(QEvent* event) {
     // workspace/screen suffix picks up the new locale immediately.
     if (event->type() == QEvent::LanguageChange) {
         update_window_title();
+        return;
+    }
+    // Remember the frame the user last worked in — the fallback target for
+    // app-wide events published while no frame is the active window.
+    if (event->type() == QEvent::ActivationChange) {
+        if (isActiveWindow())
+            wf_last_active_frame() = this;
         return;
     }
     if (event->type() != QEvent::WindowStateChange)

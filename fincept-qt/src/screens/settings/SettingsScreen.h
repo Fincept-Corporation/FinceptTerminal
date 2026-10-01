@@ -45,14 +45,22 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     void refresh_theme();
     void retranslateUi();
 
-    /// Re-wire signals from section instances to external services. Called
-    /// after every section rebuild (language change) so the wiring survives
-    /// the destruction of the old section widgets.
-    void wire_section_signals();
+    /// Wire the signals of the section at `idx` (if it has any) to external
+    /// services. Called after that section is (re)built — first visit, or a
+    /// language-change rebuild — so the wiring survives the destruction of the
+    /// old section widget.
+    void wire_section_signals(int idx);
 
-    /// Rebuild every section widget by constructing fresh instances via the
-    /// stored factories. Preserves the current section index. Each rebuilt
-    /// section picks up the active QTranslator at construction time.
+    /// Sections are built on first visit, not up front: constructing all 16 at
+    /// once cost every Settings open (130 credential cards, a storage scan, DB
+    /// reads for providers / profiles / servers) for sections the user never
+    /// looked at. Until then each stack slot holds an empty placeholder.
+    /// No-op once built.
+    void ensure_section_built(int idx);
+
+    /// Rebuild every already-built section widget by constructing fresh
+    /// instances via the stored factories. Preserves the current section index.
+    /// Each rebuilt section picks up the active QTranslator at construction time.
     void rebuild_sections_for_language_change();
 
     /// Nav button → source key map used to retranslate button labels and
@@ -80,6 +88,7 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     /// Factories for each section index. Used by the language-change rebuild
     /// path so we can recreate widgets without hardcoding the type list twice.
     QList<std::function<QWidget*()>> section_factories_;
+    QList<bool> section_built_; // aligned with section_factories_
 
     // ── MCP-driven UI sync ────────────────────────────────────────────────────
     QList<EventBus::HandlerId> mcp_event_subs_;

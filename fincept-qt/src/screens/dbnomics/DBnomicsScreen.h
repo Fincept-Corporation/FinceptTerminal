@@ -8,6 +8,7 @@
 #include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
+#include <QSet>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -67,6 +68,13 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     void rebuild_comparison_view();
     void retranslateUi();
 
+    // DataHub (CLAUDE.md D4): observations are read from `dbnomics:<provider>:<dataset>:<series>`
+    // topics, not from the service's fetch_observations() signal. Catalogue browsing (providers /
+    // datasets / series / search) stays on the service's one-shot callbacks.
+    static QString series_topic(const QString& series_id); // "PROV/DS/CODE" -> topic ("" if malformed)
+    void watch_series(const QString& series_id);           // subscribe (idempotent) + remember
+    void unwatch_unused_series();                          // drop topics no view / slot / selection uses
+
     struct SlotCard {
         DBnomicsChartWidget* chart = nullptr;
         DBnomicsDataTable* table = nullptr;
@@ -99,6 +107,9 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
     services::DbnDataPoint last_loaded_data_;
     bool has_pending_data_ = false;
     int provider_count_ = 0;
+
+    QSet<QString> watched_series_; // series ids subscribed on the hub (re-subscribed on every show)
+    QString pending_series_id_;    // the series the user just picked, until its observations arrive
 
     QWidget* comparison_content_ = nullptr;
     QVBoxLayout* comparison_layout_ = nullptr;

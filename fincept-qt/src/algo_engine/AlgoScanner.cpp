@@ -70,6 +70,7 @@ void AlgoScanner::scan(const QJsonArray& conditions, const QStringList& symbols,
                     co["field"] = d.field;
                     co["operator"] = d.op;
                     co["value"] = d.target_value;
+                    co["computed"] = d.computed_value; // live LHS value the rule was evaluated on
                     conds.append(co);
                 }
                 mo["conditions"] = conds;

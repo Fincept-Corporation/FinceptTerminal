@@ -563,10 +563,113 @@ class DCFModel:
 
         return inputs
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `dcf_model.py <command> <flat-params-json>` (argv length 3). This CLI's native
+# form is positional (`dcf wacc_inputs fcf_inputs growth_rates terminal_growth balance_sheet shares`), so a
+# service-style call is translated here and then falls through to the native dispatch below. Native invocations
+# (any other argv shape) are untouched.
+_SERVICE_COMMANDS = ("calculate", "sensitivity")
+
+
+def _svc_num(p, *keys, default=None):
+    """First numeric (non-bool) value among `keys`, else `default`."""
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _svc_dcf_inputs(p):
+    """Flat panel / MCP params -> (wacc_inputs, fcf_inputs, growth_rates, terminal_growth, balance_sheet, shares)."""
+    ebit = _svc_num(p, "ebit")
+    if ebit is None:
+        ebitda = _svc_num(p, "ebitda")
+        revenue = _svc_num(p, "revenue", default=0.0)
+        # EBIT is not supplied: approximate from EBITDA (85%) or assume a 15% operating margin.
+        ebit = ebitda * 0.85 if ebitda else revenue * 0.15
+    tax = _svc_num(p, "tax_rate", default=0.21)
+    net_debt = _svc_num(p, "net_debt", default=0.0)
+    debt = _svc_num(p, "debt", "total_debt", default=max(net_debt, 0.0))
+    cash = _svc_num(p, "cash", default=max(-net_debt, 0.0))
+    equity = _svc_num(p, "market_cap", "market_value_equity", default=None)
+    if not equity:
+        equity = max(ebit, 1.0) * 15.0  # no market cap supplied: assume ~15x EBIT
+    wacc_override = _svc_num(p, "wacc")
+    if wacc_override is not None:
+        # A fixed WACC was requested: all-equity capital structure whose CAPM cost of equity equals it.
+        wacc_inputs = {
+            "risk_free_rate": min(max(wacc_override - 0.001, 0.0), 0.20),
+            "market_risk_premium": 0.01, "beta": 0.1, "cost_of_debt": 0.0, "tax_rate": tax,
+            "market_value_equity": equity, "market_value_debt": 0.0,
+        }
+    else:
+        wacc_inputs = {
+            "risk_free_rate": _svc_num(p, "risk_free_rate", default=0.045),
+            "market_risk_premium": _svc_num(p, "market_risk_premium", default=0.055),
+            "beta": _svc_num(p, "beta", default=1.0),
+            "cost_of_debt": _svc_num(p, "cost_of_debt", default=0.05),
+            "tax_rate": tax,
+            "market_value_equity": equity,
+            "market_value_debt": debt,
+        }
+    depreciation = _svc_num(p, "depreciation", default=0.0)
+    fcf_inputs = {
+        "ebit": ebit, "tax_rate": tax, "depreciation": depreciation,
+        "capex": _svc_num(p, "capex", default=depreciation),
+        "change_in_nwc": _svc_num(p, "change_in_nwc", default=0.0),
+    }
+    terminal_growth = _svc_num(p, "terminal_growth", "terminal_growth_rate", default=0.025)
+    growth_rates = p.get("growth_rates")
+    if not isinstance(growth_rates, list) or not growth_rates:
+        years = int(_svc_num(p, "projection_years", default=5))
+        g0 = _svc_num(p, "growth_rate", "revenue_growth", default=0.05)
+        # Fade linearly from the near-term growth rate to the terminal rate.
+        growth_rates = [g0 + (terminal_growth - g0) * i / max(years - 1, 1) for i in range(max(years, 1))]
+    shares = _svc_num(p, "shares", "shares_outstanding", default=1.0)
+    if not shares or shares <= 0:
+        shares = 1.0
+    balance_sheet = {"cash": cash, "debt": debt}
+    return wacc_inputs, fcf_inputs, growth_rates, terminal_growth, balance_sheet, shares
+
+
+def _service_argv(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return argv
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return argv
+    if not isinstance(p, dict):
+        return argv
+    if argv[1] == "calculate":
+        wacc_inputs, fcf_inputs, growth_rates, tg, balance_sheet, shares = _svc_dcf_inputs(p)
+        return [argv[0], "dcf", json.dumps(wacc_inputs), json.dumps(fcf_inputs), json.dumps(growth_rates), repr(tg),
+                json.dumps(balance_sheet), repr(shares)]
+    # sensitivity: MCP shape {base_params: {...}, wacc_range: [...], tgr_range: [...]}; a flat dict is its own base.
+    base = p.get("base_params") if isinstance(p.get("base_params"), dict) else p
+    wacc_inputs, fcf_inputs, growth_rates, tg, balance_sheet, shares = _svc_dcf_inputs(base)
+    model = DCFModel("Target Company")
+    nopat = fcf_inputs["ebit"] * (1 - fcf_inputs["tax_rate"]) + fcf_inputs["depreciation"] - fcf_inputs["capex"] \
+        - fcf_inputs["change_in_nwc"]
+    wacc_scenarios = p.get("wacc_range")
+    if not isinstance(wacc_scenarios, list) or not wacc_scenarios:
+        w = model.calculate_wacc(**wacc_inputs)["wacc"]
+        wacc_scenarios = [round(w + d, 4) for d in (-0.02, -0.01, 0.0, 0.01, 0.02)]
+    tgr_scenarios = p.get("tgr_range")
+    if not isinstance(tgr_scenarios, list) or not tgr_scenarios:
+        tgr_scenarios = [round(tg + d, 4) for d in (-0.01, -0.005, 0.0, 0.005, 0.01)]
+    return [argv[0], "sensitivity", repr(nopat), json.dumps(growth_rates), json.dumps(tgr_scenarios),
+            json.dumps(wacc_scenarios), json.dumps(balance_sheet), repr(shares)]
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {
             "success": False,

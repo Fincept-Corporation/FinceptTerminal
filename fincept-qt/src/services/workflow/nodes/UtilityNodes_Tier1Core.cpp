@@ -5,6 +5,7 @@
 //
 // Part of the topic-based split of UtilityNodes.cpp.
 
+#include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/nodes/UtilityNodes.h"
 
@@ -16,6 +17,35 @@
 #include <QRegularExpression>
 
 namespace fincept::workflow {
+
+namespace {
+
+// A number out of a JSON value: real numbers, and strings that are plainly numeric
+// ("12.5"). Data coming from CSV / HTTP is routinely numeric text; reading it with
+// QJsonValue::toDouble() silently gave 0.
+bool t1c_number(const QJsonValue& v, double* out) {
+    if (v.isDouble()) {
+        *out = v.toDouble();
+        return true;
+    }
+    if (v.isString()) {
+        const QString s = v.toString().trimmed();
+        if (s.isEmpty())
+            return false;
+        const QChar c = s[0];
+        if (!(c.isDigit() || c == QLatin1Char('-') || c == QLatin1Char('+') || c == QLatin1Char('.')))
+            return false;
+        bool ok = false;
+        const double d = s.toDouble(&ok);
+        if (ok) {
+            *out = d;
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
 
 void register_utility_tier1_core(NodeRegistry& registry) {
     // ── DateTime ───────────────────────────────────────────────────
@@ -82,21 +112,28 @@ void register_utility_tier1_core(NodeRegistry& registry) {
                 QString op = params.value("operator").toString("equals");
                 QString value = params.value("value").toString();
 
+                // Compare numerically when both sides are numbers (or numeric text), as text
+                // otherwise. The old code stringified numbers with QString::number() — 6
+                // significant digits, so 1234567 never "equals" 1234567 — and read numeric
+                // text as 0 for greater/less-than.
                 auto matches = [&](const QJsonValue& item) -> bool {
                     QJsonValue field_val = item.isObject() ? item.toObject().value(field) : QJsonValue{};
-                    QString field_str =
-                        field_val.isString() ? field_val.toString() : QString::number(field_val.toDouble());
+                    const QString field_str = ExpressionEngine::value_to_string(field_val);
+
+                    double a = 0;
+                    double b = 0;
+                    const bool numeric = t1c_number(field_val, &a) && t1c_number(QJsonValue(value), &b);
 
                     if (op == "equals")
-                        return field_str == value;
+                        return numeric ? a == b : field_str == value;
                     if (op == "not_equals")
-                        return field_str != value;
+                        return numeric ? a != b : field_str != value;
                     if (op == "contains")
                         return field_str.contains(value, Qt::CaseInsensitive);
                     if (op == "greater_than")
-                        return field_val.toDouble() > value.toDouble();
+                        return numeric ? a > b : field_str > value;
                     if (op == "less_than")
-                        return field_val.toDouble() < value.toDouble();
+                        return numeric ? a < b : field_str < value;
                     return false;
                 };
 
@@ -135,10 +172,35 @@ void register_utility_tier1_core(NodeRegistry& registry) {
                 {"expression", "Expression", "expression", "", {}, "={{$input.field}}"},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>& inputs,
+            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
                 auto data = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                cb(true, data, {});
+
+                // The Expression parameter was ignored (the node returned its input as-is).
+                // Each item is the expression's context: ={{$input.price}}, {{name}} text
+                // templates, helpers like ={{prices.sum()}}; a bare path ("price") also works.
+                QString expr = params.value("expression").toString().trimmed();
+                if (expr.isEmpty()) {
+                    cb(true, data, {});
+                    return;
+                }
+                if (!expr.contains(QLatin1String("{{")))
+                    expr = QStringLiteral("={{") + expr + QStringLiteral("}}");
+
+                auto map_one = [&expr](const QJsonValue& item) -> QJsonValue {
+                    const QJsonObject ctx = item.isObject() ? item.toObject() : QJsonObject{{"value", item}};
+                    QJsonValue v = ExpressionEngine::evaluate(QJsonValue(expr), ctx);
+                    return v.isUndefined() ? QJsonValue(QJsonValue::Null) : v;
+                };
+
+                if (data.isArray()) {
+                    QJsonArray out;
+                    for (const QJsonValue& item : data.toArray())
+                        out.append(map_one(item));
+                    cb(true, out, {});
+                } else {
+                    cb(true, map_one(data), {});
+                }
             },
     });
 
@@ -176,10 +238,13 @@ void register_utility_tier1_core(NodeRegistry& registry) {
                 int count = 0;
 
                 for (const QJsonValue& item : arr) {
-                    if (!item.isObject())
+                    // [1, 2, 3] with no field aggregates the numbers themselves.
+                    if (!item.isObject() && !field.isEmpty())
                         continue;
-                    QJsonValue fv = item.toObject().value(field);
-                    double v = fv.toDouble();
+                    QJsonValue fv = item.isObject() ? item.toObject().value(field) : item;
+                    double v = 0.0;
+                    if (!t1c_number(fv, &v) && op != "count")
+                        continue; // not a number (missing / text) — don't drag sum/min/max/avg toward 0
                     result += v;
                     minimum = std::min(minimum, v);
                     maximum = std::max(maximum, v);
@@ -293,26 +358,38 @@ void register_utility_tier1_core(NodeRegistry& registry) {
 
                 QString join_key = params.value("join_key").toString("id");
 
+                // The Join Type select was ignored — every join was an inner join.
+                const QString join_type = params.value("join_type").toString("inner");
+                const bool keep_unmatched_a = (join_type == "left" || join_type == "outer");
+                const bool keep_unmatched_b = (join_type == "right" || join_type == "outer");
+
                 // Build a lookup map from B keyed by join_key.
                 QHash<QString, QJsonObject> b_map;
+                QStringList b_order;
                 for (const QJsonValue& item : arr_b) {
                     if (!item.isObject())
                         continue;
                     QJsonObject obj = item.toObject();
                     QString key_val = obj.value(join_key).toVariant().toString();
+                    if (!b_map.contains(key_val))
+                        b_order << key_val;
                     b_map.insert(key_val, obj);
                 }
 
-                // Inner join: only emit rows where key exists in both.
                 QJsonArray out;
+                QSet<QString> matched_b;
                 for (const QJsonValue& item : arr_a) {
                     if (!item.isObject())
                         continue;
                     QJsonObject obj_a = item.toObject();
                     QString key_val = obj_a.value(join_key).toVariant().toString();
                     auto it = b_map.find(key_val);
-                    if (it == b_map.end())
+                    if (it == b_map.end()) {
+                        if (keep_unmatched_a)
+                            out.append(obj_a);
                         continue;
+                    }
+                    matched_b.insert(key_val);
 
                     // Merge: B fields overwrite A on collision.
                     QJsonObject merged = obj_a;
@@ -320,6 +397,12 @@ void register_utility_tier1_core(NodeRegistry& registry) {
                     for (auto bi = obj_b.begin(); bi != obj_b.end(); ++bi)
                         merged.insert(bi.key(), bi.value());
                     out.append(merged);
+                }
+                if (keep_unmatched_b) {
+                    for (const QString& key_val : b_order) {
+                        if (!matched_b.contains(key_val))
+                            out.append(b_map.value(key_val));
+                    }
                 }
                 cb(true, out, {});
             },
@@ -351,22 +434,17 @@ void register_utility_tier1_core(NodeRegistry& registry) {
                 QString field = params.value("field").toString();
                 QJsonArray arr = inputs[0].toArray();
 
-                // Preserve insertion order using a list of keys alongside the map.
-                QJsonObject groups;
-                QStringList key_order;
-
+                // Bucket in a hash and build the result object once. The old code re-read,
+                // copied and re-inserted the whole bucket array for every row (O(n^2)).
+                QHash<QString, QJsonArray> buckets;
                 for (const QJsonValue& item : arr) {
                     if (!item.isObject())
                         continue;
-                    QString group_val = item.toObject().value(field).toVariant().toString();
-                    if (!groups.contains(group_val)) {
-                        groups.insert(group_val, QJsonArray{});
-                        key_order.append(group_val);
-                    }
-                    QJsonArray bucket = groups.value(group_val).toArray();
-                    bucket.append(item);
-                    groups.insert(group_val, bucket);
+                    buckets[item.toObject().value(field).toVariant().toString()].append(item);
                 }
+                QJsonObject groups;
+                for (auto it = buckets.constBegin(); it != buckets.constEnd(); ++it)
+                    groups.insert(it.key(), it.value());
                 cb(true, groups, {});
             },
     });
@@ -402,9 +480,9 @@ void register_utility_tier1_core(NodeRegistry& registry) {
                 for (const QJsonValue& item : arr) {
                     QString key_val;
                     if (field.isEmpty()) {
-                        // Whole-object dedup: use compact JSON as key.
-                        QJsonDocument doc(item.toObject());
-                        key_val = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+                        // Whole-item dedup: the item's own JSON is the key. (item.toObject() made
+                        // every scalar "{}", so [1, 2, 3] collapsed to a single element.)
+                        key_val = ExpressionEngine::value_to_string(item);
                     } else if (item.isObject()) {
                         key_val = item.toObject().value(field).toVariant().toString();
                     } else {

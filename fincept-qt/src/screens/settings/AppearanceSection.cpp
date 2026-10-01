@@ -2,6 +2,7 @@
 
 #include "screens/settings/AppearanceSection.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "screens/settings/SettingsRowHelpers.h"
 #include "screens/settings/SettingsStyles.h"
@@ -258,7 +259,15 @@ void AppearanceSection::build_ui() {
         repo.set("appearance.font_size", app_font_size_->currentText(), "appearance");
         repo.set("appearance.font_family", app_font_family_->currentText(), "appearance");
         repo.set("appearance.density", app_density_->currentText(), "appearance");
-        repo.set("appearance.show_chat_bubble", chat_bubble_toggle_->isChecked() ? "true" : "false", "appearance");
+        const QString bubble = chat_bubble_toggle_->isChecked() ? "true" : "false";
+        const auto prev_bubble = repo.get("appearance.show_chat_bubble");
+        const bool bubble_changed = !prev_bubble.is_ok() || prev_bubble.value() != bubble;
+        repo.set("appearance.show_chat_bubble", bubble, "appearance");
+        // Every WindowFrame re-applies its chat bubble on this event, so the toggle
+        // takes effect now instead of on the next screen change.
+        if (bubble_changed)
+            EventBus::instance().publish("settings.changed",
+                                         {{"key", QStringLiteral("appearance.show_chat_bubble")}, {"value", bubble}});
         repo.set("appearance.show_ticker_bar", ticker_bar_toggle_->isChecked() ? "true" : "false", "appearance");
         repo.set("appearance.animations", animations_toggle_->isChecked() ? "true" : "false", "appearance");
 

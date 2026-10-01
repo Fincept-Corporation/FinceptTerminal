@@ -40,12 +40,11 @@ namespace fincept::screens::panels {
 ///   1. Calls `StakingService::build_lock_tx(...)` — fails fast in mock mode.
 ///   2. On success, opens `WalletActionConfirmDialog` with decoded summary.
 ///   3. On confirm, forwards to `WalletService::sign_and_send`.
-///   4. **Not implemented yet:** unlike `SwapPanel`, this panel does NOT poll
-///      `getSignatureStatuses`. The status line reads "Sent … (not yet
-///      confirmed on-chain)" and the balance is refreshed optimistically. A
-///      lock that is rejected on-chain therefore shows no failure here — the
-///      user has to check the explorer. Wire `start_status_poll` (copy the
-///      SwapPanel implementation) when the fincept_lock program ships.
+///   4. Polls `getSignatureStatuses` (`start_status_poll`, same cadence as
+///      `SwapPanel`) until the lock is confirmed, reverted on-chain, or the
+///      attempt cap is hit. The panel stays busy for the duration so a second
+///      lock can't be queued behind an unconfirmed one; on confirmation the
+///      balance and the locks / veFNCPT topics are force-refreshed.
 ///
 /// In mock mode the LOCK button is disabled with status "DEMO — fincept_lock
 /// not deployed yet" and clicking it shows the explanation in the error strip.
@@ -81,6 +80,10 @@ class LockPanel : public QWidget {
 
     void resubscribe();
     void recompute_preview();
+    /// Poll `getSignatureStatuses` after `sign_and_send` until the lock tx is
+    /// confirmed, reverted, or the attempt cap is reached. Timer and RPC client
+    /// are parented to the panel and torn down on every terminal outcome.
+    void start_status_poll(const QString& sig);
     void show_error_strip(const QString& msg);
     void clear_error_strip();
     void set_busy(bool busy);
@@ -133,6 +136,11 @@ class LockPanel : public QWidget {
     bool revenue_is_mock_ = false;
     quint64 current_user_weight_raw_ = 0;
     fincept::wallet::TierStatus::Tier current_tier_ = fincept::wallet::TierStatus::Tier::Free;
+    /// True when the veFNCPT weight / tier the TIER preview is built from came
+    /// from the staking producer's demo positions (fincept_lock not deployed),
+    /// not from the wallet's on-chain locks.
+    bool vefncpt_is_mock_ = false;
+    bool tier_is_mock_ = false;
 
     bool busy_ = false;
 };

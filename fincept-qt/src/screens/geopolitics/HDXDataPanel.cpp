@@ -45,17 +45,12 @@ void HDXDataPanel::on_error(const QString& context, const QString& message) {
         return;
 
     // Stop the perpetual spinner and surface the failure in its place.
+    inflight_.clear();
     if (datasets_table_)
         datasets_table_->setRowCount(0);
     if (dataset_count_)
-        dataset_count_->setText(QStringLiteral("0"));
-    if (loading_label_) {
-        loading_label_->setText(tr("Failed to load HDX data (%1):\n%2\n\nAdjust the query and search again.")
-                                    .arg(context, message));
-        loading_label_->show();
-    }
-    if (datasets_table_)
-        datasets_table_->setVisible(false);
+        dataset_count_->setText(tr("0 datasets"));
+    show_message(tr("Failed to load HDX data (%1):\n%2\n\nAdjust the query and search again.").arg(context, message));
 }
 
 void HDXDataPanel::build_ui() {
@@ -119,7 +114,12 @@ void HDXDataPanel::build_ui() {
     connect(search_edit_, &QLineEdit::returnPressed, this, [this]() {
         auto q = search_edit_->text().trimmed();
         if (!q.isEmpty()) {
+            // Results arrive as the "search" context, which only the Datasets view
+            // renders - searching from any other tab left the panel on "Loading"
+            // forever. Switch there first (without its default query).
+            set_active_view(3);
             show_loading(true);
+            inflight_.insert(QStringLiteral("search"));
             GeopoliticsService::instance().search_hdx_advanced(q);
         }
     });
@@ -226,9 +226,14 @@ void HDXDataPanel::build_ui() {
     country_combo_ = new QComboBox(explorer_bar_);
     country_combo_->setStyleSheet(combo_style);
     country_combo_->setEditable(true);
-    country_combo_->setPlaceholderText(tr("Select country"));
     for (const auto& r : critical_regions())
         country_combo_->addItem(r);
+    // Start empty: a pre-selected country always won over the topic box, so the
+    // topic could never be used without first clearing the country by hand.
+    country_combo_->setCurrentIndex(-1);
+    if (country_combo_->lineEdit())
+        country_combo_->lineEdit()->setPlaceholderText(tr("Select country"));
+    country_combo_->setToolTip(tr("Country (or ISO3 code). Leave empty to search by topic instead."));
     ehl->addWidget(country_combo_);
 
     topic_lbl_ = new QLabel(tr("TOPIC:"), explorer_bar_);
@@ -256,15 +261,19 @@ void HDXDataPanel::build_ui() {
     }
     connect(explore_btn_, &QPushButton::clicked, this, [this]() {
         auto country = country_combo_->currentText().trimmed();
-        show_loading(true);
         if (!country.isEmpty()) {
+            show_loading(true);
+            inflight_.insert(QStringLiteral("country"));
             GeopoliticsService::instance().search_hdx_by_country(country);
         } else {
             auto topic = topic_combo_->currentText().trimmed();
-            if (!topic.isEmpty())
+            if (!topic.isEmpty()) {
+                show_loading(true);
+                inflight_.insert(QStringLiteral("topic"));
                 GeopoliticsService::instance().search_hdx_by_topic(topic);
-            else
-                show_loading(false);
+            } else {
+                show_message(tr("Enter a country or pick a topic, then press SEARCH."));
+            }
         }
     });
     ehl->addWidget(explore_btn_);
@@ -291,10 +300,26 @@ void HDXDataPanel::build_ui() {
                                         .arg(ui::colors::BORDER_DIM()));
     root->addWidget(attribution_lbl_);
 
-    on_view_changed(0);
+    // Style + visibility only: the first fetch waits for showEvent().
+    set_active_view(0);
+}
+
+void HDXDataPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (!shown_once_) {
+        shown_once_ = true;
+        load_view(active_view_);
+    }
 }
 
 void HDXDataPanel::on_view_changed(int index) {
+    set_active_view(index);
+    // Never fetch for a panel nobody has looked at yet (constructor / restore paths).
+    if (shown_once_)
+        load_view(index);
+}
+
+void HDXDataPanel::set_active_view(int index) {
     active_view_ = index;
     auto rgb = cyan_rgb();
     for (int i = 0; i < view_buttons_.size(); ++i) {
@@ -325,49 +350,97 @@ void HDXDataPanel::on_view_changed(int index) {
 
     if (explorer_bar_)
         explorer_bar_->setVisible(index == 2);
+}
 
+void HDXDataPanel::load_view(int index) {
     auto& svc = GeopoliticsService::instance();
+    // Show whatever is cached; otherwise fetch once (an in-flight request will
+    // render itself when it lands, so a second tab flip must not issue another).
+    auto show_or_fetch = [this](const QVector<HDXDataset>& cache, const QString& ctx, const auto& fetch) {
+        if (!cache.isEmpty()) {
+            populate_table(cache);
+        } else {
+            show_loading(true);
+            if (!inflight_.contains(ctx)) {
+                inflight_.insert(ctx);
+                fetch();
+            }
+        }
+    };
     switch (index) {
         case 0:
-            if (!cache_conflicts_.isEmpty())
-                populate_table(cache_conflicts_);
-            else {
-                show_loading(true);
-                svc.search_hdx_conflicts();
-            }
+            show_or_fetch(cache_conflicts_, QStringLiteral("conflicts"), [&svc]() { svc.search_hdx_conflicts(); });
             break;
         case 1:
-            if (!cache_humanitarian_.isEmpty())
-                populate_table(cache_humanitarian_);
-            else {
-                show_loading(true);
-                svc.search_hdx_humanitarian();
-            }
+            show_or_fetch(cache_humanitarian_, QStringLiteral("humanitarian"),
+                          [&svc]() { svc.search_hdx_humanitarian(); });
             break;
         case 2:
+            // Explorer is query-driven: show the last result, else prompt.
+            if (!cache_explorer_.isEmpty())
+                populate_table(cache_explorer_);
+            else if (inflight_.contains(QStringLiteral("country")) || inflight_.contains(QStringLiteral("topic")))
+                show_loading(true);
+            else
+                show_message(tr("Enter a country or pick a topic, then press SEARCH."));
             break;
         case 3:
-            if (!cache_datasets_.isEmpty())
-                populate_table(cache_datasets_);
-            else {
-                show_loading(true);
-                svc.search_hdx_advanced("humanitarian crisis conflict displacement");
-            }
+            show_or_fetch(cache_datasets_, QStringLiteral("search"),
+                          [&svc]() { svc.search_hdx_advanced("humanitarian crisis conflict displacement"); });
+            break;
+        default:
             break;
     }
 }
 
+void HDXDataPanel::explore_country(const QString& country) {
+    if (country.trimmed().isEmpty())
+        return;
+    set_active_view(2);
+    country_combo_->setCurrentText(country.trimmed());
+    show_loading(true);
+    inflight_.insert(QStringLiteral("country"));
+    GeopoliticsService::instance().search_hdx_by_country(country.trimmed());
+}
+
+void HDXDataPanel::explore_topic(const QString& topic) {
+    if (topic.trimmed().isEmpty())
+        return;
+    set_active_view(2);
+    country_combo_->setCurrentText(QString()); // topic search runs only with no country
+    const int idx = topic_combo_->findText(topic.trimmed(), Qt::MatchFixedString);
+    if (idx >= 0)
+        topic_combo_->setCurrentIndex(idx);
+    show_loading(true);
+    inflight_.insert(QStringLiteral("topic"));
+    GeopoliticsService::instance().search_hdx_by_topic(topic.trimmed());
+}
+
 void HDXDataPanel::show_loading(bool on) {
+    if (on && loading_label_)
+        loading_label_->setText(tr("Loading HDX data...")); // may still hold an old error / empty message
     loading_label_->setVisible(on);
     datasets_table_->setVisible(!on);
 }
 
+void HDXDataPanel::show_message(const QString& text) {
+    if (loading_label_) {
+        loading_label_->setText(text);
+        loading_label_->setVisible(true);
+    }
+    if (datasets_table_)
+        datasets_table_->setVisible(false);
+}
+
 void HDXDataPanel::on_hdx_results(const QString& context, QVector<HDXDataset> datasets) {
+    inflight_.remove(context);
     if (context == "conflicts")
         cache_conflicts_ = datasets;
     else if (context == "humanitarian")
         cache_humanitarian_ = datasets;
-    else if (context == "search" || context == "topic" || context == "country")
+    else if (context == "topic" || context == "country")
+        cache_explorer_ = datasets;
+    else if (context == "search")
         cache_datasets_ = datasets;
 
     bool relevant = (active_view_ == 0 && context == "conflicts") || (active_view_ == 1 && context == "humanitarian") ||
@@ -420,11 +493,8 @@ void HDXDataPanel::populate_table(const QVector<HDXDataset>& datasets) {
     dataset_count_->setText(tr("%1 datasets").arg(datasets.size()));
 
     // Empty result is a state, not a silent blank grid.
-    if (datasets.isEmpty() && loading_label_) {
-        loading_label_->setText(tr("No HDX datasets matched this query.\nTry a broader term or a different country."));
-        loading_label_->show();
-        datasets_table_->setVisible(false);
-    }
+    if (datasets.isEmpty())
+        show_message(tr("No HDX datasets matched this query.\nTry a broader term or a different country."));
 }
 
 void HDXDataPanel::changeEvent(QEvent* event) {
@@ -453,8 +523,8 @@ void HDXDataPanel::retranslateUi() {
         country_lbl_->setText(tr("COUNTRY:"));
     if (topic_lbl_)
         topic_lbl_->setText(tr("TOPIC:"));
-    if (country_combo_)
-        country_combo_->setPlaceholderText(tr("Select country"));
+    if (country_combo_ && country_combo_->lineEdit())
+        country_combo_->lineEdit()->setPlaceholderText(tr("Select country"));
     if (explore_btn_)
         explore_btn_->setText(tr("SEARCH"));
 

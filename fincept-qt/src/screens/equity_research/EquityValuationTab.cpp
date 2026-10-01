@@ -279,10 +279,22 @@ void EquityValuationTab::set_symbol(const QString& symbol) {
     if (symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
-    financials_loaded_ = false;
     clear_results();
+    // The screen feeds set_stock_info()/set_financials() whenever data lands — even while
+    // another tab is showing — so what is held may already be this symbol's (keep it) or
+    // the previous one's (drop it: it would drive this symbol's DCF, multiples and the
+    // Altman/Piotroski/Beneish scores).
+    if (last_info_.symbol != symbol) {
+        last_info_ = {};
+        current_price_ = 0.0;
+    } else if (current_price_ > 0.0 && current_price_val_) {
+        current_price_val_->setText(fmt_currency(current_price_)); // clear_results() blanked it
+    }
+    if (last_financials_.symbol != symbol)
+        last_financials_ = {};
+    financials_loaded_ = !last_financials_.symbol.isEmpty();
     if (scoring_note_)
-        scoring_note_->setVisible(true);
+        scoring_note_->setVisible(!financials_loaded_);
 }
 
 void EquityValuationTab::set_stock_info(const services::equity::StockInfo& info) {
@@ -448,10 +460,14 @@ void EquityValuationTab::run_scoring_models() {
 
         services::QuantLibClient::instance().call("analysis/valuation/predictive/piotroski-f", pio_body,
                                                   [self](mcp::ToolResult r) {
-                                                      if (!self || !r.success)
+                                                      if (!self)
                                                           return;
-                                                      self->display_piotroski_result(r.data);
+                                                      // Failure → "no data", never the previous symbol's score.
+                                                      self->display_piotroski_result(r.success ? r.data
+                                                                                               : QJsonValue());
                                                   });
+    } else {
+        display_piotroski_result(QJsonValue()); // fewer than two periods on file
     }
 
     // ── Beneish M ────────────────────────────────────────────────
@@ -477,10 +493,12 @@ void EquityValuationTab::run_scoring_models() {
 
         services::QuantLibClient::instance().call("analysis/valuation/predictive/beneish-m", ben_body,
                                                   [self](mcp::ToolResult r) {
-                                                      if (!self || !r.success)
+                                                      if (!self)
                                                           return;
-                                                      self->display_beneish_result(r.data);
+                                                      self->display_beneish_result(r.success ? r.data : QJsonValue());
                                                   });
+    } else {
+        display_beneish_result(QJsonValue()); // fewer than two periods on file
     }
 }
 
@@ -592,8 +610,10 @@ void EquityValuationTab::display_piotroski_result(const QJsonValue& data) {
     if (piotroski_val_)
         piotroski_val_->setText(f >= 0 ? QString("%1/9").arg(f) : QStringLiteral("—"));
 
-    if (piotroski_badge_ && f >= 0) {
-        if (f >= 8)
+    if (piotroski_badge_) {
+        if (f < 0)
+            set_badge(piotroski_badge_, tr("NO DATA"), ui::colors::TEXT_TERTIARY());
+        else if (f >= 8)
             set_badge(piotroski_badge_, tr("STRONG (%1-9)").arg(f), ui::colors::POSITIVE());
         else if (f >= 5)
             set_badge(piotroski_badge_, tr("NEUTRAL (%1-7)").arg(f), ui::colors::AMBER());

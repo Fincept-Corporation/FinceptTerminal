@@ -105,4 +105,24 @@ struct ForumPostsPage {
     QString sort_by;
 };
 
+/// Category / avatar colours arrive from the server and are interpolated into
+/// widget style sheets. Accept only #RGB / #RGBA / #RRGGBB / #RRGGBBAA hex and
+/// fall back otherwise, so a hostile value can't smuggle extra style rules
+/// (e.g. "red;} QLabel{...") into the sheet.
+inline QString forum_safe_color(const QString& color, const QString& fallback) {
+    const QString t = color.trimmed();
+    if (t.size() < 2 || t.at(0) != QLatin1Char('#'))
+        return fallback;
+    const qsizetype digits = t.size() - 1;
+    if (digits != 3 && digits != 4 && digits != 6 && digits != 8)
+        return fallback;
+    for (qsizetype i = 1; i < t.size(); ++i) {
+        const ushort u = t.at(i).unicode();
+        const bool hex = (u >= '0' && u <= '9') || (u >= 'a' && u <= 'f') || (u >= 'A' && u <= 'F');
+        if (!hex)
+            return fallback;
+    }
+    return t;
+}
+
 } // namespace fincept::services

@@ -14,6 +14,7 @@
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
 
+#include <QDate>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -199,6 +200,25 @@ static const QList<CbBank> kBanks = {
      }},
 };
 
+// ── Per-series extra arguments ───────────────────────────────────────────────
+// Several connector commands cannot run without an argument ("range requires <start> <end>",
+// "currency requires <CCY>", "date requires <YYYY-MM-DD>") and the panel used to call them with
+// none, so those series always answered with a usage error.
+enum class CbArgKind { None, Ccy, Range, CcyRange, Date };
+
+static CbArgKind cb_arg_kind(const QString& script, const QString& command) {
+    if (command == "range")
+        return script == "hnb_data.py" ? CbArgKind::None // HNB defaults to the last 20 bulletins
+                                       : CbArgKind::Range;
+    if (command == "currency")
+        return (script == "hnb_data.py" || script == "bnm_data.py") ? CbArgKind::Ccy : CbArgKind::CcyRange;
+    if (command == "sessions" && script == "bnm_data.py")
+        return CbArgKind::Ccy;
+    if (command == "date" && script == "tcmb_data.py")
+        return CbArgKind::Date;
+    return CbArgKind::None;
+}
+
 // ── Flatten helpers ──────────────────────────────────────────────────────────
 
 // Bank responses put their payload under "data" with a "date" key and one or
@@ -226,6 +246,25 @@ static QJsonArray extract_cb_rows(const QJsonObject& data) {
         for (auto it = obj.begin(); it != obj.end(); ++it) {
             if (it.value().isArray() && !it.value().toArray().isEmpty())
                 return it.value().toArray();
+        }
+        // A single wrapper key holding one object (cnb "czeonia" gives {"czeoniaDaily": {...}}):
+        // that object is the row.
+        if (obj.size() == 1 && obj.begin().value().isObject())
+            return QJsonArray{obj.begin().value().toObject()};
+        // Object of objects keyed by currency (tcmb "today" gives {"USD": {...}, "EUR": {...}}): one
+        // row per key, with the key as a "currency" column. As a single row every value was an
+        // object (rendered blank, then dropped as "no numeric value" -> "No data returned").
+        bool all_objects = true;
+        for (auto it = obj.begin(); it != obj.end(); ++it)
+            all_objects = all_objects && it.value().isObject();
+        if (all_objects) {
+            QJsonArray rows;
+            for (auto it = obj.begin(); it != obj.end(); ++it) {
+                QJsonObject row = it.value().toObject();
+                row.insert(QStringLiteral("currency"), it.key());
+                rows.append(row);
+            }
+            return rows;
         }
         return QJsonArray{obj}; // genuine single row
     }
@@ -266,17 +305,43 @@ void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     series_combo_->setFixedHeight(26);
     series_combo_->setMinimumWidth(200);
 
+    ccy_lbl_ = new QLabel(tr("CCY"));
+    ccy_lbl_->setObjectName(QStringLiteral("econCtrlLabel")); // styled by the panel stylesheet (no per-label parse)
+    ccy_edit_ = new QLineEdit(QStringLiteral("USD"));
+    ccy_edit_->setMaxLength(3);
+    ccy_edit_->setFixedWidth(52);
+    ccy_edit_->setFixedHeight(26);
+    ccy_edit_->setToolTip(tr("ISO currency code for the single-currency series (e.g. USD, EUR, GBP)"));
+    ccy_edit_->setAccessibleName(tr("Currency code"));
+
+    days_lbl_ = new QLabel(tr("DAYS"));
+    days_lbl_->setObjectName(QStringLiteral("econCtrlLabel")); // styled by the panel stylesheet (no per-label parse)
+    days_spin_ = new QSpinBox;
+    days_spin_->setRange(1, 365);
+    days_spin_->setValue(30);
+    days_spin_->setFixedHeight(26);
+    days_spin_->setToolTip(tr("Look-back window for date-range series"));
+    days_spin_->setAccessibleName(tr("Look-back days"));
+
     // Populate series for the initial bank
     update_series_for_bank(0);
 
     connect(bank_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &GlobalCentralBanksPanel::update_series_for_bank);
+    connect(series_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { update_arg_controls(); });
 
     thl->addWidget(bank_lbl_);
     thl->addWidget(bank_combo_);
     thl->addSpacing(8);
     thl->addWidget(series_lbl_);
     thl->addWidget(series_combo_);
+    thl->addSpacing(8);
+    thl->addWidget(ccy_lbl_);
+    thl->addWidget(ccy_edit_);
+    thl->addWidget(days_lbl_);
+    thl->addWidget(days_spin_);
+    update_arg_controls();
 }
 
 void GlobalCentralBanksPanel::update_series_for_bank(int bank_idx) {
@@ -285,6 +350,23 @@ void GlobalCentralBanksPanel::update_series_for_bank(int bank_idx) {
     series_combo_->clear();
     for (const auto& s : kBanks[bank_idx].series)
         series_combo_->addItem(s.label, s.command);
+    update_arg_controls();
+}
+
+void GlobalCentralBanksPanel::update_arg_controls() {
+    if (!ccy_edit_ || !days_spin_)
+        return;
+    const int bi = bank_combo_ ? bank_combo_->currentIndex() : -1;
+    const QString command = series_combo_ ? series_combo_->currentData().toString() : QString();
+    CbArgKind kind = CbArgKind::None;
+    if (bi >= 0 && bi < kBanks.size())
+        kind = cb_arg_kind(kBanks[bi].script, command);
+    const bool needs_ccy = kind == CbArgKind::Ccy || kind == CbArgKind::CcyRange;
+    const bool needs_days = kind == CbArgKind::Range || kind == CbArgKind::CcyRange;
+    ccy_edit_->setEnabled(needs_ccy);
+    ccy_lbl_->setEnabled(needs_ccy);
+    days_spin_->setEnabled(needs_days);
+    days_lbl_->setEnabled(needs_days);
 }
 
 void GlobalCentralBanksPanel::on_fetch() {
@@ -298,8 +380,30 @@ void GlobalCentralBanksPanel::on_fetch() {
     const auto& bank = kBanks[bi];
     const auto& series = bank.series[si];
 
+    // Arguments the selected command cannot run without (see cb_arg_kind()).
+    QStringList args;
+    const CbArgKind kind = cb_arg_kind(bank.script, series.command);
+    const QString ccy = ccy_edit_ ? ccy_edit_->text().trimmed().toUpper() : QString();
+    if ((kind == CbArgKind::Ccy || kind == CbArgKind::CcyRange) && ccy.size() != 3) {
+        show_empty(tr("Enter a 3-letter currency code (e.g. USD)"));
+        return;
+    }
+    if (kind == CbArgKind::Ccy || kind == CbArgKind::CcyRange)
+        args << ccy;
+    if (kind == CbArgKind::Range || kind == CbArgKind::CcyRange) {
+        const QDate end = QDate::currentDate();
+        args << end.addDays(-(days_spin_ ? days_spin_->value() : 30)).toString(Qt::ISODate)
+             << end.toString(Qt::ISODate);
+    }
+    if (kind == CbArgKind::Date) {
+        QDate d = QDate::currentDate();
+        while (d.dayOfWeek() >= 6) // bulletins are published on business days only
+            d = d.addDays(-1);
+        args << d.toString(Qt::ISODate);
+    }
+
     show_loading(tr("Fetching %1: %2…").arg(bank.label, series.label));
-    services::EconomicsService::instance().execute(kGlobalCentralBanksSourceId, bank.script, series.command, {},
+    services::EconomicsService::instance().execute(kGlobalCentralBanksSourceId, bank.script, series.command, args,
                                                    bank.req_prefix + "_" + series.command);
 }
 
@@ -386,6 +490,10 @@ void GlobalCentralBanksPanel::retranslateUi() {
         bank_lbl_->setText(tr("BANK"));
     if (series_lbl_)
         series_lbl_->setText(tr("SERIES"));
+    if (ccy_lbl_)
+        ccy_lbl_->setText(tr("CCY"));
+    if (days_lbl_)
+        days_lbl_->setText(tr("DAYS"));
     EconPanelBase::retranslateUi();
 }
 

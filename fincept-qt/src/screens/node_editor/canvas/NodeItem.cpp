@@ -241,12 +241,11 @@ QVariant NodeItem::itemChange(GraphicsItemChange change, const QVariant& value) 
 }
 
 void NodeItem::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-        emit delete_requested(def_.id);
-        event->accept();
-    } else {
-        QGraphicsObject::keyPressEvent(event);
-    }
+    // Delete / Backspace are deliberately NOT handled here. A focused node used to
+    // swallow the key and delete only itself - even when it was not part of the
+    // current selection - so a multi-selection could never be deleted. Ignoring it
+    // lets the event reach NodeEditorScreen, which deletes the whole selection.
+    QGraphicsObject::keyPressEvent(event);
 }
 
 void NodeItem::mousePressEvent(QGraphicsSceneMouseEvent* event) {

@@ -18,6 +18,8 @@
 #include <QJsonObject>
 #include <QtConcurrent/QtConcurrent>
 
+#include <algorithm>
+
 namespace fincept::mcp::tools {
 
 namespace {
@@ -28,9 +30,14 @@ QJsonObject server_to_json(const McpServerConfig& s) {
     QJsonArray args_arr;
     for (const auto& a : s.args)
         args_arr.append(a);
+    // Env values are the server's credentials (API keys, DB passwords — the
+    // marketplace entries exist precisely to inject them). list_mcp_servers /
+    // get_mcp_server are read-only and ungated, so returning the values handed every
+    // stored secret to whoever drove the tool loop. Names are what a caller needs
+    // (to know what is configured); the values stay in the secure store.
     QJsonObject env_obj;
     for (auto it = s.env.constBegin(); it != s.env.constEnd(); ++it)
-        env_obj[it.key()] = it.value();
+        env_obj[it.key()] = it.value().isEmpty() ? QStringLiteral("") : QStringLiteral("<redacted>");
     return QJsonObject{
         {"id", s.id},
         {"name", s.name},
@@ -49,11 +56,31 @@ QString id_from_name(const QString& name) {
     return name.toLower().replace(' ', '_');
 }
 
-void resolve_async(std::shared_ptr<QPromise<ToolResult>> promise, ToolResult r) {
-    if (promise->future().isFinished())
-        return;
+// Finish the call's promise exactly once. The winner is decided by the provider's
+// shared single-winner flag (ctx.resolve_guard) — the same atomic the timeout
+// watchdog and the cancellation watch race — NOT by `future().isFinished()`, which
+// two threads can both read as "no" before either calls addResult() (§M2b).
+void resolve_async(const std::shared_ptr<QPromise<ToolResult>>& promise, const ToolContext& ctx, ToolResult r) {
+    if (ctx.resolve_guard) {
+        bool expected = false;
+        if (!ctx.resolve_guard->compare_exchange_strong(expected, true))
+            return;
+    } else if (promise->future().isFinished()) {
+        return; // hand-built context with no shared guard to race
+    }
     promise->addResult(std::move(r));
     promise->finish();
+}
+
+// Marketplace/custom installs derive the server id from the display name. save_server()
+// is an upsert, so installing "Fetch" twice — or a custom server whose name collides
+// with an installed one — silently replaced the existing entry, env secrets included.
+bool mcp_server_id_taken(const QString& id) {
+    for (const auto& s : McpManager::instance().get_servers()) {
+        if (s.id == id)
+            return true;
+    }
+    return false;
 }
 
 } // namespace
@@ -102,7 +129,8 @@ std::vector<ToolDef> get_mcp_servers_tools() {
     {
         ToolDef t;
         t.name = "get_mcp_server_logs";
-        t.description = "Get captured stdout/stderr log lines for a running server (most recent first up to N).";
+        t.description = "Get the most recent captured stdout/stderr log lines for a server (up to `limit`, "
+                        "returned oldest-first so they read in order).";
         t.category = "mcp-servers";
         t.input_schema = ToolSchemaBuilder()
                              .string("id", "Server id")
@@ -129,11 +157,28 @@ std::vector<ToolDef> get_mcp_servers_tools() {
     {
         ToolDef t;
         t.name = "list_external_mcp_tools";
-        t.description = "List all tools exposed by currently-running external MCP servers.";
+        t.description = "List tools exposed by currently-running external MCP servers. Pass `server_id` to "
+                        "list one server's tools; `limit` caps the rows.";
         t.category = "mcp-servers";
-        t.handler = [](const QJsonObject&) -> ToolResult {
+        t.input_schema = ToolSchemaBuilder()
+                             .string("server_id", "Only tools from this server id (see list_mcp_servers)")
+                             .default_str("")
+                             .length(0, 128)
+                             .integer("limit", "Max tools to return")
+                             .default_int(100)
+                             .between(1, 500)
+                             .build();
+        t.handler = [](const QJsonObject& args) -> ToolResult {
+            const QString only_server = args["server_id"].toString().trimmed();
+            const int limit = std::clamp(args["limit"].toInt(100), 1, 500);
             QJsonArray arr;
+            int matched = 0;
             for (const auto& tool : McpManager::instance().get_all_external_tools()) {
+                if (!only_server.isEmpty() && tool.server_id != only_server)
+                    continue;
+                ++matched;
+                if (arr.size() >= limit)
+                    continue; // keep counting for the truncation notice
                 arr.append(QJsonObject{
                     {"server_id", tool.server_id},
                     {"server_name", tool.server_name},
@@ -141,6 +186,12 @@ std::vector<ToolDef> get_mcp_servers_tools() {
                     {"description", tool.description},
                 });
             }
+            if (matched > arr.size())
+                return ToolResult::ok(QStringLiteral("Showing %1 of %2 tools — pass `server_id` to list one server's "
+                                                     "tools, or raise `limit`.")
+                                          .arg(arr.size())
+                                          .arg(matched),
+                                      arr);
             return ToolResult::ok_data(arr);
         };
         tools.push_back(std::move(t));
@@ -211,6 +262,11 @@ std::vector<ToolDef> get_mcp_servers_tools() {
             if (!entry)
                 return ToolResult::fail("Marketplace entry not found: " + name);
 
+            if (mcp_server_id_taken(id_from_name(entry->name)))
+                return ToolResult::fail("'" + entry->name +
+                                        "' is already installed — remove_mcp_server it first, or use "
+                                        "set_mcp_server_enabled / set_mcp_server_autostart to change it");
+
             McpServerConfig cfg;
             cfg.id = id_from_name(entry->name);
             cfg.name = entry->name;
@@ -269,6 +325,9 @@ std::vector<ToolDef> get_mcp_servers_tools() {
             const QString command = args["command"].toString().trimmed();
             if (name.isEmpty() || command.isEmpty())
                 return ToolResult::fail("name and command are required");
+            if (mcp_server_id_taken(id_from_name(name)))
+                return ToolResult::fail("A server with the id '" + id_from_name(name) +
+                                        "' already exists — choose a different name, or remove_mcp_server it first");
 
             McpServerConfig cfg;
             cfg.id = id_from_name(name);
@@ -396,10 +455,11 @@ std::vector<ToolDef> get_mcp_servers_tools() {
             const QString id = args["id"].toString();
             (void)QtConcurrent::run([id, promise, ctx]() {
                 if (ctx.cancelled())
-                    return resolve_async(promise, ToolResult::fail("cancelled"));
+                    return resolve_async(promise, ctx, ToolResult::fail("cancelled"));
                 const auto r = McpManager::instance().start_server(id);
-                resolve_async(promise, r.is_ok() ? ToolResult::ok("Server started", QJsonObject{{"id", id}})
-                                                 : ToolResult::fail(QString::fromStdString(r.error())));
+                resolve_async(promise, ctx,
+                              r.is_ok() ? ToolResult::ok("Server started", QJsonObject{{"id", id}})
+                                        : ToolResult::fail(QString::fromStdString(r.error())));
             });
         };
         tools.push_back(std::move(t));
@@ -418,10 +478,11 @@ std::vector<ToolDef> get_mcp_servers_tools() {
             const QString id = args["id"].toString();
             (void)QtConcurrent::run([id, promise, ctx]() {
                 if (ctx.cancelled())
-                    return resolve_async(promise, ToolResult::fail("cancelled"));
+                    return resolve_async(promise, ctx, ToolResult::fail("cancelled"));
                 const auto r = McpManager::instance().stop_server(id);
-                resolve_async(promise, r.is_ok() ? ToolResult::ok("Server stopped", QJsonObject{{"id", id}})
-                                                 : ToolResult::fail(QString::fromStdString(r.error())));
+                resolve_async(promise, ctx,
+                              r.is_ok() ? ToolResult::ok("Server stopped", QJsonObject{{"id", id}})
+                                        : ToolResult::fail(QString::fromStdString(r.error())));
             });
         };
         tools.push_back(std::move(t));
@@ -441,10 +502,11 @@ std::vector<ToolDef> get_mcp_servers_tools() {
             const QString id = args["id"].toString();
             (void)QtConcurrent::run([id, promise, ctx]() {
                 if (ctx.cancelled())
-                    return resolve_async(promise, ToolResult::fail("cancelled"));
+                    return resolve_async(promise, ctx, ToolResult::fail("cancelled"));
                 const auto r = McpManager::instance().restart_server(id);
-                resolve_async(promise, r.is_ok() ? ToolResult::ok("Server restarted", QJsonObject{{"id", id}})
-                                                 : ToolResult::fail(QString::fromStdString(r.error())));
+                resolve_async(promise, ctx,
+                              r.is_ok() ? ToolResult::ok("Server restarted", QJsonObject{{"id", id}})
+                                        : ToolResult::fail(QString::fromStdString(r.error())));
             });
         };
         tools.push_back(std::move(t));
@@ -477,8 +539,8 @@ std::vector<ToolDef> get_mcp_servers_tools() {
             const QJsonObject inner_args = args["args"].toObject();
             (void)QtConcurrent::run([server_id, tool_name, inner_args, promise, ctx]() {
                 if (ctx.cancelled())
-                    return resolve_async(promise, ToolResult::fail("cancelled"));
-                resolve_async(promise, McpService::instance().execute_tool(server_id, tool_name, inner_args));
+                    return resolve_async(promise, ctx, ToolResult::fail("cancelled"));
+                resolve_async(promise, ctx, McpService::instance().execute_tool(server_id, tool_name, inner_args));
             });
         };
         tools.push_back(std::move(t));

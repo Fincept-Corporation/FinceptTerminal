@@ -115,7 +115,7 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
     connect(&svc, &services::PortfolioService::history_backfilled, this, [this](QString portfolio_id, int point_count) {
         if (point_count <= 0 || !summary_loaded_ || portfolio_id != selected_id_)
             return;
-        services::PortfolioService::instance().load_snapshots(portfolio_id);
+        services::PortfolioService::instance().load_snapshots(portfolio_id, kSnapshotHistoryDays);
         services::PortfolioService::instance().compute_metrics(current_summary_);
     });
 
@@ -146,6 +146,7 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
 
 void PortfolioScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    update_loading_anim();
     refresh_timer_->start();
     status_bar_->start_clock();
     if (blotter_ && !current_summary_.portfolio.broker_account_id.isEmpty())
@@ -156,6 +157,8 @@ void PortfolioScreen::showEvent(QShowEvent* event) {
 
 void PortfolioScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+    if (loading_anim_)
+        loading_anim_->stop();
     refresh_timer_->stop();
     status_bar_->stop_clock();
 }

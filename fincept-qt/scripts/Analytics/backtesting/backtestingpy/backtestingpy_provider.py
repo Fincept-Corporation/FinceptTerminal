@@ -1187,6 +1187,17 @@ class BacktestingPyProvider(BacktestingProviderBase):
         sortino = self._safe_stat(stats, 'Sortino Ratio', 0)
         calmar = self._safe_stat(stats, 'Calmar Ratio', 0)
 
+        # backtesting.py reports an unbounded profit factor (inf / NaN) when there is no losing
+        # trade; _safe_stat flattened that to 0, i.e. "worst possible" for the best possible run.
+        # Keep it as +inf (JSON null -> the UI shows "∞").
+        profit_factor = self._safe_stat(stats, 'Profit Factor', 0)
+        try:
+            raw_pf = float(stats.get('Profit Factor', 0))
+            if np.isposinf(raw_pf) or (np.isnan(raw_pf) and winning_trades > 0 and losing_trades == 0):
+                profit_factor = float('inf')
+        except (TypeError, ValueError):
+            pass
+
         return PerformanceMetrics(
             total_return=self._safe_stat(stats, 'Return [%]', 0) / 100.0,
             annualized_return=ann_return,
@@ -1195,7 +1206,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
             max_drawdown=abs(self._safe_stat(stats, 'Max. Drawdown [%]', 0)) / 100.0,
             win_rate=win_rate,
             loss_rate=1.0 - win_rate,
-            profit_factor=self._safe_stat(stats, 'Profit Factor', 0),
+            profit_factor=profit_factor,
             volatility=volatility,
             calmar_ratio=calmar,
             total_trades=total_trades,

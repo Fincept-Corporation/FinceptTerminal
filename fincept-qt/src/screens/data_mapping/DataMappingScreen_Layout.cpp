@@ -227,9 +227,17 @@ QWidget* DataMappingScreen::create_right_panel() {
     il->addWidget(parser_engines_title_);
 
     // Parser names are proper nouns (data); only the " — READY" suffix translates.
+    // Only a JSONPath-style path engine exists (see DataNormalizationService): "Direct"
+    // key paths and simple JMESPath-style paths use the same syntax, while JSONata,
+    // JavaScript and Regex are selectable but never executed. Saying "READY" for all
+    // six let a mapping with a Regex parser pass every test it was never evaluated by.
     const QStringList parsers = {"JSONPath", "JSONata", "JMESPath", "Direct", "JavaScript", "Regex"};
     for (const auto& p : parsers) {
-        auto* lbl = new QLabel(tr("%1 — READY").arg(p));
+        const bool evaluated = p == QLatin1String("JSONPath") || p == QLatin1String("Direct");
+        const bool simple_paths = p == QLatin1String("JMESPath");
+        auto* lbl = new QLabel(evaluated      ? tr("%1 — READY").arg(p)
+                               : simple_paths ? tr("%1 — SIMPLE PATHS").arg(p)
+                                              : tr("%1 — NOT EXECUTED").arg(p));
         lbl->setObjectName("dmInfoLabel");
         il->addWidget(lbl);
     }
@@ -328,8 +336,9 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_auth_value_->setPlaceholderText(tr("Token / API Key value"));
     api_auth_value_->setEchoMode(QLineEdit::Password);
     api_auth_value_->setAccessibleName(tr("Auth value (secret)"));
-    api_auth_value_->setToolTip(tr("Saved with the mapping. TEST API REQUEST does not send it — put the key in "
-                                   "HEADERS or the endpoint query string to exercise an authenticated endpoint."));
+    api_auth_value_->setToolTip(tr("Saved with the mapping and sent with TEST API REQUEST and RUN: Bearer Token / "
+                                   "OAuth2 as Authorization: Bearer, API Key as X-API-Key, Basic Auth "
+                                   "(user:password) as Authorization: Basic. Lines in HEADERS override it."));
     api_auth_value_row_ = create_form_row(tr("AUTH VALUE"), api_auth_value_);
     bl->addWidget(api_auth_value_row_);
 
@@ -352,8 +361,8 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_timeout_->setValue(30);
     api_timeout_->setSuffix(tr(" sec"));
     api_timeout_->setAccessibleName(tr("Request timeout"));
-    api_timeout_->setToolTip(tr("Saved with the mapping. The TEST API REQUEST client currently uses its own "
-                                "fixed timeout."));
+    api_timeout_->setToolTip(tr("Not applied yet: this value is not stored with the mapping, and requests "
+                                "(TEST API REQUEST and RUN) use the HTTP client's fixed 20 second timeout."));
     api_timeout_row_ = create_form_row(tr("TIMEOUT"), api_timeout_);
     bl->addWidget(api_timeout_row_);
 
@@ -494,6 +503,12 @@ QWidget* DataMappingScreen::create_field_mapping_panel() {
     json_tree_->setColumnWidth(0, 160);
     json_tree_->setColumnWidth(1, 200);
     json_tree_->setMinimumWidth(250);
+    // The sample-response explorer was display-only: every expression had to be typed
+    // by hand. Double-click a node to drop its path into the selected mapping row.
+    json_tree_->setToolTip(tr("Double-click a node to use its path as the Expression of the selected mapping "
+                              "row. Change an [N] index to [*] to take every element."));
+    connect(json_tree_, &QTreeWidget::itemDoubleClicked, this,
+            [this](QTreeWidgetItem* item, int) { use_tree_item_as_expression(item); });
     split->addWidget(json_tree_);
 
     mapping_table_ = new QTableWidget;
@@ -665,6 +680,14 @@ QWidget* DataMappingScreen::create_list_view() {
     connect(list_run_btn_, &QPushButton::clicked, this, &DataMappingScreen::on_run_mapping);
     tbl->addWidget(list_run_btn_);
 
+    list_edit_btn_ = new QPushButton(tr("EDIT"));
+    list_edit_btn_->setObjectName("dmSecondaryBtn");
+    list_edit_btn_->setCursor(Qt::PointingHandCursor);
+    list_edit_btn_->setEnabled(false);
+    list_edit_btn_->setAccessibleName(tr("Edit selected mapping"));
+    connect(list_edit_btn_, &QPushButton::clicked, this, &DataMappingScreen::on_edit_mapping);
+    tbl->addWidget(list_edit_btn_);
+
     list_del_btn_ = new QPushButton(tr("DELETE"));
     list_del_btn_->setObjectName("dmDestructiveBtn");
     list_del_btn_->setCursor(Qt::PointingHandCursor);
@@ -683,7 +706,7 @@ QWidget* DataMappingScreen::create_list_view() {
 
     mapping_list_ = new QListWidget;
     mapping_list_->setAccessibleName(tr("Saved mappings"));
-    // Selection drives RUN / DELETE; double-click runs (same as the RUN button).
+    // Selection drives RUN / EDIT / DELETE; double-click runs (same as the RUN button).
     connect(mapping_list_, &QListWidget::currentRowChanged, this, [this](int) { refresh_saved_mappings(); });
     connect(mapping_list_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) { on_run_mapping(); });
     vl->addWidget(mapping_list_, 1);
@@ -735,6 +758,11 @@ QWidget* DataMappingScreen::create_template_view() {
         int row = template_list_->currentRow();
         if (row >= 0 && row < templates().size()) {
             const auto& tmpl = templates()[row];
+            // A template carries no credentials and no sample response: drop the
+            // previous mapping's AUTH VALUE (it would otherwise be sent to this
+            // template's host by TEST API REQUEST), its sample data and its
+            // field-mapping rows before filling in the template.
+            reset_wizard_state();
             api_name_->setText(tmpl.name);
             api_base_url_->setText(tmpl.base_url);
             api_endpoint_->setText(tmpl.endpoint);

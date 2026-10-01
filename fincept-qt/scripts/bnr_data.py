@@ -91,6 +91,12 @@ class BNRWrapper:
     def _fetch_xml(self, url: str) -> bytes:
         resp = self.session.get(url, timeout=DEFAULT_TIMEOUT)
         resp.raise_for_status()
+        # bnr.ro redirects automated clients from the XML feeds to its HTML home page; feeding that
+        # to the XML parser surfaced as the cryptic "syntax error: line 1, column 0".
+        head = resp.content[:200].lstrip().lower()
+        if not (head.startswith(b"<?xml") or head.startswith(b"<dataset")):
+            raise ValueError("BNR returned its HTML website instead of the XML rates feed "
+                             "(request redirected - bot protection or site maintenance); try again later")
         return resp.content
 
     def _parse_dataset(self, content: bytes) -> List[Dict[str, Any]]:

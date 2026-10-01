@@ -116,7 +116,18 @@ Result<void> McpManager::save_server(const McpServerConfig& config) {
     srv.category = config.category;
     srv.enabled = config.enabled;
     srv.auto_start = config.auto_start;
-    srv.status = "stopped";
+    // Status is runtime state owned by start_/stop_server, not something a config edit may
+    // rewrite. This used to write "stopped" unconditionally, so toggling auto-start (or any
+    // other save) on a RUNNING server reset its persisted status — and the config caller's
+    // own `status` field, which is usually just a default, was then stored over the live one.
+    ServerStatus live_status = ServerStatus::Stopped;
+    {
+        QMutexLocker lock(&mutex_);
+        const auto existing = configs_.constFind(srv.id);
+        if (existing != configs_.constEnd())
+            live_status = existing->status;
+    }
+    srv.status = live_status == ServerStatus::Running ? "running" : (live_status == ServerStatus::Error ? "error" : "stopped");
 
     // Store args and env as JSON strings to correctly handle spaces and special chars
     QJsonArray args_arr;
@@ -137,6 +148,9 @@ Result<void> McpManager::save_server(const McpServerConfig& config) {
         QMutexLocker lock(&mutex_);
         McpServerConfig cfg = config;
         cfg.id = srv.id;
+        // Keep the live status (see above) rather than whatever the caller's copy carried.
+        const auto existing = configs_.constFind(cfg.id);
+        cfg.status = existing != configs_.constEnd() ? existing->status : ServerStatus::Stopped;
         configs_.insert(cfg.id, cfg);
     }
 
@@ -155,6 +169,7 @@ Result<void> McpManager::remove_server(const QString& id) {
         QMutexLocker lock(&mutex_);
         configs_.remove(id);
         tool_cache_.remove(id);
+        last_start_log_.remove(id);
     }
 
     emit servers_changed();
@@ -187,7 +202,9 @@ Result<void> McpManager::start_server(const QString& id) {
 
     auto start_result = client->start();
     if (start_result.is_err()) {
+        const QStringList failed_log = client->get_logs(); // read before the client goes out of scope
         QMutexLocker lock(&mutex_);
+        last_start_log_.insert(id, failed_log);
         if (configs_.contains(id))
             configs_[id].status = ServerStatus::Error;
         McpServerRepository::instance().set_status(id, "error");
@@ -198,7 +215,9 @@ Result<void> McpManager::start_server(const QString& id) {
     auto init_result = client->initialize();
     if (init_result.is_err()) {
         client->stop();
+        const QStringList failed_log = client->get_logs(); // includes whatever the process printed before dying
         QMutexLocker lock(&mutex_);
+        last_start_log_.insert(id, failed_log);
         if (configs_.contains(id))
             configs_[id].status = ServerStatus::Error;
         McpServerRepository::instance().set_status(id, "error");
@@ -211,6 +230,7 @@ Result<void> McpManager::start_server(const QString& id) {
         QMutexLocker lock(&mutex_);
         McpServerRepository::instance().set_status(id, "running");
         configs_[id].status = ServerStatus::Running;
+        last_start_log_.remove(id); // the live client's own log supersedes the failed attempt's
         clients_.insert(id, std::move(client));
     }
 
@@ -412,8 +432,8 @@ McpClient* McpManager::get_client(const QString& id) const {
 QStringList McpManager::get_logs(const QString& id) const {
     QMutexLocker lock(&mutex_);
     auto it = clients_.find(id);
-    if (it == clients_.end())
-        return {};
+    if (it == clients_.end() || !it.value())
+        return last_start_log_.value(id); // no live client: the failed start's output, if any
     return it->get()->get_logs();
 }
 

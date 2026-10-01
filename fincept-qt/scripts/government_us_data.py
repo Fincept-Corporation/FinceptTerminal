@@ -86,8 +86,12 @@ class GovernmentUSWrapper:
             if not content:
                 raise ValueError("Empty content")
 
-            # Use pandas to read CSV exactly like OpenBB does
-            results = pd.read_csv(StringIO(content), header=0)
+            # The FedInvest CSV used to start with a header row; the current one starts directly with
+            # data (CUSIP,TYPE,RATE,...). Reading it with header=0 silently dropped the first
+            # security, so only treat line 1 as a header when it actually is one.
+            first_line = content.lstrip().split("\n", 1)[0].strip().lower()
+            has_header = first_line.startswith("cusip") or first_line.startswith('"cusip')
+            results = pd.read_csv(StringIO(content), header=0 if has_header else None)
 
             # Set column names to match OpenBB exactly
             results.columns = pd.Index([
@@ -129,45 +133,61 @@ class GovernmentUSWrapper:
             else:
                 date_obj = datetime.strptime(target_date, '%Y-%m-%d').date()
 
-            # Use exact OpenBB headers
-            HEADERS = {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                "Accept-Language": "en-CA,en-US;q=0.7,en;q=0.3",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Referer": "https://treasurydirect.gov/",
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Origin": "https://treasurydirect.gov",
-                "User-Agent": get_random_agent(),
-            }
+            # FedInvest is now a Spring app with CSRF protection: a bare POST of the CSV form (what
+            # OpenBB does, and what this script did) is answered with 403 {"error":"Forbidden"}.
+            # The real flow is  GET select page (session cookie + _csrf)  ->  POST the date  ->
+            # result page (carries a fresh _csrf in its CSV form)  ->  POST the CSV form.
+            fedinvest = "https://www.treasurydirect.gov/GA-FI/FedInvest/"
+            token_re = r'name="_csrf"\s+value="([^"]+)"'
 
-            # Exact OpenBB payload format
-            payload = (
-                f"priceDateDay={date_obj.day}"
-                f"&priceDateMonth={date_obj.month}"
-                f"&priceDateYear={date_obj.year}"
-                "&fileType=csv"
-                "&csv=CSV+FORMAT"
-            )
+            page = self._make_request(url=fedinvest + "selectSecurityPriceDate")
+            if "error" in page:
+                return GovernmentUSError('treasury_prices', page['error'], page.get('status_code')).to_dict()
+            m = re.search(token_re, page['data'].text)
+            if not m:
+                return GovernmentUSError('treasury_prices', 'FedInvest page layout changed (no CSRF token)').to_dict()
 
             result = self._make_request(
-                url=self.treasury_price_url,
+                url=fedinvest + "selectSecurityPriceDate",
                 method='POST',
-                headers=HEADERS,
-                data=payload
+                data={"priceDate": date_obj.strftime("%Y-%m-%d"), "submit": "Show Prices", "_csrf": m.group(1)},
+            )
+            if "error" in result:
+                return GovernmentUSError('treasury_prices', result['error'], result.get('status_code')).to_dict()
+
+            form = re.search(r'id="CSVFormat".*?name="_csrf"\s+value="([^"]+)"', result['data'].text, re.S)
+            if not form:
+                # The date form is simply re-shown for weekends / holidays / dates not yet published.
+                return GovernmentUSError(
+                    'treasury_prices',
+                    f'No price data available for {date_obj.strftime("%Y-%m-%d")}. '
+                    f'Treasury prices are published end-of-day on business days only. '
+                    f'Try a previous business day.'
+                ).to_dict()
+
+            result = self._make_request(
+                url=fedinvest + "securityPriceDetail",
+                method='POST',
+                data={
+                    "priceDateDay": date_obj.day,
+                    "priceDateMonth": date_obj.month,
+                    "priceDateYear": date_obj.year,
+                    "fileType": "csv",
+                    "csv": "CSV FORMAT",
+                    "_csrf": form.group(1),
+                },
             )
 
             if "error" in result:
-                return GovernmentUSError('treasury_prices', result['error']).to_dict()
+                return GovernmentUSError('treasury_prices', result['error'], result.get('status_code')).to_dict()
 
             response = result['data']
             if response.status_code != 200:
                 return GovernmentUSError('treasury_prices', f'HTTP {response.status_code}', response.status_code).to_dict()
 
-            # OpenBB checks for ISO-8859-1 encoding specifically
-            if response.encoding != "ISO-8859-1":
-                return GovernmentUSError('treasury_prices', f'Expected ISO-8859-1 encoding but got: {response.encoding}').to_dict()
-
-            content = response.content.decode("utf-8").strip()
+            content = response.content.decode("utf-8", errors="replace").strip()
+            if content.lstrip().lower().startswith(("<!doctype", "<html")):
+                return GovernmentUSError('treasury_prices', 'FedInvest returned an HTML page instead of CSV').to_dict()
 
             # Check for empty content (no data for this date — weekend, holiday, or not yet published)
             if not content or len(content) < 10:
@@ -528,9 +548,11 @@ def main():
 
     try:
         if command == "treasury_prices":
-            date_arg = sys.argv[2] if len(sys.argv) > 2 else None
-            cusip_arg = sys.argv[3] if len(sys.argv) > 3 else None
-            security_type_arg = sys.argv[4] if len(sys.argv) > 4 else None
+            # An empty positional ("") means "not set": the desktop panel passes an empty CUSIP
+            # placeholder before the security type, and "" used to filter out every row.
+            date_arg = (sys.argv[2] or None) if len(sys.argv) > 2 else None
+            cusip_arg = (sys.argv[3] or None) if len(sys.argv) > 3 else None
+            security_type_arg = (sys.argv[4] or None) if len(sys.argv) > 4 else None
 
             result = wrapper.get_treasury_prices(
                 target_date=date_arg,

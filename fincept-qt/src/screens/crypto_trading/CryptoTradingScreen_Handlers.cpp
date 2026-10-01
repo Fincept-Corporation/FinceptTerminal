@@ -77,6 +77,13 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     pending_trades_.clear();
     last_ws_state_ = -1; // re-evaluate feed mode after new stream connects
 
+    // The previous venue's book / tape / candles are meaningless on the new one.
+    market_info_cache_ = {};
+    orderbook_->clear();
+    bottom_panel_->reset_market_data();
+    chart_->clear();
+    chart_symbol_.clear();
+
     // Reset fetch guards — a prior in-flight fetch from the old exchange must
     // not suppress the first fetch against the new exchange.
     candles_fetching_.store(false);
@@ -106,9 +113,33 @@ void CryptoTradingScreen::on_exchange_changed(const QString& exchange) {
     ScreenStateManager::instance().notify_changed(this);
 }
 
-void CryptoTradingScreen::on_symbol_selected(const QString& symbol) {
-    if (symbol.isEmpty() || symbol == selected_symbol_)
+void CryptoTradingScreen::on_symbol_selected(const QString& typed) {
+    QString symbol = typed.trimmed();
+    if (symbol.isEmpty())
         return;
+    // A unified pair always has a "/" ("BTC/USDT"). A bare ticker typed into the box
+    // ("BTC") used to be subscribed as-is — a topic that never ticks — leaving the
+    // whole screen waiting on a symbol that doesn't exist. Resolve it against the
+    // watchlist's pairs; if nothing matches, put the current pair back instead.
+    if (!symbol.contains(QLatin1Char('/'))) {
+        QString match;
+        for (const QString& s : watchlist_symbols_) {
+            if (s.startsWith(symbol + QLatin1Char('/'), Qt::CaseInsensitive)) {
+                match = s;
+                break;
+            }
+        }
+        if (match.isEmpty()) {
+            LOG_WARN(TAG, QString("Ignoring symbol '%1' — expected BASE/QUOTE").arg(symbol));
+            symbol_input_->setText(selected_symbol_);
+            return;
+        }
+        symbol = match;
+    }
+    if (symbol == selected_symbol_) {
+        symbol_input_->setText(selected_symbol_); // normalise a resolved/re-typed entry
+        return;
+    }
     switch_symbol(symbol);
     ScreenStateManager::instance().notify_changed(this);
 
@@ -170,6 +201,14 @@ void CryptoTradingScreen::switch_symbol(const QString& symbol) {
     pending_trades_.clear();
     market_info_cache_ = {};
 
+    // Drop what is on screen for the old pair too — the book (whose levels are
+    // clickable), the tape, the depth chart, the MARKET-tab readouts and the
+    // candles — instead of mixing them with the new pair's first updates.
+    orderbook_->clear();
+    bottom_panel_->reset_market_data();
+    chart_->clear();
+    chart_symbol_.clear();
+
     es.watch_symbol(selected_symbol_, portfolio_id_);
     es.set_ws_primary_symbol(symbol);
 
@@ -182,6 +221,7 @@ void CryptoTradingScreen::switch_symbol(const QString& symbol) {
     // WS-only mode: ticker + orderbook reflow naturally as the new symbol's
     // WS subscriptions kick in. Only history needs a REST fetch.
     async_fetch_candles(selected_symbol_, chart_->current_timeframe());
+    refresh_market_info(); // funding / OI / mark are per-symbol and were only polled every 30 s
     update_futures_visibility(); // a perp↔spot symbol switch toggles the controls
 }
 
@@ -227,6 +267,14 @@ void CryptoTradingScreen::on_mode_toggled() {
 
 void CryptoTradingScreen::on_api_clicked() {
     auto* dlg = new CryptoCredentials(exchange_id_, this);
+    // Show what is already stored (the session rehydrates it from SecureStorage at
+    // start-up). The dialog always opened blank, so editing one field — e.g. just the
+    // passphrase — meant re-typing everything, and there was no way to tell whether
+    // keys were saved at all. set_values() existed for exactly this and had no caller.
+    if (auto* sess = ExchangeSessionManager::instance().session(exchange_id_)) {
+        const ExchangeCredentials stored = sess->get_credentials();
+        dlg->set_values(stored.api_key, stored.secret, stored.password, stored.wallet_address, stored.private_key);
+    }
     connect(
         dlg, &CryptoCredentials::credentials_saved, this,
         [this](const QString& key, const QString& secret, const QString& pw, const QString& wallet, const QString& pk) {
@@ -237,7 +285,8 @@ void CryptoTradingScreen::on_api_clicked() {
             creds.wallet_address = wallet;
             creds.private_key = pk;
             ExchangeService::instance().set_credentials(creds);
-            LOG_INFO(TAG, "Credentials saved for " + exchange_id_);
+            const bool cleared = key.isEmpty() && secret.isEmpty() && pw.isEmpty() && wallet.isEmpty() && pk.isEmpty();
+            LOG_INFO(TAG, (cleared ? "Credentials cleared for " : "Credentials saved for ") + exchange_id_);
         });
     dlg->exec();
     dlg->deleteLater();
@@ -300,9 +349,15 @@ void CryptoTradingScreen::on_order_submitted(const QString& side, const QString&
             // importantly — the resulting notional. `.arg(double)` defaults to
             // %g with 6 significant digits, which rendered a quantity of
             // 0.000012345678 as "1.23457e-05"; format explicitly instead.
+            // A plain STOP has no limit price (it becomes a market order on trigger), so
+            // size its notional off the last price like a market order rather than
+            // printing "Price 0.00000000".
+            const bool market_like = order_type == "market" || order_type == "stop";
             const double ref_px =
-                (order_type == "market") ? ExchangeService::instance().get_cached_price(selected_symbol_).last : price;
-            const QString px_txt = order_type == "market" ? tr("market price") : crypto::format_price_plain(price);
+                market_like ? ExchangeService::instance().get_cached_price(selected_symbol_).last : price;
+            const QString px_txt = order_type == "market" ? tr("market price")
+                                   : order_type == "stop" ? tr("market (on trigger)")
+                                                          : crypto::format_price_plain(price);
             QString confirm_msg = tr("Place a LIVE %1 %2 order with real funds?\n\n"
                                      "Exchange   %3\n"
                                      "Pair       %4\n"
@@ -409,12 +464,28 @@ void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
         (void)QtConcurrent::run([self, order_id, symbol]() {
             if (!self)
                 return;
-            ExchangeService::instance().cancel_exchange_order(order_id, symbol);
+            // The daemon reports a failed cancel IN-BAND ({"success":false,"error":…}) and
+            // never throws — the result was discarded, so a rejected cancel looked identical
+            // to a good one while the order stayed on the book.
+            QString err;
+            try {
+                const QJsonObject r = ExchangeService::instance().cancel_exchange_order(order_id, symbol);
+                if (r.contains("error") || !r.value("success").toBool(true))
+                    err = r.value("error").toString(QStringLiteral("The exchange rejected the cancel."));
+            } catch (const std::exception& e) {
+                err = QString::fromUtf8(e.what());
+            } catch (...) {
+                err = QStringLiteral("unknown error");
+            }
+            if (!err.isEmpty())
+                LOG_ERROR(TAG, QString("Live cancel failed: %1").arg(err));
             QMetaObject::invokeMethod(
                 self,
-                [self]() {
+                [self, err]() {
                     if (!self)
                         return;
+                    if (!err.isEmpty())
+                        QMessageBox::warning(self, tr("Cancel Failed"), tr("Could not cancel the order:\n%1").arg(err));
                     self->refresh_live_data();
                 },
                 Qt::QueuedConnection);
@@ -423,16 +494,23 @@ void CryptoTradingScreen::on_cancel_order(const QString& order_id) {
 }
 
 void CryptoTradingScreen::on_ob_price_clicked(double price) {
-    order_entry_->set_current_price(price);
+    // Fill the ticket's limit-price box. This used to call set_current_price(),
+    // which only overwrites the MARK readout and the cost-basis price, so a
+    // book click never reached the order ticket at all.
+    order_entry_->set_limit_price(price);
 }
 
 void CryptoTradingScreen::on_search_requested(const QString& filter) {
     QPointer<CryptoTradingScreen> self = this;
     QString filter_copy = filter;
-    (void)QtConcurrent::run([self, filter_copy]() {
+    // Hyperliquid is a perps DEX (see is_perp_market): its tradable pairs are "swap"
+    // markets, so a hard-coded "spot" filter made the search come back empty there.
+    const QString market_type = exchange_id_ == QLatin1String("hyperliquid") ? QStringLiteral("swap")
+                                                                             : QStringLiteral("spot");
+    (void)QtConcurrent::run([self, filter_copy, market_type]() {
         if (!self)
             return;
-        auto markets = ExchangeService::instance().fetch_markets("spot", filter_copy);
+        auto markets = ExchangeService::instance().fetch_markets(market_type, filter_copy);
         QMetaObject::invokeMethod(
             self,
             [self, markets]() {
@@ -478,20 +556,39 @@ void CryptoTradingScreen::on_cancel_all_orders() {
         auto result = ExchangeService::instance().fetch_open_orders_live();
         const auto orders = result.value("orders").toArray();
         int cancelled = 0;
+        int failed = 0;
+        QString first_err;
         for (const auto& v : orders) {
             const auto o = v.toObject();
             const QString id = o.value("id").toString();
             if (id.isEmpty())
                 continue;
-            ExchangeService::instance().cancel_exchange_order(id, o.value("symbol").toString());
-            ++cancelled;
+            // Count in-band rejections ({"success":false,"error":…}) instead of
+            // reporting every attempted cancel as cancelled.
+            const QJsonObject r = ExchangeService::instance().cancel_exchange_order(id, o.value("symbol").toString());
+            if (r.contains("error") || !r.value("success").toBool(true)) {
+                ++failed;
+                if (first_err.isEmpty())
+                    first_err = r.value("error").toString();
+            } else {
+                ++cancelled;
+            }
         }
+        // A failed open-orders fetch (no/invalid API key) must not read as "0 cancelled".
+        if (result.contains("error") && first_err.isEmpty())
+            first_err = result.value("error").toString();
         QMetaObject::invokeMethod(
             self,
-            [self, cancelled]() {
+            [self, cancelled, failed, first_err]() {
                 if (!self)
                     return;
-                LOG_INFO(TAG, QString("Cancelled %1 live order(s)").arg(cancelled));
+                LOG_INFO(TAG, QString("Cancelled %1 live order(s), %2 failed").arg(cancelled).arg(failed));
+                if (failed > 0 || !first_err.isEmpty())
+                    QMessageBox::warning(self, tr("Cancel All"),
+                                         tr("%1 order(s) cancelled, %2 could not be cancelled.\n%3")
+                                             .arg(cancelled)
+                                             .arg(failed)
+                                             .arg(first_err));
                 self->refresh_live_data();
             },
             Qt::QueuedConnection);
@@ -533,6 +630,8 @@ void CryptoTradingScreen::on_close_all_positions() {
         auto result = ExchangeService::instance().fetch_positions_live();
         const auto positions = result.value("positions").toArray();
         int closed = 0;
+        int failed = 0;
+        QString first_err;
         for (const auto& v : positions) {
             const auto p = v.toObject();
             const QString sym = p.value("symbol").toString();
@@ -540,16 +639,32 @@ void CryptoTradingScreen::on_close_all_positions() {
             if (sym.isEmpty() || contracts == 0)
                 continue;
             const bool is_long = p.value("side").toString() == QLatin1String("long") || contracts > 0;
-            ExchangeService::instance().place_exchange_order(
+            // The daemon rejects in-band ({"success":false,"error":…}); the result
+            // used to be dropped, so a refused close counted as closed.
+            const QJsonObject r = ExchangeService::instance().place_exchange_order(
                 sym, is_long ? "sell" : "buy", "market", std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
-            ++closed;
+            if (r.contains("error") || !r.value("success").toBool(true)) {
+                ++failed;
+                if (first_err.isEmpty())
+                    first_err = r.value("error").toString();
+            } else {
+                ++closed;
+            }
         }
+        if (result.contains("error") && first_err.isEmpty())
+            first_err = result.value("error").toString();
         QMetaObject::invokeMethod(
             self,
-            [self, closed]() {
+            [self, closed, failed, first_err]() {
                 if (!self)
                     return;
-                LOG_INFO(TAG, QString("Closed %1 live position(s)").arg(closed));
+                LOG_INFO(TAG, QString("Closed %1 live position(s), %2 failed").arg(closed).arg(failed));
+                if (failed > 0 || !first_err.isEmpty())
+                    QMessageBox::warning(self, tr("Square Off All"),
+                                         tr("%1 position(s) closed, %2 could not be closed.\n%3")
+                                             .arg(closed)
+                                             .arg(failed)
+                                             .arg(first_err));
                 self->refresh_live_data();
             },
             Qt::QueuedConnection);
@@ -593,6 +708,7 @@ void CryptoTradingScreen::on_close_position(const QString& symbol) {
             return;
         auto result = ExchangeService::instance().fetch_positions_live(sym);
         const auto positions = result.value("positions").toArray();
+        QString err = result.contains("error") ? result.value("error").toString() : QString();
         for (const auto& v : positions) {
             const auto p = v.toObject();
             if (p.value("symbol").toString() != sym)
@@ -601,14 +717,18 @@ void CryptoTradingScreen::on_close_position(const QString& symbol) {
             if (contracts == 0)
                 continue;
             const bool is_long = p.value("side").toString() == QLatin1String("long") || contracts > 0;
-            ExchangeService::instance().place_exchange_order(
+            const QJsonObject r = ExchangeService::instance().place_exchange_order(
                 sym, is_long ? "sell" : "buy", "market", std::abs(contracts), 0.0, 0.0, 0.0, 0.0, /*reduce_only=*/true);
+            if ((r.contains("error") || !r.value("success").toBool(true)) && err.isEmpty())
+                err = r.value("error").toString(QStringLiteral("The exchange rejected the order."));
         }
         QMetaObject::invokeMethod(
             self,
-            [self]() {
+            [self, err]() {
                 if (!self)
                     return;
+                if (!err.isEmpty())
+                    QMessageBox::warning(self, tr("Close Position"), tr("Could not close the position:\n%1").arg(err));
                 self->refresh_live_data();
             },
             Qt::QueuedConnection);

@@ -75,6 +75,13 @@ double growth_ratio(double current, double previous) {
 void EquityFinancialsTab::on_financials_loaded(services::equity::FinancialsData payload) {
     if (payload.symbol != current_symbol_)
         return;
+    // ETFs, indices, crypto and some foreign listings come back with an empty statement.
+    // The populate_* helpers return early on an empty one, which left the previous
+    // company's figures on screen under this symbol — rebuild to the blank state first.
+    if (payload.income_statement.isEmpty() || payload.balance_sheet.isEmpty() || payload.cash_flow.isEmpty()) {
+        loaded_ = false; // nothing to replay into the rebuilt pages
+        rebuild_views();
+    }
     cached_data_ = payload;
     loaded_ = true;
     loading_overlay_->hide_loading();

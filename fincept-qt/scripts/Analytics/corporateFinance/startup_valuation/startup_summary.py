@@ -52,7 +52,8 @@ class StartupValuationSummary:
                                scorecard_inputs: Optional[Dict[str, Any]] = None,
                                vc_inputs: Optional[Dict[str, Any]] = None,
                                first_chicago_scenarios: Optional[List[Scenario]] = None,
-                               risk_factor_assessments: Optional[Dict[RiskFactor, int]] = None) -> Dict[str, Any]:
+                               risk_factor_assessments: Optional[Dict[RiskFactor, int]] = None,
+                               risk_factor_base_valuation: float = 2_000_000) -> Dict[str, Any]:
         """
         Generate comprehensive startup valuation using all applicable methods
 
@@ -104,7 +105,7 @@ class StartupValuationSummary:
                 if internal_key:
                     val = float(v)
                     # Frontend sends multipliers (0.5-1.5) → convert to comparison scores (-0.5 to +0.5)
-                    if val > 1.1 or val < 0.4:
+                    if val >= 0.5 or val < -0.5:
                         mapped_assessments[internal_key] = max(-0.5, min(0.5, val - 1.0))
                     else:
                         mapped_assessments[internal_key] = val
@@ -151,7 +152,7 @@ class StartupValuationSummary:
 
         # Risk Factor Summation
         if risk_factor_assessments:
-            rfs = RiskFactorSummation(base_valuation=2_000_000)
+            rfs = RiskFactorSummation(base_valuation=risk_factor_base_valuation)
             # Coerce string keys to RiskFactor enums before calling calculate_valuation
             if risk_factor_assessments and not isinstance(next(iter(risk_factor_assessments), None), RiskFactor):
                 risk_factor_assessments = _coerce_risk_factor_assessments(risk_factor_assessments)
@@ -290,10 +291,105 @@ class StartupValuationSummary:
             first_chicago_scenarios=scenarios
         )
 
+# ---- service ABI shim (MAAnalyticsService) BEGIN ----
+# The Qt MAAnalyticsService calls `startup_summary.py comprehensive <flat-params-json>` (argv length 3). The native
+# form is `comprehensive <startup_name> [berkus] [scorecard] [vc] [first_chicago] [risk]` (one JSON argument per
+# method), so a service-style call is handled here by turning the flat panel params into the same typed inputs and
+# running the same StartupValuationSummary. Any other argv shape is untouched.
+_SERVICE_COMMANDS = ("comprehensive",)
+_SVC_BERKUS = ("sound_idea", "prototype", "quality_management", "strategic_relationships", "product_rollout")
+_SVC_SCORECARD = ("management_team", "size_of_opportunity", "product_technology", "competitive_environment",
+                  "marketing_sales_channels", "need_for_additional_investment", "other_factors")
+_SVC_RISKS = ("management", "stage_of_business", "legislation_political", "manufacturing", "sales_marketing",
+              "funding_capital", "competition", "technology", "litigation", "international", "reputation",
+              "lucrative_exit")
+_SVC_STAGES = {"early": "series_a", "growth": "series_b"}
+
+
+def _svc_num(p, *keys, default=None):
+    for k in keys:
+        v = p.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return default
+
+
+def _svc_named(values, names, cast):
+    """List (panel order) or dict -> {name: cast(value)}."""
+    if isinstance(values, dict):
+        return {k: cast(v) for k, v in values.items()}
+    if isinstance(values, list):
+        return {n: cast(v) for n, v in zip(names, values) if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    return {}
+
+
+def _svc_startup_inputs(p):
+    inputs = {}
+    berkus = _svc_named(p.get("berkus_scores"), _SVC_BERKUS, float)
+    if berkus:
+        inputs["berkus_scores"] = berkus
+    sc = p.get("scorecard", p.get("scorecard_inputs"))
+    if isinstance(sc, dict):
+        stage = str(sc.get("stage", "seed")).strip().lower()
+        inputs["scorecard_inputs"] = {"stage": _SVC_STAGES.get(stage, stage), "region": sc.get("region", "US"),
+                                      "assessments": _svc_named(sc.get("assessments"), _SVC_SCORECARD, float)}
+    exit_metric = _svc_num(p, "vc_exit_metric", "exit_metric")
+    if exit_metric:
+        stage = str(p.get("vc_stage", "series_a")).strip().lower()
+        inputs["vc_inputs"] = {
+            "exit_year_metric": exit_metric,
+            "exit_multiple": _svc_num(p, "vc_multiple", "exit_multiple", default=8.0),
+            "years_to_exit": int(_svc_num(p, "vc_years", "years", default=5.0)),
+            "investment_amount": _svc_num(p, "vc_investment", "investment", default=0.0),
+            "stage": _SVC_STAGES.get(stage, stage),
+        }
+    scenarios = p.get("first_chicago_scenarios", p.get("scenarios"))
+    if isinstance(scenarios, list) and scenarios:
+        names = ("Bull Case", "Base Case", "Bear Case")
+        inputs["first_chicago_scenarios"] = [
+            dict(s, name=s.get("name", names[i] if i < len(names) else "Scenario %d" % (i + 1)))
+            for i, s in enumerate(scenarios) if isinstance(s, dict)]
+    risks = _svc_named(p.get("risk_assessments", p.get("risk_factor_assessments")), _SVC_RISKS, int)
+    if risks:
+        inputs["risk_factor_assessments"] = risks
+    base = _svc_num(p, "rf_base", "base_valuation")
+    if base and "risk_factor_assessments" in inputs:
+        inputs["risk_factor_base_valuation"] = base
+    return inputs
+
+
+def _service_dispatch(argv):
+    import json
+    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+        return False
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return False
+    if not isinstance(p, dict):
+        return False
+    try:
+        inputs = _svc_startup_inputs(p)
+        if not inputs:
+            raise ValueError("No valuation method inputs supplied (Berkus scores, VC inputs, scenarios or risk "
+                             "assessments are needed)")
+        valuation = StartupValuationSummary(str(p.get("startup_name", "Startup"))).comprehensive_valuation(**inputs)
+        if isinstance(valuation, dict) and "error" in valuation and len(valuation) == 1:
+            raise ValueError(valuation["error"])
+        print(json.dumps({"success": True, "data": valuation}, default=str))
+    except Exception as e:
+        print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
+        sys.exit(1)
+    return True
+# ---- service ABI shim (MAAnalyticsService) END ----
+
+
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    if _service_dispatch(sys.argv):
+        return
     if len(sys.argv) < 2:
         result = {"success": False, "error": "No command specified"}
         print(json.dumps(result))

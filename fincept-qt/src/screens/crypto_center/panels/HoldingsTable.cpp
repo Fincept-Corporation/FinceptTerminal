@@ -371,6 +371,17 @@ void HoldingsTable::rebuild_table() {
 
 void HoldingsTable::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    // SETTINGS has its own "show unverified tokens" checkbox that writes the
+    // same persisted flag, but this table only read it once in the constructor
+    // — toggling it on SETTINGS did nothing until the next app start. Re-sync
+    // whenever the table becomes visible (it is hidden while SETTINGS is open).
+    auto flag = SecureStorage::instance().retrieve(QStringLiteral("wallet.show_unverified_tokens"));
+    const bool persisted = flag.is_ok() && flag.value().compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
+    if (persisted != show_unverified_) {
+        show_unverified_ = persisted;
+        show_all_button_->setText(show_unverified_ ? tr("Hide unverified") : tr("Show all"));
+        rebuild_table();
+    }
     if (!current_pubkey_.isEmpty()) {
         refresh_subscription();
     }

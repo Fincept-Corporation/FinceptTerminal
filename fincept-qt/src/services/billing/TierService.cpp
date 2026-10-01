@@ -63,7 +63,12 @@ void TierService::refresh(const QStringList& topics) {
 
 void TierService::publish_for(const QString& topic, const QString& pubkey) {
     auto& hub = fincept::datahub::DataHub::instance();
-    const auto v = hub.peek(vefncpt_topic_for(pubkey));
+    // peek() drops the value once the veFNCPT topic's TTL ages out, which would
+    // publish (and cache) Free for a wallet that actually holds a tier. Fall
+    // back to the last-known-good aggregate instead of regressing the tier.
+    auto v = hub.peek(vefncpt_topic_for(pubkey));
+    if (!v.isValid())
+        v = hub.peek_raw(vefncpt_topic_for(pubkey));
 
     fincept::wallet::TierStatus s;
     s.pubkey_b58 = pubkey;

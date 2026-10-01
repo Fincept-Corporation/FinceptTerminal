@@ -5,15 +5,20 @@
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
+#include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
 #include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLocale>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSysInfo>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -82,6 +87,20 @@ static QLabel* makeBullet(const QString& text) {
                                "font-family: 'Consolas','Courier New',monospace;")
                            .arg(ui::colors::TEXT_SECONDARY()));
     lbl->setWordWrap(true);
+    return lbl;
+}
+
+// A clickable link label: shows `text`, opens `href` (https:// or mailto:) in the
+// system handler. The contact addresses and licence/Enterprise footers used to be
+// plain QLabels that looked like links but did nothing when clicked.
+static QLabel* makeLinkLabel(const QString& text, const QString& href, const QString& style) {
+    auto* lbl = new QLabel(QString("<a href=\"%1\" style=\"color:%2;text-decoration:none;\">%3</a>")
+                               .arg(href, ui::colors::CYAN(), text.toHtmlEscaped()));
+    lbl->setTextFormat(Qt::RichText);
+    lbl->setOpenExternalLinks(true);
+    lbl->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    lbl->setCursor(Qt::PointingHandCursor);
+    lbl->setStyleSheet(style);
     return lbl;
 }
 
@@ -179,6 +198,21 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             svc.check_for_updates(/*silent=*/false);
         });
         right->addWidget(check_btn_);
+
+        // Result of the last check (silent startup check included) — shown only
+        // when a newer release exists; "up to date" is already reported by the
+        // dialog a user-initiated check shows.
+        update_status_ = new QLabel;
+        update_status_->setAlignment(Qt::AlignRight);
+        update_status_->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold; "
+                                              "background: transparent; "
+                                              "font-family: 'Consolas','Courier New',monospace;")
+                                          .arg(ui::colors::AMBER()));
+        update_status_->hide();
+        right->addWidget(update_status_);
+        connect(&services::UpdateService::instance(), &services::UpdateService::check_finished, this,
+                [this](bool) { refresh_update_status(); });
+        refresh_update_status(); // the startup check may have finished before this screen existed
         bhl->addLayout(right);
 
         pvl->addWidget(body);
@@ -227,11 +261,12 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             pvl->addWidget(body);
 
             // Footer link
-            auto* foot = new QLabel("gnu.org/licenses/agpl-3.0");
-            foot->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; "
-                                        "padding: 6px 14px; border-top: 1px solid %2; "
-                                        "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::CYAN(), ui::colors::BORDER_DIM()));
+            auto* foot = makeLinkLabel(QStringLiteral("gnu.org/licenses/agpl-3.0"),
+                                       QStringLiteral("https://www.gnu.org/licenses/agpl-3.0.html"),
+                                       QString("color: %1; font-size: 11px; background: transparent; "
+                                               "padding: 6px 14px; border-top: 1px solid %2; "
+                                               "font-family: 'Consolas','Courier New',monospace;")
+                                           .arg(ui::colors::CYAN(), ui::colors::BORDER_DIM()));
             pvl->addWidget(foot);
 
             rl->addWidget(panel, 1);
@@ -262,11 +297,12 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             pvl->addWidget(body);
 
             // Footer link
-            auto* foot = new QLabel("fincept.in/enterprise");
-            foot->setStyleSheet(QString("color: %1; font-size: 11px; background: transparent; "
-                                        "padding: 6px 14px; border-top: 1px solid %2; "
-                                        "font-family: 'Consolas','Courier New',monospace;")
-                                    .arg(ui::colors::CYAN(), ui::colors::BORDER_DIM()));
+            auto* foot = makeLinkLabel(QStringLiteral("fincept.in/enterprise"),
+                                       QStringLiteral("https://fincept.in/enterprise"),
+                                       QString("color: %1; font-size: 11px; background: transparent; "
+                                               "padding: 6px 14px; border-top: 1px solid %2; "
+                                               "font-family: 'Consolas','Courier New',monospace;")
+                                           .arg(ui::colors::CYAN(), ui::colors::BORDER_DIM()));
             pvl->addWidget(foot);
 
             rl->addWidget(panel, 1);
@@ -305,6 +341,9 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         left->addWidget(path);
         bhl->addLayout(left, 1);
 
+        auto* diag_btns = new QVBoxLayout;
+        diag_btns->setSpacing(6);
+
         open_folder_btn_ = new QPushButton(tr("Open Folder"));
         open_folder_btn_->setStyleSheet(LINK_BTN());
         open_folder_btn_->setCursor(Qt::PointingHandCursor);
@@ -315,7 +354,31 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             QDir().mkpath(crash_dir);
             QDesktopServices::openUrl(QUrl::fromLocalFile(crash_dir));
         });
-        bhl->addWidget(open_folder_btn_, 0, Qt::AlignTop);
+        diag_btns->addWidget(open_folder_btn_);
+
+        // Support and Help both ask for "your OS, version and any error messages"
+        // when filing a bug. Put that block on the clipboard in one click. Only
+        // build/OS facts — no paths, account or hardware identifiers.
+        copy_info_btn_ = new QPushButton(tr("Copy System Info"));
+        copy_info_btn_->setStyleSheet(LINK_BTN());
+        copy_info_btn_->setCursor(Qt::PointingHandCursor);
+        copy_info_btn_->setToolTip(tr("Copy version and OS details to the clipboard for bug reports"));
+        connect(copy_info_btn_, &QPushButton::clicked, this, [this]() {
+            const QString info = QStringLiteral("Fincept Terminal v%1\nQt: %2 (built with %3)\nOS: %4 (%5 %6)\n"
+                                                "CPU architecture: %7\nBuild ABI: %8\nLocale: %9")
+                                     .arg(QApplication::applicationVersion(), QString::fromLatin1(qVersion()),
+                                          QStringLiteral(QT_VERSION_STR), QSysInfo::prettyProductName(),
+                                          QSysInfo::kernelType(), QSysInfo::kernelVersion(),
+                                          QSysInfo::currentCpuArchitecture(), QSysInfo::buildAbi(),
+                                          QLocale::system().name());
+            if (auto* cb = QGuiApplication::clipboard())
+                cb->setText(info);
+            copy_info_btn_->setText(tr("Copied"));
+            QTimer::singleShot(1500, copy_info_btn_, [this]() { copy_info_btn_->setText(tr("Copy System Info")); });
+        });
+        diag_btns->addWidget(copy_info_btn_);
+        diag_btns->addStretch();
+        bhl->addLayout(diag_btns);
 
         pvl->addWidget(body);
         vl->addWidget(panel);
@@ -440,8 +503,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             cvl->addWidget(lbl);
             contact_labels_.append(lbl);
 
-            auto* email = new QLabel(contacts[i].email);
-            email->setStyleSheet(LINK_STYLE());
+            auto* email = makeLinkLabel(contacts[i].email, QStringLiteral("mailto:") + contacts[i].email, LINK_STYLE());
             cvl->addWidget(email);
 
             grid->addWidget(col, 0, i);
@@ -462,7 +524,18 @@ void AboutScreen::changeEvent(QEvent* event) {
     QWidget::changeEvent(event);
 }
 
+void AboutScreen::refresh_update_status() {
+    if (!update_status_)
+        return;
+    const auto& svc = services::UpdateService::instance();
+    const bool available = svc.update_available() && !svc.latest_version().isEmpty();
+    update_status_->setVisible(available);
+    if (available)
+        update_status_->setText(tr("UPDATE AVAILABLE — v%1").arg(svc.latest_version()));
+}
+
 void AboutScreen::retranslateUi() {
+    refresh_update_status();
     // Version panel
     setPanelHeaderText(version_header_, "ℹ", tr("VERSION INFORMATION"));
     if (app_subtitle_)
@@ -495,6 +568,10 @@ void AboutScreen::retranslateUi() {
         crash_dumps_label_->setText(tr("CRASH DUMPS"));
     if (open_folder_btn_)
         open_folder_btn_->setText(tr("Open Folder"));
+    if (copy_info_btn_) {
+        copy_info_btn_->setText(tr("Copy System Info"));
+        copy_info_btn_->setToolTip(tr("Copy version and OS details to the clipboard for bug reports"));
+    }
 
     // Trademarks
     setPanelHeaderText(trademarks_header_, "", tr("TRADEMARKS"));

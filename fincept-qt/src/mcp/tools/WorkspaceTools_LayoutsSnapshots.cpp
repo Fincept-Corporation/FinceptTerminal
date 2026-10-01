@@ -138,9 +138,10 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
                              .string("description", "Optional description")
                              .default_str("")
                              .length(0, 512)
-                             .string("kind", "Layout kind: user | auto | builtin | crash_recovery")
+                             .string("kind", "Layout kind: user (default) or auto. 'builtin' and 'crash_recovery' "
+                                             "belong to the app itself and cannot be created through this tool.")
                              .default_str("user")
-                             .length(1, 32)
+                             .enums({"user", "auto"})
                              .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
@@ -552,7 +553,15 @@ void workspace_internal::register_layout_snapshot_tools(std::vector<ToolDef>& to
                     resolve(ToolResult::fail(QString::fromStdString(p.error())));
                     return;
                 }
-                const auto ws = layout::Workspace::from_json(QJsonDocument::fromJson(p.value()).object());
+                // A corrupt or truncated payload parses to an empty object; applying that
+                // "restores" an empty workspace over the live one. Refuse it instead.
+                const QJsonObject payload_obj = QJsonDocument::fromJson(p.value()).object();
+                if (payload_obj.isEmpty()) {
+                    resolve(ToolResult::fail("Snapshot " + QString::number(id) +
+                                             " has an unreadable (corrupt or empty) payload — nothing was changed"));
+                    return;
+                }
+                const auto ws = layout::Workspace::from_json(payload_obj);
                 const int n = layout::WorkspaceShell::apply(ws);
                 resolve(ToolResult::ok(QString("Snapshot restored (%1 frames)").arg(n),
                                        QJsonObject{{"snapshot_id", id}, {"frames_applied", n}}));
