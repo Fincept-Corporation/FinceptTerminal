@@ -25,7 +25,7 @@
 >
 > [![Start free](https://img.shields.io/badge/Start_free_%E2%86%92-0E7490?style=for-the-badge)](https://quantcept.io/register) &nbsp; [![See the desk](https://img.shields.io/badge/See_the_desk-1F2328?style=for-the-badge)](https://quantcept.io)
 >
-> <sub>30-day passes — nothing auto-renews · Students: Alpha for $10 · Free to start at [quantcept.io](https://quantcept.io)</sub>
+> <sub>30-day passes — nothing auto-renews · Students: Apex for $5 · Free to start at [quantcept.io](https://quantcept.io)</sub>
 
 
 # Fincept Terminal
