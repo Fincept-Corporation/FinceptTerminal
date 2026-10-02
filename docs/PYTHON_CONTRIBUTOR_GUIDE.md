@@ -17,7 +17,7 @@ Python powers Fincept Terminal's analytics and data capabilities:
 Python scripts are executed by the C++ application via `python_runner.cpp` and communicate through JSON on stdout.
 
 **Related Guides:**
-- [C++ Guide](../fincept-cpp/CONTRIBUTING.md) — How C++ executes Python and renders results
+- [C++ Guide](./CPP_CONTRIBUTOR_GUIDE.md) — How C++ executes Python and renders results
 
 ---
 

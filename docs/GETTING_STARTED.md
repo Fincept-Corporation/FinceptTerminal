@@ -369,5 +369,5 @@ Almost always **RAM exhaustion**, not a broken toolchain:
 
 **Ready to contribute?**
 - Pick an issue: https://github.com/Fincept-Corporation/FinceptTerminal/issues
-- Read the C++ guide: [fincept-qt/CONTRIBUTING.md](../fincept-qt/CONTRIBUTING.md)
+- Read the C++ guide: [CPP_CONTRIBUTOR_GUIDE.md](./CPP_CONTRIBUTOR_GUIDE.md)
 - Read the Python guide: [PYTHON_CONTRIBUTOR_GUIDE.md](./PYTHON_CONTRIBUTOR_GUIDE.md)
